@@ -1,0 +1,2 @@
+Soft Device协议栈版本S140, 
+SDK版本17.1.0

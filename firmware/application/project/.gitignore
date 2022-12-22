@@ -1,0 +1,97 @@
+# reference to https://blog.csdn.net/u010160335/article/details/80068175
+# reference to Keil->help->µVision User's Guide->Appendix->B. File Types
+
+# Project Files
+!*.OPT
+*.UVGUI.*
+*.UVGUIX.*
+!*.UVMPW
+!*.UVPROJ
+!*.UVPROJX
+!*.UVOPT
+!*.UVOPTX
+!*.UV2
+
+# Source Files
+!*.A51
+!*.A66
+!*.C
+!*.CPP
+!*.H
+!*.INC
+!*.S
+!*.SRC
+
+# Listing Files
+*.COD
+*.HTM
+*.I
+*.LST
+*.MAP
+*.M51
+*.M66
+*.SCR
+
+# Object and HEX Files
+# *.
+*.AXF
+*.B[00-31]
+*.D
+*.CRF
+*.ELF
+*.HEX
+*.H86
+*.LIB
+*.OBJ
+*.O
+*.SBR
+
+# Build Files
+*.BAT
+*._IA
+*.__I
+*._II
+*.SCR
+
+# Debugger Files
+*.INI
+
+# Other Files
+*.BUILD_LOG.HTM
+*.CDB
+*.DEP
+*.IC
+*.LIN
+*.LNP
+*.ORC
+*.PACK
+*.PDSC
+*.PLG
+PROJECT_GUI.XSD
+PROJECT_MPW.XSD
+PROJECT_OPT.XSD
+PROJECT_PROJ.XSD
+*.SCT
+*.UVL
+*.UVLA
+*.UVTSK
+*.SFD
+*.SFR
+*.SVD.XML
+*.SVD
+*.XML
+bash.exe.stackdump
+
+# Jlink Files
+JLinkLog.txt
+
+# WS8100 Files
+!WS8100.ini
+!WS8100.sct
+
+# Output Files
+/_build
+# List Files
+/list
+/RTE
+EventRecorderStub.scvd

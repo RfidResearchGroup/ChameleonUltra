@@ -1,0 +1,6 @@
+# 忽略idea的文件夹
+bin/
+# 忽略vscode的文件夹
+script/__pycache__
+# 忽略编译输出文件夹
+src/out
