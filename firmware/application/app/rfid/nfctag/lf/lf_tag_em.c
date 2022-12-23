@@ -296,7 +296,6 @@ int lf_tag_em410x_data_loadcb(tag_specific_type_t type, tag_data_buffer_t* buffe
         // 此处直接转换ID卡号为对应的bit数据流
         m_tag_type = type;
         m_id_bit_data = em410x_id_to_memory64(buffer->buffer);
-        
         NRF_LOG_INFO("LF Em410x data load finish.");
     } else {
         NRF_LOG_ERROR("LF_EM410X_TAG_ID_SIZE too big.");
