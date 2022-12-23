@@ -201,7 +201,7 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
         sleep_timer_stop();
         
         // LED状态更新
-        set_slot_ligth_color(2);
+        set_slot_light_color(2);
         TAG_FIELD_LED_ON()
         
         // 无论如何，每次场状态发现变化都需要重置发送的bit位置

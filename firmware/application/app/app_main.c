@@ -284,7 +284,7 @@ static void check_wakeup_src(void) {
     if (reset_source & NRF_POWER_RESETREAS_OFF_MASK) {  // 首次通过按钮唤醒设备
         NRF_LOG_INFO("WakeUp from button");
         advertising_start();        // 启动蓝牙广播
-        set_slot_ligth_color(0);
+        set_slot_light_color(0);
         sleep_timer_start(SLEEP_DELAY_MS_BUTTON_WAKEUP);    // 如果接下来无操作就等待超时后深度休眠
     } else
     // WakeUp from hf field or lf field
@@ -293,12 +293,12 @@ static void check_wakeup_src(void) {
         // 高频亮绿灯
         if (reset_source & NRF_POWER_RESETREAS_NFC_MASK) {
             
-            set_slot_ligth_color(1);
+            set_slot_light_color(1);
         }
         // 低频亮蓝灯
         if (reset_source & NRF_POWER_RESETREAS_LPCOMP_MASK) {
             
-            set_slot_ligth_color(2);
+            set_slot_light_color(2);
         }
         // We can only run tag emulation at field wakeup source.
         sleep_timer_start(SLEEP_DELAY_MS_FIELD_WAKEUP);
@@ -307,7 +307,7 @@ static void check_wakeup_src(void) {
     if (reset_source & NRF_POWER_RESETREAS_VBUS_MASK) {
         // nrfx_power_usbstatus_get() can check usb attach status
         NRF_LOG_INFO("WakeUp from VBUS(USB)");
-        set_slot_ligth_color(0);
+        set_slot_light_color(0);
         advertising_start();        // 启动蓝牙广播，USB插入的情况下，不需要进行深度休眠
     } else
     {
@@ -316,7 +316,7 @@ static void check_wakeup_src(void) {
         uint32_t* noinit_addr = (uint32_t*)0x20038000;
         memset(noinit_addr, 0xFF, 0x8000);
         NRF_LOG_INFO("Reset noinit ram done.");
-        set_slot_ligth_color(0);
+        set_slot_light_color(0);
         // 如果首次上电发现USB正插着，我们可以做一些相应的操作
         if (is_usb_attach) {
             NRF_LOG_INFO("USB Power found.");
@@ -336,25 +336,23 @@ static void button_press_process(void) {
         // 无论如何，发生了按钮事件，我们需先获得当前激活的卡槽
         uint8_t slot_now = tag_emulation_get_slot();
         uint8_t slot_new = slot_now;
-        
-        // Button left press
+        // 处理某个按钮的事件
         if (m_is_read_btn_press) {
+            // Button left press
             m_is_read_btn_press = false;
-            slot_new = find_prev_tag_emulation_slot(slot_now);
+            slot_new = tag_emulation_slot_find_prev(slot_now);
         }
-        // Button right press
         if (m_is_write_btn_press) {
+            // Button right press
             m_is_write_btn_press = false;
-            slot_new = find_next_tag_emulation_slot(slot_now);
+            slot_new = tag_emulation_slot_find_next(slot_now);
         }
-        
         // 仅在新卡槽切换有效的情况下更新状态
         if (slot_new != slot_now) {
             tag_emulation_change_slot(slot_new, true);  // 告诉模拟卡模块我们需要切换卡槽
             light_up_by_slot();                         // 切换了卡槽，我们需要重新亮灯
-            set_slot_ligth_color(0);                    // 然后重新切换灯的颜色
+            set_slot_light_color(0);                    // 然后重新切换灯的颜色
         }
-        
         // 重新延迟进入休眠
         sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
     }

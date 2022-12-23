@@ -93,23 +93,22 @@ void light_up_by_slot(void) {
  * @brief Function for enter tag emulation mode
  * @param color: 0 表示r, 1表示g, 2表示b
  */
-void set_slot_ligth_color(uint8_t color) {
+void set_slot_light_color(uint8_t color) {
     nrf_gpio_pin_set(LED_R);
     nrf_gpio_pin_set(LED_G);
     nrf_gpio_pin_set(LED_B);
-    uint32_t pin = LED_R;
     switch(color) {
         case 0:
-            pin = LED_R;
+            nrf_gpio_pin_clear(LED_R);
             break;
         case 1:
-            pin = LED_G;
+            nrf_gpio_pin_clear(LED_G);
             break;
         case 2:
-            pin = LED_B;
+            nrf_gpio_pin_clear(LED_B);
             break;
     }
-    nrf_gpio_pin_clear(pin);
+    
 }
 
 /**

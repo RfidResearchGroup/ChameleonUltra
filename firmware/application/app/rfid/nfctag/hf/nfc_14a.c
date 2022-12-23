@@ -586,7 +586,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
         case NRFX_NFCT_EVT_FIELD_DETECTED: {
             g_is_tag_emulating = true;
             sleep_timer_stop();
-            set_slot_ligth_color(1);
+            set_slot_light_color(1);
 
             TAG_FIELD_LED_ON()
             NRF_LOG_INFO("HF FIELD DETECTED");
@@ -634,7 +634,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             break;
         }
         case NRFX_NFCT_EVT_RX_FRAMEEND: {
-            set_slot_ligth_color(1);
+            set_slot_light_color(1);
             TAG_FIELD_LED_ON()
             
             // NRF_LOG_INFO("RX FRAMEEND.\n");
