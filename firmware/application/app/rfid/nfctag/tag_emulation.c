@@ -148,6 +148,28 @@ tag_data_buffer_t* get_buffer_by_tag_type(tag_specific_type_t type) {
 }
 
 /**
+* 从内存中加载数据到模拟卡数据之中
+ */
+bool tag_emulation_load_by_buffer(tag_specific_type_t tag_type, bool update_crc) {
+    // 数据已经加载到缓冲区，接下来根据激活的卡槽的配置，
+    // 将设定的模拟卡类型（高频卡, 低频卡）指向的场感应配备的BUFFER传递给其
+    tag_datas_loadcb_t fn_loadcb = get_data_loadcb_from_tag_type(tag_type);
+    if (fn_loadcb == NULL) {    // 确保有实现对应的加载过程
+        NRF_LOG_INFO("Tag data loader no impl.");
+        return false;
+    }
+    // 通知对应的实现，我们加载完成数据了
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(tag_type);
+    int length = fn_loadcb(tag_type, buffer);
+    if (length > 0 && update_crc) {
+        // 读取完成后，我们先保存一份当前数据的CRC，后面保存的时候可以作为变动对比的参考
+        calc_14a_crc_lut(buffer->buffer, length, (uint8_t *)buffer->crc);
+        return true;
+    }
+    return false;
+}
+
+/**
  * 根据类型加载数据
  */
 static void load_data_by_tag_type(uint8_t slot, tag_specific_type_t tag_type) {
@@ -172,18 +194,10 @@ static void load_data_by_tag_type(uint8_t slot, tag_specific_type_t tag_type) {
         NRF_LOG_INFO("Tag slot data no exists.");
         return;
     }
-    // 数据已经加载到缓冲区，接下来根据激活的卡槽的配置，
-    // 将设定的模拟卡类型（高频卡, 低频卡）指向的场感应配备的BUFFER传递给其
-    tag_datas_loadcb_t fn_loadcb = get_data_loadcb_from_tag_type(tag_type);
-    if (fn_loadcb == NULL) {    // 确保有实现对应的加载过程
-        NRF_LOG_INFO("Tag data loader no impl.");
-        return;
+    ret = tag_emulation_load_by_buffer(tag_type, true);
+    if (ret) {
+        NRF_LOG_INFO("Load tag slot %d, type %d data done.", slot, tag_type);
     }
-    // 通知对应的实现，我们加载完成数据了
-    int length = fn_loadcb(tag_type, buffer);
-    // 读取完成后，我们先保存一份当前数据的CRC，后面保存的时候可以作为变动对比的参考
-    calc_14a_crc_lut(buffer->buffer, length, (uint8_t *)buffer->crc);
-    NRF_LOG_INFO("Load tag slot %d, type %d data done.", slot, tag_type);
 }
 
 /**
@@ -454,7 +468,7 @@ void tag_emulation_change_slot(uint8_t index, bool sense_disable) {
 /**
  * 判断指定卡槽是否启用了
  */
-bool get_tag_emulation_slot_enable(uint8_t slot) {
+bool tag_emulation_slot_is_enable(uint8_t slot) {
     // 直接返回对应卡槽的使能状态
     return slotConfig.group[slot].enable;
 }
@@ -462,7 +476,7 @@ bool get_tag_emulation_slot_enable(uint8_t slot) {
 /**
  * 设置指定卡槽是否启用
  */
-void set_tag_emulation_slot_enable(uint8_t slot, bool enable) {
+void tag_emulation_slot_set_enable(uint8_t slot, bool enable) {
     // 直接设置对应卡槽的使能状态
     slotConfig.group[slot].enable = enable;
 }
@@ -470,7 +484,7 @@ void set_tag_emulation_slot_enable(uint8_t slot, bool enable) {
 /**
  * 寻找下一个有效使能的卡槽
  */
-uint8_t find_next_tag_emulation_slot(uint8_t slot_now) {
+uint8_t tag_emulation_slot_find_next(uint8_t slot_now) {
     uint8_t start_slot = (slot_now + 1 >= TAG_MAX_SLOT_NUM) ? 0 : slot_now + 1;
     for (uint8_t i = start_slot; i < sizeof(slotConfig.group);) {
         if (i == slot_now) return slot_now;         // 一次轮回之后没有发现其他被激活的卡槽
@@ -487,7 +501,7 @@ uint8_t find_next_tag_emulation_slot(uint8_t slot_now) {
 /**
  * 寻找上一个有效使能的卡槽
  */
-uint8_t find_prev_tag_emulation_slot(uint8_t slot_now) {
+uint8_t tag_emulation_slot_find_prev(uint8_t slot_now) {
     uint8_t start_slot = (slot_now - 1 < 0) ? (TAG_MAX_SLOT_NUM - 1) : slot_now - 1;
     for (uint8_t i = start_slot; i < sizeof(slotConfig.group);) {
         if (i == slot_now) return slot_now;         // 一次轮回之后没有发现其他被激活的卡槽

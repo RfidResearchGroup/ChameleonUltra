@@ -83,18 +83,25 @@ void tag_emulation_delete_data(uint8_t slot, tag_sense_type_t sense_type);
 bool tag_emulation_factory_data(uint8_t slot, tag_specific_type_t tag_type);
 // 更改正在模拟的卡片的类型
 void tag_emulation_change_type(uint8_t slot, tag_specific_type_t tag_type);
+// 从内存中加载数据到模拟卡缓冲区
+bool tag_emulation_load_by_buffer(tag_specific_type_t tag_type, bool update_crc);
 
 tag_sense_type_t get_sense_type_from_tag_type(tag_specific_type_t type);
 tag_data_buffer_t* get_buffer_by_tag_type(tag_specific_type_t type);
 
+// 设置当前使用的卡槽
 void tag_emulation_set_slot(uint8_t index);
+// 获取当前使用的卡槽
 uint8_t tag_emulation_get_slot(void);
+// 切换卡槽，根据传入参数控制是否在切换期间关闭场监听
 void tag_emulation_change_slot(uint8_t index, bool sense_disable);
-bool get_tag_emulation_slot_enable(uint8_t slot);
-void set_tag_emulation_slot_enable(uint8_t slot, bool enable);
+// 获取卡槽使能状态
+bool tag_emulation_slot_is_enable(uint8_t slot);
+// 设置卡槽使能
+void tag_emulation_slot_set_enable(uint8_t slot, bool enable);
 
 // 在某个方向上查询任何一个使能的卡槽
-uint8_t find_next_tag_emulation_slot(uint8_t slot_now);
-uint8_t find_prev_tag_emulation_slot(uint8_t slot_now);
+uint8_t tag_emulation_slot_find_next(uint8_t slot_now);
+uint8_t tag_emulation_slot_find_prev(uint8_t slot_now);
 
 #endif
