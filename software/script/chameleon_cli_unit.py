@@ -498,6 +498,112 @@ class HFMFWRBL(BaseMF1AuthOpera):
             print(f" - {colorama.Fore.RED}Write fail.{colorama.Style.RESET_ALL}")
 
 
+class HFMFDetectionEnable(DeviceRequiredUnit):
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        parser = ArgumentParserNoExit()
+        parser.add_argument('-e', '--enable', type=int, required=True, choices=[1, 0],
+                            help="1 = enable, 0 = disable")
+        return parser
+
+    # hf mf detection enable -e 1
+    def on_exec(self, args: argparse.Namespace):
+        enable = True if args.enable == 1 else False
+        self.cmd_positive.set_mf1_detection_enable(enable)
+        print(f" - Set mf1 detection { 'enable' if enable else 'disable'}.")
+
+
+class HFMFDetectionLogCount(DeviceRequiredUnit):
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        return None
+
+    # hf mf detection count
+    def on_exec(self, args: argparse.Namespace):
+        data_bytes = self.cmd_standard.get_mf1_detection_count().data
+        count = int.from_bytes(data_bytes, "little", signed=False)
+        print(f" - MF1 detection log count = {count}")
+
+
+class HFMFDetectionDecrypt(DeviceRequiredUnit):
+
+    detection_log_size = 18
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        return None
+
+    def decrypt_by_list(self, rs: list):
+        """
+            从侦测日志列表中解密秘钥
+        :param rs:
+        :return:
+        """
+        keys = []
+        for i in range(len(rs)):
+            item0 = rs[i]
+            for j in range(i + 1, len(rs)):
+                item1 = rs[j]
+                cmd_base = f"{item0['uid']} {item0['nt']} {item0['nr']} {item0['ar']}"
+                cmd_base += f" {item1['nt']} {item1['nr']} {item1['ar']}"
+                cmd_recover = f"mfkey32v2.exe {cmd_base}"
+                # print(cmd_recover)
+                # Found Key: [e899c526c5cd]
+                # subprocess.run(cmd_final, cwd=os.path.abspath("../bin/"), shell=True)
+                process = self.sub_process(cmd_recover)
+                # wait end
+                process.wait_process()
+                # get output
+                output_str = process.get_output_sync()
+                # print(output_str)
+                sea_obj = re.search(r"([a-fA-F0-9]{12})", output_str, flags=re.MULTILINE)
+                if sea_obj is not None:
+                    keys.append(sea_obj[1])
+
+        return keys
+
+    # hf mf detection decrypt
+    def on_exec(self, args: argparse.Namespace):
+        buffer = bytearray()
+        index = 0
+        count = int.from_bytes(self.cmd_standard.get_mf1_detection_count().data, "little", signed=False)
+        if count == 0:
+            print(" - No detection log to download")
+            return
+        print(f" - MF1 detection log count = {count}, start download", end="")
+        while index < count:
+            tmp = self.cmd_positive.get_mf1_detection_log(index).data
+            recv_count = int(len(tmp) / HFMFDetectionDecrypt.detection_log_size)
+            index += recv_count
+            buffer.extend(tmp)
+            print(f".", end="")
+        print()
+        print(f" - Download done ({len(buffer)}bytes), start parse and decrypt")
+
+        result_maps = chameleon_cstruct.parse_mf1_detection_result(buffer)
+        for uid in result_maps.keys():
+            print(f" - Detection log for uid [{uid.upper()}]")
+            result_maps_for_uid = result_maps[uid]
+            for block in result_maps_for_uid:
+                print(f"  > Block {block} detect log decrypting...")
+                if 'A' in result_maps_for_uid[block]:
+                    # print(f" - A record: { result_maps[block]['A'] }")
+                    records = result_maps_for_uid[block]['A']
+                    if len(records) > 1:
+                        result_maps[uid][block]['A'] = self.decrypt_by_list(records)
+                if 'B' in result_maps_for_uid[block]:
+                    # print(f" - B record: { result_maps[block]['B'] }")
+                    records = result_maps_for_uid[block]['B']
+                    if len(records) > 1:
+                        result_maps[uid][block]['B'] = self.decrypt_by_list(records)
+            print("  > Result ---------------------------")
+            for block in result_maps_for_uid.keys():
+                if 'A' in result_maps_for_uid[block]:
+                    print(f"  > Block {block}, A key result: {result_maps_for_uid[block]['A']}")
+                if 'B' in result_maps_for_uid[block]:
+                    print(f"  > Block {block}, B key result: {result_maps_for_uid[block]['B']}")
+        return
+
+
 class LFEMRead(ReaderRequiredUint):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -509,32 +615,69 @@ class LFEMRead(ReaderRequiredUint):
         print(f" - EM410x ID(10H): {colorama.Fore.GREEN}{id_hex}{colorama.Style.RESET_ALL}")
 
 
-class LFEMWriteT55xx(ReaderRequiredUint):
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        parser = ArgumentParserNoExit()
+class LFEMCardRequiredUint(DeviceRequiredUnit):
+
+    @staticmethod
+    def add_card_arg(parser: ArgumentParserNoExit):
         parser.add_argument("--id", type=str, required=True, help="EM410x tag id", metavar="hex")
         return parser
+
+    def before_exec(self, args: argparse.Namespace):
+        if super(LFEMCardRequiredUint, self).before_exec(args):
+            if not re.match(r"^[a-fA-F0-9]{10}$", args.id):
+                raise ArgsParserError("ID must include 10 HEX symbols")
+            return True
+        return False
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        raise NotImplementedError("Please implement this")
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError("Please implement this")
+
+
+class LFEMWriteT55xx(LFEMCardRequiredUint, ReaderRequiredUint):
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        parser = ArgumentParserNoExit()
+        return self.add_card_arg(parser)
+
+    def before_exec(self, args: argparse.Namespace):
+        b1 = super(LFEMCardRequiredUint, self).before_exec(args)
+        b2 = super(ReaderRequiredUint, self).before_exec(args)
+        return b1 and b2
 
     # lf em write --id 4400999559
     def on_exec(self, args: argparse.Namespace):
         id_hex = args.id
-        if not re.match(r"^[a-fA-F0-9]{10}$", id_hex):
-            raise ArgsParserError("ID must include 10 HEX symbols")
         id_bytes = bytearray.fromhex(id_hex)
         self.cmd_positive.write_em_410x_to_t55xx(id_bytes)
         print(f" - EM410x ID(10H): {id_hex} write done.")
 
 
-class HWSlotSet(DeviceRequiredUnit):
+class SlotIndexRequireUint(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
-        parser = ArgumentParserNoExit()
+        raise NotImplementedError()
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError()
+
+    @staticmethod
+    def add_slot_args(parser: ArgumentParserNoExit):
         slot_choices = [1, 2, 3, 4, 5, 6, 7, 8]
         parser.add_argument('-s', "--slot", type=int, required=True,
                             help="Slot index", metavar="number", choices=slot_choices)
         return parser
 
-    # hw slot set -s 1
+
+class HWSlotSet(SlotIndexRequireUint):
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        parser = ArgumentParserNoExit()
+        return self.add_slot_args(parser)
+
+    # hw slot change -s 1
     def on_exec(self, args: argparse.Namespace):
         slot_index = args.slot
         self.cmd_positive.set_slot_activated(slot_index)
@@ -543,8 +686,8 @@ class HWSlotSet(DeviceRequiredUnit):
 
 class TagTypeRequiredUint(DeviceRequiredUnit):
 
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        parser = ArgumentParserNoExit()
+    @staticmethod
+    def add_type_args(parser: ArgumentParserNoExit):
         type_choices = chameleon_cmd.TagSpecificType.list()
         help_str = ""
         for name, value in chameleon_cmd.TagSpecificType.__members__.items():
@@ -555,11 +698,20 @@ class TagTypeRequiredUint(DeviceRequiredUnit):
                             metavar="number", choices=type_choices)
         return parser
 
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        raise NotImplementedError()
+
     def on_exec(self, args: argparse.Namespace):
         raise NotImplementedError()
 
 
-class HWSlotTagType(TagTypeRequiredUint):
+class HWSlotTagType(TagTypeRequiredUint, SlotIndexRequireUint):
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        parser = ArgumentParserNoExit()
+        self.add_type_args(parser)
+        self.add_slot_args(parser)
+        return parser
 
     # hw slot tagtype -t 2
     def on_exec(self, args: argparse.Namespace):
@@ -568,13 +720,12 @@ class HWSlotTagType(TagTypeRequiredUint):
         print(f' - Set slot tag type success.')
 
 
-class HWSlotDataDefault(TagTypeRequiredUint):
+class HWSlotDataDefault(TagTypeRequiredUint, SlotIndexRequireUint):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
-        parser = super(HWSlotDataDefault, self).args_parser()
-        slot_choices = [1, 2, 3, 4, 5, 6, 7, 8]
-        parser.add_argument('-s', "--slot", type=int, required=True,
-                            help="Slot index", metavar="number", choices=slot_choices)
+        parser = ArgumentParserNoExit()
+        self.add_type_args(parser)
+        self.add_slot_args(parser)
         return parser
 
     # hw slot init -s 1 -t 2
@@ -583,3 +734,32 @@ class HWSlotDataDefault(TagTypeRequiredUint):
         slot_num = args.slot
         self.cmd_positive.set_slot_data_default(slot_num, tag_type)
         print(f' - Set slot tag data init success.')
+
+
+class HWSlotEnableSet(SlotIndexRequireUint):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        parser = ArgumentParserNoExit()
+        self.add_slot_args(parser)
+        parser.add_argument('-e', '--enable', type=int, required=True, help="1 is Enable or 0 Disable", choices=[0, 1])
+        return parser
+
+    # hw slot enable -s 1 -e 0
+    def on_exec(self, args: argparse.Namespace):
+        slot_num = args.slot
+        enable = args.enable
+        self.cmd_positive.set_slot_enable(slot_num, enable)
+        print(f' - Set slot {slot_num} {"enable" if enable else "disable"} success.')
+
+
+class LFEMSim(LFEMCardRequiredUint):
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        parser = ArgumentParserNoExit()
+        return self.add_card_arg(parser)
+
+    # lf em sim --id 4545454545
+    def on_exec(self, args: argparse.Namespace):
+        id_hex = args.id
+        id_bytes = bytearray.fromhex(id_hex)
+        self.cmd_positive.set_em140x_sim_id(id_bytes)
+        print(f' - Set em410x tag id success.')

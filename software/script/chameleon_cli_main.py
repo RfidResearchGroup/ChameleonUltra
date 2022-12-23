@@ -55,9 +55,10 @@ class ChameleonCLI:
                     'help': "Device mode get/set"
                 },
                 'slot': {
-                    'set': new_uint(chameleon_cli_unit.HWSlotSet, "Set emulation tag slot activated."),
+                    'change': new_uint(chameleon_cli_unit.HWSlotSet, "Set emulation tag slot activated."),
                     'type': new_uint(chameleon_cli_unit.HWSlotTagType, "Set emulation tag type"),
                     'init': new_uint(chameleon_cli_unit.HWSlotDataDefault, "Set emulation tag data to default"),
+                    'enable': new_uint(chameleon_cli_unit.HWSlotEnableSet, "Set emulation tag slot enable or disable"),
                     'help': "Emulation tag slot.",
                 },
                 'help': "hardware controller",
@@ -73,6 +74,12 @@ class ChameleonCLI:
                     'darkside': new_uint(chameleon_cli_unit.HFMFDarkside, "Mifare Classic darkside recover key"),
                     'rdbl': new_uint(chameleon_cli_unit.HFMFRDBL, "MiFARE Classic read one block"),
                     'wrbl': new_uint(chameleon_cli_unit.HFMFWRBL, "MiFARE Classic write one block"),
+                    'detection': {
+                        'enable': new_uint(chameleon_cli_unit.HFMFDetectionEnable, "Detection enable"),
+                        'count': new_uint(chameleon_cli_unit.HFMFDetectionLogCount, "Detection log count"),
+                        'decrypt': new_uint(chameleon_cli_unit.HFMFDetectionDecrypt, "Download log and decrypt keys"),
+                        'help': "Mifare Classic detection log"
+                    },
                     'help': "Mifare Classic mini/1/2/4, attack/read/write"
                 },
                 'help': "high frequency tag/reader",
@@ -81,7 +88,8 @@ class ChameleonCLI:
                 'em': {
                     'read': new_uint(chameleon_cli_unit.LFEMRead, "Scan em410x tag and print id"),
                     'write': new_uint(chameleon_cli_unit.LFEMWriteT55xx, "Write em410x id to t55xx"),
-                    'help': "EM410x read/write",
+                    'sim': new_uint(chameleon_cli_unit.LFEMSim, "Simulation a em410x id card."),
+                    'help': "EM410x read/write/emulator",
                 },
                 'help': "low frequency tag/reader",
             }

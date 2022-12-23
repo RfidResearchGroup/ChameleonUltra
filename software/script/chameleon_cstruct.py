@@ -69,3 +69,63 @@ def parse_darkside_acquire_result(data: bytearray):
         'nr':  bytes_to_u32(data[24: 28]),
         'ar':  bytes_to_u32(data[28: 32]),
     }
+
+
+"""
+// 验证的基础信息
+    struct {
+        uint8_t block;
+        uint8_t is_keyb: 1;
+        uint8_t is_nested: 1;
+        // 空域，占位置用的
+        uint8_t : 6;
+    } cmd;
+    // mfkey32必要参数
+    uint8_t uid[4];
+    uint8_t nt[4];
+    uint8_t nr[4];
+    uint8_t ar[4];
+"""
+
+
+def parse_mf1_detection_result(data: bytearray):
+    """
+        From bytes parse detection param
+    :param data: data
+    :return:
+    """
+    # 转换
+    result_list = []
+    pos = 0
+    while pos < len(data):
+        result_list.append({
+            'block': data[0 + pos],
+            'type': 0x60 + (data[1 + pos] & 0x01),
+            'is_nested': True if data[1 + pos] >> 1 & 0x01 == 0x01 else False,
+            'uid': data[2 + pos: 6 + pos].hex(),
+            'nt': data[6 + pos: 10 + pos].hex(),
+            'nr': data[10 + pos: 14 + pos].hex(),
+            'ar': data[14 + pos: 18 + pos].hex(),
+        })
+        pos += 18
+
+    # 归类
+    result_map = {}
+    for item in result_list:
+        uid = item['uid']
+        if uid not in result_map:
+            result_map[uid] = {}
+
+        block = item['block']
+        if block not in result_map[uid]:
+            result_map[uid][block] = {}
+
+        type_chr = 'A' if item['type'] == 0x60 else 'B'
+        if type_chr not in result_map[uid][block]:
+            result_map[uid][block][type_chr] = []
+
+        result_map[uid][block][type_chr].append(item)
+
+    return result_map
+
+

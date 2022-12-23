@@ -8,6 +8,7 @@ DATA_CMD_GET_DEVICE_MODE = 1002
 DATA_CMD_SET_SLOT_ACTIVATED = 1003
 DATA_CMD_SET_SLOT_TAG_TYPE = 1004
 DATA_CMD_SET_SLOT_DATA_DEFAULT = 1005
+DATA_CMD_SET_SLOT_ENABLE = 1006
 
 DATA_CMD_SCAN_14A_TAG = 2000
 DATA_CMD_MF1_SUPPORT_DETECT = 2001
@@ -22,6 +23,11 @@ DATA_CMD_MF1_WRITE_ONE_BLOCK = 2009
 
 DATA_CMD_SCAN_EM410X_TAG = 3000
 DATA_CMD_WRITE_EM410X_TO_T5577 = 3001
+
+DATA_CMD_SET_EM410X_EMU_ID = 5000
+DATA_CMD_SET_MF1_DETECTION_ENABLE = 5003
+DATA_CMD_GET_MF1_DETECTION_COUNT = 5004
+DATA_CMD_GET_MF1_DETECTION_RESULT = 5005
 
 
 @enum.unique
@@ -238,20 +244,24 @@ class BaseChameleonCMD:
         data.append(slot_index - 1)
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_ACTIVATED, 0x00, data)
 
-    def set_slot_tag_type(self, tag_type: TagSpecificType):
+    def set_slot_tag_type(self, slot_index: int, tag_type: TagSpecificType):
         """
             设置当前卡槽的模拟卡的标签类型
             注意：此操作并不会更改flash中的数据，flash中的数据的变动仅在下次保存时更新
+        :param slot_index: 卡槽号码
         :param tag_type: 标签类型
         :return:
         """
+        if slot_index < 1 or slot_index > 8:
+            raise ValueError("The slot index range error(1-8)")
         data = bytearray()
+        data.append(slot_index - 1)
         data.append(tag_type)
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_TAG_TYPE, 0x00, data)
 
     def set_slot_data_default(self, slot_index: int, tag_type: TagSpecificType):
         """
-            设置当前卡槽的模拟卡的数据为缺省数据
+            设置指定卡槽的模拟卡的数据为缺省数据
             注意：此API会将flash中的数据一并进行设置
         :param slot_index: 卡槽号码
         :param tag_type: 要设置的缺省标签类型
@@ -263,6 +273,57 @@ class BaseChameleonCMD:
         data.append(slot_index - 1)
         data.append(tag_type)
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_DATA_DEFAULT, 0x00, data)
+
+    def set_slot_enable(self, slot_index: int, enable: bool):
+        """
+            设置指定的卡槽是否使能
+        :param slot_index: 卡槽号码
+        :param enable: 是否使能
+        :return:
+        """
+        if slot_index < 1 or slot_index > 8:
+            raise ValueError("The slot index range error(1-8)")
+        data = bytearray()
+        data.append(slot_index - 1)
+        data.append(0x01 if enable else 0x00)
+        return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_ENABLE, 0X00, data)
+
+    def set_em140x_sim_id(self, id_bytes: bytearray):
+        """
+            设置EM410x模拟的卡号
+        :param id_bytes: 卡号的字节
+        :return:
+        """
+        if len(id_bytes) != 5:
+            raise ValueError("The id bytes length must equal 5")
+        return self.device.send_cmd_sync(DATA_CMD_SET_EM410X_EMU_ID, 0x00, id_bytes)
+
+    def set_mf1_detection_enable(self, enable: bool):
+        """
+            设置是否使能当前卡槽的侦测
+        :param enable: 是否使能
+        :return:
+        """
+        data = bytearray()
+        data.append(0x01 if enable else 0x00)
+        return self.device.send_cmd_sync(DATA_CMD_SET_MF1_DETECTION_ENABLE, 0x00, data)
+
+    def get_mf1_detection_count(self):
+        """
+            获取当前侦测记录的统计个数
+        :return:
+        """
+        return self.device.send_cmd_sync(DATA_CMD_GET_MF1_DETECTION_COUNT, 0x00, None)
+
+    def get_mf1_detection_log(self, index: int):
+        """
+            从指定的index位置开始获取侦测日志
+        :param index: 开始索引
+        :return:
+        """
+        data = bytearray()
+        data.extend(index.to_bytes(4, "big", signed=False))
+        return self.device.send_cmd_sync(DATA_CMD_GET_MF1_DETECTION_RESULT, 0x00, data)
 
 
 class NegativeResponseError(Exception):
@@ -348,8 +409,8 @@ class PositiveChameleonCMD(BaseChameleonCMD):
         self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
         return ret
 
-    def set_slot_tag_type(self, tag_type: TagSpecificType):
-        ret = super(PositiveChameleonCMD, self).set_slot_tag_type(tag_type)
+    def set_slot_tag_type(self, slot_index: int, tag_type: TagSpecificType):
+        ret = super(PositiveChameleonCMD, self).set_slot_tag_type(slot_index, tag_type)
         self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
         return ret
 
@@ -357,3 +418,27 @@ class PositiveChameleonCMD(BaseChameleonCMD):
         ret = super(PositiveChameleonCMD, self).set_slot_data_default(slot_index, tag_type)
         self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
         return ret
+
+    def set_slot_enable(self, slot_index: int, enable: bool):
+        ret = super(PositiveChameleonCMD, self).set_slot_enable(slot_index, enable)
+        self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
+        return ret
+
+    def set_em140x_sim_id(self, id_bytes: bytearray):
+        ret = super(PositiveChameleonCMD, self).set_em140x_sim_id(id_bytes)
+        self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
+        return ret
+
+    def set_mf1_detection_enable(self, enable: bool):
+        ret = super(PositiveChameleonCMD, self).set_mf1_detection_enable(enable)
+        self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
+        return ret
+
+    def get_mf1_detection_log(self, index: int):
+        ret = super(PositiveChameleonCMD, self).get_mf1_detection_log(index)
+        self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
+        return ret
+
+
+
+
