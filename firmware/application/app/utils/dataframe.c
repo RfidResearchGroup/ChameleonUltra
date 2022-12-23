@@ -25,9 +25,6 @@ NRF_LOG_MODULE_REGISTER();
  */
 
 #define DATA_PACK_TRANSMISSION_ON   0x11
-#define DATA_PACK_MAX_DATA_LENGTH   512
-#define DATA_PACK_BASE_LENGTH       10
-
 #define DATA_LRC_CUT(val)   ((uint8_t)(0x100 - val))
 
 

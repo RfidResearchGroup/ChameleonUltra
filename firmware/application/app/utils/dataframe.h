@@ -5,6 +5,10 @@
 #include <stdbool.h>
 
 
+#define DATA_PACK_MAX_DATA_LENGTH   512
+#define DATA_PACK_BASE_LENGTH       10
+
+
 // Data frame process callback
 typedef void (*data_frame_cbk_t)(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data);
 // TX buffer
