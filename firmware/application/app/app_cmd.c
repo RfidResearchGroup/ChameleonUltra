@@ -213,16 +213,22 @@ data_frame_tx_t* cmd_processor_write_em410x_2_t57(uint16_t cmd, uint16_t status,
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+// 封装一个自动切换卡槽的调用函数
+static void change_slot_auto(uint8_t slot) {
+    device_mode_t mode = get_device_mode();
+    // 读卡器模式下不需要禁用模拟卡再进行切换
+    tag_emulation_change_slot(slot, mode != DEVICE_MODE_READER);
+    // 重新亮灯
+    light_up_by_slot();
+    // 默认亮起RGB
+    set_slot_light_color(0);
+}
+
 data_frame_tx_t* cmd_processor_set_slot_activated(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     // 需要确保传过来的卡槽号码不要超过支持的上限
     if (length == 1 && data[0] < TAG_MAX_SLOT_NUM) {
-        uint8_t slot = data[0];
-        device_mode_t mode = get_device_mode();
-        // 读卡器模式下不需要禁用模拟卡再进行切换
-        tag_emulation_change_slot(slot, mode != DEVICE_MODE_READER);
-        light_up_by_slot();
-        set_slot_ligth_color(0);
-		status = STATUS_DEVICE_SUCCESS;
+        change_slot_auto(data[0]);
+        status = STATUS_DEVICE_SUCCESS;
 	} else {
         status = STATUS_PAR_ERR;
     }
@@ -231,13 +237,11 @@ data_frame_tx_t* cmd_processor_set_slot_activated(uint16_t cmd, uint16_t status,
 
 data_frame_tx_t* cmd_processor_set_slot_tag_type(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     // 需要确保传过来的标签类型是有效的
-    if (length == 1 && data[0] != TAG_TYPE_UNKNOWN) {
-        // 取出上位机传过来的标签类型
-        tag_specific_type_t tag_type = data[0];
-        // 获得当前使能的卡槽
-        uint8_t slot_index_now = tag_emulation_get_slot();
+    if (length == 2 && data[0] < TAG_MAX_SLOT_NUM && data[1] != TAG_TYPE_UNKNOWN) {
+        uint8_t num_slot = data[0];    // 获得要操作的卡槽
+        uint8_t tag_type = data[1];    // 取出上位机传过来的标签类型
         // 将当前的卡槽切换到指定的模拟卡类型
-        tag_emulation_change_type(slot_index_now, tag_type);
+        tag_emulation_change_type(num_slot, (tag_specific_type_t)tag_type);
 		status = STATUS_DEVICE_SUCCESS;
 	} else {
         status = STATUS_PAR_ERR;
@@ -248,14 +252,105 @@ data_frame_tx_t* cmd_processor_set_slot_tag_type(uint16_t cmd, uint16_t status, 
 data_frame_tx_t* cmd_processor_set_slot_data_default(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     // 需要确保传过来的标签类型是有效的
     if (length == 2 && data[0] < TAG_MAX_SLOT_NUM && data[1] != TAG_TYPE_UNKNOWN) {
-        uint8_t target_init_slot_num = data[0];    // 获得要操作的卡槽
-        tag_specific_type_t tag_type = data[1];    // 取出上位机传过来的标签类型
+        uint8_t num_slot = data[0];    // 获得要操作的卡槽
+        uint8_t tag_type = data[1];    // 取出上位机传过来的标签类型
         // 重置当前的卡槽为缺省数据，如果失败，则可能是并未实现此API的缺省
-        status = tag_emulation_factory_data(target_init_slot_num, tag_type) ? STATUS_DEVICE_SUCCESS : STATUS_NOT_IMPLEMENTED;
+        status = tag_emulation_factory_data(num_slot, (tag_specific_type_t)tag_type) ? STATUS_DEVICE_SUCCESS : STATUS_NOT_IMPLEMENTED;
 	} else {
         status = STATUS_PAR_ERR;
     }
     return data_frame_make(cmd, status, 0, NULL);
+}
+
+data_frame_tx_t* cmd_processor_set_slot_enable(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    // 需要确保传过来的标签类型是有效的
+    if (length == 2 && data[0] < TAG_MAX_SLOT_NUM && (data[1] == 0 || data[1] == 1)) {
+        uint8_t slot_now = data[0];  // 获得要操作的卡槽
+        bool enable = data[1];  // 获得要操作的卡槽的状态
+        tag_emulation_slot_set_enable(slot_now, enable);
+        if (!enable) {
+            // 禁用了当前卡槽后，重新找一个能用的卡槽，切换到那个卡槽上
+            uint8_t slot_prev = tag_emulation_slot_find_next(slot_now);
+            NRF_LOG_INFO("slot_now = %d, slot_prev = %d", slot_now, slot_prev);
+            if (slot_prev == slot_now) {
+                // 找了一圈，发现并没有找到使能的卡槽，那么说明全部的卡槽都被禁用了
+                // 此时我们应当灭掉卡槽灯
+                set_slot_light_color(3);
+            } else {
+                change_slot_auto(slot_prev);
+            }
+        }
+        status = STATUS_DEVICE_SUCCESS;
+	} else {
+        status = STATUS_PAR_ERR;
+    }
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+data_frame_tx_t* cmd_processor_set_em410x_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    // 需要确保传过来的ID长度是对的
+    if (length == LF_EM410X_TAG_ID_SIZE) {
+        // 获取EM410x的缓冲区
+        tag_data_buffer_t* buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
+        // 设置卡号进去
+        memcpy(buffer->buffer, data, LF_EM410X_TAG_ID_SIZE);
+        // 重新通知加载数据
+        tag_emulation_load_by_buffer(TAG_TYPE_EM410X, false);
+        status = STATUS_DEVICE_SUCCESS;
+	} else {
+        status = STATUS_PAR_ERR;
+    }
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+data_frame_tx_t* cmd_processor_set_mf1_detection_enable(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length == 1 && (data[0] == 0 || data[0] == 1)) {
+        nfc_tag_mf1_detection_log_clear();  // 无论如何，操作日志的记录状态都要清除日志的历史记录
+        nfc_tag_mf1_set_detection_enable(data[0]);
+        status = STATUS_DEVICE_SUCCESS;
+	} else {
+        status = STATUS_PAR_ERR;
+    }
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+data_frame_tx_t* cmd_processor_get_mf1_detection_count(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint32_t count = nfc_tag_mf1_detection_log_count();
+    if (count == 0xFFFFFFFF) {
+        count = 0;
+    }
+    status = STATUS_DEVICE_SUCCESS;
+    return data_frame_make(cmd, status, sizeof(uint32_t), (uint8_t *)&count);
+}
+
+data_frame_tx_t* cmd_processor_get_mf1_detection_log(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint32_t count;
+    uint32_t index;
+    uint8_t *resp = NULL;
+    nfc_tag_mf1_auth_log_t* logs = get_mf1_auth_log(&count);
+    if (length == 4) {
+        if (count == 0xFFFFFFFF) {
+            length = 0;
+            status = STATUS_PAR_ERR;
+        } else {
+            index = bytes_to_num(data, 4);
+            NRF_LOG_INFO("index = %d", index);
+            if (index < count) {
+                // 直接使用头部地址+index作为数据源
+                resp = (uint8_t *)(logs + index);
+                // 计算当前还能传输多少个日志
+                length = MIN(count - index, DATA_PACK_MAX_DATA_LENGTH / sizeof(nfc_tag_mf1_auth_log_t)) * sizeof(nfc_tag_mf1_auth_log_t);
+                status = STATUS_DEVICE_SUCCESS;
+            } else {
+                length = 0;
+                status = STATUS_PAR_ERR;
+            }
+        }
+    } else {
+        length = 0;
+        status = STATUS_PAR_ERR;
+    }
+    return data_frame_make(cmd, status, length, resp);
 }
 
 /**
@@ -310,7 +405,13 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_SET_SLOT_ACTIVATED,         NULL,                        cmd_processor_set_slot_activated,            NULL                },
     {    DATA_CMD_SET_SLOT_TAG_TYPE,          NULL,                        cmd_processor_set_slot_tag_type,             NULL                },
     {    DATA_CMD_SET_SLOT_DATA_DEFAULT,      NULL,                        cmd_processor_set_slot_data_default,         NULL                },
+    {    DATA_CMD_SET_SLOT_ENABLE,            NULL,                        cmd_processor_set_slot_enable,               NULL                },
     
+    {    DATA_CMD_SET_EM410X_EMU_ID,          NULL,                        cmd_processor_set_em410x_emu_id,             NULL                },
+    
+    {    DATA_CMD_SET_MF1_DETECTION_ENABLE,   NULL,                        cmd_processor_set_mf1_detection_enable,      NULL                },
+    {    DATA_CMD_GET_MF1_DETECTION_COUNT,    NULL,                        cmd_processor_get_mf1_detection_count,       NULL                },
+    {    DATA_CMD_GET_MF1_DETECTION_RESULT,   NULL,                        cmd_processor_get_mf1_detection_log,         NULL                },
 };
 
 
