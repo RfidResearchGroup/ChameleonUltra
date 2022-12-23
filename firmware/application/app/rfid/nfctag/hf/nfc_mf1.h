@@ -59,8 +59,12 @@ typedef struct {
      * 开启后将响应后门卡操作指令，并且所有的操作直接放行，不受 mode_block_write 和控制位影响
      */
     uint8_t mode_gen1a_magic: 1;
+    /**
+     * 使能侦测，将自动记录mf1的验证日志
+     */
+    uint8_t detection_enable: 1;
     // 保留
-    uint8_t reserved1: 6;
+    uint8_t reserved1: 5;
     uint8_t reserved2;
     uint8_t reserved3;
 } nfc_tag_mf1_configure_t;
@@ -125,13 +129,13 @@ typedef struct {
 } nfc_tag_mf1_auth_log_t;
 
 
-// 获得mf1的侦测日志
 nfc_tag_mf1_auth_log_t* get_mf1_auth_log(uint32_t* count);
-// 数据加载后处理回调
 int nfc_tag_mf1_data_loadcb(tag_specific_type_t type, tag_data_buffer_t* buffer);
-// 数据保存前处理回调
 int nfc_tag_mf1_data_savecb(tag_specific_type_t type, tag_data_buffer_t* buffer);
-// 格式化为工厂默认数据
 bool nfc_tag_mf1_data_factory(uint8_t slot, tag_specific_type_t tag_type);
+void nfc_tag_mf1_set_detection_enable(bool enable);
+bool nfc_tag_mf1_is_detection_enable(void);
+void nfc_tag_mf1_detection_log_clear(void);
+uint32_t nfc_tag_mf1_detection_log_count(void);
 
 #endif

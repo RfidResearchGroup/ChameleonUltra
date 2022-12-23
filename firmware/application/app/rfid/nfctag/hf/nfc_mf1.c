@@ -395,12 +395,14 @@ void append_mf1_auth_log_step1(bool isKeyB, bool isNested, uint8_t block, uint8_
         NRF_LOG_INFO("Mifare Classic auth log buffer overflow");
         return;
     }
-    // 先判断是否是重新初始化了
-    m_auth_log.logs[m_auth_log.count].cmd.is_keyb = isKeyB;
-    m_auth_log.logs[m_auth_log.count].cmd.block = block;
-    m_auth_log.logs[m_auth_log.count].cmd.is_nested = isNested;
-    memcpy(m_auth_log.logs[m_auth_log.count].uid, m_shadow_coll_res.uid, 4);
-    memcpy(m_auth_log.logs[m_auth_log.count].nt, nonce, 4);
+    // 判断这个卡槽是否使能了侦测日志记录
+    if (m_tag_information->config.detection_enable) {
+        m_auth_log.logs[m_auth_log.count].cmd.is_keyb = isKeyB;
+        m_auth_log.logs[m_auth_log.count].cmd.block = block;
+        m_auth_log.logs[m_auth_log.count].cmd.is_nested = isNested;
+        memcpy(m_auth_log.logs[m_auth_log.count].uid, m_shadow_coll_res.uid, 4);
+        memcpy(m_auth_log.logs[m_auth_log.count].nt, nonce, 4);
+    }
 }
 
 /** @brief mf1追加验证日志，步骤二，存放读头回应的加密信息
@@ -412,14 +414,28 @@ void append_mf1_auth_log_step2(uint8_t *nr, uint8_t *ar) {
     if (m_auth_log.count > MF1_AUTH_LOG_MAX_SIZE) {
         return;
     }
-    
-    // 缓存加密信息
-    memcpy(m_auth_log.logs[m_auth_log.count].nr, nr, 4);
-    memcpy(m_auth_log.logs[m_auth_log.count].ar, ar, 4);
-    // 然后就可以结束本次记录，统计数量递增
-    m_auth_log.count += 1;
-    // 打印一下当前记录的日志个数
-    NRF_LOG_INFO("Auth log count: %d", m_auth_log.count);
+    if (m_tag_information->config.detection_enable) {
+        // 缓存加密信息
+        memcpy(m_auth_log.logs[m_auth_log.count].nr, nr, 4);
+        memcpy(m_auth_log.logs[m_auth_log.count].ar, ar, 4);
+    }
+}
+
+/** @brief mf1追加验证日志，步骤三，存放最终验证成功或者失败的日志
+ * 此步骤完成了最终的统计个数递增
+ * @param is_auth_success: 是否验证成功
+ */
+void append_mf1_auth_log_step3(bool is_auth_success) {
+    // 判断到超过上限直接跳过此操作，避免覆盖之前的记录
+    if (m_auth_log.count > MF1_AUTH_LOG_MAX_SIZE) {
+        return;
+    }
+    if (m_tag_information->config.detection_enable) {
+        // 然后就可以结束本次记录，统计数量递增
+        m_auth_log.count += 1;
+        // 打印一下当前记录的日志个数
+        NRF_LOG_INFO("Auth log count: %d", m_auth_log.count);
+    }
 }
 
 /** @brief mf1获得验证日志
@@ -663,6 +679,8 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                     m_tag_tx_buffer.tx_frame_bit_size = nfc_tag_14a_wrap_frame(m_tag_tx_buffer.tx_raw_buffer, 32, m_tag_tx_buffer.tx_bit_parity, m_tag_tx_buffer.tx_warp_frame);
                     nfc_tag_14a_tx_bits(m_tag_tx_buffer.tx_warp_frame, m_tag_tx_buffer.tx_frame_bit_size);
                 } else {
+                    // 暂时只存放验证失败的日志
+                    append_mf1_auth_log_step3(false);
                     // 验证失败，重置状态机
                     nfc_tag_14a_set_state(NFC_TAG_STATE_14A_IDLE);
                 }
@@ -1062,6 +1080,7 @@ bool nfc_tag_mf1_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     uint8_t default_blk0[] = { 0xDE, 0xAD, 0xBE, 0xFF, 0x32, 0x08, 0x04, 0x00, 0x01, 0x77, 0xA2, 0xCC, 0x35, 0xAF, 0xA5, 0x1D };
     uint8_t default_data[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     uint8_t default_trail[] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x07, 0x80, 0x69, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+    
     // default mf1 info
     nfc_tag_mf1_information_t mf1_tmp_information;
     nfc_tag_mf1_information_t *p_mf1_information;
@@ -1076,6 +1095,7 @@ bool nfc_tag_mf1_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
             memcpy(p_mf1_information->memory[block], default_data, sizeof(default_data));
         }
     }
+    
     // default mf1 auto ant-collision res 
     p_mf1_information->res_coll.atqa[0] = 0x04;
     p_mf1_information->res_coll.atqa[1] = 0x00;
@@ -1084,10 +1104,13 @@ bool nfc_tag_mf1_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     p_mf1_information->res_coll.uid[1] = 0x21;
     p_mf1_information->res_coll.size = NFC_TAG_14A_UID_SINGLE_SIZE;
     p_mf1_information->res_coll.ats.length = 0;
+    
     // default mf1 config
     p_mf1_information->config.mode_gen1a_magic = false;
     p_mf1_information->config.use_mf1_coll_res = true;
     p_mf1_information->config.mode_block_write = NFC_TAG_MF1_WRITE_NORMAL;
+    p_mf1_information->config.detection_enable = false;
+    
     // save data to flash
     tag_sense_type_t sense_type = get_sense_type_from_tag_type(tag_type);
     fds_slot_record_map_t map_info;
@@ -1101,4 +1124,24 @@ bool nfc_tag_mf1_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
         NRF_LOG_ERROR("Factory slot data error.");
     }
     return ret;
+}
+
+// 设置是否使能侦测
+void nfc_tag_mf1_set_detection_enable(bool enable) {
+    m_tag_information->config.detection_enable = enable;
+}
+
+// 当前是否使能侦测
+bool nfc_tag_mf1_is_detection_enable(void) {
+    return m_tag_information->config.detection_enable;
+}
+
+// 清除侦测记录
+void nfc_tag_mf1_detection_log_clear(void) {
+    m_auth_log.count = 0;
+}
+
+// 获得侦测记录的统计次数
+uint32_t nfc_tag_mf1_detection_log_count(void) {
+    return m_auth_log.count;
 }
