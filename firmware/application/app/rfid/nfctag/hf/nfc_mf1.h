@@ -6,6 +6,7 @@
 
 #define NFC_TAG_MF1_DATA_SIZE   16
 #define NFC_TAG_MF1_FRAME_SIZE  (NFC_TAG_MF1_DATA_SIZE + NFC_TAG_14A_CRC_LENGTH)
+#define NFC_TAG_MF1_BLOCK_MAX   256
 
 
 // mf1标签写入模式
@@ -76,7 +77,7 @@ typedef struct {
 typedef struct __attribute__((aligned(4))) {
     nfc_tag_14a_coll_res_entity_t res_coll;
     nfc_tag_mf1_configure_t config;
-    uint8_t memory[256][16];
+    uint8_t memory[NFC_TAG_MF1_BLOCK_MAX][NFC_TAG_MF1_DATA_SIZE];
 } nfc_tag_mf1_information_t;
 
 // 4Byte卡片的出厂固化的0块结构
@@ -137,5 +138,6 @@ void nfc_tag_mf1_set_detection_enable(bool enable);
 bool nfc_tag_mf1_is_detection_enable(void);
 void nfc_tag_mf1_detection_log_clear(void);
 uint32_t nfc_tag_mf1_detection_log_count(void);
+nfc_tag_14a_coll_res_referen_t* get_miafre_coll_res(void);
 
 #endif
