@@ -53,7 +53,8 @@
 //                  Range from 4000 -> 4999
 // ******************************************************************
 // 
-#define DATA_CMD_UPLOAD_MF1_DATA                (4000)
+#define DATA_CMD_LOAD_MF1_BLOCK_DATA            (4000)
+#define DATA_CMD_SET_MF1_ANTI_COLLISION_RES     (4001)
 //
 // ******************************************************************
 
@@ -72,4 +73,6 @@
 #define DATA_CMD_SET_MF1_DETECTION_ENABLE       (5003)
 #define DATA_CMD_GET_MF1_DETECTION_COUNT        (5004)
 #define DATA_CMD_GET_MF1_DETECTION_RESULT       (5005)
+
+
 #endif

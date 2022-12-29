@@ -334,12 +334,14 @@ data_frame_tx_t* cmd_processor_get_mf1_detection_log(uint16_t cmd, uint16_t stat
             status = STATUS_PAR_ERR;
         } else {
             index = bytes_to_num(data, 4);
-            NRF_LOG_INFO("index = %d", index);
+            // NRF_LOG_INFO("index = %d", index);
             if (index < count) {
                 // 直接使用头部地址+index作为数据源
                 resp = (uint8_t *)(logs + index);
                 // 计算当前还能传输多少个日志
-                length = MIN(count - index, DATA_PACK_MAX_DATA_LENGTH / sizeof(nfc_tag_mf1_auth_log_t)) * sizeof(nfc_tag_mf1_auth_log_t);
+                length = MIN(count - index, DATA_PACK_MAX_DATA_LENGTH / sizeof(nfc_tag_mf1_auth_log_t));
+                // 计算当前传输的日志总字节长度
+                length = length * sizeof(nfc_tag_mf1_auth_log_t);
                 status = STATUS_DEVICE_SUCCESS;
             } else {
                 length = 0;
@@ -351,6 +353,56 @@ data_frame_tx_t* cmd_processor_get_mf1_detection_log(uint16_t cmd, uint16_t stat
         status = STATUS_PAR_ERR;
     }
     return data_frame_make(cmd, status, length, resp);
+}
+
+data_frame_tx_t* cmd_processor_set_mf1_emulator_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length > 0 && (((length - 1) % NFC_TAG_MF1_DATA_SIZE) == 0)) {
+        // 我们必须要确保传输过来的块数据没有越界
+        uint8_t block_index = data[0];
+        uint8_t block_count = (length - 1) % NFC_TAG_MF1_DATA_SIZE;
+        if (block_index + block_count > NFC_TAG_MF1_BLOCK_MAX) {
+            status = STATUS_PAR_ERR;
+        } else {
+            // 默认获得最大的IC卡数据缓冲区
+            tag_data_buffer_t* buffer = get_buffer_by_tag_type(TAG_TYPE_MIFARE_4096);
+            nfc_tag_mf1_information_t *info = (nfc_tag_mf1_information_t *)buffer->buffer;
+            // 没有越界，我们可以进行block设置
+            for (int i = 1, j = block_index; i < length - 1; i += NFC_TAG_MF1_DATA_SIZE, j++) {
+                uint8_t *p_block = &data[i];
+                memcpy(info->memory[j], p_block, NFC_TAG_MF1_DATA_SIZE);
+            }
+            // 设置完成，我们可以告知上位机
+            status = STATUS_DEVICE_SUCCESS;
+        }
+    } else {
+        status = STATUS_PAR_ERR;
+    }
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+data_frame_tx_t* cmd_processor_set_mf1_anti_collision_res(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length > 13) {
+        // sak(1) + atqa(2) + uid(10) 设置基础参数，长度绝对不会大于13个字节
+        status = STATUS_PAR_ERR;
+    } else {
+        uint8_t uid_length = length - 3;
+        if (is_valid_uid_size(uid_length)) {
+            nfc_tag_14a_coll_res_referen_t* info = get_miafre_coll_res();
+            // copy sak
+            info->sak[0] = data[0];
+            // copy atqa
+            memcpy(info->atqa, &data[1], 2);
+            // copy uid
+            memcpy(info->uid, &data[3], uid_length);
+            // copy size
+            *(info->size) = (nfc_tag_14a_uid_size)uid_length;
+            status = STATUS_DEVICE_SUCCESS;
+        } else {
+            // UID长度不对
+            status = STATUS_PAR_ERR;
+        }
+    }
+    return data_frame_make(cmd, status, 0, NULL);
 }
 
 /**
@@ -378,40 +430,43 @@ data_frame_tx_t* after_reader_run(uint16_t cmd, uint16_t status, uint16_t length
 }
 
 /**
- * (cmd -> process) function map, the map struct is:
- *            cmd code                        before process               cmd processor                                after process
+ * (cmd -> processor) function map, the map struct is:
+ *       cmd code                               before process               cmd processor                                after process
  */
 static cmd_data_map_t m_data_cmd_map[] = {
-    {    DATA_CMD_GET_APP_VERSION,            NULL,                        cmd_processor_get_version,                   NULL                },
-    {    DATA_CMD_CHANGE_DEVICE_MODE,         NULL,                        cmd_processor_change_device_mode,            NULL                },
-    {    DATA_CMD_GET_DEVICE_MODE,            NULL,                        cmd_processor_get_device_mode,               NULL                },
-
-    {    DATA_CMD_SCAN_14A_TAG,               before_reader_run,           cmd_processor_14a_scan,                      after_reader_run    },
-    {    DATA_CMD_MF1_SUPPORT_DETECT,         before_reader_run,           cmd_processor_detect_mf1_support,            after_reader_run    },
-    {    DATA_CMD_MF1_NT_LEVEL_DETECT,        before_reader_run,           cmd_processor_detect_mf1_nt_level,           after_reader_run    },
-    {    DATA_CMD_MF1_DARKSIDE_DETECT,        before_reader_run,           cmd_processor_detect_mf1_darkside,           after_reader_run    },
-
-    {    DATA_CMD_MF1_DARKSIDE_ACQUIRE,       before_reader_run,           cmd_processor_mf1_darkside_acquire,          after_reader_run    },
-    {    DATA_CMD_MF1_NT_DIST_DETECT,         before_reader_run,           cmd_processor_mf1_nt_distance,               after_reader_run    },
-    {    DATA_CMD_MF1_NESTED_ACQUIRE,         before_reader_run,           cmd_processor_mf1_nested_acquire,            after_reader_run    },
-
-    {    DATA_CMD_MF1_CHECK_ONE_KEY_BLOCK,    before_reader_run,           cmd_processor_mf1_auth_one_key_block,        after_reader_run    },
-    {    DATA_CMD_MF1_READ_ONE_BLOCK,         before_reader_run,           cmd_processor_mf1_read_one_block,            after_reader_run    },
-    {    DATA_CMD_MF1_WRITE_ONE_BLOCK,        before_reader_run,           cmd_processor_mf1_write_one_block,           after_reader_run    },
-
-    {    DATA_CMD_SCAN_EM410X_TAG,            NULL,                        cmd_processor_em410x_scan,                   NULL                },
-    {    DATA_CMD_WRITE_EM410X_TO_T5577,      NULL,                        cmd_processor_write_em410x_2_t57,            NULL                },
+    {    DATA_CMD_GET_APP_VERSION,              NULL,                        cmd_processor_get_version,                   NULL                },
+    {    DATA_CMD_CHANGE_DEVICE_MODE,           NULL,                        cmd_processor_change_device_mode,            NULL                },
+    {    DATA_CMD_GET_DEVICE_MODE,              NULL,                        cmd_processor_get_device_mode,               NULL                },
+                                                                                                                          
+    {    DATA_CMD_SCAN_14A_TAG,                 before_reader_run,           cmd_processor_14a_scan,                      after_reader_run    },
+    {    DATA_CMD_MF1_SUPPORT_DETECT,           before_reader_run,           cmd_processor_detect_mf1_support,            after_reader_run    },
+    {    DATA_CMD_MF1_NT_LEVEL_DETECT,          before_reader_run,           cmd_processor_detect_mf1_nt_level,           after_reader_run    },
+    {    DATA_CMD_MF1_DARKSIDE_DETECT,          before_reader_run,           cmd_processor_detect_mf1_darkside,           after_reader_run    },
+                                                                                                                          
+    {    DATA_CMD_MF1_DARKSIDE_ACQUIRE,         before_reader_run,           cmd_processor_mf1_darkside_acquire,          after_reader_run    },
+    {    DATA_CMD_MF1_NT_DIST_DETECT,           before_reader_run,           cmd_processor_mf1_nt_distance,               after_reader_run    },
+    {    DATA_CMD_MF1_NESTED_ACQUIRE,           before_reader_run,           cmd_processor_mf1_nested_acquire,            after_reader_run    },
+                                                                                                                          
+    {    DATA_CMD_MF1_CHECK_ONE_KEY_BLOCK,      before_reader_run,           cmd_processor_mf1_auth_one_key_block,        after_reader_run    },
+    {    DATA_CMD_MF1_READ_ONE_BLOCK,           before_reader_run,           cmd_processor_mf1_read_one_block,            after_reader_run    },
+    {    DATA_CMD_MF1_WRITE_ONE_BLOCK,          before_reader_run,           cmd_processor_mf1_write_one_block,           after_reader_run    },
+                                                                                                                          
+    {    DATA_CMD_SCAN_EM410X_TAG,              NULL,                        cmd_processor_em410x_scan,                   NULL                },
+    {    DATA_CMD_WRITE_EM410X_TO_T5577,        NULL,                        cmd_processor_write_em410x_2_t57,            NULL                },
+                                                                                                                          
+    {    DATA_CMD_SET_SLOT_ACTIVATED,           NULL,                        cmd_processor_set_slot_activated,            NULL                },
+    {    DATA_CMD_SET_SLOT_TAG_TYPE,            NULL,                        cmd_processor_set_slot_tag_type,             NULL                },
+    {    DATA_CMD_SET_SLOT_DATA_DEFAULT,        NULL,                        cmd_processor_set_slot_data_default,         NULL                },
+    {    DATA_CMD_SET_SLOT_ENABLE,              NULL,                        cmd_processor_set_slot_enable,               NULL                },
+                                                                                                                          
+    {    DATA_CMD_SET_EM410X_EMU_ID,            NULL,                        cmd_processor_set_em410x_emu_id,             NULL                },
+                                                                                                                          
+    {    DATA_CMD_SET_MF1_DETECTION_ENABLE,     NULL,                        cmd_processor_set_mf1_detection_enable,      NULL                },
+    {    DATA_CMD_GET_MF1_DETECTION_COUNT,      NULL,                        cmd_processor_get_mf1_detection_count,       NULL                },
+    {    DATA_CMD_GET_MF1_DETECTION_RESULT,     NULL,                        cmd_processor_get_mf1_detection_log,         NULL                },
+    {    DATA_CMD_LOAD_MF1_BLOCK_DATA,          NULL,                        cmd_processor_set_mf1_emulator_block,        NULL                },
+    {    DATA_CMD_SET_MF1_ANTI_COLLISION_RES,   NULL,                        cmd_processor_set_mf1_anti_collision_res,    NULL                },
     
-    {    DATA_CMD_SET_SLOT_ACTIVATED,         NULL,                        cmd_processor_set_slot_activated,            NULL                },
-    {    DATA_CMD_SET_SLOT_TAG_TYPE,          NULL,                        cmd_processor_set_slot_tag_type,             NULL                },
-    {    DATA_CMD_SET_SLOT_DATA_DEFAULT,      NULL,                        cmd_processor_set_slot_data_default,         NULL                },
-    {    DATA_CMD_SET_SLOT_ENABLE,            NULL,                        cmd_processor_set_slot_enable,               NULL                },
-    
-    {    DATA_CMD_SET_EM410X_EMU_ID,          NULL,                        cmd_processor_set_em410x_emu_id,             NULL                },
-    
-    {    DATA_CMD_SET_MF1_DETECTION_ENABLE,   NULL,                        cmd_processor_set_mf1_detection_enable,      NULL                },
-    {    DATA_CMD_GET_MF1_DETECTION_COUNT,    NULL,                        cmd_processor_get_mf1_detection_count,       NULL                },
-    {    DATA_CMD_GET_MF1_DETECTION_RESULT,   NULL,                        cmd_processor_get_mf1_detection_log,         NULL                },
 };
 
 
