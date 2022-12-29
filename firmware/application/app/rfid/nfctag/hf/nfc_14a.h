@@ -103,5 +103,7 @@ void nfc_tag_14a_tx_bits(uint8_t *data, uint32_t bits);
 void nfc_tag_14a_tx_nbit_delay_window(uint8_t data, uint32_t bits);
 void nfc_tag_14a_tx_nbit(uint8_t data, uint32_t bits);
 
+// 判断是否是有效的uid长度
+bool is_valid_uid_size(uint8_t uid_length);
 
 #endif
