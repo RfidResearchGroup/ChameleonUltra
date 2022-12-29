@@ -604,6 +604,82 @@ class HFMFDetectionDecrypt(DeviceRequiredUnit):
         return
 
 
+class HFMFELoad(DeviceRequiredUnit):
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        parser = ArgumentParserNoExit()
+        parser.add_argument('-f', '--file', type=str, required=True, help="file path")
+        parser.add_argument('-t', '--type', type=str, required=True, help="content type", choices=['bin', 'hex'])
+        return parser
+
+    # hf mf eload -f test.bin -t bin
+    # hf mf eload -f test.eml -t hex
+    def on_exec(self, args: argparse.Namespace):
+        file = args.file
+        content_type = args.type
+        buffer = bytearray()
+
+        with open(file, mode='rb') as fd:
+            if content_type == 'bin':
+                buffer.extend(fd.read())
+            if content_type == 'hex':
+                buffer.extend(bytearray.fromhex(fd.read().decode()))
+
+        if len(buffer) % 16 != 0:
+            raise Exception("Data block not align for 16 bytes")
+        if len(buffer) / 16 > 256:
+            raise Exception("Data block memory overflow")
+
+        index = 0
+        block = 0
+        while index < len(buffer):
+            # split a block from buffer
+            block_data = buffer[index: index + 16]
+            index += 16
+            # load to device
+            self.cmd_positive.set_mf1_block_data(block, block_data)
+            print('.', end='')
+            block += 1
+        print("\n - Load success")
+
+
+class HFMFSim(DeviceRequiredUnit):
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        parser = ArgumentParserNoExit()
+        parser.add_argument('--sak', type=str, required=True, help="Select AcKnowledge(hex)", metavar="hex")
+        parser.add_argument('--atqa', type=str, required=True, help="Answer To Request(hex)", metavar="hex")
+        parser.add_argument('--uid', type=str, required=True, help="Unique ID(hex)", metavar="hex")
+        return parser
+
+    # hf mf sim --sak 08 --atqa 0400 --uid DEADBEEF
+    def on_exec(self, args: argparse.Namespace):
+        sak_str: str = args.sak.strip()
+        atqa_str: str = args.atqa.strip()
+        uid_str: str = args.uid.strip()
+
+        if re.match('[a-fA-F0-9]{2}', sak_str) is not None:
+            sak = bytearray.fromhex(sak_str)
+        else:
+            raise Exception("SAK must be hex(2byte)")
+
+        if re.match('[a-fA-F0-9]{4}', atqa_str) is not None:
+            atqa = bytearray.fromhex(atqa_str)
+        else:
+            raise Exception("ATQA must be hex(4byte)")
+
+        if re.match('[a-fA-F0-9]+', uid_str) is not None:
+            uid_len = len(uid_str)
+            if uid_len != 8 and uid_len != 14 and uid_len != 20:
+                raise Exception("UID length error")
+            uid = bytearray.fromhex(uid_str)
+        else:
+            raise Exception("UID must be hex")
+
+        self.cmd_positive.set_mf1_anti_collision_res(sak, atqa, uid)
+        print(" - Set anti-collision resources success")
+
+
 class LFEMRead(ReaderRequiredUint):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -716,7 +792,8 @@ class HWSlotTagType(TagTypeRequiredUint, SlotIndexRequireUint):
     # hw slot tagtype -t 2
     def on_exec(self, args: argparse.Namespace):
         tag_type = args.type
-        self.cmd_positive.set_slot_tag_type(tag_type)
+        slot_index = args.slot
+        self.cmd_positive.set_slot_tag_type(slot_index, tag_type)
         print(f' - Set slot tag type success.')
 
 
