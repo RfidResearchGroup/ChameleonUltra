@@ -1,18 +1,20 @@
-PROJECT_NAME     := secure_bootloader_ble_s140_pca10056
-TARGETS          := nrf52840_xxaa_s140
+PROJECT_NAME     := chameleon_bootloader
+TARGETS          := bootloader
 OUTPUT_DIRECTORY := out
 
-SDK_ROOT := ./sdk/
-PROJ_DIR := ./app/
+SDK_ROOT := ../../resource/nrf52_sdk
+PROJ_DIR := ./src/
+DFU_DIR  := ../../resource/dfu_key/
+LD_DIR   := ../../resource/link_script/
 
-$(OUTPUT_DIRECTORY)/nrf52840_xxaa_s140.out: \
-  LINKER_SCRIPT  := $(PROJ_DIR)/secure_bootloader_gcc_nrf52.ld
+$(OUTPUT_DIRECTORY)/bootloader.out: \
+  LINKER_SCRIPT  := ${LD_DIR}/bootloader.ld
 
 
 # Source files common to all targets
 SRC_FILES += \
   $(PROJ_DIR)/main.c \
-  $(PROJ_DIR)/dfu_public_key.c \
+  $(DFU_DIR)/dfu_public_key.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_clock.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_power.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_systick.c \
@@ -104,7 +106,6 @@ SRC_FILES += \
 # Include folders common to all targets
 INC_FOLDERS += \
   $(PROJ_DIR) \
-  $(PROJ_DIR)/config \
   $(SDK_ROOT)/modules/nrfx/drivers/include \
   $(SDK_ROOT)/components/libraries/crypto/backend/micro_ecc \
   $(SDK_ROOT)/components/libraries/memobj \
@@ -175,7 +176,7 @@ OPT = -Os -g3
 CFLAGS += $(OPT)
 CFLAGS += -DBLE_STACK_SUPPORT_REQD
 CFLAGS += -DBOARD_CHAMELEON
-CFLAGS += -DCONFIG_GPIO_AS_PINRESET
+# CFLAGS += -DCONFIG_GPIO_AS_PINRESET
 CFLAGS += -DFLOAT_ABI_HARD
 CFLAGS += -DNRF52840_XXAA
 CFLAGS += -DNRF_DFU_SETTINGS_VERSION=2
@@ -213,7 +214,7 @@ ASMFLAGS += -DSVC_INTERFACE_CALL_AS_NORMAL_FUNCTION
 
 # Linker flags
 LDFLAGS += $(OPT)
-LDFLAGS += -mthumb -mabi=aapcs -L$(SDK_ROOT)/modules/nrfx/mdk -T$(LINKER_SCRIPT)
+LDFLAGS += -mthumb -mabi=aapcs -L$(SDK_ROOT)/modules/nrfx/mdk -L${LD_DIR}/ -T$(LINKER_SCRIPT)
 LDFLAGS += -mcpu=cortex-m4
 LDFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
 # let linker dump unused sections
@@ -221,8 +222,8 @@ LDFLAGS += -Wl,--gc-sections
 # use newlib in nano version
 LDFLAGS += --specs=nano.specs
 
-nrf52840_xxaa_s140: CFLAGS += -D__HEAP_SIZE=0
-nrf52840_xxaa_s140: ASMFLAGS += -D__HEAP_SIZE=0
+bootloader: CFLAGS += -D__HEAP_SIZE=0
+bootloader: ASMFLAGS += -D__HEAP_SIZE=0
 
 # Add standard libraries at the very end of the linker input, after all objects
 # that may need symbols provided by these libraries.
@@ -232,12 +233,12 @@ LIB_FILES += -lc -lnosys -lm
 .PHONY: default help
 
 # Default target - first one defined
-default: nrf52840_xxaa_s140
+default: bootloader
 
 # Print all targets that can be built
 help:
 	@echo following targets are available:
-	@echo		nrf52840_xxaa_s140
+	@echo		bootloader
 	@echo		flash_softdevice
 	@echo		config - starting external tool for editing sdk_config.h
 	@echo		flash      - flashing binary
@@ -253,8 +254,8 @@ $(foreach target, $(TARGETS), $(call define_target, $(target)))
 
 # Flash the program
 flash: default
-	@echo Flashing: $(OUTPUT_DIRECTORY)/nrf52840_xxaa_s140.hex
-	nrfjprog -f nrf52 --program $(OUTPUT_DIRECTORY)/nrf52840_xxaa_s140.hex --sectorerase
+	@echo Flashing: $(OUTPUT_DIRECTORY)/bootloader.hex
+	nrfjprog -f nrf52 --program $(OUTPUT_DIRECTORY)/bootloader.hex --sectorerase
 	nrfjprog -f nrf52 --reset
 
 # Flash softdevice
@@ -267,7 +268,7 @@ erase:
 	nrfjprog -f nrf52 --eraseall
 
 # Config project
-SDK_CONFIG_FILE := $(PROJ_DIR)/config/sdk_config.h
+SDK_CONFIG_FILE := $(PROJ_DIR)/sdk_config.h
 CMSIS_CONFIG_TOOL := $(SDK_ROOT)/external_tools/cmsisconfig/CMSIS_Configuration_Wizard.jar
 config:
 	java -jar $(CMSIS_CONFIG_TOOL) $(SDK_CONFIG_FILE)
