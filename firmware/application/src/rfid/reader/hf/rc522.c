@@ -38,7 +38,7 @@ static autotimer* g_timeout_auto_timer;
 #define SPI_INSTANCE  0 /**< SPI instance index. */
 static const nrf_drv_spi_t s_spiHandle = NRF_DRV_SPI_INSTANCE(SPI_INSTANCE);	// SPI instance
 
-#define NO_OPT __attribute__((optimize("-O0")))
+#define ONCE_OPT __attribute__((optimize("O3")))
 
 /**
 * @brief  ：读寄存器
@@ -94,7 +94,7 @@ void read_register_buffer(uint8_t Address, uint8_t *pInBuffer, uint8_t len)
 * @param  ：Address：寄存器地址
 *			value: 将要写入的值
 */
-void NO_OPT write_register_single(uint8_t Address, uint8_t value)
+void ONCE_OPT write_register_single(uint8_t Address, uint8_t value)
 {
 	RC522_DOSEL;
 
