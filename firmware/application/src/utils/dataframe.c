@@ -142,7 +142,7 @@ void data_frame_receive(uint8_t *data, uint16_t length) {
             m_data_cmd = bytes_to_num(&m_data_rx_buffer[2], 2);
             m_data_status = bytes_to_num(&m_data_rx_buffer[4], 2);
             m_data_len = bytes_to_num(&m_data_rx_buffer[6], 2);
-            NRF_LOG_ERROR("Data frame data length %d.", m_data_len);
+            NRF_LOG_INFO("Data frame data length %d.", m_data_len);
             // check data length
             if (m_data_len > DATA_PACK_MAX_DATA_LENGTH) {
                 NRF_LOG_ERROR("Data frame data length too than of max.");
