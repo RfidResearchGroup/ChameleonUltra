@@ -7,8 +7,6 @@ First of all, it is difficult to buy chips because the lead time for the main ch
 
 # Why NRF52840?
 
-# Overview
-
 NRF52840 has a built-in NFC Tag-A module, but no one seems to care about it. After playing with HydraNFC's TRF7970A and FlipperZero's ST25R3916, the developers found that they can only simulate card numbers. I accidentally tested the NFC of 52840, and found that it is not only surprisingly easy to simulate a complete MF card, but also has very good simulation performance, friendly data flow interaction, and very fast response, unlike the former which is limited by the SPI bus clock rate. We also found that it has ultra-low power consumption, ultra-small size, 256kb/1M large RAM and FLASH, also has BLE5.0 and USB2.0 FS, super CotexM4F, most importantly, he is very cheap ! !
 This is undoubtedly a treasure discovery for us! Below we will explain in detail how we exploited the performance of the 52840, and what seemingly impossible functions have been realized with it!
 
