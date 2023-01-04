@@ -19,13 +19,13 @@ High frequency analog: ISO 14443, NFC, NXP Mifare Classic, Plus, Ultralight, Ult
 Low frequency support: ASK, FSK, PSK, card reader, analog card, Brute Force. EM410X, T5577, HID prox, Indala.
 
 # PSK
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/3.png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/2.png)
 
 # FSK
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/4.png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/3.png)
 
 # ASK
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/5.png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/4.png)
 
 # 1. Ultra-low power consumption
 
