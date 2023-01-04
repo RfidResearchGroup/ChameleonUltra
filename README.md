@@ -73,5 +73,5 @@ Hardnest decoding function:
 
 
 Hardware frame diagram:
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/10.png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Hardware%20frame%20diagram.png)
 
