@@ -43,35 +43,35 @@ This project specially optimizes the start-up and interaction logic and antenna 
 
 # 4. Ultra-fast response speed and low interaction delay
 
-# Standard MF card
+# Standard MIFARE Card
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/5.png)
 
-# AVR simulation card
+# AVR Simulation
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/6.png)
 
-# PM3 analog card
+# PM3 Simulation
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/7.png)
 
-# Mi K30 analog card
+# Mi K30 Simulation
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/8.png)
 
-# Chameleon Ultra Sim Card
+# Chameleon Ultra Simulation
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/9.png)
 
 # 5. 256kB super large RAM cooperates with RC522 to replace Proxmark3 magically to complete the decoding
 
-Darkside decoding function:
+# Darkside decoding function
 
 
-Nested decoding function:
+# Nested decoding function:
 
 
-Staticnest decoding function:
+# Staticnest decoding function:
 
 
-Hardnest decoding function:
+# Hardnest decoding function:
 
 
-Hardware frame diagram:
+# Hardware frame diagram:
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Hardware%20frame%20diagram.png)
 
