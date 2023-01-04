@@ -10,7 +10,7 @@ First of all, it is difficult to buy chips because the lead time for the main ch
 NRF52840 has a built-in NFC Tag-A module, but no one seems to care about it. After playing with HydraNFC's TRF7970A and FlipperZero's ST25R3916, the developers found that they can only simulate card numbers. I accidentally tested the NFC of 52840, and found that it is not only surprisingly easy to simulate a complete MF card, but also has very good simulation performance, friendly data flow interaction, and very fast response, unlike the former which is limited by the SPI bus clock rate. We also found that it has ultra-low power consumption, ultra-small size, 256kb/1M large RAM and FLASH, also has BLE5.0 and USB2.0 FS, super CotexM4F, most importantly, he is very cheap ! !
 This is undoubtedly a treasure discovery for us! Below we will explain in detail how we exploited the performance of the 52840, and what seemingly impossible functions have been realized with it!
 
-# Supported functions:
+# Supported functions
 
 High-frequency decoding: MFKEY32 V2 sniffing, Darkside, Nested, Staticnest, Hardnest, Rely attack
 High frequency analog: ISO 14443, NFC, NXP Mifare Classic, Plus, Ultralight, Ultralight C, Ntag, DESfire / DESfire EV1
@@ -43,19 +43,19 @@ This project specially optimizes the start-up and interaction logic and antenna 
 
 # 4. Ultra-fast response speed and low interaction delay
 
-# Standard MF card:
+# Standard MF card
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/5.png)
 
-# AVR simulation card:
+# AVR simulation card
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/6.png)
 
-# PM3 analog card:
+# PM3 analog card
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/7.png)
 
-# Mi K30 analog card:
+# Mi K30 analog card
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/8.png)
 
-# Chameleon Ultra Sim Card:
+# Chameleon Ultra Sim Card
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/9.png)
 
 # 5. 256kB super large RAM cooperates with RC522 to replace Proxmark3 magically to complete the decoding
