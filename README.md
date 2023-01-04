@@ -1,6 +1,6 @@
 # ChameleonUltra
 
-"https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/1.png"
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/1.png)
 
 Why not keep using ATxmega128?
 First of all, it is difficult to buy chips because the lead time for the main chip is too long, and because the price has skyrocketed. Secondly, because the interaction speed of the ATxmega soft analog card is slow, the decryption performance of the READER mode cannot meet the needs, and the low-frequency function cannot be added, so we have been trying to upgrade it, such as using the latest ARM to replace the AVR framework, and the performance will definitely be greatly improved. .
