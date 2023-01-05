@@ -58,19 +58,23 @@ This project specially optimizes the start-up and interaction logic and antenna 
 # ChameleonTiny Simulation
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/ChameleonTiny.png)
 
+# FlipperZero Simulation
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/FlipperZero%20Simulation.png)
+
 # 5. 256kB super large RAM cooperates with RC522 to replace Proxmark3 magically to complete the decoding
 
 # Darkside decoding function
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/DarkSide.png)
 
-# Nested decoding function:
+# Nested decoding function
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Nested.png)
 
-# Staticnest decoding function:
+# MFKEY32 V2 decoding function：
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Nested.png)
 
+# Staticnest decoding function
 
-# Hardnest decoding function:
-
+# Hardnest decoding function
 
 # Hardware frame diagram:
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Hardware%20frame%20diagram.png)
