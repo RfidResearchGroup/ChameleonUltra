@@ -69,12 +69,14 @@ This project specially optimizes the start-up and interaction logic and antenna 
 # Nested decoding function
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Nested.png)
 
-# MFKEY32 V2 decoding function：
+# MFKEY32 V2 decoding function
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Nested.png) 
 
 # Staticnest decoding function
+Coming Soon
 
 # Hardnest decoding function
+Coming Soon
 
 # Hardware frame diagram:
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Hardware%20%20Frame%20Diagram.png)
