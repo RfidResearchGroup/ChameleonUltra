@@ -44,27 +44,27 @@ This project specially optimizes the start-up and interaction logic and antenna 
 # 4. Ultra-fast response speed and low interaction delay
 
 # Standard MIFARE Card
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/5.png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Standard_m1_s50.png)
 
-# AVR Simulation
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/6.png)
-
-# PM3 Simulation
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/7.png)
+# PM3 Rdv4.01 Simulation
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Proxmark3_Rdv4_RRG_(Firmware%20build%20at%2020201026).png)
 
 # Mi K30 Simulation
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/8.png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Xiaomi_k30u_smartkey.png)
 
-# Chameleon Ultra Simulation
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/9.png)
+# ChameleonUltra Simulation
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/ChameleonUltra.png)
+
+# ChameleonTiny Simulation
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/ChameleonTiny.png)
 
 # 5. 256kB super large RAM cooperates with RC522 to replace Proxmark3 magically to complete the decoding
 
 # Darkside decoding function
-
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/DarkSide.png)
 
 # Nested decoding function:
-
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Nested.png)
 
 # Staticnest decoding function:
 
