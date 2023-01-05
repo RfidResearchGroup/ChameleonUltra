@@ -12,9 +12,37 @@ This is undoubtedly a treasure discovery for us! Below we will explain in detail
 
 # Supported functions
 
-High-frequency decoding: MFKEY32 V2 sniffing, Darkside, Nested, Staticnest, Hardnest, Rely attack
-High frequency analog: ISO 14443, NFC, NXP Mifare Classic, Plus, Ultralight, Ultralight C, Ntag, DESfire / DESfire EV1
-Low frequency support: ASK, FSK, PSK, card reader, analog card, Brute Force. EM410X, T5577, HID prox, Indala.
+High-frequency decoding: 
+1）MFKEY32 V2 
+2) Sniffing
+3）Darkside
+4）Nested
+5）Staticnest
+6）Hardnest
+7）Relay attack
+
+High frequency analog: 
+1) ISO 14443
+2) NFC
+3) NXP MIFARE Classic
+4) NXP MIFARE Plus 
+5) Ultralight 
+6) Ultralight C 
+7) NTAG
+8) DESFIRE 
+9) DESFIRE EV1
+
+Low frequency support: 
+1) ASK
+2) FSK
+3) PSK
+4) Card reader 
+5) Simulation card
+6) Brute Force
+7) EM410X
+8) T5577 
+9) HID prox
+10) Indala
 
 # PSK
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/PSK.png)
