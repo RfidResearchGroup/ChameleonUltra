@@ -92,7 +92,7 @@ This project specially optimizes the start-up and interaction logic and antenna 
 # 5. 256kB super large RAM cooperates with RC522 to replace Proxmark3 magically to complete the decoding
 
 # Darkside decoding function
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Darkside.png)
+![alt text]()
 
 # Nested decoding function
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Nested.png)
