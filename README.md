@@ -22,7 +22,7 @@ High-frequency decoding:
 6）Hardnest
 7）Relay attack
 
-High frequency analog: 
+High frequency simulation: 
 1) ISO 14443
 2) NFC
 3) NXP MIFARE Classic
