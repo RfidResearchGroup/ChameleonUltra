@@ -13,7 +13,7 @@ Below we will explain in detail how we exploited the performance of the NRF52840
 
 # Supported functions
 
-# High-frequency decoding
+## High-frequency decoding
 1）MFKEY32 V2 
 2) Sniffing
 3）Darkside
@@ -22,7 +22,7 @@ Below we will explain in detail how we exploited the performance of the NRF52840
 6）Hardnest
 7）Relay attack
 
-# High frequency simulation
+## High frequency simulation
 1) ISO 14443
 2) NFC
 3) NXP MIFARE Classic
@@ -33,7 +33,7 @@ Below we will explain in detail how we exploited the performance of the NRF52840
 8) DESFIRE 
 9) DESFIRE EV1
 
-# Low frequency support
+## Low frequency support
 1) ASK
 2) FSK
 3) PSK
