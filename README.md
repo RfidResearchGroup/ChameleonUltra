@@ -14,13 +14,13 @@ Below we will explain in detail how we exploited the performance of the NRF52840
 # Supported functions
 
 ## High-frequency decoding
-1）MFKEY32 V2 
-2) Sniffing
-3）Darkside
-4）Nested
-5）Staticnest
-6）Hardnest
-7）Relay attack
+1. MFKEY32 V2 
+2. Sniffing
+3. Darkside
+4. Nested
+5. Staticnest
+6. Hardnest
+7. Relay attack
 
 ## High frequency simulation
 1) ISO 14443
