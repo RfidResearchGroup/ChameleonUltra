@@ -329,7 +329,7 @@ bool lf_tag_em410x_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     // 将数据写进去flash
     tag_sense_type_t sense_type = get_sense_type_from_tag_type(tag_type);
     fds_slot_record_map_t map_info; // 获取专用卡槽FDS记录信息
-    get_fds_map_by_slot_sense_type(slot, sense_type, &map_info);
+    get_fds_map_by_slot_sense_type_for_dump(slot, sense_type, &map_info);
     // 调用堵塞式的fds写入函数，将卡槽指定场类型的数据写入到flash中
     bool ret = fds_write_sync(map_info.id, map_info.key, sizeof(tag_id) / 4, (uint8_t *)tag_id);
     if (ret) {

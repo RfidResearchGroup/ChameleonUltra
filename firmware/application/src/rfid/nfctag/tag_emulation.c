@@ -186,7 +186,7 @@ static void load_data_by_tag_type(uint8_t slot, tag_specific_type_t tag_type) {
     tag_sense_type_t sense_type = get_sense_type_from_tag_type(tag_type);
     // 获取专用卡槽FDS记录信息
     fds_slot_record_map_t map_info;
-    get_fds_map_by_slot_sense_type(slot, sense_type, &map_info);
+    get_fds_map_by_slot_sense_type_for_dump(slot, sense_type, &map_info);
     // 根据当前激活的卡槽的场类型，加载指定场的数据到缓冲区
     // 提示: 如果数据与buffer长度无法匹配，则可能是固件更新导致，这个时候就要将数据进行删除重建
     bool ret = fds_read_sync(map_info.id, map_info.key, buffer->length, buffer->buffer);
@@ -242,7 +242,7 @@ static void save_data_by_tag_type(uint8_t slot, tag_specific_type_t tag_type) {
     tag_sense_type_t sense_type = get_sense_type_from_tag_type(tag_type);
     // 获取专用卡槽FDS记录信息
     fds_slot_record_map_t map_info;
-    get_fds_map_by_slot_sense_type(slot, sense_type, &map_info);
+    get_fds_map_by_slot_sense_type_for_dump(slot, sense_type, &map_info);
     // 计算要保存的数据的长度（自动填充整字）
     int data_word_length = (data_byte_length / 4) + (data_byte_length % 4 > 0 ? 1 : 0);
     // 调用堵塞式的fds写入函数，将卡槽指定场类型的数据写入到flash中
@@ -264,7 +264,7 @@ static void delete_data_by_tag_type(uint8_t slot, tag_sense_type_t sense_type) {
         return;
     }
     fds_slot_record_map_t map_info;
-    get_fds_map_by_slot_sense_type(slot, sense_type, &map_info);
+    get_fds_map_by_slot_sense_type_for_dump(slot, sense_type, &map_info);
     int count = fds_delete_sync(map_info.id, map_info.key);
     NRF_LOG_INFO("Slot %d delete senese type %d data, record count: %d", slot, sense_type, count);
 }

@@ -1053,7 +1053,7 @@ bool nfc_tag_mf1_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     // save data to flash
     tag_sense_type_t sense_type = get_sense_type_from_tag_type(tag_type);
     fds_slot_record_map_t map_info;
-    get_fds_map_by_slot_sense_type(slot, sense_type, &map_info);
+    get_fds_map_by_slot_sense_type_for_dump(slot, sense_type, &map_info);
     int info_size = get_information_size_by_tag_type(tag_type, true);   // auto 4 byte align.
     NRF_LOG_INFO("MF1 info size: %d", info_size);
     bool ret = fds_write_sync(map_info.id, map_info.key, info_size / 4, p_mf1_information);
