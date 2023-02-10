@@ -14,6 +14,8 @@
 #define DATA_CMD_SET_SLOT_TAG_TYPE              (1004)
 #define DATA_CMD_SET_SLOT_DATA_DEFAULT          (1005)
 #define DATA_CMD_SET_SLOT_ENABLE                (1006)
+#define DATA_CMD_SET_SLOT_TAG_NICK              (1007)
+#define DATA_CMD_GET_SLOT_TAG_NICK              (1008)
 //
 // ******************************************************************
 

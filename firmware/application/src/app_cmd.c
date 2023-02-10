@@ -9,6 +9,7 @@
 #include "hex_utils.h"
 #include "data_cmd.h"
 #include "app_cmd.h"
+#include "tag_persistence.h"
 
 
 #define NRF_LOG_MODULE_NAME app_cmd
@@ -405,6 +406,56 @@ data_frame_tx_t* cmd_processor_set_mf1_anti_collision_res(uint16_t cmd, uint16_t
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+data_frame_tx_t* cmd_processor_set_slot_tag_nick_name(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    // one chinese have 2byte(gbk).
+    if (length > 34 || length < 3) {
+        status = STATUS_PAR_ERR;
+    } else {
+        uint8_t slot = data[0];
+        uint8_t sense_type = data[1];
+        fds_slot_record_map_t map_info;
+
+        get_fds_map_by_slot_sense_type_for_nick(slot, sense_type, &map_info);
+        
+        uint8_t buffer[36];
+        buffer[0] = length - 2; // 减去开头的两个字节，剩下的就是昵称的字节流
+        memcpy(buffer + 1, data + 2, buffer[0]);    // 拷贝一份昵称到缓冲区中，这样子缓冲区里就有 一个字节开头的长度 + 昵称字节流
+        
+        bool ret = fds_write_sync(map_info.id, map_info.key, sizeof(buffer) / 4, buffer);
+        if (ret) {
+            status = STATUS_DEVICE_SUCCESS;
+        } else {
+            status = STATUS_FLASH_WRITE_FAIL;
+        }
+    }
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+data_frame_tx_t* cmd_processor_get_slot_tag_nick_name(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    // one chinese have 2byte(gbk).
+    if (length != 2) {
+        status = STATUS_PAR_ERR;
+    } else {
+        uint8_t buffer[36];
+        uint8_t slot = data[0];
+        uint8_t sense_type = data[1];
+        fds_slot_record_map_t map_info;
+
+        get_fds_map_by_slot_sense_type_for_nick(slot, sense_type, &map_info);
+        bool ret = fds_read_sync(map_info.id, map_info.key, sizeof(buffer), buffer);
+        if (ret) {
+            status = STATUS_DEVICE_SUCCESS;
+            length = buffer[0];
+            data = &buffer[1];
+        } else {
+            status = STATUS_FLASH_READ_FAIL;
+            length = 0;
+            data = NULL;
+        }
+    }
+    return data_frame_make(cmd, status, length, data);
+}
+
 
 /**
  * before reader run, reset reader and on antenna,
@@ -480,6 +531,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_LOAD_MF1_BLOCK_DATA,          NULL,                        cmd_processor_set_mf1_emulator_block,        NULL                   },
     {    DATA_CMD_SET_MF1_ANTI_COLLISION_RES,   NULL,                        cmd_processor_set_mf1_anti_collision_res,    NULL                   },
 
+    {    DATA_CMD_SET_SLOT_TAG_NICK,            NULL,                        cmd_processor_set_slot_tag_nick_name,        NULL                   },
+    {    DATA_CMD_GET_SLOT_TAG_NICK,            NULL,                        cmd_processor_get_slot_tag_nick_name,        NULL                   },
 };
 
 

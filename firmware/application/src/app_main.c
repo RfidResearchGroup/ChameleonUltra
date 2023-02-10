@@ -392,9 +392,9 @@ int main(void) {
     button_init();            // 按钮初始化
     init_leds();              // LED初始化
     sleep_timer_init();       // 休眠用的软定时器初始化
-    usb_cdc_init();           // USB cdc模拟初始化
     rng_drv_and_srand_init(); // 随机数生成器初始化
     power_management_init();  // 电源管理初始化
+    usb_cdc_init();           // USB cdc模拟初始化
     ble_slave_init();         // 蓝牙协议栈初始化
     check_wakeup_src();       // 检测唤醒源，根据唤醒源决定BLE广播与后续休眠动作
 
@@ -405,21 +405,20 @@ int main(void) {
     // cmd callback register
     on_data_frame_complete(on_data_frame_received);
 
+    // usbd event listener
+    APP_ERROR_CHECK(app_usbd_power_events_enable());
+
     // Enter main loop.
-    NRF_LOG_INFO("NFC TAG & Reader Started");
+    NRF_LOG_INFO("NFC TAG & Reader Started 1");
     while (1) {
         // Button event process
         button_press_process();
         // Data pack process
         data_frame_process();
         // Log print process
-        while (NRF_LOG_PROCESS()) {
-            __NOP();
-        }
+        while (NRF_LOG_PROCESS());
         // USB event process
-        while (app_usbd_event_queue_process()) {
-            __NOP();
-        }
+        while (app_usbd_event_queue_process());
         // No task to process, system sleep enter.
         sleep_system_run(
             system_off_enter, // If system idle sometime, we can enter deep sleep state.

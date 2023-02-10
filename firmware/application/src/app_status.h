@@ -41,4 +41,6 @@
 #define     STATUS_INVALID_CMD                      (0x67)  // 无效的指令
 #define     STATUS_DEVICE_SUCCESS                   (0x68)  // 设备相关操作成功执行
 #define     STATUS_NOT_IMPLEMENTED                  (0x69)  // 调用了某些未实现的操作，属于开发者遗漏的错误
+#define     STATUS_FLASH_WRITE_FAIL                 (0x70)  // flash写入失败
+#define     STATUS_FLASH_READ_FAIL                  (0x71)  // flash读取失败
 #endif
