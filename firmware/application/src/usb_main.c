@@ -144,9 +144,6 @@ void usb_cdc_init(void) {
     app_usbd_class_inst_t const *class_cdc_acm = app_usbd_cdc_acm_class_inst_get(&m_app_cdc_acm);
     ret = app_usbd_class_append(class_cdc_acm);
     APP_ERROR_CHECK(ret);
-
-    ret = app_usbd_power_events_enable();
-    APP_ERROR_CHECK(ret);
 }
 
 void usb_cdc_write(const void *p_buf, uint16_t length) {
