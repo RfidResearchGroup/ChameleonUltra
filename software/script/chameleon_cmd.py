@@ -10,6 +10,9 @@ DATA_CMD_SET_SLOT_TAG_TYPE = 1004
 DATA_CMD_SET_SLOT_DATA_DEFAULT = 1005
 DATA_CMD_SET_SLOT_ENABLE = 1006
 
+DATA_CMD_SET_SLOT_TAG_NICK = 1007
+DATA_CMD_GET_SLOT_TAG_NICK = 1008
+
 DATA_CMD_SCAN_14A_TAG = 2000
 DATA_CMD_MF1_SUPPORT_DETECT = 2001
 DATA_CMD_MF1_NT_LEVEL_DETECT = 2002
@@ -353,6 +356,32 @@ class BaseChameleonCMD:
         data.extend(atqa)
         data.extend(uid)
         return self.device.send_cmd_sync(DATA_CMD_SET_MF1_ANTI_COLLISION_RES, 0X00, data)
+    
+    def set_slot_tag_nick_name(self, slot: int, sense_type: int, name: str):
+        """
+            设置MF1的模拟卡的防冲撞资源信息
+        :param slot: 卡槽号码
+        :param sense_type: 场类型
+        :param name: 卡槽昵称
+        :return:
+        """
+        data = bytearray()
+        data.extend([slot, sense_type])
+        data.extend(name.encode(encoding="gbk"))
+        return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_TAG_NICK, 0x00, data)
+    
+    def get_slot_tag_nick_name(self, slot: int, sense_type: int):
+        """
+            设置MF1的模拟卡的防冲撞资源信息
+        :param slot: 卡槽号码
+        :param sense_type: 场类型
+        :param name: 卡槽昵称
+        :return:
+        """
+        data = bytearray()
+        data.extend([slot, sense_type])
+        return self.device.send_cmd_sync(DATA_CMD_GET_SLOT_TAG_NICK, 0x00, data)
+
 
 
 class NegativeResponseError(Exception):
@@ -477,4 +506,15 @@ class PositiveChameleonCMD(BaseChameleonCMD):
         ret = super(PositiveChameleonCMD, self).set_mf1_anti_collision_res(sak, atqa, uid)
         self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
         return ret
+    
+    def set_slot_tag_nick_name(self, slot: int, sense_type: int, name: str):
+        ret = super(PositiveChameleonCMD, self).set_slot_tag_nick_name(slot, sense_type, name)
+        self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
+        return ret
+    
+    def get_slot_tag_nick_name(self, slot: int, sense_type: int):
+        ret = super(PositiveChameleonCMD, self).get_slot_tag_nick_name(slot, sense_type)
+        self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
+        return ret
+
 

@@ -59,6 +59,11 @@ class ChameleonCLI:
                     'type': new_uint(chameleon_cli_unit.HWSlotTagType, "Set emulation tag type"),
                     'init': new_uint(chameleon_cli_unit.HWSlotDataDefault, "Set emulation tag data to default"),
                     'enable': new_uint(chameleon_cli_unit.HWSlotEnableSet, "Set emulation tag slot enable or disable"),
+                    'nick': {
+                        'set': new_uint(chameleon_cli_unit.HWSlotNickSet, "Set tag nick name for slot"),
+                        'get': new_uint(chameleon_cli_unit.HWSlotNickGet, "Get tag nick name for slot"),
+                        'help': "Get/Set tag nick name for slot",
+                    },
                     'help': "Emulation tag slot.",
                 },
                 'help': "hardware controller",

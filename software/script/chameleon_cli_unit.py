@@ -745,6 +745,21 @@ class SlotIndexRequireUint(DeviceRequiredUnit):
         parser.add_argument('-s', "--slot", type=int, required=True,
                             help="Slot index", metavar="number", choices=slot_choices)
         return parser
+    
+class SenseTypeRequireUint(DeviceRequiredUnit):
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        raise NotImplementedError()
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError()
+
+    @staticmethod
+    def add_sense_type_args(parser: ArgumentParserNoExit):
+        slot_choices = [1, 2]
+        parser.add_argument('-st', "--sense_type", type=int, required=True,
+                            help="Sense type", metavar="number", choices=slot_choices)
+        return parser
 
 
 class HWSlotSet(SlotIndexRequireUint):
@@ -805,7 +820,8 @@ class HWSlotDataDefault(TagTypeRequiredUint, SlotIndexRequireUint):
         self.add_slot_args(parser)
         return parser
 
-    # hw slot init -s 1 -t 2
+    # m1 1k卡模拟 hw slot init -s 1 -t 3
+    # em id卡模拟 hw slot init -s 1 -t 1
     def on_exec(self, args: argparse.Namespace):
         tag_type = args.type
         slot_num = args.slot
@@ -840,3 +856,37 @@ class LFEMSim(LFEMCardRequiredUint):
         id_bytes = bytearray.fromhex(id_hex)
         self.cmd_positive.set_em140x_sim_id(id_bytes)
         print(f' - Set em410x tag id success.')
+
+
+class HWSlotNickSet(SlotIndexRequireUint, SenseTypeRequireUint):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        parser = ArgumentParserNoExit()
+        self.add_slot_args(parser)
+        self.add_sense_type_args(parser)
+        parser.add_argument('-n', '--name', type=str, required=True, help="Yout tag nick name for slot")
+        return parser
+
+    # hw slot nick set -s 1 -st 1 -n 测试名称保存
+    def on_exec(self, args: argparse.Namespace):
+        slot_num = args.slot
+        sense_type = args.sense_type
+        name: str = args.name
+        if len(name.encode(encoding="gbk")) > 32:
+            raise ValueError("Your tag nick name too long.")
+        self.cmd_positive.set_slot_tag_nick_name(slot_num, sense_type, name)
+        print(f' - Set tag nick name for slot {slot_num} success.')
+
+
+class HWSlotNickGet(SlotIndexRequireUint, SenseTypeRequireUint):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        parser = ArgumentParserNoExit()
+        self.add_slot_args(parser)
+        self.add_sense_type_args(parser)
+        return parser
+
+    # hw slot nick get -s 1 -st 1
+    def on_exec(self, args: argparse.Namespace):
+        slot_num = args.slot
+        sense_type = args.sense_type
+        res = self.cmd_positive.get_slot_tag_nick_name(slot_num, sense_type)
+        print(f' - Get tag nick name for slot {slot_num}: {res.data.decode(encoding="gbk")}')
