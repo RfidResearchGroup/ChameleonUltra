@@ -563,6 +563,8 @@ void nfc_tag_14a_data_process(uint8_t *p_data)
                         uint8_t len = fsd >= auto_coll_res->ats->length ? auto_coll_res->ats->length : fsd;
                         // 根据FSD返回ATS数据，FSD是PCD支持的最大帧大小，去掉CRC后才是实际的数据帧大小支持
                         nfc_tag_14a_tx_bytes(auto_coll_res->ats->data, len, true);
+                    } else {
+                        nfc_tag_14a_tx_nbit_delay_window(NAK_INVALID_OPERATION_TBIV, 4);
                     }
                     // 在外部直接处理了明文发送的RATS指令之后直接等待下一轮通信
                     return;

@@ -23,6 +23,17 @@
 #define NFC_TAG_14A_CMD_ANTICOLL_OR_SELECT_3  0x97
 
 
+// TBV = Transfer Buffer Valid
+// TBIV = Transfer Buffer Invalid
+#define ACK_NAK_FRAME_SIZE          4         /* Bits */
+#define ACK_VALUE                   0x0A
+#define NAK_INVALID_OPERATION_TBV   0x00    // 这个不常用
+#define NAK_CRC_PARITY_ERROR_TBV    0x01    // 这个不常用
+#define NAK_INVALID_OPERATION_TBIV  0x04
+#define NAK_CRC_PARITY_ERROR_TBIV   0x05
+#define NAK_OTHER_ERROR             0x06    // 这个不在手册中定义，属于变色龙特有（可能需要扇区）
+
+
 // ISO14443-A 通用状态机
 typedef enum {
     NFC_TAG_STATE_14A_IDLE,     // 空闲状态，可等待任何指令

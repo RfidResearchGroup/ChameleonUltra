@@ -30,16 +30,6 @@ NRF_LOG_MODULE_REGISTER();
 #define MEM_EV1_SIGNATURE_TRAILOR   ((MEM_EV1_SIGNATURE_BLOCK + 3 ) * MEM_BYTES_PER_BLOCK)
 
 
-// TBV = Transfer Buffer Valid
-// TBIV = Transfer Buffer Invalid
-#define ACK_NAK_FRAME_SIZE          4         /* Bits */
-#define ACK_VALUE                   0x0A
-#define NAK_INVALID_OPERATION_TBV   0x00    // 这个不常用
-#define NAK_CRC_PARITY_ERROR_TBV    0x01    // 这个不常用
-#define NAK_INVALID_OPERATION_TBIV  0x04
-#define NAK_CRC_PARITY_ERROR_TBIV   0x05
-#define NAK_OTHER_ERROR             0x06    // 这个不在手册中定义，属于变色龙特有（可能需要扇区）
-
 #define CMD_AUTH_A                  0x60
 #define CMD_AUTH_B                  0x61
 #define CMD_AUTH_FRAME_SIZE         2         /* Bytes without CRCA */
@@ -1039,14 +1029,16 @@ bool nfc_tag_mf1_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     p_mf1_information->res_coll.atqa[0] = 0x04;
     p_mf1_information->res_coll.atqa[1] = 0x00;
     p_mf1_information->res_coll.sak[0] = 0x08;
-    p_mf1_information->res_coll.uid[0] = 0x12;
-    p_mf1_information->res_coll.uid[1] = 0x21;
+    p_mf1_information->res_coll.uid[0] = 0xDE;
+    p_mf1_information->res_coll.uid[1] = 0xAD;
+    p_mf1_information->res_coll.uid[2] = 0xBE;
+    p_mf1_information->res_coll.uid[3] = 0xFF;
     p_mf1_information->res_coll.size = NFC_TAG_14A_UID_SINGLE_SIZE;
     p_mf1_information->res_coll.ats.length = 0;
     
     // default mf1 config
     p_mf1_information->config.mode_gen1a_magic = false;
-    p_mf1_information->config.use_mf1_coll_res = true;
+    p_mf1_information->config.use_mf1_coll_res = false;
     p_mf1_information->config.mode_block_write = NFC_TAG_MF1_WRITE_NORMAL;
     p_mf1_information->config.detection_enable = false;
     
