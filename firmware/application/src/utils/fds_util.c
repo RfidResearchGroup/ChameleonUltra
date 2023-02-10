@@ -46,7 +46,7 @@ bool fds_read_sync(uint16_t id, uint16_t key, uint16_t max_length, uint8_t* buff
             NRF_LOG_INFO("FDS read success.");
             return true;
         } else {
-            NRF_LOG_INFO("FDS buffer too small, can't run memcpy.");
+            NRF_LOG_INFO("FDS buffer too small, can't run memcpy, fds size = %d, buffer size = %d", flash_record.p_header->length_words * 4, max_length);
         }
         err_code = fds_record_close(&record_desc);                          // 操作完成后关闭文件
         APP_ERROR_CHECK(err_code);
