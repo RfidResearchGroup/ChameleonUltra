@@ -113,5 +113,5 @@ Coming Soon
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Hardware%20%20Frame%20Diagram.png)
 
 # Hardware Pictures
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Hardware%Photos.png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Hardware%20Photos.png)
 
