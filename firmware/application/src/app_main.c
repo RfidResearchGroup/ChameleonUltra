@@ -152,16 +152,13 @@ static void timer_button_event_handle(void *arg) {
     nrf_drv_gpiote_pin_t pin = *(nrf_drv_gpiote_pin_t *)arg;
     // 在此处检查一下当前GPIO是否是处于按下的电平状态
     if (nrf_gpio_pin_read(pin) == 1) {
-        // 然后给他在进行一次步进或者步退后，得到新的卡槽位置
-        switch (pin) {
-        case BUTTON_1:
+        if (pin == BUTTON_1) {
             NRF_LOG_INFO("BUTTON_LEFT");
             m_is_read_btn_press = true;
-            break;
-        case BUTTON_2:
+        }
+        if (pin == BUTTON_2) {
             NRF_LOG_INFO("BUTTON_RIGHT");
             m_is_write_btn_press = true;
-            break;
         }
     }
 }
@@ -212,12 +209,14 @@ static void system_off_enter(void) {
 
     // 需要配置为浮空模拟输入且不上下拉的IO
     uint32_t gpio_cfg_default_nopull[] = {
+#if defined(PROJECT_CHAMELEON_ULTRA)
         HF_SPI_SELECT,
         HF_SPI_MISO,
         HF_SPI_MOSI,
         HF_SPI_MOSI,
-        BAT_SENSE,
         LF_OA_OUT,
+#endif
+        BAT_SENSE,
     };
     for (int i = 0; i < ARRAY_SIZE(gpio_cfg_default_nopull); i++) {
         nrf_gpio_cfg_default(gpio_cfg_default_nopull[i]);
@@ -225,7 +224,9 @@ static void system_off_enter(void) {
 
     // 需要配置为推挽输出且拉高的IO
     uint32_t gpio_cfg_output_high[] = {
+#if defined(PROJECT_CHAMELEON_ULTRA)
         HF_ANT_SEL,
+#endif
     };
     for (int i = 0; i < ARRAY_SIZE(gpio_cfg_output_high); i++) {
         nrf_gpio_cfg_output(gpio_cfg_output_high[i]);
@@ -233,7 +234,12 @@ static void system_off_enter(void) {
     }
 
     // 需要配置为推挽输出且拉低的IO
-    uint32_t gpio_cfg_output_low[] = {LED_1, LED_2, LED_3, LED_4, LED_5, LED_6, LED_7, LED_8, LED_R, LED_G, LED_B, LF_MOD, READER_POWER, LF_ANT_DRIVER};
+    uint32_t gpio_cfg_output_low[] = {
+        LED_1, LED_2, LED_3, LED_4, LED_5, LED_6, LED_7, LED_8, LED_R, LED_G, LED_B, LF_MOD, 
+#if defined(PROJECT_CHAMELEON_ULTRA)
+        READER_POWER, LF_ANT_DRIVER
+#endif
+    };
     for (int i = 0; i < ARRAY_SIZE(gpio_cfg_output_low); i++) {
         nrf_gpio_cfg_output(gpio_cfg_output_low[i]);
         nrf_gpio_pin_clear(gpio_cfg_output_low[i]);
@@ -356,33 +362,35 @@ static void button_press_process(void) {
 /**
  * @brief Function for chameleon lite power controll
  */
-int board_nrf52840_high_voltage_set(void) {
+void board_nrf52840_high_voltage_set(void) {
 #ifdef SOFTDEVICE_PRESENT
-    sd_power_dcdc_mode_set(NRF_POWER_DCDC_ENABLE);
-    sd_power_dcdc0_mode_set(NRF_POWER_DCDC_ENABLE);
+    sd_power_dcdc_mode_set(NRF_POWER_DCDC_DISABLE);
+    sd_power_dcdc0_mode_set(NRF_POWER_DCDC_DISABLE);
 #else
-    NRF_POWER->DCDCEN = 1;
-    NRF_POWER->DCDCEN0 = 1;
+    NRF_POWER->DCDCEN = 0;
+    NRF_POWER->DCDCEN0 = 0;
 #endif
-    // if the nrf52840_pca10059 board is powered from USB (high voltage mode), GPIO output voltage is set to 1.8 volts by
-    // default and that is not enough to turn the green and blue LEDs on. Increase GPIO voltage to 3.0 volts.
+     // if the nrf52840_pca10059 board is powered from USB (high voltage mode), GPIO output voltage is set to 1.8 volts by
+     // default and that is not enough to turn the green and blue LEDs on. Increase GPIO voltage to 3.0 volts.
     if (((NRF_UICR->REGOUT0 & UICR_REGOUT0_VOUT_Msk) == (UICR_REGOUT0_VOUT_DEFAULT << UICR_REGOUT0_VOUT_Pos))) {
         NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Wen << NVMC_CONFIG_WEN_Pos;
-        while (NRF_NVMC->READY == NVMC_READY_READY_Busy)
-            ;
+        while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
         NRF_UICR->REGOUT0 = (NRF_UICR->REGOUT0 & ~((uint32_t)UICR_REGOUT0_VOUT_Msk)) | (UICR_REGOUT0_VOUT_3V3 << UICR_REGOUT0_VOUT_Pos);
         NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Ren << NVMC_CONFIG_WEN_Pos;
-        while (NRF_NVMC->READY == NVMC_READY_READY_Busy)
-            ;
+        while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
         // a reset is required for changes to take effect
         NVIC_SystemReset();
     }
-    return 0;
 }
 
 /**@brief Application main function.
  */
 int main(void) {
+#if defined(PROJECT_CHAMELEON_LITE)
+    board_nrf52840_high_voltage_set();  // lite需要关闭dcdc并且抬高内核电压
+#endif
+    hw_connect_init();        // 记得先把引脚初始化一下
+
     log_init();               // 日志初始化
     gpio_te_init();           // 初始化GPIO矩阵库
     app_timers_init();        // 初始化软定时器

@@ -13,6 +13,8 @@ DATA_CMD_SET_SLOT_ENABLE = 1006
 DATA_CMD_SET_SLOT_TAG_NICK = 1007
 DATA_CMD_GET_SLOT_TAG_NICK = 1008
 
+DATA_CMD_SLOT_DATA_CONFIG_SAVE = 1009
+
 DATA_CMD_SCAN_14A_TAG = 2000
 DATA_CMD_MF1_SUPPORT_DETECT = 2001
 DATA_CMD_MF1_NT_LEVEL_DETECT = 2002
@@ -381,6 +383,13 @@ class BaseChameleonCMD:
         data = bytearray()
         data.extend([slot, sense_type])
         return self.device.send_cmd_sync(DATA_CMD_GET_SLOT_TAG_NICK, 0x00, data)
+    
+    def update_slot_data_config(self):
+        """
+            更新卡槽的配置和数据到flash中。
+        :return:
+        """
+        return self.device.send_cmd_sync(DATA_CMD_SLOT_DATA_CONFIG_SAVE, 0x00, None)
 
 
 

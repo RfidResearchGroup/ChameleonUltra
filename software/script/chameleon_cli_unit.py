@@ -890,3 +890,14 @@ class HWSlotNickGet(SlotIndexRequireUint, SenseTypeRequireUint):
         sense_type = args.sense_type
         res = self.cmd_positive.get_slot_tag_nick_name(slot_num, sense_type)
         print(f' - Get tag nick name for slot {slot_num}: {res.data.decode(encoding="gbk")}')
+
+
+class HWSlotUpdate(DeviceRequiredUnit):
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        return None
+
+    # hw slot update
+    def on_exec(self, args: argparse.Namespace):
+        self.cmd_positive.update_slot_data_config()
+        print(f' - Update config and data from device memory to flash success.')

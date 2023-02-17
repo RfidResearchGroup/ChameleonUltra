@@ -9,8 +9,16 @@ LD_DIR   := ../../resource/link_script/
 $(OUTPUT_DIRECTORY)/application.out: \
   LINKER_SCRIPT  := ${LD_DIR}/application.ld
 
+
+CHAMELEON_ULTRA := ultra
+CHAMELEON_LITE  := lite
+# What device is it?
+CURRENT_DEVICE_TYPE := ${CHAMELEON_LITE}
+
+
 # Source files common to all targets
 SRC_FILES += \
+  $(PROJ_DIR)/hw_connect.c \
   $(PROJ_DIR)/app_main.c \
   $(PROJ_DIR)/app_cmd.c \
   $(PROJ_DIR)/ble_main.c \
@@ -28,14 +36,6 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/nfctag/hf/nfc_14a.c \
   $(PROJ_DIR)/rfid/nfctag/hf/nfc_mf1.c \
   $(PROJ_DIR)/rfid/nfctag/lf/lf_tag_em.c \
-  $(PROJ_DIR)/rfid/reader/hf/mf1_toolbox.c \
-  $(PROJ_DIR)/rfid/reader/hf/rc522.c \
-  $(PROJ_DIR)/rfid/reader/lf/data_utils.c \
-  $(PROJ_DIR)/rfid/reader/lf/lf_125khz_radio.c \
-  $(PROJ_DIR)/rfid/reader/lf/lf_em410x_data.c \
-  $(PROJ_DIR)/rfid/reader/lf/lf_reader_data.c \
-  $(PROJ_DIR)/rfid/reader/lf/lf_reader_main.c \
-  $(PROJ_DIR)/rfid/reader/lf/lf_t55xx_data.c \
   $(PROJ_DIR)/utils/dataframe.c \
   $(PROJ_DIR)/utils/fds_util.c \
   $(PROJ_DIR)/utils/syssleep.c \
@@ -119,6 +119,7 @@ SRC_FILES += \
   $(SDK_ROOT)/components/softdevice/common/nrf_sdh_ble.c \
   $(SDK_ROOT)/components/softdevice/common/nrf_sdh_soc.c \
 
+
 # Include folders common to all targets
 INC_FOLDERS += \
   ${PROJ_DIR} \
@@ -128,9 +129,6 @@ INC_FOLDERS += \
   ${PROJ_DIR}/rfid/nfctag/ \
   ${PROJ_DIR}/rfid/nfctag/hf \
   ${PROJ_DIR}/rfid/nfctag/lf \
-  ${PROJ_DIR}/rfid/reader/ \
-  ${PROJ_DIR}/rfid/reader/hf \
-  ${PROJ_DIR}/rfid/reader/lf \
   $(SDK_ROOT)/components/nfc/ndef/generic/message \
   $(SDK_ROOT)/components/nfc/t2t_lib \
   $(SDK_ROOT)/components/nfc/t4t_parser/hl_detection_procedure \
@@ -270,6 +268,36 @@ LIB_FILES += \
 OPT = -O3 -g3
 # Uncomment the line below to enable link time optimization
 #OPT += -flto
+
+
+ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
+# Append reader module source code to compile list.
+  SRC_FILES +=\
+    $(PROJ_DIR)/rfid/reader/hf/mf1_toolbox.c \
+    $(PROJ_DIR)/rfid/reader/hf/rc522.c \
+    $(PROJ_DIR)/rfid/reader/lf/data_utils.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_125khz_radio.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_em410x_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_reader_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_reader_main.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_t55xx_data.c \
+
+  INC_FOLDERS +=\
+    ${PROJ_DIR}/rfid/reader/ \
+    ${PROJ_DIR}/rfid/reader/hf \
+    ${PROJ_DIR}/rfid/reader/lf \
+
+  CFLAGS += -DPROJECT_CHAMELEON_ULTRA
+
+$(info  Chameleon Ultra: reader and tag emulation module enable.)
+else ifeq (${CURRENT_DEVICE_TYPE}, ${CHAMELEON_LITE})
+
+  CFLAGS += -DPROJECT_CHAMELEON_LITE
+
+$(info  Chameleon Lite: tag emulation module enable.)
+else
+$(error Chameleon: No device type define.)
+endif
 
 # C flags common to all targets
 CFLAGS += $(OPT)

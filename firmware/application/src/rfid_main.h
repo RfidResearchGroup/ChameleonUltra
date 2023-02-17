@@ -3,24 +3,22 @@
 
 #include "nrf_gpio.h"
 
-#include "rc522.h"
+#include "bsp_time.h"
+#include "bsp_delay.h"
+#include "hw_connect.h"
 #include "nfc_14a.h"
 #include "nfc_mf1.h"
 #include "lf_tag_em.h"
-#include "bsp_time.h"
-#include "bsp_delay.h"
-#include "mf1_toolbox.h"
 #include "tag_emulation.h"
+
+
+#if defined(PROJECT_CHAMELEON_ULTRA)
+#include "rc522.h"
+#include "mf1_toolbox.h"
 #include "lf_em410x_data.h"
 #include "lf_125khz_radio.h"
 #include "lf_reader_main.h"
-#include "hw_connect.h"
-
-
-
-// 通用场灯的操作定义
-#define TAG_FIELD_LED_ON()     nrf_gpio_pin_clear(LED_FIELD);
-#define TAG_FIELD_LED_OFF()    nrf_gpio_pin_set(LED_FIELD);
+#endif
 
 
 typedef enum {

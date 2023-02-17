@@ -9,6 +9,7 @@
 #include "hex_utils.h"
 #include "data_cmd.h"
 #include "app_cmd.h"
+#include "app_status.h"
 #include "tag_persistence.h"
 
 
@@ -25,6 +26,7 @@ data_frame_tx_t* cmd_processor_get_version(uint16_t cmd, uint16_t status, uint16
 }
 
 data_frame_tx_t* cmd_processor_change_device_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+#if defined(PROJECT_CHAMELEON_ULTRA)
     if (length == 1) {
         if (data[0] == 1) {
             reader_mode_enter();
@@ -34,7 +36,10 @@ data_frame_tx_t* cmd_processor_change_device_mode(uint16_t cmd, uint16_t status,
     } else {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-    return data_frame_make(cmd, 0x0000, 0, NULL);
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 0, NULL);
+#else
+    return data_frame_make(cmd, STATUS_NOT_IMPLEMENTED, 0, NULL);
+#endif
 }
 
 data_frame_tx_t* cmd_processor_get_device_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -44,8 +49,11 @@ data_frame_tx_t* cmd_processor_get_device_mode(uint16_t cmd, uint16_t status, ui
     } else {
         status = 0;
     }
-    return data_frame_make(cmd, 0x0000, 1, (uint8_t*)&status);
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 1, (uint8_t*)&status);
 }
+
+
+#if defined(PROJECT_CHAMELEON_ULTRA)
 
 data_frame_tx_t* cmd_processor_14a_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     picc_14a_tag_t taginfo;
@@ -214,6 +222,8 @@ data_frame_tx_t* cmd_processor_write_em410x_2_t57(uint16_t cmd, uint16_t status,
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+#endif
+
 // 封装一个自动切换卡槽的调用函数
 static void change_slot_auto(uint8_t slot) {
     device_mode_t mode = get_device_mode();
@@ -286,6 +296,11 @@ data_frame_tx_t* cmd_processor_set_slot_enable(uint16_t cmd, uint16_t status, ui
         status = STATUS_PAR_ERR;
     }
     return data_frame_make(cmd, status, 0, NULL);
+}
+
+data_frame_tx_t* cmd_processor_slot_data_config_save(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    tag_emulation_save();
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 0, NULL);
 }
 
 data_frame_tx_t* cmd_processor_set_em410x_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -456,6 +471,8 @@ data_frame_tx_t* cmd_processor_get_slot_tag_nick_name(uint16_t cmd, uint16_t sta
     return data_frame_make(cmd, status, length, data);
 }
 
+#if defined(PROJECT_CHAMELEON_ULTRA)
+
 
 /**
  * before reader run, reset reader and on antenna,
@@ -493,6 +510,8 @@ data_frame_tx_t* after_hf_reader_run(uint16_t cmd, uint16_t status, uint16_t len
     return NULL;
 }
 
+#endif
+
 /**
  * (cmd -> processor) function map, the map struct is:
  *       cmd code                               before process               cmd processor                                after process
@@ -501,6 +520,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_APP_VERSION,              NULL,                        cmd_processor_get_version,                   NULL                   },
     {    DATA_CMD_CHANGE_DEVICE_MODE,           NULL,                        cmd_processor_change_device_mode,            NULL                   },
     {    DATA_CMD_GET_DEVICE_MODE,              NULL,                        cmd_processor_get_device_mode,               NULL                   },
+
+#if defined(PROJECT_CHAMELEON_ULTRA)
 
     {    DATA_CMD_SCAN_14A_TAG,                 before_hf_reader_run,        cmd_processor_14a_scan,                      after_hf_reader_run    },
     {    DATA_CMD_MF1_SUPPORT_DETECT,           before_hf_reader_run,        cmd_processor_detect_mf1_support,            after_hf_reader_run    },
@@ -518,10 +539,14 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_SCAN_EM410X_TAG,              before_reader_run,           cmd_processor_em410x_scan,                   NULL                   },
     {    DATA_CMD_WRITE_EM410X_TO_T5577,        before_reader_run,           cmd_processor_write_em410x_2_t57,            NULL                   },
 
+#endif
+
     {    DATA_CMD_SET_SLOT_ACTIVATED,           NULL,                        cmd_processor_set_slot_activated,            NULL                   },
     {    DATA_CMD_SET_SLOT_TAG_TYPE,            NULL,                        cmd_processor_set_slot_tag_type,             NULL                   },
     {    DATA_CMD_SET_SLOT_DATA_DEFAULT,        NULL,                        cmd_processor_set_slot_data_default,         NULL                   },
     {    DATA_CMD_SET_SLOT_ENABLE,              NULL,                        cmd_processor_set_slot_enable,               NULL                   },
+    {    DATA_CMD_SLOT_DATA_CONFIG_SAVE,        NULL,                        cmd_processor_slot_data_config_save,         NULL                   },
+    
 
     {    DATA_CMD_SET_EM410X_EMU_ID,            NULL,                        cmd_processor_set_em410x_emu_id,             NULL                   },
 

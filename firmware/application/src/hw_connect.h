@@ -1,88 +1,91 @@
-// Max > 256.256
-#define HW_MAJOR    1
-#define HW_MINOR    1
-
-#define HW_NUM(major, minor)    (major << 8 | minor)
-#define HW_VER                  HW_NUM(HW_MAJOR, HW_MINOR)
+/*
+ * hardware io connection map.
+ */
+#include "nrf_lpcomp.h"
 
 
+typedef enum {
+    CHAMELEON_ULTRA,
+    CHAMELEON_LITE,
+} chameleon_device_type_t;
 
-// v1.1
-#if HW_VER == HW_NUM(1, 1)
-    // ****************** LED DEFINE ******************
-    #define LED_FIELD      (NRF_GPIO_PIN_MAP(1, 1))
-    #define LED_R          (NRF_GPIO_PIN_MAP(0, 24))
-    #define LED_G          (NRF_GPIO_PIN_MAP(0, 22))
-    #define LED_B          (NRF_GPIO_PIN_MAP(1, 0))
-    #define LED_8          (NRF_GPIO_PIN_MAP(0, 20))
-    #define LED_7          (NRF_GPIO_PIN_MAP(0, 17))
-    #define LED_6          (NRF_GPIO_PIN_MAP(0, 15))
-    #define LED_5          (NRF_GPIO_PIN_MAP(0, 13))
-    #define LED_4          (NRF_GPIO_PIN_MAP(0, 12))
-    #define LED_3          (NRF_GPIO_PIN_MAP(1, 9))
-    #define LED_2          (NRF_GPIO_PIN_MAP(0, 8))
-    #define LED_1          (NRF_GPIO_PIN_MAP(0, 6))
-    #define RGB_LIST_NUM 8
-    #define RGB_CTRL_NUM 3
-    // ****************** LF DEFINE ******************
-    // reader
-    #define LF_ANT_DRIVER  (NRF_GPIO_PIN_MAP(0, 31))    // LF ANT DRIVER
-    #define LF_OA_OUT      (NRF_GPIO_PIN_MAP(1, 15))    // LF DATA IN
-    // emulation
-    #define LF_MOD         (NRF_GPIO_PIN_MAP(1, 13))
-    #define LF_RSSI_PIN    (NRF_GPIO_PIN_MAP(0, 2))
-    #define LF_RSSI        NRF_LPCOMP_INPUT_0
-    // ****************** HF DEFINE ******************
-    // reader
-    #define HF_SPI_SELECT  (NRF_GPIO_PIN_MAP(1, 6))
-    #define HF_SPI_MISO    (NRF_GPIO_PIN_MAP(0, 11))
-    #define HF_SPI_MOSI    (NRF_GPIO_PIN_MAP(1, 7))
-    #define HF_SPI_SCK     (NRF_GPIO_PIN_MAP(1, 4))
-    #define HF_ANT_SEL     (NRF_GPIO_PIN_MAP(1, 10))
-    // ****************** BTN DEFINE ******************
-    #define BUTTON_1       (NRF_GPIO_PIN_MAP(0, 26))
-    #define BUTTON_2       (NRF_GPIO_PIN_MAP(1, 2))
-    // ****************** OTHER DEFINE ******************
-    #define BAT_SENSE      (NRF_GPIO_PIN_MAP(0, 4))
-    #define READER_POWER   (NRF_GPIO_PIN_MAP(0, 29))    // POWER
+
+#define MAX_LED_NUM 8
+#define MAX_RGB_NUM 3
+
+
+extern uint32_t g_led_field;
+extern uint32_t g_led_1;
+extern uint32_t g_led_2;
+extern uint32_t g_led_3;
+extern uint32_t g_led_4;
+extern uint32_t g_led_5;
+extern uint32_t g_led_6;
+extern uint32_t g_led_7;
+extern uint32_t g_led_8;
+extern uint32_t g_led_r;
+extern uint32_t g_led_g;
+extern uint32_t g_led_b;
+extern uint32_t g_led_num;
+extern uint32_t g_rgb_num;
+extern uint32_t g_button1;
+extern uint32_t g_button2;
+extern uint32_t g_lf_mod;
+extern uint32_t g_lf_rssi_pin;
+extern nrf_lpcomp_input_t g_lf_rssi;
+extern uint32_t g_bat_sense;
+
+
+#define LED_FIELD      g_led_field
+#define LED_1          g_led_1
+#define LED_2          g_led_2
+#define LED_3          g_led_3
+#define LED_4          g_led_4
+#define LED_5          g_led_5
+#define LED_6          g_led_6
+#define LED_7          g_led_7
+#define LED_8          g_led_8
+#define LED_R          g_led_r
+#define LED_G          g_led_g
+#define LED_B          g_led_b
+#define RGB_LIST_NUM   g_led_num
+#define RGB_CTRL_NUM   g_rgb_num
+#define BUTTON_1       g_button1
+#define BUTTON_2       g_button2
+#define LF_MOD         g_lf_mod
+#define LF_RSSI_PIN    g_lf_rssi_pin
+#define LF_RSSI        g_lf_rssi
+#define BAT_SENSE      g_bat_sense
+
+
+#if defined(PROJECT_CHAMELEON_ULTRA)
+extern uint32_t g_lf_ant_driver;
+extern uint32_t g_lf_oa_out;
+extern uint32_t g_hf_spi_select;
+extern uint32_t g_hf_spi_miso;
+extern uint32_t g_hf_spi_mosi;
+extern uint32_t g_hf_spi_sck;
+extern uint32_t g_hf_ant_sel;
+extern uint32_t g_reader_power;
+
+#define LF_ANT_DRIVER  g_lf_ant_driver
+#define LF_OA_OUT      g_lf_oa_out
+#define HF_SPI_SELECT  g_hf_spi_select
+#define HF_SPI_MISO    g_hf_spi_miso
+#define HF_SPI_MOSI    g_hf_spi_mosi
+#define HF_SPI_SCK     g_hf_spi_sck
+#define HF_ANT_SEL     g_hf_ant_sel
+#define READER_POWER   g_reader_power
 #endif
 
-// v1.2
-#if HW_VER == HW_NUM(1, 2)
-        // ****************** LED DEFINE ******************
-    #define LED_FIELD      (NRF_GPIO_PIN_MAP(1, 1))
-    #define LED_R          (NRF_GPIO_PIN_MAP(0, 24))
-    #define LED_G          (NRF_GPIO_PIN_MAP(0, 22))
-    #define LED_B          (NRF_GPIO_PIN_MAP(1, 0))
-    #define LED_8          (NRF_GPIO_PIN_MAP(0, 20))
-    #define LED_7          (NRF_GPIO_PIN_MAP(0, 17))
-    #define LED_6          (NRF_GPIO_PIN_MAP(0, 15))
-    #define LED_5          (NRF_GPIO_PIN_MAP(0, 13))
-    #define LED_4          (NRF_GPIO_PIN_MAP(0, 12))
-    #define LED_3          (NRF_GPIO_PIN_MAP(1, 9))
-    #define LED_2          (NRF_GPIO_PIN_MAP(0, 8))
-    #define LED_1          (NRF_GPIO_PIN_MAP(0, 6))
-    #define RGB_LIST_NUM 8
-    #define RGB_CTRL_NUM 3
-    // ****************** LF DEFINE ******************
-    // reader
-    #define LF_ANT_DRIVER  (NRF_GPIO_PIN_MAP(0, 31))    // LF ANT DRIVER
-    #define LF_OA_OUT      (NRF_GPIO_PIN_MAP(0, 29))    // LF DATA IN
-    // emulation
-    #define LF_MOD         (NRF_GPIO_PIN_MAP(1, 13))
-    #define LF_RSSI_PIN    (NRF_GPIO_PIN_MAP(0, 2))
-    #define LF_RSSI        NRF_LPCOMP_INPUT_0
-    // ****************** HF DEFINE ******************
-    // reader
-    #define HF_SPI_SELECT  (NRF_GPIO_PIN_MAP(1, 6))
-    #define HF_SPI_MISO    (NRF_GPIO_PIN_MAP(0, 11))
-    #define HF_SPI_MOSI    (NRF_GPIO_PIN_MAP(1, 7))
-    #define HF_SPI_SCK     (NRF_GPIO_PIN_MAP(1, 4))
-    #define HF_ANT_SEL     (NRF_GPIO_PIN_MAP(1, 10))
-    // ****************** BTN DEFINE ******************
-    #define BUTTON_1       (NRF_GPIO_PIN_MAP(0, 26))
-    #define BUTTON_2       (NRF_GPIO_PIN_MAP(1, 2))
-    // ****************** OTHER DEFINE ******************
-    #define BAT_SENSE      (NRF_GPIO_PIN_MAP(0, 4))
-    #define READER_POWER   (NRF_GPIO_PIN_MAP(1, 15))    // POWER
-#endif
+
+// 通用场灯的操作定义
+#define TAG_FIELD_LED_ON()     nrf_gpio_pin_clear(LED_FIELD);
+#define TAG_FIELD_LED_OFF()    nrf_gpio_pin_set(LED_FIELD);
+
+
+void hw_connect_init(void);
+uint32_t* hw_get_led_array(void);
+uint32_t* hw_get_rgb_array(void);
+chameleon_device_type_t hw_get_device_type(void);
+uint8_t hw_get_version_code(void);
