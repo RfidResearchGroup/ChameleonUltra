@@ -32,7 +32,6 @@ void init_leds(void);
 void light_up_by_slot(void);
 void reader_mode_enter(void);
 void tag_mode_enter(void);
-void set_slot_light_color(uint8_t color);
 device_mode_t get_device_mode(void);
 
 #endif

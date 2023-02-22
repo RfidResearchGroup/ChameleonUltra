@@ -52,10 +52,6 @@ static const uint8_t m_board_led_list[LEDS_NUMBER] = LEDS_LIST;
 static const uint8_t m_board_btn_list[BUTTONS_NUMBER] = BUTTONS_LIST;
 #endif
 
-#if RGB_NUMBER > 0
-static const uint8_t m_board_rgb_list[RGB_NUMBER] = RGB_LIST;
-#endif
-
 #if LEDS_NUMBER > 0
 bool bsp_board_led_state_get(uint32_t led_idx)
 {
@@ -140,22 +136,12 @@ static void bsp_board_leds_init(void)
     }
     #endif
 
-    #if defined(RGB_NUMBER) && defined(LEDS_NUMBER)
-    // Led for rgb init
     uint32_t i;
-    for (i = 0; i < RGB_NUMBER; ++i)
-    {
-        nrf_gpio_cfg_output(m_board_rgb_list[i]);
-        nrf_gpio_pin_set(m_board_rgb_list[i]);
-    }
-    nrf_gpio_pin_clear(LED_R);
-
     for (i = 0; i < LEDS_NUMBER; ++i)
     {
         nrf_gpio_cfg_output(m_board_led_list[i]);
     }
     bsp_board_leds_off();
-    #endif
 }
 
 uint32_t bsp_board_led_idx_to_pin(uint32_t led_idx)
@@ -219,30 +205,6 @@ uint32_t bsp_board_button_idx_to_pin(uint32_t button_idx)
 }
 #endif //BUTTONS_NUMBER > 0
 
-#if RGB_NUMBER > 0
-/**
- * @brief Function for enter tag emulation mode
- * @param color: 0 -> r, 1 -> g, 2 -> b
- */
-void bsp_set_led_color(uint8_t color) {
-    nrf_gpio_pin_set(LED_R);
-    nrf_gpio_pin_set(LED_G);
-    nrf_gpio_pin_set(LED_B);
-    uint32_t pin = LED_R;
-    switch(color) {
-        case 0:
-            pin = LED_R;
-            break;
-        case 1:
-            pin = LED_G;
-            break;
-        case 2:
-            pin = LED_B;
-            break;
-    }
-    nrf_gpio_pin_clear(pin);
-}
-#endif
 
 void bsp_board_init(uint32_t init_flags)
 {

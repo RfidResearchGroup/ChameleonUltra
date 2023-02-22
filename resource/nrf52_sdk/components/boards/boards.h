@@ -85,8 +85,6 @@
   #include STRINGIFY(CUSTOM_BOARD_INC.h)
 #elif defined(BOARD_CUSTOM)
   #include "custom_board.h"
-#elif defined(BOARD_CHAMELEON)
-  #include "chameleon_nrf52.h"
 #else
 #error "Board is not defined"
 
@@ -115,13 +113,6 @@ extern "C" {
  * @return True if the LED is turned on.
  */
 bool bsp_board_led_state_get(uint32_t led_idx);
-
-/**
- * @brief Fcuntion for led color change
- * 
- * @param color 0 -> r, 1 -> g, 2 -> b
- */
-void bsp_set_led_color(uint8_t color);
 
 /**
  * Function for turning on an LED.

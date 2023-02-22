@@ -1,7 +1,11 @@
 /*
  * hardware io connection map.
  */
+#ifndef HW_CONNECT_H_
+#define HW_CONNECT_H_
+
 #include "nrf_lpcomp.h"
+#include "device_info.h"
 
 
 typedef enum {
@@ -52,6 +56,7 @@ extern uint32_t g_bat_sense;
 #define RGB_CTRL_NUM   g_rgb_num
 #define BUTTON_1       g_button1
 #define BUTTON_2       g_button2
+#define BUTTON_PULL    NRF_GPIO_PIN_PULLDOWN
 #define LF_MOD         g_lf_mod
 #define LF_RSSI_PIN    g_lf_rssi_pin
 #define LF_RSSI        g_lf_rssi
@@ -85,7 +90,12 @@ extern uint32_t g_reader_power;
 
 
 void hw_connect_init(void);
+void init_leds(void);
 uint32_t* hw_get_led_array(void);
 uint32_t* hw_get_rgb_array(void);
 chameleon_device_type_t hw_get_device_type(void);
 uint8_t hw_get_version_code(void);
+void set_slot_light_color(uint8_t color);
+
+
+#endif

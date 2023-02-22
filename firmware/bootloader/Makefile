@@ -6,14 +6,23 @@ SDK_ROOT := ../../resource/nrf52_sdk
 PROJ_DIR := ./src/
 DFU_DIR  := ../../resource/dfu_key/
 LD_DIR   := ../../resource/link_script/
+SRC_PUBLIC := ../../resource/public_src/
+
 
 $(OUTPUT_DIRECTORY)/bootloader.out: \
   LINKER_SCRIPT  := ${LD_DIR}/bootloader.ld
 
 
+CHAMELEON_ULTRA := ultra
+CHAMELEON_LITE  := lite
+# What device is it?
+CURRENT_DEVICE_TYPE := ${CHAMELEON_LITE}
+
+
 # Source files common to all targets
 SRC_FILES += \
   $(PROJ_DIR)/main.c \
+  $(SRC_PUBLIC)/hw_connect.c \
   $(DFU_DIR)/dfu_public_key.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_clock.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_power.c \
@@ -60,7 +69,6 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310_bl/cc310_bl_backend_hash.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310_bl/cc310_bl_backend_init.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310_bl/cc310_bl_backend_shared.c \
-  $(SDK_ROOT)/components/boards/boards.c \
   $(SDK_ROOT)/components/softdevice/common/nrf_sdh.c \
   $(SDK_ROOT)/components/softdevice/common/nrf_sdh_ble.c \
   $(SDK_ROOT)/components/softdevice/common/nrf_sdh_soc.c \
@@ -106,6 +114,7 @@ SRC_FILES += \
 # Include folders common to all targets
 INC_FOLDERS += \
   $(PROJ_DIR) \
+  ${SRC_PUBLIC} \
   $(SDK_ROOT)/modules/nrfx/drivers/include \
   $(SDK_ROOT)/components/libraries/crypto/backend/micro_ecc \
   $(SDK_ROOT)/components/libraries/memobj \
@@ -139,7 +148,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/external/nrf_oberon \
   $(SDK_ROOT)/components/libraries/strerror \
   $(SDK_ROOT)/components/libraries/crypto/backend/mbedtls \
-  $(SDK_ROOT)/components/boards \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310 \
   $(SDK_ROOT)/components/libraries/bootloader \
   $(SDK_ROOT)/components/softdevice/s140/headers \
@@ -167,6 +175,18 @@ LIB_FILES += \
   $(SDK_ROOT)/external/nrf_oberon/lib/cortex-m4/hard-float/liboberon_3.0.8.a \
   $(SDK_ROOT)/external/nrf_cc310_bl/lib/cortex-m4/hard-float/libnrf_cc310_bl_0.9.13.a \
 
+
+ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
+  CFLAGS += -DPROJECT_CHAMELEON_ULTRA
+$(info  Chameleon Ultra <Bootloader>: zZZZZZ.)
+else ifeq (${CURRENT_DEVICE_TYPE}, ${CHAMELEON_LITE})
+  CFLAGS += -DPROJECT_CHAMELEON_LITE
+$(info  Chameleon Lite <Bootloader>: zZZZZZ.)
+else
+$(error Chameleon <Bootloader>: No device type define.)
+endif
+
+
 # Optimization flags
 OPT = -Os -g3
 # Uncomment the line below to enable link time optimization
@@ -175,7 +195,6 @@ OPT = -Os -g3
 # C flags common to all targets
 CFLAGS += $(OPT)
 CFLAGS += -DBLE_STACK_SUPPORT_REQD
-CFLAGS += -DBOARD_CHAMELEON
 # CFLAGS += -DCONFIG_GPIO_AS_PINRESET
 CFLAGS += -DFLOAT_ABI_HARD
 CFLAGS += -DNRF52840_XXAA
@@ -201,7 +220,6 @@ ASMFLAGS += -mcpu=cortex-m4
 ASMFLAGS += -mthumb -mabi=aapcs
 ASMFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
 ASMFLAGS += -DBLE_STACK_SUPPORT_REQD
-ASMFLAGS += -DBOARD_CHAMELEON
 ASMFLAGS += -DCONFIG_GPIO_AS_PINRESET
 ASMFLAGS += -DFLOAT_ABI_HARD
 ASMFLAGS += -DNRF52840_XXAA

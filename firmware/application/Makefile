@@ -5,6 +5,8 @@ OUTPUT_DIRECTORY := out
 SDK_ROOT := ../../resource/nrf52_sdk
 PROJ_DIR := ./src/
 LD_DIR   := ../../resource/link_script/
+SRC_PUBLIC := ../../resource/public_src/
+
 
 $(OUTPUT_DIRECTORY)/application.out: \
   LINKER_SCRIPT  := ${LD_DIR}/application.ld
@@ -18,7 +20,7 @@ CURRENT_DEVICE_TYPE := ${CHAMELEON_LITE}
 
 # Source files common to all targets
 SRC_FILES += \
-  $(PROJ_DIR)/hw_connect.c \
+  $(SRC_PUBLIC)/hw_connect.c \
   $(PROJ_DIR)/app_main.c \
   $(PROJ_DIR)/app_cmd.c \
   $(PROJ_DIR)/ble_main.c \
@@ -123,6 +125,7 @@ SRC_FILES += \
 # Include folders common to all targets
 INC_FOLDERS += \
   ${PROJ_DIR} \
+  ${SRC_PUBLIC} \
   ${PROJ_DIR}/bsp/ \
   ${PROJ_DIR}/utils/ \
   ${PROJ_DIR}/rfid/ \
@@ -264,11 +267,6 @@ INC_FOLDERS += \
 # Libraries common to all targets
 LIB_FILES += \
 
-# Optimization flags
-OPT = -O3 -g3
-# Uncomment the line below to enable link time optimization
-#OPT += -flto
-
 
 ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
 # Append reader module source code to compile list.
@@ -289,15 +287,21 @@ ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
 
   CFLAGS += -DPROJECT_CHAMELEON_ULTRA
 
-$(info  Chameleon Ultra: reader and tag emulation module enable.)
+$(info  Chameleon Ultra <Application>: reader and tag emulation module enable.)
 else ifeq (${CURRENT_DEVICE_TYPE}, ${CHAMELEON_LITE})
 
   CFLAGS += -DPROJECT_CHAMELEON_LITE
 
-$(info  Chameleon Lite: tag emulation module enable.)
+$(info  Chameleon Lite <Application>: tag emulation module enable.)
 else
-$(error Chameleon: No device type define.)
+$(error Chameleon <Application>: No device type define.)
 endif
+
+
+# Optimization flags
+OPT = -O3 -g3
+# Uncomment the line below to enable link time optimization
+#OPT += -flto
 
 # C flags common to all targets
 CFLAGS += $(OPT)
@@ -375,7 +379,7 @@ include $(TEMPLATE_PATH)/Makefile.common
 
 $(foreach target, $(TARGETS), $(call define_target, $(target)))
 
-.PHONY: flash flash_softdevice erase
+.PHONY: flash flash_softdevice erase config
 
 # Flash the program
 flash: default

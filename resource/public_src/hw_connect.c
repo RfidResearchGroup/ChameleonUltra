@@ -12,6 +12,8 @@ const static chameleon_device_type_t m_device_type =
     "No device define before project build.";
 #endif
 
+char g_extern_product_str[sizeof(DEVICE_NAME_STR) + sizeof(": hw_v255, fw_v65535") + 1];
+
 
 uint32_t g_led_field;
 uint32_t g_led_1;
@@ -63,7 +65,36 @@ uint32_t m_rgb_array[MAX_RGB_NUM];
 static uint8_t m_hw_ver;
 
 
+
+/**
+ * @brief Function for chameleon lite power set
+ */
+void board_lite_high_voltage_set(void) {
+#ifdef SOFTDEVICE_PRESENT
+    sd_power_dcdc_mode_set(NRF_POWER_DCDC_DISABLE);
+    sd_power_dcdc0_mode_set(NRF_POWER_DCDC_DISABLE);
+#else
+    NRF_POWER->DCDCEN = 0;
+    NRF_POWER->DCDCEN0 = 0;
+#endif
+     // if the chameleon lite is powered from USB (high voltage mode), GPIO output voltage is set to 1.8 volts by
+     // default and that is not enough to turn the green and blue LEDs on. Increase GPIO voltage to 3.0 volts.
+    if (((NRF_UICR->REGOUT0 & UICR_REGOUT0_VOUT_Msk) == (UICR_REGOUT0_VOUT_DEFAULT << UICR_REGOUT0_VOUT_Pos))) {
+        NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Wen << NVMC_CONFIG_WEN_Pos;
+        while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
+        NRF_UICR->REGOUT0 = (NRF_UICR->REGOUT0 & ~((uint32_t)UICR_REGOUT0_VOUT_Msk)) | (UICR_REGOUT0_VOUT_3V3 << UICR_REGOUT0_VOUT_Pos);
+        NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Ren << NVMC_CONFIG_WEN_Pos;
+        while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
+        // a reset is required for changes to take effect
+        NVIC_SystemReset();
+    }
+}
+
 void hw_connect_init(void) {
+#if defined(PROJECT_CHAMELEON_LITE)
+    board_lite_high_voltage_set();  // lite需要关闭dcdc并且抬高内核电压
+#endif
+
     // TODO 请实现此处，实现硬件版本号的读取
     // 测试的时候可以直接改写此版本号
     m_hw_ver = 1;
@@ -180,6 +211,9 @@ void hw_connect_init(void) {
     INIT_RGB_ARRAY(1, LED_R);
     INIT_RGB_ARRAY(2, LED_G);
     INIT_RGB_ARRAY(3, LED_B);
+
+    // Generates a description string of detailed device information.
+    sprintf(g_extern_product_str, "%s: hw_v%d, fw_v%d", DEVICE_NAME_STR, m_hw_ver, FW_VER_NUM);
 }
 
 uint32_t* hw_get_led_array(void) {
@@ -196,4 +230,48 @@ chameleon_device_type_t hw_get_device_type(void) {
 
 uint8_t hw_get_version_code(void) {
     return m_hw_ver;
+}
+
+// 初始化设备的LED灯珠
+void init_leds(void) {
+    uint32_t* led_pins = hw_get_led_array();
+    uint32_t* led_rgb_pins = hw_get_rgb_array();
+    
+    // 初始化卡槽那几颗LED灯的GPIO（其他的LED由其他的模块控制）
+    for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
+        nrf_gpio_cfg_output(led_pins[i]);
+        nrf_gpio_pin_clear(led_pins[i]);
+    }
+
+    // 初始化RGB脚
+    for (uint8_t i = 0; i < RGB_CTRL_NUM; i++) {
+        nrf_gpio_cfg_output(led_rgb_pins[i]);
+        nrf_gpio_pin_set(led_rgb_pins[i]);
+    }
+
+    // 设置FIELD LED脚为输出且灭掉场灯
+    nrf_gpio_cfg_output(LED_FIELD);
+    TAG_FIELD_LED_OFF()
+}
+
+/**
+ * @brief Function for enter tag emulation mode
+ * @param color: 0 表示r, 1表示g, 2表示b
+ */
+void set_slot_light_color(uint8_t color) {
+    nrf_gpio_pin_set(LED_R);
+    nrf_gpio_pin_set(LED_G);
+    nrf_gpio_pin_set(LED_B);
+    switch(color) {
+        case 0:
+            nrf_gpio_pin_clear(LED_R);
+            break;
+        case 1:
+            nrf_gpio_pin_clear(LED_G);
+            break;
+        case 2:
+            nrf_gpio_pin_clear(LED_B);
+            break;
+    }
+    
 }
