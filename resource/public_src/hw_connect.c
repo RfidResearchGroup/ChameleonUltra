@@ -49,10 +49,12 @@ uint32_t g_reader_power;
 
 
 uint32_t m_led_array[MAX_LED_NUM];
-#define INIT_LED_ARRAY(num, led)     \
-    if (RGB_LIST_NUM >= num) {       \
-        m_led_array[num - 1] = led;  \
-    }                                \
+uint32_t m_led_reversal_array[MAX_LED_NUM];
+#define INIT_LED_ARRAY(num, led)                        \
+    if (RGB_LIST_NUM >= num) {                          \
+        m_led_array[num - 1] = led;                     \
+        m_led_reversal_array[RGB_LIST_NUM - num] = led; \
+    }                                                   \
 
 
 uint32_t m_rgb_array[MAX_RGB_NUM];
@@ -218,6 +220,10 @@ void hw_connect_init(void) {
 
 uint32_t* hw_get_led_array(void) {
     return m_led_array;
+}
+
+uint32_t* hw_get_led_reversal_array(void) {
+    return m_led_reversal_array;
 }
 
 uint32_t* hw_get_rgb_array(void) {

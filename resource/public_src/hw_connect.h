@@ -7,7 +7,6 @@
 #include "nrf_lpcomp.h"
 #include "device_info.h"
 
-
 typedef enum {
     CHAMELEON_ULTRA,
     CHAMELEON_LITE,
@@ -92,6 +91,7 @@ extern uint32_t g_reader_power;
 void hw_connect_init(void);
 void init_leds(void);
 uint32_t* hw_get_led_array(void);
+uint32_t* hw_get_led_reversal_array(void);
 uint32_t* hw_get_rgb_array(void);
 chameleon_device_type_t hw_get_device_type(void);
 uint8_t hw_get_version_code(void);

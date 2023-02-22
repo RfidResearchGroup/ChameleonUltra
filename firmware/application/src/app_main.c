@@ -33,6 +33,8 @@ NRF_LOG_MODULE_REGISTER();
 #include "syssleep.h"
 #include "tag_emulation.h"
 #include "usb_main.h"
+#include "rgb_marquee.h"
+
 
 // 定义软定时器
 APP_TIMER_DEF(m_button_check_timer); // 用于按钮防抖的定时器
@@ -207,6 +209,20 @@ static void system_off_enter(void) {
     ret = sd_power_ram_power_set(8, ram8_retention);
     APP_ERROR_CHECK(ret);
 
+
+    // 关机动画
+    uint8_t slot = tag_emulation_get_slot();
+    for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
+        nrf_gpio_pin_clear(hw_get_led_array()[i]);
+    }
+    uint8_t dir = slot > 3 ? 1 : 0;
+    // TODO 实现从指定卡槽的位置跑到头的灯效
+    ledblink4(0,dir,7,99,75);
+    ledblink4(0,!dir,7,75,50);
+    ledblink4(0,dir,7,50,25);
+    ledblink4(0,!dir,7,25,0);
+
+
     // 需要配置为浮空模拟输入且不上下拉的IO
     uint32_t gpio_cfg_default_nopull[] = {
 #if defined(PROJECT_CHAMELEON_ULTRA)
@@ -331,6 +347,7 @@ static void check_wakeup_src(void) {
 
 /**@brief button press event process
  */
+extern bool g_usb_led_marquee_enable;
 static void button_press_process(void) {
     // 确保AB按钮其中一个发生了点击事件
     if (m_is_read_btn_press || m_is_write_btn_press) {
@@ -351,6 +368,8 @@ static void button_press_process(void) {
         // 仅在新卡槽切换有效的情况下更新状态
         if (slot_new != slot_now) {
             tag_emulation_change_slot(slot_new, true); // 告诉模拟卡模块我们需要切换卡槽
+            g_usb_led_marquee_enable = false;
+            ledblink3(slot_now, 0, slot_new, 0);       // 灯效
             light_up_by_slot();                        // 切换了卡槽，我们需要重新亮灯
             set_slot_light_color(0);                   // 然后重新切换灯的颜色
         }
@@ -364,7 +383,6 @@ static void button_press_process(void) {
  */
 int main(void) {
     hw_connect_init();        // 记得先把引脚初始化一下
-
     log_init();               // 日志初始化
     gpio_te_init();           // 初始化GPIO矩阵库
     app_timers_init();        // 初始化软定时器
@@ -395,6 +413,9 @@ int main(void) {
     while (1) {
         // Button event process
         button_press_process();
+
+        ledblink1(0, 0);
+        
         // Data pack process
         data_frame_process();
         // Log print process

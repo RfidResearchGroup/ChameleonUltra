@@ -37,8 +37,9 @@ APP_USBD_CDC_ACM_GLOBAL_DEF(m_app_cdc_acm,
 // USB DEFINES END
 
 // USB CODE START
-static bool m_usb_connected = false;
-static bool m_usb_port_opened = false;
+volatile bool g_usb_connected = false;
+volatile bool g_usb_port_opened = false;
+volatile bool g_usb_led_marquee_enable = false;
 
 /** @brief User event handler @ref app_usbd_cdc_acm_user_ev_handler_t */
 static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst, app_usbd_cdc_acm_user_event_t event) {
@@ -56,15 +57,14 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst, app_usb
         ret_code_t ret = app_usbd_cdc_acm_read(&m_app_cdc_acm, cdc_data_buffer, 1);
         UNUSED_VARIABLE(ret);
         NRF_LOG_INFO("CDC ACM port opened");
-        m_usb_port_opened = true;
+        g_usb_port_opened = true;
         break;
     }
 
     case APP_USBD_CDC_ACM_USER_EVT_PORT_CLOSE:
         NRF_LOG_INFO("CDC ACM port closed");
-        m_usb_port_opened = false;
-        if (m_usb_connected) {
-        }
+        g_usb_port_opened = false;
+        g_usb_led_marquee_enable = true;
         break;
 
     case APP_USBD_CDC_ACM_USER_EVT_TX_DONE:
@@ -91,15 +91,19 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst, app_usb
 static void usbd_user_ev_handler(app_usbd_event_type_t event) {
     switch (event) {
     case APP_USBD_EVT_DRV_SUSPEND:
+        NRF_LOG_INFO("USB SUSPEND");
         break;
 
     case APP_USBD_EVT_DRV_RESUME:
+        NRF_LOG_INFO("USB RESUME");
         break;
 
     case APP_USBD_EVT_STARTED:
+        NRF_LOG_INFO("USB STARTED");
         break;
 
     case APP_USBD_EVT_STOPPED:
+        NRF_LOG_INFO("USB STOPPED");
         app_usbd_disable();
         break;
 
@@ -109,22 +113,25 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event) {
         if (!nrf_drv_usbd_is_enabled()) {
             app_usbd_enable();
         }
+        g_usb_led_marquee_enable = true;
         break;
 
     case APP_USBD_EVT_POWER_REMOVED:
         sleep_timer_start(SLEEP_DELAY_MS_USB_POWER_DISCONNECTED);
         NRF_LOG_INFO("USB power removed");
-        m_usb_connected = false;
+        g_usb_connected = false;
+        g_usb_led_marquee_enable = false;
         app_usbd_stop();
         break;
 
     case APP_USBD_EVT_POWER_READY:
         NRF_LOG_INFO("USB ready");
-        m_usb_connected = true;
+        g_usb_connected = true;
         app_usbd_start();
         break;
 
     default:
+        // NRF_LOG_INFO("Other usb event: %d", event);
         break;
     }
 }
@@ -158,7 +165,7 @@ int fputc(int ch, FILE *f){
     ch_static = ch;
 
     // must cdc is available
-    if (m_usb_port_opened && m_usb_connected) {
+    if (g_usb_port_opened && g_usb_connected) {
         // send and wait done.
         ret_code_t ret;
         do {

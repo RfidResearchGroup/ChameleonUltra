@@ -16,7 +16,7 @@ $(OUTPUT_DIRECTORY)/bootloader.out: \
 CHAMELEON_ULTRA := ultra
 CHAMELEON_LITE  := lite
 # What device is it?
-CURRENT_DEVICE_TYPE := ${CHAMELEON_LITE}
+CURRENT_DEVICE_TYPE := ${CHAMELEON_ULTRA}
 
 
 # Source files common to all targets

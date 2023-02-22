@@ -15,7 +15,7 @@ $(OUTPUT_DIRECTORY)/application.out: \
 CHAMELEON_ULTRA := ultra
 CHAMELEON_LITE  := lite
 # What device is it?
-CURRENT_DEVICE_TYPE := ${CHAMELEON_LITE}
+CURRENT_DEVICE_TYPE := ${CHAMELEON_ULTRA}
 
 
 # Source files common to all targets
@@ -26,6 +26,7 @@ SRC_FILES += \
   $(PROJ_DIR)/ble_main.c \
   $(PROJ_DIR)/rfid_main.c \
   $(PROJ_DIR)/usb_main.c \
+  $(PROJ_DIR)/rgb_marquee.c \
   $(PROJ_DIR)/bsp/bsp_delay.c \
   $(PROJ_DIR)/bsp/bsp_time.c \
   $(PROJ_DIR)/rfid/crc_utils.c \
