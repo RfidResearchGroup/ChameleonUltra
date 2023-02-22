@@ -47,7 +47,6 @@
  */
 
 #include <stdint.h>
-#include "boards.h"
 #include "nrf_mbr.h"
 #include "nrf_bootloader.h"
 #include "nrf_bootloader_app_start.h"
@@ -62,6 +61,8 @@
 #include "nrf_delay.h"
 #include "app_scheduler.h"
 #include "nrfx_systick.h"
+#include "nrf_gpio.h"
+#include "hw_connect.h"
 
 
 static void on_error(void)
@@ -104,8 +105,9 @@ static uint8_t m_led_flash_state = 0;
 static bool m_led_flash_setp = 0;
 static nrfx_systick_state_t systick;
 void flash_led(void *p_event_data, uint16_t event_size) {
-    bsp_board_leds_off();
-    bsp_set_led_color(m_led_flash_state);
+    nrf_gpio_pin_clear(LED_5);
+    nrf_gpio_pin_clear(LED_4);
+    set_slot_light_color(m_led_flash_state);
 
     int led_flash_speed;
     switch (m_led_flash_state)
@@ -123,18 +125,18 @@ void flash_led(void *p_event_data, uint16_t event_size) {
     }
 
     if (m_led_flash_setp == 0) {
-        bsp_board_led_on(BSP_BOARD_LED_3);
+        nrf_gpio_pin_set(LED_4);
         if (nrfx_systick_test(&systick, led_flash_speed)) {
             m_led_flash_setp = 1;
             nrfx_systick_get(&systick);
-            bsp_board_led_off(BSP_BOARD_LED_3);
+            nrf_gpio_pin_clear(LED_5);
         }
     } else {
-        bsp_board_led_on(BSP_BOARD_LED_4);
+        nrf_gpio_pin_set(LED_5);
         if (nrfx_systick_test(&systick, led_flash_speed)) {
             m_led_flash_setp = 0;
             nrfx_systick_get(&systick);
-            bsp_board_led_off(BSP_BOARD_LED_4);
+            nrf_gpio_pin_clear(LED_4);
         }
     }
 
@@ -151,7 +153,6 @@ static void dfu_observer(nrf_dfu_evt_type_t evt_type)
     {
         case NRF_DFU_EVT_DFU_INITIALIZED:
             nrfx_systick_init();
-            bsp_board_init(BSP_INIT_LEDS);
             m_led_flash_state = 0;
             m_led_flash_setp = 0;
             nrfx_systick_get(&systick);
@@ -183,6 +184,10 @@ static void dfu_observer(nrf_dfu_evt_type_t evt_type)
 int main(void)
 {
     uint32_t ret_val;
+
+    // Must to init hardware connect.
+    hw_connect_init();
+    init_leds();
 
     // Must happen before flash protection is applied, since it edits a protected page.
     nrf_bootloader_mbr_addrs_populate();

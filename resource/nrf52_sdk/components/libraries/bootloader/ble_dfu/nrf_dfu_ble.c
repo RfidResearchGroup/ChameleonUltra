@@ -57,6 +57,7 @@
 #include "nrf_delay.h"
 #include "nrf_dfu_settings.h"
 #include "nrf_dfu_ble.h"
+#include "hw_connect.h"
 
 #define NRF_LOG_MODULE_NAME nrf_dfu_ble
 #include "nrf_log.h"
@@ -167,18 +168,53 @@ static uint32_t advertising_init(uint8_t adv_flags, ble_gap_adv_params_t const *
     m_enc_advdata[5] = LSB_16(BLE_DFU_SERVICE_UUID);
     m_enc_advdata[6] = MSB_16(BLE_DFU_SERVICE_UUID);
 
-    /* Get GAP device name and length. */
+
+    // Get GAP device name and length.
     err_code = sd_ble_gap_device_name_get(&m_enc_advdata[9], &actual_device_name_length);
     if (err_code != NRF_SUCCESS)
     {
         return err_code;
     }
-
     // Set GAP device in advertising data.
     m_enc_advdata[7] = actual_device_name_length + 1; // (actual_length + ADV_AD_TYPE_FIELD_SIZE(1))
     m_enc_advdata[8] = BLE_GAP_AD_TYPE_COMPLETE_LOCAL_NAME;
-
     m_adv_data.adv_data.len += actual_device_name_length;
+
+
+    // Add device information to adv data
+    ble_gap_addr_t addr;
+    err_code = sd_ble_gap_addr_get(&addr);
+    if (err_code != NRF_SUCCESS)
+    {
+        return err_code;
+    }
+    m_enc_advdata[m_adv_data.adv_data.len] = 13; // length
+    m_adv_data.adv_data.len += 1;
+    m_enc_advdata[m_adv_data.adv_data.len] = BLE_GAP_AD_TYPE_MANUFACTURER_SPECIFIC_DATA;
+    m_adv_data.adv_data.len += 1;
+    m_enc_advdata[m_adv_data.adv_data.len] = 0xFF;
+    m_adv_data.adv_data.len += 1;
+    m_enc_advdata[m_adv_data.adv_data.len] = 0xFF;
+    m_adv_data.adv_data.len += 1;
+
+    addr.addr[0] -= 1;
+    for (int i = 0, j = sizeof(addr.addr) - 1; i < sizeof(addr.addr) / 2; i++, j--) {
+        uint8_t tmp = addr.addr[i];
+        addr.addr[i] = addr.addr[j];
+        addr.addr[j] = tmp;
+    }
+    memcpy(&m_enc_advdata[m_adv_data.adv_data.len], addr.addr, sizeof(addr.addr));
+    
+    
+    m_adv_data.adv_data.len += sizeof(addr.addr);
+    m_enc_advdata[m_adv_data.adv_data.len] = hw_get_device_type();
+    m_adv_data.adv_data.len += 1;
+    m_enc_advdata[m_adv_data.adv_data.len] = hw_get_version_code();
+    m_adv_data.adv_data.len += 1;
+    m_enc_advdata[m_adv_data.adv_data.len] = (FW_VER_NUM >> 8) & 0xFF;
+    m_adv_data.adv_data.len += 1;
+    m_enc_advdata[m_adv_data.adv_data.len] = FW_VER_NUM & 0xFF;
+    m_adv_data.adv_data.len += 1;
 
     return sd_ble_gap_adv_set_configure(&m_adv_handle, &m_adv_data, p_adv_params);
 }
@@ -923,13 +959,13 @@ static uint32_t gap_params_init(void)
 {
     uint32_t                err_code;
     ble_gap_conn_sec_mode_t sec_mode;
-    uint8_t const *         device_name;
+    uint8_t*                device_name;
     uint32_t                name_len;
 
     BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
 
 #if (!NRF_DFU_BLE_REQUIRES_BONDS)
-
+    unsigned char name_array[sizeof(NRF_DFU_BLE_ADV_NAME) + sizeof("-FFFF") + 1];
     err_code = gap_address_change();
     VERIFY_SUCCESS(err_code);
 
@@ -943,8 +979,15 @@ static uint32_t gap_params_init(void)
 #endif
     {
         NRF_LOG_DEBUG("Using default advertising name");
-        device_name = (uint8_t const *)(NRF_DFU_BLE_ADV_NAME);
-        name_len    = strlen(NRF_DFU_BLE_ADV_NAME);
+
+        ble_gap_addr_t addr;
+        err_code = sd_ble_gap_addr_get(&addr);
+        VERIFY_SUCCESS(err_code);
+        addr.addr[0] -= 1;
+        name_len = sprintf((char*)name_array, "%s-%02X%02X", NRF_DFU_BLE_ADV_NAME, addr.addr[1], addr.addr[0]);
+        device_name = (unsigned char*)name_array;
+        // device_name = (uint8_t const *)(NRF_DFU_BLE_ADV_NAME);
+        // name_len    = strlen(NRF_DFU_BLE_ADV_NAME);
     }
 
     err_code = sd_ble_gap_device_name_set(&sec_mode, device_name, name_len);

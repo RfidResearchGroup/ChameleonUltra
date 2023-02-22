@@ -89,6 +89,12 @@ NRF_LOG_MODULE_REGISTER();
 /** @brief Make USB power value */
 #define APP_USBD_POWER_MAKE(ma) (((ma) + 1) / 2)
 
+#ifdef USE_APP_CONFIG
+#define BCD_DEVICE_VALUE FW_VER_NUM
+#else
+#define BCD_DEVICE_VALUE APP_USBD_BCD_VER_MAKE(APP_USBD_DEVICE_VER_MAJOR, APP_USBD_DEVICE_VER_MINOR, APP_USBD_DEVICE_VER_SUB)                                                                        
+#endif
+
 /**
  @brief Default device descriptor initializer @ref app_usbd_descriptor_device_t
 * */
@@ -102,10 +108,7 @@ NRF_LOG_MODULE_REGISTER();
    .bMaxPacketSize0 = NRF_DRV_USBD_EPSIZE,             /* endpoint size: fixed to: NRF_DRV_USBD_EPSIZE*/ \
    .idVendor = APP_USBD_VID,                           /* Vendor ID*/                                    \
    .idProduct = APP_USBD_PID,                          /* Product ID*/                                   \
-   .bcdDevice = APP_USBD_BCD_VER_MAKE(                 /* Device version BCD */                          \
-       APP_USBD_DEVICE_VER_MAJOR,                                                                        \
-       APP_USBD_DEVICE_VER_MINOR,                                                                        \
-       APP_USBD_DEVICE_VER_SUB),                                                                         \
+   .bcdDevice = BCD_DEVICE_VALUE,                      /* Device version BCD */                          \
    .iManufacturer = APP_USBD_STRING_ID_MANUFACTURER,   /* String ID: manufacturer */                     \
    .iProduct = APP_USBD_STRING_ID_PRODUCT,             /* String ID: product */                          \
    .iSerialNumber = APP_USBD_STRING_ID_SERIAL,         /* String ID: serial */                           \

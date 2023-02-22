@@ -43,6 +43,7 @@
 #ifndef SDK_CONFIG_H
 #define SDK_CONFIG_H
 // <<< Use Configuration Wizard in Context Menu >>>\n
+#define USE_APP_CONFIG
 #ifdef USE_APP_CONFIG
 #include "app_config.h"
 #endif
@@ -153,7 +154,7 @@
 // <47=> 47 (P1.15) 
 
 #ifndef NRF_BL_DFU_ENTER_METHOD_BUTTON_PIN
-#define NRF_BL_DFU_ENTER_METHOD_BUTTON_PIN 26
+#define NRF_BL_DFU_ENTER_METHOD_BUTTON_PIN BUTTON_1
 #endif
 
 // </e>
@@ -1067,7 +1068,7 @@
 // <i> It is checked against the hw_version value in the init packet
 
 #ifndef NRF_DFU_HW_VERSION
-#define NRF_DFU_HW_VERSION 52
+#define NRF_DFU_HW_VERSION hw_get_device_type()
 #endif
 
 // <q> NRF_DFU_REQUIRE_SIGNED_APP_UPDATE  - Require a valid signature to update the application or SoftDevice.
@@ -1176,7 +1177,7 @@
 
 // <s> NRF_DFU_BLE_ADV_NAME - Default advertising name.
 #ifndef NRF_DFU_BLE_ADV_NAME
-#define NRF_DFU_BLE_ADV_NAME "DfuTarg"
+#define NRF_DFU_BLE_ADV_NAME DEVICE_NAME_STR_SHORT
 #endif
 
 // <o> NRF_DFU_BLE_ADV_INTERVAL - Advertising interval (in units of 0.625 ms) 
@@ -1546,7 +1547,7 @@
 // <i> Setting string to NULL disables that string.
 // <i> The order of manufacturer names must be the same like in @ref APP_USBD_STRINGS_LANGIDS.
 #ifndef APP_USBD_STRINGS_MANUFACTURER
-#define APP_USBD_STRINGS_MANUFACTURER APP_USBD_STRING_DESC("Nordic Semiconductor")
+#define APP_USBD_STRINGS_MANUFACTURER APP_USBD_STRING_DESC("Proxgrind")
 #endif
 
 // </e>
@@ -1562,7 +1563,7 @@
  
 
 #ifndef APP_USBD_STRINGS_PRODUCT_EXTERN
-#define APP_USBD_STRINGS_PRODUCT_EXTERN 0
+#define APP_USBD_STRINGS_PRODUCT_EXTERN 1
 #endif
 
 // <s> APP_USBD_STRINGS_PRODUCT - String descriptor for the product name.
@@ -1570,7 +1571,7 @@
 // <i> Note: This value is not editable in Configuration Wizard.
 // <i> List of product names that is defined the same way like in @ref APP_USBD_STRINGS_MANUFACTURER.
 #ifndef APP_USBD_STRINGS_PRODUCT
-#define APP_USBD_STRINGS_PRODUCT APP_USBD_STRING_DESC("Secure DFU Bootloader")
+#define APP_USBD_STRINGS_PRODUCT g_extern_product_str
 #endif
 
 // </e>

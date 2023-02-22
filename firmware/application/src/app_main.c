@@ -359,36 +359,10 @@ static void button_press_process(void) {
     }
 }
 
-/**
- * @brief Function for chameleon lite power controll
- */
-void board_nrf52840_high_voltage_set(void) {
-#ifdef SOFTDEVICE_PRESENT
-    sd_power_dcdc_mode_set(NRF_POWER_DCDC_DISABLE);
-    sd_power_dcdc0_mode_set(NRF_POWER_DCDC_DISABLE);
-#else
-    NRF_POWER->DCDCEN = 0;
-    NRF_POWER->DCDCEN0 = 0;
-#endif
-     // if the nrf52840_pca10059 board is powered from USB (high voltage mode), GPIO output voltage is set to 1.8 volts by
-     // default and that is not enough to turn the green and blue LEDs on. Increase GPIO voltage to 3.0 volts.
-    if (((NRF_UICR->REGOUT0 & UICR_REGOUT0_VOUT_Msk) == (UICR_REGOUT0_VOUT_DEFAULT << UICR_REGOUT0_VOUT_Pos))) {
-        NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Wen << NVMC_CONFIG_WEN_Pos;
-        while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
-        NRF_UICR->REGOUT0 = (NRF_UICR->REGOUT0 & ~((uint32_t)UICR_REGOUT0_VOUT_Msk)) | (UICR_REGOUT0_VOUT_3V3 << UICR_REGOUT0_VOUT_Pos);
-        NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Ren << NVMC_CONFIG_WEN_Pos;
-        while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
-        // a reset is required for changes to take effect
-        NVIC_SystemReset();
-    }
-}
 
 /**@brief Application main function.
  */
 int main(void) {
-#if defined(PROJECT_CHAMELEON_LITE)
-    board_nrf52840_high_voltage_set();  // lite需要关闭dcdc并且抬高内核电压
-#endif
     hw_connect_init();        // 记得先把引脚初始化一下
 
     log_init();               // 日志初始化

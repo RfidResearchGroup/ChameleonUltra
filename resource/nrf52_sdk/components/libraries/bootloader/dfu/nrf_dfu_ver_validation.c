@@ -46,6 +46,7 @@
 #include "nrf_assert.h"
 #include "dfu-cc.pb.h"
 #include "nrf_dfu_ver_validation.h"
+#include "hw_connect.h"
 
 #define NRF_LOG_MODULE_NAME nrf_dfu_ver_validation
 #include "nrf_log.h"

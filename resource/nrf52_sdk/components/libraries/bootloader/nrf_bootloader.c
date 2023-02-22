@@ -41,7 +41,6 @@
 
 #include "compiler_abstraction.h"
 #include "nrf.h"
-#include "boards.h"
 #include "sdk_config.h"
 #include "nrf_power.h"
 #include "nrfx_power.h"
@@ -59,6 +58,9 @@
 #include "nrf_bootloader_dfu_timers.h"
 #include "app_scheduler.h"
 #include "nrf_dfu_validation.h"
+#include "nrf_gpio.h"
+#include "hw_connect.h"
+
 
 static nrf_dfu_observer_t m_user_observer; //<! Observer callback set by the user.
 static volatile bool m_flash_write_done;
