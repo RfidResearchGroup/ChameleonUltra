@@ -83,3 +83,21 @@ void light_up_by_slot(void) {
 device_mode_t get_device_mode(void) {
     return rfid_state;
 }
+
+/**
+ * @brief Get the color by slot
+ * 
+ * @param slot slot number, 0 - 7
+ * @return uint8_t Color 0R, 1G, 2B
+ */
+uint8_t get_color_by_slot(uint8_t slot) {
+    tag_specific_type_t tag_type[2];
+    tag_emulation_get_specific_type_by_slot(slot, tag_type);
+    if (tag_type[0] != TAG_TYPE_UNKNOWN && tag_type[1] != TAG_TYPE_UNKNOWN) {
+        return 0;   // 双频卡模拟，返回R，表示双频卡
+    } else if (tag_type[0] != TAG_TYPE_UNKNOWN) {   // 高频模拟，返回G
+        return 1;
+    } else {    // 低频模拟，返回B
+        return 2;
+    }
+}

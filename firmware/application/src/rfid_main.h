@@ -33,5 +33,6 @@ void light_up_by_slot(void);
 void reader_mode_enter(void);
 void tag_mode_enter(void);
 device_mode_t get_device_mode(void);
+uint8_t get_color_by_slot(uint8_t slot);
 
 #endif

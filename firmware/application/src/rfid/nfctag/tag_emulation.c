@@ -289,6 +289,17 @@ void tag_emulation_save_data(void) {
 }
 
 /**
+ * @brief 获取模拟卡的标签类型，从对应卡槽中。
+ * 
+ * @param slot 卡槽
+ * @param tag_type 标签类型
+ */
+void tag_emulation_get_specific_type_by_slot(uint8_t slot, tag_specific_type_t tag_type[2]) {
+    tag_type[0] = slotConfig.group[slot].tag_hf;
+    tag_type[1] = slotConfig.group[slot].tag_lf;
+}
+
+/**
  * 删除某个卡槽指定的场类型的数据，如果是当前的激活的卡槽的数据，我们还需要动态关闭此卡片的模拟
  */
 void tag_emulation_delete_data(uint8_t slot, tag_sense_type_t sense_type) {

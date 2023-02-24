@@ -212,15 +212,18 @@ static void system_off_enter(void) {
 
     // 关机动画
     uint8_t slot = tag_emulation_get_slot();
+    uint32_t* p_led_array = hw_get_led_array();
     for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
-        nrf_gpio_pin_clear(hw_get_led_array()[i]);
+        nrf_gpio_pin_clear(p_led_array[i]);
     }
     uint8_t dir = slot > 3 ? 1 : 0;
+    uint8_t color = get_color_by_slot(slot);
     // TODO 实现从指定卡槽的位置跑到头的灯效
-    ledblink4(0,dir,7,99,75);
-    ledblink4(0,!dir,7,75,50);
-    ledblink4(0,dir,7,50,25);
-    ledblink4(0,!dir,7,25,0);
+    ledblink5(color, slot, dir ? 7 : 0);
+    ledblink4(color, dir, 7, 99, 75);
+    ledblink4(color, !dir, 7, 75, 50);
+    ledblink4(color, dir, 7, 50, 25);
+    ledblink4(color, !dir, 7, 25, 0);
 
 
     // 需要配置为浮空模拟输入且不上下拉的IO
@@ -288,8 +291,6 @@ static void check_wakeup_src(void) {
     uint32_t reset_source;
     sd_power_reset_reason_get(&reset_source);
     sd_power_reset_reason_clr(reset_source);
-    // get usb status
-    bool is_usb_attach = nrfx_power_usbstatus_get() != NRFX_POWER_USB_STATE_DISCONNECTED;
 
     /*
      * 注意：下方描述的休眠是深度休眠，停止任何非唤醒源的外设，停止CPU，达到最低功耗
@@ -302,40 +303,57 @@ static void check_wakeup_src(void) {
      * 提示：上述；逻辑为唤醒阶段处理的逻辑，剩下的逻辑转换为运行时的处理阶段
      */
 
-    // WakeUp from button
-    if (reset_source & NRF_POWER_RESETREAS_OFF_MASK) { // 首次通过按钮唤醒设备
+    uint8_t slot = tag_emulation_get_slot();
+    uint8_t dir = slot > 3 ? 1 : 0;
+    uint8_t color = get_color_by_slot(slot);
+    
+    if (reset_source & NRF_POWER_RESETREAS_OFF_MASK) {
         NRF_LOG_INFO("WakeUp from button");
         advertising_start(); // 启动蓝牙广播
-        set_slot_light_color(0);
-        sleep_timer_start(SLEEP_DELAY_MS_BUTTON_WAKEUP); // 如果接下来无操作就等待超时后深度休眠
-    } else
-        if (reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) { // WakeUp from hf field or lf field
+
+        // 按钮唤醒的开机动画
+        ledblink2(color, !dir, 11);
+        ledblink2(color, dir, 11);
+        ledblink2(color, !dir, dir ? slot : 7 - slot);
+        // 动画结束后亮起当前卡槽的指示灯
+        light_up_by_slot();
+
+        // 如果接下来无操作就等待超时后深度休眠
+        sleep_timer_start(SLEEP_DELAY_MS_BUTTON_WAKEUP);
+    } else if (reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) {
         NRF_LOG_INFO("WakeUp from rfid field");
-        // 高频亮绿灯
-        if (reset_source & NRF_POWER_RESETREAS_NFC_MASK) {
-            set_slot_light_color(1);
-        }
-        // 低频亮蓝灯
-        if (reset_source & NRF_POWER_RESETREAS_LPCOMP_MASK) {
-            set_slot_light_color(2);
-        }
+
+        // 场唤醒的情况下，只扫一轮RGB作为开机动画
+        ledblink2(color, !dir, dir ? slot : 7 - slot);
+        set_slot_light_color(color);
+        light_up_by_slot();
+
         // We can only run tag emulation at field wakeup source.
         sleep_timer_start(SLEEP_DELAY_MS_FIELD_WAKEUP);
-    } else
-        if (reset_source & NRF_POWER_RESETREAS_VBUS_MASK) { // WakeUp from power
+    } else if (reset_source & NRF_POWER_RESETREAS_VBUS_MASK) {
         // nrfx_power_usbstatus_get() can check usb attach status
         NRF_LOG_INFO("WakeUp from VBUS(USB)");
-        set_slot_light_color(0);
-        advertising_start(); // 启动蓝牙广播，USB插入的情况下，不需要进行深度休眠
+        
+        // USB插入和开启通信断口有自身的灯效，暂时不需要亮灯
+        // set_slot_light_color(color);
+        // light_up_by_slot();
+
+        // 启动蓝牙广播，USB插入的情况下，不需要进行深度休眠
+        advertising_start();
     } else {
         NRF_LOG_INFO("First power system");
+
         // 重置一下noinit ram区域
         uint32_t *noinit_addr = (uint32_t *)0x20038000;
         memset(noinit_addr, 0xFF, 0x8000);
         NRF_LOG_INFO("Reset noinit ram done.");
-        set_slot_light_color(0);
+
+        ledblink2(0, !dir, 11);
+        ledblink2(1, dir, 11);
+        ledblink2(2, !dir, 11);
+
         // 如果首次上电发现USB正插着，我们可以做一些相应的操作
-        if (is_usb_attach) {
+        if (nrfx_power_usbstatus_get() != NRFX_POWER_USB_STATE_DISCONNECTED) {
             NRF_LOG_INFO("USB Power found.");
             // usb插着可以随便广播BLE
             advertising_start();
@@ -369,12 +387,48 @@ static void button_press_process(void) {
         if (slot_new != slot_now) {
             tag_emulation_change_slot(slot_new, true); // 告诉模拟卡模块我们需要切换卡槽
             g_usb_led_marquee_enable = false;
-            ledblink3(slot_now, 0, slot_new, 0);       // 灯效
-            light_up_by_slot();                        // 切换了卡槽，我们需要重新亮灯
-            set_slot_light_color(0);                   // 然后重新切换灯的颜色
+            // 回去场使能类型对应的颜色
+            uint8_t color_now = get_color_by_slot(slot_now);
+            uint8_t color_new = get_color_by_slot(slot_new);
+            
+            // 切换卡槽的灯效
+            ledblink3(slot_now, color_now, slot_new, color_new);
+            // 切换了卡槽，我们需要重新亮灯
+            light_up_by_slot();
+            // 然后重新切换灯的颜色
+            set_slot_light_color(color_new);
         }
         // 重新延迟进入休眠
         sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
+    }
+}
+
+extern bool g_usb_port_opened;
+static void blink_usb_led_status(void) {
+    uint8_t slot = tag_emulation_get_slot();
+    uint8_t color = get_color_by_slot(slot);
+    uint8_t dir = slot > 3 ? 1 : 0;
+    static bool is_working = true;
+    if (nrfx_power_usbstatus_get() == NRFX_POWER_USB_STATE_DISCONNECTED) {
+        if (is_working) {
+            rgb_marquee_stop();
+            set_slot_light_color(color);
+            light_up_by_slot();
+            is_working = false;
+        }
+    } else {
+        is_working = true;
+        // 灯效是使能状态，可以进行显示
+        if (is_rgb_marquee_enable()) {
+            if (g_usb_port_opened) {
+                ledblink1(color, dir);
+            } else {
+                ledblink6();
+            }
+        } else {
+            set_slot_light_color(color);
+            light_up_by_slot();
+        }
     }
 }
 
@@ -396,26 +450,26 @@ int main(void) {
     power_management_init();  // 电源管理初始化
     usb_cdc_init();           // USB cdc模拟初始化
     ble_slave_init();         // 蓝牙协议栈初始化
-    check_wakeup_src();       // 检测唤醒源，根据唤醒源决定BLE广播与后续休眠动作
-
-    tag_emulation_init(); // 模拟卡初始化
-    light_up_by_slot();   // 根据当前配置启用的卡槽亮起对应的灯
-    tag_mode_enter();     // 默认进入卡模拟模式
+    tag_emulation_init();     // 模拟卡初始化
+    rgb_marquee_init();       // 灯效初始化
 
     // cmd callback register
     on_data_frame_complete(on_data_frame_received);
+    
+    check_wakeup_src();       // 检测唤醒源，根据唤醒源决定BLE广播与后续休眠动作
+    tag_mode_enter();         // 默认进入卡模拟模式
 
     // usbd event listener
     APP_ERROR_CHECK(app_usbd_power_events_enable());
 
     // Enter main loop.
-    NRF_LOG_INFO("NFC TAG & Reader Started 1");
+    NRF_LOG_INFO("Chameleon working");
+
     while (1) {
         // Button event process
         button_press_process();
-
-        ledblink1(0, 0);
-        
+        // Led blink at usb status
+        blink_usb_led_status();
         // Data pack process
         data_frame_process();
         // Log print process
@@ -423,9 +477,8 @@ int main(void) {
         // USB event process
         while (app_usbd_event_queue_process());
         // No task to process, system sleep enter.
-        sleep_system_run(
-            system_off_enter, // If system idle sometime, we can enter deep sleep state.
-            nrf_pwr_mgmt_run  // Some task process done, we can enter cpu sleep state.
-        );
+        // If system idle sometime, we can enter deep sleep state.
+        // Some task process done, we can enter cpu sleep state.
+        sleep_system_run(system_off_enter, nrf_pwr_mgmt_run);
     }
 }
