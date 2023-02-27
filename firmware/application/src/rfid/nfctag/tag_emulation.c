@@ -51,14 +51,14 @@ static tag_slot_config_t slotConfig ALIGN_U32 = {
     .config = { .activated = 0, .reserved1 = 0, .reserved2 = 0, .reserved3 = 0, },
     // 配置卡槽组
     .group = {
-        { .enable = true,  .reserved1 = 0, .reserved2 = 0, .tag_hf = TAG_TYPE_MIFARE_1024, .tag_lf = TAG_TYPE_EM410X, },    // 1
-        { .enable = true,  .reserved1 = 0, .reserved2 = 0, .tag_hf = TAG_TYPE_UNKNOWN,     .tag_lf = TAG_TYPE_EM410X, },    // 2
-        { .enable = true,  .reserved1 = 0, .reserved2 = 0, .tag_hf = TAG_TYPE_MIFARE_1024, .tag_lf = TAG_TYPE_UNKNOWN, },   // 3
-        { .enable = false, .reserved1 = 0, .reserved2 = 0, .tag_hf = TAG_TYPE_UNKNOWN,     .tag_lf = TAG_TYPE_UNKNOWN, },   // 4
-        { .enable = false, .reserved1 = 0, .reserved2 = 0, .tag_hf = TAG_TYPE_UNKNOWN,     .tag_lf = TAG_TYPE_UNKNOWN, },   // 5
-        { .enable = false, .reserved1 = 0, .reserved2 = 0, .tag_hf = TAG_TYPE_UNKNOWN,     .tag_lf = TAG_TYPE_UNKNOWN, },   // 6
-        { .enable = false, .reserved1 = 0, .reserved2 = 0, .tag_hf = TAG_TYPE_UNKNOWN,     .tag_lf = TAG_TYPE_UNKNOWN, },   // 7
-        { .enable = false, .reserved1 = 0, .reserved2 = 0, .tag_hf = TAG_TYPE_UNKNOWN,     .tag_lf = TAG_TYPE_UNKNOWN, },   // 8
+        { .enable = true,  .reserved1 = 0, .reserved2 = 0, .tag_hf = TAG_TYPE_MIFARE_1024, .tag_lf = TAG_TYPE_EM410X,       },   // 1
+        { .enable = true,  .reserved1 = 0, .reserved2 = 0, .tag_hf = TAG_TYPE_MIFARE_1024, .tag_lf = TAG_TYPE_UNKNOWN,      },   // 2
+        { .enable = true,  .reserved1 = 0, .reserved2 = 0, .tag_hf = TAG_TYPE_UNKNOWN,     .tag_lf = TAG_TYPE_EM410X,       },   // 3
+        { .enable = false, .reserved1 = 0, .reserved2 = 0, .tag_hf = TAG_TYPE_UNKNOWN,     .tag_lf = TAG_TYPE_UNKNOWN,      },   // 4
+        { .enable = false, .reserved1 = 0, .reserved2 = 0, .tag_hf = TAG_TYPE_UNKNOWN,     .tag_lf = TAG_TYPE_UNKNOWN,      },   // 5
+        { .enable = false, .reserved1 = 0, .reserved2 = 0, .tag_hf = TAG_TYPE_UNKNOWN,     .tag_lf = TAG_TYPE_UNKNOWN,      },   // 6
+        { .enable = false, .reserved1 = 0, .reserved2 = 0, .tag_hf = TAG_TYPE_UNKNOWN,     .tag_lf = TAG_TYPE_UNKNOWN,      },   // 7
+        { .enable = false, .reserved1 = 0, .reserved2 = 0, .tag_hf = TAG_TYPE_UNKNOWN,     .tag_lf = TAG_TYPE_UNKNOWN,      },   // 8
     },
 };
 // 卡槽配置特有的CRC，一旦slot配置发生变动，可通过CRC检查出来
@@ -548,5 +548,44 @@ void tag_emulation_change_type(uint8_t slot, tag_specific_type_t tag_type) {
     if (sense_type != TAG_SENSE_NO) {
         load_data_by_tag_type(slot, tag_type);
         NRF_LOG_INFO("reload data success.");
+    }
+}
+
+/**
+ * @brief 模拟卡的工厂初始化函数
+ *  可用于初始化默认出厂的一些数据
+ */
+void tag_emulation_factory_init(void) {
+    fds_slot_record_map_t map_info;
+
+    if (slotConfig.group[0].enable && slotConfig.group[0].tag_hf != TAG_TYPE_UNKNOWN && slotConfig.group[0].tag_lf != TAG_TYPE_UNKNOWN) {
+        // 在卡槽一初始化一张双频卡，如果其不存在历史记录，默认其是全新出厂状态。
+        get_fds_map_by_slot_sense_type_for_dump(0, TAG_SENSE_HF, &map_info);
+        bool is_slot1_hf_data_exists = fds_is_exists(map_info.id, map_info.key);
+        get_fds_map_by_slot_sense_type_for_dump(0, TAG_SENSE_LF, &map_info);
+        bool is_slot1_lf_data_exists = fds_is_exists(map_info.id, map_info.key);
+        // 此处判断卡槽1的高频卡和低频卡都不存在
+        if (!is_slot1_hf_data_exists && !is_slot1_lf_data_exists) {
+            tag_emulation_factory_data(0, slotConfig.group[0].tag_hf);   
+            tag_emulation_factory_data(0, slotConfig.group[0].tag_lf);
+        }
+    }
+
+    if (slotConfig.group[1].enable && slotConfig.group[1].tag_hf != TAG_TYPE_UNKNOWN) {
+        // 在卡槽2初始化一张高频m1卡，如果其不存在的话。
+        get_fds_map_by_slot_sense_type_for_dump(1, TAG_SENSE_HF, &map_info);
+        bool is_slot2_hf_data_exists = fds_is_exists(map_info.id, map_info.key);
+        if (!is_slot2_hf_data_exists) {
+            tag_emulation_factory_data(1, slotConfig.group[1].tag_hf);
+        }
+    }
+
+    if (slotConfig.group[2].enable && slotConfig.group[2].tag_lf != TAG_TYPE_UNKNOWN) {
+        // 在卡槽3初始化一张低频em410x卡，如果其不存在的话。
+        get_fds_map_by_slot_sense_type_for_dump(2, TAG_SENSE_LF, &map_info);
+        bool is_slot3_lf_data_exists = fds_is_exists(map_info.id, map_info.key);
+        if (!is_slot3_lf_data_exists) {
+            tag_emulation_factory_data(2, slotConfig.group[2].tag_lf);
+        }
     }
 }

@@ -101,6 +101,8 @@ bool tag_emulation_slot_is_enable(uint8_t slot);
 void tag_emulation_slot_set_enable(uint8_t slot, bool enable);
 // 获取对应卡槽的模拟卡类型
 void tag_emulation_get_specific_type_by_slot(uint8_t slot, tag_specific_type_t tag_type[2]);
+// 初始化某些出厂数据
+void tag_emulation_factory_init(void);
 
 // 在某个方向上查询任何一个使能的卡槽
 uint8_t tag_emulation_slot_find_next(uint8_t slot_now);

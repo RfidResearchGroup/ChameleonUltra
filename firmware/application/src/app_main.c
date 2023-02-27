@@ -365,6 +365,9 @@ static void check_wakeup_src(void) {
         memset(noinit_addr, 0xFF, 0x8000);
         NRF_LOG_INFO("Reset noinit ram done.");
 
+        // 初始化默认卡槽数据。
+        tag_emulation_factory_init();
+
         ledblink2(0, !dir, 11);
         ledblink2(1, dir, 11);
         ledblink2(2, !dir, 11);
