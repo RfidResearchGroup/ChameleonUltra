@@ -25,6 +25,9 @@ NRF_LOG_MODULE_REGISTER();
 #define ANT_NO_MOD()  nrf_gpio_pin_clear(LF_MOD)
 
 
+// usb灯效是否允许使能
+extern bool g_usb_led_marquee_enable;
+
 // 承载64位ID号的比特数据
 static uint64_t m_id_bit_data = 0;
 // 当前发送的卡片ID的bit位置
@@ -191,15 +194,18 @@ void timer_ce_handler(nrf_timer_event_t event_type, void* p_context) {
 static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // 仅限于未启动低频模拟时，并且是上升沿事件才去启动模拟卡
     if (!m_is_lf_emulating && event == NRF_LPCOMP_EVENT_UP) {
+        // 关闭休眠延时
+        sleep_timer_stop();
+        // 关闭比较器
+        nrf_drv_lpcomp_disable();
+
         // 设置模拟状态标志位
         m_is_lf_emulating = true;
         g_is_tag_emulating = true;
         
-        // 关闭比较器
-        nrf_drv_lpcomp_disable();
-        // 关闭休眠延时
-        sleep_timer_stop();
-        
+        // 模拟卡状态应当关闭USB灯效
+        g_usb_led_marquee_enable = false;
+
         // LED状态更新
         set_slot_light_color(2);
         TAG_FIELD_LED_ON()

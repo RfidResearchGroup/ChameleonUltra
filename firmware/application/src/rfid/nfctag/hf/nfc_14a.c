@@ -579,7 +579,7 @@ void nfc_tag_14a_data_process(uint8_t *p_data)
     }
 }
 
-uint8_t atqa[] = { 0x04, 0x00 };
+extern bool g_usb_led_marquee_enable;
 
 /**
  * 14a事件回调函数
@@ -588,11 +588,14 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
     // Select action to process.
     switch (p_event->evt_id) {
         case NRFX_NFCT_EVT_FIELD_DETECTED: {
-            g_is_tag_emulating = true;
             sleep_timer_stop();
-            set_slot_light_color(1);
 
+            g_is_tag_emulating = true;
+            g_usb_led_marquee_enable = false;
+
+            set_slot_light_color(1);
             TAG_FIELD_LED_ON()
+            
             NRF_LOG_INFO("HF FIELD DETECTED");
             
             // 关闭自动防冲撞，MCU管理所有的交互过程，然后使能NFC外设，使能之后就可以进行IO了
@@ -615,14 +618,6 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             
             TAG_FIELD_LED_OFF()
             m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
-            
-// #if defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
-//             // Reset the NFCT peripheral.
-//             *(volatile uint32_t *)0x40005FFC = 0;
-//             *(volatile uint32_t *)0x40005FFC;
-//             *(volatile uint32_t *)0x40005FFC = 1;
-//             nrfx_nfct_enable();
-// #endif
 
             NRF_LOG_INFO("HF FIELD LOST");
             break;
