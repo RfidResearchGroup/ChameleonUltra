@@ -36,10 +36,15 @@ NRF_LOG_MODULE_REGISTER();
 #include "rgb_marquee.h"
 
 
+
 // 定义软定时器
 APP_TIMER_DEF(m_button_check_timer); // 用于按钮防抖的定时器
 static bool m_is_read_btn_press = false;
 static bool m_is_write_btn_press = false;
+
+// cpu reset reason
+static uint32_t m_reset_source;
+
 
 /**@brief Function for assert macro callback.
  *
@@ -218,7 +223,13 @@ static void system_off_enter(void) {
     }
     uint8_t dir = slot > 3 ? 1 : 0;
     uint8_t color = get_color_by_slot(slot);
-    // TODO 实现从指定卡槽的位置跑到头的灯效
+    if (m_reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) {
+        if (m_reset_source & NRF_POWER_RESETREAS_NFC_MASK) {
+            color = 1;
+        } else {
+            color = 2;
+        }
+    }
     ledblink5(color, slot, dir ? 7 : 0);
     ledblink4(color, dir, 7, 99, 75);
     ledblink4(color, !dir, 7, 75, 50);
@@ -287,10 +298,8 @@ static void system_off_enter(void) {
  *@brief :检测唤醒源
  */
 static void check_wakeup_src(void) {
-    // get cpu reset reason
-    uint32_t reset_source;
-    sd_power_reset_reason_get(&reset_source);
-    sd_power_reset_reason_clr(reset_source);
+    sd_power_reset_reason_get(&m_reset_source);
+    sd_power_reset_reason_clr(m_reset_source);
 
     /*
      * 注意：下方描述的休眠是深度休眠，停止任何非唤醒源的外设，停止CPU，达到最低功耗
@@ -307,7 +316,7 @@ static void check_wakeup_src(void) {
     uint8_t dir = slot > 3 ? 1 : 0;
     uint8_t color = get_color_by_slot(slot);
     
-    if (reset_source & NRF_POWER_RESETREAS_OFF_MASK) {
+    if (m_reset_source & NRF_POWER_RESETREAS_OFF_MASK) {
         NRF_LOG_INFO("WakeUp from button");
         advertising_start(); // 启动蓝牙广播
 
@@ -320,9 +329,17 @@ static void check_wakeup_src(void) {
 
         // 如果接下来无操作就等待超时后深度休眠
         sleep_timer_start(SLEEP_DELAY_MS_BUTTON_WAKEUP);
-    } else if (reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) {
+    } else if (m_reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) {
         NRF_LOG_INFO("WakeUp from rfid field");
 
+        // wake up from hf field.
+        if (m_reset_source & NRF_POWER_RESETREAS_NFC_MASK) {
+            color = 1;  // HF field show G.
+            NRF_LOG_INFO("WakeUp from HF");
+        } else {
+            color = 2;  // LF filed show B.
+            NRF_LOG_INFO("WakeUp from LF");
+        }
         // 场唤醒的情况下，只扫一轮RGB作为开机动画
         ledblink2(color, !dir, dir ? slot : 7 - slot);
         set_slot_light_color(color);
@@ -330,7 +347,7 @@ static void check_wakeup_src(void) {
 
         // We can only run tag emulation at field wakeup source.
         sleep_timer_start(SLEEP_DELAY_MS_FIELD_WAKEUP);
-    } else if (reset_source & NRF_POWER_RESETREAS_VBUS_MASK) {
+    } else if (m_reset_source & NRF_POWER_RESETREAS_VBUS_MASK) {
         // nrfx_power_usbstatus_get() can check usb attach status
         NRF_LOG_INFO("WakeUp from VBUS(USB)");
         
@@ -408,7 +425,7 @@ static void blink_usb_led_status(void) {
     uint8_t slot = tag_emulation_get_slot();
     uint8_t color = get_color_by_slot(slot);
     uint8_t dir = slot > 3 ? 1 : 0;
-    static bool is_working = true;
+    static bool is_working = false;
     if (nrfx_power_usbstatus_get() == NRFX_POWER_USB_STATE_DISCONNECTED) {
         if (is_working) {
             rgb_marquee_stop();
