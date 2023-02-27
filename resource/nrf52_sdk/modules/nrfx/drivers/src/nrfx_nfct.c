@@ -241,6 +241,7 @@ static void nrfx_nfct_field_event_handler(volatile nrfx_nfct_field_state_t field
                  *    以达到及时处理数据消息的目的，在一段时间内无消息可处理之后，我们可以正式关闭NFC外设，达到节省电量资源的目的。
                  */
 #if defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
+                nrf_nfct_int_disable(NRFX_NFCT_RX_INT_MASK | NRFX_NFCT_TX_INT_MASK);
                 app_timer_start(m_nfc_close_timer, APP_TIMER_TICKS(3000), NULL);
 #else
                 nrf_nfct_task_trigger(NRF_NFCT_TASK_SENSE);
@@ -416,7 +417,6 @@ static inline nrfx_err_t nrfx_nfct_field_timer_config(void)
 static void timer_nfc_close_handle(void *arg) {
     NRFX_CRITICAL_SECTION_ENTER();
     nrf_nfct_task_trigger(NRF_NFCT_TASK_SENSE);
-    nrf_nfct_int_disable(NRFX_NFCT_RX_INT_MASK | NRFX_NFCT_TX_INT_MASK);
     NRFX_CRITICAL_SECTION_EXIT();
 }
 
