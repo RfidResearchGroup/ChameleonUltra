@@ -29,6 +29,22 @@ static bool fds_find_record(uint16_t id, uint16_t key, fds_record_desc_t *desc) 
     return false;
 }
 
+/**
+ * @brief Determine whether the record exists.
+ * 
+ * @param id record id
+ * @param key record key
+ * @return true on record exists
+ * @return false on no found
+ */
+bool fds_record_exists(uint16_t id, uint16_t key) {
+    fds_record_desc_t record_desc;
+    if (fds_find_record(id, key, &record_desc)) {
+        return true;
+    }
+    return false;
+}
+
 
 /**
  * 读取记录
