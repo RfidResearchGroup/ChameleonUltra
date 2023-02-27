@@ -437,17 +437,22 @@ static void blink_usb_led_status(void) {
             is_working = false;
         }
     } else {
-        is_working = true;
+
         // 灯效是使能状态，可以进行显示
         if (is_rgb_marquee_enable()) {
+            is_working = true;
             if (g_usb_port_opened) {
                 ledblink1(color, dir);
             } else {
                 ledblink6();
             }
         } else {
-            set_slot_light_color(color);
-            light_up_by_slot();
+            if (is_working) {
+                is_working = false;
+                rgb_marquee_stop();
+                set_slot_light_color(color);
+                light_up_by_slot();
+            }
         }
     }
 }
