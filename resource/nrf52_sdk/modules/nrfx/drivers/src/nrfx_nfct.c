@@ -501,6 +501,10 @@ void nrfx_nfct_uninit(void)
     NRFX_IRQ_DISABLE(NFCT_IRQn);
     NRFX_IRQ_PENDING_CLEAR(NFCT_IRQn);
 
+#if defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
+    app_timer_stop(m_nfc_close_timer);
+#endif
+
 #if defined(USE_TIMER_WORKAROUND)
     /* De-initialize Timer module as the workaround for NFCT HW issues. */
     nrfx_timer_uninit(&m_timer_workaround.timer);
