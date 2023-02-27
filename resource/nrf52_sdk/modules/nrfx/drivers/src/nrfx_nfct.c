@@ -58,21 +58,20 @@
 typedef struct
 {
     const nrfx_timer_t timer;                     /**< Timer instance that supports the correct NFC field detection. */
-// #if defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
+#if defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
     bool               fieldevents_filter_active; /**< Flag that indicates that the field events are ignored. */
     bool               is_hfclk_on;               /**< HFCLK has started - one of the NFC activation conditions. */
     bool               is_delayed;                /**< Required time delay has passed - one of the NFC activation conditions. */
-// #else
+#else
     uint32_t           field_state_cnt;           /**< Counter of the FIELDLOST events. */
-// #endif // defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
+#endif // defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
 } nrfx_nfct_timer_workaround_t;
 
 #if defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
-    #define NRFX_NFCT_FIELDLOST_THR      1500
-    #define NRFX_NFCT_ACTIVATE_DELAY     (1000) /**< Minimal delay in us between NFC field detection and activation of NFCT. */
+    #define NRFX_NFCT_ACTIVATE_DELAY     1000 /**< Minimal delay in us between NFC field detection and activation of NFCT. */
     #define NRFX_NFCT_TIMER_PERIOD       NRFX_NFCT_ACTIVATE_DELAY
 #else
-    #define NRFX_NFCT_FIELDLOST_THR      30000
+    #define NRFX_NFCT_FIELDLOST_THR      7
     #define NRFX_NFCT_FIELD_TIMER_PERIOD 100  /**< Field polling period in us. */
     #define NRFX_NFCT_TIMER_PERIOD       NRFX_NFCT_FIELD_TIMER_PERIOD
 #endif // defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
@@ -192,22 +191,6 @@ static void nrfx_nfct_field_event_handler(volatile nrfx_nfct_field_state_t field
         /* Probe NFC field */
         field_state = (nrfx_nfct_field_check()) ? NRFX_NFC_FIELD_STATE_ON : NRFX_NFC_FIELD_STATE_OFF;
     }
-    
-    // 20221108 fix NRF52840 delay close field
-#if defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
-    if (field_state == NRFX_NFC_FIELD_STATE_OFF && m_nfct_cb.field_on) {
-        if (++m_timer_workaround.field_state_cnt < NRFX_NFCT_FIELDLOST_THR) {
-            // restart timer to check field
-            // NRF_LOG_INFO("field_state_cnt = %d", m_timer_workaround.field_state_cnt);
-            nrfx_timer_clear(&m_timer_workaround.timer);
-            nrfx_timer_enable(&m_timer_workaround.timer);
-            return;
-        }
-    } else {
-        m_timer_workaround.field_state_cnt = 0;
-    }
-#endif
-    
 
     /* Field event service. Only take action on field transition -
      * based on the value of m_nfct_cb.field_on
@@ -225,7 +208,6 @@ static void nrfx_nfct_field_event_handler(volatile nrfx_nfct_field_state_t field
 
                 nrfx_timer_clear(&m_timer_workaround.timer);
                 nrfx_timer_enable(&m_timer_workaround.timer);
-                m_timer_workaround.field_state_cnt = 0;  
                 /* End: Workaround for anomaly 190 */
 #elif defined(NRF52832_XXAA) || defined(NRF52832_XXAB)
                 nrfx_timer_clear(&m_timer_workaround.timer);
@@ -242,7 +224,15 @@ static void nrfx_nfct_field_event_handler(volatile nrfx_nfct_field_state_t field
         case NRFX_NFC_FIELD_STATE_OFF:
             if (m_nfct_cb.field_on)
             {
-                nrf_nfct_task_trigger(NRF_NFCT_TASK_SENSE);
+                /*
+                 *  经过思考，既然低功耗读头无法成功唤醒的原因是读头发送太快，而唤醒NFC外设需要时间，恰巧错过了此通信时序。
+                 *    那我们就需要在首次唤醒NFC模块后，让其留存一段时间，这段时间就是大概能让低功耗读头正常通信的时间。
+                 *    唤醒NFC模块这段过程是为了让外设和时钟稳定的一个过程，特别是在NRF52840上，那么我们就不能改动唤醒到场侦测事件的这个过程
+                 *    假设从场丢失事件的回调关闭为切入点，我们可以假装关闭NFC外设（只分发场丢失事件，而不关闭外设），但是实际上留存着事件监听一段时间，假设在这段时间里接收到数据，我们可以立刻将事件转发给观察者
+                 *    以达到及时处理数据消息的目的，在一段时间内无消息可处理之后，我们可以正式关闭NFC外设，达到节省电量资源的目的。
+                 */
+
+                // nrf_nfct_task_trigger(NRF_NFCT_TASK_SENSE);
                 nrf_nfct_int_disable(NRFX_NFCT_RX_INT_MASK | NRFX_NFCT_TX_INT_MASK);
                 m_nfct_cb.field_on = false;
                 nfct_evt.evt_id    = NRFX_NFCT_EVT_FIELD_LOST;
@@ -372,6 +362,7 @@ static void nrfx_nfct_field_timer_handler(nrf_timer_event_t event_type, void * p
 
 #if defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
     m_timer_workaround.is_delayed = true;
+
     nrfx_timer_disable(&m_timer_workaround.timer);
     nrfx_nfct_activate_check();
 #else

@@ -39,7 +39,7 @@ APP_USBD_CDC_ACM_GLOBAL_DEF(m_app_cdc_acm,
 // USB CODE START
 volatile bool g_usb_connected = false;
 volatile bool g_usb_port_opened = false;
-volatile bool g_usb_led_marquee_enable = false;
+volatile bool g_usb_led_marquee_enable = true;
 
 /** @brief User event handler @ref app_usbd_cdc_acm_user_ev_handler_t */
 static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst, app_usbd_cdc_acm_user_event_t event) {

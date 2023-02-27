@@ -464,7 +464,6 @@ int main(void) {
 
     // Enter main loop.
     NRF_LOG_INFO("Chameleon working");
-
     while (1) {
         // Button event process
         button_press_process();
