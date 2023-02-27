@@ -1,4 +1,4 @@
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Header.png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/resource/picture/Header.png)
 
 # ChameleonUltra
 
@@ -46,13 +46,13 @@ Below we will explain in detail how we exploited the performance of the NRF52840
 10) Indala
 
 # PSK
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/PSK.png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/resource/picture/PSK.png)
 
 # FSK
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/FSK.png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/resource/picture/FSK.png)
 
 # ASK
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/ASK.png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/resource/picture/ASK.png)
 
 # 1. Ultra-low power consumption
 
@@ -75,33 +75,33 @@ This project specially optimizes the start-up and interaction logic and antenna 
 # 4. Ultra-fast response speed and low interaction delay
 
 # Standard MIFARE Card
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Standard_m1_s50.png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/resource/picture/Standard_m1_s50.png)
 
 # Proxmark3 Rdv4.01 Simulation
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Proxmark3_Rdv4_RRG_(Firmware%20build%20at%2020201026).png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/resource/picture/Proxmark3_Rdv4_RRG_(Firmware%20build%20at%2020201026).png)
 
 # Mi K30 Simulation
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Xiaomi_k30u_smartkey.png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/resource/picture/Xiaomi_k30u_smartkey.png)
 
 # ChameleonUltra Simulation
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/ChameleonUltra.png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/resource/picture/ChameleonUltra.png)
 
 # ChameleonTiny Simulation
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/ChameleonTiny.png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/resource/picture/ChameleonTiny.png)
 
 # FlipperZero Simulation
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/FlipperZero%20Simulation.png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/resource/picture/FlipperZero%20Simulation.png)
 
 # 5. 256kB super large RAM cooperates with RC522 to replace Proxmark3 magically to complete the decoding
 
 # Darkside decoding function
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Darkside.png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/resource/picture/Darkside.png)
 
 # Nested decoding function
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Nested.png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/resource/picture/Nested.png)
 
 # MFKEY32 V2 decoding function
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/MFKEY32V2.png) 
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/resource/picture/MFKEY32V2.png) 
 
 # Staticnest decoding function
 Coming Soon
@@ -110,8 +110,8 @@ Coming Soon
 Coming Soon 
 
 # Hardware frame diagram:
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Hardware%20%20Frame%20Diagram.png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/resource/picture/Hardware%20%20Frame%20Diagram.png)
 
 # Hardware Pictures
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Photos/Hardware%20Photos.png)
+![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/resource/picture/Hardware%20Photos.png)
 
