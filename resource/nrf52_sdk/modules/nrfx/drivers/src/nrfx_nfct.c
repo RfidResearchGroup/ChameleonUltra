@@ -70,6 +70,10 @@ typedef struct
 #if defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
     #define NRFX_NFCT_ACTIVATE_DELAY     1000 /**< Minimal delay in us between NFC field detection and activation of NFCT. */
     #define NRFX_NFCT_TIMER_PERIOD       NRFX_NFCT_ACTIVATE_DELAY
+
+    #include "app_timer.h"
+    // app timer, close nfc module at idle.
+    APP_TIMER_DEF(m_nfc_close_timer);
 #else
     #define NRFX_NFCT_FIELDLOST_THR      7
     #define NRFX_NFCT_FIELD_TIMER_PERIOD 100  /**< Field polling period in us. */
@@ -81,6 +85,7 @@ static nrfx_nfct_timer_workaround_t m_timer_workaround =
 {
     .timer = NRFX_TIMER_INSTANCE(NRFX_NFCT_TIMER_INSTANCE),
 };
+
 #endif // defined(USE_TIMER_WORKAROUND)
 
 #define NRFX_NFCT_FWT_MAX_DIFF         1u             /**< The maximal difference between the requested FWT and HW-limited FWT settings.*/
@@ -206,6 +211,9 @@ static void nrfx_nfct_field_event_handler(volatile nrfx_nfct_field_state_t field
                 m_timer_workaround.is_delayed                = false;
                 m_timer_workaround.fieldevents_filter_active = true;
 
+                // timer cancel
+                app_timer_stop(m_nfc_close_timer);
+
                 nrfx_timer_clear(&m_timer_workaround.timer);
                 nrfx_timer_enable(&m_timer_workaround.timer);
                 /* End: Workaround for anomaly 190 */
@@ -224,6 +232,7 @@ static void nrfx_nfct_field_event_handler(volatile nrfx_nfct_field_state_t field
         case NRFX_NFC_FIELD_STATE_OFF:
             if (m_nfct_cb.field_on)
             {
+
                 /*
                  *  经过思考，既然低功耗读头无法成功唤醒的原因是读头发送太快，而唤醒NFC外设需要时间，恰巧错过了此通信时序。
                  *    那我们就需要在首次唤醒NFC模块后，让其留存一段时间，这段时间就是大概能让低功耗读头正常通信的时间。
@@ -231,9 +240,13 @@ static void nrfx_nfct_field_event_handler(volatile nrfx_nfct_field_state_t field
                  *    假设从场丢失事件的回调关闭为切入点，我们可以假装关闭NFC外设（只分发场丢失事件，而不关闭外设），但是实际上留存着事件监听一段时间，假设在这段时间里接收到数据，我们可以立刻将事件转发给观察者
                  *    以达到及时处理数据消息的目的，在一段时间内无消息可处理之后，我们可以正式关闭NFC外设，达到节省电量资源的目的。
                  */
-
-                // nrf_nfct_task_trigger(NRF_NFCT_TASK_SENSE);
+#if defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
+                app_timer_start(m_nfc_close_timer, APP_TIMER_TICKS(3000), NULL);
+#else
+                nrf_nfct_task_trigger(NRF_NFCT_TASK_SENSE);
                 nrf_nfct_int_disable(NRFX_NFCT_RX_INT_MASK | NRFX_NFCT_TX_INT_MASK);
+#endif
+
                 m_nfct_cb.field_on = false;
                 nfct_evt.evt_id    = NRFX_NFCT_EVT_FIELD_LOST;
 
@@ -394,6 +407,19 @@ static inline nrfx_err_t nrfx_nfct_field_timer_config(void)
                                 true);
     return err_code;
 }
+
+/**
+ * @brief Close nfc module at idle.
+ * 
+ * @param arg Unused
+ */
+static void timer_nfc_close_handle(void *arg) {
+    NRFX_CRITICAL_SECTION_ENTER();
+    nrf_nfct_task_trigger(NRF_NFCT_TASK_SENSE);
+    nrf_nfct_int_disable(NRFX_NFCT_RX_INT_MASK | NRFX_NFCT_TX_INT_MASK);
+    NRFX_CRITICAL_SECTION_EXIT();
+}
+
 #endif // defined(USE_TIMER_WORKAROUND)
 
 static inline nrf_nfct_sensres_nfcid1_size_t nrf_nfct_nfcid1_size_to_sensres_size(uint8_t nfcid1_size)
@@ -440,6 +466,13 @@ nrfx_err_t nrfx_nfct_init(nrfx_nfct_config_t const * p_config)
 #if defined(USE_TIMER_WORKAROUND)
     /* Initialize Timer module as the workaround for NFCT HW issues. */
     err_code = nrfx_nfct_field_timer_config();
+    APP_ERROR_CHECK(err_code);
+
+#if defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
+    err_code = app_timer_create(&m_nfc_close_timer, APP_TIMER_MODE_SINGLE_SHOT, timer_nfc_close_handle);
+    APP_ERROR_CHECK(err_code);
+#endif
+
 #endif // defined(USE_TIMER_WORKAROUND)
 
     if (err_code == NRFX_SUCCESS)
