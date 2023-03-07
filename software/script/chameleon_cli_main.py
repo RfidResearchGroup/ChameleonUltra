@@ -72,6 +72,7 @@ class ChameleonCLI:
                         'help': "Get/Set tag nick name for slot",
                     },
                     'update': new_uint(chameleon_cli_unit.HWSlotUpdate, "Update config & data to device flash"),
+                    'openall': new_uint(chameleon_cli_unit.HWSlotOpenAll, "Open all slot and set to default data"), 
                     'help': "Emulation tag slot.",
                 },
                 'help': "hardware controller",
