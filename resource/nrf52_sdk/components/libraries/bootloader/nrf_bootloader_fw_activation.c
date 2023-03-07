@@ -403,6 +403,11 @@ nrf_bootloader_fw_activation_result_t nrf_bootloader_fw_activate(void)
             break;
         case NRF_DFU_BANK_INVALID:
         default:
+            // When updating the firmware by USB-SERIAL, if the device is powered off, 
+            // the situation described in the following website link will occur. At this time, our solution is to add the following line of code,
+            // The current test can solve the problem and will not affect the OTA process of USB+BLE
+            // https://devzone.nordicsemi.com/f/nordic-q-a/79864/usb-ble-bootloader-stuck-unable-to-dfu-after-dfu-process-was-interrupted
+            nrf_dfu_settings_progress_reset();  // Add this line of code to reset the OTA progress and make it restart OTA
             NRF_LOG_INFO("No firmware to activate.");
             return ACTIVATION_NONE;
     }
