@@ -23,7 +23,7 @@ CURRENT_DEVICE_TYPE := ${CHAMELEON_ULTRA}
 SRC_FILES += \
   $(PROJ_DIR)/main.c \
   $(SRC_PUBLIC)/hw_connect.c \
-  $(DFU_DIR)/dfu_public_key.c \
+  $(PROJ_DIR)/dfu_public_key.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_clock.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_power.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_systick.c \
