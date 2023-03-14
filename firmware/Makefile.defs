@@ -6,7 +6,6 @@
 #    You can ignore this file modify.
 # Warning: your toolchain path not allow PR to public repo!!!
 # If you need define the toolchain path, plz delete annotate and change it.
-GNU_INSTALL_ROOT ?= C:/UserProgram/arm_gcc/none/bin/
 #GNU_INSTALL_ROOT ?= /your/toolchain/path/
 #GNU_VERSION ?= 8.8.8
 #GNU_PREFIX ?= arm-none-eabi
