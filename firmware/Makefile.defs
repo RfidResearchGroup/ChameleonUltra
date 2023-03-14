@@ -1,0 +1,26 @@
+#    In the nrf52 sdk, will auto detection current platform: posix or windows.
+#    If your <arm-none-eabi> is already installed, and version and path is this:
+#    Version     : 9.3.1
+#    Windows-path: C:/Program Files (x86)/GNU Arm Embedded Toolchain/9 2020-q2-update/bin/
+#    POSIX  -path: /usr/local/gcc-arm-none-eabi-9-2020-q2-update/bin/
+#    You can ignore this file modify.
+# Warning: your toolchain path not allow PR to public repo!!!
+# If you need define the toolchain path, plz delete annotate and change it.
+GNU_INSTALL_ROOT ?= C:/UserProgram/arm_gcc/none/bin/
+#GNU_INSTALL_ROOT ?= /your/toolchain/path/
+#GNU_VERSION ?= 8.8.8
+#GNU_PREFIX ?= arm-none-eabi
+
+
+PROJECT_NAME     := chameleon_ultra_firmware
+OUTPUT_DIRECTORY := ../objects
+PROJ_DIR         := ./src
+SDK_ROOT         := ../nrf52_sdk
+SRC_COMMON       := ../common
+LD_DIR           := $(SRC_COMMON)
+
+# Device type supported
+CHAMELEON_ULTRA := ultra
+CHAMELEON_LITE  := lite
+# What device is it?
+CURRENT_DEVICE_TYPE := ${CHAMELEON_ULTRA}

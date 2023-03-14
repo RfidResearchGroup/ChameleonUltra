@@ -1,26 +1,13 @@
-PROJECT_NAME     := chameleon_application
+include ../Makefile.defs
+
 TARGETS          := application
-OUTPUT_DIRECTORY := out
-
-SDK_ROOT := ../../resource/nrf52_sdk
-PROJ_DIR := ./src/
-LD_DIR   := ../../resource/link_script/
-SRC_PUBLIC := ../../resource/public_src/
-
-
 $(OUTPUT_DIRECTORY)/application.out: \
-  LINKER_SCRIPT  := ${LD_DIR}/application.ld
-
-
-CHAMELEON_ULTRA := ultra
-CHAMELEON_LITE  := lite
-# What device is it?
-CURRENT_DEVICE_TYPE := ${CHAMELEON_ULTRA}
+  LINKER_SCRIPT  := application.ld
 
 
 # Source files common to all targets
 SRC_FILES += \
-  $(SRC_PUBLIC)/hw_connect.c \
+  $(SRC_COMMON)/hw_connect.c \
   $(PROJ_DIR)/app_main.c \
   $(PROJ_DIR)/app_cmd.c \
   $(PROJ_DIR)/ble_main.c \
@@ -83,7 +70,6 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/fstorage/nrf_fstorage_sd.c \
   $(SDK_ROOT)/components/libraries/fds/fds.c \
   $(SDK_ROOT)/modules/nrfx/mdk/system_nrf52840.c \
-  $(SDK_ROOT)/components/boards/boards.c \
   $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_clock.c \
   $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_power.c \
   $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_rng.c \
@@ -103,8 +89,6 @@ SRC_FILES += \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_spi.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_rng.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_ppi.c \
-  $(SDK_ROOT)/components/libraries/bsp/bsp.c \
-  $(SDK_ROOT)/components/libraries/bsp/bsp_btn_ble.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_Syscalls_GCC.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_printf.c \
@@ -126,7 +110,7 @@ SRC_FILES += \
 # Include folders common to all targets
 INC_FOLDERS += \
   ${PROJ_DIR} \
-  ${SRC_PUBLIC} \
+  ${SRC_COMMON} \
   ${PROJ_DIR}/bsp/ \
   ${PROJ_DIR}/utils/ \
   ${PROJ_DIR}/rfid/ \
@@ -308,7 +292,7 @@ OPT = -O3 -g3
 CFLAGS += $(OPT)
 CFLAGS += -DAPP_TIMER_V2
 CFLAGS += -DAPP_TIMER_V2_RTC1_ENABLED
-CFLAGS += -DBOARD_PCA10056
+
 # CFLAGS += -DCONFIG_GPIO_AS_PINRESET
 CFLAGS += -DFLOAT_ABI_HARD
 CFLAGS += -DNRF52840_XXAA
@@ -332,7 +316,7 @@ ASMFLAGS += -mthumb -mabi=aapcs
 ASMFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
 ASMFLAGS += -DAPP_TIMER_V2
 ASMFLAGS += -DAPP_TIMER_V2_RTC1_ENABLED
-ASMFLAGS += -DBOARD_PCA10056
+
 ASMFLAGS += -DCONFIG_GPIO_AS_PINRESET
 ASMFLAGS += -DFLOAT_ABI_HARD
 ASMFLAGS += -DNRF52840_XXAA
@@ -375,7 +359,7 @@ help:
 
 TEMPLATE_PATH := $(SDK_ROOT)/components/toolchain/gcc
 
-
+include ../Makefile.defs
 include $(TEMPLATE_PATH)/Makefile.common
 
 $(foreach target, $(TARGETS), $(call define_target, $(target)))
