@@ -181,3 +181,7 @@ int fputc(int ch, FILE *f){
     return ch;
 }
 */
+
+bool is_usb_working(void) {
+    return g_usb_port_opened;
+}

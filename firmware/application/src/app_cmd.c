@@ -561,6 +561,24 @@ static cmd_data_map_t m_data_cmd_map[] = {
 };
 
 
+/**
+ * @brief Auto select source to response 
+ * 
+ * @param resp data
+ */
+void auto_response_data(data_frame_tx_t* resp) {
+	// TODO Please select the reply source automatically according to the message source, 
+    //  and do not reply by checking the validity of the link layer by layer
+	if (is_usb_working()) {
+		usb_cdc_write(resp->buffer, resp->length);
+	} else if (is_nus_working()) {
+		nus_data_reponse(resp->buffer, resp->length);
+	} else {
+		NRF_LOG_ERROR("No connection valid found at response client.");
+	}
+}
+
+
 /**@brief Function for prcoess data frame(cmd)
  */
 void on_data_frame_received(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -595,12 +613,12 @@ void on_data_frame_received(uint16_t cmd, uint16_t status, uint16_t length, uint
     if (is_cmd_support) {
         // check and response
         if (response != NULL) {
-            usb_cdc_write(response->buffer, response->length);
+            auto_response_data(response);
         }
     } else {
         // response cmd unsupport.
         response = data_frame_make(cmd, STATUS_INVALID_CMD, 0, NULL);
-        usb_cdc_write(response->buffer, response->length);
+        auto_response_data(response);
         NRF_LOG_INFO("Data frame cmd invalid: %d,", cmd);
     }
 }
