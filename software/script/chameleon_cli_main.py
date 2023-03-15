@@ -75,6 +75,7 @@ class ChameleonCLI:
                     'openall': new_uint(chameleon_cli_unit.HWSlotOpenAll, "Open all slot and set to default data"), 
                     'help': "Emulation tag slot.",
                 },
+                'dfu': new_uint(chameleon_cli_unit.HWDFU, "Restart application to bootloader mode(Not yet implement dfu)."),
                 'help': "hardware controller",
             },
             'hf': {

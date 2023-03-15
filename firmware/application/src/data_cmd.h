@@ -17,6 +17,7 @@
 #define DATA_CMD_SET_SLOT_TAG_NICK              (1007)
 #define DATA_CMD_GET_SLOT_TAG_NICK              (1008)
 #define DATA_CMD_SLOT_DATA_CONFIG_SAVE          (1009)
+#define DATA_CMD_ENTER_BOOTLOADER               (1010)
 //
 // ******************************************************************
 

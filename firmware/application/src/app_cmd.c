@@ -11,6 +11,7 @@
 #include "app_cmd.h"
 #include "app_status.h"
 #include "tag_persistence.h"
+#include "nrf_pwr_mgmt.h"
 
 
 #define NRF_LOG_MODULE_NAME app_cmd
@@ -50,6 +51,18 @@ data_frame_tx_t* cmd_processor_get_device_mode(uint16_t cmd, uint16_t status, ui
         status = 0;
     }
     return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 1, (uint8_t*)&status);
+}
+
+data_frame_tx_t* cmd_processor_enter_bootloader(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    // restart to boot
+    #define BOOTLOADER_DFU_GPREGRET_MASK            (0xB0)      
+    #define BOOTLOADER_DFU_START_BIT_MASK           (0x01)  
+    #define BOOTLOADER_DFU_START    (BOOTLOADER_DFU_GPREGRET_MASK |         BOOTLOADER_DFU_START_BIT_MASK)      
+    APP_ERROR_CHECK(sd_power_gpregret_clr(0,0xffffffff));
+    APP_ERROR_CHECK(sd_power_gpregret_set(0, BOOTLOADER_DFU_START));
+    nrf_pwr_mgmt_shutdown(NRF_PWR_MGMT_SHUTDOWN_GOTO_DFU);
+    // Never into here...
+    while (1) __NOP();
 }
 
 
@@ -520,7 +533,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_APP_VERSION,              NULL,                        cmd_processor_get_version,                   NULL                   },
     {    DATA_CMD_CHANGE_DEVICE_MODE,           NULL,                        cmd_processor_change_device_mode,            NULL                   },
     {    DATA_CMD_GET_DEVICE_MODE,              NULL,                        cmd_processor_get_device_mode,               NULL                   },
-
+    {    DATA_CMD_ENTER_BOOTLOADER,             NULL,                        cmd_processor_enter_bootloader,              NULL                   },
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
     {    DATA_CMD_SCAN_14A_TAG,                 before_hf_reader_run,        cmd_processor_14a_scan,                      after_hf_reader_run    },

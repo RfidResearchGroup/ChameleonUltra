@@ -15,6 +15,8 @@ DATA_CMD_GET_SLOT_TAG_NICK = 1008
 
 DATA_CMD_SLOT_DATA_CONFIG_SAVE = 1009
 
+DATA_CMD_ENTER_BOOTLOADER = 1010
+
 DATA_CMD_SCAN_14A_TAG = 2000
 DATA_CMD_MF1_SUPPORT_DETECT = 2001
 DATA_CMD_MF1_NT_LEVEL_DETECT = 2002
@@ -391,6 +393,12 @@ class BaseChameleonCMD:
         """
         return self.device.send_cmd_sync(DATA_CMD_SLOT_DATA_CONFIG_SAVE, 0x00, None)
 
+    def enter_dfu_mode(self):
+        """
+            重启进入DFU模式(bootloader)
+        :return:
+        """
+        return self.device.send_cmd_auto(DATA_CMD_ENTER_BOOTLOADER, 0x00, None)
 
 
 class NegativeResponseError(Exception):

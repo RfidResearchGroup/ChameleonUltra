@@ -932,3 +932,18 @@ class HWSlotOpenAll(DeviceRequiredUnit):
         # update config and save to flash
         self.cmd_positive.update_slot_data_config()
         print(f' - Open all slot and set data to default success.')
+
+
+class HWDFU(DeviceRequiredUnit):
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        return None
+    
+    # hw dfu
+    def on_exec(self, args: argparse.Namespace):
+        print("Application restarting...")
+        self.cmd_standard.enter_dfu_mode()
+        # 理论上，上面的指令执行完成后，dfu模式会进入，然后USB会重启，
+        # 我们判断是否成功进入USB，只需要判断USB是否变成DFU设备的VID和PID即可，
+        # 同时我们记得确认设备的信息，一致时才是同一个设备。
+        print(" - Enter success @.@~")
