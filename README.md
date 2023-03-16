@@ -28,7 +28,7 @@ functions have been realized with it!
 
 # Supported functions
 
-## High frequency attack
+## High Frequency Attack
 
 | Attack Type  |   Tag Type    | Whether the hardware supports | Does the software support | Whether the application layer supports |                    Note |
 |--------------|:-------------:|------------------------------:|---------------------------|:--------------------------------------:|------------------------:|
@@ -40,7 +40,7 @@ functions have been realized with it!
 | HardNested   | MifareClassic |                       Support | Support                   |          Not yet implemented           |                      No |
 | Relay attack |   ISO14443A   |                       Support | Support                   |          Not yet implemented           |                      No |
 
-## High frequency simulation
+## High Frequency Simulation
 
 | Card Type                     |    Encoding Type     | Whether the hardware supports | Does the software support | Whether the application layer supports |                                     Note |
 |-------------------------------|:--------------------:|------------------------------:|---------------------------|:--------------------------------------:|-----------------------------------------:|
@@ -55,7 +55,7 @@ functions have been realized with it!
 | Mifare DESFire EV2            | ISO14443A High rate  |       Only supported Low rate | Only supported Low rate   |          Not yet implemented           |                                          |
 | Mifare PLUS                   | ISO14443A High rate  |       Only supported Low rate | Only supported Low rate   |          Not yet implemented           |                                          |
 
-## High frequency reader
+## High Frequency Reader
 
 | Card Type                     |    Encoding Type     |                Whether the hardware supports | Does the software support                    | Whether the application layer supports |                                       Note |
 |-------------------------------|:--------------------:|---------------------------------------------:|----------------------------------------------|:--------------------------------------:|-------------------------------------------:|
@@ -70,14 +70,14 @@ functions have been realized with it!
 | Mifare DESFire EV2            | ISO14443A High rate  | Supports low rates, or possibly higher rates | Supports low rates, or possibly higher rates |          Not yet implemented           |                                            |
 | Mifare PLUS                   | ISO14443A High rate  | Supports low rates, or possibly higher rates | Supports low rates, or possibly higher rates |          Not yet implemented           |                                            |
 
-## Low frequency attack
+## Low Frequency Attack
 
 | Vulnerability Type | Tag Type  | Whether the hardware supports | Does the software support | Whether the application layer supports | Note |
 |--------------------|:---------:|------------------------------:|---------------------------|:--------------------------------------:|-----:|
 | Sniffing           |  125KHz   |                       Support | Support                   |          Not yet implemented           |      |
 | Brute Force        | EM410x ID |                       Support | Support                   |          Not yet implemented           |      |
 
-## Low frequency simulation
+## Low Frequency Simulation
 
 | Card Type                | Encoding Type | Whether the hardware supports | Does the software support | Whether the application layer supports |                                          Note |
 |--------------------------|:-------------:|------------------------------:|---------------------------|:--------------------------------------:|----------------------------------------------:|
@@ -101,7 +101,7 @@ functions have been realized with it!
 | NexWatch                 |      PSK      |                       Support | Support                   |          Not yet implemented           |                                               |
 | Jablotron                |      ASK      |                       Support | Support                   |          Not yet implemented           |                                               |
 
-## Low frequency reader
+## Low Frequency Reader
 
 | Card Type                | Encoding Type | Whether the hardware supports | Does the software support | Whether the application layer supports |                                          Note |
 |--------------------------|:-------------:|------------------------------:|---------------------------|:--------------------------------------:|----------------------------------------------:|
@@ -125,7 +125,7 @@ functions have been realized with it!
 | NexWatch                 |      PSK      |                       Support | Support                   |          Not yet implemented           |                                               |
 | Jablotron                |      ASK      |                       Support | Support                   |          Not yet implemented           |                                               |
 
-## Low frequency modulation
+## Low Frequency Modulation
 
 [modulation_psk]: https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/resource/picture/PSK.png
 
@@ -183,7 +183,7 @@ testing a variety of common low-power reading heads, they can open the door perf
 
 [fdt_flipper_zero]: https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/resource/picture/FlipperZero%20Simulation.png
 
-| Simulator            |             FDT             |                                "**_FDT_**" Rating                                |
+| Simulation            |             FDT             |                                "**_FDT_**" Rating                                |
 |----------------------|:---------------------------:|:--------------------------------------------------------------------------------:|
 | Standard MIFARE Card |  ![alt][fdt_standard_s50]   | &#x2B50;&#x2B50;&#x2B50;&#x2B50;&#x2B50;&#x2B50;&#x2B50;&#x2B50;&#x2B50;&#x2B50; |
 | ChameleonUltra       | ![alt][fdt_chameleon_ultra] |         &#x2B50;&#x2B50;&#x2B50;&#x2B50;&#x2B50;&#x2B50;&#x2B50;&#x2B50;         |
