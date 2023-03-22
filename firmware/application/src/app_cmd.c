@@ -126,7 +126,6 @@ data_frame_tx_t* cmd_processor_detect_nested_dist(uint16_t cmd, uint16_t status,
 	if (length == 8) {
 		status = Nested_Distacne_Detect(data[1], data[0], &data[2], &nd);
 		if (status == HF_TAG_OK) {
-			// ̽�����?
 			length = sizeof(NestedDist);
 			data = (uint8_t *)(&nd);
 		} else {
@@ -144,7 +143,6 @@ data_frame_tx_t* cmd_processor_mf1_nt_distance(uint16_t cmd, uint16_t status, ui
 	if (length == 8) {
 		status = Nested_Distacne_Detect(data[1], data[0], &data[2], &nd);
 		if (status == HF_TAG_OK) {
-			// ̽�����?
 			length = sizeof(NestedDist);
 			data = (uint8_t *)(&nd);
 		} else {
@@ -189,7 +187,6 @@ data_frame_tx_t* cmd_processor_mf1_read_one_block(uint16_t cmd, uint16_t status,
 	if (length == 8) {
 		status = auth_key_use_522_hw(data[1], data[0], &data[2]);
 		if (status == HF_TAG_OK) {
-			// ֱ�ӵ��ñ�׼��ȡAPIȥ��ȡ��Ƭ
 			status = pcd_14a_reader_mf1_read(data[1], block);
 			if (status == HF_TAG_OK) {
 				length = 16;
@@ -210,7 +207,6 @@ data_frame_tx_t* cmd_processor_mf1_write_one_block(uint16_t cmd, uint16_t status
     if (length == 24) {
 		status = auth_key_use_522_hw(data[1], data[0], &data[2]);
 		if (status == HF_TAG_OK) {
-			// ֱ�ӵ��ñ�׼д��APIȥд�뿨Ƭ
 			status = pcd_14a_reader_mf1_write(data[1], &data[8]);
 		} else {
 			length = 0;
@@ -228,15 +224,8 @@ data_frame_tx_t* cmd_processor_em410x_scan(uint16_t cmd, uint16_t status, uint16
 }
 
 data_frame_tx_t* cmd_processor_write_em410x_2_t57(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    // д��T55XX�ı�ǩ��Ҫ�ṩһ��5��Byte���ȵĿ���
-	// ���һ���Ҫ�ṩ����һ���µ���Կ����һ���ɵ���Կ
 	if (length >= 13 && (length - 9) % 4 == 0) {
-		status = PcdWriteT55XX(
-			data, 				// ����UID
-			data + 5, 			// ����newkey
-			data + 9,			// ����oldkey
-			(length - 9) / 4 	// ������?newkey + uid���ʣ���oldkey����Կ����
-		);
+		status = PcdWriteT55XX(data, data + 5, data + 9, (length - 9) / 4);
 	} else {
 		status = STATUS_PAR_ERR;
 	}
@@ -245,19 +234,15 @@ data_frame_tx_t* cmd_processor_write_em410x_2_t57(uint16_t cmd, uint16_t status,
 
 #endif
 
-// ��װһ���Զ��л����۵ĵ��ú���
+
 static void change_slot_auto(uint8_t slot) {
     device_mode_t mode = get_device_mode();
-    // ������ģʽ�²���Ҫ����ģ�⿨�ٽ����л�
     tag_emulation_change_slot(slot, mode != DEVICE_MODE_READER);
-    // ��������
     light_up_by_slot();
-    // Ĭ������RGB
     set_slot_light_color(0);
 }
 
 data_frame_tx_t* cmd_processor_set_slot_activated(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    // ��Ҫȷ���������Ŀ��ۺ��벻Ҫ����֧�ֵ�����
     if (length == 1 && data[0] < TAG_MAX_SLOT_NUM) {
         change_slot_auto(data[0]);
         status = STATUS_DEVICE_SUCCESS;
@@ -268,11 +253,9 @@ data_frame_tx_t* cmd_processor_set_slot_activated(uint16_t cmd, uint16_t status,
 }
 
 data_frame_tx_t* cmd_processor_set_slot_tag_type(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    // ��Ҫȷ���������ı�ǩ��������Ч��
     if (length == 2 && data[0] < TAG_MAX_SLOT_NUM && data[1] != TAG_TYPE_UNKNOWN) {
-        uint8_t num_slot = data[0];    // ����?�����Ŀ���
-        uint8_t tag_type = data[1];    // ȡ����λ���������ı�ǩ����
-        // ����ǰ�Ŀ����л���ָ����ģ�⿨����
+        uint8_t num_slot = data[0];
+        uint8_t tag_type = data[1];
         tag_emulation_change_type(num_slot, (tag_specific_type_t)tag_type);
 		status = STATUS_DEVICE_SUCCESS;
 	} else {
@@ -282,11 +265,9 @@ data_frame_tx_t* cmd_processor_set_slot_tag_type(uint16_t cmd, uint16_t status, 
 }
 
 data_frame_tx_t* cmd_processor_set_slot_data_default(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    // ��Ҫȷ���������ı�ǩ��������Ч��
     if (length == 2 && data[0] < TAG_MAX_SLOT_NUM && data[1] != TAG_TYPE_UNKNOWN) {
-        uint8_t num_slot = data[0];    // ����?�����Ŀ���
-        uint8_t tag_type = data[1];    // ȡ����λ���������ı�ǩ����
-        // ���õ�ǰ�Ŀ���Ϊȱʡ���ݣ����ʧ�ܣ�������ǲ�δʵ�ִ�API��ȱʡ
+        uint8_t num_slot = data[0];
+        uint8_t tag_type = data[1];
         status = tag_emulation_factory_data(num_slot, (tag_specific_type_t)tag_type) ? STATUS_DEVICE_SUCCESS : STATUS_NOT_IMPLEMENTED;
 	} else {
         status = STATUS_PAR_ERR;
@@ -295,18 +276,14 @@ data_frame_tx_t* cmd_processor_set_slot_data_default(uint16_t cmd, uint16_t stat
 }
 
 data_frame_tx_t* cmd_processor_set_slot_enable(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    // ��Ҫȷ���������ı�ǩ��������Ч��
     if (length == 2 && data[0] < TAG_MAX_SLOT_NUM && (data[1] == 0 || data[1] == 1)) {
-        uint8_t slot_now = data[0];  // ����?�����Ŀ���
-        bool enable = data[1];  // ����?�����Ŀ��۵�״̬
+        uint8_t slot_now = data[0];
+        bool enable = data[1];
         tag_emulation_slot_set_enable(slot_now, enable);
         if (!enable) {
-            // �����˵�ǰ���ۺ�������һ�����õĿ��ۣ��л����Ǹ�������
             uint8_t slot_prev = tag_emulation_slot_find_next(slot_now);
             NRF_LOG_INFO("slot_now = %d, slot_prev = %d", slot_now, slot_prev);
             if (slot_prev == slot_now) {
-                // ����һȦ�����ֲ�û���ҵ�ʹ�ܵĿ��ۣ���ô˵��ȫ���Ŀ��۶���������
-                // ��ʱ����Ӧ��������۵�?
                 set_slot_light_color(3);
             } else {
                 change_slot_auto(slot_prev);
@@ -325,13 +302,9 @@ data_frame_tx_t* cmd_processor_slot_data_config_save(uint16_t cmd, uint16_t stat
 }
 
 data_frame_tx_t* cmd_processor_set_em410x_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    // ��Ҫȷ����������ID�����ǶԵ�
     if (length == LF_EM410X_TAG_ID_SIZE) {
-        // ��ȡEM410x�Ļ�����
         tag_data_buffer_t* buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
-        // ���ÿ��Ž�ȥ
         memcpy(buffer->buffer, data, LF_EM410X_TAG_ID_SIZE);
-        // ����֪ͨ��������
         tag_emulation_load_by_buffer(TAG_TYPE_EM410X, false);
         status = STATUS_DEVICE_SUCCESS;
 	} else {
@@ -342,7 +315,7 @@ data_frame_tx_t* cmd_processor_set_em410x_emu_id(uint16_t cmd, uint16_t status, 
 
 data_frame_tx_t* cmd_processor_set_mf1_detection_enable(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length == 1 && (data[0] == 0 || data[0] == 1)) {
-        nfc_tag_mf1_detection_log_clear();  // ������Σ�������־�ļ�¼״�?��Ҫ�����־����ʷ���?
+        nfc_tag_mf1_detection_log_clear();
         nfc_tag_mf1_set_detection_enable(data[0]);
         status = STATUS_DEVICE_SUCCESS;
 	} else {
@@ -373,11 +346,8 @@ data_frame_tx_t* cmd_processor_get_mf1_detection_log(uint16_t cmd, uint16_t stat
             index = bytes_to_num(data, 4);
             // NRF_LOG_INFO("index = %d", index);
             if (index < count) {
-                // ֱ��ʹ��ͷ����ַ+index��Ϊ����Դ
                 resp = (uint8_t *)(logs + index);
-                // ���㵱ǰ���ܴ�����ٸ����?
                 length = MIN(count - index, DATA_PACK_MAX_DATA_LENGTH / sizeof(nfc_tag_mf1_auth_log_t));
-                // ���㵱ǰ�������־���ֽڳ���?
                 length = length * sizeof(nfc_tag_mf1_auth_log_t);
                 status = STATUS_DEVICE_SUCCESS;
             } else {
@@ -394,21 +364,17 @@ data_frame_tx_t* cmd_processor_get_mf1_detection_log(uint16_t cmd, uint16_t stat
 
 data_frame_tx_t* cmd_processor_set_mf1_emulator_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length > 0 && (((length - 1) % NFC_TAG_MF1_DATA_SIZE) == 0)) {
-        // ���Ǳ���Ҫȷ����������Ŀ�����û��Խ��?
         uint8_t block_index = data[0];
         uint8_t block_count = (length - 1) % NFC_TAG_MF1_DATA_SIZE;
         if (block_index + block_count > NFC_TAG_MF1_BLOCK_MAX) {
             status = STATUS_PAR_ERR;
         } else {
-            // Ĭ�ϻ������IC�����ݻ�����
             tag_data_buffer_t* buffer = get_buffer_by_tag_type(TAG_TYPE_MIFARE_4096);
             nfc_tag_mf1_information_t *info = (nfc_tag_mf1_information_t *)buffer->buffer;
-            // û��Խ�磬���ǿ��Խ���block����
             for (int i = 1, j = block_index; i < length - 1; i += NFC_TAG_MF1_DATA_SIZE, j++) {
                 uint8_t *p_block = &data[i];
                 memcpy(info->memory[j], p_block, NFC_TAG_MF1_DATA_SIZE);
             }
-            // ������ɣ����ǿ��Ը��?��λ��
             status = STATUS_DEVICE_SUCCESS;
         }
     } else {
@@ -419,7 +385,7 @@ data_frame_tx_t* cmd_processor_set_mf1_emulator_block(uint16_t cmd, uint16_t sta
 
 data_frame_tx_t* cmd_processor_set_mf1_anti_collision_res(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length > 13) {
-        // sak(1) + atqa(2) + uid(10) ���û������������Ⱦ��Բ������?13���ֽ�
+        // sak(1) + atqa(2) + uid(10)
         status = STATUS_PAR_ERR;
     } else {
         uint8_t uid_length = length - 3;
@@ -435,7 +401,6 @@ data_frame_tx_t* cmd_processor_set_mf1_anti_collision_res(uint16_t cmd, uint16_t
             *(info->size) = (nfc_tag_14a_uid_size)uid_length;
             status = STATUS_DEVICE_SUCCESS;
         } else {
-            // UID���Ȳ���
             status = STATUS_PAR_ERR;
         }
     }
@@ -454,8 +419,8 @@ data_frame_tx_t* cmd_processor_set_slot_tag_nick_name(uint16_t cmd, uint16_t sta
         get_fds_map_by_slot_sense_type_for_nick(slot, sense_type, &map_info);
         
         uint8_t buffer[36];
-        buffer[0] = length - 2; // ��ȥ��ͷ�������ֽڣ�ʣ�µľ����ǳƵ��ֽ���
-        memcpy(buffer + 1, data + 2, buffer[0]);    // ����һ���ǳƵ��������У������ӻ����������? һ���ֽڿ�ͷ�ĳ��� + �ǳ��ֽ���
+        buffer[0] = length - 2;
+        memcpy(buffer + 1, data + 2, buffer[0]);
         
         bool ret = fds_write_sync(map_info.id, map_info.key, sizeof(buffer) / 4, buffer);
         if (ret) {
