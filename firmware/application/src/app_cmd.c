@@ -21,9 +21,10 @@
 NRF_LOG_MODULE_REGISTER();
 
 
+
 data_frame_tx_t* cmd_processor_get_version(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint32_t version = 0xDEADBEEF;
-    return data_frame_make(cmd, 0xDED1, 4, (uint8_t*)&version);
+    uint16_t version = FW_VER_NUM;
+    return data_frame_make(cmd, status, 2, (uint8_t*)&version);
 }
 
 data_frame_tx_t* cmd_processor_change_device_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -63,6 +64,13 @@ data_frame_tx_t* cmd_processor_enter_bootloader(uint16_t cmd, uint16_t status, u
     nrf_pwr_mgmt_shutdown(NRF_PWR_MGMT_SHUTDOWN_GOTO_DFU);
     // Never into here...
     while (1) __NOP();
+}
+
+data_frame_tx_t* cmd_processor_get_device_chip_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint32_t chip_id[2];
+    chip_id[0] = NRF_FICR->DEVICEID[0];
+    chip_id[1] = NRF_FICR->DEVICEID[1];
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 8, (uint8_t*)(&chip_id[0]));
 }
 
 
@@ -118,7 +126,7 @@ data_frame_tx_t* cmd_processor_detect_nested_dist(uint16_t cmd, uint16_t status,
 	if (length == 8) {
 		status = Nested_Distacne_Detect(data[1], data[0], &data[2], &nd);
 		if (status == HF_TAG_OK) {
-			// Ì½²âÍê³É
+			// Ì½ï¿½ï¿½ï¿½ï¿½ï¿?
 			length = sizeof(NestedDist);
 			data = (uint8_t *)(&nd);
 		} else {
@@ -136,7 +144,7 @@ data_frame_tx_t* cmd_processor_mf1_nt_distance(uint16_t cmd, uint16_t status, ui
 	if (length == 8) {
 		status = Nested_Distacne_Detect(data[1], data[0], &data[2], &nd);
 		if (status == HF_TAG_OK) {
-			// Ì½²âÍê³É
+			// Ì½ï¿½ï¿½ï¿½ï¿½ï¿?
 			length = sizeof(NestedDist);
 			data = (uint8_t *)(&nd);
 		} else {
@@ -181,7 +189,7 @@ data_frame_tx_t* cmd_processor_mf1_read_one_block(uint16_t cmd, uint16_t status,
 	if (length == 8) {
 		status = auth_key_use_522_hw(data[1], data[0], &data[2]);
 		if (status == HF_TAG_OK) {
-			// Ö±½Óµ÷ÓÃ±ê×¼¶ÁÈ¡APIÈ¥¶ÁÈ¡¿¨Æ¬
+			// Ö±ï¿½Óµï¿½ï¿½Ã±ï¿½×¼ï¿½ï¿½È¡APIÈ¥ï¿½ï¿½È¡ï¿½ï¿½Æ¬
 			status = pcd_14a_reader_mf1_read(data[1], block);
 			if (status == HF_TAG_OK) {
 				length = 16;
@@ -202,7 +210,7 @@ data_frame_tx_t* cmd_processor_mf1_write_one_block(uint16_t cmd, uint16_t status
     if (length == 24) {
 		status = auth_key_use_522_hw(data[1], data[0], &data[2]);
 		if (status == HF_TAG_OK) {
-			// Ö±½Óµ÷ÓÃ±ê×¼Ð´ÈëAPIÈ¥Ð´Èë¿¨Æ¬
+			// Ö±ï¿½Óµï¿½ï¿½Ã±ï¿½×¼Ð´ï¿½ï¿½APIÈ¥Ð´ï¿½ë¿¨Æ¬
 			status = pcd_14a_reader_mf1_write(data[1], &data[8]);
 		} else {
 			length = 0;
@@ -220,14 +228,14 @@ data_frame_tx_t* cmd_processor_em410x_scan(uint16_t cmd, uint16_t status, uint16
 }
 
 data_frame_tx_t* cmd_processor_write_em410x_2_t57(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    // Ð´ÈëT55XXµÄ±êÇ©ÐèÒªÌá¹©Ò»¸ö5¸öByte³¤¶ÈµÄ¿¨ºÅ
-	// ²¢ÇÒ»¹ÐèÒªÌá¹©ÖÁÉÙÒ»¸öÐÂµÄÃÜÔ¿£¬ÓëÒ»¸ö¾ÉµÄÃÜÔ¿
+    // Ð´ï¿½ï¿½T55XXï¿½Ä±ï¿½Ç©ï¿½ï¿½Òªï¿½á¹©Ò»ï¿½ï¿½5ï¿½ï¿½Byteï¿½ï¿½ï¿½ÈµÄ¿ï¿½ï¿½ï¿½
+	// ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½Òªï¿½á¹©ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½Âµï¿½ï¿½ï¿½Ô¿ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½Éµï¿½ï¿½ï¿½Ô¿
 	if (length >= 13 && (length - 9) % 4 == 0) {
 		status = PcdWriteT55XX(
-			data, 				// ´«ÈëUID
-			data + 5, 			// ´«Èënewkey
-			data + 9,			// ´«Èëoldkey
-			(length - 9) / 4 	// ´«Èë¼õÈ¥newkey + uidºóµÄÊ£ÓàµÄoldkeyµÄÃÜÔ¿×éÊý
+			data, 				// ï¿½ï¿½ï¿½ï¿½UID
+			data + 5, 			// ï¿½ï¿½ï¿½ï¿½newkey
+			data + 9,			// ï¿½ï¿½ï¿½ï¿½oldkey
+			(length - 9) / 4 	// ï¿½ï¿½ï¿½ï¿½ï¿½È?newkey + uidï¿½ï¿½ï¿½Ê£ï¿½ï¿½ï¿½oldkeyï¿½ï¿½ï¿½ï¿½Ô¿ï¿½ï¿½ï¿½ï¿½
 		);
 	} else {
 		status = STATUS_PAR_ERR;
@@ -237,19 +245,19 @@ data_frame_tx_t* cmd_processor_write_em410x_2_t57(uint16_t cmd, uint16_t status,
 
 #endif
 
-// ·â×°Ò»¸ö×Ô¶¯ÇÐ»»¿¨²ÛµÄµ÷ÓÃº¯Êý
+// ï¿½ï¿½×°Ò»ï¿½ï¿½ï¿½Ô¶ï¿½ï¿½Ð»ï¿½ï¿½ï¿½ï¿½ÛµÄµï¿½ï¿½Ãºï¿½ï¿½ï¿½
 static void change_slot_auto(uint8_t slot) {
     device_mode_t mode = get_device_mode();
-    // ¶Á¿¨Æ÷Ä£Ê½ÏÂ²»ÐèÒª½ûÓÃÄ£Äâ¿¨ÔÙ½øÐÐÇÐ»»
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£Ê½ï¿½Â²ï¿½ï¿½ï¿½Òªï¿½ï¿½ï¿½ï¿½Ä£ï¿½â¿¨ï¿½Ù½ï¿½ï¿½ï¿½ï¿½Ð»ï¿½
     tag_emulation_change_slot(slot, mode != DEVICE_MODE_READER);
-    // ÖØÐÂÁÁµÆ
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     light_up_by_slot();
-    // Ä¬ÈÏÁÁÆðRGB
+    // Ä¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½RGB
     set_slot_light_color(0);
 }
 
 data_frame_tx_t* cmd_processor_set_slot_activated(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    // ÐèÒªÈ·±£´«¹ýÀ´µÄ¿¨²ÛºÅÂë²»Òª³¬¹ýÖ§³ÖµÄÉÏÏÞ
+    // ï¿½ï¿½ÒªÈ·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¿ï¿½ï¿½Ûºï¿½ï¿½ë²»Òªï¿½ï¿½ï¿½ï¿½Ö§ï¿½Öµï¿½ï¿½ï¿½ï¿½ï¿½
     if (length == 1 && data[0] < TAG_MAX_SLOT_NUM) {
         change_slot_auto(data[0]);
         status = STATUS_DEVICE_SUCCESS;
@@ -260,11 +268,11 @@ data_frame_tx_t* cmd_processor_set_slot_activated(uint16_t cmd, uint16_t status,
 }
 
 data_frame_tx_t* cmd_processor_set_slot_tag_type(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    // ÐèÒªÈ·±£´«¹ýÀ´µÄ±êÇ©ÀàÐÍÊÇÓÐÐ§µÄ
+    // ï¿½ï¿½ÒªÈ·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä±ï¿½Ç©ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð§ï¿½ï¿½
     if (length == 2 && data[0] < TAG_MAX_SLOT_NUM && data[1] != TAG_TYPE_UNKNOWN) {
-        uint8_t num_slot = data[0];    // »ñµÃÒª²Ù×÷µÄ¿¨²Û
-        uint8_t tag_type = data[1];    // È¡³öÉÏÎ»»ú´«¹ýÀ´µÄ±êÇ©ÀàÐÍ
-        // ½«µ±Ç°µÄ¿¨²ÛÇÐ»»µ½Ö¸¶¨µÄÄ£Äâ¿¨ÀàÐÍ
+        uint8_t num_slot = data[0];    // ï¿½ï¿½ï¿½Ò?ï¿½ï¿½ï¿½ï¿½ï¿½Ä¿ï¿½ï¿½ï¿½
+        uint8_t tag_type = data[1];    // È¡ï¿½ï¿½ï¿½ï¿½Î»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä±ï¿½Ç©ï¿½ï¿½ï¿½ï¿½
+        // ï¿½ï¿½ï¿½ï¿½Ç°ï¿½Ä¿ï¿½ï¿½ï¿½ï¿½Ð»ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½ï¿½ï¿½Ä£ï¿½â¿¨ï¿½ï¿½ï¿½ï¿½
         tag_emulation_change_type(num_slot, (tag_specific_type_t)tag_type);
 		status = STATUS_DEVICE_SUCCESS;
 	} else {
@@ -274,11 +282,11 @@ data_frame_tx_t* cmd_processor_set_slot_tag_type(uint16_t cmd, uint16_t status, 
 }
 
 data_frame_tx_t* cmd_processor_set_slot_data_default(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    // ÐèÒªÈ·±£´«¹ýÀ´µÄ±êÇ©ÀàÐÍÊÇÓÐÐ§µÄ
+    // ï¿½ï¿½ÒªÈ·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä±ï¿½Ç©ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð§ï¿½ï¿½
     if (length == 2 && data[0] < TAG_MAX_SLOT_NUM && data[1] != TAG_TYPE_UNKNOWN) {
-        uint8_t num_slot = data[0];    // »ñµÃÒª²Ù×÷µÄ¿¨²Û
-        uint8_t tag_type = data[1];    // È¡³öÉÏÎ»»ú´«¹ýÀ´µÄ±êÇ©ÀàÐÍ
-        // ÖØÖÃµ±Ç°µÄ¿¨²ÛÎªÈ±Ê¡Êý¾Ý£¬Èç¹ûÊ§°Ü£¬Ôò¿ÉÄÜÊÇ²¢Î´ÊµÏÖ´ËAPIµÄÈ±Ê¡
+        uint8_t num_slot = data[0];    // ï¿½ï¿½ï¿½Ò?ï¿½ï¿½ï¿½ï¿½ï¿½Ä¿ï¿½ï¿½ï¿½
+        uint8_t tag_type = data[1];    // È¡ï¿½ï¿½ï¿½ï¿½Î»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä±ï¿½Ç©ï¿½ï¿½ï¿½ï¿½
+        // ï¿½ï¿½ï¿½Ãµï¿½Ç°ï¿½Ä¿ï¿½ï¿½ï¿½ÎªÈ±Ê¡ï¿½ï¿½ï¿½Ý£ï¿½ï¿½ï¿½ï¿½Ê§ï¿½Ü£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç²ï¿½Î´Êµï¿½Ö´ï¿½APIï¿½ï¿½È±Ê¡
         status = tag_emulation_factory_data(num_slot, (tag_specific_type_t)tag_type) ? STATUS_DEVICE_SUCCESS : STATUS_NOT_IMPLEMENTED;
 	} else {
         status = STATUS_PAR_ERR;
@@ -287,18 +295,18 @@ data_frame_tx_t* cmd_processor_set_slot_data_default(uint16_t cmd, uint16_t stat
 }
 
 data_frame_tx_t* cmd_processor_set_slot_enable(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    // ÐèÒªÈ·±£´«¹ýÀ´µÄ±êÇ©ÀàÐÍÊÇÓÐÐ§µÄ
+    // ï¿½ï¿½ÒªÈ·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä±ï¿½Ç©ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð§ï¿½ï¿½
     if (length == 2 && data[0] < TAG_MAX_SLOT_NUM && (data[1] == 0 || data[1] == 1)) {
-        uint8_t slot_now = data[0];  // »ñµÃÒª²Ù×÷µÄ¿¨²Û
-        bool enable = data[1];  // »ñµÃÒª²Ù×÷µÄ¿¨²ÛµÄ×´Ì¬
+        uint8_t slot_now = data[0];  // ï¿½ï¿½ï¿½Ò?ï¿½ï¿½ï¿½ï¿½ï¿½Ä¿ï¿½ï¿½ï¿½
+        bool enable = data[1];  // ï¿½ï¿½ï¿½Ò?ï¿½ï¿½ï¿½ï¿½ï¿½Ä¿ï¿½ï¿½Ûµï¿½×´Ì¬
         tag_emulation_slot_set_enable(slot_now, enable);
         if (!enable) {
-            // ½ûÓÃÁËµ±Ç°¿¨²Ûºó£¬ÖØÐÂÕÒÒ»¸öÄÜÓÃµÄ¿¨²Û£¬ÇÐ»»µ½ÄÇ¸ö¿¨²ÛÉÏ
+            // ï¿½ï¿½ï¿½ï¿½ï¿½Ëµï¿½Ç°ï¿½ï¿½ï¿½Ûºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ÃµÄ¿ï¿½ï¿½Û£ï¿½ï¿½Ð»ï¿½ï¿½ï¿½ï¿½Ç¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
             uint8_t slot_prev = tag_emulation_slot_find_next(slot_now);
             NRF_LOG_INFO("slot_now = %d, slot_prev = %d", slot_now, slot_prev);
             if (slot_prev == slot_now) {
-                // ÕÒÁËÒ»È¦£¬·¢ÏÖ²¢Ã»ÓÐÕÒµ½Ê¹ÄÜµÄ¿¨²Û£¬ÄÇÃ´ËµÃ÷È«²¿µÄ¿¨²Û¶¼±»½ûÓÃÁË
-                // ´ËÊ±ÎÒÃÇÓ¦µ±Ãðµô¿¨²ÛµÆ
+                // ï¿½ï¿½ï¿½ï¿½Ò»È¦ï¿½ï¿½ï¿½ï¿½ï¿½Ö²ï¿½Ã»ï¿½ï¿½ï¿½Òµï¿½Ê¹ï¿½ÜµÄ¿ï¿½ï¿½Û£ï¿½ï¿½ï¿½Ã´Ëµï¿½ï¿½È«ï¿½ï¿½ï¿½Ä¿ï¿½ï¿½Û¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+                // ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½Ó¦ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ûµï¿?
                 set_slot_light_color(3);
             } else {
                 change_slot_auto(slot_prev);
@@ -317,13 +325,13 @@ data_frame_tx_t* cmd_processor_slot_data_config_save(uint16_t cmd, uint16_t stat
 }
 
 data_frame_tx_t* cmd_processor_set_em410x_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    // ÐèÒªÈ·±£´«¹ýÀ´µÄID³¤¶ÈÊÇ¶ÔµÄ
+    // ï¿½ï¿½ÒªÈ·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½IDï¿½ï¿½ï¿½ï¿½ï¿½Ç¶Ôµï¿½
     if (length == LF_EM410X_TAG_ID_SIZE) {
-        // »ñÈ¡EM410xµÄ»º³åÇø
+        // ï¿½ï¿½È¡EM410xï¿½Ä»ï¿½ï¿½ï¿½ï¿½ï¿½
         tag_data_buffer_t* buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
-        // ÉèÖÃ¿¨ºÅ½øÈ¥
+        // ï¿½ï¿½ï¿½Ã¿ï¿½ï¿½Å½ï¿½È¥
         memcpy(buffer->buffer, data, LF_EM410X_TAG_ID_SIZE);
-        // ÖØÐÂÍ¨Öª¼ÓÔØÊý¾Ý
+        // ï¿½ï¿½ï¿½ï¿½Í¨Öªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
         tag_emulation_load_by_buffer(TAG_TYPE_EM410X, false);
         status = STATUS_DEVICE_SUCCESS;
 	} else {
@@ -334,7 +342,7 @@ data_frame_tx_t* cmd_processor_set_em410x_emu_id(uint16_t cmd, uint16_t status, 
 
 data_frame_tx_t* cmd_processor_set_mf1_detection_enable(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length == 1 && (data[0] == 0 || data[0] == 1)) {
-        nfc_tag_mf1_detection_log_clear();  // ÎÞÂÛÈçºÎ£¬²Ù×÷ÈÕÖ¾µÄ¼ÇÂ¼×´Ì¬¶¼ÒªÇå³ýÈÕÖ¾µÄÀúÊ·¼ÇÂ¼
+        nfc_tag_mf1_detection_log_clear();  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾ï¿½Ä¼ï¿½Â¼×´Ì?ï¿½ï¿½Òªï¿½ï¿½ï¿½ï¿½ï¿½Ö¾ï¿½ï¿½ï¿½ï¿½Ê·ï¿½ï¿½Â?
         nfc_tag_mf1_set_detection_enable(data[0]);
         status = STATUS_DEVICE_SUCCESS;
 	} else {
@@ -365,11 +373,11 @@ data_frame_tx_t* cmd_processor_get_mf1_detection_log(uint16_t cmd, uint16_t stat
             index = bytes_to_num(data, 4);
             // NRF_LOG_INFO("index = %d", index);
             if (index < count) {
-                // Ö±½ÓÊ¹ÓÃÍ·²¿µØÖ·+index×÷ÎªÊý¾ÝÔ´
+                // Ö±ï¿½ï¿½Ê¹ï¿½ï¿½Í·ï¿½ï¿½ï¿½ï¿½Ö·+indexï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½Ô´
                 resp = (uint8_t *)(logs + index);
-                // ¼ÆËãµ±Ç°»¹ÄÜ´«Êä¶àÉÙ¸öÈÕÖ¾
+                // ï¿½ï¿½ï¿½ãµ±Ç°ï¿½ï¿½ï¿½Ü´ï¿½ï¿½ï¿½ï¿½ï¿½Ù¸ï¿½ï¿½ï¿½Ö?
                 length = MIN(count - index, DATA_PACK_MAX_DATA_LENGTH / sizeof(nfc_tag_mf1_auth_log_t));
-                // ¼ÆËãµ±Ç°´«ÊäµÄÈÕÖ¾×Ü×Ö½Ú³¤¶È
+                // ï¿½ï¿½ï¿½ãµ±Ç°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾ï¿½ï¿½ï¿½Ö½Ú³ï¿½ï¿½ï¿?
                 length = length * sizeof(nfc_tag_mf1_auth_log_t);
                 status = STATUS_DEVICE_SUCCESS;
             } else {
@@ -386,21 +394,21 @@ data_frame_tx_t* cmd_processor_get_mf1_detection_log(uint16_t cmd, uint16_t stat
 
 data_frame_tx_t* cmd_processor_set_mf1_emulator_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length > 0 && (((length - 1) % NFC_TAG_MF1_DATA_SIZE) == 0)) {
-        // ÎÒÃÇ±ØÐëÒªÈ·±£´«Êä¹ýÀ´µÄ¿éÊý¾ÝÃ»ÓÐÔ½½ç
+        // ï¿½ï¿½ï¿½Ç±ï¿½ï¿½ï¿½ÒªÈ·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¿ï¿½ï¿½ï¿½ï¿½ï¿½Ã»ï¿½ï¿½Ô½ï¿½ï¿?
         uint8_t block_index = data[0];
         uint8_t block_count = (length - 1) % NFC_TAG_MF1_DATA_SIZE;
         if (block_index + block_count > NFC_TAG_MF1_BLOCK_MAX) {
             status = STATUS_PAR_ERR;
         } else {
-            // Ä¬ÈÏ»ñµÃ×î´óµÄIC¿¨Êý¾Ý»º³åÇø
+            // Ä¬ï¿½Ï»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ICï¿½ï¿½ï¿½ï¿½ï¿½Ý»ï¿½ï¿½ï¿½ï¿½ï¿½
             tag_data_buffer_t* buffer = get_buffer_by_tag_type(TAG_TYPE_MIFARE_4096);
             nfc_tag_mf1_information_t *info = (nfc_tag_mf1_information_t *)buffer->buffer;
-            // Ã»ÓÐÔ½½ç£¬ÎÒÃÇ¿ÉÒÔ½øÐÐblockÉèÖÃ
+            // Ã»ï¿½ï¿½Ô½ï¿½ç£¬ï¿½ï¿½ï¿½Ç¿ï¿½ï¿½Ô½ï¿½ï¿½ï¿½blockï¿½ï¿½ï¿½ï¿½
             for (int i = 1, j = block_index; i < length - 1; i += NFC_TAG_MF1_DATA_SIZE, j++) {
                 uint8_t *p_block = &data[i];
                 memcpy(info->memory[j], p_block, NFC_TAG_MF1_DATA_SIZE);
             }
-            // ÉèÖÃÍê³É£¬ÎÒÃÇ¿ÉÒÔ¸æÖªÉÏÎ»»ú
+            // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½É£ï¿½ï¿½ï¿½ï¿½Ç¿ï¿½ï¿½Ô¸ï¿½Ö?ï¿½ï¿½Î»ï¿½ï¿½
             status = STATUS_DEVICE_SUCCESS;
         }
     } else {
@@ -411,7 +419,7 @@ data_frame_tx_t* cmd_processor_set_mf1_emulator_block(uint16_t cmd, uint16_t sta
 
 data_frame_tx_t* cmd_processor_set_mf1_anti_collision_res(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length > 13) {
-        // sak(1) + atqa(2) + uid(10) ÉèÖÃ»ù´¡²ÎÊý£¬³¤¶È¾ø¶Ô²»»á´óÓÚ13¸ö×Ö½Ú
+        // sak(1) + atqa(2) + uid(10) ï¿½ï¿½ï¿½Ã»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¾ï¿½ï¿½Ô²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿?13ï¿½ï¿½ï¿½Ö½ï¿½
         status = STATUS_PAR_ERR;
     } else {
         uint8_t uid_length = length - 3;
@@ -427,7 +435,7 @@ data_frame_tx_t* cmd_processor_set_mf1_anti_collision_res(uint16_t cmd, uint16_t
             *(info->size) = (nfc_tag_14a_uid_size)uid_length;
             status = STATUS_DEVICE_SUCCESS;
         } else {
-            // UID³¤¶È²»¶Ô
+            // UIDï¿½ï¿½ï¿½È²ï¿½ï¿½ï¿½
             status = STATUS_PAR_ERR;
         }
     }
@@ -446,8 +454,8 @@ data_frame_tx_t* cmd_processor_set_slot_tag_nick_name(uint16_t cmd, uint16_t sta
         get_fds_map_by_slot_sense_type_for_nick(slot, sense_type, &map_info);
         
         uint8_t buffer[36];
-        buffer[0] = length - 2; // ¼õÈ¥¿ªÍ·µÄÁ½¸ö×Ö½Ú£¬Ê£ÏÂµÄ¾ÍÊÇêÇ³ÆµÄ×Ö½ÚÁ÷
-        memcpy(buffer + 1, data + 2, buffer[0]);    // ¿½±´Ò»·ÝêÇ³Æµ½»º³åÇøÖÐ£¬ÕâÑù×Ó»º³åÇøÀï¾ÍÓÐ Ò»¸ö×Ö½Ú¿ªÍ·µÄ³¤¶È + êÇ³Æ×Ö½ÚÁ÷
+        buffer[0] = length - 2; // ï¿½ï¿½È¥ï¿½ï¿½Í·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö½Ú£ï¿½Ê£ï¿½ÂµÄ¾ï¿½ï¿½ï¿½ï¿½Ç³Æµï¿½ï¿½Ö½ï¿½ï¿½ï¿½
+        memcpy(buffer + 1, data + 2, buffer[0]);    // ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½Ç³Æµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿? Ò»ï¿½ï¿½ï¿½Ö½Ú¿ï¿½Í·ï¿½Ä³ï¿½ï¿½ï¿½ + ï¿½Ç³ï¿½ï¿½Ö½ï¿½ï¿½ï¿½
         
         bool ret = fds_write_sync(map_info.id, map_info.key, sizeof(buffer) / 4, buffer);
         if (ret) {
@@ -534,6 +542,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_CHANGE_DEVICE_MODE,           NULL,                        cmd_processor_change_device_mode,            NULL                   },
     {    DATA_CMD_GET_DEVICE_MODE,              NULL,                        cmd_processor_get_device_mode,               NULL                   },
     {    DATA_CMD_ENTER_BOOTLOADER,             NULL,                        cmd_processor_enter_bootloader,              NULL                   },
+    {    DATA_CMD_GET_DEVICE_CHIP_ID,           NULL,                        cmd_processor_get_device_chip_id,            NULL                   },
+
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
     {    DATA_CMD_SCAN_14A_TAG,                 before_hf_reader_run,        cmd_processor_14a_scan,                      after_hf_reader_run    },
