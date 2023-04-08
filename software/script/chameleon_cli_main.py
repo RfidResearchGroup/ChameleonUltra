@@ -164,7 +164,7 @@ class ChameleonCLI:
                 continue
 
             if cmd_str == "exit":
-                print("Bye, thanks for you.  ^.^ ")
+                print("Bye, thank you.  ^.^ ")
                 sys.exit(996)
 
             # parse cmd
