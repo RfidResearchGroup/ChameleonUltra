@@ -251,7 +251,7 @@ all: $(TARGETS)
 
 # Create build directories
 $(OUTPUT_DIRECTORY):
-	$(MK) $@
+#	$(MK) -p $@ 
 $(OUTPUT_DIRECTORY)/%/.: | $(OUTPUT_DIRECTORY)
 	cd $(OUTPUT_DIRECTORY) && $(MK) $*
 

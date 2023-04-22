@@ -4,3 +4,4 @@ bin/
 script/__pycache__
 # 忽略编译输出文件夹
 src/out
+script/

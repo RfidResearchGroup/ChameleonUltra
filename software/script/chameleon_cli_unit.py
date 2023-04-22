@@ -85,7 +85,7 @@ class BaseCLIUnit:
         raise NotImplementedError("Please implement this")
 
     @staticmethod
-    def sub_process(cmd, cwd=os.path.abspath("../bin/"), ):
+    def sub_process(cmd, cwd=os.path.abspath("/bin/"), ):
         class ShadowProcess:
             def __init__(self):
                 self.time_start = timeit.default_timer()
@@ -745,7 +745,7 @@ class SlotIndexRequireUint(DeviceRequiredUnit):
         parser.add_argument('-s', "--slot", type=int, required=True,
                             help="Slot index", metavar="number", choices=slot_choices)
         return parser
-    
+
 class SenseTypeRequireUint(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -907,7 +907,7 @@ class HWSlotOpenAll(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
         return None
-    
+
     # hw slot openall
     def on_exec(self, args: argparse.Namespace):
         # what type you need set to default?
@@ -938,7 +938,7 @@ class HWDFU(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
         return None
-    
+
     # hw dfu
     def on_exec(self, args: argparse.Namespace):
         print("Application restarting...")
