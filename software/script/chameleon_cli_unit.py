@@ -85,10 +85,11 @@ class BaseCLIUnit:
         raise NotImplementedError("Please implement this")
 
     @staticmethod
-    def sub_process(cmd, cwd=os.path.abspath("/bin/"), ):
+    def sub_process(cmd, cwd=os.path.abspath("bin/"), ):
         class ShadowProcess:
             def __init__(self):
                 self.time_start = timeit.default_timer()
+                print(cwd + "/" + cmd)
                 self._process = subprocess.Popen(
                     cmd, cwd=cwd, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE
                 )
