@@ -77,11 +77,11 @@ static void sleep_mode_enter(void) {
     ret_code_t err_code;
 
     // Go to system-off mode (this function will not return; wakeup will cause a reset).
-    // 注意，如果插着jlink或者开着debug，进入低功耗的函数可能会报错，
-    // 开启调试时我们应当禁用低功耗状态值检测，或者干脆不进入低功耗
+    // Note that if jlink is plugged in or debug is on, an error may be reported when entering a low-power function.
+    // When turning on debugging we should disable low power state value detection or simply not enter low power
     err_code = sd_power_system_off();
 
-    // OK，此处非常重要，如果开启了日志输出并且使能了RTT，则不去检查低功耗模式的错误
+    // OK, this is very important, if the log output is enabled and RTT is enabled, then do not check for low power mode errors
 #if !(NRF_LOG_ENABLED && NRF_LOG_BACKEND_RTT_ENABLED)
     APP_ERROR_CHECK(err_code);
 #else
@@ -113,51 +113,51 @@ static void rng_drv_and_srand_init(void) {
     uint8_t available;
     uint32_t rand_int;
 
-    // 先初始化官方的rng管理驱动api
+    // First initialize the official rng management driver api
     err_code = nrf_drv_rng_init(NULL);
     APP_ERROR_CHECK(err_code);
 
-    // 等待随机数管理器生成足够的随机数放到队列里
+    // Wait for the random number generator to generate enough random numbers to put in the queue
     do {
         nrf_drv_rng_bytes_available(&available);
     } while (available < 4);
 
-    // 注意，此处我们是将一个uint32_t的值的地址强制转换为uint8_t的地址
-    // 以获得uint32的首个字节的指针的指向
+    // Note that here we are forcing the address of a uint32_t value to be converted to a uint8_t address
+    // to get the pointer to the first byte of uint32
     err_code = nrf_drv_rng_rand(((uint8_t *)(&rand_int)), 4);
     APP_ERROR_CHECK(err_code);
 
-    // 最后初始化c标准库中的srand种子
+    // Finally initialize the srand seeds in the c standard library
     srand(rand_int);
 }
 
-/**@brief 初始化GPIO矩阵库
+/**@brief Initialize GPIO matrix library
  */
 static void gpio_te_init(void) {
-    // 初始化GPIOTE
+    // Initialize GPIOTE
     uint32_t err_code = nrf_drv_gpiote_init();
     APP_ERROR_CHECK(err_code);
 }
 
-/**@brief 按钮矩阵事件
+/**@brief Button Matrix Events
  */
 static void button_pin_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action) {
     device_mode_t mode = get_device_mode();
-    // 暂时只允许模拟卡模式响应按钮的操作
+    // Temporarily allow only the analog card mode to respond to button operations
     if (mode == DEVICE_MODE_TAG) {
-        static nrf_drv_gpiote_pin_t pin_static;                                  // 使用静态内部变量去存放当前发生事件的GPIO
-        pin_static = pin;                                                        // 缓存当前触发事件的按钮到内部变量中
-        app_timer_start(m_button_check_timer, APP_TIMER_TICKS(50), &pin_static); // 启动定时器防抖
+        static nrf_drv_gpiote_pin_t pin_static;                                  // Use static internal variables to store the GPIO where the current event occurred
+        pin_static = pin;                                                        // Cache the button that currently triggers the event into an internal variable
+        app_timer_start(m_button_check_timer, APP_TIMER_TICKS(50), &pin_static); // Start timer anti-shake
     }
 }
 
-/** @brief 按钮防抖定时器
- * @param 无
- * @return 无
+/** @brief Button anti-shake timer
+ * @param None
+ * @return None
  */
 static void timer_button_event_handle(void *arg) {
     nrf_drv_gpiote_pin_t pin = *(nrf_drv_gpiote_pin_t *)arg;
-    // 在此处检查一下当前GPIO是否是处于按下的电平状态
+    // Check here if the current GPIO is at the pressed level
     if (nrf_gpio_pin_read(pin) == 1) {
         if (pin == BUTTON_1) {
             NRF_LOG_INFO("BUTTON_LEFT");
@@ -175,15 +175,15 @@ static void timer_button_event_handle(void *arg) {
 static void button_init(void) {
     ret_code_t err_code;
 
-    // 初始化按钮防抖的非精确的定时器
+    // Non-exact timer for initializing button anti-shake
     err_code = app_timer_create(&m_button_check_timer, APP_TIMER_MODE_SINGLE_SHOT, timer_button_event_handle);
     APP_ERROR_CHECK(err_code);
 
-    // 配置SENSE模式，选择fales为sense配置
+    // Configure SENSE mode, select false for sense configuration
     nrf_drv_gpiote_in_config_t in_config = NRFX_GPIOTE_CONFIG_IN_SENSE_LOTOHI(false);
-    in_config.pull = NRF_GPIO_PIN_PULLDOWN; // 下拉
+    in_config.pull = NRF_GPIO_PIN_PULLDOWN; // Pulldown
 
-    // 配置按键绑定POTR
+    // Configure key binding POTR
     err_code = nrf_drv_gpiote_in_init(BUTTON_1, &in_config, button_pin_handler);
     APP_ERROR_CHECK(err_code);
     nrf_drv_gpiote_in_event_enable(BUTTON_1, true);
@@ -193,18 +193,18 @@ static void button_init(void) {
     nrf_drv_gpiote_in_event_enable(BUTTON_2, true);
 }
 
-/**@brief 进入深度休眠的实现函数
+/**@brief The implementation function to enter deep hibernation
  */
 static void system_off_enter(void) {
 
-    // 先禁用掉HF NFC的事件
+    // Disable the HF NFC event first
     NRF_NFCT->INTENCLR = NRF_NFCT_DISABLE_ALL_INT;
-    // 然后再禁用掉LF LPCOMP的事件
+    // Then disable the LF LPCOMP event
     NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
 
-    // 配置一下RAM休眠保持
+    // Configure RAM hibernation hold
     ret_code_t ret;
-    uint32_t ram8_retention = // RAM8 每个 section 都有32KB的容量
+    uint32_t ram8_retention = // RAM8 Each section has 32KB capacity
                               // POWER_RAM_POWER_S0RETENTION_On << POWER_RAM_POWER_S0RETENTION_Pos ;
                               // POWER_RAM_POWER_S1RETENTION_On << POWER_RAM_POWER_S1RETENTION_Pos |
                               // POWER_RAM_POWER_S2RETENTION_On << POWER_RAM_POWER_S2RETENTION_Pos |
@@ -215,7 +215,7 @@ static void system_off_enter(void) {
     APP_ERROR_CHECK(ret);
 
 
-    // 关机动画
+    // Power off animation
     uint8_t slot = tag_emulation_get_slot();
     uint32_t* p_led_array = hw_get_led_array();
     for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
@@ -237,7 +237,7 @@ static void system_off_enter(void) {
     ledblink4(color, !dir, 7, 25, 0);
 
 
-    // 需要配置为浮空模拟输入且不上下拉的IO
+    // IOs that need to be configured as floating analog inputs ==> no pull-up or pull-down
     uint32_t gpio_cfg_default_nopull[] = {
 #if defined(PROJECT_CHAMELEON_ULTRA)
         HF_SPI_SELECT,
@@ -252,7 +252,7 @@ static void system_off_enter(void) {
         nrf_gpio_cfg_default(gpio_cfg_default_nopull[i]);
     }
 
-    // 需要配置为推挽输出且拉高的IO
+    // IO that needs to be configured as a push-pull output and pulled high
     uint32_t gpio_cfg_output_high[] = {
 #if defined(PROJECT_CHAMELEON_ULTRA)
         HF_ANT_SEL,
@@ -263,7 +263,7 @@ static void system_off_enter(void) {
         nrf_gpio_pin_set(gpio_cfg_output_high[i]);
     }
 
-    // 需要配置为推挽输出且拉低的IO
+    // IOs that need to be configured as push-pull outputs and pulled low
     uint32_t gpio_cfg_output_low[] = {
         LED_1, LED_2, LED_3, LED_4, LED_5, LED_6, LED_7, LED_8, LED_R, LED_G, LED_B, LF_MOD, 
 #if defined(PROJECT_CHAMELEON_ULTRA)
@@ -275,41 +275,41 @@ static void system_off_enter(void) {
         nrf_gpio_pin_clear(gpio_cfg_output_low[i]);
     }
 
-    // 等一会儿再休眠，避免GPIO电路配置波动唤醒芯片
+    // Wait for a while before hibernating to avoid GPIO circuit configuration fluctuations to wake up the chip
     bsp_delay_ms(50);
 
-    // 然后把卡槽配置等数据进行保存
+    // Then save the card slot configuration and other data
     tag_emulation_save();
 
-    // 然后进行休眠
+    // Then hibernate
     NRF_LOG_INFO("Sleep finally, Bye ^.^");
-    // 关闭所有的软定时器
+    // Turn off all soft timers
     app_timer_stop_all();
-    // 调用系统休眠
+    // Calling system hibernation
     sleep_mode_enter();
 
-    // 本不应该进入这里，但是jlink调试模式下可以进入，顶多是无法正常休眠罢了
-    // jlink连接的时候，功耗会上升，并且休眠也会卡在这个步骤。
+    // It is not supposed to enter here, but jlink debug mode it can be entered, at most is not normal hibernation just
+    // jlink connection, power consumption will rise, and hibernation will also be stuck in this step.
     while (1)
         NRF_LOG_PROCESS();
 }
 
 /**
- *@brief :检测唤醒源
+ *@brief :Detection of wake-up source
  */
 static void check_wakeup_src(void) {
     sd_power_reset_reason_get(&m_reset_source);
     sd_power_reset_reason_clr(m_reset_source);
 
     /*
-     * 注意：下方描述的休眠是深度休眠，停止任何非唤醒源的外设，停止CPU，达到最低功耗
+     * Note: The hibernation described below is deep hibernation, stopping any non-wakeup source peripherals and stopping the CPU to achieve the lowest power consumption
      *
-     * 如果唤醒源是按钮，那么需要开启BLE广播，直到按钮停止点击后一段时间后休眠
-     * 如果唤醒源是模拟卡的场，不需要开启BLE广播，直到模拟卡结束后休眠。
-     * 如果唤醒源是USB，那么就一直开启BLE，并且不进行休眠，直到USB拔掉
-     * 如果唤醒源是首次接入电池，则啥都不干，直接进入休眠
+     * If the wake-up source is a button, then you need to turn on BLE broadcast until the button stops clicking after a period of time to hibernate
+     * If the wake-up source is the field of the analog card, it is not necessary to turn on BLE broadcast until the analog card ends and then hibernate.
+     * If the wake-up source is USB, then keep BLE on and no hibernation until USB is unplugged
+     * If the wakeup source is the first time to access the battery, then do nothing and go directly to hibernation
      *
-     * 提示：上述；逻辑为唤醒阶段处理的逻辑，剩下的逻辑转换为运行时的处理阶段
+     * Hint: The above; logic is the logic processed in the wake-up phase, the rest of the logic is converted to the runtime processing phase
      */
 
     uint8_t slot = tag_emulation_get_slot();
@@ -318,16 +318,16 @@ static void check_wakeup_src(void) {
     
     if (m_reset_source & NRF_POWER_RESETREAS_OFF_MASK) {
         NRF_LOG_INFO("WakeUp from button");
-        advertising_start(); // 启动蓝牙广播
+        advertising_start(); // Turn on Bluetooth radio
 
-        // 按钮唤醒的开机动画
+        // Button wake-up boot animation
         ledblink2(color, !dir, 11);
         ledblink2(color, dir, 11);
         ledblink2(color, !dir, dir ? slot : 7 - slot);
-        // 动画结束后亮起当前卡槽的指示灯
+        // The indicator of the current card slot lights up at the end of the animation
         light_up_by_slot();
 
-        // 如果接下来无操作就等待超时后深度休眠
+        // If no operation follows, wait for the timeout and then deep hibernate
         sleep_timer_start(SLEEP_DELAY_MS_BUTTON_WAKEUP);
     } else if (m_reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) {
         NRF_LOG_INFO("WakeUp from rfid field");
@@ -340,7 +340,7 @@ static void check_wakeup_src(void) {
             color = 2;  // LF filed show B.
             NRF_LOG_INFO("WakeUp from LF");
         }
-        // 场唤醒的情况下，只扫一轮RGB作为开机动画
+        // In the case of field wake-up, only one round of RGB is swept as the power-on animation
         ledblink2(color, !dir, dir ? slot : 7 - slot);
         set_slot_light_color(color);
         light_up_by_slot();
@@ -351,34 +351,34 @@ static void check_wakeup_src(void) {
         // nrfx_power_usbstatus_get() can check usb attach status
         NRF_LOG_INFO("WakeUp from VBUS(USB)");
         
-        // USB插入和开启通信断口有自身的灯效，暂时不需要亮灯
+        // USB plugged in and open communication break has its own light effect, no need to light up for the time being
         // set_slot_light_color(color);
         // light_up_by_slot();
 
-        // 启动蓝牙广播，USB插入的情况下，不需要进行深度休眠
+        // Start Bluetooth radio with USB plugged in, no deep hibernation required
         advertising_start();
     } else {
         NRF_LOG_INFO("First power system");
 
-        // 重置一下noinit ram区域
+        // Reset the noinit ram area
         uint32_t *noinit_addr = (uint32_t *)0x20038000;
         memset(noinit_addr, 0xFF, 0x8000);
         NRF_LOG_INFO("Reset noinit ram done.");
 
-        // 初始化默认卡槽数据。
+        // Initialize the default card slot data.
         tag_emulation_factory_init();
 
         ledblink2(0, !dir, 11);
         ledblink2(1, dir, 11);
         ledblink2(2, !dir, 11);
 
-        // 如果首次上电发现USB正插着，我们可以做一些相应的操作
+        // If the USB is plugged in when first powered up, we can do something accordingly
         if (nrfx_power_usbstatus_get() != NRFX_POWER_USB_STATE_DISCONNECTED) {
             NRF_LOG_INFO("USB Power found.");
-            // usb插着可以随便广播BLE
+            // usb plugged in can broadcast BLE at will
             advertising_start();
         } else {
-            sleep_timer_start(SLEEP_DELAY_MS_FRIST_POWER); // 等一会儿直接进入休眠，啥都不干
+            sleep_timer_start(SLEEP_DELAY_MS_FRIST_POWER); // Wait a while and go straight to hibernation, do nothing
         }
     }
 }
@@ -387,12 +387,12 @@ static void check_wakeup_src(void) {
  */
 extern bool g_usb_led_marquee_enable;
 static void button_press_process(void) {
-    // 确保AB按钮其中一个发生了点击事件
+    // Make sure that one of the AB buttons has a click event
     if (m_is_read_btn_press || m_is_write_btn_press) {
-        // 无论如何，发生了按钮事件，我们需先获得当前激活的卡槽
+        // In any case, a button event occurs and we need to get the currently active card slot first
         uint8_t slot_now = tag_emulation_get_slot();
         uint8_t slot_new = slot_now;
-        // 处理某个按钮的事件
+        // Handle the events of a button
         if (m_is_read_btn_press) {
             // Button left press
             m_is_read_btn_press = false;
@@ -403,22 +403,22 @@ static void button_press_process(void) {
             m_is_write_btn_press = false;
             slot_new = tag_emulation_slot_find_next(slot_now);
         }
-        // 仅在新卡槽切换有效的情况下更新状态
+        // Update status only if the new card slot switch is valid
         if (slot_new != slot_now) {
-            tag_emulation_change_slot(slot_new, true); // 告诉模拟卡模块我们需要切换卡槽
+            tag_emulation_change_slot(slot_new, true); // Tell the analog card module that we need to switch card slots
             g_usb_led_marquee_enable = false;
-            // 回去场使能类型对应的颜色
+            // Go back to the color corresponding to the field enablement type
             uint8_t color_now = get_color_by_slot(slot_now);
             uint8_t color_new = get_color_by_slot(slot_new);
             
-            // 切换卡槽的灯效
+            // Switching the light effect of the card slot
             ledblink3(slot_now, color_now, slot_new, color_new);
-            // 切换了卡槽，我们需要重新亮灯
+            // Switched the card slot, we need to re-light
             light_up_by_slot();
-            // 然后重新切换灯的颜色
+            // Then switch the color of the light again
             set_slot_light_color(color_new);
         }
-        // 重新延迟进入休眠
+        // Re-delay into hibernation
         sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
     }
 }
@@ -438,7 +438,7 @@ static void blink_usb_led_status(void) {
         }
     } else {
 
-        // 灯效是使能状态，可以进行显示
+        // The light effect is enabled and can be displayed
         if (is_rgb_marquee_enable()) {
             is_working = true;
             if (g_usb_port_opened) {
@@ -461,28 +461,28 @@ static void blink_usb_led_status(void) {
 /**@brief Application main function.
  */
 int main(void) {
-    hw_connect_init();        // 记得先把引脚初始化一下
-    log_init();               // 日志初始化
-    gpio_te_init();           // 初始化GPIO矩阵库
-    app_timers_init();        // 初始化软定时器
-    fds_util_init();          // 初始化fds工具封装
-    bsp_timer_init();         // 初始化超时定时器
-    bsp_timer_start();        // 启动BSP TIMER，准备用于处理业务逻辑
-    button_init();            // 按钮初始化
-    init_leds();              // LED初始化
-    sleep_timer_init();       // 休眠用的软定时器初始化
-    rng_drv_and_srand_init(); // 随机数生成器初始化
-    power_management_init();  // 电源管理初始化
-    usb_cdc_init();           // USB cdc模拟初始化
-    ble_slave_init();         // 蓝牙协议栈初始化
-    tag_emulation_init();     // 模拟卡初始化
-    rgb_marquee_init();       // 灯效初始化
+    hw_connect_init();        // Remember to initialize the pins first
+    log_init();               // Log initialization
+    gpio_te_init();           // Initialize GPIO matrix library
+    app_timers_init();        // Initialize soft timer
+    fds_util_init();          // Initialize fds tool package
+    bsp_timer_init();         // Initialize timeout timer
+    bsp_timer_start();        // Start BSP TIMER and prepare it for processing business logic
+    button_init();            // Button initialization for handling business logic
+    init_leds();              // LED initialization
+    sleep_timer_init();       // Soft timer initialization for hibernation
+    rng_drv_and_srand_init(); // Random number generator initialization
+    power_management_init();  // Power management initialization
+    usb_cdc_init();           // USB cdc emulation initialization
+    ble_slave_init();         // Bluetooth protocol stack initialization
+    tag_emulation_init();     // Analog card initialization
+    rgb_marquee_init();       // Light effect initialization
 
     // cmd callback register
     on_data_frame_complete(on_data_frame_received);
     
-    check_wakeup_src();       // 检测唤醒源，根据唤醒源决定BLE广播与后续休眠动作
-    tag_mode_enter();         // 默认进入卡模拟模式
+    check_wakeup_src();       // Detect wake-up source and decide BLE broadcast and subsequent hibernation action according to the wake-up source
+    tag_mode_enter();         // Enter card simulation mode by default
 
     // usbd event listener
     APP_ERROR_CHECK(app_usbd_power_events_enable());
