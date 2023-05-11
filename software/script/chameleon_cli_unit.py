@@ -4,6 +4,7 @@ import subprocess
 import argparse
 import colorama
 import timeit
+import sys
 
 import chameleon_com
 import chameleon_cmd
@@ -316,7 +317,10 @@ class HFMFNested(ReaderRequiredUint):
         cmd_param = f"{dist_obj['uid']} {dist_obj['dist']}"
         for nt_item in nt_obj:
             cmd_param += f" {nt_item['nt']} {nt_item['nt_enc']} {nt_item['par']}"
-        cmd_recover = f"nested.exe {cmd_param}"
+        if sys.platform == "win32":
+            cmd_recover = f"nested.exe {cmd_param}"
+        else:
+            cmd_recover = f"./nested {cmd_param}"
         # start a decrypt process
         process = self.sub_process(cmd_recover)
 
@@ -405,7 +409,10 @@ class HFMFDarkside(ReaderRequiredUint):
             for darkside_item in self.darkside_list:
                 recover_params += f" {darkside_item['nt1']} {darkside_item['ks1']} {darkside_item['par']}"
                 recover_params += f" {darkside_item['nr']} {darkside_item['ar']}"
-            cmd_recover = f"darkside.exe {recover_params}"
+            if sys.platform == "win32":
+                cmd_recover = f"darkside.exe {recover_params}"
+            else:
+                cmd_recover = f"./darkside {recover_params}"
             # subprocess.run(cmd_recover, cwd=os.path.abspath("../bin/"), shell=True)
             # print(cmd_recover)
             # start a decrypt process
@@ -546,7 +553,10 @@ class HFMFDetectionDecrypt(DeviceRequiredUnit):
                 item1 = rs[j]
                 cmd_base = f"{item0['uid']} {item0['nt']} {item0['nr']} {item0['ar']}"
                 cmd_base += f" {item1['nt']} {item1['nr']} {item1['ar']}"
-                cmd_recover = f"mfkey32v2.exe {cmd_base}"
+                if sys.platform == "win32":
+                    cmd_recover = f"mfkey32v2.exe {cmd_base}"
+                else:
+                    cmd_recover = f"./mfkey32v2 {cmd_base}"
                 # print(cmd_recover)
                 # Found Key: [e899c526c5cd]
                 # subprocess.run(cmd_final, cwd=os.path.abspath("../bin/"), shell=True)
