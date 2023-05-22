@@ -1,6 +1,6 @@
 #    In the nrf52 sdk, will auto detection current platform: posix or windows.
 #    If your <arm-none-eabi> is already installed, and version and path is this:
-#    Version     : 9.3.1
+#    Version     : 10.3.1
 #    Windows-path: C:/Program Files (x86)/GNU Arm Embedded Toolchain/9 2020-q2-update/bin/
 #    POSIX  -path: /usr/local/gcc-arm-none-eabi-9-2020-q2-update/bin/
 #    You can ignore this file modify.
