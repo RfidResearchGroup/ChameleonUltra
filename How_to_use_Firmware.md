@@ -3,7 +3,7 @@ In this file you can look up how to [edit](#Editing-the-code), [compile](#Compil
 
 ## Editing the code
 We are using [Visual Studio Code](https://code.visualstudio.com/download) to edit this project! Simply download and install it!
- - Install the [ARM-GCC](https://mynewt.apache.org/latest/get_started/native_install/cross_tools.html) version [9.3.1 Compiler](https://developer.arm.com/downloads/-/gnu-rm) and remember the path where you installed it.
+ - Install the [ARM-GCC](https://mynewt.apache.org/latest/get_started/native_install/cross_tools.html) version [10.3.1 Compiler Tested](https://developer.arm.com/downloads/-/gnu-rm) and remember the path where you installed it.
  - Install the [C++ Extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools) in VS-Code.
  - Create a new IntelliSense Configuration:
 	 - press F1 in VS-Code and enter `C/C++: Edit Configurations (UI)`
@@ -35,6 +35,9 @@ We are using [Visual Studio Code](https://code.visualstudio.com/download) to edi
 - go into folder and run `make`
 
 ## Debugging the code
-- Install [openocd](https://mynewt.apache.org/latest/get_started/native_install/cross_tools.html)
+- Install [nRF Util](https://www.nordicsemi.com/Products/Development-tools/nrf-util)
+  - Move it to a known path like `C:/nrfutil/`
+  - Add this path to `PATH` Environment Variable
 - Install [Cortex-Debug](https://marketplace.visualstudio.com/items?itemName=marus25.cortex-debug) VS-Code Extension
+- Install [Segger J-Link](https://www.segger.com/downloads/jlink)
 - MORE INFO ADDED LATER
