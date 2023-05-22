@@ -37,8 +37,8 @@ NRF_LOG_MODULE_REGISTER();
 
 
 
-// 定义软定时器
-APP_TIMER_DEF(m_button_check_timer); // 用于按钮防抖的定时器
+// Defining soft timers
+APP_TIMER_DEF(m_button_check_timer); // Timer for button debounce
 static bool m_is_read_btn_press = false;
 static bool m_is_write_btn_press = false;
 
