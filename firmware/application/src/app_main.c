@@ -192,7 +192,6 @@ static void system_off_enter(void) {
     tag_emulation_save();
 
     // Configure RAM hibernation hold
-    ret_code_t ret;
     uint32_t ram8_retention = // RAM8 Each section has 32KB capacity
                               // POWER_RAM_POWER_S0RETENTION_On << POWER_RAM_POWER_S0RETENTION_Pos ;
                               // POWER_RAM_POWER_S1RETENTION_On << POWER_RAM_POWER_S1RETENTION_Pos |
