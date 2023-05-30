@@ -4,7 +4,7 @@
 
 
 // 设备当前处于的模式
-static device_mode_t rfid_state = DEVICE_MODE_NONE;
+device_mode_t rfid_state = DEVICE_MODE_NONE;
 
 
 /**
@@ -15,16 +15,16 @@ void reader_mode_enter(void) {
 #if defined(PROJECT_CHAMELEON_ULTRA)
     if (rfid_state != DEVICE_MODE_READER) {
         rfid_state = DEVICE_MODE_READER;
+        
+        tag_emulation_sense_end();          // to end tag emulation
+
         // pin init
         nrf_gpio_cfg_output(LF_ANT_DRIVER);
         nrf_gpio_cfg_output(READER_POWER);
+        nrf_gpio_pin_set(READER_POWER);     // reader power enable
         nrf_gpio_cfg_output(HF_ANT_SEL);
-        // to end tag emulation
-        tag_emulation_sense_end();
-        // reader power enable
-        nrf_gpio_pin_set(READER_POWER);
-        // hf ant switch to reader mode
-        nrf_gpio_pin_clear(HF_ANT_SEL);
+        nrf_gpio_pin_clear(HF_ANT_SEL);     // hf ant switch to reader mode
+
         // init reader
         lf_125khz_radio_init();
         pcd_14a_reader_init();
@@ -41,19 +41,19 @@ void tag_mode_enter(void) {
         rfid_state = DEVICE_MODE_TAG;
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
-        // pin init
-        nrf_gpio_cfg_output(LF_ANT_DRIVER);
-        nrf_gpio_cfg_output(READER_POWER);
-        nrf_gpio_cfg_output(HF_ANT_SEL);
         // uninit reader
         lf_125khz_radio_uninit();
         pcd_14a_reader_uninit();
-        // lf reader driver
-        nrf_gpio_pin_clear(LF_ANT_DRIVER);
-        // reader power disable
-        nrf_gpio_pin_clear(READER_POWER);
-        // hf ant switch to emulation mode
-        nrf_gpio_pin_set(HF_ANT_SEL);
+
+        // pin init
+        nrf_gpio_cfg_output(LF_ANT_DRIVER);
+        nrf_gpio_pin_clear(LF_ANT_DRIVER);  // lf reader driver
+
+        nrf_gpio_cfg_output(READER_POWER);
+        nrf_gpio_pin_clear(READER_POWER);   // reader power disable
+
+        nrf_gpio_cfg_output(HF_ANT_SEL);
+        nrf_gpio_pin_set(HF_ANT_SEL);       // hf ant switch to emulation mode
 #endif
 
         // to run tag emulation
