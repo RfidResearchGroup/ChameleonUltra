@@ -99,45 +99,11 @@ void hw_connect_init(void) {
 
     // TODO 请实现此处，实现硬件版本号的读取
     // 测试的时候可以直接改写此版本号
-    m_hw_ver = 2;
+    m_hw_ver = 1;
 
     
 #if defined(PROJECT_CHAMELEON_ULTRA)
     if (m_hw_ver == 1) {
-        LED_FIELD    = (NRF_GPIO_PIN_MAP(1, 1));
-        LED_R        = (NRF_GPIO_PIN_MAP(0, 24));
-        LED_G        = (NRF_GPIO_PIN_MAP(0, 22));
-        LED_B        = (NRF_GPIO_PIN_MAP(1, 0));
-        LED_8        = (NRF_GPIO_PIN_MAP(0, 20));
-        LED_7        = (NRF_GPIO_PIN_MAP(0, 17));
-        LED_6        = (NRF_GPIO_PIN_MAP(0, 15));
-        LED_5        = (NRF_GPIO_PIN_MAP(0, 13));
-        LED_4        = (NRF_GPIO_PIN_MAP(0, 12));
-        LED_3        = (NRF_GPIO_PIN_MAP(1, 9));
-        LED_2        = (NRF_GPIO_PIN_MAP(0, 8));
-        LED_1        = (NRF_GPIO_PIN_MAP(0, 6));
-        RGB_LIST_NUM = 8;
-        RGB_CTRL_NUM = 3;
-
-        LF_ANT_DRIVER = (NRF_GPIO_PIN_MAP(0, 31));
-        LF_OA_OUT     = (NRF_GPIO_PIN_MAP(1, 15));
-        LF_MOD        = (NRF_GPIO_PIN_MAP(1, 13));
-        LF_RSSI_PIN   = (NRF_GPIO_PIN_MAP(0, 2));
-        LF_RSSI       = NRF_LPCOMP_INPUT_0;
-
-        HF_SPI_SELECT = (NRF_GPIO_PIN_MAP(1, 6));
-        HF_SPI_MISO   = (NRF_GPIO_PIN_MAP(0, 11));
-        HF_SPI_MOSI   = (NRF_GPIO_PIN_MAP(1, 7));
-        HF_SPI_SCK    = (NRF_GPIO_PIN_MAP(1, 4));
-        HF_ANT_SEL    = (NRF_GPIO_PIN_MAP(1, 10));
-
-        BUTTON_1      = (NRF_GPIO_PIN_MAP(0, 26));
-        BUTTON_2      = (NRF_GPIO_PIN_MAP(1, 2));
-
-        BAT_SENSE     = (NRF_GPIO_PIN_MAP(0, 4));
-        READER_POWER  = (NRF_GPIO_PIN_MAP(0, 29));
-    }
-    if (m_hw_ver == 2) {
         LED_FIELD    =   (NRF_GPIO_PIN_MAP(1, 1));
         LED_R        =   (NRF_GPIO_PIN_MAP(0, 24));
         LED_G        =   (NRF_GPIO_PIN_MAP(0, 22));
