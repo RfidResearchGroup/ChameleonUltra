@@ -90,7 +90,6 @@ class BaseCLIUnit:
         class ShadowProcess:
             def __init__(self):
                 self.time_start = timeit.default_timer()
-                print(cwd + "/" + cmd)
                 self._process = subprocess.Popen(
                     cmd, cwd=cwd, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE
                 )
