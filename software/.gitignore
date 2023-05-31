@@ -2,6 +2,7 @@
 bin/
 # Ignore the python library cache
 script/__pycache__
-# 忽略编译输出文件夹
+# Ignore the compilers output folder
 src/out
+# Ignore the compiled scripts
 script/
