@@ -15,6 +15,7 @@
 #include "nrf_pwr_mgmt.h"
 #include "nrfx_nfct.h"
 #include "nrfx_power.h"
+#include "nrf_drv_lpcomp.h"
 
 #define NRF_LOG_MODULE_NAME app_main
 #include "nrf_log.h"
@@ -44,6 +45,10 @@ static bool m_is_write_btn_press = false;
 
 // cpu reset reason
 static uint32_t m_reset_source;
+static uint32_t m_gpregret_val;
+
+#define GPREGRET_CLEAR_VALUE_DEFAULT (0xFFFFFFFFUL)
+#define RESET_ON_LF_FIELD_EXISTS_Msk (1UL)
 
 
 /**@brief Function for assert macro callback.
@@ -67,26 +72,6 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t *p_file_name) {
 static void app_timers_init(void) {
     ret_code_t err_code = app_timer_init();
     APP_ERROR_CHECK(err_code);
-}
-
-/**@brief Function for putting the chip into sleep mode.
- *
- * @note This function will not return.
- */
-static void sleep_mode_enter(void) {
-    ret_code_t err_code;
-
-    // Go to system-off mode (this function will not return; wakeup will cause a reset).
-    // Note that if jlink is plugged in or debug is on, an error may be reported when entering a low-power function.
-    // When turning on debugging we should disable low power state value detection or simply not enter low power
-    err_code = sd_power_system_off();
-
-    // OK, this is very important, if the log output is enabled and RTT is enabled, then do not check for low power mode errors
-#if !(NRF_LOG_ENABLED && NRF_LOG_BACKEND_RTT_ENABLED)
-    APP_ERROR_CHECK(err_code);
-#else
-    UNUSED_VARIABLE(err_code);
-#endif
 }
 
 /**@brief Function for initializing the nrf log module.
@@ -196,14 +181,17 @@ static void button_init(void) {
 /**@brief The implementation function to enter deep hibernation
  */
 static void system_off_enter(void) {
+    ret_code_t ret;
 
     // Disable the HF NFC event first
     NRF_NFCT->INTENCLR = NRF_NFCT_DISABLE_ALL_INT;
     // Then disable the LF LPCOMP event
     NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
 
+    // Save tag data
+    tag_emulation_save();
+
     // Configure RAM hibernation hold
-    ret_code_t ret;
     uint32_t ram8_retention = // RAM8 Each section has 32KB capacity
                               // POWER_RAM_POWER_S0RETENTION_On << POWER_RAM_POWER_S0RETENTION_Pos ;
                               // POWER_RAM_POWER_S1RETENTION_On << POWER_RAM_POWER_S1RETENTION_Pos |
@@ -213,7 +201,6 @@ static void system_off_enter(void) {
         POWER_RAM_POWER_S5RETENTION_On << POWER_RAM_POWER_S5RETENTION_Pos;
     ret = sd_power_ram_power_set(8, ram8_retention);
     APP_ERROR_CHECK(ret);
-
 
     // Power off animation
     uint8_t slot = tag_emulation_get_slot();
@@ -236,7 +223,6 @@ static void system_off_enter(void) {
     ledblink4(color, dir, 7, 50, 25);
     ledblink4(color, !dir, 7, 25, 0);
 
-
     // IOs that need to be configured as floating analog inputs ==> no pull-up or pull-down
     uint32_t gpio_cfg_default_nopull[] = {
 #if defined(PROJECT_CHAMELEON_ULTRA)
@@ -257,6 +243,7 @@ static void system_off_enter(void) {
 #if defined(PROJECT_CHAMELEON_ULTRA)
         HF_ANT_SEL,
 #endif
+        LED_FIELD,
     };
     for (int i = 0; i < ARRAY_SIZE(gpio_cfg_output_high); i++) {
         nrf_gpio_cfg_output(gpio_cfg_output_high[i]);
@@ -278,15 +265,34 @@ static void system_off_enter(void) {
     // Wait for a while before hibernating to avoid GPIO circuit configuration fluctuations to wake up the chip
     bsp_delay_ms(50);
 
-    // Then save the card slot configuration and other data
-    tag_emulation_save();
-
-    // Then hibernate
+    // Print leaving message finally
     NRF_LOG_INFO("Sleep finally, Bye ^.^");
     // Turn off all soft timers
     app_timer_stop_all();
-    // Calling system hibernation
-    sleep_mode_enter();
+
+    // 检查是否存在低频场，解决休眠时有非常强的场信号一直使比较器处于高电平输入状态从而无法产生上升沿而无法唤醒系统的问题。
+    if(lf_is_field_exists()) {
+        // 关闭比较器
+        nrf_drv_lpcomp_disable();
+        // 设置reset原因，重启后需要拿到此原因，避免误判唤醒源
+        sd_power_gpregret_clr(1, GPREGRET_CLEAR_VALUE_DEFAULT);
+        sd_power_gpregret_set(1, RESET_ON_LF_FIELD_EXISTS_Msk);
+        // 触发reset唤醒系统，重新启动模拟过程
+        nrf_pwr_mgmt_shutdown(NRF_PWR_MGMT_SHUTDOWN_RESET);
+        return;
+    };
+
+    // Go to system-off mode (this function will not return; wakeup will cause a reset).
+    // 注意，如果插着jlink或者开着debug，进入低功耗的函数可能会报错，
+    // 开启调试时我们应当禁用低功耗状态值检测，或者干脆不进入低功耗
+    ret = sd_power_system_off();
+
+    // OK，此处非常重要，如果开启了日志输出并且使能了RTT，则不去检查低功耗模式的错误
+#if !(NRF_LOG_ENABLED && NRF_LOG_BACKEND_RTT_ENABLED)
+    APP_ERROR_CHECK(ret);
+#else
+    UNUSED_VARIABLE(ret);
+#endif
 
     // It is not supposed to enter here, but jlink debug mode it can be entered, at most is not normal hibernation just
     // jlink connection, power consumption will rise, and hibernation will also be stuck in this step.
@@ -300,6 +306,10 @@ static void system_off_enter(void) {
 static void check_wakeup_src(void) {
     sd_power_reset_reason_get(&m_reset_source);
     sd_power_reset_reason_clr(m_reset_source);
+
+    sd_power_gpregret_get(1, &m_gpregret_val);
+    sd_power_gpregret_clr(1, GPREGRET_CLEAR_VALUE_DEFAULT);
+
 
     /*
      * Note: The hibernation described below is deep hibernation, stopping any non-wakeup source peripherals and stopping the CPU to achieve the lowest power consumption
@@ -329,7 +339,8 @@ static void check_wakeup_src(void) {
 
         // If no operation follows, wait for the timeout and then deep hibernate
         sleep_timer_start(SLEEP_DELAY_MS_BUTTON_WAKEUP);
-    } else if (m_reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) {
+    } else if ((m_reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) ||
+               (m_gpregret_val & RESET_ON_LF_FIELD_EXISTS_Msk)) {
         NRF_LOG_INFO("WakeUp from rfid field");
 
         // wake up from hf field.
@@ -338,8 +349,16 @@ static void check_wakeup_src(void) {
             NRF_LOG_INFO("WakeUp from HF");
         } else {
             color = 2;  // LF filed show B.
-            NRF_LOG_INFO("WakeUp from LF");
+            if (m_gpregret_val & RESET_ON_LF_FIELD_EXISTS_Msk) {
+                NRF_LOG_INFO("Reset by LF");
+            } else {
+                NRF_LOG_INFO("WakeUp from LF");
+            }
         }
+
+        // 当前是模拟卡事件唤醒系统，我们可以让场强灯先亮起来
+        TAG_FIELD_LED_ON();
+
         // In the case of field wake-up, only one round of RGB is swept as the power-on animation
         ledblink2(color, !dir, dir ? slot : 7 - slot);
         set_slot_light_color(color);
@@ -368,9 +387,14 @@ static void check_wakeup_src(void) {
         // Initialize the default card slot data.
         tag_emulation_factory_init();
 
+        // RGB
         ledblink2(0, !dir, 11);
         ledblink2(1, dir, 11);
         ledblink2(2, !dir, 11);
+
+        // Show RGB for slot.
+        set_slot_light_color(color);
+        light_up_by_slot();
 
         // If the USB is plugged in when first powered up, we can do something accordingly
         if (nrfx_power_usbstatus_get() != NRFX_POWER_USB_STATE_DISCONNECTED) {

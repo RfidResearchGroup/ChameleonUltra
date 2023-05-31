@@ -65,6 +65,7 @@ void sleep_timer_start(uint32_t time_ms) {
 void sleep_system_run(void (*sysOffSleep)(), void (*sysOnSleep)()) {
     // No task to process, sleep enter
     if (m_system_off_enter) {
+        m_system_off_enter = false;
         // Enter Sleep(System_OFF sleep mode) zzzzz.....
         sysOffSleep();
     } else {

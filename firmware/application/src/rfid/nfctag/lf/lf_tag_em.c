@@ -118,7 +118,8 @@ uint64_t em410x_id_to_memory64(uint8_t id[5]) {
 /**
 * @brief 判断场状态
  */
-static inline bool is_lf_field_exists(void) {
+ bool lf_is_field_exists(void) {
+    nrf_drv_lpcomp_enable();
     bsp_delay_us(20);                                   // 延迟一段时间再采样，避免误判
     nrf_lpcomp_task_trigger(NRF_LPCOMP_TASK_SAMPLE);    // 触发一次采样
     return nrf_lpcomp_result_get() == 1;                // 判断LF场状态的采样结果
@@ -160,16 +161,15 @@ void timer_ce_handler(nrf_timer_event_t event_type, void* p_context) {
                 
                 // 我们不需要任何的事件，仅仅需要检测一下场的状态
                 NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
-                nrf_drv_lpcomp_enable();                                    // 重启比较器，以便可以重新比较场状态
-                if (is_lf_field_exists()) {
+                if (lf_is_field_exists()) {
                     nrf_drv_lpcomp_disable();
                     nrfx_timer_enable(&m_timer_send_id);                    // 打开广播场的定时器，继续模拟
                 } else {
                     // 开启事件中断，让下次场事件可以正常出入
-                    NRF_LPCOMP->INTENSET = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
                     g_is_tag_emulating = false;                             // 重设模拟中的标志位
                     m_is_lf_emulating = false;
                     TAG_FIELD_LED_OFF()                                     // 确保关闭LF的场状态的指示灯
+                    NRF_LPCOMP->INTENSET = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
                     sleep_timer_start(SLEEP_DELAY_MS_FIELD_125KHZ_LOST);    // 启动进入休眠的定时器
                     NRF_LOG_INFO("LF FIELD LOST");
                 }
@@ -226,33 +226,21 @@ static void lf_sense_enable(void) {
     ret_code_t err_code;
     
     nrf_drv_lpcomp_config_t config = NRF_DRV_LPCOMP_DEFAULT_CONFIG;
-    config.hal.reference = NRF_LPCOMP_REF_SUPPLY_1_16;  // 参考电压
-    config.input = LF_RSSI;                             // 输入脚
-    config.hal.detection = NRF_LPCOMP_DETECT_UP;        // 默认上升沿触发
-    config.hal.hyst = NRF_LPCOMP_HYST_50mV;             // 防抖，避免频繁中断
+    config.hal.reference = NRF_LPCOMP_REF_SUPPLY_1_16;
+    config.input = LF_RSSI;
+    config.hal.detection = NRF_LPCOMP_DETECT_UP;
+    config.hal.hyst = NRF_LPCOMP_HYST_50mV;
 
-    // initialize LPCOMP driver, from this point LPCOMP will be active and provided
-    // event handler will be executed when defined action is detected
     err_code = nrf_drv_lpcomp_init(&config, lpcomp_event_handler);
     APP_ERROR_CHECK(err_code);
-    nrf_drv_lpcomp_enable();    // 使能低功耗比较器
-    
-    // 初始化用于震荡曼彻斯特波的定时器
-    uint32_t time_us = LF_125KHZ_EM410X_BIT_CLOCK;  // 定时时间250us
-    // 保存定时时间对应的Ticks
-    uint32_t time_ticks;
-    // 定义定时器配置结构体，并使用默认配置参数初始化结构体
+
+    // TAG id broadcast
     nrfx_timer_config_t timer_cfg = NRFX_TIMER_DEFAULT_CONFIG;
-    // 初始化定时器，初始化时会注册timer_led_event_handler事件回调函数
     err_code = nrfx_timer_init(&m_timer_send_id, &timer_cfg, timer_ce_handler);
     APP_ERROR_CHECK(err_code);
-    // 定时时间转换为ticks
-    time_ticks = nrfx_timer_us_to_ticks(&m_timer_send_id, time_us);
-    // 设置定时器捕获/比较通道及该通道的比较值，使能通道的比较中断
-    nrfx_timer_extended_compare(&m_timer_send_id, NRF_TIMER_CC_CHANNEL2, time_ticks, NRF_TIMER_SHORT_COMPARE2_CLEAR_MASK, true);
+    nrfx_timer_extended_compare(&m_timer_send_id, NRF_TIMER_CC_CHANNEL2, nrfx_timer_us_to_ticks(&m_timer_send_id, LF_125KHZ_EM410X_BIT_CLOCK), NRF_TIMER_SHORT_COMPARE2_CLEAR_MASK, true);
 
-    // 如果一初始化完就发现当前处于场中，并且没有处于广播状态，就主动触发广播
-    if (!m_is_lf_emulating && is_lf_field_exists()) {
+    if (lf_is_field_exists() && !m_is_lf_emulating) {
         lpcomp_event_handler(NRF_LPCOMP_EVENT_UP);
     }
 }
