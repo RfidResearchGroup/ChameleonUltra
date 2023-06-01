@@ -4,3 +4,5 @@ bin/
 script/__pycache__
 # Ignore the compilers output folder
 src/out
+# Ignore the compiled scripts
+script/
