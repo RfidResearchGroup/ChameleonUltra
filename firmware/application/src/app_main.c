@@ -37,7 +37,6 @@ NRF_LOG_MODULE_REGISTER();
 #include "rgb_marquee.h"
 
 
-
 // Defining soft timers
 APP_TIMER_DEF(m_button_check_timer); // Timer for button debounce
 static bool m_is_read_btn_press = false;
@@ -49,6 +48,8 @@ static uint32_t m_gpregret_val;
 
 #define GPREGRET_CLEAR_VALUE_DEFAULT (0xFFFFFFFFUL)
 #define RESET_ON_LF_FIELD_EXISTS_Msk (1UL)
+
+extern bool g_is_low_battery_shutdown;
 
 
 /**@brief Function for assert macro callback.
@@ -202,26 +203,40 @@ static void system_off_enter(void) {
     ret = sd_power_ram_power_set(8, ram8_retention);
     APP_ERROR_CHECK(ret);
 
-    // Power off animation
-    uint8_t slot = tag_emulation_get_slot();
-    uint32_t* p_led_array = hw_get_led_array();
-    for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
-        nrf_gpio_pin_clear(p_led_array[i]);
-    }
-    uint8_t dir = slot > 3 ? 1 : 0;
-    uint8_t color = get_color_by_slot(slot);
-    if (m_reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) {
-        if (m_reset_source & NRF_POWER_RESETREAS_NFC_MASK) {
-            color = 1;
-        } else {
-            color = 2;
+    if (g_is_low_battery_shutdown) {
+        // Don't create too complex animations, just blink LED1 three times.
+        rgb_marquee_stop();
+        set_slot_light_color(0);
+        for (uint8_t i = 0; i <= 3; i++) {
+            nrf_gpio_pin_set(LED_1);
+            bsp_delay_ms(100);
+            nrf_gpio_pin_clear(LED_1);
+            bsp_delay_ms(100);
         }
+    } else {
+        // close all led.
+        uint32_t* p_led_array = hw_get_led_array();
+        for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
+            nrf_gpio_pin_clear(p_led_array[i]);
+        }
+        uint8_t slot = tag_emulation_get_slot();
+        // Power off animation
+        uint8_t dir = slot > 3 ? 1 : 0;
+        uint8_t color = get_color_by_slot(slot);
+        if (m_reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) {
+            if (m_reset_source & NRF_POWER_RESETREAS_NFC_MASK) {
+                color = 1;
+            } else {
+                color = 2;
+            }
+        }
+        ledblink5(color, slot, dir ? 7 : 0);
+        ledblink4(color, dir, 7, 99, 75);
+        ledblink4(color, !dir, 7, 75, 50);
+        ledblink4(color, dir, 7, 50, 25);
+        ledblink4(color, !dir, 7, 25, 0);
+        rgb_marquee_stop();
     }
-    ledblink5(color, slot, dir ? 7 : 0);
-    ledblink4(color, dir, 7, 99, 75);
-    ledblink4(color, !dir, 7, 75, 50);
-    ledblink4(color, dir, 7, 50, 25);
-    ledblink4(color, !dir, 7, 25, 0);
 
     // IOs that need to be configured as floating analog inputs ==> no pull-up or pull-down
     uint32_t gpio_cfg_default_nopull[] = {
@@ -232,7 +247,7 @@ static void system_off_enter(void) {
         HF_SPI_MOSI,
         LF_OA_OUT,
 #endif
-        BAT_SENSE,
+        BAT_SENSE_PIN,
     };
     for (int i = 0; i < ARRAY_SIZE(gpio_cfg_default_nopull); i++) {
         nrf_gpio_cfg_default(gpio_cfg_default_nopull[i]);
@@ -243,7 +258,7 @@ static void system_off_enter(void) {
 #if defined(PROJECT_CHAMELEON_ULTRA)
         HF_ANT_SEL,
 #endif
-        LED_FIELD,
+        LED_FIELD, LED_R, LED_G, LED_B,
     };
     for (int i = 0; i < ARRAY_SIZE(gpio_cfg_output_high); i++) {
         nrf_gpio_cfg_output(gpio_cfg_output_high[i]);
@@ -252,7 +267,7 @@ static void system_off_enter(void) {
 
     // IOs that need to be configured as push-pull outputs and pulled low
     uint32_t gpio_cfg_output_low[] = {
-        LED_1, LED_2, LED_3, LED_4, LED_5, LED_6, LED_7, LED_8, LED_R, LED_G, LED_B, LF_MOD, 
+        LED_1, LED_2, LED_3, LED_4, LED_5, LED_6, LED_7, LED_8, LF_MOD, 
 #if defined(PROJECT_CHAMELEON_ULTRA)
         READER_POWER, LF_ANT_DRIVER
 #endif
@@ -481,11 +496,12 @@ static void blink_usb_led_status(void) {
     }
 }
 
-
 /**@brief Application main function.
  */
 int main(void) {
     hw_connect_init();        // Remember to initialize the pins first
+    init_leds();              // LED initialization
+
     log_init();               // Log initialization
     gpio_te_init();           // Initialize GPIO matrix library
     app_timers_init();        // Initialize soft timer
@@ -493,7 +509,6 @@ int main(void) {
     bsp_timer_init();         // Initialize timeout timer
     bsp_timer_start();        // Start BSP TIMER and prepare it for processing business logic
     button_init();            // Button initialization for handling business logic
-    init_leds();              // LED initialization
     sleep_timer_init();       // Soft timer initialization for hibernation
     rng_drv_and_srand_init(); // Random number generator initialization
     power_management_init();  // Power management initialization
