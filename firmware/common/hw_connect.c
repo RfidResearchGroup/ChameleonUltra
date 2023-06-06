@@ -34,7 +34,9 @@ uint32_t g_button2;
 uint32_t g_lf_mod;
 uint32_t g_lf_rssi_pin;
 nrf_lpcomp_input_t g_lf_rssi;
-uint32_t g_bat_sense;
+uint32_t g_bat_sense_pin;
+nrf_saadc_input_t g_bat_sense;
+
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 uint32_t g_lf_ant_driver;
@@ -104,65 +106,69 @@ void hw_connect_init(void) {
     
 #if defined(PROJECT_CHAMELEON_ULTRA)
     if (m_hw_ver == 1) {
-        LED_FIELD    =   (NRF_GPIO_PIN_MAP(1, 1));
-        LED_R        =   (NRF_GPIO_PIN_MAP(0, 24));
-        LED_G        =   (NRF_GPIO_PIN_MAP(0, 22));
-        LED_B        =   (NRF_GPIO_PIN_MAP(1, 0));
-        LED_1        =   (NRF_GPIO_PIN_MAP(0, 20));
-        LED_2        =   (NRF_GPIO_PIN_MAP(0, 17));
-        LED_3        =   (NRF_GPIO_PIN_MAP(0, 15));
-        LED_4        =   (NRF_GPIO_PIN_MAP(0, 13));
-        LED_5        =   (NRF_GPIO_PIN_MAP(0, 12));
-        LED_6        =   (NRF_GPIO_PIN_MAP(1, 9));
-        LED_7        =   (NRF_GPIO_PIN_MAP(0, 8));
-        LED_8        =   (NRF_GPIO_PIN_MAP(0, 6));
-        RGB_LIST_NUM = 8;
-        RGB_CTRL_NUM = 3;
+        LED_FIELD       =   (NRF_GPIO_PIN_MAP(1, 1));
+        LED_R           =   (NRF_GPIO_PIN_MAP(0, 24));
+        LED_G           =   (NRF_GPIO_PIN_MAP(0, 22));
+        LED_B           =   (NRF_GPIO_PIN_MAP(1, 0));
+        LED_1           =   (NRF_GPIO_PIN_MAP(0, 20));
+        LED_2           =   (NRF_GPIO_PIN_MAP(0, 17));
+        LED_3           =   (NRF_GPIO_PIN_MAP(0, 15));
+        LED_4           =   (NRF_GPIO_PIN_MAP(0, 13));
+        LED_5           =   (NRF_GPIO_PIN_MAP(0, 12));
+        LED_6           =   (NRF_GPIO_PIN_MAP(1, 9));
+        LED_7           =   (NRF_GPIO_PIN_MAP(0, 8));
+        LED_8           =   (NRF_GPIO_PIN_MAP(0, 6));
+        RGB_LIST_NUM    = 8;
+        RGB_CTRL_NUM    = 3;
 
-        LF_ANT_DRIVER = (NRF_GPIO_PIN_MAP(0, 31));
-        LF_OA_OUT     = (NRF_GPIO_PIN_MAP(0, 29));
-        LF_MOD        = (NRF_GPIO_PIN_MAP(1, 13));
-        LF_RSSI_PIN   = (NRF_GPIO_PIN_MAP(0, 2));
-        LF_RSSI       = NRF_LPCOMP_INPUT_0;
+        LF_ANT_DRIVER   = (NRF_GPIO_PIN_MAP(0, 31));
+        LF_OA_OUT       = (NRF_GPIO_PIN_MAP(0, 29));
+        LF_MOD          = (NRF_GPIO_PIN_MAP(1, 13));
+        LF_RSSI_PIN     = (NRF_GPIO_PIN_MAP(0, 2));
+        LF_RSSI         = NRF_LPCOMP_INPUT_0;
 
-        HF_SPI_SELECT = (NRF_GPIO_PIN_MAP(1, 6));
-        HF_SPI_MISO   = (NRF_GPIO_PIN_MAP(0, 11));
-        HF_SPI_MOSI   = (NRF_GPIO_PIN_MAP(1, 7));
-        HF_SPI_SCK    = (NRF_GPIO_PIN_MAP(1, 4));
-        HF_ANT_SEL    = (NRF_GPIO_PIN_MAP(1, 10));
+        HF_SPI_SELECT   = (NRF_GPIO_PIN_MAP(1, 6));
+        HF_SPI_MISO     = (NRF_GPIO_PIN_MAP(0, 11));
+        HF_SPI_MOSI     = (NRF_GPIO_PIN_MAP(1, 7));
+        HF_SPI_SCK      = (NRF_GPIO_PIN_MAP(1, 4));
+        HF_ANT_SEL      = (NRF_GPIO_PIN_MAP(1, 10));
 
-        BUTTON_2      = (NRF_GPIO_PIN_MAP(0, 26));
-        BUTTON_1      = (NRF_GPIO_PIN_MAP(1, 2));
+        READER_POWER    = (NRF_GPIO_PIN_MAP(1, 15));
 
-        BAT_SENSE     = (NRF_GPIO_PIN_MAP(0, 4));
-        READER_POWER  = (NRF_GPIO_PIN_MAP(1, 15));
+        BUTTON_2        = (NRF_GPIO_PIN_MAP(0, 26));
+        BUTTON_1        = (NRF_GPIO_PIN_MAP(1, 2));
+
+        BAT_SENSE_PIN   = (NRF_GPIO_PIN_MAP(0, 4));
+        BAT_SENSE       = NRF_SAADC_INPUT_AIN2;
     }
 #endif
 
 #if defined(PROJECT_CHAMELEON_LITE)
     if (m_hw_ver == 1) {
-        LED_FIELD      = (NRF_GPIO_PIN_MAP(1, 1));
-        LED_1          = (NRF_GPIO_PIN_MAP(0, 22));
-        LED_2          = (NRF_GPIO_PIN_MAP(0, 20));
-        LED_3          = (NRF_GPIO_PIN_MAP(0, 17));
-        LED_4          = (NRF_GPIO_PIN_MAP(0, 15));
-        LED_5          = (NRF_GPIO_PIN_MAP(0, 13));
-        LED_6          = (NRF_GPIO_PIN_MAP(0, 6));
-        LED_7          = (NRF_GPIO_PIN_MAP(0, 4));
-        LED_8          = (NRF_GPIO_PIN_MAP(0, 26));
-        LED_R          = (NRF_GPIO_PIN_MAP(0, 8));
-        LED_G          = (NRF_GPIO_PIN_MAP(0, 12));
-        LED_B          = (NRF_GPIO_PIN_MAP(1, 9));
-        RGB_LIST_NUM   = 8;
-        RGB_CTRL_NUM   = 3;
-        
-        BUTTON_1       = (NRF_GPIO_PIN_MAP(1, 2));
-        BUTTON_2       = (NRF_GPIO_PIN_MAP(1, 6));
+        LED_FIELD       = (NRF_GPIO_PIN_MAP(1, 1));
+        LED_1           = (NRF_GPIO_PIN_MAP(0, 22));
+        LED_2           = (NRF_GPIO_PIN_MAP(0, 20));
+        LED_3           = (NRF_GPIO_PIN_MAP(0, 17));
+        LED_4           = (NRF_GPIO_PIN_MAP(0, 15));
+        LED_5           = (NRF_GPIO_PIN_MAP(0, 13));
+        LED_6           = (NRF_GPIO_PIN_MAP(0, 6));
+        LED_7           = (NRF_GPIO_PIN_MAP(0, 4));
+        LED_8           = (NRF_GPIO_PIN_MAP(0, 26));
+        LED_R           = (NRF_GPIO_PIN_MAP(0, 8));
+        LED_G           = (NRF_GPIO_PIN_MAP(0, 12));
+        LED_B           = (NRF_GPIO_PIN_MAP(1, 9));
+        RGB_LIST_NUM    = 8;
+        RGB_CTRL_NUM    = 3;
 
-        LF_MOD         = (NRF_GPIO_PIN_MAP(1, 4));
-        LF_RSSI_PIN    = (NRF_GPIO_PIN_MAP(0, 2));
-        LF_RSSI        = NRF_LPCOMP_INPUT_0;
-        BAT_SENSE      = (NRF_GPIO_PIN_MAP(0, 29));
+        LF_MOD          = (NRF_GPIO_PIN_MAP(1, 4));
+        LF_RSSI_PIN     = (NRF_GPIO_PIN_MAP(0, 2));
+        LF_RSSI         = NRF_LPCOMP_INPUT_0;
+
+        BUTTON_1        = (NRF_GPIO_PIN_MAP(1, 2));
+        BUTTON_2        = (NRF_GPIO_PIN_MAP(1, 6));
+
+        BAT_SENSE_PIN   = (NRF_GPIO_PIN_MAP(0, 29));
+        BAT_SENSE       = NRF_SAADC_INPUT_AIN5;
     }
 #endif
 

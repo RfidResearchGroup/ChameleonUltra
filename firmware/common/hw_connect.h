@@ -5,6 +5,7 @@
 #define HW_CONNECT_H_
 
 #include "nrf_lpcomp.h"
+#include "nrf_saadc.h"
 #include "device_info.h"
 
 typedef enum {
@@ -36,31 +37,32 @@ extern uint32_t g_button2;
 extern uint32_t g_lf_mod;
 extern uint32_t g_lf_rssi_pin;
 extern nrf_lpcomp_input_t g_lf_rssi;
-extern uint32_t g_bat_sense;
+extern uint32_t g_bat_sense_pin;
+extern nrf_saadc_input_t g_bat_sense;
 
 
-#define LED_FIELD      g_led_field
-#define LED_1          g_led_1
-#define LED_2          g_led_2
-#define LED_3          g_led_3
-#define LED_4          g_led_4
-#define LED_5          g_led_5
-#define LED_6          g_led_6
-#define LED_7          g_led_7
-#define LED_8          g_led_8
-#define LED_R          g_led_r
-#define LED_G          g_led_g
-#define LED_B          g_led_b
-#define RGB_LIST_NUM   g_led_num
-#define RGB_CTRL_NUM   g_rgb_num
-#define BUTTON_1       g_button1
-#define BUTTON_2       g_button2
-#define BUTTON_PULL    NRF_GPIO_PIN_PULLDOWN
-#define LF_MOD         g_lf_mod
-#define LF_RSSI_PIN    g_lf_rssi_pin
-#define LF_RSSI        g_lf_rssi
-#define BAT_SENSE      g_bat_sense
-
+#define LED_FIELD       g_led_field
+#define LED_1           g_led_1
+#define LED_2           g_led_2
+#define LED_3           g_led_3
+#define LED_4           g_led_4
+#define LED_5           g_led_5
+#define LED_6           g_led_6
+#define LED_7           g_led_7
+#define LED_8           g_led_8
+#define LED_R           g_led_r
+#define LED_G           g_led_g
+#define LED_B           g_led_b
+#define RGB_LIST_NUM    g_led_num
+#define RGB_CTRL_NUM    g_rgb_num
+#define BUTTON_1        g_button1
+#define BUTTON_2        g_button2
+#define BUTTON_PULL     NRF_GPIO_PIN_PULLDOWN
+#define LF_MOD          g_lf_mod
+#define LF_RSSI_PIN     g_lf_rssi_pin
+#define LF_RSSI         g_lf_rssi
+#define BAT_SENSE_PIN   g_bat_sense_pin
+#define BAT_SENSE       g_bat_sense
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 extern uint32_t g_lf_ant_driver;
