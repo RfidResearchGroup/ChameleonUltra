@@ -2,6 +2,7 @@
 #include "nfc_14a.h"
 #include "lf_tag_em.h"
 #include "nfc_mf1.h"
+#include "nfc_ntag.h"
 #include "fds_util.h"
 #include "tag_emulation.h"
 #include "tag_persistence.h"
@@ -81,9 +82,9 @@ static tag_base_handler_map_t tag_base_map[] = {
     { TAG_SENSE_HF,    TAG_TYPE_MIFARE_2048,    nfc_tag_mf1_data_loadcb,      nfc_tag_mf1_data_savecb,      nfc_tag_mf1_data_factory,      &m_tag_data_hf },
     { TAG_SENSE_HF,    TAG_TYPE_MIFARE_4096,    nfc_tag_mf1_data_loadcb,      nfc_tag_mf1_data_savecb,      nfc_tag_mf1_data_factory,      &m_tag_data_hf },
     // NTAG标签模拟
-    { TAG_SENSE_HF,    TAG_TYPE_NTAG_213,       NULL,                         NULL,                         NULL,                          &m_tag_data_hf },
-    { TAG_SENSE_HF,    TAG_TYPE_NTAG_215,       NULL,                         NULL,                         NULL,                          &m_tag_data_hf },
-    { TAG_SENSE_HF,    TAG_TYPE_NTAG_216,       NULL,                         NULL,                         NULL,                          &m_tag_data_hf },
+    { TAG_SENSE_HF,    TAG_TYPE_NTAG_213,      nfc_tag_ntag_data_loadcb,     nfc_tag_ntag_data_savecb,      nfc_tag_ntag_data_factory,     &m_tag_data_hf },
+    { TAG_SENSE_HF,    TAG_TYPE_NTAG_215,      nfc_tag_ntag_data_loadcb,     nfc_tag_ntag_data_savecb,      nfc_tag_ntag_data_factory,     &m_tag_data_hf },
+    { TAG_SENSE_HF,    TAG_TYPE_NTAG_216,      nfc_tag_ntag_data_loadcb,     nfc_tag_ntag_data_savecb,      nfc_tag_ntag_data_factory,     &m_tag_data_hf },
 };
 
 
