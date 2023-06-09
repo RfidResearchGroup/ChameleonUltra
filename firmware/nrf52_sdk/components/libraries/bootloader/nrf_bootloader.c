@@ -129,6 +129,23 @@ static void do_reset(void * p_context)
     NVIC_SystemReset();
 }
 
+static void do_systemoff(void * p_context) {
+    UNUSED_PARAMETER(p_context);
+
+    NRF_LOG_FINAL_FLUSH();
+    
+    nrf_delay_ms(NRF_BL_RESET_DELAY_MS);
+
+    // reinit leds status
+    init_leds();
+    set_slot_light_color(3);
+    // systemoff mode, deepsleep
+    nrf_power_system_off();
+}
+
+static bool check_usb_attach(void) {
+    return nrfx_power_usbstatus_get() != NRFX_POWER_USB_STATE_DISCONNECTED;
+}
 
 static void bootloader_reset(bool do_backup)
 {
@@ -137,7 +154,12 @@ static void bootloader_reset(bool do_backup)
     if (do_backup)
     {
         m_flash_write_done = false;
-        nrf_dfu_settings_backup(do_reset);
+        // The usb is attach, we can reset system.
+        if (check_usb_attach()) {
+            nrf_dfu_settings_backup(do_reset);
+        } else {
+            nrf_dfu_settings_backup(do_systemoff);
+        }
     }
     else
     {
@@ -161,9 +183,7 @@ static void dfu_observer(nrf_dfu_evt_type_t evt_type)
     {
         case NRF_DFU_EVT_DFU_STARTED:
         case NRF_DFU_EVT_OBJECT_RECEIVED:
-            nrf_bootloader_dfu_inactivity_timer_restart(
-                        NRF_BOOTLOADER_MS_TO_TICKS(NRF_BL_DFU_INACTIVITY_TIMEOUT_MS),
-                        inactivity_timeout);
+            nrf_bootloader_dfu_inactivity_timer_restart(NRF_BOOTLOADER_MS_TO_TICKS(NRF_BL_DFU_INACTIVITY_TIMEOUT_MS), inactivity_timeout);
             break;
         case NRF_DFU_EVT_DFU_COMPLETED:
         case NRF_DFU_EVT_DFU_ABORTED:
@@ -232,11 +252,9 @@ static void loop_forever(void)
 #endif
 /**@brief Function for initializing button used to enter DFU mode.
  */
-static void dfu_enter_button_init(void)
+void dfu_enter_button_init(void)
 {
-    nrf_gpio_cfg_sense_input(NRF_BL_DFU_ENTER_METHOD_BUTTON_PIN,
-                             BUTTON_PULL,
-                             NRF_GPIO_PIN_SENSE_LOW);
+    nrf_gpio_cfg_sense_input(NRF_BL_DFU_ENTER_METHOD_BUTTON_PIN, BUTTON_PULL, NRF_GPIO_PIN_SENSE_HIGH);
 }
 #endif
 
@@ -370,7 +388,7 @@ static bool dfu_enter_check(void)
         bool is_usb_attach = false;
         // 如果按钮一直是按下的状态，则等待用户释放按钮，期间检测USB插入，如果是插入状态，则进入DFU模式
         while (nrf_gpio_pin_read(NRF_BL_DFU_ENTER_METHOD_BUTTON_PIN) == 1) {
-            is_usb_attach = nrfx_power_usbstatus_get() != NRFX_POWER_USB_STATE_DISCONNECTED;
+            is_usb_attach = check_usb_attach();
         }
         NRF_LOG_DEBUG("DFU mode requested via button.");
         // 按钮按下，但是USB没插入，则进入普通APP模式，

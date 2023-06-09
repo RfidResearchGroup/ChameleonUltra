@@ -100,7 +100,6 @@ void app_error_handler_bare(uint32_t error_code)
     on_error();
 }
 
-
 static uint8_t m_led_flash_state = 0;
 static bool m_led_flash_setp = 0;
 static nrfx_systick_state_t systick;
@@ -183,7 +182,7 @@ static void dfu_observer(nrf_dfu_evt_type_t evt_type)
 /**@brief Function for application main entry. */
 int main(void)
 {
-    uint32_t ret_val;
+    ret_code_t ret_val;
 
     // Must to init hardware connect.
     hw_connect_init();

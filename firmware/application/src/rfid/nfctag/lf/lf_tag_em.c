@@ -42,7 +42,8 @@ static volatile bool m_is_lf_emulating = false;
 const nrfx_timer_t m_timer_send_id = NRFX_TIMER_INSTANCE(3);
 // 缓存标签类型
 static tag_specific_type_t m_tag_type = TAG_TYPE_UNKNOWN;
-
+// 当前是否需要发送重新进入LF状态的第二个沿
+static bool m_is_send_reboardcast_last_edge;
 
 /**
  * @brief 将EM410X的卡号转为U64的内存布局，计算奇偶校验位
@@ -74,8 +75,8 @@ uint64_t em410x_id_to_memory64(uint8_t id[5]) {
 
     // 好了，到了目前最关键的时候了，现在需要赋值和计算奇偶校验位了
     // 1、先把前导码给赋值了
-    memory.bit.h00 = memory.bit.h01 = memory.bit.h02 = 
-    memory.bit.h03 = memory.bit.h04 = memory.bit.h05 = 
+    memory.bit.h00 = memory.bit.h01 = memory.bit.h02 =
+    memory.bit.h03 = memory.bit.h04 = memory.bit.h05 =
     memory.bit.h06 = memory.bit.h07 = memory.bit.h08 = 1;
     // 2、把8bit的版本或者自定义ID给赋值了
     memory.bit.d00 = GETBIT(id[0], 7); memory.bit.d01 = GETBIT(id[0], 6); memory.bit.d02 = GETBIT(id[0], 5); memory.bit.d03 = GETBIT(id[0], 4);
@@ -118,7 +119,8 @@ uint64_t em410x_id_to_memory64(uint8_t id[5]) {
 /**
 * @brief 判断场状态
  */
-static inline bool is_lf_field_exists(void) {
+ bool lf_is_field_exists(void) {
+    nrf_drv_lpcomp_enable();
     bsp_delay_us(20);                                   // 延迟一段时间再采样，避免误判
     nrf_lpcomp_task_trigger(NRF_LPCOMP_TASK_SAMPLE);    // 触发一次采样
     return nrf_lpcomp_result_get() == 1;                // 判断LF场状态的采样结果
@@ -129,27 +131,32 @@ void timer_ce_handler(nrf_timer_event_t event_type, void* p_context) {
         // 因为我们配置的是使用CC通道2，所以事件回调
         // 函数中判断NRF_TIMER_EVENT_COMPARE0事件
 		case NRF_TIMER_EVENT_COMPARE2: {
-            if (m_is_send_first_edge) {
-                if (GETBIT(m_id_bit_data, m_bit_send_position)) {
-                    // 发送 1 的第一个沿
-                    ANT_TO_MOD();
+            if(m_is_send_reboardcast_last_edge){
+                m_is_send_reboardcast_last_edge = false;
+                ANT_TO_MOD();
+            }else{
+                if (m_is_send_first_edge) {
+                    if (GETBIT(m_id_bit_data, m_bit_send_position)) {
+                        // 发送 1 的第一个沿
+                        ANT_TO_MOD();
+                    } else {
+                        // 发送 0 的第一个沿
+                        ANT_NO_MOD();
+                    }
+                    m_is_send_first_edge = false;   // 下次发送第二个沿
                 } else {
-                    // 发送 0 的第一个沿
-                    ANT_NO_MOD();
-                }
-                m_is_send_first_edge = false;   // 下次发送第二个沿
-            } else {
-                if (GETBIT(m_id_bit_data, m_bit_send_position)) {
-                    // 发送 1 的第二个沿
-                    ANT_NO_MOD();
-                } else {
-                    // 发送 0 的第二个沿
-                    ANT_TO_MOD();
-                }
-                m_is_send_first_edge = true;    // 下次发送第一个沿
-                if (++m_bit_send_position >= LF_125KHZ_EM410X_BIT_SIZE) {
-                    m_bit_send_position = 0;    // 广播一次成功，bit位置归零
-                    ++m_send_id_count;          // 统计广播次数
+                    if (GETBIT(m_id_bit_data, m_bit_send_position)) {
+                        // 发送 1 的第二个沿
+                        ANT_NO_MOD();
+                    } else {
+                        // 发送 0 的第二个沿
+                        ANT_TO_MOD();
+                    }
+                    m_is_send_first_edge = true;    // 下次发送第一个沿
+                    if (++m_bit_send_position >= LF_125KHZ_EM410X_BIT_SIZE) {
+                        m_bit_send_position = 0;    // 广播一次成功，bit位置归零
+                        ++m_send_id_count;          // 统计广播次数
+                    }
                 }
             }
             // 如果广播次数超过上限次数，则重新比较场状态，根据新的场状态选择是否继续模拟标签
@@ -157,19 +164,19 @@ void timer_ce_handler(nrf_timer_event_t event_type, void* p_context) {
                 m_send_id_count = 0;                                        // 广播次数达到上限，重新识别场状态并且重新统计广播次数
                 ANT_NO_MOD();                                               // 确保天线不短路而导致无法获得RSSI状态
                 nrfx_timer_disable(&m_timer_send_id);                       // 关闭广播场的定时器
-                
+
                 // 我们不需要任何的事件，仅仅需要检测一下场的状态
                 NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
-                nrf_drv_lpcomp_enable();                                    // 重启比较器，以便可以重新比较场状态
-                if (is_lf_field_exists()) {
+                if (lf_is_field_exists()) {
                     nrf_drv_lpcomp_disable();
                     nrfx_timer_enable(&m_timer_send_id);                    // 打开广播场的定时器，继续模拟
+                    m_is_send_reboardcast_last_edge = true;                 // 如果继续的话需要发送0的后一个沿
                 } else {
                     // 开启事件中断，让下次场事件可以正常出入
-                    NRF_LPCOMP->INTENSET = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
                     g_is_tag_emulating = false;                             // 重设模拟中的标志位
                     m_is_lf_emulating = false;
                     TAG_FIELD_LED_OFF()                                     // 确保关闭LF的场状态的指示灯
+                    NRF_LPCOMP->INTENSET = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
                     sleep_timer_start(SLEEP_DELAY_MS_FIELD_125KHZ_LOST);    // 启动进入休眠的定时器
                     NRF_LOG_INFO("LF FIELD LOST");
                 }
@@ -202,57 +209,46 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
         // 设置模拟状态标志位
         m_is_lf_emulating = true;
         g_is_tag_emulating = true;
-        
+
         // 模拟卡状态应当关闭USB灯效
         g_usb_led_marquee_enable = false;
 
         // LED状态更新
         set_slot_light_color(2);
         TAG_FIELD_LED_ON()
-        
+
         // 无论如何，每次场状态发现变化都需要重置发送的bit位置
         m_send_id_count = 0;
         m_bit_send_position = 0;
         m_is_send_first_edge = true;
-        
+        m_is_send_reboardcast_last_edge = false;
+
         // 开启精准的硬件定时器去广播卡号
         nrfx_timer_enable(&m_timer_send_id);
-        
+
         NRF_LOG_INFO("LF FIELD DETECTED");
     }
 }
 
 static void lf_sense_enable(void) {
     ret_code_t err_code;
-    
-    nrf_drv_lpcomp_config_t config = NRF_DRV_LPCOMP_DEFAULT_CONFIG;
-    config.hal.reference = NRF_LPCOMP_REF_SUPPLY_1_16;  // 参考电压
-    config.input = LF_RSSI;                             // 输入脚
-    config.hal.detection = NRF_LPCOMP_DETECT_UP;        // 默认上升沿触发
-    config.hal.hyst = NRF_LPCOMP_HYST_50mV;             // 防抖，避免频繁中断
 
-    // initialize LPCOMP driver, from this point LPCOMP will be active and provided
-    // event handler will be executed when defined action is detected
+    nrf_drv_lpcomp_config_t config = NRF_DRV_LPCOMP_DEFAULT_CONFIG;
+    config.hal.reference = NRF_LPCOMP_REF_SUPPLY_1_16;
+    config.input = LF_RSSI;
+    config.hal.detection = NRF_LPCOMP_DETECT_UP;
+    config.hal.hyst = NRF_LPCOMP_HYST_50mV;
+
     err_code = nrf_drv_lpcomp_init(&config, lpcomp_event_handler);
     APP_ERROR_CHECK(err_code);
-    nrf_drv_lpcomp_enable();    // 使能低功耗比较器
-    
-    // 初始化用于震荡曼彻斯特波的定时器
-    uint32_t time_us = LF_125KHZ_EM410X_BIT_CLOCK;  // 定时时间250us
-    // 保存定时时间对应的Ticks
-    uint32_t time_ticks;
-    // 定义定时器配置结构体，并使用默认配置参数初始化结构体
+
+    // TAG id broadcast
     nrfx_timer_config_t timer_cfg = NRFX_TIMER_DEFAULT_CONFIG;
-    // 初始化定时器，初始化时会注册timer_led_event_handler事件回调函数
     err_code = nrfx_timer_init(&m_timer_send_id, &timer_cfg, timer_ce_handler);
     APP_ERROR_CHECK(err_code);
-    // 定时时间转换为ticks
-    time_ticks = nrfx_timer_us_to_ticks(&m_timer_send_id, time_us);
-    // 设置定时器捕获/比较通道及该通道的比较值，使能通道的比较中断
-    nrfx_timer_extended_compare(&m_timer_send_id, NRF_TIMER_CC_CHANNEL2, time_ticks, NRF_TIMER_SHORT_COMPARE2_CLEAR_MASK, true);
+    nrfx_timer_extended_compare(&m_timer_send_id, NRF_TIMER_CC_CHANNEL2, nrfx_timer_us_to_ticks(&m_timer_send_id, LF_125KHZ_EM410X_BIT_CLOCK), NRF_TIMER_SHORT_COMPARE2_CLEAR_MASK, true);
 
-    // 如果一初始化完就发现当前处于场中，并且没有处于广播状态，就主动触发广播
-    if (!m_is_lf_emulating && is_lf_field_exists()) {
+    if (lf_is_field_exists() && !m_is_lf_emulating) {
         lpcomp_event_handler(NRF_LPCOMP_EVENT_UP);
     }
 }
@@ -277,7 +273,7 @@ void lf_tag_125khz_sense_switch(bool enable) {
     nrf_gpio_cfg_output(LF_MOD);
     // 默认不短路天线（短路会导致RSSI无法判断）
     ANT_NO_MOD();
-    
+
     // 首次执行或者是禁用状态，只允许初始化
     if (m_lf_sense_state == LF_SENSE_STATE_NONE || m_lf_sense_state == LF_SENSE_STATE_DISABLE) {
         if (enable) {
