@@ -381,8 +381,23 @@ flash_softdevice:
 	nrfjprog -f nrf52 --program $(SDK_ROOT)/components/softdevice/s140/hex/s140_nrf52_7.2.0_softdevice.hex --sectorerase
 	nrfjprog -f nrf52 --reset
 
+# Flash with ST-Link + OpenOCD
+flash_stlink:
+	@echo Generating settings...
+	nrfutil settings generate --family NRF52840 --application $(OUTPUT_DIRECTORY)/application.hex --application-version 1 --bootloader-version 1 --bl-settings-version 2 $(OUTPUT_DIRECTORY)/settings.hex
+	@echo Merging required files
+	mergehex --merge $(OUTPUT_DIRECTORY)/bootloader.hex $(OUTPUT_DIRECTORY)/settings.hex --output $(OUTPUT_DIRECTORY)/bootloader_settings.hex
+	mergehex --merge $(OUTPUT_DIRECTORY)/bootloader_settings.hex $(OUTPUT_DIRECTORY)/application.hex $(SDK_ROOT)/components/softdevice/s140/hex/s140_nrf52_7.2.0_softdevice.hex --output $(OUTPUT_DIRECTORY)/project.hex
+	@echo Flashing...
+	openocd -f interface/stlink.cfg -f target/nrf52.cfg -c "program $(OUTPUT_DIRECTORY)/project.hex verify reset ; shutdown"
+
 erase:
 	nrfjprog -f nrf52 --eraseall
+    
+# Erase with ST-Link
+erase_stlink:
+	openocd -f interface/stlink.cfg -f target/nrf52.cfg -c "flash init; init; reset halt; flash erase_sector 0 1 last; exit"
+	@echo Successfully deleted everything!
 
 SDK_CONFIG_FILE := ./${PROJ_DIR}/sdk_config.h
 CMSIS_CONFIG_TOOL := $(SDK_ROOT)/external_tools/cmsisconfig/CMSIS_Configuration_Wizard.jar
