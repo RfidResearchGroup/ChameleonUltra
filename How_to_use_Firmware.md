@@ -69,4 +69,42 @@ We are using [Visual Studio Code](https://code.visualstudio.com/download) to edi
 
 ## Debugging the code
 - Install [Cortex-Debug](https://marketplace.visualstudio.com/items?itemName=marus25.cortex-debug) VS-Code Extension
-- MORE INFO ADDED LATER
+- Open `app_main.c`
+- Open the extension with `CTRL-SHIFT-D`
+- Klick on `create a launch.json file`
+- Select `Cortex-Debug`
+- Add this in the configuration bracket:
+	```
+			{
+				"cwd": "${workspaceFolder}",
+				"executable": "${workspaceRoot}/firmware/objects/bootloader.out",
+				"name": "Debug with JLink",
+				"request": "launch",
+				"type": "cortex-debug",
+				"runToEntryPoint": "main",
+				"showDevDebugOutput": "none",
+				"servertype": "jlink",
+				"device": "nrf52",
+				"interface": "swd",
+				"svdFile": "${workspaceRoot}/firmware/nrf52_sdk/modules/nrfx/mdk/nrf52.svd",
+				"gdbPath": "C:/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin/arm-none-eabi-gdb.exe"
+			}, 
+			{
+				"cwd": "${workspaceFolder}",
+				"executable": "${workspaceRoot}/firmware/objects/bootloader.out",
+				"name": "Debug with STLink",
+				"request": "launch",
+				"type": "cortex-debug",
+				"runToEntryPoint": "main",
+				"showDevDebugOutput": "none",
+				"servertype": "openocd",
+				"device": "nrf52",
+				"svdFile": "${workspaceRoot}/firmware/nrf52_sdk/modules/nrfx/mdk/nrf52.svd",
+				"gdbPath": "C:/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin/arm-none-eabi-gdb.exe",
+				"configFiles": [
+					"interface/stlink.cfg",
+					"target/nrf52.cfg"
+				]
+			}
+	```
+- In the debug menu you can select `Debug with JLink` or `Debug with STLink`
