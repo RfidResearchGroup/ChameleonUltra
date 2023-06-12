@@ -953,7 +953,7 @@ void nfc_tag_mf1_reset_handler() {
  * @return 假设 type == TAG_TYPE_MIFARE_1024，
  *  那么信息的长度应当是防冲撞信息加上配置信息再加上扇区大小的长度
  */
-int get_information_size_by_tag_type(tag_specific_type_t type, bool auth_align) {
+static int get_information_size_by_tag_type(tag_specific_type_t type, bool auth_align) {
     int size_raw = sizeof(nfc_tag_14a_coll_res_entity_t) + sizeof(nfc_tag_mf1_configure_t) + (get_block_max_by_tag_type(type) * NFC_TAG_MF1_DATA_SIZE);
     int size_align = size_raw + (size_raw % 4);
     return auth_align ? size_align : size_raw;
