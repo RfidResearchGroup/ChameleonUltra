@@ -324,6 +324,15 @@ data_frame_tx_t* cmd_processor_set_mf1_detection_enable(uint16_t cmd, uint16_t s
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+data_frame_tx_t* cmd_processor_get_mf1_detection_status(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (nfc_tag_mf1_is_detection_enable()) {
+        status = 1;
+    } else {
+        status = 0;
+    }
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 1, (uint8_t*)&status);
+}
+
 data_frame_tx_t* cmd_processor_get_mf1_detection_count(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint32_t count = nfc_tag_mf1_detection_log_count();
     if (count == 0xFFFFFFFF) {
@@ -538,6 +547,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
 
     {    DATA_CMD_SET_EM410X_EMU_ID,            NULL,                        cmd_processor_set_em410x_emu_id,             NULL                   },
 
+    {    DATA_CMD_GET_MF1_DETECTION_STATUS,     NULL,                        cmd_processor_get_mf1_detection_status,      NULL                   },
     {    DATA_CMD_SET_MF1_DETECTION_ENABLE,     NULL,                        cmd_processor_set_mf1_detection_enable,      NULL                   },
     {    DATA_CMD_GET_MF1_DETECTION_COUNT,      NULL,                        cmd_processor_get_mf1_detection_count,       NULL                   },
     {    DATA_CMD_GET_MF1_DETECTION_RESULT,     NULL,                        cmd_processor_get_mf1_detection_log,         NULL                   },

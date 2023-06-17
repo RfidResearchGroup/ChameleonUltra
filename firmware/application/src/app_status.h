@@ -20,7 +20,7 @@
 /////////////////////////////////////////////////////////////////////
 #define 	DARKSIDE_CANT_FIXED_NT          		(0x20)	// Darkside，无法固定随机数，这个情况可能出现在UID卡上
 #define 	DARKSIDE_LUCK_AUTH_OK           		(0x21)	// Darkside，直接验证成功了，可能刚好密钥是空的
-#define 	DARKSIDE_NACK_NO_SNED           		(0x22)	// Darkside，卡片不响应nack，可能是一张修复了nack逻辑漏洞的卡片
+#define 	DARKSIDE_NACK_NO_SEND           		(0x22)	// Darkside，卡片不响应nack，可能是一张修复了nack逻辑漏洞的卡片
 #define 	DARKSIDE_TAG_CHANGED            		(0x23)	// Darkside，在运行darkside的过程中出现了卡片切换，可能信号问题，或者真的是两张卡迅速切换了
 #define 	NESTED_TAG_IS_STATIC            		(0x24)	// Nested，检测到卡片应答的随机数是固定的
 #define 	NESTED_TAG_IS_HARD              		(0x25)	// Nested，检测到卡片应答的随机数是不可预测的
