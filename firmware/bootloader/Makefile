@@ -198,7 +198,7 @@ CFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
 CFLAGS += -ffunction-sections -fdata-sections -fno-strict-aliasing
 CFLAGS += -fno-builtin -fshort-enums
 # fix newer compilator versions
-CFLAGS  += -Wno-array-bounds
+CFLAGS += -Wno-error=array-bounds
 
 # C++ flags common to all targets
 CXXFLAGS += $(OPT)
