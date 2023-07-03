@@ -500,7 +500,7 @@ uint8_t Darkside_Recover_Key(uint8_t targetBlk, uint8_t targetTyp,
 				par++;
 				if (par == 0) {    // tried all 256 possible parities without success. Card doesn't send NACK.
 					NRF_LOG_INFO("Card doesn't send NACK.\r\n");
-					return DARKSIDE_NACK_NO_SNED;
+					return DARKSIDE_NACK_NO_SEND;
 				}
 			} else {
 				// Why this?
@@ -542,7 +542,7 @@ void Atenna_Switch_Delay(uint32_t delay_ms) {
 * @retval	: 如果支持，返回 HF_TAG_OK，如果不支持，
 *				返回检测过程中发生异常的结果码：
 *					1、DARKSIDE_CANT_FIXED_NT
-*					2、DARKSIDE_NACK_NO_SNED
+*					2、DARKSIDE_NACK_NO_SEND
 *					3、DARKSIDE_TAG_CHANGED
 *				或者其他的卡片相关的通信错误，最常见的是丢失卡片 HF_TAG_NO
 *
