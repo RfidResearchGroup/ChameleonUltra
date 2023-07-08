@@ -5,6 +5,7 @@ import argparse
 import colorama
 import timeit
 import sys
+import serial.tools.list_ports
 
 import chameleon_com
 import chameleon_cmd
@@ -185,7 +186,7 @@ class ReaderRequiredUint(DeviceRequiredUnit):
 class HWConnect(BaseCLIUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
-        parser.add_argument('-p', '--port', type=str, required=True)
+        parser.add_argument('-p', '--port', type=str, required=False)
         return parser
 
     def before_exec(self, args: argparse.Namespace):
@@ -193,6 +194,15 @@ class HWConnect(BaseCLIUnit):
 
     def on_exec(self, args: argparse.Namespace):
         try:
+            if args.port is None: # Chameleon Autodedect if no port is supplied
+                # loop through all ports and find chameleon
+                for port in serial.tools.list_ports.comports():
+                    if port.manufacturer.startswith("Proxgrind") and port.description.startswith("Chameleon"):
+                        args.port = port.device
+                        break
+                if args.port is None: # If no chameleon was found, exit
+                    print("Chameleon not found, please connect the device or try connecting manually with the -p flag.")
+                    return
             self.device_com.open(args.port)
             print(" { Chameleon connected } ")
         except Exception as e:
