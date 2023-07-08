@@ -185,7 +185,7 @@ class ReaderRequiredUint(DeviceRequiredUnit):
 class HWConnect(BaseCLIUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
-        parser.add_argument('-p', '--port', type=str, required=True)
+        parser.add_argument('-p', '--port', type=str, required=False)
         return parser
 
     def before_exec(self, args: argparse.Namespace):
@@ -193,6 +193,19 @@ class HWConnect(BaseCLIUnit):
 
     def on_exec(self, args: argparse.Namespace):
         try:
+            if args.port is None: # Chameleon Autodedect if no port is supplied
+                # loop through all ports and find chameleon
+                for port in chameleon_com.get_all_ports():
+                    self.device_com.open(port)
+                    resp = self.cmd_standard.get_device_info()
+                    if resp.status == chameleon_status.Device.HF_TAG_OK: # AFAIK Pyserial has no option to get USB PID/VID, would be a better solution than connecting to ever port
+                        print(f"Chameleon found on port {port}") # If it returns the expected awnser, were done
+                        args.port = port
+                        break
+                    self.device_com.close()
+                if args.port is None: # If no chameleon was found, exit
+                    print("Chameleon not found, please connect the device or try connecting manually with the -p flag.")
+                    return
             self.device_com.open(args.port)
             print(" { Chameleon connected } ")
         except Exception as e:
