@@ -16,7 +16,7 @@ improved.
 # Why NRF52840?
 
 NRF52840 has a built-in NFC Tag-A module, but no one seems to care about it. After playing with HydraNFC's TRF7970A and
-FlipperZero's ST25R3916, the developers found that they can only simulate MIFARE UID. I accidentally tested the NFC of
+FlipperZero's ST25R3916, ~~the developers found that they can only simulate MIFARE UID~~. I accidentally tested the NFC of
 52840, and found that it is not only surprisingly easy to simulate a complete MIFARE card, but also has very good
 simulation performance, friendly data flow interaction, and very fast response, unlike the former which is limited by
 the SPI bus clock rate. We also found that it has ultra-low power consumption, ultra-small size, 256kb/1M large RAM and
@@ -25,6 +25,9 @@ discovery for us!
 
 Below we will explain in detail how we exploited the performance of the NRF52840, and what seemingly impossible
 functions have been realized with it!
+
+**Update**:
+*  FlipperZero can simulate mifare sector now, but FDT so high.
 
 # Supported functions
 
