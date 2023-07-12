@@ -147,11 +147,21 @@ class ChameleonCLI:
         :return:
         """
         self.print_banner()
+        closing = False
         while True:
             # wait user input
             status = f"{colorama.Fore.GREEN}USB" if self.device_com.isOpen() else f"{colorama.Fore.RED}Offline"
             print(f"[{status}{colorama.Style.RESET_ALL}] chameleon --> ", end="")
-            cmd_str = input().strip()
+            try:
+                cmd_str = input().strip()
+            except EOFError:
+                print("")
+                closing = True
+
+            if closing or cmd_str == "exit":
+                print("Bye, thank you.  ^.^ ")
+                self.device_com.close()
+                sys.exit(996)
 
             # clear screen
             if cmd_str == "clear":
@@ -162,10 +172,6 @@ class ChameleonCLI:
                 else:
                     print("No screen clear implement")
                 continue
-
-            if cmd_str == "exit":
-                print("Bye, thank you.  ^.^ ")
-                sys.exit(996)
 
             # parse cmd
             cmd_map, args_str = self.parse_cli_cmd(cmd_str)

@@ -52,6 +52,7 @@ class ChameleonCom:
         self.serial_instance: serial.Serial = None
         self.send_data_queue = queue.Queue()
         self.wait_response_map = {}
+        self.event_closing = threading.Event()
 
     def isOpen(self):
         """
@@ -83,6 +84,7 @@ class ChameleonCom:
             self.send_data_queue.queue.clear()
             self.wait_response_map.clear()
             # Start a sub thread to process data
+            self.event_closing.clear()
             threading.Thread(target=self.thread_data_receive, ).start()
             threading.Thread(target=self.thread_data_transfer, ).start()
             threading.Thread(target=self.thread_check_timeout, ).start()
@@ -115,6 +117,7 @@ class ChameleonCom:
             Close chameleon and clear variable
         :return:
         """
+        self.event_closing.set()
         try:
             self.serial_instance.close()
         except:
@@ -140,7 +143,8 @@ class ChameleonCom:
             try:
                 data_bytes = self.serial_instance.read()
             except Exception as e:
-                print(f"Serial Error {e}, thread for receiver exit.")
+                if not self.event_closing.is_set():
+                    print(f"Serial Error {e}, thread for receiver exit.")
                 self.close()
                 break
             if len(data_bytes) > 0:
