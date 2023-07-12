@@ -4,6 +4,13 @@
 
 ![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/resource/picture/Header.png)
 
+# ChameleonUltra Authorised Distributors
+
+Europe: [Lab401]: https://lab401.com/
+United States: [Hackerwarehouse]: https://hackerwarehouse.com/
+UK: [KSEC]: https://cyborg.ksecsolutions.com/
+Anywhere else: [Sneaktechnology.com]: https://sneaktechnology.com/ / [Aliexpress by RRG]: https://proxgrind.aliexpress.com/store/1101312023
+
 # ChameleonUltra
 
 Why not keep using ATxmega128?
