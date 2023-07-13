@@ -6,9 +6,9 @@
 
 # ChameleonUltra Authorised Distributors
 
-Europe: [Lab401]: https://lab401.com/
+Europe: [Lab401]: (https://lab401.com/)
 
-United States: [Hackerwarehouse]: https://hackerwarehouse.com/
+United States: [Hackerwarehouse]: [https://hackerwarehouse.com/](url)
 
 UK: [KSEC]: https://cyborg.ksecsolutions.com/
 
