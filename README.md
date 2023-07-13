@@ -6,13 +6,13 @@
 
 # ChameleonUltra Authorised Distributors
 
-Europe: [!][Lab401][https://lab401.com/](url)
+Europe: [Lab401](https://lab401.com/)
 
-United States: [Hackerwarehouse]: [https://hackerwarehouse.com/](url)
+United States: [Hackerwarehouse](https://hackerwarehouse.com/)
 
-UK: [KSEC]: https://cyborg.ksecsolutions.com/
+UK: [KSEC](https://cyborg.ksecsolutions.com/)
 
-Anywhere else: [Sneaktechnology.com]: https://sneaktechnology.com/ / [Aliexpress by RRG]: https://proxgrind.aliexpress.com/store/1101312023
+Anywhere else: [Sneaktechnology.com](https://sneaktechnology.com) / [Aliexpress by RRG](https://proxgrind.aliexpress.com/store/1101312023)
 
 # ChameleonUltra
 
