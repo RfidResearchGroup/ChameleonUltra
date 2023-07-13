@@ -6,7 +6,7 @@
 
 # ChameleonUltra Authorised Distributors
 
-Europe: [https://lab401.com/](url)
+Europe: [https://lab401.com/](Lab401)
 
 United States: [Hackerwarehouse]: [https://hackerwarehouse.com/](url)
 
