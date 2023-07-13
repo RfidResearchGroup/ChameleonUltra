@@ -52,9 +52,26 @@ jobs:
         env:
           repo: ${{ github.repository }}
         run: |
-          docker run --rm -v ${PWD}/firmware:/workdir -e CURRENT_DEVICE_TYPE=${{ matrix.device_type }} ghcr.io/${repo,,}-fw-builder@${{ needs.build_fw_builder.outputs.image_hash }} ./build.sh
+          docker run --rm -v ${PWD}:/workdir -e CURRENT_DEVICE_TYPE=${{ matrix.device_type }} ghcr.io/${repo,,}-fw-builder@${{ needs.build_fw_builder.outputs.image_hash }} firmware/build.sh
       - name: Upload built binaries
         uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.device_type }}-firmware
-          path: firmware/objects/*.hex 
+          path: firmware/objects/*.hex
+      - name: Unzip dfu images
+        run: |
+          sudo chown -R $USER:$USER firmware/objects
+          mkdir firmware/objects/dfu-app
+          mkdir firmware/objects/dfu-full
+          unzip firmware/objects/dfu-app.zip -d firmware/objects/dfu-app
+          unzip firmware/objects/dfu-full.zip -d firmware/objects/dfu-full
+      - name: Upload dfu app image
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.device_type }}-dfu-app
+          path: firmware/objects/dfu-app/*
+      - name: Upload dfu full image
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.device_type }}-dfu-full
+          path: firmware/objects/dfu-full/*
