@@ -4,7 +4,6 @@ TARGETS          := application
 $(OUTPUT_DIRECTORY)/application.out: \
   LINKER_SCRIPT  := application.ld
 
-
 # Source files common to all targets
 SRC_FILES += \
   $(SRC_COMMON)/hw_connect.c \
@@ -309,9 +308,6 @@ CFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
 # keep every function in a separate section, this allows linker to discard unused ones
 CFLAGS += -ffunction-sections -fdata-sections -fno-strict-aliasing
 CFLAGS += -fno-builtin -fshort-enums
-# fix newer compilator versions
-CFLAGS += -Wno-error=array-bounds
-CFLAGS += -Wno-error=sizeof-array-div
 
 # C++ flags common to all targets
 CXXFLAGS += $(OPT)
@@ -367,6 +363,15 @@ TEMPLATE_PATH := $(SDK_ROOT)/components/toolchain/gcc
 
 include ../Makefile.defs
 include $(TEMPLATE_PATH)/Makefile.common
+
+# tolerate warnings in newer gcc versions
+# need to be called after $(TEMPLATE_PATH)/Makefile.common
+CC_VERSION = $(shell $(CC) -dumpversion 2>/dev/null|sed 's/\..*//')
+CC_VERSION := $(or $(strip $(CC_VERSION)),0)
+CFLAGS += -Wno-error=array-bounds
+ifeq ($(shell expr $(CC_VERSION) \>= 12), 1)
+    CFLAGS += -Wno-error=sizeof-array-div
+endif
 
 $(foreach target, $(TARGETS), $(call define_target, $(target)))
 
