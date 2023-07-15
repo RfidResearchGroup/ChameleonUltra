@@ -935,9 +935,7 @@ class HWSlotOpenAll(DeviceRequiredUnit):
         lf_type = chameleon_cmd.TagSpecificType.TAG_TYPE_EM410X
 
         # set all slot
-        for slot in range(8):
-            # the slot not from 0 offset, so we can inc 1.
-            slot = slot + 1
+        for slot in range(1,9):
             print(f' Slot{slot} setting...')
             # first to set tag type
             self.cmd_positive.set_slot_tag_type(slot, hf_type)
