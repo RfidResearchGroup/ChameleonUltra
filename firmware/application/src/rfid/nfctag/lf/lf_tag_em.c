@@ -42,8 +42,6 @@ static volatile bool m_is_lf_emulating = false;
 const nrfx_timer_t m_timer_send_id = NRFX_TIMER_INSTANCE(3);
 // 缓存标签类型
 static tag_specific_type_t m_tag_type = TAG_TYPE_UNKNOWN;
-// 当前是否需要发送重新进入LF状态的第二个沿
-static bool m_is_send_reboardcast_last_edge;
 
 /**
  * @brief 将EM410X的卡号转为U64的内存布局，计算奇偶校验位
@@ -131,46 +129,39 @@ void timer_ce_handler(nrf_timer_event_t event_type, void* p_context) {
         // 因为我们配置的是使用CC通道2，所以事件回调
         // 函数中判断NRF_TIMER_EVENT_COMPARE0事件
 		case NRF_TIMER_EVENT_COMPARE2: {
-            if(m_is_send_reboardcast_last_edge){
-                m_is_send_reboardcast_last_edge = false;
-                ANT_TO_MOD();
-            }else{
-                if (m_is_send_first_edge) {
-                    if (GETBIT(m_id_bit_data, m_bit_send_position)) {
-                        // 发送 1 的第一个沿
-                        ANT_TO_MOD();
-                    } else {
-                        // 发送 0 的第一个沿
-                        ANT_NO_MOD();
-                    }
-                    m_is_send_first_edge = false;   // 下次发送第二个沿
+            if (m_is_send_first_edge) {
+                if (GETBIT(m_id_bit_data, m_bit_send_position)) {
+                    // 发送 1 的第一个沿
+                    ANT_TO_MOD();
                 } else {
-                    if (GETBIT(m_id_bit_data, m_bit_send_position)) {
-                        // 发送 1 的第二个沿
-                        ANT_NO_MOD();
-                    } else {
-                        // 发送 0 的第二个沿
-                        ANT_TO_MOD();
-                    }
-                    m_is_send_first_edge = true;    // 下次发送第一个沿
-                    if (++m_bit_send_position >= LF_125KHZ_EM410X_BIT_SIZE) {
-                        m_bit_send_position = 0;    // 广播一次成功，bit位置归零
-                        ++m_send_id_count;          // 统计广播次数
-                    }
+                    // 发送 0 的第一个沿
+                    ANT_NO_MOD();
+                }
+                m_is_send_first_edge = false;   // 下次发送第二个沿
+            } else {
+                if (GETBIT(m_id_bit_data, m_bit_send_position)) {
+                    // 发送 1 的第二个沿
+                    ANT_NO_MOD();
+                } else {
+                    // 发送 0 的第二个沿
+                    ANT_TO_MOD();
+                }
+                m_is_send_first_edge = true;    // 下次发送第一个沿
+                if (++m_bit_send_position >= LF_125KHZ_EM410X_BIT_SIZE) {
+                    m_bit_send_position = 0;    // 广播一次成功，bit位置归零
+                    ++m_send_id_count;          // 统计广播次数
                 }
             }
+
             // 如果广播次数超过上限次数，则重新比较场状态，根据新的场状态选择是否继续模拟标签
             if (m_send_id_count >= LF_125KHZ_BORADCAST_MAX) {
                 m_send_id_count = 0;                                        // 广播次数达到上限，重新识别场状态并且重新统计广播次数
-                ANT_NO_MOD();                                               // 确保天线不短路而导致无法获得RSSI状态
                 nrfx_timer_disable(&m_timer_send_id);                       // 关闭广播场的定时器
-
                 // 我们不需要任何的事件，仅仅需要检测一下场的状态
                 NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
                 if (lf_is_field_exists()) {
                     nrf_drv_lpcomp_disable();
                     nrfx_timer_enable(&m_timer_send_id);                    // 打开广播场的定时器，继续模拟
-                    m_is_send_reboardcast_last_edge = true;                 // 如果继续的话需要发送0的后一个沿
                 } else {
                     // 开启事件中断，让下次场事件可以正常出入
                     g_is_tag_emulating = false;                             // 重设模拟中的标志位
@@ -221,7 +212,6 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
         m_send_id_count = 0;
         m_bit_send_position = 0;
         m_is_send_first_edge = true;
-        m_is_send_reboardcast_last_edge = false;
 
         // 开启精准的硬件定时器去广播卡号
         nrfx_timer_enable(&m_timer_send_id);
