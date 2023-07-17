@@ -629,14 +629,22 @@ class HFMFELoad(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
         parser.add_argument('-f', '--file', type=str, required=True, help="file path")
-        parser.add_argument('-t', '--type', type=str, required=True, help="content type", choices=['bin', 'hex'])
+        parser.add_argument('-t', '--type', type=str, required=False, help="content type", choices=['bin', 'hex'])
         return parser
 
     # hf mf eload -f test.bin -t bin
     # hf mf eload -f test.eml -t hex
     def on_exec(self, args: argparse.Namespace):
         file = args.file
-        content_type = args.type
+        if args.type is None:
+            if file.endswith('.bin'):
+                content_type = 'bin'
+            elif file.endswith('.eml'):
+                content_type = 'hex'
+            else:
+                raise Exception("Unknown file format, Specify content type with -t option")
+        else:
+            content_type = args.type
         buffer = bytearray()
 
         with open(file, mode='rb') as fd:
