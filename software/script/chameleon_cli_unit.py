@@ -197,7 +197,7 @@ class HWConnect(BaseCLIUnit):
             if args.port is None: # Chameleon Autodedect if no port is supplied
                 # loop through all ports and find chameleon
                 for port in serial.tools.list_ports.comports():
-                    if port.manufacturer.startswith("Proxgrind") and port.description.startswith("Chameleon"):
+                    if port.vid == 0x6868:
                         args.port = port.device
                         break
                 if args.port is None: # If no chameleon was found, exit
