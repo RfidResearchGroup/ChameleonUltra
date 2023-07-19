@@ -24,6 +24,7 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/nfctag/hf/crypto1_helper.c \
   $(PROJ_DIR)/rfid/nfctag/hf/nfc_14a.c \
   $(PROJ_DIR)/rfid/nfctag/hf/nfc_mf1.c \
+  $(PROJ_DIR)/rfid/nfctag/hf/nfc_ntag.c \
   $(PROJ_DIR)/rfid/nfctag/lf/lf_tag_em.c \
   $(PROJ_DIR)/utils/dataframe.c \
   $(PROJ_DIR)/utils/fds_util.c \
