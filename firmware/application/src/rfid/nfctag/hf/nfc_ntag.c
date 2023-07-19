@@ -67,7 +67,7 @@ NRF_LOG_MODULE_REGISTER();
 // 0x13 ntag216
 const uint8_t ntagVersion[8] = {0x00, 0x04, 0x04, 0x02, 0x01, 0x00, 0x11, 0x03};
 /* pwd auth for amiibo */
-const uint8_t ntagPwdOK[2] = {0x80, 0x80};
+uint8_t ntagPwdOK[2] = {0x80, 0x80};
 
 // 指向标签信息的数据结构指针
 static nfc_tag_ntag_information_t* m_tag_information = NULL;
@@ -143,7 +143,7 @@ void nfc_tag_ntag_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                 nfc_tag_14a_tx_nbit_delay_window(NAK_INVALID_OPERATION_TBIV, 4);
             }
             break;
-        case CMD_FAST_READ:
+        case CMD_FAST_READ: {
             uint8_t end_block_num = p_data[2];
             if ((block_num > end_block_num) || (block_num >= get_block_max_by_tag_type(m_tag_type)) || (end_block_num >= get_block_max_by_tag_type(m_tag_type))) {
                 nfc_tag_14a_tx_nbit_delay_window(NAK_INVALID_OPERATION_TBV, 4);
@@ -154,6 +154,7 @@ void nfc_tag_ntag_state_handler(uint8_t* p_data, uint16_t szDataBits) {
             }
             nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, (end_block_num - block_num + 1) * NFC_TAG_NTAG_DATA_SIZE, true);
             break;
+        }
         case CMD_WRITE:
             // TODO
             nfc_tag_14a_tx_nbit_delay_window(ACK_VALUE, 4);
@@ -161,7 +162,7 @@ void nfc_tag_ntag_state_handler(uint8_t* p_data, uint16_t szDataBits) {
         case CMD_COMPAT_WRITE:
             // TODO
             break;
-        case CMD_PWD_AUTH:
+        case CMD_PWD_AUTH: {
             /* TODO: IMPLEMENT COUNTER AUTHLIM */
             uint8_t Password[4];
             memcpy(Password, m_tag_information->memory[get_block_cfg_by_tag_type(m_tag_type) + CONF_PASSWORD_OFFSET], 4);
@@ -179,6 +180,7 @@ void nfc_tag_ntag_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                 nfc_tag_14a_tx_bytes(m_tag_information->memory[get_block_cfg_by_tag_type(m_tag_type) + CONF_PASSWORD_OFFSET], 2, true);
             }
             break;
+        }
         case CMD_READ_SIG:
             memset(m_tag_tx_buffer.tx_buffer, 0xCA, SIGNATURE_LENGTH);
             nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, SIGNATURE_LENGTH, true);
