@@ -28,15 +28,15 @@ void get_fds_map_by_slot_auto_inc_id(uint16_t key, uint16_t id, uint8_t slot, ta
 
 
 /**
- * 根据卡槽和卡槽中指定的场类型获得其在FDS中对应的数据的KEY和ID
+ * 鏍规嵁鍗℃Ы鍜屽崱妲戒腑鎸囧畾鐨勫満绫诲瀷鑾峰緱鍏跺湪FDS涓搴旂殑鏁版嵁鐨凨EY鍜孖D
  */
 void get_fds_map_by_slot_sense_type_for_dump(uint8_t slot, tag_sense_type_t sense_type, fds_slot_record_map_t* map) {
-    // 根据 @see FDS_SLOT_TAG_DUMP_FILE_KEY 的约定，每个slot以其为起点，每个slot都有其单独的key的record，并且每个slot中独特的场类型也有一个数据的id
+    // 鏍规嵁 @see FDS_SLOT_TAG_DUMP_FILE_KEY 鐨勭害瀹氾紝姣忎釜slot浠ュ叾涓鸿捣鐐癸紝姣忎釜slot閮芥湁鍏跺崟鐙殑key鐨剅ecord锛屽苟涓旀瘡涓猻lot涓嫭鐗圭殑鍦虹被鍨嬩篃鏈変竴涓暟鎹殑id
     get_fds_map_by_slot_auto_inc_id(FDS_SLOT_TAG_DUMP_FILE_KEY, FDS_SLOT_TAG_DUMP_FILE_ID, slot, sense_type, map);
 }
 
 /**
- * 根据卡槽和卡槽中指定的场类型获得其在FDS中对应的数据的KEY和ID
+ * 鏍规嵁鍗℃Ы鍜屽崱妲戒腑鎸囧畾鐨勫満绫诲瀷鑾峰緱鍏跺湪FDS涓搴旂殑鏁版嵁鐨凨EY鍜孖D
  */
 void get_fds_map_by_slot_sense_type_for_nick(uint8_t slot, tag_sense_type_t sense_type, fds_slot_record_map_t* map) {
     get_fds_map_by_slot_auto_inc_id(FDS_SLOT_TAG_NICK_NAME_KEY, FDS_SLOT_TAG_NICK_NAME_ID, slot, sense_type, map);

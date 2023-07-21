@@ -16,12 +16,12 @@ typedef struct {
 	uint64_t ks_list;
 } DarksideParam;
 
-// ×ª»»×Ö·û´®ÎªU32ÀàĞÍ
+// è½¬æ¢å­—ç¬¦ä¸²ä¸ºU32ç±»å‹
 uint64_t atoui(const char* str)
 {
 	uint64_t result = 0, i = 0;
 	char* tmp = NULL;
-	for (i = 0; isspace(str[i]) && i < strlen(str); i++)//Ìø¹ı¿Õ°×·û;    
+	for (i = 0; isspace(str[i]) && i < strlen(str); i++)//è·³è¿‡ç©ºç™½ç¬¦;    
 		;
 	tmp = str + i;
 	while (*tmp)
@@ -41,7 +41,7 @@ void num_to_bytes(uint64_t n, uint32_t len, uint8_t* dest)
 }
 
 int main(int argc, char* argv[]) {
-	// ³õÊ¼»¯UID
+	// åˆå§‹åŒ–UID
     uint32_t uid = (uint32_t)atoui(argv[1]);
 	uint32_t count = 0, i = 0;
 	uint32_t keycount = 0;
@@ -68,7 +68,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	for (i = 0; i < count; i++) {
-		// ³õÊ¼»¯NT, NR, AR
+		// åˆå§‹åŒ–NT, NR, AR
 		uint32_t nt = dps[i].nt;
 		uint32_t nr = dps[i].nr;
 		uint32_t ar = dps[i].ar;
@@ -85,7 +85,7 @@ int main(int argc, char* argv[]) {
 		printf("AR = %"PRIu32"\r\n", ar);
 		*/
 
-		// ¿ªÊ¼½âÃÜ
+		// å¼€å§‹è§£å¯†
 		keycount = nonce2key(uid, nt, nr, ar, par_list, ks_list, &keylist);
 
 		if (keycount == 0) {

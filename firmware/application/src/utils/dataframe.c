@@ -44,11 +44,11 @@ static data_frame_tx_t m_frame_tx_buf_info = {
 
 
 /**
- * @brief Êı¾İ°ü´´½¨£¬½«´´½¨Ö®ºóµÄÊı¾İ°ü·Åµ½»º³åÇøÖĞ£¬µÈ´ı·¢ËÍÍê±ÏÖ®ºóÉèÖÃ·Çbusy×´Ì¬
- * @param cmd: Ö¸ÁîÓ¦´ğ
- * @param status: Ó¦´ğ×´Ì¬
- * @param length: Ó¦´ğÊı¾İ³¤¶È
- * @param data: Ó¦´ğÊı¾İ
+ * @brief æ•°æ®åŒ…åˆ›å»ºï¼Œå°†åˆ›å»ºä¹‹åçš„æ•°æ®åŒ…æ”¾åˆ°ç¼“å†²åŒºä¸­ï¼Œç­‰å¾…å‘é€å®Œæ¯•ä¹‹åè®¾ç½®ébusyçŠ¶æ€
+ * @param cmd: æŒ‡ä»¤åº”ç­”
+ * @param status: åº”ç­”çŠ¶æ€
+ * @param length: åº”ç­”æ•°æ®é•¿åº¦
+ * @param data: åº”ç­”æ•°æ®
  */
 data_frame_tx_t* data_frame_make(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t lrc_tx = 0x00;
@@ -94,9 +94,9 @@ void data_frame_reset(void) {
 }
 
 /**
- * @brief Êı¾İ°ü½ÓÊÕ£¬ÓÃÓÚ½ÓÊÕ·¢ËÍ¹ıÀ´µÄÊı¾İ°ü²¢ÇÒ½øĞĞÆ´½Ó´¦Àí
- * @param data: ½ÓÊÕµ½µÄ×Ö½ÚÊı×é
- * @param length: ½ÓÊÕµ½µÄ×Ö½ÚÊı×éµÄ³¤¶È
+ * @brief æ•°æ®åŒ…æ¥æ”¶ï¼Œç”¨äºæ¥æ”¶å‘é€è¿‡æ¥çš„æ•°æ®åŒ…å¹¶ä¸”è¿›è¡Œæ‹¼æ¥å¤„ç†
+ * @param data: æ¥æ”¶åˆ°çš„å­—èŠ‚æ•°ç»„
+ * @param length: æ¥æ”¶åˆ°çš„å­—èŠ‚æ•°ç»„çš„é•¿åº¦
  */
 void data_frame_receive(uint8_t *data, uint16_t length) {
     // buffer wait process
@@ -173,9 +173,9 @@ void data_frame_receive(uint8_t *data, uint16_t length) {
 }
 
 /**
- * @brief Êı¾İ°ü´¦Àí£¬µ±½ÓÊÕµ½µÄÊı¾İĞÎ³ÉÁËÒ»¸öÍêÕûµÄÖ¡Ö®ºó£¬
- *          ½«»áÍ¨¹ı´Ëº¯Êı·Ö·¢´¦ÀíÈÎÎñ£¬´Ëº¯Êı»á»Øµ÷Í¨ÖªÊı¾İ´¦ÀíÕß
- *          Èç¹ûÊı¾İ´¦ÀíÊÇºÄÊ±²Ù×÷£¬ÔòĞèÒª½«´Ëº¯Êı·ÅÔÚmainÑ­»·ÖĞµ÷ÓÃ
+ * @brief æ•°æ®åŒ…å¤„ç†ï¼Œå½“æ¥æ”¶åˆ°çš„æ•°æ®å½¢æˆäº†ä¸€ä¸ªå®Œæ•´çš„å¸§ä¹‹åï¼Œ
+ *          å°†ä¼šé€šè¿‡æ­¤å‡½æ•°åˆ†å‘å¤„ç†ä»»åŠ¡ï¼Œæ­¤å‡½æ•°ä¼šå›è°ƒé€šçŸ¥æ•°æ®å¤„ç†è€…
+ *          å¦‚æœæ•°æ®å¤„ç†æ˜¯è€—æ—¶æ“ä½œï¼Œåˆ™éœ€è¦å°†æ­¤å‡½æ•°æ”¾åœ¨mainå¾ªç¯ä¸­è°ƒç”¨
  */
 void data_frame_process(void) {
     // check if data frame 
@@ -191,7 +191,7 @@ void data_frame_process(void) {
 }
 
 /**
- * @brief Êı¾İ°ü´¦Àí»Øµ÷×¢²á
+ * @brief æ•°æ®åŒ…å¤„ç†å›è°ƒæ³¨å†Œ
  */
 void on_data_frame_complete(data_frame_cbk_t callback) {
     m_frame_process_cbk = callback;

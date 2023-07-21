@@ -1,7 +1,7 @@
 #include "data_utils.h"
 #include <ctype.h>
 
-//ÏòrawĞ´Èë2bitÊı¾İ£¬datab´æ0bit£¬dataa´æ1bit
+//å‘rawå†™å…¥2bitæ•°æ®ï¼Œdatabå­˜0bitï¼Œdataaå­˜1bit
 void writebit(uint8_t *dataa, uint8_t *datab, uint8_t pos, uint8_t adata)
 {
 	if (adata >= 4)
@@ -16,7 +16,7 @@ void writebit(uint8_t *dataa, uint8_t *datab, uint8_t pos, uint8_t adata)
 	getbit(adata, 0) ? setbit(datab[aimbyte], aimbit) : clrbit(datab[aimbyte], aimbit);
 }
 
-//Êä³örawµÄ2bit×éºÏÊı¾İ
+//è¾“å‡ºrawçš„2bitç»„åˆæ•°æ®
 uint8_t readbit(uint8_t *dataa, uint8_t *datab, uint8_t pos)
 {
 	static uint8_t aimbyte = 0;
@@ -28,7 +28,7 @@ uint8_t readbit(uint8_t *dataa, uint8_t *datab, uint8_t pos)
 		(getbit(datab[aimbyte], aimbit)));
 }
 
-//ÏòrawĞ´Èë2bitÊı¾İ(´ó¶Ë·½·¨£¬Ã¿¸öbyteµÄµÚ8Î»Ğ´Êı¾İµÄµÚ1Î»)£¬datab´æ0bit£¬dataa´æ1bit
+//å‘rawå†™å…¥2bitæ•°æ®(å¤§ç«¯æ–¹æ³•ï¼Œæ¯ä¸ªbyteçš„ç¬¬8ä½å†™æ•°æ®çš„ç¬¬1ä½)ï¼Œdatabå­˜0bitï¼Œdataaå­˜1bit
 void writebit_msb(uint8_t *dataa, uint8_t *datab, uint8_t pos, uint8_t adata)
 {
 	if (adata >= 4)
@@ -43,7 +43,7 @@ void writebit_msb(uint8_t *dataa, uint8_t *datab, uint8_t pos, uint8_t adata)
 	getbit(adata, 0) ? setbit(datab[aimbyte], aimbit) : clrbit(datab[aimbyte], aimbit);
 }
 
-//Êä³örawµÄ2bit×éºÏÊı¾İ(´ó¶Ë·½·¨£¬Ã¿¸öbyteµÄµÚ8Î»¶ÁÊı¾İµÄµÚ1Î»)
+//è¾“å‡ºrawçš„2bitç»„åˆæ•°æ®(å¤§ç«¯æ–¹æ³•ï¼Œæ¯ä¸ªbyteçš„ç¬¬8ä½è¯»æ•°æ®çš„ç¬¬1ä½)
 uint8_t readbit_msb(uint8_t *dataa, uint8_t *datab, uint8_t pos)
 {
 	static uint8_t aimbyte = 0;
@@ -55,7 +55,7 @@ uint8_t readbit_msb(uint8_t *dataa, uint8_t *datab, uint8_t pos)
 		(getbit(datab[aimbyte], aimbit)));
 }
 
-//¸ßµÍÎ»·­×ª
+//é«˜ä½ä½ç¿»è½¬
 uint8_t invert_num(uint8_t num)
 {
 	uint8_t temp = 0, sh = 0xf;
@@ -71,7 +71,7 @@ uint8_t invert_num(uint8_t num)
 	return num;
 }
 
-//Ô­Ê¼Êı¾İ×ª»»Îª2±¶³¤¶ÈµÄhex×Ö·ûÊı×é
+//åŸå§‹æ•°æ®è½¬æ¢ä¸º2å€é•¿åº¦çš„hexå­—ç¬¦æ•°ç»„
 void ByteToHexStr(uint8_t *source, uint8_t *dest, uint8_t sourceLen)
 {
 	uint8_t i, highByte, lowByte;
