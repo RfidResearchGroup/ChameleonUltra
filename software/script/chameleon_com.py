@@ -78,7 +78,11 @@ class ChameleonCom:
             finally:
                 if error is not None:
                     raise OpenFailException(error)
-            self.serial_instance.dtr = 1  # must make dtr enable
+            try:
+                self.serial_instance.dtr = 1  # must make dtr enable
+            except Exception as e:
+                # not all serial support dtr, e.g. virtual serial over BLE
+                pass
             self.serial_instance.timeout = 0  # noblock
             # clear variable
             self.send_data_queue.queue.clear()
