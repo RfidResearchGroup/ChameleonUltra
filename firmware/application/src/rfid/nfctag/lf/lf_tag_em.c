@@ -170,6 +170,7 @@ void timer_ce_handler(nrf_timer_event_t event_type, void* p_context) {
                     m_is_lf_emulating = false;
                     TAG_FIELD_LED_OFF()                                     // 确保关闭LF的场状态的指示灯
                     NRF_LPCOMP->INTENSET = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
+                    // call sleep_timer_start *after* unsetting g_is_tag_emulating
                     sleep_timer_start(SLEEP_DELAY_MS_FIELD_125KHZ_LOST);    // 启动进入休眠的定时器
                     NRF_LOG_INFO("LF FIELD LOST");
                 }
