@@ -416,7 +416,7 @@ class BaseChameleonCMD:
             重启进入DFU模式(bootloader)
         :return:
         """
-        return self.device.send_cmd_auto(DATA_CMD_ENTER_BOOTLOADER, 0x00, None)
+        return self.device.send_cmd_auto(DATA_CMD_ENTER_BOOTLOADER, 0x00, close=True)
 
 
 class NegativeResponseError(Exception):
