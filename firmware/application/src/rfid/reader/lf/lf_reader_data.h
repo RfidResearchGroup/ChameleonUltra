@@ -9,7 +9,7 @@
  extern "C" {
 #endif
 
-typedef void(*RIO_CALLBACK_S)(void); // 调用函数格式
+typedef void(*RIO_CALLBACK_S)(void); // 璋冪敤鍑芥暟鏍煎紡
 
 void register_rio_callback(RIO_CALLBACK_S P);
 void blank_function(void);

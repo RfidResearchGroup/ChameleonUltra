@@ -196,20 +196,20 @@ __INLINE uint32_t map(uint32_t x, uint32_t in_min, uint32_t in_max, uint32_t out
 	return (uint32_t)((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min);
 }
 
-//µç³ØµçÑ¹µ½°Ù·Ö±È¼ÆËã
+//ç”µæ± ç”µå‹åˆ°ç™¾åˆ†æ¯”è®¡ç®—
 uint32_t BATVOL2PERCENT(uint16_t VOL)
 {
 	//100%	4.20V	1
-	//90 %	4.06V		80%-100%	°×
+	//90 %	4.06V		80%-100%	ç™½
 	//80 %	3.98V	1
-	//70 %	3.92V		60%-80%		°×
+	//70 %	3.92V		60%-80%		ç™½
 	//60 %	3.87V	1
-	//50 %	3.82V		40%-60%		°×
+	//50 %	3.82V		40%-60%		ç™½
 	//40 %	3.79V	1
-	//30 %	3.77V		20%-40%		°×
+	//30 %	3.77V		20%-40%		ç™½
 	//20 %	3.74V	1
-	//10 %	3.68V		5%-20%		ºì
-	//5 %	3.45V	1				¹Ø»ú
+	//10 %	3.68V		5%-20%		çº¢
+	//5 %	3.45V	1				å…³æœº
 	//0 %	3.00V
 	//#define P100VOL	4200
 	//#define P80VOL	3980
@@ -219,16 +219,16 @@ uint32_t BATVOL2PERCENT(uint16_t VOL)
 	//#define P5VOL	3450
 	
 	//100%	4.20V	1
-	//90 %	4.00V		80%-100%	°×
+	//90 %	4.00V		80%-100%	ç™½
 	//80 %	3.89V	1
-	//70 %	3.79V		60%-80%		°×
+	//70 %	3.79V		60%-80%		ç™½
 	//60 %	3.70V	1
-	//50 %	3.62V		40%-60%		°×
+	//50 %	3.62V		40%-60%		ç™½
 	//40 %	3.57V	1
-	//30 %	3.53V		20%-40%		°×
+	//30 %	3.53V		20%-40%		ç™½
 	//20 %	3.51V	1
-	//10 %	3.46V		5%-20%		ºì
-	//5 %	3.43V	1				¹Ø»ú
+	//10 %	3.46V		5%-20%		çº¢
+	//5 %	3.43V	1				å…³æœº
 	//0 %	3.00V
 #define P100VOL	4200
 #define P80VOL	3890
@@ -650,12 +650,12 @@ void create_battery_timer(void) {
  * @brief Function for init ble slave.
  */
 void ble_slave_init(void) {
-    adc_configure();                    // ADC³õÊ¼»¯
-    create_battery_timer();             // ´´½¨µç³ØµçÁ¿¸üĞÂ¶¨Ê±Æ÷
-    ble_stack_init();                   // BLEĞ­ÒéÕ»³õÊ¼»¯
-    gap_params_init();                  // GAP²ÎÊı³õÊ¼»¯
-    gatt_init();                        // GATTĞ­Òé³õÊ¼»¯
-    services_init();                    // ·şÎñÌØÕ÷³õÊ¼»¯
-    advertising_init();                 // ¹ã²¥²ÎÊı³õÊ¼»¯
-    conn_params_init();                 // Á¬½Ó²ÎÊı³õÊ¼»¯
+    adc_configure();                    // ADCåˆå§‹åŒ–
+    create_battery_timer();             // åˆ›å»ºç”µæ± ç”µé‡æ›´æ–°å®šæ—¶å™¨
+    ble_stack_init();                   // BLEåè®®æ ˆåˆå§‹åŒ–
+    gap_params_init();                  // GAPå‚æ•°åˆå§‹åŒ–
+    gatt_init();                        // GATTåè®®åˆå§‹åŒ–
+    services_init();                    // æœåŠ¡ç‰¹å¾åˆå§‹åŒ–
+    advertising_init();                 // å¹¿æ’­å‚æ•°åˆå§‹åŒ–
+    conn_params_init();                 // è¿æ¥å‚æ•°åˆå§‹åŒ–
 }
