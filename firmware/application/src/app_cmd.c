@@ -73,6 +73,12 @@ data_frame_tx_t* cmd_processor_get_device_chip_id(uint16_t cmd, uint16_t status,
     return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 8, (uint8_t*)(&chip_id[0]));
 }
 
+data_frame_tx_t* cmd_processor_get_device_address(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint32_t device_address[2];
+    device_address[0] = NRF_FICR->DEVICEADDR[0];
+    device_address[1] = NRF_FICR->DEVICEADDR[1];
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 6, (uint8_t*)(&device_address[0]));
+}
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
@@ -517,6 +523,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_DEVICE_MODE,              NULL,                        cmd_processor_get_device_mode,               NULL                   },
     {    DATA_CMD_ENTER_BOOTLOADER,             NULL,                        cmd_processor_enter_bootloader,              NULL                   },
     {    DATA_CMD_GET_DEVICE_CHIP_ID,           NULL,                        cmd_processor_get_device_chip_id,            NULL                   },
+    {    DATA_CMD_GET_DEVICE_ADDRESS,           NULL,                        cmd_processor_get_device_address,            NULL                   },
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 

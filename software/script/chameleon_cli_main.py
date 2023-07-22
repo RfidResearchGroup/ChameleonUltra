@@ -56,6 +56,14 @@ class ChameleonCLI:
         self.cmd_maps = {
             'hw': {
                 'connect': new_uint(chameleon_cli_unit.HWConnect, "Connect to chameleon by serial port"),
+                'chipid': {
+                    'get': new_uint(chameleon_cli_unit.HWChipIdGet, "Get device chipset ID"),
+                    'help': "Device chipsed ID get"
+                },
+                'address': {
+                    'get': new_uint(chameleon_cli_unit.HWAddressGet, "Get device address (used with Bluetooth)"),
+                    'help': "Device address get"
+                },
                 'mode': {
                     'set': new_uint(chameleon_cli_unit.HWModeSet, "Change device mode to tag reader or tag emulator"),
                     'get': new_uint(chameleon_cli_unit.HWModeGet, "Get current device mode"),

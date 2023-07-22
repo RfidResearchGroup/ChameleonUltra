@@ -35,22 +35,31 @@ set -xe
 
 (
   cd objects
-  nrfutil settings generate --family NRF52840 \
-    --application application.hex --application-version $application_version \
-    --bootloader-version $bootloader_version --bl-settings-version 2 settings.hex
-  mergehex --merge bootloader.hex settings.hex --output bootloader_merged.hex
-  mergehex --merge bootloader_merged.hex application.hex \
-    ../nrf52_sdk/components/softdevice/${softdevice}/hex/${softdevice}_nrf52_${softdevice_version}_softdevice.hex --output fullimage.hex
-  nrfutil pkg generate \
-    --application application.hex --application-version $application_version \
-    --bootloader bootloader_merged.hex --bootloader-version $bootloader_version \
-    --softdevice ../nrf52_sdk/components/softdevice/${softdevice}/hex/${softdevice}_nrf52_${softdevice_version}_softdevice.hex --sd-id ${softdevice_id} \
-    --sd-req ${softdevice_id} --hw-version $hw_version \
-    --key-file ../../resource/dfu_key/chameleon.pem \
+  
+  nrfutil nrf5sdk-tools pkg generate \
+    --hw-version 0 \
+    --bootloader  bootloader.hex   --bootloader-version  $bootloader_version  --key-file ../../resource/dfu_key/chameleon.pem \
+    --application application.hex  --application-version $application_version --app-boot-validation NO_VALIDATION \
+    --softdevice  ../nrf52_sdk/components/softdevice/${softdevice}/hex/${softdevice}_nrf52_${softdevice_version}_softdevice.hex --sd-req ${softdevice_id} --sd-id ${softdevice_id} --sd-boot-validation NO_VALIDATION \
     dfu-full.zip
-  nrfutil pkg generate \
-    --application application.hex --application-version $application_version \
-    --sd-req ${softdevice_id} --hw-version $hw_version \
-    --key-file ../../resource/dfu_key/chameleon.pem \
+	
+  nrfutil nrf5sdk-tools pkg generate \
+    --hw-version 0 --key-file ../../resource/dfu_key/chameleon.pem \
+    --application application.hex  --application-version $application_version --app-boot-validation NO_VALIDATION \
+    --sd-req ${softdevice_id} \
     dfu-app.zip
+
+  nrfutil nrf5sdk-tools settings generate \
+    --family NRF52840 \
+    --application application.hex --application-version $application_version \
+    --bootloader-version $bootloader_version --bl-settings-version 2 \
+    settings.hex
+
+  mergehex \
+    --merge \
+      bootloader.hex \
+      settings.hex \
+      application.hex \
+      ../nrf52_sdk/components/softdevice/${softdevice}/hex/${softdevice}_nrf52_${softdevice_version}_softdevice.hex \
+    --output fullimage.hex
 )
