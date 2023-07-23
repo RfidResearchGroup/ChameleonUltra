@@ -48,11 +48,6 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
-      - name: Get upload URL
-        shell: bash
-        run: |
-          upload_url=$(curl -sL https://api.github.com/repos/actions/checkout/releases/latest | jq -r '.upload_url')
-          echo UPLOAD_URL=$upload_url >> $GITHUB_ENV
       - name: Build firmware
         env:
           repo: ${{ github.repository }}
