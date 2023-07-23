@@ -236,6 +236,24 @@ class HWModeGet(DeviceRequiredUnit):
         print(f"- Device Mode ( Tag {'Reader' if self.cmd_standard.is_reader_device_mode() else 'Emulator'} )")
 
 
+class HWChipIdGet(DeviceRequiredUnit):
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        return None
+
+    def on_exec(self, args: argparse.Namespace):
+        print(f' - Device chip ID: ' + self.cmd_positive.get_device_chip_id())
+
+
+class HWAddressGet(DeviceRequiredUnit):
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        return None
+
+    def on_exec(self, args: argparse.Namespace):
+        print(f' - Device address: ' + self.cmd_positive.get_device_address())
+
+
 class HF14AScan(ReaderRequiredUint):
     def args_parser(self) -> ArgumentParserNoExit or None:
         pass

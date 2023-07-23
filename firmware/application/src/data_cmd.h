@@ -19,6 +19,7 @@
 #define DATA_CMD_SLOT_DATA_CONFIG_SAVE          (1009)
 #define DATA_CMD_ENTER_BOOTLOADER               (1010)
 #define DATA_CMD_GET_DEVICE_CHIP_ID             (1011)
+#define DATA_CMD_GET_DEVICE_ADDRESS             (1012)
 //
 // ******************************************************************
 

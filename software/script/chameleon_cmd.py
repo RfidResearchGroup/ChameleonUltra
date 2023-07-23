@@ -18,6 +18,7 @@ DATA_CMD_SLOT_DATA_CONFIG_SAVE = 1009
 
 DATA_CMD_ENTER_BOOTLOADER = 1010
 DATA_CMD_GET_DEVICE_CHIP_ID = 1011
+DATA_CMD_GET_DEVICE_ADDRESS = 1012
 
 DATA_CMD_SCAN_14A_TAG = 2000
 DATA_CMD_MF1_SUPPORT_DETECT = 2001
@@ -101,6 +102,12 @@ class BaseChameleonCMD:
         resp = self.device.send_cmd_sync(DATA_CMD_GET_DEVICE_CHIP_ID, 0x00, None)
         return resp.data.hex()
     
+    def get_device_address(self) -> str:
+        """
+            Get device address
+        """
+        resp = self.device.send_cmd_sync(DATA_CMD_GET_DEVICE_ADDRESS, 0x00, None)
+        return resp.data[::-1].hex()
     
 
     def is_reader_device_mode(self) -> bool:
