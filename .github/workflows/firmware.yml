@@ -75,3 +75,62 @@ jobs:
         with:
           name: ${{ matrix.device_type }}-dfu-full
           path: firmware/objects/dfu-full/*
+  create_release:
+    permissions: write-all
+    name: Create Pre-Release with dfu app images
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs:
+      - build_fw
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.run_number }}
+          release_name: Compiled commit ${{ github.sha }}
+          body: |
+            Auto-Generated DFU images
+          draft: false
+          prerelease: true
+      - name: Download Ultra DFU
+        uses: actions/download-artifact@v3
+        with:
+          name: ultra-dfu-app
+          path: dfu-app-artifacts
+      - name: Compress
+        run: |
+          zip --junk-paths -0 -r ./dfu-app-artifacts/dfu-app.zip ./dfu-app-artifacts/*
+      - name: Upload Ultra DFU
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dfu-app-artifacts/dfu-app.zip
+          asset_name: ultra-dfu-app.zip
+          asset_content_type: application/zip
+      - name: Clear
+        run: |
+          rm -rf ./dfu-app-artifacts/
+      - name: Download Lite DFU
+        uses: actions/download-artifact@v3
+        with:
+          name: lite-dfu-app
+          path: dfu-app-artifacts
+      - name: Compress
+        run: |
+          zip --junk-paths -0 -r ./dfu-app-artifacts/dfu-app.zip ./dfu-app-artifacts/*
+      - name: Upload Lite DFU
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dfu-app-artifacts/dfu-app.zip
+          asset_name: lite-dfu-app.zip
+          asset_content_type: application/zip
