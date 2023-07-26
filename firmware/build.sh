@@ -1,7 +1,5 @@
 #!/bin/env bash
 
-# Partially based on informations from https://github.com/RfidResearchGroup/ChameleonUltra/issues/16
-
 if [[ $BASH_SOURCE = */* ]]; then
   cd -- "${BASH_SOURCE%/*}/" || exit
 fi
