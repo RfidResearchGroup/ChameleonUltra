@@ -6,14 +6,15 @@ In this file you can look up how to [install requirements](#Prerequisites-for-co
 
 ### install a cross-compiler
 
-So far, the following compilers have been reported to work fine.
-Download one of them and decompress it. Remember the path where you installed it.
+So far, the following compilers have been reported to work fine.  
+Download one of them and decompress it.  
+Remember the path where you installed it.
 
 - [gcc-arm-none-eabi-10.3-2021.10](https://developer.arm.com/downloads/-/gnu-rm)
 - [arm-gnu-toolchain-12.2.rel1-XXX-arm-none-eabi](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads), e.g. [arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi.tar.xz](https://developer.arm.com/-/media/Files/downloads/gnu/12.2.rel1/binrel/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi.tar.xz) for a x86_64 Linux host
 
-Always use the official versions from ARM, *DO NOT* install `gcc-arm-none-eabi` from Debian/Ubuntu.
-For some unknown reasons, same gcc version from Debian creates a bootloader too large to fit in the allocated flash space.
+Always use the official versions from ARM, *DO NOT* install `gcc-arm-none-eabi` from Debian/Ubuntu.  
+For some unknown reasons, same gcc version from Debian creates a bootloader too large to fit in the allocated flash space.  
 Moreover it does not contain the `gdb` debugger.
 
 ### install make
@@ -266,9 +267,9 @@ Then flash the ST_Link V2
 ```
 stlink-tool src/blackmagic.bin
 ```
-See `src/platforms/stlink/README.md` for more details.
-Unplug/plug.
-Every time you plug the ST-Link, you have to run `stlink-tool` to enable BMP.
+See [src/platforms/stlink/README.md](https://github.com/blackmagic-debug/blackmagic/blob/main/src/platforms/stlink/README.md) for more details.
+Unplug/plug.  
+Every time you plug the ST-Link, you have to run `stlink-tool` to enable BMP.  
 Under linux, it is convenient to install [udev rules](https://github.com/blackmagic-debug/blackmagic/blob/main/driver/README.md#99-blackmagic-plugdevrules) to get aliases `/dev/ttyBmpGdb` and `/dev/ttyBmpTarg`.
 
 Note that using a native ST-Link V2 with BlackMagicProbe "hosted" will not allow to see NRF_LOG messages.
