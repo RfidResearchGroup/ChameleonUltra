@@ -8,7 +8,10 @@ import chameleon_com
 import chameleon_cmd
 import colorama
 import chameleon_cli_unit
-
+import os
+ 
+if os.name == 'posix':
+   import readline
 
 ULTRA = r"""
                                                                 ╦ ╦╦ ╔╦╗╦═╗╔═╗
