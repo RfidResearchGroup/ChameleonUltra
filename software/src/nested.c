@@ -265,7 +265,7 @@ int main(int argc, char* const argv[]) {
 
 	if (keyCount > 0) {
 		for (i = 0; i < keyCount; i++) {
-			printf("Key%d: %llx\r\n", i + 1, keys[i]);
+			printf("Key %d... %" PRIx64 " \r\n", i + 1, keys[i]);
 			fflush(stdout);
 		}
 	}
