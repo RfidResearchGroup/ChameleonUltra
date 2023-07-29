@@ -9,7 +9,7 @@ import chameleon_cmd
 import colorama
 import chameleon_cli_unit
 import os
- 
+
 if os.name == 'posix':
    import readline
 
@@ -169,7 +169,7 @@ class ChameleonCLI:
                 print("")
                 closing = True
 
-            if closing or cmd_str == "exit":
+            if closing or cmd_str == "exit" or cmd_str == "quit" or cmd_str.startswith('q', 0) or cmd_str.startswith('e', 0):
                 print("Bye, thank you.  ^.^ ")
                 self.device_com.close()
                 sys.exit(996)
