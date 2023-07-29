@@ -18,17 +18,13 @@ typedef struct {
 } DarksideParam;
 
 // 转换字符串为U32类型
-uint64_t atoui(const char* str)
-{
-	uint64_t result = 0, i = 0;
-	char* tmp = NULL;
-	for (i = 0; isspace(str[i]) && i < strlen(str); i++)//跳过空白符;    
-		;
-	tmp = str + i;
-	while (*tmp)
-	{
-		result = result * 10 + *tmp - '0';
-		tmp++;
+uint64_t atoui(const char* str) {
+
+	uint64_t result = 0;
+	for (int i = 0; str[i] != '\0'; ++i) {
+		if (str[i] >= '0' && str[i] <= '9') {
+			result = result * 10 + str[i] - '0';
+		}
 	}
 	return result;
 }
@@ -42,6 +38,11 @@ void num_to_bytes(uint64_t n, uint32_t len, uint8_t* dest)
 }
 
 int main(int argc, char* argv[]) {
+
+	if (((argc - 2) % 5) != 0) {
+		printf("Unexcepted param count\n");
+		return EXIT_FAILURE;
+	}
 	// 初始化UID
     uint32_t uid = (uint32_t)atoui(argv[1]);
 	uint32_t count = 0, i = 0;
@@ -50,10 +51,6 @@ int main(int argc, char* argv[]) {
 	DarksideParam* dps = NULL;
 	bool no_key_recover = true;
 
-	if (((argc - 2) % 5) != 0) {
-		printf("Unexcepted param count.");
-		return EXIT_FAILURE;
-	}
 	for (i = 1; i + 5 < argc;) {
 		void *pTmp = realloc(dps, sizeof(DarksideParam) * ++count);
 		if (pTmp == NULL) {
