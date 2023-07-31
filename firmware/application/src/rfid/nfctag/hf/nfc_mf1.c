@@ -3,9 +3,14 @@
 #include "nfc_mf1.h"
 #include "nfc_14a.h"
 #include "hex_utils.h"
-#include "crypto1_helper.h"
 #include "fds_util.h"
 #include "tag_persistence.h"
+
+#ifdef NFC_MF1_FAST_SIM
+#include "mf1_crypto1.h"
+#else
+#include "crypto1_helper.h"
+#endif
 
 #define NRF_LOG_MODULE_NAME tag_mf1
 #include "nrf_log.h"
@@ -188,9 +193,12 @@ static nfc_tag_mf1_tx_buffer_t m_tag_tx_buffer;
 // 保存当前正在模拟的MF1的具体类型
 static tag_specific_type_t m_tag_type;
 
+// Fast simulate is enable, we use internal crypto1 instance from 'mf1_crypto1.c'
+#ifndef NFC_MF1_FAST_SIM
 // mifare classic crypto1
 static struct Crypto1State mpcs = {0, 0};
 static struct Crypto1State *pcs = &mpcs;
+#endif
 
 // 定义指向存放侦测的数据的buffer
 // 将此数据放置在休眠保留的RAM中，以节约写入到Flash的时间和空间
@@ -402,11 +410,13 @@ static bool check_block_max_overflow(uint8_t block) {
     return block > block_max;
 }
 
+#ifndef NFC_MF1_FAST_SIM
 void mf1_prng_by_bytes(uint8_t *nonces, uint32_t n) {
     uint32_t nonces_u32 = bytes_to_num(nonces, 4);
     nonces_u32 = prng_successor(nonces_u32, n);
     num_to_bytes(nonces_u32, 4, nonces);
 }
+#endif
 
 /** @brief mf1状态机
  * @param data      来自读头数据
@@ -431,7 +441,9 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                     m_gen1a_state = GEN1A_STATE_UNLOCKED_RW_WAIT;       // 更新GEN1A状态机
                     m_mf1_state = MF1_STATE_UNAUTH;                     // 更新MF1状态机
                     nfc_tag_14a_tx_nbit_delay_window(ACK_VALUE, 4);     // 回复读卡器gen1a标签解锁后门成功
+#ifndef NFC_MF1_FAST_SIM
                     crypto1_deinit(pcs);                                // Reset crypto1 handler
+#endif
                 } else {
                     m_gen1a_state = GEN1A_STATE_DISABLE;                // 如果发现并没有走过第一步的话，直接重置gen1a状态机
                 }
@@ -485,14 +497,22 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                             for (uint8_t i = 0; i < sizeof(ReaderResponse); i++) {
                                 ReaderResponse[i] = CardNonce[i];
                             }
+#ifdef NFC_MF1_FAST_SIM
+                            Crypto1PRNG(ReaderResponse, 64);
+#else
                             mf1_prng_by_bytes(ReaderResponse, 64);
+#endif
 
                             // 根据读卡器的应答预先计算我们的应答
                             for (uint8_t i = 0; i < sizeof(CardResponse); i++) {
                                 CardResponse[i] = ReaderResponse[i];
                             }
+#ifdef NFC_MF1_FAST_SIM
+                            Crypto1PRNG(CardResponse, 32);
+#else
                             mf1_prng_by_bytes(CardResponse, 32);
-                            
+#endif
+
                             // 记录验证日志
                             append_mf1_auth_log_step1(KeyInUse, false, BlockAuth, CardNonce);
                             
@@ -505,6 +525,16 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                             m_tag_tx_buffer.tx_raw_buffer[2] = CardNonce[2];
                             m_tag_tx_buffer.tx_raw_buffer[3] = CardNonce[3];
 
+#ifdef NFC_MF1_FAST_SIM
+                            Crypto1Setup(
+                                // 根据当前的指令类型选择验证A或者B秘钥
+                                KeyInUse ? m_tag_trailer_info->keyb : m_tag_trailer_info->keya,
+                                // 传入当前使用的防冲撞的UID
+                                m_shadow_coll_res.uid, 
+                                // 传入一个明文的随机数，这个随机数将会被用于解密后续的通信
+                                CardNonce
+                            );
+#else
                             // 设置crypto1密钥流，丢弃之前的加密状态
                             crypto1_deinit(pcs);
                             // 加载密钥流
@@ -514,6 +544,7 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                             );
                             // 设置密钥流
                             crypto1_word(pcs, bytes_to_num(m_shadow_coll_res.uid, 4) ^ bytes_to_num(CardNonce, 4), 0);
+#endif
                             // 回应明文随机数给读卡器
                             nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_raw_buffer, 4, false);
                             break;
@@ -581,16 +612,19 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
             if (szDataBits == 64) {
                 // 拷贝读卡器回应的NR + AR
                 append_mf1_auth_log_step2(p_data, &p_data[4]);
-                
+#ifdef NFC_MF1_FAST_SIM
+                // Reader delivers an encrypted nonce. We use it to setup the crypto1 LFSR in nonlinear feedback mode. Furthermore it delivers an encrypted answer. Decrypt and check it
+                Crypto1Auth(&p_data[0]);
+                Crypto1ByteArray(&p_data[4], 4);
+#else
                 // NR,是读卡器生成的随机数
                 uint32_t nr = bytes_to_num(p_data, 4);
                 // AR,是卡片加密我们第一步回应的随机数的加密后的数据
                 uint32_t ar = bytes_to_num(&p_data[4], 4);
-                
                 // --- crypto
                 crypto1_word(pcs, nr, 1);
                 num_to_bytes(ar ^ crypto1_word(pcs, 0, 0), 4, &p_data[4]);
-                
+#endif
                 // 验证读卡器返回来的随机数是不是我们发送的
                 if ((p_data[4] == ReaderResponse[0]) && (p_data[5] == ReaderResponse[1]) && (p_data[6] == ReaderResponse[2]) && (p_data[7] == ReaderResponse[3])) {
                     // 读取器已通过身份验证。加密预计算的卡应答数据并生成奇偶校验位。
@@ -598,10 +632,12 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                     m_tag_tx_buffer.tx_raw_buffer[1] = CardResponse[1];
                     m_tag_tx_buffer.tx_raw_buffer[2] = CardResponse[2];
                     m_tag_tx_buffer.tx_raw_buffer[3] = CardResponse[3];
-                    
                     // 加密且计算奇偶校验位
+#ifdef NFC_MF1_FAST_SIM
+                    Crypto1ByteArrayWithParity(m_tag_tx_buffer.tx_raw_buffer, m_tag_tx_buffer.tx_bit_parity, 4);
+#else
                     mf_crypto1_encrypt(pcs, m_tag_tx_buffer.tx_raw_buffer, 4, m_tag_tx_buffer.tx_bit_parity);
-                    
+#endif
                     // 验证成功了，需要进入已经验证成功的状态
                     m_mf1_state = MF1_STATE_AUTHED;
                     // 进行打包，将奇偶校验位进行拼接后返回
@@ -624,7 +660,11 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
         case MF1_STATE_AUTHED: {
             if (szDataBits == 32) {
                 // 在这种状态下，所有通信都被加密。因此，我们首先必须解密读头发送过来的数据。
+#ifdef NFC_MF1_FAST_SIM
+                Crypto1ByteArray(p_data, 4);
+#else
                 mf_crypto1_decryptEx(pcs, p_data, 4, p_data);
+#endif
                 // 解密完成后，检查CRC是否正确，我们必须要确保数据过来的数据无误！
                 if (nfc_tag_14a_checks_crc(p_data, 4)) {
                     switch (p_data[0]) {
@@ -660,10 +700,12 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                             }
                             // 无论如何，回复的数据都要计算CRC
                             nfc_tag_14a_append_crc(m_tag_tx_buffer.tx_raw_buffer, NFC_TAG_MF1_DATA_SIZE);
-                            
                             // 加密和计算奇偶校验位后回复给读卡器
+#ifdef NFC_MF1_FAST_SIM
+                            Crypto1ByteArrayWithParity(m_tag_tx_buffer.tx_raw_buffer, m_tag_tx_buffer.tx_bit_parity, NFC_TAG_MF1_FRAME_SIZE);
+#else
                             mf_crypto1_encrypt(pcs, m_tag_tx_buffer.tx_raw_buffer, NFC_TAG_MF1_FRAME_SIZE, m_tag_tx_buffer.tx_bit_parity);
-                            
+#endif
                             // 合并奇偶校验位到数据帧
                             m_tag_tx_buffer.tx_frame_bit_size = nfc_tag_14a_wrap_frame(m_tag_tx_buffer.tx_raw_buffer, 144, m_tag_tx_buffer.tx_bit_parity, m_tag_tx_buffer.tx_warp_frame);
                             // 启动发送
@@ -676,48 +718,74 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                                 // 直接重置14a的状态机，让标签休眠
                                 nfc_tag_14a_set_state(NFC_TAG_STATE_14A_HALTED);
                                 // 告知一下读头此操作不被允许
+#ifdef NFC_MF1_FAST_SIM
+                                nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV ^ Crypto1Nibble(), 4);
+#else
                                 nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, NAK_INVALID_OPERATION_TBIV), 4);
+#endif
                             } else {
                                 // 正常的写入命令。存储地址并准备接收即将到来的数据。
                                 CurrentAddress = p_data[1];
                                 m_mf1_state = MF1_STATE_WRITE;
                                 // 进行ACK响应，告知读头我们已经准备好了
+#ifdef NFC_MF1_FAST_SIM
+                                nfc_tag_14a_tx_nbit(ACK_VALUE ^ Crypto1Nibble(), 4);
+#else
                                 nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, ACK_VALUE), 4);
+#endif
                             }
                             return;
                         }
-                        // 尽管我觉下面的三个case的代码有点蠢，除了设置状态机不同其他的相同，但是空间换时间吧算是（心理安慰）
+                        // 尽管我觉下面的三个case的代码有点蠢，除了设置状态机不同其他的都相同，但是空间换时间吧算是（心理安慰）
                         case CMD_DECREMENT: {
                             CurrentAddress = p_data[1];
                             m_mf1_state = MF1_STATE_DECREMENT;
+#ifdef NFC_MF1_FAST_SIM
+                            nfc_tag_14a_tx_nbit(ACK_VALUE ^ Crypto1Nibble(), 4);
+#else
                             nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, ACK_VALUE), 4);
+#endif
                             break;
                         }
                         case CMD_INCREMENT: {
                             CurrentAddress = p_data[1];
                             m_mf1_state = MF1_STATE_INCREMENT;
+#ifdef NFC_MF1_FAST_SIM
+                            nfc_tag_14a_tx_nbit(ACK_VALUE ^ Crypto1Nibble(), 4);
+#else
                             nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, ACK_VALUE), 4);
+#endif
                             break;
                         }
                         case CMD_RESTORE: {
                             CurrentAddress = p_data[1];
                             m_mf1_state = MF1_STATE_RESTORE;
+#ifdef NFC_MF1_FAST_SIM
+                            nfc_tag_14a_tx_nbit(ACK_VALUE ^ Crypto1Nibble(), 4);
+#else
                             nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, ACK_VALUE), 4);
+#endif
                             break;
                         }
                         case CMD_TRANSFER: {
+                            uint8_t status;
                             // 此处先不判断当前的写入模式，以写入模式控制写入
                             if (m_tag_information->config.mode_block_write == NFC_TAG_MF1_WRITE_DENIED) {
                                 // 这个模式下直接拒绝操作
-                                nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, NAK_INVALID_OPERATION_TBIV), 4);
+                                status = NAK_INVALID_OPERATION_TBIV;
                             } else if (m_tag_information->config.mode_block_write == NFC_TAG_MF1_WRITE_DECEIVE) {
                                 // 这个模式下回应ACK，但是不写入到RAM里面
-                                nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, ACK_VALUE), 4);
+                                status = ACK_VALUE;
                             } else {
                                 // 将全局块缓冲区写回指令参数指定的块地址
                                 memcpy(m_tag_information->memory[p_data[1]], m_data_block_buffer, MEM_BYTES_PER_BLOCK);
-                                nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, ACK_VALUE), 4);
+                                status = ACK_VALUE;
                             }
+#ifdef NFC_MF1_FAST_SIM
+                                nfc_tag_14a_tx_nbit(status ^ Crypto1Nibble(), 4);
+#else
+                                nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, status), 4);
+#endif
                             break;
                         }
                         case CMD_AUTH_A:
@@ -758,13 +826,21 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                             for (uint8_t i = 0; i < sizeof(ReaderResponse); i++) {
                                 ReaderResponse[i] = CardNonce[i];
                             }
+#ifdef NFC_MF1_FAST_SIM
+                            Crypto1PRNG(ReaderResponse, 64);
+#else
                             mf1_prng_by_bytes(ReaderResponse, 64);
+#endif
 
                             // 根据读卡器的应答预先计算我们的应答
                             for (uint8_t i = 0; i < sizeof(CardResponse); i++) {
                                 CardResponse[i] = ReaderResponse[i];
                             }
+#ifdef NFC_MF1_FAST_SIM
+                            Crypto1PRNG(CardResponse, 32);
+#else
                             mf1_prng_by_bytes(CardResponse, 32);
+#endif
                             
                             // 记录嵌套验证信息
                             append_mf1_auth_log_step1(KeyInUse, true, BlockAuth, CardNonce);
@@ -777,7 +853,23 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                             m_tag_tx_buffer.tx_raw_buffer[1] = CardNonce[1];
                             m_tag_tx_buffer.tx_raw_buffer[2] = CardNonce[2];
                             m_tag_tx_buffer.tx_raw_buffer[3] = CardNonce[3];
-                            
+
+#ifdef NFC_MF1_FAST_SIM
+                            /* Setup crypto1 cipher. Discard in-place encrypted CardNonce. */
+                            Crypto1SetupNested(
+                                // 根据当前的指令类型选择验证A或者B秘钥
+                                KeyInUse ? m_tag_trailer_info->keyb : m_tag_trailer_info->keya, 
+                                // 传入当前使用的防冲撞的UID
+                                m_shadow_coll_res.uid, 
+                                // 传入一个明文的随机数，这个随机数将被加密并通过此缓冲区传出
+                                m_tag_tx_buffer.tx_raw_buffer,
+                                // 传入一个保存随机数的奇偶校验位的缓冲区
+                                m_tag_tx_buffer.tx_bit_parity,
+                                // 根据函数解释 Use: Decrypt = false for the tag, Decrypt = true for the reader
+                                // 我们目前是标签角色，因此传入false
+                                false
+                            );
+#else
                             // 设置crypto1密钥流，丢弃之前的加密状态
                             crypto1_deinit(pcs);
                             // 加载密钥流
@@ -789,7 +881,7 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                             uint8_t m_auth_nt_keystream[4];
                             num_to_bytes(bytes_to_num(m_shadow_coll_res.uid, 4) ^ bytes_to_num(CardNonce, 4), 4, m_auth_nt_keystream);
                             mf_crypto1_encryptEx(pcs, CardNonce, m_auth_nt_keystream, m_tag_tx_buffer.tx_raw_buffer, 4, m_tag_tx_buffer.tx_bit_parity);
-
+#endif
                             // 嵌套验证的情况下，进行组帧后回复一个加密的随机数，带奇偶校验位不带CRC
                             m_tag_tx_buffer.tx_frame_bit_size = nfc_tag_14a_wrap_frame(m_tag_tx_buffer.tx_raw_buffer, 32, m_tag_tx_buffer.tx_bit_parity, m_tag_tx_buffer.tx_warp_frame);
                             nfc_tag_14a_tx_bits(m_tag_tx_buffer.tx_warp_frame, m_tag_tx_buffer.tx_frame_bit_size);
@@ -801,7 +893,11 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                                 // 如果一切正常，那么我们应该直接让卡片休眠，而且不能回应任何消息给读头
                                 nfc_tag_14a_set_state(NFC_TAG_STATE_14A_HALTED);
                             } else {
+#ifdef NFC_MF1_FAST_SIM
+                                nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV ^ Crypto1Nibble(), 4);
+#else
                                 nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, NAK_INVALID_OPERATION_TBIV), 4);
+#endif
                             }
                             break;
                         }
@@ -809,13 +905,21 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                             // 读头发了不知道什么鬼指令，我们没法处理，
                             // 因此任务此次通信异常，需要将状态重置，并且回应读头我们不支持这个指令
                             nfc_tag_14a_set_state(NFC_TAG_STATE_14A_IDLE);
+#ifdef NFC_MF1_FAST_SIM
+                            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV ^ Crypto1Nibble(), 4);
+#else
                             nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, NAK_INVALID_OPERATION_TBIV), 4);
+#endif
                             break;
                         }
                     }
                 } else {
                     // crc有误，返回错误码告知
+#ifdef NFC_MF1_FAST_SIM
+                    nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV ^ Crypto1Nibble(), 4);
+#else
                     nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, NAK_INVALID_OPERATION_TBIV), 4);
+#endif
                     break;
                 }
             } else {
@@ -827,45 +931,58 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
         }
         
         case MF1_STATE_WRITE: {
+            uint8_t status;
             // 当前处于写入状态机，我们需要确保接收到的数据是足够的长度的
             if (szDataBits == 144) {
                 // 解密我们接收到的16字节的待写入数据和2字节的CRCA
+#ifdef NFC_MF1_FAST_SIM
+                Crypto1ByteArray(p_data, NFC_TAG_MF1_FRAME_SIZE);
+#else
                 mf_crypto1_decryptEx(pcs, p_data, NFC_TAG_MF1_FRAME_SIZE, p_data);
+#endif
                 // 校验数据的CRC，再次确保收到的数据无误
                 if (nfc_tag_14a_checks_crc(p_data, NFC_TAG_MF1_FRAME_SIZE)) {
                     // 此处先不判断当前的写入模式，以写入模式控制写入
                     if (m_tag_information->config.mode_block_write == NFC_TAG_MF1_WRITE_DENIED) {
                         // 这个模式下直接拒绝操作
-                        nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, NAK_INVALID_OPERATION_TBIV), 4);
+                        status = NAK_INVALID_OPERATION_TBIV;
                     } else if (m_tag_information->config.mode_block_write == NFC_TAG_MF1_WRITE_DECEIVE) {
                         // 这个模式下回应ACK，但是不写入到RAM里面
-                        nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, ACK_VALUE), 4);
+                        status = ACK_VALUE;
                     } else {
                         // 其他剩余的模式都可以更新数据到标签的RAM中
                         memcpy(m_tag_information->memory[CurrentAddress], p_data, NFC_TAG_MF1_DATA_SIZE);
-                        nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, ACK_VALUE), 4);
+                        status = ACK_VALUE;
                     }
                 } else {
-                    nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, NAK_CRC_PARITY_ERROR_TBIV), 4);
+                    status = NAK_CRC_PARITY_ERROR_TBIV;
                 }
             } else {
-                // 当前处于接收写卡的数据的状态，但是收到的数据的长度不对！
-                // 我们直接返回crc错误的信息给读头
-                nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, NAK_CRC_PARITY_ERROR_TBIV), 4);
+                status = NAK_CRC_PARITY_ERROR_TBIV;
             }
             // 无论如何，操作结束后都将让标签回到验证空闲状态
             m_mf1_state = MF1_STATE_AUTHED;
+#ifdef NFC_MF1_FAST_SIM
+            nfc_tag_14a_tx_nbit(status ^ Crypto1Nibble(), 4);
+#else
+            nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, status), 4);
+#endif
             break;
         }
         
         case MF1_STATE_DECREMENT:
         case MF1_STATE_INCREMENT:
         case MF1_STATE_RESTORE: {
+            uint8_t status;
             if (szDataBits == (MEM_VALUE_SIZE + NFC_TAG_14A_CRC_LENGTH) * 8) {
                 // 当我们到达这里时，前面已经发出了递减、递增或恢复命令，读取器现在正在发送数据。
                 // 首先，解密数据并检查CRC。将请求的块地址中的数据读取到全局块缓冲器中，并检查完整性。
                 // 然后，如果需要，根据发出的命令进行加或减，并将块存储回全局块缓冲区。
+#ifdef NFC_MF1_FAST_SIM
+                Crypto1ByteArray(p_data, MEM_VALUE_SIZE + NFC_TAG_14A_CRC_LENGTH);
+#else
                 mf_crypto1_decryptEx(pcs, p_data, MEM_VALUE_SIZE + NFC_TAG_14A_CRC_LENGTH, p_data);
+#endif
                 // 解密后必须要校验CRC，避免使用了出错的数据
                 if (nfc_tag_14a_checks_crc(p_data, MEM_VALUE_SIZE + NFC_TAG_14A_CRC_LENGTH)) {
                     // 先复制一份操作的块数据到全局缓冲区中
@@ -888,19 +1005,25 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                         ValueToBlock(m_data_block_buffer, value_block);
                         // 这三个操作的第二步，也就是本步不需要回应读头
                         // 因此当程序执行到这一步时，就可以回到已验证可以等待指令的状态了
+                        break;
                     } else {
                         // 这里的应答码或许是错误的，或许根本不需要应答
-                        nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, NAK_OTHER_ERROR), 4);
+                        status = NAK_OTHER_ERROR;
                     }
                 } else {
                     // CRC错误
-                    nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, NAK_CRC_PARITY_ERROR_TBIV), 4);
+                    status = NAK_CRC_PARITY_ERROR_TBIV;
                 }
             } else {
                 // 长度错误，但是也算到CRC错误里面
-                nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, NAK_CRC_PARITY_ERROR_TBIV), 4);
+                status = NAK_CRC_PARITY_ERROR_TBIV;
             }
             m_mf1_state = MF1_STATE_AUTHED;
+#ifdef NFC_MF1_FAST_SIM
+            nfc_tag_14a_tx_nbit(status ^ Crypto1Nibble(), 4);
+#else
+            nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, status), 4);
+#endif
             break;
         }
         
@@ -943,9 +1066,11 @@ nfc_tag_14a_coll_res_referen_t* get_miafre_coll_res() {
 void nfc_tag_mf1_reset_handler() {
     m_mf1_state = MF1_STATE_UNAUTH;
     m_gen1a_state = GEN1A_STATE_DISABLE;
-    
+
+#ifndef NFC_MF1_FAST_SIM
     // Must to reset pcs handler
-    crypto1_deinit(pcs);
+    crypto1_deinit(pcs);    
+#endif
 }
 
 /** @brief 获得信息结构体存放有效的信息的长度

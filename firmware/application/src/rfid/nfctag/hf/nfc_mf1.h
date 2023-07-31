@@ -3,6 +3,8 @@
 
 #include "nfc_14a.h"
 
+// Exchange space for time.
+#define NFC_MF1_FAST_SIM    // Fast simulate enable(Implement By ChameleonMini Repo)
 
 #define NFC_TAG_MF1_DATA_SIZE   16
 #define NFC_TAG_MF1_FRAME_SIZE  (NFC_TAG_MF1_DATA_SIZE + NFC_TAG_14A_CRC_LENGTH)
