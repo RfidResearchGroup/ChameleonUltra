@@ -46,7 +46,8 @@ class ChameleonCLI:
     """
 
     def __init__(self):
-        self.session = prompt_toolkit.PromptSession()
+        self.completer = chameleon_utils.CustomNestedCompleter.from_nested_dict(chameleon_cli_unit.root_commands)
+        self.session = prompt_toolkit.PromptSession(completer=self.completer)
 
         # new a device communication instance(only communication)
         self.device_com = chameleon_com.ChameleonCom()
