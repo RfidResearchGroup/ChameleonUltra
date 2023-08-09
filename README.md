@@ -10,9 +10,25 @@ Europe: [Lab401](https://lab401.com/)
 
 United States: [Hackerwarehouse](https://hackerwarehouse.com/)
 
-UK: [KSEC](https://cyborg.ksecsolutions.com/)
-
 Anywhere else: [Sneaktechnology](https://sneaktechnology.com) / [Aliexpress by RRG](https://proxgrind.aliexpress.com/store/1101312023)
+
+# How to use ?
+
+Coming Soon.
+
+# Videos to reference
+
+Downloading and compiling the CLI
+
+https://www.youtube.com/watch?v=VGpAeitNXH0
+
+Downloading a GUI
+
+https://www.youtube.com/watch?v=rHH7iqbX3nY
+
+Link to the GUI
+https://github.com/GameTec-live/ChameleonUltraGUI
+
 
 # ChameleonUltra
 
