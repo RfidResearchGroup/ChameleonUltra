@@ -37,9 +37,9 @@ BANNER = f"""
 """
 
 
-def new_uint(unit_clz, help_msg):
+def new_unit(unit_clz, help_msg):
     """
-        new a uint dict object
+        Create a new unit dict object
     :param unit_clz: unit implement class
     :param help_msg: unit usage
     :return: a dict...
@@ -58,65 +58,65 @@ class ChameleonCLI:
     def __init__(self):
         self.cmd_maps = {
             'hw': {
-                'connect': new_uint(chameleon_cli_unit.HWConnect, "Connect to chameleon by serial port"),
+                'connect': new_unit(chameleon_cli_unit.HWConnect, "Connect to chameleon by serial port"),
                 'chipid': {
-                    'get': new_uint(chameleon_cli_unit.HWChipIdGet, "Get device chipset ID"),
+                    'get': new_unit(chameleon_cli_unit.HWChipIdGet, "Get device chipset ID"),
                     'help': "Device chipsed ID get"
                 },
                 'address': {
-                    'get': new_uint(chameleon_cli_unit.HWAddressGet, "Get device address (used with Bluetooth)"),
+                    'get': new_unit(chameleon_cli_unit.HWAddressGet, "Get device address (used with Bluetooth)"),
                     'help': "Device address get"
                 },
                 'mode': {
-                    'set': new_uint(chameleon_cli_unit.HWModeSet, "Change device mode to tag reader or tag emulator"),
-                    'get': new_uint(chameleon_cli_unit.HWModeGet, "Get current device mode"),
+                    'set': new_unit(chameleon_cli_unit.HWModeSet, "Change device mode to tag reader or tag emulator"),
+                    'get': new_unit(chameleon_cli_unit.HWModeGet, "Get current device mode"),
                     'help': "Device mode get/set"
                 },
                 'slot': {
-                    'change': new_uint(chameleon_cli_unit.HWSlotSet, "Set emulation tag slot activated."),
-                    'type': new_uint(chameleon_cli_unit.HWSlotTagType, "Set emulation tag type"),
-                    'init': new_uint(chameleon_cli_unit.HWSlotDataDefault, "Set emulation tag data to default"),
-                    'enable': new_uint(chameleon_cli_unit.HWSlotEnableSet, "Set emulation tag slot enable or disable"),
+                    'change': new_unit(chameleon_cli_unit.HWSlotSet, "Set emulation tag slot activated."),
+                    'type': new_unit(chameleon_cli_unit.HWSlotTagType, "Set emulation tag type"),
+                    'init': new_unit(chameleon_cli_unit.HWSlotDataDefault, "Set emulation tag data to default"),
+                    'enable': new_unit(chameleon_cli_unit.HWSlotEnableSet, "Set emulation tag slot enable or disable"),
                     'nick': {
-                        'set': new_uint(chameleon_cli_unit.HWSlotNickSet, "Set tag nick name for slot"),
-                        'get': new_uint(chameleon_cli_unit.HWSlotNickGet, "Get tag nick name for slot"),
+                        'set': new_unit(chameleon_cli_unit.HWSlotNickSet, "Set tag nick name for slot"),
+                        'get': new_unit(chameleon_cli_unit.HWSlotNickGet, "Get tag nick name for slot"),
                         'help': "Get/Set tag nick name for slot",
                     },
-                    'update': new_uint(chameleon_cli_unit.HWSlotUpdate, "Update config & data to device flash"),
-                    'openall': new_uint(chameleon_cli_unit.HWSlotOpenAll, "Open all slot and set to default data"), 
+                    'update': new_unit(chameleon_cli_unit.HWSlotUpdate, "Update config & data to device flash"),
+                    'openall': new_unit(chameleon_cli_unit.HWSlotOpenAll, "Open all slot and set to default data"), 
                     'help': "Emulation tag slot.",
                 },
-                'dfu': new_uint(chameleon_cli_unit.HWDFU, "Restart application to bootloader mode(Not yet implement dfu)."),
+                'dfu': new_unit(chameleon_cli_unit.HWDFU, "Restart application to bootloader mode(Not yet implement dfu)."),
                 'help': "hardware controller",
             },
             'hf': {
                 '14a': {
-                    'scan': new_uint(chameleon_cli_unit.HF14AScan, "Scan 14a tag, and print basic information"),
-                    'info': new_uint(chameleon_cli_unit.HF14AInfo, "Scan 14a tag, and print detail information"),
+                    'scan': new_unit(chameleon_cli_unit.HF14AScan, "Scan 14a tag, and print basic information"),
+                    'info': new_unit(chameleon_cli_unit.HF14AInfo, "Scan 14a tag, and print detail information"),
                     'help': "ISO14443-a tag read/write/info...",
                 },
                 'mf': {
-                    'nested': new_uint(chameleon_cli_unit.HFMFNested, "Mifare Classic nested recover key"),
-                    'darkside': new_uint(chameleon_cli_unit.HFMFDarkside, "Mifare Classic darkside recover key"),
-                    'rdbl': new_uint(chameleon_cli_unit.HFMFRDBL, "MiFARE Classic read one block"),
-                    'wrbl': new_uint(chameleon_cli_unit.HFMFWRBL, "MiFARE Classic write one block"),
+                    'nested': new_unit(chameleon_cli_unit.HFMFNested, "Mifare Classic nested recover key"),
+                    'darkside': new_unit(chameleon_cli_unit.HFMFDarkside, "Mifare Classic darkside recover key"),
+                    'rdbl': new_unit(chameleon_cli_unit.HFMFRDBL, "MiFARE Classic read one block"),
+                    'wrbl': new_unit(chameleon_cli_unit.HFMFWRBL, "MiFARE Classic write one block"),
                     'detection': {
-                        'enable': new_uint(chameleon_cli_unit.HFMFDetectionEnable, "Detection enable"),
-                        'count': new_uint(chameleon_cli_unit.HFMFDetectionLogCount, "Detection log count"),
-                        'decrypt': new_uint(chameleon_cli_unit.HFMFDetectionDecrypt, "Download log and decrypt keys"),
+                        'enable': new_unit(chameleon_cli_unit.HFMFDetectionEnable, "Detection enable"),
+                        'count': new_unit(chameleon_cli_unit.HFMFDetectionLogCount, "Detection log count"),
+                        'decrypt': new_unit(chameleon_cli_unit.HFMFDetectionDecrypt, "Download log and decrypt keys"),
                         'help': "Mifare Classic detection log"
                     },
-                    'sim': new_uint(chameleon_cli_unit.HFMFSim, "Simulation a mifare classic card"),
-                    'eload': new_uint(chameleon_cli_unit.HFMFELoad, "Load data to emulator memory"),
+                    'sim': new_unit(chameleon_cli_unit.HFMFSim, "Simulation a mifare classic card"),
+                    'eload': new_unit(chameleon_cli_unit.HFMFELoad, "Load data to emulator memory"),
                     'help': "Mifare Classic mini/1/2/4, attack/read/write"
                 },
                 'help': "high frequency tag/reader",
             },
             'lf': {
                 'em': {
-                    'read': new_uint(chameleon_cli_unit.LFEMRead, "Scan em410x tag and print id"),
-                    'write': new_uint(chameleon_cli_unit.LFEMWriteT55xx, "Write em410x id to t55xx"),
-                    'sim': new_uint(chameleon_cli_unit.LFEMSim, "Simulation a em410x id card"),
+                    'read': new_unit(chameleon_cli_unit.LFEMRead, "Scan em410x tag and print id"),
+                    'write': new_unit(chameleon_cli_unit.LFEMWriteT55xx, "Write em410x id to t55xx"),
+                    'sim': new_unit(chameleon_cli_unit.LFEMSim, "Simulation a em410x id card"),
                     'help': "EM410x read/write/emulator",
                 },
                 'help': "low frequency tag/reader",

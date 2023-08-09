@@ -162,7 +162,7 @@ class DeviceRequiredUnit(BaseCLIUnit):
         raise NotImplementedError("Please implement this")
 
 
-class ReaderRequiredUint(DeviceRequiredUnit):
+class ReaderRequiredUnit(DeviceRequiredUnit):
     """
         Make sure of device enter to reader mode.
     """
@@ -171,7 +171,7 @@ class ReaderRequiredUint(DeviceRequiredUnit):
         raise NotImplementedError("Please implement this")
 
     def before_exec(self, args: argparse.Namespace):
-        if super(ReaderRequiredUint, self).before_exec(args):
+        if super(ReaderRequiredUnit, self).before_exec(args):
             ret = self.cmd_standard.is_reader_device_mode()
             if ret:
                 return True
@@ -254,7 +254,7 @@ class HWAddressGet(DeviceRequiredUnit):
         print(f' - Device address: ' + self.cmd_positive.get_device_address())
 
 
-class HF14AScan(ReaderRequiredUint):
+class HF14AScan(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
         pass
 
@@ -275,7 +275,7 @@ class HF14AScan(ReaderRequiredUint):
         return self.scan()
 
 
-class HF14AInfo(ReaderRequiredUint):
+class HF14AInfo(ReaderRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
         pass
@@ -305,7 +305,7 @@ class HF14AInfo(ReaderRequiredUint):
             self.info()
 
 
-class HFMFNested(ReaderRequiredUint):
+class HFMFNested(ReaderRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
         type_choices = ['A', 'B', 'a', 'b']
@@ -410,7 +410,7 @@ class HFMFNested(ReaderRequiredUint):
         return
 
 
-class HFMFDarkside(ReaderRequiredUint):
+class HFMFDarkside(ReaderRequiredUnit):
 
     def __init__(self):
         super().__init__()
@@ -476,7 +476,7 @@ class HFMFDarkside(ReaderRequiredUint):
         return
 
 
-class BaseMF1AuthOpera(ReaderRequiredUint):
+class BaseMF1AuthOpera(ReaderRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
         type_choices = ['A', 'B', 'a', 'b']
@@ -727,7 +727,7 @@ class HFMFSim(DeviceRequiredUnit):
         print(" - Set anti-collision resources success")
 
 
-class LFEMRead(ReaderRequiredUint):
+class LFEMRead(ReaderRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
         return None
@@ -738,7 +738,7 @@ class LFEMRead(ReaderRequiredUint):
         print(f" - EM410x ID(10H): {colorama.Fore.GREEN}{id_hex}{colorama.Style.RESET_ALL}")
 
 
-class LFEMCardRequiredUint(DeviceRequiredUnit):
+class LFEMCardRequiredUnit(DeviceRequiredUnit):
 
     @staticmethod
     def add_card_arg(parser: ArgumentParserNoExit):
@@ -746,7 +746,7 @@ class LFEMCardRequiredUint(DeviceRequiredUnit):
         return parser
 
     def before_exec(self, args: argparse.Namespace):
-        if super(LFEMCardRequiredUint, self).before_exec(args):
+        if super(LFEMCardRequiredUnit, self).before_exec(args):
             if not re.match(r"^[a-fA-F0-9]{10}$", args.id):
                 raise ArgsParserError("ID must include 10 HEX symbols")
             return True
@@ -759,15 +759,15 @@ class LFEMCardRequiredUint(DeviceRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
-class LFEMWriteT55xx(LFEMCardRequiredUint, ReaderRequiredUint):
+class LFEMWriteT55xx(LFEMCardRequiredUnit, ReaderRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
         return self.add_card_arg(parser)
 
     def before_exec(self, args: argparse.Namespace):
-        b1 = super(LFEMCardRequiredUint, self).before_exec(args)
-        b2 = super(ReaderRequiredUint, self).before_exec(args)
+        b1 = super(LFEMCardRequiredUnit, self).before_exec(args)
+        b2 = super(ReaderRequiredUnit, self).before_exec(args)
         return b1 and b2
 
     # lf em write --id 4400999559
@@ -778,7 +778,7 @@ class LFEMWriteT55xx(LFEMCardRequiredUint, ReaderRequiredUint):
         print(f" - EM410x ID(10H): {id_hex} write done.")
 
 
-class SlotIndexRequireUint(DeviceRequiredUnit):
+class SlotIndexRequireUnit(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
         raise NotImplementedError()
@@ -793,7 +793,7 @@ class SlotIndexRequireUint(DeviceRequiredUnit):
                             help="Slot index", metavar="number", choices=slot_choices)
         return parser
 
-class SenseTypeRequireUint(DeviceRequiredUnit):
+class SenseTypeRequireUnit(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
         raise NotImplementedError()
@@ -809,7 +809,7 @@ class SenseTypeRequireUint(DeviceRequiredUnit):
         return parser
 
 
-class HWSlotSet(SlotIndexRequireUint):
+class HWSlotSet(SlotIndexRequireUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
@@ -822,7 +822,7 @@ class HWSlotSet(SlotIndexRequireUint):
         print(f" - Set slot {slot_index} activated success.")
 
 
-class TagTypeRequiredUint(DeviceRequiredUnit):
+class TagTypeRequiredUnit(DeviceRequiredUnit):
 
     @staticmethod
     def add_type_args(parser: ArgumentParserNoExit):
@@ -843,7 +843,7 @@ class TagTypeRequiredUint(DeviceRequiredUnit):
         raise NotImplementedError()
 
 
-class HWSlotTagType(TagTypeRequiredUint, SlotIndexRequireUint):
+class HWSlotTagType(TagTypeRequiredUnit, SlotIndexRequireUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
@@ -859,7 +859,7 @@ class HWSlotTagType(TagTypeRequiredUint, SlotIndexRequireUint):
         print(f' - Set slot tag type success.')
 
 
-class HWSlotDataDefault(TagTypeRequiredUint, SlotIndexRequireUint):
+class HWSlotDataDefault(TagTypeRequiredUnit, SlotIndexRequireUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
@@ -876,7 +876,7 @@ class HWSlotDataDefault(TagTypeRequiredUint, SlotIndexRequireUint):
         print(f' - Set slot tag data init success.')
 
 
-class HWSlotEnableSet(SlotIndexRequireUint):
+class HWSlotEnableSet(SlotIndexRequireUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
         self.add_slot_args(parser)
@@ -891,7 +891,7 @@ class HWSlotEnableSet(SlotIndexRequireUint):
         print(f' - Set slot {slot_num} {"enable" if enable else "disable"} success.')
 
 
-class LFEMSim(LFEMCardRequiredUint):
+class LFEMSim(LFEMCardRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
@@ -905,7 +905,7 @@ class LFEMSim(LFEMCardRequiredUint):
         print(f' - Set em410x tag id success.')
 
 
-class HWSlotNickSet(SlotIndexRequireUint, SenseTypeRequireUint):
+class HWSlotNickSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
         self.add_slot_args(parser)
@@ -924,7 +924,7 @@ class HWSlotNickSet(SlotIndexRequireUint, SenseTypeRequireUint):
         print(f' - Set tag nick name for slot {slot_num} success.')
 
 
-class HWSlotNickGet(SlotIndexRequireUint, SenseTypeRequireUint):
+class HWSlotNickGet(SlotIndexRequireUnit, SenseTypeRequireUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
         self.add_slot_args(parser)
