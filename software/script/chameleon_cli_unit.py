@@ -59,12 +59,8 @@ class BaseCLIUnit:
         self._device_com = com
 
     @property
-    def cmd_positive(self) -> chameleon_cmd.BaseChameleonCMD:
-        return chameleon_cmd.PositiveChameleonCMD(self.device_com)
-
-    @property
-    def cmd_standard(self) -> chameleon_cmd.BaseChameleonCMD:
-        return chameleon_cmd.BaseChameleonCMD(self.device_com)
+    def cmd(self) -> chameleon_cmd.ChameleonCMD:
+        return chameleon_cmd.ChameleonCMD(self.device_com)
 
     def args_parser(self) -> ArgumentParserNoExit or None:
         """
@@ -172,7 +168,7 @@ class ReaderRequiredUnit(DeviceRequiredUnit):
 
     def before_exec(self, args: argparse.Namespace):
         if super(ReaderRequiredUnit, self).before_exec(args):
-            ret = self.cmd_standard.is_reader_device_mode()
+            ret = self.cmd.is_reader_device_mode()
             if ret:
                 return True
             else:
@@ -221,10 +217,10 @@ class HWModeSet(DeviceRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         if args.mode == 'reader' or args.mode == 'r':
-            self.cmd_standard.set_reader_device_mode(True)
+            self.cmd.set_reader_device_mode(True)
             print("Switch to {  Tag Reader  } mode successfully.")
         else:
-            self.cmd_standard.set_reader_device_mode(False)
+            self.cmd.set_reader_device_mode(False)
             print("Switch to { Tag Emulator } mode successfully.")
 
 
@@ -233,7 +229,7 @@ class HWModeGet(DeviceRequiredUnit):
         pass
 
     def on_exec(self, args: argparse.Namespace):
-        print(f"- Device Mode ( Tag {'Reader' if self.cmd_standard.is_reader_device_mode() else 'Emulator'} )")
+        print(f"- Device Mode ( Tag {'Reader' if self.cmd.is_reader_device_mode() else 'Emulator'} )")
 
 
 class HWChipIdGet(DeviceRequiredUnit):
@@ -242,7 +238,7 @@ class HWChipIdGet(DeviceRequiredUnit):
         return None
 
     def on_exec(self, args: argparse.Namespace):
-        print(f' - Device chip ID: ' + self.cmd_positive.get_device_chip_id())
+        print(f' - Device chip ID: ' + self.cmd.get_device_chip_id())
 
 
 class HWAddressGet(DeviceRequiredUnit):
@@ -251,7 +247,7 @@ class HWAddressGet(DeviceRequiredUnit):
         return None
 
     def on_exec(self, args: argparse.Namespace):
-        print(f' - Device address: ' + self.cmd_positive.get_device_address())
+        print(f' - Device address: ' + self.cmd.get_device_address())
 
 
 class HF14AScan(ReaderRequiredUnit):
@@ -259,7 +255,7 @@ class HF14AScan(ReaderRequiredUnit):
         pass
 
     def scan(self):
-        resp: chameleon_com.Response = self.cmd_standard.scan_tag_14a()
+        resp: chameleon_com.Response = self.cmd.scan_tag_14a()
         if resp.status == chameleon_status.Device.HF_TAG_OK:
             info = chameleon_cstruct.parse_14a_scan_tag_result(resp.data)
             print(f"- UID  Size: {info['uid_size']}")
@@ -282,11 +278,11 @@ class HF14AInfo(ReaderRequiredUnit):
 
     def info(self):
         # detect mf1 support
-        resp = self.cmd_positive.detect_mf1_support()
+        resp = self.cmd.detect_mf1_support()
         if resp.status == chameleon_status.Device.HF_TAG_OK:
             # detect prng
             print("- Mifare Classic technology")
-            resp = self.cmd_standard.detect_mf1_nt_level()
+            resp = self.cmd.detect_mf1_nt_level()
             if resp.status == 0x00:
                 prng_level = "Weak"
             elif resp.status == 0x24:
@@ -336,8 +332,8 @@ class HFMFNested(ReaderRequiredUnit):
         :return:
         """
         # acquire
-        dist_resp = self.cmd_positive.detect_nt_distance(block_known, type_known, key_known)
-        nt_resp = self.cmd_positive.acquire_nested(block_known, type_known, key_known, block_target, type_target)
+        dist_resp = self.cmd.detect_nt_distance(block_known, type_known, key_known)
+        nt_resp = self.cmd.acquire_nested(block_known, type_known, key_known, block_target, type_target)
         # parse
         dist_obj = chameleon_cstruct.parse_nt_distance_detect_result(dist_resp.data)
         nt_obj = chameleon_cstruct.parse_nested_nt_acquire_group(nt_resp.data)
@@ -371,7 +367,7 @@ class HFMFNested(ReaderRequiredUnit):
             print(f" - [{len(key_list)} candidate keys found ]")
             for key in key_list:
                 key_bytes = bytearray.fromhex(key)
-                ret = self.cmd_standard.auth_mf1_key(block_target, type_target, key_bytes)
+                ret = self.cmd.auth_mf1_key(block_target, type_target, key_bytes)
                 if ret.status == chameleon_status.Device.HF_TAG_OK:
                     return key
         else:
@@ -429,7 +425,7 @@ class HFMFDarkside(ReaderRequiredUnit):
         first_recover = True
         retry_count = 0
         while retry_count < 0xFF:
-            darkside_resp = self.cmd_positive.acquire_darkside(block_target, type_target, first_recover, 15)
+            darkside_resp = self.cmd.acquire_darkside(block_target, type_target, first_recover, 15)
             first_recover = False   # not first run.
             darkside_obj = chameleon_cstruct.parse_darkside_acquire_result(darkside_resp.data)
             self.darkside_list.append(darkside_obj)
@@ -462,7 +458,7 @@ class HFMFDarkside(ReaderRequiredUnit):
                 # auth key
                 for key in key_list:
                     key_bytes = bytearray.fromhex(key)
-                    auth_ret = self.cmd_positive.auth_mf1_key(block_target, type_target, key_bytes)
+                    auth_ret = self.cmd.auth_mf1_key(block_target, type_target, key_bytes)
                     if auth_ret.status == chameleon_status.Device.HF_TAG_OK:
                         return key
         return None
@@ -509,7 +505,7 @@ class HFMFRDBL(BaseMF1AuthOpera):
     # hf mf rdbl -b 2 -t A -k FFFFFFFFFFFF
     def on_exec(self, args: argparse.Namespace):
         param = self.get_param(args)
-        resp = self.cmd_positive.read_mf1_block(param.block, param.type, param.key)
+        resp = self.cmd.read_mf1_block(param.block, param.type, param.key)
         print(f" - Data: {resp.data.hex()}")
 
 
@@ -527,7 +523,7 @@ class HFMFWRBL(BaseMF1AuthOpera):
         if not re.match(r"^[a-fA-F0-9]{32}$", args.data):
             raise ArgsParserError("Data must include 32 HEX symbols")
         param.data = bytearray.fromhex(args.data)
-        resp = self.cmd_standard.write_mf1_block(param.block, param.type, param.key, param.data)
+        resp = self.cmd.write_mf1_block(param.block, param.type, param.key, param.data)
         if resp.status == chameleon_status.Device.HF_TAG_OK:
             print(f" - {colorama.Fore.GREEN}Write done.{colorama.Style.RESET_ALL}")
         else:
@@ -545,7 +541,7 @@ class HFMFDetectionEnable(DeviceRequiredUnit):
     # hf mf detection enable -e 1
     def on_exec(self, args: argparse.Namespace):
         enable = True if args.enable == 1 else False
-        self.cmd_positive.set_mf1_detection_enable(enable)
+        self.cmd.set_mf1_detection_enable(enable)
         print(f" - Set mf1 detection { 'enable' if enable else 'disable'}.")
 
 
@@ -556,7 +552,7 @@ class HFMFDetectionLogCount(DeviceRequiredUnit):
 
     # hf mf detection count
     def on_exec(self, args: argparse.Namespace):
-        data_bytes = self.cmd_standard.get_mf1_detection_count().data
+        data_bytes = self.cmd.get_mf1_detection_count().data
         count = int.from_bytes(data_bytes, "little", signed=False)
         print(f" - MF1 detection log count = {count}")
 
@@ -604,13 +600,13 @@ class HFMFDetectionDecrypt(DeviceRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         buffer = bytearray()
         index = 0
-        count = int.from_bytes(self.cmd_standard.get_mf1_detection_count().data, "little", signed=False)
+        count = int.from_bytes(self.cmd.get_mf1_detection_count().data, "little", signed=False)
         if count == 0:
             print(" - No detection log to download")
             return
         print(f" - MF1 detection log count = {count}, start download", end="")
         while index < count:
-            tmp = self.cmd_positive.get_mf1_detection_log(index).data
+            tmp = self.cmd.get_mf1_detection_log(index).data
             recv_count = int(len(tmp) / HFMFDetectionDecrypt.detection_log_size)
             index += recv_count
             buffer.extend(tmp)
@@ -684,7 +680,7 @@ class HFMFELoad(DeviceRequiredUnit):
             block_data = buffer[index: index + 16]
             index += 16
             # load to device
-            self.cmd_positive.set_mf1_block_data(block, block_data)
+            self.cmd.set_mf1_block_data(block, block_data)
             print('.', end='')
             block += 1
         print("\n - Load success")
@@ -723,7 +719,7 @@ class HFMFSim(DeviceRequiredUnit):
         else:
             raise Exception("UID must be hex")
 
-        self.cmd_positive.set_mf1_anti_collision_res(sak, atqa, uid)
+        self.cmd.set_mf1_anti_collision_res(sak, atqa, uid)
         print(" - Set anti-collision resources success")
 
 
@@ -733,7 +729,7 @@ class LFEMRead(ReaderRequiredUnit):
         return None
 
     def on_exec(self, args: argparse.Namespace):
-        resp = self.cmd_positive.read_em_410x()
+        resp = self.cmd.read_em_410x()
         id_hex = resp.data.hex()
         print(f" - EM410x ID(10H): {colorama.Fore.GREEN}{id_hex}{colorama.Style.RESET_ALL}")
 
@@ -774,7 +770,7 @@ class LFEMWriteT55xx(LFEMCardRequiredUnit, ReaderRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         id_hex = args.id
         id_bytes = bytearray.fromhex(id_hex)
-        self.cmd_positive.write_em_410x_to_t55xx(id_bytes)
+        self.cmd.write_em_410x_to_t55xx(id_bytes)
         print(f" - EM410x ID(10H): {id_hex} write done.")
 
 
@@ -818,7 +814,7 @@ class HWSlotSet(SlotIndexRequireUnit):
     # hw slot change -s 1
     def on_exec(self, args: argparse.Namespace):
         slot_index = args.slot
-        self.cmd_positive.set_slot_activated(slot_index)
+        self.cmd.set_slot_activated(slot_index)
         print(f" - Set slot {slot_index} activated success.")
 
 
@@ -855,7 +851,7 @@ class HWSlotTagType(TagTypeRequiredUnit, SlotIndexRequireUnit):
     def on_exec(self, args: argparse.Namespace):
         tag_type = args.type
         slot_index = args.slot
-        self.cmd_positive.set_slot_tag_type(slot_index, tag_type)
+        self.cmd.set_slot_tag_type(slot_index, tag_type)
         print(f' - Set slot tag type success.')
 
 
@@ -872,7 +868,7 @@ class HWSlotDataDefault(TagTypeRequiredUnit, SlotIndexRequireUnit):
     def on_exec(self, args: argparse.Namespace):
         tag_type = args.type
         slot_num = args.slot
-        self.cmd_positive.set_slot_data_default(slot_num, tag_type)
+        self.cmd.set_slot_data_default(slot_num, tag_type)
         print(f' - Set slot tag data init success.')
 
 
@@ -887,7 +883,7 @@ class HWSlotEnableSet(SlotIndexRequireUnit):
     def on_exec(self, args: argparse.Namespace):
         slot_num = args.slot
         enable = args.enable
-        self.cmd_positive.set_slot_enable(slot_num, enable)
+        self.cmd.set_slot_enable(slot_num, enable)
         print(f' - Set slot {slot_num} {"enable" if enable else "disable"} success.')
 
 
@@ -901,7 +897,7 @@ class LFEMSim(LFEMCardRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         id_hex = args.id
         id_bytes = bytearray.fromhex(id_hex)
-        self.cmd_positive.set_em140x_sim_id(id_bytes)
+        self.cmd.set_em140x_sim_id(id_bytes)
         print(f' - Set em410x tag id success.')
 
 
@@ -920,7 +916,7 @@ class HWSlotNickSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
         name: str = args.name
         if len(name.encode(encoding="gbk")) > 32:
             raise ValueError("Your tag nick name too long.")
-        self.cmd_positive.set_slot_tag_nick_name(slot_num, sense_type, name)
+        self.cmd.set_slot_tag_nick_name(slot_num, sense_type, name)
         print(f' - Set tag nick name for slot {slot_num} success.')
 
 
@@ -935,7 +931,7 @@ class HWSlotNickGet(SlotIndexRequireUnit, SenseTypeRequireUnit):
     def on_exec(self, args: argparse.Namespace):
         slot_num = args.slot
         sense_type = args.sense_type
-        res = self.cmd_positive.get_slot_tag_nick_name(slot_num, sense_type)
+        res = self.cmd.get_slot_tag_nick_name(slot_num, sense_type)
         print(f' - Get tag nick name for slot {slot_num}: {res.data.decode(encoding="gbk")}')
 
 
@@ -946,7 +942,7 @@ class HWSlotUpdate(DeviceRequiredUnit):
 
     # hw slot update
     def on_exec(self, args: argparse.Namespace):
-        self.cmd_positive.update_slot_data_config()
+        self.cmd.update_slot_data_config()
         print(f' - Update config and data from device memory to flash success.')
 
 
@@ -965,17 +961,17 @@ class HWSlotOpenAll(DeviceRequiredUnit):
         for slot in range(1,9):
             print(f' Slot{slot} setting...')
             # first to set tag type
-            self.cmd_positive.set_slot_tag_type(slot, hf_type)
-            self.cmd_positive.set_slot_tag_type(slot, lf_type)
+            self.cmd.set_slot_tag_type(slot, hf_type)
+            self.cmd.set_slot_tag_type(slot, lf_type)
             # to init default data
-            self.cmd_positive.set_slot_data_default(slot, hf_type)
-            self.cmd_positive.set_slot_data_default(slot, lf_type)
+            self.cmd.set_slot_data_default(slot, hf_type)
+            self.cmd.set_slot_data_default(slot, lf_type)
             # finally, we can enable this slot.
-            self.cmd_positive.set_slot_enable(slot, True)
+            self.cmd.set_slot_enable(slot, True)
             print(f' Open slot{slot} finish')
 
         # update config and save to flash
-        self.cmd_positive.update_slot_data_config()
+        self.cmd.update_slot_data_config()
         print(f' - Open all slot and set data to default success.')
 
 
@@ -987,7 +983,7 @@ class HWDFU(DeviceRequiredUnit):
     # hw dfu
     def on_exec(self, args: argparse.Namespace):
         print("Application restarting...")
-        self.cmd_standard.enter_dfu_mode()
+        self.cmd.enter_dfu_mode()
         # 理论上，上面的指令执行完成后，dfu模式会进入，然后USB会重启，
         # 我们判断是否成功进入USB，只需要判断USB是否变成DFU设备的VID和PID即可，
         # 同时我们记得确认设备的信息，一致时才是同一个设备。
