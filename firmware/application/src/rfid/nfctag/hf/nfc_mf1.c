@@ -214,6 +214,9 @@ static uint8_t CurrentAddress;
 static uint8_t KeyInUse;
 static uint8_t m_data_block_buffer[MEM_BYTES_PER_BLOCK];
 
+// MifareClassic crypto1 setup use fixed uid by cascade level
+#define UID_BY_CASCADE_LEVEL (m_shadow_coll_res.uid + (*m_shadow_coll_res.size - NFC_TAG_14A_UID_SINGLE_SIZE))
+
 #define BYTE_SWAP(x) (((uint8_t)(x)>>4)|((uint8_t)(x)<<4))
 #define NO_ACCESS 0x07
 
@@ -337,7 +340,7 @@ void append_mf1_auth_log_step1(bool isKeyB, bool isNested, uint8_t block, uint8_
         m_auth_log.logs[m_auth_log.count].cmd.is_keyb = isKeyB;
         m_auth_log.logs[m_auth_log.count].cmd.block = block;
         m_auth_log.logs[m_auth_log.count].cmd.is_nested = isNested;
-        memcpy(m_auth_log.logs[m_auth_log.count].uid, m_shadow_coll_res.uid, 4);
+        memcpy(m_auth_log.logs[m_auth_log.count].uid, UID_BY_CASCADE_LEVEL, 4);
         memcpy(m_auth_log.logs[m_auth_log.count].nt, nonce, 4);
     }
 }
@@ -530,7 +533,7 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                                 // 根据当前的指令类型选择验证A或者B秘钥
                                 KeyInUse ? m_tag_trailer_info->keyb : m_tag_trailer_info->keya,
                                 // 传入当前使用的防冲撞的UID
-                                m_shadow_coll_res.uid, 
+                                UID_BY_CASCADE_LEVEL, 
                                 // 传入一个明文的随机数，这个随机数将会被用于解密后续的通信
                                 CardNonce
                             );
@@ -543,7 +546,7 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                                 bytes_to_num(KeyInUse ? m_tag_trailer_info->keyb : m_tag_trailer_info->keya, 6)
                             );
                             // 设置密钥流
-                            crypto1_word(pcs, bytes_to_num(m_shadow_coll_res.uid, 4) ^ bytes_to_num(CardNonce, 4), 0);
+                            crypto1_word(pcs, bytes_to_num(UID_BY_CASCADE_LEVEL, 4) ^ bytes_to_num(CardNonce, 4), 0);
 #endif
                             // 回应明文随机数给读卡器
                             nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_raw_buffer, 4, false);
@@ -860,7 +863,7 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                                 // 根据当前的指令类型选择验证A或者B秘钥
                                 KeyInUse ? m_tag_trailer_info->keyb : m_tag_trailer_info->keya, 
                                 // 传入当前使用的防冲撞的UID
-                                m_shadow_coll_res.uid, 
+                                UID_BY_CASCADE_LEVEL, 
                                 // 传入一个明文的随机数，这个随机数将被加密并通过此缓冲区传出
                                 m_tag_tx_buffer.tx_raw_buffer,
                                 // 传入一个保存随机数的奇偶校验位的缓冲区
@@ -879,7 +882,7 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                             );
                             // 进行随机数加密
                             uint8_t m_auth_nt_keystream[4];
-                            num_to_bytes(bytes_to_num(m_shadow_coll_res.uid, 4) ^ bytes_to_num(CardNonce, 4), 4, m_auth_nt_keystream);
+                            num_to_bytes(bytes_to_num(UID_BY_CASCADE_LEVEL, 4) ^ bytes_to_num(CardNonce, 4), 4, m_auth_nt_keystream);
                             mf_crypto1_encryptEx(pcs, CardNonce, m_auth_nt_keystream, m_tag_tx_buffer.tx_raw_buffer, 4, m_tag_tx_buffer.tx_bit_parity);
 #endif
                             // 嵌套验证的情况下，进行组帧后回复一个加密的随机数，带奇偶校验位不带CRC
