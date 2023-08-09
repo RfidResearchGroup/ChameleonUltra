@@ -217,7 +217,7 @@ class ChameleonCLI:
                         continue
                     # start process cmd
                     unit.on_exec(args_parse_result)
-                except (chameleon_cmd.NegativeResponseError, chameleon_cli_unit.ArgsParserError) as e:
+                except (chameleon_cmd.UnexpectedResponseError, chameleon_cli_unit.ArgsParserError) as e:
                     print(f"{colorama.Fore.RED}{str(e)}{colorama.Style.RESET_ALL}")
                 except Exception:
                     print(f"CLI exception: {colorama.Fore.RED}{traceback.format_exc()}{colorama.Style.RESET_ALL}")

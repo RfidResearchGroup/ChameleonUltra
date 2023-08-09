@@ -4,12 +4,16 @@ from typing import Union
 import chameleon_status
 
 
-class NegativeResponseError(Exception):
+class UnexpectedResponseError(Exception):
     """
-        Not positive response
+    Unexpected response exception
     """
 
-def expect_response(accepted_responses):
+def expect_response(accepted_responses: Union[int, list[int]]):
+    """
+    Decorator for wrapping a Chameleon CMD function to check its response 
+    for expected return codes and throwing an exception otherwise
+    """
     if isinstance(accepted_responses, int):
         accepted_responses = [accepted_responses]
     
@@ -20,9 +24,9 @@ def expect_response(accepted_responses):
 
             if ret.status not in accepted_responses:
                 if ret.status in chameleon_status.Device and ret.status in chameleon_status.message:
-                    raise NegativeResponseError(chameleon_status.message[ret.status])
+                    raise UnexpectedResponseError(chameleon_status.message[ret.status])
                 else:
-                    raise NegativeResponseError(f"Not positive response and unknown status {ret.status}")
+                    raise UnexpectedResponseError(f"Unexpected response and unknown status {ret.status}")
 
             return ret
 

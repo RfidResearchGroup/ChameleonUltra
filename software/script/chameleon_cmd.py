@@ -2,7 +2,7 @@ import enum
 
 import chameleon_com
 import chameleon_status
-from chameleon_utils import NegativeResponseError, expect_response
+from chameleon_utils import UnexpectedResponseError, expect_response
 
 DATA_CMD_GET_APP_VERSION = 1000
 DATA_CMD_CHANGE_MODE = 1001
