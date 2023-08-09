@@ -103,7 +103,7 @@ class ChameleonCLI:
             except KeyboardInterrupt:
                 closing = True
             
-            if cmd_str in ["exit", "quit", "q", "e"] or closing:
+            if closing or cmd_str in ["exit", "quit", "q", "e"]:
                 print("Bye, thank you.  ^.^ ")
                 self.device_com.close()
                 sys.exit(996)
