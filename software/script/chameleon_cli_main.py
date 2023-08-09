@@ -8,7 +8,10 @@ import chameleon_com
 import chameleon_cmd
 import colorama
 import chameleon_cli_unit
+import chameleon_utils
 import os
+import prompt_toolkit
+from prompt_toolkit.formatted_text import ANSI
 
 if os.name == 'posix':
    import readline
@@ -37,94 +40,44 @@ BANNER = f"""
 """
 
 
-def new_unit(unit_clz, help_msg):
-    """
-        Create a new unit dict object
-    :param unit_clz: unit implement class
-    :param help_msg: unit usage
-    :return: a dict...
-    """
-    return {
-        'unit': unit_clz,
-        'help': help_msg,
-    }
-
-
 class ChameleonCLI:
     """
         CLI for chameleon
     """
 
     def __init__(self):
-        self.cmd_maps = {
-            'hw': {
-                'connect': new_unit(chameleon_cli_unit.HWConnect, "Connect to chameleon by serial port"),
-                'chipid': {
-                    'get': new_unit(chameleon_cli_unit.HWChipIdGet, "Get device chipset ID"),
-                    'help': "Device chipsed ID get"
-                },
-                'address': {
-                    'get': new_unit(chameleon_cli_unit.HWAddressGet, "Get device address (used with Bluetooth)"),
-                    'help': "Device address get"
-                },
-                'mode': {
-                    'set': new_unit(chameleon_cli_unit.HWModeSet, "Change device mode to tag reader or tag emulator"),
-                    'get': new_unit(chameleon_cli_unit.HWModeGet, "Get current device mode"),
-                    'help': "Device mode get/set"
-                },
-                'slot': {
-                    'change': new_unit(chameleon_cli_unit.HWSlotSet, "Set emulation tag slot activated."),
-                    'type': new_unit(chameleon_cli_unit.HWSlotTagType, "Set emulation tag type"),
-                    'init': new_unit(chameleon_cli_unit.HWSlotDataDefault, "Set emulation tag data to default"),
-                    'enable': new_unit(chameleon_cli_unit.HWSlotEnableSet, "Set emulation tag slot enable or disable"),
-                    'nick': {
-                        'set': new_unit(chameleon_cli_unit.HWSlotNickSet, "Set tag nick name for slot"),
-                        'get': new_unit(chameleon_cli_unit.HWSlotNickGet, "Get tag nick name for slot"),
-                        'help': "Get/Set tag nick name for slot",
-                    },
-                    'update': new_unit(chameleon_cli_unit.HWSlotUpdate, "Update config & data to device flash"),
-                    'openall': new_unit(chameleon_cli_unit.HWSlotOpenAll, "Open all slot and set to default data"), 
-                    'help': "Emulation tag slot.",
-                },
-                'dfu': new_unit(chameleon_cli_unit.HWDFU, "Restart application to bootloader mode(Not yet implement dfu)."),
-                'help': "hardware controller",
-            },
-            'hf': {
-                '14a': {
-                    'scan': new_unit(chameleon_cli_unit.HF14AScan, "Scan 14a tag, and print basic information"),
-                    'info': new_unit(chameleon_cli_unit.HF14AInfo, "Scan 14a tag, and print detail information"),
-                    'help': "ISO14443-a tag read/write/info...",
-                },
-                'mf': {
-                    'nested': new_unit(chameleon_cli_unit.HFMFNested, "Mifare Classic nested recover key"),
-                    'darkside': new_unit(chameleon_cli_unit.HFMFDarkside, "Mifare Classic darkside recover key"),
-                    'rdbl': new_unit(chameleon_cli_unit.HFMFRDBL, "MiFARE Classic read one block"),
-                    'wrbl': new_unit(chameleon_cli_unit.HFMFWRBL, "MiFARE Classic write one block"),
-                    'detection': {
-                        'enable': new_unit(chameleon_cli_unit.HFMFDetectionEnable, "Detection enable"),
-                        'count': new_unit(chameleon_cli_unit.HFMFDetectionLogCount, "Detection log count"),
-                        'decrypt': new_unit(chameleon_cli_unit.HFMFDetectionDecrypt, "Download log and decrypt keys"),
-                        'help': "Mifare Classic detection log"
-                    },
-                    'sim': new_unit(chameleon_cli_unit.HFMFSim, "Simulation a mifare classic card"),
-                    'eload': new_unit(chameleon_cli_unit.HFMFELoad, "Load data to emulator memory"),
-                    'help': "Mifare Classic mini/1/2/4, attack/read/write"
-                },
-                'help': "high frequency tag/reader",
-            },
-            'lf': {
-                'em': {
-                    'read': new_unit(chameleon_cli_unit.LFEMRead, "Scan em410x tag and print id"),
-                    'write': new_unit(chameleon_cli_unit.LFEMWriteT55xx, "Write em410x id to t55xx"),
-                    'sim': new_unit(chameleon_cli_unit.LFEMSim, "Simulation a em410x id card"),
-                    'help': "EM410x read/write/emulator",
-                },
-                'help': "low frequency tag/reader",
-            }
-        }
+        self.session = prompt_toolkit.PromptSession()
 
         # new a device communication instance(only communication)
         self.device_com = chameleon_com.ChameleonCom()
+    
+    def get_cmd_node(self, node: chameleon_utils.CLITree, cmdline: list[str]) -> tuple[chameleon_utils.CLITree, list[str]]:
+        """
+        Recursively traverse the command line tree to get to the matching node
+        
+        :return: last matching CLITree node, remaining tokens
+        """
+        # No more subcommands to parse, return node
+        if cmdline == []:
+            return node, []
+        
+        for child in node.children:
+            if cmdline[0] == child.name:
+                return self.get_cmd_node(child, cmdline[1:])
+        
+        # No matching child node
+        return node, cmdline[:]
+
+    def get_prompt(self):
+        """
+        Retrieve the cli prompt
+        
+        :return: current cmd prompt
+        """
+        device_string = f"{colorama.Fore.GREEN}USB" if self.device_com.isOpen(
+        ) else f"{colorama.Fore.RED}Offline"
+        status = f"[{device_string}{colorama.Style.RESET_ALL}] chameleon --> "
+        return status
 
     @staticmethod
     def print_banner():
@@ -133,24 +86,6 @@ class ChameleonCLI:
         :return:
         """
         print(colorama.Fore.YELLOW + BANNER)
-
-    def parse_cli_cmd(self, cmd_str):
-        """
-            parse cmd from str
-        :param cmd_str:
-        :return:
-        """
-        cmds = cmd_str.split(" ")
-        cmd_maps: dict or types.FunctionType = self.cmd_maps
-        cmd_end = ""
-        for cmd in cmds:
-            if cmd in cmd_maps:  # CMD found in map, we can continue find next
-                cmd_maps = cmd_maps[cmd]
-                cmd_end = cmd
-            else:  # CMD not found
-                break
-        cmd_end_position = cmd_str.index(cmd_end) + len(cmd_end) + 1
-        return cmd_maps, (cmd_str[:cmd_end_position], cmd_str[cmd_end_position:])
 
     def startCLI(self):
         """
@@ -161,74 +96,73 @@ class ChameleonCLI:
         closing = False
         while True:
             # wait user input
-            status = f"{colorama.Fore.GREEN}USB" if self.device_com.isOpen() else f"{colorama.Fore.RED}Offline"
-            print(f"[{status}{colorama.Style.RESET_ALL}] chameleon --> ", end="")
             try:
-                cmd_str = input().strip()
+                cmd_str = self.session.prompt(ANSI(self.get_prompt())).strip()
             except EOFError:
-                print("")
                 closing = True
-
-            if closing or cmd_str == "exit" or cmd_str == "quit" or cmd_str.startswith('q', 0) or cmd_str.startswith('e', 0):
+            except KeyboardInterrupt:
+                closing = True
+            
+            if cmd_str in ["exit", "quit", "q", "e"] or closing:
                 print("Bye, thank you.  ^.^ ")
                 self.device_com.close()
                 sys.exit(996)
-
-            # clear screen
-            if cmd_str == "clear":
-                if platform.system() == 'Windows':
-                    os.system("cls")
-                elif platform.system() == 'Linux':
-                    os.system("clear")
-                else:
-                    print("No screen clear implement")
+            elif cmd_str == "clear":
+                os.system('clear' if os.name == 'posix' else 'cls')
+                continue
+            elif cmd_str == "":
                 continue
 
             # parse cmd
-            cmd_map, args_str = self.parse_cli_cmd(cmd_str)
-            is_exec_map = 'unit' in cmd_map
-            if is_exec_map:
-                # new a unit instance
-                unit_clz = cmd_map['unit']
-                if callable(unit_clz):
-                    unit: chameleon_cli_unit.BaseCLIUnit = unit_clz()
-                else:
-                    raise TypeError("CMD unit is not a 'BaseCLIUnit'")
-                # set variables of required
-                unit.device_com = self.device_com
-                # parse args
-                args_parse_result = unit.args_parser()
-                if args_parse_result is not None:
-                    args: argparse.ArgumentParser = args_parse_result
-                    args.prog = args_str[0]
-                    try:
-                        args_parse_result = args.parse_args(args_str[1].split())
-                    except chameleon_cli_unit.ArgsParserError as e:
-                        args.print_usage()
-                        print(str(e).strip(), end="\n\n")
-                        continue
-                    except chameleon_cli_unit.ParserExitIntercept:
-                        # don't exit process.
-                        continue
-                # noinspection PyBroadException
-                try:
-                    # before process cmd, we need to do something...
-                    if not unit.before_exec(args_parse_result):
-                        continue
-                    # start process cmd
-                    unit.on_exec(args_parse_result)
-                except (chameleon_cmd.UnexpectedResponseError, chameleon_cli_unit.ArgsParserError) as e:
-                    print(f"{colorama.Fore.RED}{str(e)}{colorama.Style.RESET_ALL}")
-                except Exception:
-                    print(f"CLI exception: {colorama.Fore.RED}{traceback.format_exc()}{colorama.Style.RESET_ALL}")
-            elif isinstance(cmd_map, dict):
+            argv = cmd_str.split()
+            root_cmd = argv[0]
+            if root_cmd not in chameleon_cli_unit.root_commands:
+                # No matching command group
                 print("".ljust(18, "-") + "".ljust(10) + "".ljust(30, "-"))
-                for map_key in cmd_map:
-                    map_item = cmd_map[map_key]
-                    if 'help' in map_item:
-                        cmd_title = f"{colorama.Fore.GREEN}{map_key}{colorama.Style.RESET_ALL}"
-                        help_line = (f" - {cmd_title}".ljust(37)) + f"[ {map_item['help']} ]"
-                        print(help_line)
+                for cmd_name, cmd_node in chameleon_cli_unit.root_commands.items():
+                    cmd_title = f"{colorama.Fore.GREEN}{cmd_name}{colorama.Style.RESET_ALL}"
+                    help_line = (f" - {cmd_title}".ljust(37)) + f"[ {cmd_node.helptext} ]"
+                    print(help_line)
+                continue
+
+            tree_node, arg_list = self.get_cmd_node(chameleon_cli_unit.root_commands[root_cmd], argv[1:])
+
+            if not tree_node.cls:
+                # Found tree node is a group without an implementation, print children
+                print("".ljust(18, "-") + "".ljust(10) + "".ljust(30, "-"))
+                for child in tree_node.children:
+                    cmd_title = f"{colorama.Fore.GREEN}{child.name}{colorama.Style.RESET_ALL}"
+                    help_line = (f" - {cmd_title}".ljust(37)) + f"[ {child.helptext} ]"
+                    print(help_line)
+                continue
+
+            unit: chameleon_cli_unit.BaseCLIUnit = tree_node.cls()
+            unit.device_com = self.device_com
+            args_parse_result = unit.args_parser()
+
+            if args_parse_result is not None:
+                args: argparse.ArgumentParser = args_parse_result
+                args.prog = tree_node.fullname
+                try:
+                    args_parse_result = args.parse_args(arg_list)
+                except chameleon_utils.ArgsParserError as e:
+                    args.print_usage()
+                    print(str(e).strip(), end="\n\n")
+                    continue
+                except chameleon_utils.ParserExitIntercept:
+                    # don't exit process.
+                    continue
+            try:
+                # before process cmd, we need to do something...
+                if not unit.before_exec(args_parse_result):
+                    continue
+
+                # start process cmd
+                unit.on_exec(args_parse_result)
+            except (chameleon_utils.UnexpectedResponseError, chameleon_utils.ArgsParserError) as e:
+                print(f"{colorama.Fore.RED}{str(e)}{colorama.Style.RESET_ALL}")
+            except Exception:
+                print(f"CLI exception: {colorama.Fore.RED}{traceback.format_exc()}{colorama.Style.RESET_ALL}")
 
 
 if __name__ == '__main__':

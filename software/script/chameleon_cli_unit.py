@@ -12,16 +12,10 @@ import chameleon_com
 import chameleon_cmd
 import chameleon_cstruct
 import chameleon_status
+from chameleon_utils import *
 
 description_public = "Please enter correct parameters"
 
-
-class ArgsParserError(Exception):
-    pass
-
-
-class ParserExitIntercept(Exception):
-    pass
 
 
 class ArgumentParserNoExit(argparse.ArgumentParser):
@@ -180,6 +174,29 @@ class ReaderRequiredUnit(DeviceRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
+hw = CLITree('hw', 'hardware controller')
+hw_chipid = hw.subgroup('chipid', 'Device chipsed ID get')
+hw_address = hw.subgroup('address', 'Device address get')
+hw_mode = hw.subgroup('mode', 'Device mode get/set')
+hw_slot = hw.subgroup('slot', 'Emulation tag slot.')
+hw_slot_nick = hw_slot.subgroup('nick', 'Get/Set tag nick name for slot')
+
+hf = CLITree('hf', 'high frequency tag/reader')
+hf_14a = hf.subgroup('14a', 'ISO14443-a tag read/write/info...')
+hf_mf = hf.subgroup('mf', 'Mifare Classic mini/1/2/4, attack/read/write')
+hf_mf_detection = hf.subgroup(
+    'detection', 'Mifare Classic detection log')
+
+lf = CLITree('lf', 'low frequency tag/reader')
+lf_em = lf.subgroup('em', 'EM410x read/write/emulator')
+
+root_commands: dict[str, CLITree] = {
+    'hw': hw,
+    'hf': hf,
+    'lf': lf,
+}
+
+@hw.command('connect', 'Connect to chameleon by serial port')
 class HWConnect(BaseCLIUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
@@ -206,6 +223,7 @@ class HWConnect(BaseCLIUnit):
             print(f"Chameleon Connect fail: {str(e)}")
 
 
+@hw_mode.command('set', 'Change device mode to tag reader or tag emulator')
 class HWModeSet(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -224,6 +242,7 @@ class HWModeSet(DeviceRequiredUnit):
             print("Switch to { Tag Emulator } mode successfully.")
 
 
+@hw_mode.command('get', 'Get current device mode')
 class HWModeGet(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
         pass
@@ -232,6 +251,7 @@ class HWModeGet(DeviceRequiredUnit):
         print(f"- Device Mode ( Tag {'Reader' if self.cmd.is_reader_device_mode() else 'Emulator'} )")
 
 
+@hw_chipid.command('get', 'Get device chipset ID')
 class HWChipIdGet(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -241,6 +261,7 @@ class HWChipIdGet(DeviceRequiredUnit):
         print(f' - Device chip ID: ' + self.cmd.get_device_chip_id())
 
 
+@hw_address.command('get', 'Get device address (used with Bluetooth)')
 class HWAddressGet(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -250,6 +271,7 @@ class HWAddressGet(DeviceRequiredUnit):
         print(f' - Device address: ' + self.cmd.get_device_address())
 
 
+@hf_14a.command('scan', 'Scan 14a tag, and print basic information')
 class HF14AScan(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
         pass
@@ -271,6 +293,7 @@ class HF14AScan(ReaderRequiredUnit):
         return self.scan()
 
 
+@hf_14a.command('info', 'Scan 14a tag, and print detail information')
 class HF14AInfo(ReaderRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -301,6 +324,7 @@ class HF14AInfo(ReaderRequiredUnit):
             self.info()
 
 
+@hf_mf.command('nested', 'Mifare Classic nested recover key')
 class HFMFNested(ReaderRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -406,6 +430,7 @@ class HFMFNested(ReaderRequiredUnit):
         return
 
 
+@hf_mf.command('darkside', 'Mifare Classic darkside recover key')
 class HFMFDarkside(ReaderRequiredUnit):
 
     def __init__(self):
@@ -500,6 +525,7 @@ class BaseMF1AuthOpera(ReaderRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
+@hf_mf.command('rdbl', 'MiFARE Classic read one block')
 class HFMFRDBL(BaseMF1AuthOpera):
 
     # hf mf rdbl -b 2 -t A -k FFFFFFFFFFFF
@@ -509,6 +535,7 @@ class HFMFRDBL(BaseMF1AuthOpera):
         print(f" - Data: {resp.data.hex()}")
 
 
+@hf_mf.command('wrbl', 'MiFARE Classic write one block')
 class HFMFWRBL(BaseMF1AuthOpera):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -530,6 +557,7 @@ class HFMFWRBL(BaseMF1AuthOpera):
             print(f" - {colorama.Fore.RED}Write fail.{colorama.Style.RESET_ALL}")
 
 
+@hf_mf_detection.command('enable', 'Detection enable')
 class HFMFDetectionEnable(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -545,6 +573,7 @@ class HFMFDetectionEnable(DeviceRequiredUnit):
         print(f" - Set mf1 detection { 'enable' if enable else 'disable'}.")
 
 
+@hf_mf_detection.command('count', 'Detection log count')
 class HFMFDetectionLogCount(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -557,6 +586,7 @@ class HFMFDetectionLogCount(DeviceRequiredUnit):
         print(f" - MF1 detection log count = {count}")
 
 
+@hf_mf_detection.command('decrypt', 'Download log and decrypt keys')
 class HFMFDetectionDecrypt(DeviceRequiredUnit):
 
     detection_log_size = 18
@@ -639,6 +669,7 @@ class HFMFDetectionDecrypt(DeviceRequiredUnit):
         return
 
 
+@hf_mf.command('eload', 'Load data to emulator memory')
 class HFMFELoad(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -686,6 +717,7 @@ class HFMFELoad(DeviceRequiredUnit):
         print("\n - Load success")
 
 
+@hf_mf.command('sim', 'Simulation a mifare classic card')
 class HFMFSim(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -723,6 +755,7 @@ class HFMFSim(DeviceRequiredUnit):
         print(" - Set anti-collision resources success")
 
 
+@lf_em.command('read', 'Scan em410x tag and print id')
 class LFEMRead(ReaderRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -755,6 +788,7 @@ class LFEMCardRequiredUnit(DeviceRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
+@lf_em.command('write', 'Write em410x id to t55xx')
 class LFEMWriteT55xx(LFEMCardRequiredUnit, ReaderRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -805,6 +839,7 @@ class SenseTypeRequireUnit(DeviceRequiredUnit):
         return parser
 
 
+@hw_slot.command('change', 'Set emulation tag slot activated.')
 class HWSlotSet(SlotIndexRequireUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -839,6 +874,7 @@ class TagTypeRequiredUnit(DeviceRequiredUnit):
         raise NotImplementedError()
 
 
+@hw_slot.command('type', 'Set emulation tag type')
 class HWSlotTagType(TagTypeRequiredUnit, SlotIndexRequireUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -855,6 +891,7 @@ class HWSlotTagType(TagTypeRequiredUnit, SlotIndexRequireUnit):
         print(f' - Set slot tag type success.')
 
 
+@hw_slot.command('init', 'Set emulation tag data to default')
 class HWSlotDataDefault(TagTypeRequiredUnit, SlotIndexRequireUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -872,6 +909,7 @@ class HWSlotDataDefault(TagTypeRequiredUnit, SlotIndexRequireUnit):
         print(f' - Set slot tag data init success.')
 
 
+@hw_slot.command('enable', 'Set emulation tag slot enable or disable')
 class HWSlotEnableSet(SlotIndexRequireUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
@@ -887,6 +925,7 @@ class HWSlotEnableSet(SlotIndexRequireUnit):
         print(f' - Set slot {slot_num} {"enable" if enable else "disable"} success.')
 
 
+@lf_em.command('sim', 'Simulation a em410x id card')
 class LFEMSim(LFEMCardRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -901,6 +940,7 @@ class LFEMSim(LFEMCardRequiredUnit):
         print(f' - Set em410x tag id success.')
 
 
+@hw_slot_nick.command('set', 'Set tag nick name for slot')
 class HWSlotNickSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
@@ -920,6 +960,7 @@ class HWSlotNickSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
         print(f' - Set tag nick name for slot {slot_num} success.')
 
 
+@hw_slot_nick.command('get', 'Get tag nick name for slot')
 class HWSlotNickGet(SlotIndexRequireUnit, SenseTypeRequireUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
@@ -935,6 +976,7 @@ class HWSlotNickGet(SlotIndexRequireUnit, SenseTypeRequireUnit):
         print(f' - Get tag nick name for slot {slot_num}: {res.data.decode(encoding="gbk")}')
 
 
+@hw_slot.command('update', 'Update config & data to device flash')
 class HWSlotUpdate(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -946,6 +988,7 @@ class HWSlotUpdate(DeviceRequiredUnit):
         print(f' - Update config and data from device memory to flash success.')
 
 
+@hw_slot.command('openall', 'Open all slot and set to default data')
 class HWSlotOpenAll(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -975,6 +1018,7 @@ class HWSlotOpenAll(DeviceRequiredUnit):
         print(f' - Open all slot and set data to default success.')
 
 
+@hw.command('dfu', 'Restart application to bootloader mode(Not yet implement dfu).')
 class HWDFU(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
