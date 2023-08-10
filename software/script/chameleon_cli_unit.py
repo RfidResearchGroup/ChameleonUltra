@@ -1013,7 +1013,7 @@ class HWSettingsAnimationSet(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
         parser.add_argument('-m', '--mode', type=int, required=True, help="0 is full (default), 1 is minimal (only single pass on button wakeup), 2 is none", choices=[0, 1, 2])
-        return None
+        return parser
     
     def on_exec(self, args: argparse.Namespace):
         mode = args.mode

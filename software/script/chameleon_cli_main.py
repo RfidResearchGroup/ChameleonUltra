@@ -152,14 +152,15 @@ class ChameleonCLI:
         cmds = cmd_str.split(" ")
         cmd_maps: dict or types.FunctionType = self.cmd_maps
         cmd_end = ""
+        cmd_end_position = 0
         for cmd in cmds:
             if cmd in cmd_maps:  # CMD found in map, we can continue find next
                 cmd_maps = cmd_maps[cmd]
                 cmd_end = cmd
+                cmd_end_position += len(cmd) + 1
             else:  # CMD not found
                 break
-        cmd_end_position = cmd_str.index(cmd_end) + len(cmd_end) + 1
-        return cmd_maps, (cmd_str[:cmd_end_position], cmd_str[cmd_end_position:])
+        return cmd_maps, (cmd_str[:cmd_end_position - 1], cmd_str[cmd_end_position:])
 
     def startCLI(self):
         """
