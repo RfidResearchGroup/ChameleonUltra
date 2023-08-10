@@ -12,6 +12,7 @@
 #include "app_status.h"
 #include "tag_persistence.h"
 #include "nrf_pwr_mgmt.h"
+#include "settings.h"
 
 
 #define NRF_LOG_MODULE_NAME app_cmd
@@ -78,6 +79,26 @@ data_frame_tx_t* cmd_processor_get_device_address(uint16_t cmd, uint16_t status,
     device_address[0] = NRF_FICR->DEVICEADDR[0];
     device_address[1] = NRF_FICR->DEVICEADDR[1];
     return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 6, (uint8_t*)(&device_address[0]));
+}
+
+data_frame_tx_t* cmd_processor_save_settings(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    status = settings_save_config();
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+data_frame_tx_t* cmd_processor_set_animation_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length == 1) {
+        settings_set_animation_config(data[0]);
+    }
+    else {
+        status = STATUS_PAR_ERR; 
+    }
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+data_frame_tx_t* cmd_processor_get_animation_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t animation_mode = settings_get_animation_config();
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 1, (uint8_t *)(&animation_mode));
 }
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
@@ -524,6 +545,9 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_ENTER_BOOTLOADER,             NULL,                        cmd_processor_enter_bootloader,              NULL                   },
     {    DATA_CMD_GET_DEVICE_CHIP_ID,           NULL,                        cmd_processor_get_device_chip_id,            NULL                   },
     {    DATA_CMD_GET_DEVICE_ADDRESS,           NULL,                        cmd_processor_get_device_address,            NULL                   },
+    {    DATA_CMD_SAVE_SETTINGS,                NULL,                        cmd_processor_save_settings,                 NULL                   },
+    {    DATA_CMD_SET_ANIMATION_MODE,           NULL,                        cmd_processor_set_animation_mode,            NULL                   },
+    {    DATA_CMD_GET_ANIMATION_MODE,           NULL,                        cmd_processor_get_animation_mode,            NULL                   },
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 

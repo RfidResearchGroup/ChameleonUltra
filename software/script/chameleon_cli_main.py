@@ -87,6 +87,15 @@ class ChameleonCLI:
                     'help': "Emulation tag slot.",
                 },
                 'dfu': new_uint(chameleon_cli_unit.HWDFU, "Restart application to bootloader mode(Not yet implement dfu)."),
+                'settings': {
+                    'animation': {
+                        'get': new_uint(chameleon_cli_unit.HWSettingsAnimationGet, "Get current animation mode value"),
+                        'set': new_uint(chameleon_cli_unit.HWSettingsAnimationSet, "Change chameleon animation mode"),
+                        'help': 'Manage wake-up and sleep animation mode'
+                    },
+                    'store': new_uint(chameleon_cli_unit.HWSettingsStore, "Store current settings to flash"),
+                    'help': "Chameleon settings management"
+                },
                 'help': "hardware controller",
             },
             'hf': {

@@ -3,6 +3,7 @@
 #include "lf_tag_em.h"
 #include "nfc_mf1.h"
 #include "nfc_ntag.h"
+#include "fds_ids.h"
 #include "fds_util.h"
 #include "tag_emulation.h"
 #include "tag_persistence.h"
