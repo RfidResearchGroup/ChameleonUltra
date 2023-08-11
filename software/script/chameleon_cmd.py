@@ -42,6 +42,37 @@ DATA_CMD_SET_MF1_DETECTION_ENABLE = 5003
 DATA_CMD_GET_MF1_DETECTION_COUNT = 5004
 DATA_CMD_GET_MF1_DETECTION_RESULT = 5005
 
+@enum.unique
+class SlotNumber(enum.IntEnum):
+    SLOT_1 = 0,
+    SLOT_2 = 1,
+    SLOT_3 = 2,
+    SLOT_4 = 3,
+    SLOT_5 = 4,
+    SLOT_6 = 5,
+    SLOT_7 = 6,
+    SLOT_8 = 7,
+    SLOT_NO = 8,
+
+    @staticmethod
+    def list(exclude_unknown=True):
+        enum_list = []
+        for name, value in SlotNumber.__members__.items():
+            if value == SlotNumber.SLOT_NO:
+                continue
+            enum_list.append(int(name.replace('SLOT_','')))
+
+        return enum_list
+
+    @staticmethod
+    def fix(index: int):
+        for name, value in SlotNumber.__members__.items():
+            if value == SlotNumber.SLOT_NO:
+                continue
+            if index == int(name.replace('SLOT_','')):
+                return value
+
+
 
 @enum.unique
 class TagSenseType(enum.IntEnum):
@@ -51,6 +82,26 @@ class TagSenseType(enum.IntEnum):
     TAG_SENSE_LF = 1,
     # 高频13.56mhz场感应
     TAG_SENSE_HF = 2,
+
+    @staticmethod
+    def list(exclude_unknown=True):
+        enum_list = []
+        for name, value in TagSenseType.__members__.items():
+            if value == TagSenseType.TAG_SENSE_NO:
+                continue
+            enum_list.append(f"{name.replace('TAG_SENSE_','')} = {value}")
+
+        return enum_list
+    
+    @staticmethod
+    def choices(exclude_unknown=True):
+        choice_list = []
+        for name, value in TagSenseType.__members__.items():
+            if value == TagSenseType.TAG_SENSE_NO:
+                continue
+            choice_list.append(value)
+
+        return choice_list
 
 
 @enum.unique
@@ -267,7 +318,7 @@ class BaseChameleonCMD:
             data.extend(key)
         return self.device.send_cmd_sync(DATA_CMD_WRITE_EM410X_TO_T5577, 0x00, data)
 
-    def set_slot_activated(self, slot_index):
+    def set_slot_activated(self, slot_index: SlotNumber):
         """
             设置当前激活使用的卡槽
         :param slot_index: 卡槽索引，从 1 - 8（不是从0下标开始）
@@ -276,10 +327,10 @@ class BaseChameleonCMD:
         if slot_index < 1 or slot_index > 8:
             raise ValueError("The slot index range error(1-8)")
         data = bytearray()
-        data.append(slot_index - 1)
+        data.append(SlotNumber.fix(slot_index))
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_ACTIVATED, 0x00, data)
 
-    def set_slot_tag_type(self, slot_index: int, tag_type: TagSpecificType):
+    def set_slot_tag_type(self, slot_index: SlotNumber, tag_type: TagSpecificType):
         """
             设置当前卡槽的模拟卡的标签类型
             注意：此操作并不会更改flash中的数据，flash中的数据的变动仅在下次保存时更新
@@ -290,11 +341,11 @@ class BaseChameleonCMD:
         if slot_index < 1 or slot_index > 8:
             raise ValueError("The slot index range error(1-8)")
         data = bytearray()
-        data.append(slot_index - 1)
+        data.append(SlotNumber.fix(slot_index))
         data.append(tag_type)
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_TAG_TYPE, 0x00, data)
 
-    def set_slot_data_default(self, slot_index: int, tag_type: TagSpecificType):
+    def set_slot_data_default(self, slot_index: SlotNumber, tag_type: TagSpecificType):
         """
             设置指定卡槽的模拟卡的数据为缺省数据
             注意：此API会将flash中的数据一并进行设置
@@ -305,11 +356,11 @@ class BaseChameleonCMD:
         if slot_index < 1 or slot_index > 8:
             raise ValueError("The slot index range error(1-8)")
         data = bytearray()
-        data.append(slot_index - 1)
+        data.append(SlotNumber.fix(slot_index))
         data.append(tag_type)
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_DATA_DEFAULT, 0x00, data)
 
-    def set_slot_enable(self, slot_index: int, enable: bool):
+    def set_slot_enable(self, slot_index: SlotNumber, enable: bool):
         """
             设置指定的卡槽是否使能
         :param slot_index: 卡槽号码
@@ -319,7 +370,7 @@ class BaseChameleonCMD:
         if slot_index < 1 or slot_index > 8:
             raise ValueError("The slot index range error(1-8)")
         data = bytearray()
-        data.append(slot_index - 1)
+        data.append(SlotNumber.fix(slot_index))
         data.append(0x01 if enable else 0x00)
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_ENABLE, 0X00, data)
 
@@ -386,7 +437,7 @@ class BaseChameleonCMD:
         data.extend(uid)
         return self.device.send_cmd_sync(DATA_CMD_SET_MF1_ANTI_COLLISION_RES, 0X00, data)
     
-    def set_slot_tag_nick_name(self, slot: int, sense_type: int, name: str):
+    def set_slot_tag_nick_name(self, slot: SlotNumber, sense_type: TagSenseType, name: str):
         """
             设置MF1的模拟卡的防冲撞资源信息
         :param slot: 卡槽号码
@@ -395,11 +446,11 @@ class BaseChameleonCMD:
         :return:
         """
         data = bytearray()
-        data.extend([slot, sense_type])
+        data.extend([SlotNumber.fix(slot), sense_type])
         data.extend(name.encode(encoding="gbk"))
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_TAG_NICK, 0x00, data)
     
-    def get_slot_tag_nick_name(self, slot: int, sense_type: int):
+    def get_slot_tag_nick_name(self, slot: SlotNumber, sense_type: TagSenseType):
         """
             设置MF1的模拟卡的防冲撞资源信息
         :param slot: 卡槽号码
@@ -408,7 +459,7 @@ class BaseChameleonCMD:
         :return:
         """
         data = bytearray()
-        data.extend([slot, sense_type])
+        data.extend([SlotNumber.fix(slot), sense_type])
         return self.device.send_cmd_sync(DATA_CMD_GET_SLOT_TAG_NICK, 0x00, data)
     
     def update_slot_data_config(self):

@@ -788,9 +788,11 @@ class SlotIndexRequireUint(DeviceRequiredUnit):
 
     @staticmethod
     def add_slot_args(parser: ArgumentParserNoExit):
-        slot_choices = [1, 2, 3, 4, 5, 6, 7, 8]
+        slot_choices = chameleon_cmd.SlotNumber.list()
+        help_str = f"Slot Indexes: {slot_choices}"
+
         parser.add_argument('-s', "--slot", type=int, required=True,
-                            help="Slot index", metavar="number", choices=slot_choices)
+                            help=help_str, metavar="number", choices=slot_choices)
         return parser
 
 class SenseTypeRequireUint(DeviceRequiredUnit):
@@ -803,9 +805,12 @@ class SenseTypeRequireUint(DeviceRequiredUnit):
 
     @staticmethod
     def add_sense_type_args(parser: ArgumentParserNoExit):
-        slot_choices = [1, 2]
+        slot_list = chameleon_cmd.TagSenseType.list()
+        slot_choices = chameleon_cmd.TagSenseType.choices()
+        help_str = f"Sense Types: {slot_list}"
+        
         parser.add_argument('-st', "--sense_type", type=int, required=True,
-                            help="Sense type", metavar="number", choices=slot_choices)
+                            help=help_str, metavar="number", choices=slot_choices)
         return parser
 
 
@@ -910,7 +915,7 @@ class HWSlotNickSet(SlotIndexRequireUint, SenseTypeRequireUint):
         parser = ArgumentParserNoExit()
         self.add_slot_args(parser)
         self.add_sense_type_args(parser)
-        parser.add_argument('-n', '--name', type=str, required=True, help="Yout tag nick name for slot")
+        parser.add_argument('-n', '--name', type=str, required=True, help="Your tag nick name for slot")
         return parser
 
     # hw slot nick set -s 1 -st 1 -n 测试名称保存
@@ -921,6 +926,7 @@ class HWSlotNickSet(SlotIndexRequireUint, SenseTypeRequireUint):
         if len(name.encode(encoding="gbk")) > 32:
             raise ValueError("Your tag nick name too long.")
         self.cmd_positive.set_slot_tag_nick_name(slot_num, sense_type, name)
+        #print(f'{slot_num} selected for nickname {name}.')
         print(f' - Set tag nick name for slot {slot_num} success.')
 
 
