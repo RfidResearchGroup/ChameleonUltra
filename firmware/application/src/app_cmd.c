@@ -29,8 +29,7 @@ data_frame_tx_t* cmd_processor_get_version(uint16_t cmd, uint16_t status, uint16
 
 
 data_frame_tx_t* cmd_processor_get_git_version(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint32_t* version = (uint32_t*)GIT_VERSION;
-    return data_frame_make(cmd, status, 7, (uint8_t*)version);
+    return data_frame_make(cmd, status, strlen(GIT_VERSION), (uint8_t*)GIT_VERSION);
 }
 
 
