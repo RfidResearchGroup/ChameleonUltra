@@ -27,6 +27,13 @@ data_frame_tx_t* cmd_processor_get_version(uint16_t cmd, uint16_t status, uint16
     return data_frame_make(cmd, status, 2, (uint8_t*)&version);
 }
 
+
+data_frame_tx_t* cmd_processor_get_git_version(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint32_t* version = (uint32_t*)GIT_VERSION;
+    return data_frame_make(cmd, status, 7, (uint8_t*)version);
+}
+
+
 data_frame_tx_t* cmd_processor_change_device_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
 #if defined(PROJECT_CHAMELEON_ULTRA)
     if (length == 1) {
@@ -524,6 +531,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_ENTER_BOOTLOADER,             NULL,                        cmd_processor_enter_bootloader,              NULL                   },
     {    DATA_CMD_GET_DEVICE_CHIP_ID,           NULL,                        cmd_processor_get_device_chip_id,            NULL                   },
     {    DATA_CMD_GET_DEVICE_ADDRESS,           NULL,                        cmd_processor_get_device_address,            NULL                   },
+    {    DATA_CMD_GET_GIT_VERSION,              NULL,                        cmd_processor_get_git_version,               NULL                   },
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
