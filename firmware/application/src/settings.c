@@ -33,19 +33,19 @@ uint8_t settings_save_config(void)
     uint16_t new_calc_crc;
     calc_14a_crc_lut((uint8_t *)&config, sizeof(config), (uint8_t *)&new_calc_crc);
     if (new_calc_crc != m_config_crc) {    // Before saving, make sure that the configuration has changed
-        NRF_LOG_INFO("Save tag slot config start.");
+        NRF_LOG_INFO("Save config start.");
         bool ret = fds_write_sync(FDS_SETTINGS_ID, FDS_SETTINGS_KEY, sizeof(config) / 4, (uint8_t *)&config);
         if (ret) {
-            NRF_LOG_INFO("Save tag slot config success.");
+            NRF_LOG_INFO("Save config success.");
             m_config_crc = new_calc_crc; // store new CRC so we know that we've updated the configuration
         }
         else
         {
-            NRF_LOG_ERROR("Save tag slot config error.");
+            NRF_LOG_ERROR("Save config error.");
             return STATUS_FLASH_WRITE_FAIL;
         }
     } else {
-        NRF_LOG_INFO("Tag slot config no change.");
+        NRF_LOG_INFO("Config no change.");
     }
 
     return STATUS_DEVICE_SUCCESS;
