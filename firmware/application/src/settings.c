@@ -53,11 +53,10 @@ uint8_t settings_save_config(void)
 
 uint8_t settings_get_animation_config()
 {
-    return config & 0x3;
+    return config.animation_config;
 }
 
 void settings_set_animation_config(uint8_t value)
 {
-    config &= ~(0x3);
-    config |= value;
+    config.animation_config = value;
 }
