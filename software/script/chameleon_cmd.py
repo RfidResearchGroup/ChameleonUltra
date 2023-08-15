@@ -327,7 +327,7 @@ class BaseChameleonCMD:
         data.append(0x01 if enable else 0x00)
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_ENABLE, 0X00, data)
 
-    def set_em140x_sim_id(self, id_bytes: bytearray):
+    def set_em410x_sim_id(self, id_bytes: bytearray):
         """
             设置EM410x模拟的卡号
         :param id_bytes: 卡号的字节
@@ -336,6 +336,12 @@ class BaseChameleonCMD:
         if len(id_bytes) != 5:
             raise ValueError("The id bytes length must equal 5")
         return self.device.send_cmd_sync(DATA_CMD_SET_EM410X_EMU_ID, 0x00, id_bytes)
+    
+    def get_em410x_sim_id(self):
+        """
+            Get the simulated EM410x card id
+        """
+        return self.device.send_cmd_sync(DATA_CMD_GET_EM410X_EMU_ID, 0x00)
 
     def set_mf1_detection_enable(self, enable: bool):
         """
@@ -528,8 +534,8 @@ class PositiveChameleonCMD(BaseChameleonCMD):
         self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
         return ret
 
-    def set_em140x_sim_id(self, id_bytes: bytearray):
-        ret = super(PositiveChameleonCMD, self).set_em140x_sim_id(id_bytes)
+    def set_em410x_sim_id(self, id_bytes: bytearray):
+        ret = super(PositiveChameleonCMD, self).set_em410x_sim_id(id_bytes)
         self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
         return ret
 

@@ -891,18 +891,29 @@ class HWSlotEnableSet(SlotIndexRequireUint):
         print(f' - Set slot {slot_num} {"enable" if enable else "disable"} success.')
 
 
-class LFEMSim(LFEMCardRequiredUint):
+class LFEMSimSet(LFEMCardRequiredUint):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
         return self.add_card_arg(parser)
 
-    # lf em sim --id 4545454545
+    # lf em sim set --id 4545454545
     def on_exec(self, args: argparse.Namespace):
         id_hex = args.id
         id_bytes = bytearray.fromhex(id_hex)
-        self.cmd_positive.set_em140x_sim_id(id_bytes)
+        self.cmd_positive.set_em410x_sim_id(id_bytes)
         print(f' - Set em410x tag id success.')
+
+class LFEMSimGet(DeviceRequiredUnit):
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        return None
+
+    # lf em sim get
+    def on_exec(self, args: argparse.Namespace):
+        response = self.cmd_positive.get_em410x_sim_id()
+        print(f' - Get em410x tag id success.')
+        print(f'ID: {response.data.hex()}')
 
 
 class HWSlotNickSet(SlotIndexRequireUint, SenseTypeRequireUint):
