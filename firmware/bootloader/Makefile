@@ -10,6 +10,7 @@ SRC_FILES += \
   $(PROJ_DIR)/main.c \
   $(PROJ_DIR)/dfu_public_key.c \
   $(SRC_COMMON)/hw_connect.c \
+  $(SRC_COMMON)/libc_nano_stubs.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_clock.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_power.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_systick.c \
