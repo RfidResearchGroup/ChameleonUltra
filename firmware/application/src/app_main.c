@@ -359,6 +359,8 @@ static void check_wakeup_src(void) {
             ledblink2(color, !dir, dir ? slot : 7 - slot);
         } else if (animation_config == SettingsAnimationModeMinimal) {
             ledblink2(color, !dir, dir ? slot : 7 - slot);
+        } else {
+            set_slot_light_color(color);
         }
 
         // The indicator of the current card slot lights up at the end of the animation
