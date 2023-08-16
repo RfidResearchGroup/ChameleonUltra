@@ -367,14 +367,13 @@ TEMPLATE_PATH := $(SDK_ROOT)/components/toolchain/gcc
 include ../Makefile.defs
 include $(TEMPLATE_PATH)/Makefile.common
 
-# tolerate warnings in newer gcc versions
 # need to be called after $(TEMPLATE_PATH)/Makefile.common
 CC_VERSION = $(shell $(CC) -dumpversion 2>/dev/null|sed 's/\..*//')
 CC_VERSION := $(or $(strip $(CC_VERSION)),0)
-CFLAGS += -Wno-error=array-bounds
-ifeq ($(shell expr $(CC_VERSION) \>= 12), 1)
-    CFLAGS += -Wno-error=sizeof-array-div
-endif
+# usage example:
+#ifeq ($(shell expr $(CC_VERSION) \>= 12), 1)
+#    CFLAGS += -Wno-error=sizeof-array-div
+#endif
 
 $(foreach target, $(TARGETS), $(call define_target, $(target)))
 

@@ -64,6 +64,10 @@ extern "C" {
 /** @brief Number of channels in each PWM instance. */
 #define NRF_PWM_CHANNEL_COUNT  4
 
+// ChameleonUltra: nRF SDK produces a wrong GCC warning as the following macro is not meant to give an array size
+#if __GNUC__ >= 12
+#pragma GCC diagnostic ignored "-Wsizeof-array-div"
+#endif
 /**
  * @brief Helper macro for calculating the number of 16-bit values in the specified
  *        array of duty cycle values.
