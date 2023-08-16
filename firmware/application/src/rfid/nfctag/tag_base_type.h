@@ -22,14 +22,14 @@ typedef enum {
     // 特定的且必须存在的标志不存在的类型
     TAG_TYPE_UNKNOWN,
     // 125khz（ID卡）系列
-    TAG_TYPE_EM410X,
+    TAG_TYPE_EM410X      = 0x10000,
     // Mifare系列
-    TAG_TYPE_MIFARE_Mini,
+    TAG_TYPE_MIFARE_Mini = 0x20000,
     TAG_TYPE_MIFARE_1024,
     TAG_TYPE_MIFARE_2048,
     TAG_TYPE_MIFARE_4096,
     // NTAG系列
-    TAG_TYPE_NTAG_213,
+    TAG_TYPE_NTAG_213    = 0x20100,
     TAG_TYPE_NTAG_215,
     TAG_TYPE_NTAG_216,
 } tag_specific_type_t;
