@@ -86,6 +86,12 @@ data_frame_tx_t* cmd_processor_save_settings(uint16_t cmd, uint16_t status, uint
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+data_frame_tx_t* cmd_processor_reset_settings(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    settings_init_config();
+    status = settings_save_config();
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
 data_frame_tx_t* cmd_processor_set_animation_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length == 1) {
         settings_set_animation_config(data[0]);
@@ -546,6 +552,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_DEVICE_CHIP_ID,           NULL,                        cmd_processor_get_device_chip_id,            NULL                   },
     {    DATA_CMD_GET_DEVICE_ADDRESS,           NULL,                        cmd_processor_get_device_address,            NULL                   },
     {    DATA_CMD_SAVE_SETTINGS,                NULL,                        cmd_processor_save_settings,                 NULL                   },
+    {    DATA_CMD_RESET_SETTINGS,               NULL,                        cmd_processor_reset_settings,                NULL                   },
     {    DATA_CMD_SET_ANIMATION_MODE,           NULL,                        cmd_processor_set_animation_mode,            NULL                   },
     {    DATA_CMD_GET_ANIMATION_MODE,           NULL,                        cmd_processor_get_animation_mode,            NULL                   },
 

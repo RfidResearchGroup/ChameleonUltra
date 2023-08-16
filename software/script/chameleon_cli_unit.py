@@ -1032,3 +1032,15 @@ class HWSettingsStore(DeviceRequiredUnit):
             print(" - Store success @.@~")
         else:
             print(" - Store failed")
+
+class HWSettingsReset(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        return None
+
+    def on_exec(self, args: argparse.Namespace):
+        print("Initializing settings...")
+        resp: chameleon_com.Response = self.cmd_standard.reset_settings()
+        if resp.status == chameleon_status.Device.STATUS_DEVICE_SUCCESS:
+            print(" - Reset success @.@~")
+        else:
+            print(" - Reset failed")

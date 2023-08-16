@@ -21,8 +21,9 @@ DATA_CMD_GET_DEVICE_CHIP_ID = 1011
 DATA_CMD_GET_DEVICE_ADDRESS = 1012
 
 DATA_CMD_SAVE_SETTINGS = 1013
-DATA_CMD_SET_ANIMATION_MODE = 1014
-DATA_CMD_GET_ANIMATION_MODE = 1015
+DATA_CMD_RESET_SETTINGS = 1014
+DATA_CMD_SET_ANIMATION_MODE = 1015
+DATA_CMD_GET_ANIMATION_MODE = 1016
 
 DATA_CMD_SCAN_14A_TAG = 2000
 DATA_CMD_MF1_SUPPORT_DETECT = 2001
@@ -441,6 +442,12 @@ class BaseChameleonCMD:
         """
         return self.device.send_cmd_sync(DATA_CMD_SET_ANIMATION_MODE, 0x00, bytearray([value]))
     
+    def reset_settings(self):
+        """
+        Reset settings stored in flash memory
+        """
+        return self.device.send_cmd_sync(DATA_CMD_RESET_SETTINGS, 0x00)
+
     def store_settings(self):
         """
         Store settings to flash memory

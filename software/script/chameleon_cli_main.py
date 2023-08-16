@@ -94,6 +94,7 @@ class ChameleonCLI:
                         'help': 'Manage wake-up and sleep animation mode'
                     },
                     'store': new_uint(chameleon_cli_unit.HWSettingsStore, "Store current settings to flash"),
+                    'reset': new_uint(chameleon_cli_unit.HWSettingsReset, "Reset settings to default values"),
                     'help': "Chameleon settings management"
                 },
                 'help': "hardware controller",

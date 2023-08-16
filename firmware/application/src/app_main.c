@@ -222,7 +222,7 @@ static void system_off_enter(void) {
             nrf_gpio_pin_clear(p_led_array[i]);
         }
         uint8_t animation_config = settings_get_animation_config();
-        if (animation_config == SETTINGS_ANIMATION_FULL) {
+        if (animation_config == SettingsAnimationModeFull) {
             uint8_t slot = tag_emulation_get_slot();
             // Power off animation
             uint8_t dir = slot > 3 ? 1 : 0;
@@ -352,13 +352,12 @@ static void check_wakeup_src(void) {
 
         // Button wake-up boot animation
         uint8_t animation_config = settings_get_animation_config();
-        if (animation_config == SETTINGS_ANIMATION_FULL)
+        if (animation_config == SettingsAnimationModeFull)
         {
             ledblink2(color, !dir, 11);
             ledblink2(color, dir, 11);
             ledblink2(color, !dir, dir ? slot : 7 - slot);
-        }
-        else if (animation_config == SETTINGS_ANIMATION_MINIMAL) {
+        } else if (animation_config == SettingsAnimationModeMinimal) {
             ledblink2(color, !dir, dir ? slot : 7 - slot);
         }
 
@@ -388,7 +387,7 @@ static void check_wakeup_src(void) {
         TAG_FIELD_LED_ON();
 
         uint8_t animation_config = settings_get_animation_config();
-        if (animation_config == SETTINGS_ANIMATION_FULL) {
+        if (animation_config == SettingsAnimationModeFull) {
             // In the case of field wake-up, only one round of RGB is swept as the power-on animation
             ledblink2(color, !dir, dir ? slot : 7 - slot);
         }
