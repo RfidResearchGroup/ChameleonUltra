@@ -20,6 +20,10 @@
 #define DATA_CMD_ENTER_BOOTLOADER               (1010)
 #define DATA_CMD_GET_DEVICE_CHIP_ID             (1011)
 #define DATA_CMD_GET_DEVICE_ADDRESS             (1012)
+#define DATA_CMD_SAVE_SETTINGS                  (1013)
+#define DATA_CMD_RESET_SETTINGS                 (1014)
+#define DATA_CMD_SET_ANIMATION_MODE             (1015)
+#define DATA_CMD_GET_ANIMATION_MODE             (1016)
 //
 // ******************************************************************
 

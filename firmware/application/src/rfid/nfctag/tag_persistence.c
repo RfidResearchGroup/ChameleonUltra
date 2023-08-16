@@ -1,5 +1,5 @@
 #include "tag_persistence.h"
-
+#include "fds_ids.h"
 
 #define NRF_LOG_MODULE_NAME tag_persistence
 #include "nrf_log.h"
