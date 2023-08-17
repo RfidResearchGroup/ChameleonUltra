@@ -12,6 +12,7 @@
 #include "app_status.h"
 #include "tag_persistence.h"
 #include "nrf_pwr_mgmt.h"
+#include "settings.h"
 
 
 #define NRF_LOG_MODULE_NAME app_cmd
@@ -26,6 +27,12 @@ data_frame_tx_t* cmd_processor_get_version(uint16_t cmd, uint16_t status, uint16
     uint16_t version = FW_VER_NUM;
     return data_frame_make(cmd, status, 2, (uint8_t*)&version);
 }
+
+
+data_frame_tx_t* cmd_processor_get_git_version(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    return data_frame_make(cmd, status, strlen(GIT_VERSION), (uint8_t*)GIT_VERSION);
+}
+
 
 data_frame_tx_t* cmd_processor_change_device_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
 #if defined(PROJECT_CHAMELEON_ULTRA)
@@ -78,6 +85,32 @@ data_frame_tx_t* cmd_processor_get_device_address(uint16_t cmd, uint16_t status,
     device_address[0] = NRF_FICR->DEVICEADDR[0];
     device_address[1] = NRF_FICR->DEVICEADDR[1];
     return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 6, (uint8_t*)(&device_address[0]));
+}
+
+data_frame_tx_t* cmd_processor_save_settings(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    status = settings_save_config();
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+data_frame_tx_t* cmd_processor_reset_settings(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    settings_init_config();
+    status = settings_save_config();
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+data_frame_tx_t* cmd_processor_set_animation_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length == 1) {
+        settings_set_animation_config(data[0]);
+    }
+    else {
+        status = STATUS_PAR_ERR; 
+    }
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+data_frame_tx_t* cmd_processor_get_animation_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t animation_mode = settings_get_animation_config();
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 1, (uint8_t *)(&animation_mode));
 }
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
@@ -388,13 +421,13 @@ data_frame_tx_t* cmd_processor_get_mf1_detection_log(uint16_t cmd, uint16_t stat
 data_frame_tx_t* cmd_processor_set_mf1_emulator_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length > 0 && (((length - 1) % NFC_TAG_MF1_DATA_SIZE) == 0)) {
         uint8_t block_index = data[0];
-        uint8_t block_count = (length - 1) % NFC_TAG_MF1_DATA_SIZE;
+        uint8_t block_count = (length - 1) / NFC_TAG_MF1_DATA_SIZE;
         if (block_index + block_count > NFC_TAG_MF1_BLOCK_MAX) {
             status = STATUS_PAR_ERR;
         } else {
             tag_data_buffer_t* buffer = get_buffer_by_tag_type(TAG_TYPE_MIFARE_4096);
             nfc_tag_mf1_information_t *info = (nfc_tag_mf1_information_t *)buffer->buffer;
-            for (int i = 1, j = block_index; i < length - 1; i += NFC_TAG_MF1_DATA_SIZE, j++) {
+            for (int i = 1, j = block_index; i < length; i += NFC_TAG_MF1_DATA_SIZE, j++) {
                 uint8_t *p_block = &data[i];
                 memcpy(info->memory[j], p_block, NFC_TAG_MF1_DATA_SIZE);
             }
@@ -532,6 +565,11 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_ENTER_BOOTLOADER,             NULL,                        cmd_processor_enter_bootloader,              NULL                   },
     {    DATA_CMD_GET_DEVICE_CHIP_ID,           NULL,                        cmd_processor_get_device_chip_id,            NULL                   },
     {    DATA_CMD_GET_DEVICE_ADDRESS,           NULL,                        cmd_processor_get_device_address,            NULL                   },
+    {    DATA_CMD_SAVE_SETTINGS,                NULL,                        cmd_processor_save_settings,                 NULL                   },
+    {    DATA_CMD_RESET_SETTINGS,               NULL,                        cmd_processor_reset_settings,                NULL                   },
+    {    DATA_CMD_SET_ANIMATION_MODE,           NULL,                        cmd_processor_set_animation_mode,            NULL                   },
+    {    DATA_CMD_GET_ANIMATION_MODE,           NULL,                        cmd_processor_get_animation_mode,            NULL                   },
+    {    DATA_CMD_GET_GIT_VERSION,              NULL,                        cmd_processor_get_git_version,               NULL                   },
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 

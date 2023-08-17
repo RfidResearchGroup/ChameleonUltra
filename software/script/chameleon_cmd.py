@@ -19,6 +19,12 @@ DATA_CMD_SLOT_DATA_CONFIG_SAVE = 1009
 DATA_CMD_ENTER_BOOTLOADER = 1010
 DATA_CMD_GET_DEVICE_CHIP_ID = 1011
 DATA_CMD_GET_DEVICE_ADDRESS = 1012
+DATA_CMD_GET_GIT_VERSION = 1017
+
+DATA_CMD_SAVE_SETTINGS = 1013
+DATA_CMD_RESET_SETTINGS = 1014
+DATA_CMD_SET_ANIMATION_MODE = 1015
+DATA_CMD_GET_ANIMATION_MODE = 1016
 
 DATA_CMD_SCAN_14A_TAG = 2000
 DATA_CMD_MF1_SUPPORT_DETECT = 2001
@@ -112,7 +118,10 @@ class BaseChameleonCMD:
         """
         resp = self.device.send_cmd_sync(DATA_CMD_GET_DEVICE_ADDRESS, 0x00, None)
         return resp.data[::-1].hex()
-    
+
+    def get_git_version(self) -> str:
+        resp = self.device.send_cmd_sync(DATA_CMD_GET_GIT_VERSION, 0x00, None)
+        return resp.data.decode('utf-8')
 
     def is_reader_device_mode(self) -> bool:
         """
@@ -434,6 +443,30 @@ class BaseChameleonCMD:
         :return:
         """
         return self.device.send_cmd_auto(DATA_CMD_ENTER_BOOTLOADER, 0x00, close=True)
+    
+    def get_settings_animation(self):
+        """
+        Get animation mode value
+        """
+        return self.device.send_cmd_sync(DATA_CMD_GET_ANIMATION_MODE, 0x00, None)
+    
+    def set_settings_animation(self, value: int):
+        """
+        Set animation mode value
+        """
+        return self.device.send_cmd_sync(DATA_CMD_SET_ANIMATION_MODE, 0x00, bytearray([value]))
+    
+    def reset_settings(self):
+        """
+        Reset settings stored in flash memory
+        """
+        return self.device.send_cmd_sync(DATA_CMD_RESET_SETTINGS, 0x00)
+
+    def store_settings(self):
+        """
+        Store settings to flash memory
+        """
+        return self.device.send_cmd_sync(DATA_CMD_SAVE_SETTINGS, 0x00)
 
 
 class NegativeResponseError(Exception):
