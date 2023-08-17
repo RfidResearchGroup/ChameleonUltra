@@ -7,10 +7,12 @@ $(OUTPUT_DIRECTORY)/application.out: \
 # Source files common to all targets
 SRC_FILES += \
   $(SRC_COMMON)/hw_connect.c \
+  $(SRC_COMMON)/libc_nano_stubs.c \
   $(PROJ_DIR)/app_main.c \
   $(PROJ_DIR)/app_cmd.c \
   $(PROJ_DIR)/ble_main.c \
   $(PROJ_DIR)/rfid_main.c \
+  $(PROJ_DIR)/settings.c \
   $(PROJ_DIR)/usb_main.c \
   $(PROJ_DIR)/rgb_marquee.c \
   $(PROJ_DIR)/bsp/bsp_delay.c \
@@ -369,14 +371,13 @@ TEMPLATE_PATH := $(SDK_ROOT)/components/toolchain/gcc
 include ../Makefile.defs
 include $(TEMPLATE_PATH)/Makefile.common
 
-# tolerate warnings in newer gcc versions
 # need to be called after $(TEMPLATE_PATH)/Makefile.common
 CC_VERSION = $(shell $(CC) -dumpversion 2>/dev/null|sed 's/\..*//')
 CC_VERSION := $(or $(strip $(CC_VERSION)),0)
-CFLAGS += -Wno-error=array-bounds
-ifeq ($(shell expr $(CC_VERSION) \>= 12), 1)
-    CFLAGS += -Wno-error=sizeof-array-div
-endif
+# usage example:
+#ifeq ($(shell expr $(CC_VERSION) \>= 12), 1)
+#    CFLAGS += -Wno-error=sizeof-array-div
+#endif
 
 $(foreach target, $(TARGETS), $(call define_target, $(target)))
 

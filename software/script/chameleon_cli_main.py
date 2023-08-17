@@ -88,6 +88,16 @@ class ChameleonCLI:
                 },
                 'version': new_uint(chameleon_cli_unit.HWVersion, "Get current device firmware version"),
                 'dfu': new_uint(chameleon_cli_unit.HWDFU, "Restart application to bootloader mode(Not yet implement dfu)."),
+                'settings': {
+                    'animation': {
+                        'get': new_uint(chameleon_cli_unit.HWSettingsAnimationGet, "Get current animation mode value"),
+                        'set': new_uint(chameleon_cli_unit.HWSettingsAnimationSet, "Change chameleon animation mode"),
+                        'help': 'Manage wake-up and sleep animation mode'
+                    },
+                    'store': new_uint(chameleon_cli_unit.HWSettingsStore, "Store current settings to flash"),
+                    'reset': new_uint(chameleon_cli_unit.HWSettingsReset, "Reset settings to default values"),
+                    'help': "Chameleon settings management"
+                },
                 'help': "hardware controller",
             },
             'hf': {
@@ -144,14 +154,15 @@ class ChameleonCLI:
         cmds = cmd_str.split(" ")
         cmd_maps: dict or types.FunctionType = self.cmd_maps
         cmd_end = ""
+        cmd_end_position = 0
         for cmd in cmds:
             if cmd in cmd_maps:  # CMD found in map, we can continue find next
                 cmd_maps = cmd_maps[cmd]
                 cmd_end = cmd
+                cmd_end_position += len(cmd) + 1
             else:  # CMD not found
                 break
-        cmd_end_position = cmd_str.index(cmd_end) + len(cmd_end) + 1
-        return cmd_maps, (cmd_str[:cmd_end_position], cmd_str[cmd_end_position:])
+        return cmd_maps, (cmd_str[:cmd_end_position - 1], cmd_str[cmd_end_position:])
 
     def startCLI(self):
         """
