@@ -24,6 +24,7 @@
 #define DATA_CMD_RESET_SETTINGS                 (1014)
 #define DATA_CMD_SET_ANIMATION_MODE             (1015)
 #define DATA_CMD_GET_ANIMATION_MODE             (1016)
+#define DATA_CMD_GET_GIT_VERSION                (1017)
 //
 // ******************************************************************
 

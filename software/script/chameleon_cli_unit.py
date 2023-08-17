@@ -253,6 +253,16 @@ class HWAddressGet(DeviceRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         print(f' - Device address: ' + self.cmd_positive.get_device_address())
 
+class HWVersion(DeviceRequiredUnit):
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        return None
+
+    def on_exec(self, args: argparse.Namespace):
+        fw_version_int = self.cmd_positive.get_firmware_version()
+        fw_version = f'v{fw_version_int // 256}.{fw_version_int % 256}'
+        git_version = self.cmd_positive.get_git_version()
+        print(f' - Version: {fw_version} ({git_version})')
 
 class HF14AScan(ReaderRequiredUint):
     def args_parser(self) -> ArgumentParserNoExit or None:

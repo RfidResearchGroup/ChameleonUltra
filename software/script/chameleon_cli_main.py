@@ -86,6 +86,7 @@ class ChameleonCLI:
                     'openall': new_uint(chameleon_cli_unit.HWSlotOpenAll, "Open all slot and set to default data"), 
                     'help': "Emulation tag slot.",
                 },
+                'version': new_uint(chameleon_cli_unit.HWVersion, "Get current device firmware version"),
                 'dfu': new_uint(chameleon_cli_unit.HWDFU, "Restart application to bootloader mode(Not yet implement dfu)."),
                 'settings': {
                     'animation': {
