@@ -73,6 +73,7 @@ class ChameleonCLI:
                     'help': "Device mode get/set"
                 },
                 'slot': {
+                    'info': new_uint(chameleon_cli_unit.HWSlotInfo, "Get information about slots"),
                     'change': new_uint(chameleon_cli_unit.HWSlotSet, "Set emulation tag slot activated."),
                     'type': new_uint(chameleon_cli_unit.HWSlotTagType, "Set emulation tag type"),
                     'init': new_uint(chameleon_cli_unit.HWSlotDataDefault, "Set emulation tag data to default"),
@@ -174,9 +175,8 @@ class ChameleonCLI:
         while True:
             # wait user input
             status = f"{colorama.Fore.GREEN}USB" if self.device_com.isOpen() else f"{colorama.Fore.RED}Offline"
-            print(f"[{status}{colorama.Style.RESET_ALL}] chameleon --> ", end="")
             try:
-                cmd_str = input().strip()
+                cmd_str = input(f"[{status}{colorama.Style.RESET_ALL}] chameleon --> ").strip()
             except EOFError:
                 print("")
                 closing = True
