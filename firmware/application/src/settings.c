@@ -62,7 +62,7 @@ void settings_migrate(void)
 
 void settings_load_config(void)
 {
-    bool ret = fds_read_sync(FDS_SETTINGS_ID, FDS_SETTINGS_KEY, sizeof(config), (uint8_t *)&config);
+    bool ret = fds_read_sync(FDS_SETTINGS_FILE_ID, FDS_SETTINGS_RECORD_KEY, sizeof(config), (uint8_t *)&config);
     if (ret) {
         NRF_LOG_INFO("Load config done.");
         // After the reading is complete, we first save a copy of the current CRC, which can be used as a reference for comparison of changes when saving later
@@ -89,7 +89,7 @@ uint8_t settings_save_config(void)
     // We are saving the configuration, we need to calculate the crc code of the current configuration to judge whether the following data is updated
     if (config_did_change()) {    // Before saving, make sure that the configuration has changed
         NRF_LOG_INFO("Save config start.");
-        bool ret = fds_write_sync(FDS_SETTINGS_ID, FDS_SETTINGS_KEY, sizeof(config) / 4, (uint8_t *)&config);
+        bool ret = fds_write_sync(FDS_SETTINGS_FILE_ID, FDS_SETTINGS_RECORD_KEY, sizeof(config) / 4, (uint8_t *)&config);
         if (ret) {
             NRF_LOG_INFO("Save config success.");
             update_config_crc();
