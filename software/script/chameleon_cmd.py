@@ -30,6 +30,8 @@ DATA_CMD_GET_GIT_VERSION = 1017
 DATA_CMD_GET_ACTIVE_SLOT = 1018
 DATA_CMD_GET_SLOT_INFO = 1019
 
+DATA_CMD_WIPE_FDS = 1020
+
 DATA_CMD_SCAN_14A_TAG = 2000
 DATA_CMD_MF1_SUPPORT_DETECT = 2001
 DATA_CMD_MF1_NT_LEVEL_DETECT = 2002
@@ -495,6 +497,12 @@ class BaseChameleonCMD:
         Store settings to flash memory
         """
         return self.device.send_cmd_sync(DATA_CMD_SAVE_SETTINGS, 0x00)
+    
+    def factory_reset(self):
+        """
+        Reset to factory settings
+        """
+        return self.device.send_cmd_sync(DATA_CMD_WIPE_FDS, 0x00)
 
 
 class NegativeResponseError(Exception):
