@@ -27,6 +27,7 @@
 #define DATA_CMD_GET_GIT_VERSION                (1017)
 #define DATA_CMD_GET_ACTIVE_SLOT                (1018)
 #define DATA_CMD_GET_SLOT_INFO                  (1019)
+#define DATA_CMD_WIPE_FDS                       (1020)
 //
 // ******************************************************************
 

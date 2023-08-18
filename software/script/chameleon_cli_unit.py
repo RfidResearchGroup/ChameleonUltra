@@ -950,10 +950,10 @@ class HWSlotNickSet(SlotIndexRequireUint, SenseTypeRequireUint):
         slot_num = args.slot
         sense_type = args.sense_type
         name: str = args.name
-        if len(name.encode(encoding="gbk")) > 32:
+        uname = name.encode(encoding="utf8")
+        if len(uname) > 32:
             raise ValueError("Your tag nick name too long.")
-        self.cmd_positive.set_slot_tag_nick_name(slot_num, sense_type, name)
-        #print(f'{slot_num} selected for nickname {name}.')
+        self.cmd_positive.set_slot_tag_nick_name(slot_num, sense_type, uname)
         print(f' - Set tag nick name for slot {slot_num} success.')
 
 
@@ -969,7 +969,7 @@ class HWSlotNickGet(SlotIndexRequireUint, SenseTypeRequireUint):
         slot_num = args.slot
         sense_type = args.sense_type
         res = self.cmd_positive.get_slot_tag_nick_name(slot_num, sense_type)
-        print(f' - Get tag nick name for slot {slot_num}: {res.data.decode(encoding="gbk")}')
+        print(f' - Get tag nick name for slot {slot_num}: {res.data.decode(encoding="utf8")}')
 
 
 class HWSlotUpdate(DeviceRequiredUnit):
@@ -1077,3 +1077,27 @@ class HWSettingsReset(DeviceRequiredUnit):
             print(" - Reset success @.@~")
         else:
             print(" - Reset failed")
+
+class HWFactoryReset(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Permanently wipes Chameleon to factory settings. " \
+            "This will delete all your slot data and custom settings. " \
+            "There's no going back."
+        parser.add_argument(
+            "--i-know-what-im-doing",
+            default=False,
+            action="store_true",
+            help="Just to be sure :)"
+        )
+        return parser
+    def on_exec(self, args: argparse.Namespace):
+        if not args.i_know_what_im_doing:
+            print("This time your data's safe. Read the command documentation next time.")
+            return
+        resp = self.cmd_positive.factory_reset()
+        if resp.status == chameleon_status.Device.STATUS_DEVICE_SUCCESS:
+            print(" - Reset successful! Please reconnect.")
+            print(" - A Serial Error below is normal, please ignore it")
+        else:
+            print(" - Reset failed!")

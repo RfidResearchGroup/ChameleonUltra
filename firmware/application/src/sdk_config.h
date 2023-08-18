@@ -4630,7 +4630,7 @@
 // <e> NRFX_WDT_ENABLED - nrfx_wdt - WDT peripheral driver
 //==========================================================
 #ifndef NRFX_WDT_ENABLED
-#define NRFX_WDT_ENABLED 0
+#define NRFX_WDT_ENABLED 1
 #endif
 // <o> NRFX_WDT_CONFIG_BEHAVIOUR  - WDT behavior in CPU SLEEP or HALT mode
  
@@ -4647,7 +4647,7 @@
 
 
 #ifndef NRFX_WDT_CONFIG_RELOAD_VALUE
-#define NRFX_WDT_CONFIG_RELOAD_VALUE 2000
+#define NRFX_WDT_CONFIG_RELOAD_VALUE 5000
 #endif
 
 // <o> NRFX_WDT_CONFIG_NO_IRQ  - Remove WDT IRQ handling from WDT driver
@@ -4677,7 +4677,7 @@
 // <e> NRFX_WDT_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_WDT_CONFIG_LOG_ENABLED
-#define NRFX_WDT_CONFIG_LOG_ENABLED 0
+#define NRFX_WDT_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_WDT_CONFIG_LOG_LEVEL  - Default Severity level
  
@@ -5868,9 +5868,10 @@
 
 // <e> UART_ENABLED - nrf_drv_uart - UART/UARTE peripheral driver - legacy layer
 //==========================================================
-#ifndef UART_ENABLED
-#define UART_ENABLED 0
-#endif
+//Don't define it at all else it conflicts with NRFX
+//#ifndef UART_ENABLED
+//#define UART_ENABLED 0
+//#endif
 // <o> UART_DEFAULT_CONFIG_HWFC  - Hardware Flow Control
  
 // <0=> Disabled 
@@ -6018,9 +6019,10 @@
 
 // <e> WDT_ENABLED - nrf_drv_wdt - WDT peripheral driver - legacy layer
 //==========================================================
-#ifndef WDT_ENABLED
-#define WDT_ENABLED 0
-#endif
+//Don't define it at all else it conflicts with NRFX
+//#ifndef WDT_ENABLED
+//#define WDT_ENABLED 0
+//#endif
 // <o> WDT_CONFIG_BEHAVIOUR  - WDT behavior in CPU SLEEP or HALT mode
  
 // <1=> Run in SLEEP, Pause in HALT 

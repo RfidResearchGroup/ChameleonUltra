@@ -30,6 +30,8 @@ DATA_CMD_GET_GIT_VERSION = 1017
 DATA_CMD_GET_ACTIVE_SLOT = 1018
 DATA_CMD_GET_SLOT_INFO = 1019
 
+DATA_CMD_WIPE_FDS = 1020
+
 DATA_CMD_SCAN_14A_TAG = 2000
 DATA_CMD_MF1_SUPPORT_DETECT = 2001
 DATA_CMD_MF1_NT_LEVEL_DETECT = 2002
@@ -464,7 +466,7 @@ class BaseChameleonCMD:
         data.extend(uid)
         return self.device.send_cmd_sync(DATA_CMD_SET_MF1_ANTI_COLLISION_RES, 0X00, data)
     
-    def set_slot_tag_nick_name(self, slot: SlotNumber, sense_type: TagSenseType, name: str):
+    def set_slot_tag_nick_name(self, slot: SlotNumber, sense_type: TagSenseType, name: bytes):
         """
             设置MF1的模拟卡的防冲撞资源信息
         :param slot: 卡槽号码
@@ -475,7 +477,7 @@ class BaseChameleonCMD:
         # SlotNumber() will raise error for us if slot not in slot range
         data = bytearray()
         data.extend([SlotNumber.to_fw(slot), sense_type])
-        data.extend(name.encode(encoding="gbk"))
+        data.extend(name)
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_TAG_NICK, 0x00, data)
     
     def get_slot_tag_nick_name(self, slot: SlotNumber, sense_type: TagSenseType):
@@ -528,6 +530,12 @@ class BaseChameleonCMD:
         Store settings to flash memory
         """
         return self.device.send_cmd_sync(DATA_CMD_SAVE_SETTINGS, 0x00)
+    
+    def factory_reset(self):
+        """
+        Reset to factory settings
+        """
+        return self.device.send_cmd_sync(DATA_CMD_WIPE_FDS, 0x00)
 
 
 class NegativeResponseError(Exception):
@@ -653,7 +661,7 @@ class PositiveChameleonCMD(BaseChameleonCMD):
         self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
         return ret
     
-    def set_slot_tag_nick_name(self, slot: int, sense_type: int, name: str):
+    def set_slot_tag_nick_name(self, slot: int, sense_type: int, name: bytes):
         ret = super(PositiveChameleonCMD, self).set_slot_tag_nick_name(slot, sense_type, name)
         self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
         return ret

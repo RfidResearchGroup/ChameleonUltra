@@ -13,6 +13,7 @@
 #include "tag_persistence.h"
 #include "nrf_pwr_mgmt.h"
 #include "settings.h"
+#include "delayed_reset.h"
 
 
 #define NRF_LOG_MODULE_NAME app_cmd
@@ -357,6 +358,13 @@ data_frame_tx_t* cmd_processor_get_slot_info(uint16_t cmd, uint16_t status, uint
     return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 16, slot_info);
 }
 
+data_frame_tx_t* cmd_processor_wipe_fds(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    bool success = fds_wipe();
+    status = success ? STATUS_DEVICE_SUCCESS : STATUS_FLASH_WRITE_FAIL;
+    delayed_reset(50);
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
 data_frame_tx_t* cmd_processor_set_em410x_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length == LF_EM410X_TAG_ID_SIZE) {
         tag_data_buffer_t* buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
@@ -473,7 +481,6 @@ data_frame_tx_t* cmd_processor_set_mf1_anti_collision_res(uint16_t cmd, uint16_t
 }
 
 data_frame_tx_t* cmd_processor_set_slot_tag_nick_name(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    // one chinese have 2byte(gbk).
     if (length > 34 || length < 3) {
         status = STATUS_PAR_ERR;
     } else {
@@ -498,7 +505,6 @@ data_frame_tx_t* cmd_processor_set_slot_tag_nick_name(uint16_t cmd, uint16_t sta
 }
 
 data_frame_tx_t* cmd_processor_get_slot_tag_nick_name(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    // one chinese have 2byte(gbk).
     if (length != 2) {
         status = STATUS_PAR_ERR;
     } else {
@@ -607,6 +613,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_SLOT_DATA_CONFIG_SAVE,        NULL,                        cmd_processor_slot_data_config_save,         NULL                   },
     {    DATA_CMD_GET_ACTIVE_SLOT,              NULL,                        cmd_processor_get_activated_slot,            NULL                   },
     {    DATA_CMD_GET_SLOT_INFO,                NULL,                        cmd_processor_get_slot_info,                 NULL                   },
+    {    DATA_CMD_WIPE_FDS,                     NULL,                        cmd_processor_wipe_fds,                      NULL                   },
     
 
     {    DATA_CMD_SET_EM410X_EMU_ID,            NULL,                        cmd_processor_set_em410x_emu_id,             NULL                   },

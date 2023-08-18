@@ -17,6 +17,7 @@ SRC_FILES += \
   $(PROJ_DIR)/rgb_marquee.c \
   $(PROJ_DIR)/bsp/bsp_delay.c \
   $(PROJ_DIR)/bsp/bsp_time.c \
+  $(PROJ_DIR)/bsp/bsp_wdt.c \
   $(PROJ_DIR)/rfid/crc_utils.c \
   $(PROJ_DIR)/rfid/hex_utils.c \
   $(PROJ_DIR)/rfid/mf1_crapto1.c \
@@ -30,6 +31,7 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/nfctag/hf/nfc_ntag.c \
   $(PROJ_DIR)/rfid/nfctag/lf/lf_tag_em.c \
   $(PROJ_DIR)/utils/dataframe.c \
+  $(PROJ_DIR)/utils/delayed_reset.c \
   $(PROJ_DIR)/utils/fds_util.c \
   $(PROJ_DIR)/utils/syssleep.c \
   $(PROJ_DIR)/utils/timeslot.c \
@@ -93,6 +95,7 @@ SRC_FILES += \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_spi.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_rng.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_ppi.c \
+  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_wdt.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_Syscalls_GCC.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_printf.c \
@@ -288,6 +291,23 @@ else
 $(error Chameleon <Application>: No device type define.)
 endif
 
+ifeq (${NRF_LOG_UART_ON_SWO_ENABLED}, 1)
+SRC_FILES += \
+  $(SDK_ROOT)/components/libraries/log/src/nrf_log_backend_uart.c \
+  $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_uart.c \
+  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_uarte.c
+
+  CFLAGS += -DNRFX_UARTE_ENABLED=1 -DNRFX_UARTE0_ENABLED=1
+  CFLAGS += -DNRF_LOG_BACKEND_UART_ENABLED=1
+#define NRF_GPIO_PIN_MAP(port, pin) (((port) << 5) | ((pin) & 0x1F))
+#define NRF_LOG_BACKEND_UART_TX_PIN NRF_GPIO_PIN_MAP(1, 0)
+  CFLAGS += -DNRF_LOG_BACKEND_UART_TX_PIN=32
+# 30801920 = 115200 baud
+  CFLAGS += -DNRF_LOG_BACKEND_UART_BAUDRATE=30801920
+  CFLAGS += -DNRF_LOG_BACKEND_UART_TEMP_BUFFER_SIZE=64
+
+$(info  Chameleon <Application>: enable NRF_LOG on UART via SWO pin.)
+endif
 
 # Optimization flags
 OPT = -O3 -g3
