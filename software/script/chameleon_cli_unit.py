@@ -1,3 +1,4 @@
+import binascii
 import os
 import re
 import subprocess
@@ -698,6 +699,55 @@ class HFMFELoad(DeviceRequiredUnit):
             print('.', end='')
             block += 1
         print("\n - Load success")
+
+class HFMFERead(DeviceRequiredUnit):
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        parser = ArgumentParserNoExit()
+        parser.add_argument('-f', '--file', type=str, required=True, help="file path")
+        parser.add_argument('-t', '--type', type=str, required=False, help="content type", choices=['bin', 'hex'])
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        file = args.file
+        if args.type is None:
+            if file.endswith('.bin'):
+                content_type = 'bin'
+            elif file.endswith('.eml'):
+                content_type = 'hex'
+            else:
+                raise Exception("Unknown file format, Specify content type with -t option")
+        else:
+            content_type = args.type
+
+        selected_slot = self.cmd_positive.get_active_slot().data[0]
+        slot_info = self.cmd_positive.get_slot_info().data
+        tag_type = chameleon_cmd.TagSpecificType(slot_info[selected_slot * 2])
+        if tag_type == chameleon_cmd.TagSpecificType.TAG_TYPE_MIFARE_Mini:
+            block_count = 20
+        elif tag_type == chameleon_cmd.TagSpecificType.TAG_TYPE_MIFARE_1024:
+            block_count = 64
+        elif tag_type == chameleon_cmd.TagSpecificType.TAG_TYPE_MIFARE_2048:
+            block_count = 128
+        elif tag_type == chameleon_cmd.TagSpecificType.TAG_TYPE_MIFARE_4096:
+            block_count = 256
+        else:
+            raise Exception("Card in current slot is not Mifare Classic/Plus in SL1 mode")
+
+        with open(file, 'wb') as fd:
+            block = 0
+            while block < block_count:
+                response = self.cmd_positive.get_mf1_block_data(block, 1)
+                print('.', end='')
+                block += 1
+                if content_type == 'hex':
+                    hex_char_repr = binascii.hexlify(response.data)
+                    fd.write(hex_char_repr)
+                    fd.write(bytes([0x0a]))
+                else:
+                    fd.write(response.data)
+        
+        print("\n - Read success")
 
 
 class HFMFSim(DeviceRequiredUnit):

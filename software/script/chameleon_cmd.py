@@ -1,4 +1,5 @@
 import enum
+import struct
 
 import chameleon_com
 import chameleon_status
@@ -44,14 +45,14 @@ DATA_CMD_MF1_WRITE_ONE_BLOCK = 2009
 DATA_CMD_SCAN_EM410X_TAG = 3000
 DATA_CMD_WRITE_EM410X_TO_T5577 = 3001
 
-DATA_CMD_LOAD_MF1_BLOCK_DATA = 4000
+DATA_CMD_LOAD_MF1_EMU_BLOCK_DATA = 4000
 DATA_CMD_SET_MF1_ANTI_COLLISION_RES = 4001
 
 DATA_CMD_SET_MF1_DETECTION_ENABLE = 4004
 DATA_CMD_GET_MF1_DETECTION_COUNT = 4005
 DATA_CMD_GET_MF1_DETECTION_RESULT = 4006
 
-DATA_CMD_READ_MF1_BLOCK_DATA = 4008
+DATA_CMD_READ_MF1_EMU_BLOCK_DATA = 4008
 
 DATA_CMD_SET_EM410X_EMU_ID = 5000
 DATA_CMD_GET_EM410X_EMU_ID = 5001
@@ -427,7 +428,14 @@ class BaseChameleonCMD:
         data = bytearray()
         data.append(block_start & 0xFF)
         data.extend(block_data)
-        return self.device.send_cmd_sync(DATA_CMD_LOAD_MF1_BLOCK_DATA, 0x00, data)
+        return self.device.send_cmd_sync(DATA_CMD_LOAD_MF1_EMU_BLOCK_DATA, 0x00, data)
+    
+    def get_mf1_block_data(self, block_start: int, block_count: int):
+        """
+            Gets data for selected block range
+        """
+        data = struct.pack('<BH', block_start, block_count)
+        return self.device.send_cmd_sync(DATA_CMD_READ_MF1_EMU_BLOCK_DATA, 0x00, data)
 
     def set_mf1_anti_collision_res(self, sak: bytearray, atqa: bytearray, uid: bytearray):
         """

@@ -66,7 +66,7 @@
 //                  Range from 4000 -> 4999
 // ******************************************************************
 // 
-#define DATA_CMD_LOAD_MF1_BLOCK_DATA            (4000)
+#define DATA_CMD_LOAD_MF1_EMU_BLOCK_DATA        (4000)
 #define DATA_CMD_SET_MF1_ANTI_COLLISION_RES     (4001)
 #define DATA_CMD_SET_MF1_ANTICOLLISION_INFO     (4002)
 #define DATA_CMD_SET_MF1_ATS_RESOURCE           (4003)
@@ -74,7 +74,7 @@
 #define DATA_CMD_GET_MF1_DETECTION_COUNT        (4005)
 #define DATA_CMD_GET_MF1_DETECTION_RESULT       (4006)
 #define DATA_CMD_GET_MF1_DETECTION_STATUS       (4007)
-#define DATA_CMD_READ_MF1_BLOCK_DATA            (4008)
+#define DATA_CMD_READ_MF1_EMU_BLOCK_DATA        (4008)
 //
 // ******************************************************************
 
