@@ -10,6 +10,7 @@ SRC_FILES += \
   $(PROJ_DIR)/main.c \
   $(PROJ_DIR)/dfu_public_key.c \
   $(SRC_COMMON)/hw_connect.c \
+  $(SRC_COMMON)/libc_nano_stubs.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_clock.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_power.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_systick.c \
@@ -197,8 +198,6 @@ CFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
 # keep every function in a separate section, this allows linker to discard unused ones
 CFLAGS += -ffunction-sections -fdata-sections -fno-strict-aliasing
 CFLAGS += -fno-builtin -fshort-enums
-# fix newer compilator versions
-CFLAGS += -Wno-error=array-bounds
 
 # C++ flags common to all targets
 CXXFLAGS += $(OPT)
@@ -252,6 +251,15 @@ help:
 TEMPLATE_PATH := $(SDK_ROOT)/components/toolchain/gcc
 
 include $(TEMPLATE_PATH)/Makefile.common
+
+# tolerate warnings in newer gcc versions
+# need to be called after $(TEMPLATE_PATH)/Makefile.common
+CC_VERSION = $(shell $(CC) -dumpversion 2>/dev/null|sed 's/\..*//')
+CC_VERSION := $(or $(strip $(CC_VERSION)),0)
+ifeq ($(shell expr $(CC_VERSION) \>= 12), 1)
+    # avoid a couple of false warnings in nRF SDK
+    CFLAGS += --param=min-pagesize=0
+endif
 
 $(foreach target, $(TARGETS), $(call define_target, $(target)))
 

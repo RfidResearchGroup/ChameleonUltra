@@ -22,4 +22,8 @@ LD_DIR           := $(SRC_COMMON)
 CHAMELEON_ULTRA := ultra
 CHAMELEON_LITE  := lite
 # What device is it?
+
 CURRENT_DEVICE_TYPE ?= ${CHAMELEON_ULTRA}
+
+# Versioning information
+GIT_VERSION := "$(shell git describe --abbrev=7 --dirty --always --tags)"

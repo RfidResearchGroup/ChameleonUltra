@@ -41,6 +41,8 @@
 #define NRF_SECTION_H__
 
 #include "nordic_common.h"
+// ChameleonUltra: nRF SDK produces a number of GCC warnings due to its NRF_SECTION macros and we want to ignore them
+#pragma GCC diagnostic ignored "-Warray-bounds"
 
 #ifdef __cplusplus
 extern "C" {

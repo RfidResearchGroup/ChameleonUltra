@@ -3,6 +3,7 @@
 #include "lf_tag_em.h"
 #include "nfc_mf1.h"
 #include "nfc_ntag.h"
+#include "fds_ids.h"
 #include "fds_util.h"
 #include "tag_emulation.h"
 #include "tag_persistence.h"
@@ -383,7 +384,7 @@ void tag_emulation_sense_switch(tag_sense_type_t type, bool enable) {
  */
 void tag_emulation_load_config(void) {
     // 读取卡槽配置数据
-    bool ret = fds_read_sync(FDS_CONFIG_RECORD_FILE_ID, FDS_CONFIG_RECORD_FILE_KEY, sizeof(slotConfig), (uint8_t *)&slotConfig);
+    bool ret = fds_read_sync(FDS_EMULATION_CONFIG_FILE_ID, FDS_EMULATION_CONFIG_RECORD_KEY, sizeof(slotConfig), (uint8_t *)&slotConfig);
     if (ret) {
         // 读取完成后，我们先保存一份当前配置的BCC，后面保存的时候可以作为变动对比的参考
         calc_14a_crc_lut((uint8_t *)&slotConfig, sizeof(slotConfig), (uint8_t *)&m_slot_config_crc);
@@ -402,7 +403,7 @@ void tag_emulation_save_config(void) {
     calc_14a_crc_lut((uint8_t *)&slotConfig, sizeof(slotConfig), (uint8_t *)&new_calc_crc);
     if (new_calc_crc != m_slot_config_crc) {    // 在保存之前，先确保卡槽配置有变动了
         NRF_LOG_INFO("Save tag slot config start.");
-        bool ret = fds_write_sync(FDS_CONFIG_RECORD_FILE_ID, FDS_CONFIG_RECORD_FILE_KEY, sizeof(slotConfig) / 4, (uint8_t *)&slotConfig);
+        bool ret = fds_write_sync(FDS_EMULATION_CONFIG_FILE_ID, FDS_EMULATION_CONFIG_RECORD_KEY, sizeof(slotConfig) / 4, (uint8_t *)&slotConfig);
         if (ret) {
             NRF_LOG_INFO("Save tag slot config success.");
         } else {

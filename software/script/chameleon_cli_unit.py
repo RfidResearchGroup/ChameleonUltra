@@ -253,6 +253,16 @@ class HWAddressGet(DeviceRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         print(f' - Device address: ' + self.cmd_positive.get_device_address())
 
+class HWVersion(DeviceRequiredUnit):
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        return None
+
+    def on_exec(self, args: argparse.Namespace):
+        fw_version_int = self.cmd_positive.get_firmware_version()
+        fw_version = f'v{fw_version_int // 256}.{fw_version_int % 256}'
+        git_version = self.cmd_positive.get_git_version()
+        print(f' - Version: {fw_version} ({git_version})')
 
 class HF14AScan(ReaderRequiredUint):
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -813,6 +823,18 @@ class SenseTypeRequireUint(DeviceRequiredUnit):
                             help=help_str, metavar="number", choices=slot_choices)
         return parser
 
+class HWSlotInfo(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        return
+
+    # hw slot info
+    def on_exec(self, args: argparse.Namespace):
+        data = self.cmd_positive.get_slot_info().data
+        selected = self.cmd_positive.get_active_slot().data[0]
+        for slot in range(8):
+            print(f' - Slot {slot + 1} data{" (active)" if slot == selected else ""}:')
+            print(f' HF: {chameleon_cmd.TagSpecificType(data[slot * 2])}')
+            print(f' LF: {chameleon_cmd.TagSpecificType(data[slot * 2 + 1])}')
 
 class HWSlotSet(SlotIndexRequireUint):
 
@@ -1000,3 +1022,53 @@ class HWDFU(DeviceRequiredUnit):
         print(" - Enter success @.@~")
         # let time for comm thread to send dfu cmd and close port
         time.sleep(0.1)
+
+class HWSettingsAnimationGet(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        return None
+    def on_exec(self, args: argparse.Namespace):
+        resp: chameleon_com.Response = self.cmd_standard.get_settings_animation()
+        if resp.data[0] == 0:
+            print("Full animation")
+        elif resp.data[0] == 1:
+            print("Minimal animation")
+        elif resp.data[0] == 2:
+            print("No animation")
+        else:
+            print("Unknown setting value, something failed.")
+
+class HWSettingsAnimationSet(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        parser = ArgumentParserNoExit()
+        parser.add_argument('-m', '--mode', type=int, required=True, help="0 is full (default), 1 is minimal (only single pass on button wakeup), 2 is none", choices=[0, 1, 2])
+        return parser
+    
+    def on_exec(self, args: argparse.Namespace):
+        mode = args.mode
+        self.cmd_standard.set_settings_animation(mode)
+        print("Animation mode change success. Do not forget to store your settings in flash!")
+    
+
+class HWSettingsStore(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        return None
+    
+    def on_exec(self, args: argparse.Namespace):
+        print("Storing settings...")
+        resp: chameleon_com.Response = self.cmd_standard.store_settings()
+        if resp.status == chameleon_status.Device.STATUS_DEVICE_SUCCESS:
+            print(" - Store success @.@~")
+        else:
+            print(" - Store failed")
+
+class HWSettingsReset(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        return None
+
+    def on_exec(self, args: argparse.Namespace):
+        print("Initializing settings...")
+        resp: chameleon_com.Response = self.cmd_standard.reset_settings()
+        if resp.status == chameleon_status.Device.STATUS_DEVICE_SUCCESS:
+            print(" - Reset success @.@~")
+        else:
+            print(" - Reset failed")

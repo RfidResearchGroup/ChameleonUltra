@@ -41,6 +41,8 @@ class Device(metaclass=MetaDevice):
     STATUS_INVALID_CMD                      = 0x67  # 无效的指令
     STATUS_DEVICE_SUCCESS                   = 0x68  # 设备相关操作成功执行
     STATUS_NOT_IMPLEMENTED                  = 0x69  # 调用了某些未实现的操作，属于开发者遗漏的错误
+    STATUS_FLASH_WRITE_FAIL                 = 0x70  # flash写入失败
+    STATUS_FLASH_READ_FAIL                  = 0x71  # flash读取失败
 
 
 message = {
@@ -68,4 +70,6 @@ message = {
     Device.STATUS_INVALID_CMD               : "API request fail, cmd invalid",
     Device.STATUS_DEVICE_SUCCESS            : "Device operation succeeded",
     Device.STATUS_NOT_IMPLEMENTED           : "Some api not implemented",
+    Device.STATUS_FLASH_WRITE_FAIL          : "Flash write failed",
+    Device.STATUS_FLASH_READ_FAIL           : "Flash read failed"
 }
