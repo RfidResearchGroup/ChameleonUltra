@@ -13,6 +13,7 @@
 #include "tag_persistence.h"
 #include "nrf_pwr_mgmt.h"
 #include "settings.h"
+#include "delayed_reset.h"
 
 
 #define NRF_LOG_MODULE_NAME app_cmd
@@ -359,15 +360,9 @@ data_frame_tx_t* cmd_processor_get_slot_info(uint16_t cmd, uint16_t status, uint
 
 data_frame_tx_t* cmd_processor_wipe_fds(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     bool success = fds_wipe();
-    if (!success) {
-        return data_frame_make(cmd, STATUS_FLASH_WRITE_FAIL, 0, NULL);
-    }
-    while (NRF_LOG_PROCESS());
-    ret_code_t ret = sd_nvic_SystemReset();
-    APP_ERROR_CHECK(ret);
-    while (1) {
-        __NOP();
-    }
+    status = success ? STATUS_DEVICE_SUCCESS : STATUS_FLASH_WRITE_FAIL;
+    delayed_reset(50);
+    return data_frame_make(cmd, status, 0, NULL);
 }
 
 data_frame_tx_t* cmd_processor_set_em410x_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {

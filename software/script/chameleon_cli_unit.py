@@ -1084,11 +1084,9 @@ class HWFactoryReset(DeviceRequiredUnit):
         if not args.i_know_what_im_doing:
             print("This time your data's safe. Read the command documentation next time.")
             return
-        try:
-            resp = self.cmd_positive.factory_reset()
-            if resp.status != chameleon_status.Device.STATUS_DEVICE_SUCCESS:
-                print(" - Reset failed!")
-                return
-        except KeyError:
-            print(" - A Serial Error above is normal, please ignore it")
+        resp = self.cmd_positive.factory_reset()
+        if resp.status == chameleon_status.Device.STATUS_DEVICE_SUCCESS:
             print(" - Reset successful! Please reconnect.")
+            print(" - A Serial Error below is normal, please ignore it")
+        else:
+            print(" - Reset failed!")
