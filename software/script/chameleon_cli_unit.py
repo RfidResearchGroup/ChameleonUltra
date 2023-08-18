@@ -1066,3 +1066,29 @@ class HWSettingsReset(DeviceRequiredUnit):
             print(" - Reset success @.@~")
         else:
             print(" - Reset failed")
+
+class HWFactoryReset(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Permanently wipes Chameleon to factory settings. " \
+            "This will delete all your slot data and custom settings. " \
+            "There's no going back."
+        parser.add_argument(
+            "--i-know-what-im-doing",
+            default=False,
+            action="store_true",
+            help="Just to be sure :)"
+        )
+        return parser
+    def on_exec(self, args: argparse.Namespace):
+        if not args.i_know_what_im_doing:
+            print("This time your data's safe. Read the command documentation next time.")
+            return
+        try:
+            resp = self.cmd_positive.factory_reset()
+            if resp.status != chameleon_status.Device.STATUS_DEVICE_SUCCESS:
+                print(" - Reset failed!")
+                return
+        except KeyError:
+            print(" - A Serial Error above is normal, please ignore it")
+            print(" - Reset successful! Please reconnect.")

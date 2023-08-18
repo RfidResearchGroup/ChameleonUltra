@@ -99,6 +99,7 @@ class ChameleonCLI:
                     'reset': new_uint(chameleon_cli_unit.HWSettingsReset, "Reset settings to default values"),
                     'help': "Chameleon settings management"
                 },
+                'factory_reset': new_uint(chameleon_cli_unit.HWFactoryReset, "Wipe all data and return to factory settings"),
                 'help': "hardware controller",
             },
             'hf': {

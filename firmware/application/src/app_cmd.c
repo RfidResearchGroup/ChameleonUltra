@@ -357,6 +357,19 @@ data_frame_tx_t* cmd_processor_get_slot_info(uint16_t cmd, uint16_t status, uint
     return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 16, slot_info);
 }
 
+data_frame_tx_t* cmd_processor_wipe_fds(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    bool success = fds_wipe();
+    if (!success) {
+        return data_frame_make(cmd, STATUS_FLASH_WRITE_FAIL, 0, NULL);
+    }
+    while (NRF_LOG_PROCESS());
+    ret_code_t ret = sd_nvic_SystemReset();
+    APP_ERROR_CHECK(ret);
+    while (1) {
+        __NOP();
+    }
+}
+
 data_frame_tx_t* cmd_processor_set_em410x_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length == LF_EM410X_TAG_ID_SIZE) {
         tag_data_buffer_t* buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
@@ -607,6 +620,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_SLOT_DATA_CONFIG_SAVE,        NULL,                        cmd_processor_slot_data_config_save,         NULL                   },
     {    DATA_CMD_GET_ACTIVE_SLOT,              NULL,                        cmd_processor_get_activated_slot,            NULL                   },
     {    DATA_CMD_GET_SLOT_INFO,                NULL,                        cmd_processor_get_slot_info,                 NULL                   },
+    {    DATA_CMD_WIPE_FDS,                     NULL,                        cmd_processor_wipe_fds,                      NULL                   },
     
 
     {    DATA_CMD_SET_EM410X_EMU_ID,            NULL,                        cmd_processor_set_em410x_emu_id,             NULL                   },
