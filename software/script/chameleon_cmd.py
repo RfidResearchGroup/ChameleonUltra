@@ -54,6 +54,27 @@ DATA_CMD_SET_MF1_DETECTION_ENABLE = 5003
 DATA_CMD_GET_MF1_DETECTION_COUNT = 5004
 DATA_CMD_GET_MF1_DETECTION_RESULT = 5005
 
+@enum.unique
+class SlotNumber(enum.IntEnum):
+    SLOT_1 = 1,
+    SLOT_2 = 2,
+    SLOT_3 = 3,
+    SLOT_4 = 4,
+    SLOT_5 = 5,
+    SLOT_6 = 6,
+    SLOT_7 = 7,
+    SLOT_8 = 8,
+
+    @staticmethod
+    def to_fw(index: int): # can be int or SlotNumber
+        # SlotNumber() will raise error for us if index not in slot range
+        return SlotNumber(index).value - 1
+
+    @staticmethod
+    def from_fw(index: int):
+        # SlotNumber() will raise error for us if index not in fw range
+        return SlotNumber(index + 1)
+
 
 @enum.unique
 class TagSenseType(enum.IntEnum):
@@ -64,6 +85,20 @@ class TagSenseType(enum.IntEnum):
     # 高频13.56mhz场感应
     TAG_SENSE_HF = 2,
 
+
+    @staticmethod
+    def list(exclude_unknown=True):
+        enum_list = list(map(int, TagSenseType))
+        if exclude_unknown:
+            enum_list.remove(TagSenseType.TAG_SENSE_NO)
+        return enum_list
+
+    def __str__(self):
+        if self == TagSenseType.TAG_SENSE_LF:
+            return "LF"
+        elif self == TagSenseType.TAG_SENSE_HF:
+            return "HF"
+        return "None"
 
 @enum.unique
 class TagSpecificType(enum.IntEnum):
@@ -89,21 +124,21 @@ class TagSpecificType(enum.IntEnum):
         return enum_list
 
     def __str__(self):
-        if self.value == TagSpecificType.TAG_TYPE_EM410X:
+        if self == TagSpecificType.TAG_TYPE_EM410X:
             return "EM410X"
-        elif self.value == TagSpecificType.TAG_TYPE_MIFARE_Mini:
+        elif self == TagSpecificType.TAG_TYPE_MIFARE_Mini:
             return "Mifare Mini"
-        elif self.value == TagSpecificType.TAG_TYPE_MIFARE_1024:
+        elif self == TagSpecificType.TAG_TYPE_MIFARE_1024:
             return "Mifare Classic 1k"
-        elif self.value == TagSpecificType.TAG_TYPE_MIFARE_2048:
+        elif self == TagSpecificType.TAG_TYPE_MIFARE_2048:
             return "Mifare Classic 2k"
-        elif self.value == TagSpecificType.TAG_TYPE_MIFARE_4096:
+        elif self == TagSpecificType.TAG_TYPE_MIFARE_4096:
             return "Mifare Classic 4k"
-        elif self.value == TagSpecificType.TAG_TYPE_NTAG_213:
+        elif self == TagSpecificType.TAG_TYPE_NTAG_213:
             return "NTAG 213"
-        elif self.value == TagSpecificType.TAG_TYPE_NTAG_215:
+        elif self == TagSpecificType.TAG_TYPE_NTAG_215:
             return "NTAG 215"
-        elif self.value == TagSpecificType.TAG_TYPE_NTAG_216:
+        elif self == TagSpecificType.TAG_TYPE_NTAG_216:
             return "NTAG 216"
         return "Unknown"
 
@@ -316,19 +351,18 @@ class BaseChameleonCMD:
         """
         return self.device.send_cmd_sync(DATA_CMD_GET_ACTIVE_SLOT, 0x00, None)
 
-    def set_slot_activated(self, slot_index):
+    def set_slot_activated(self, slot_index: SlotNumber):
         """
             设置当前激活使用的卡槽
         :param slot_index: 卡槽索引，从 1 - 8（不是从0下标开始）
         :return:
         """
-        if slot_index < 1 or slot_index > 8:
-            raise ValueError("The slot index range error(1-8)")
+        # SlotNumber() will raise error for us if slot_index not in slot range
         data = bytearray()
-        data.append(slot_index - 1)
+        data.append(SlotNumber.to_fw(slot_index))
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_ACTIVATED, 0x00, data)
 
-    def set_slot_tag_type(self, slot_index: int, tag_type: TagSpecificType):
+    def set_slot_tag_type(self, slot_index: SlotNumber, tag_type: TagSpecificType):
         """
             设置当前卡槽的模拟卡的标签类型
             注意：此操作并不会更改flash中的数据，flash中的数据的变动仅在下次保存时更新
@@ -336,14 +370,13 @@ class BaseChameleonCMD:
         :param tag_type: 标签类型
         :return:
         """
-        if slot_index < 1 or slot_index > 8:
-            raise ValueError("The slot index range error(1-8)")
+        # SlotNumber() will raise error for us if slot_index not in slot range
         data = bytearray()
-        data.append(slot_index - 1)
+        data.append(SlotNumber.to_fw(slot_index))
         data.append(tag_type)
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_TAG_TYPE, 0x00, data)
 
-    def set_slot_data_default(self, slot_index: int, tag_type: TagSpecificType):
+    def set_slot_data_default(self, slot_index: SlotNumber, tag_type: TagSpecificType):
         """
             设置指定卡槽的模拟卡的数据为缺省数据
             注意：此API会将flash中的数据一并进行设置
@@ -351,24 +384,22 @@ class BaseChameleonCMD:
         :param tag_type: 要设置的缺省标签类型
         :return:
         """
-        if slot_index < 1 or slot_index > 8:
-            raise ValueError("The slot index range error(1-8)")
+        # SlotNumber() will raise error for us if slot_index not in slot range
         data = bytearray()
-        data.append(slot_index - 1)
+        data.append(SlotNumber.to_fw(slot_index))
         data.append(tag_type)
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_DATA_DEFAULT, 0x00, data)
 
-    def set_slot_enable(self, slot_index: int, enable: bool):
+    def set_slot_enable(self, slot_index: SlotNumber, enable: bool):
         """
             设置指定的卡槽是否使能
         :param slot_index: 卡槽号码
         :param enable: 是否使能
         :return:
         """
-        if slot_index < 1 or slot_index > 8:
-            raise ValueError("The slot index range error(1-8)")
+        # SlotNumber() will raise error for us if slot_index not in slot range
         data = bytearray()
-        data.append(slot_index - 1)
+        data.append(SlotNumber.to_fw(slot_index))
         data.append(0x01 if enable else 0x00)
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_ENABLE, 0X00, data)
 
@@ -435,7 +466,7 @@ class BaseChameleonCMD:
         data.extend(uid)
         return self.device.send_cmd_sync(DATA_CMD_SET_MF1_ANTI_COLLISION_RES, 0X00, data)
     
-    def set_slot_tag_nick_name(self, slot: int, sense_type: int, name: bytes):
+    def set_slot_tag_nick_name(self, slot: SlotNumber, sense_type: TagSenseType, name: bytes):
         """
             设置MF1的模拟卡的防冲撞资源信息
         :param slot: 卡槽号码
@@ -443,12 +474,13 @@ class BaseChameleonCMD:
         :param name: 卡槽昵称
         :return:
         """
+        # SlotNumber() will raise error for us if slot not in slot range
         data = bytearray()
-        data.extend([slot, sense_type])
+        data.extend([SlotNumber.to_fw(slot), sense_type])
         data.extend(name)
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_TAG_NICK, 0x00, data)
     
-    def get_slot_tag_nick_name(self, slot: int, sense_type: int):
+    def get_slot_tag_nick_name(self, slot: SlotNumber, sense_type: TagSenseType):
         """
             设置MF1的模拟卡的防冲撞资源信息
         :param slot: 卡槽号码
@@ -456,8 +488,9 @@ class BaseChameleonCMD:
         :param name: 卡槽昵称
         :return:
         """
+        # SlotNumber() will raise error for us if slot not in slot range
         data = bytearray()
-        data.extend([slot, sense_type])
+        data.extend([SlotNumber.to_fw(slot), sense_type])
         return self.device.send_cmd_sync(DATA_CMD_GET_SLOT_TAG_NICK, 0x00, data)
     
     def update_slot_data_config(self):

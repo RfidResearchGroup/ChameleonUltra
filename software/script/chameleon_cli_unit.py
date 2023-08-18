@@ -798,9 +798,11 @@ class SlotIndexRequireUint(DeviceRequiredUnit):
 
     @staticmethod
     def add_slot_args(parser: ArgumentParserNoExit):
-        slot_choices = [1, 2, 3, 4, 5, 6, 7, 8]
+        slot_choices = [x.value for x in chameleon_cmd.SlotNumber]
+        help_str = f"Slot Indexes: {slot_choices}"
+
         parser.add_argument('-s', "--slot", type=int, required=True,
-                            help="Slot index", metavar="number", choices=slot_choices)
+                            help=help_str, metavar="number", choices=slot_choices)
         return parser
 
 class SenseTypeRequireUint(DeviceRequiredUnit):
@@ -813,10 +815,18 @@ class SenseTypeRequireUint(DeviceRequiredUnit):
 
     @staticmethod
     def add_sense_type_args(parser: ArgumentParserNoExit):
-        slot_choices = [1, 2]
+        sense_choices = chameleon_cmd.TagSenseType.list()
+
+        help_str = ""
+        for s in chameleon_cmd.TagSenseType:
+            if s == chameleon_cmd.TagSenseType.TAG_SENSE_NO:
+                continue
+            help_str += f"{s.value} = {s}, "
+
         parser.add_argument('-st', "--sense_type", type=int, required=True,
-                            help="Sense type", metavar="number", choices=slot_choices)
+                            help=help_str, metavar="number", choices=sense_choices)
         return parser
+
 
 class HWSlotInfo(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -825,11 +835,11 @@ class HWSlotInfo(DeviceRequiredUnit):
     # hw slot info
     def on_exec(self, args: argparse.Namespace):
         data = self.cmd_positive.get_slot_info().data
-        selected = self.cmd_positive.get_active_slot().data[0]
-        for slot in range(8):
-            print(f' - Slot {slot + 1} data{" (active)" if slot == selected else ""}:')
-            print(f' HF: {chameleon_cmd.TagSpecificType(data[slot * 2])}')
-            print(f' LF: {chameleon_cmd.TagSpecificType(data[slot * 2 + 1])}')
+        selected = chameleon_cmd.SlotNumber.from_fw(self.cmd_positive.get_active_slot().data[0])
+        for slot in chameleon_cmd.SlotNumber:
+            print(f' - Slot {slot} data{" (active)" if slot == selected else ""}:')
+            print(f' HF: {chameleon_cmd.TagSpecificType(data[chameleon_cmd.SlotNumber.to_fw(slot) * 2])}')
+            print(f' LF: {chameleon_cmd.TagSpecificType(data[chameleon_cmd.SlotNumber.to_fw(slot) * 2 + 1])}')
 
 class HWSlotSet(SlotIndexRequireUint):
 
@@ -850,10 +860,10 @@ class TagTypeRequiredUint(DeviceRequiredUnit):
     def add_type_args(parser: ArgumentParserNoExit):
         type_choices = chameleon_cmd.TagSpecificType.list()
         help_str = ""
-        for name, value in chameleon_cmd.TagSpecificType.__members__.items():
-            if value == chameleon_cmd.TagSpecificType.TAG_TYPE_UNKNOWN:
+        for t in chameleon_cmd.TagSpecificType:
+            if t == chameleon_cmd.TagSpecificType.TAG_TYPE_UNKNOWN:
                 continue
-            help_str += f"{value} = {name.replace('TAG_TYPE_', '')}, "
+            help_str += f"{t.value} = {t}, "
         parser.add_argument('-t', "--type", type=int, required=True, help=help_str,
                             metavar="number", choices=type_choices)
         return parser
@@ -932,7 +942,7 @@ class HWSlotNickSet(SlotIndexRequireUint, SenseTypeRequireUint):
         parser = ArgumentParserNoExit()
         self.add_slot_args(parser)
         self.add_sense_type_args(parser)
-        parser.add_argument('-n', '--name', type=str, required=True, help="Yout tag nick name for slot")
+        parser.add_argument('-n', '--name', type=str, required=True, help="Your tag nick name for slot")
         return parser
 
     # hw slot nick set -s 1 -st 1 -n 测试名称保存
@@ -985,8 +995,8 @@ class HWSlotOpenAll(DeviceRequiredUnit):
         lf_type = chameleon_cmd.TagSpecificType.TAG_TYPE_EM410X
 
         # set all slot
-        for slot in range(1,9):
-            print(f' Slot{slot} setting...')
+        for slot in chameleon_cmd.SlotNumber:
+            print(f' Slot {slot} setting...')
             # first to set tag type
             self.cmd_positive.set_slot_tag_type(slot, hf_type)
             self.cmd_positive.set_slot_tag_type(slot, lf_type)
@@ -995,11 +1005,11 @@ class HWSlotOpenAll(DeviceRequiredUnit):
             self.cmd_positive.set_slot_data_default(slot, lf_type)
             # finally, we can enable this slot.
             self.cmd_positive.set_slot_enable(slot, True)
-            print(f' Open slot{slot} finish')
+            print(f' Slot {slot} setting done.')
 
         # update config and save to flash
         self.cmd_positive.update_slot_data_config()
-        print(f' - Open all slot and set data to default success.')
+        print(f' - Succeeded opening all slots and setting data to default.')
 
 
 class HWDFU(DeviceRequiredUnit):
