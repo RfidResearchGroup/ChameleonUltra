@@ -5868,9 +5868,10 @@
 
 // <e> UART_ENABLED - nrf_drv_uart - UART/UARTE peripheral driver - legacy layer
 //==========================================================
-#ifndef UART_ENABLED
-#define UART_ENABLED 0
-#endif
+//Don't define it at all else it conflicts with NRFX
+//#ifndef UART_ENABLED
+//#define UART_ENABLED 0
+//#endif
 // <o> UART_DEFAULT_CONFIG_HWFC  - Hardware Flow Control
  
 // <0=> Disabled 

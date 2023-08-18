@@ -288,6 +288,23 @@ else
 $(error Chameleon <Application>: No device type define.)
 endif
 
+ifeq (${NRF_LOG_UART_ON_SWO_ENABLED}, 1)
+SRC_FILES += \
+  $(SDK_ROOT)/components/libraries/log/src/nrf_log_backend_uart.c \
+  $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_uart.c \
+  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_uarte.c
+
+  CFLAGS += -DNRFX_UARTE_ENABLED=1 -DNRFX_UARTE0_ENABLED=1
+  CFLAGS += -DNRF_LOG_BACKEND_UART_ENABLED=1
+#define NRF_GPIO_PIN_MAP(port, pin) (((port) << 5) | ((pin) & 0x1F))
+#define NRF_LOG_BACKEND_UART_TX_PIN NRF_GPIO_PIN_MAP(1, 0)
+  CFLAGS += -DNRF_LOG_BACKEND_UART_TX_PIN=32
+# 30801920 = 115200 baud
+  CFLAGS += -DNRF_LOG_BACKEND_UART_BAUDRATE=30801920
+  CFLAGS += -DNRF_LOG_BACKEND_UART_TEMP_BUFFER_SIZE=64
+
+$(info  Chameleon <Application>: enable NRF_LOG on UART via SWO pin.)
+endif
 
 # Optimization flags
 OPT = -O3 -g3
