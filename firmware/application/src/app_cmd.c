@@ -473,7 +473,6 @@ data_frame_tx_t* cmd_processor_set_mf1_anti_collision_res(uint16_t cmd, uint16_t
 }
 
 data_frame_tx_t* cmd_processor_set_slot_tag_nick_name(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    // one chinese have 2byte(gbk).
     if (length > 34 || length < 3) {
         status = STATUS_PAR_ERR;
     } else {
@@ -498,7 +497,6 @@ data_frame_tx_t* cmd_processor_set_slot_tag_nick_name(uint16_t cmd, uint16_t sta
 }
 
 data_frame_tx_t* cmd_processor_get_slot_tag_nick_name(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    // one chinese have 2byte(gbk).
     if (length != 2) {
         status = STATUS_PAR_ERR;
     } else {

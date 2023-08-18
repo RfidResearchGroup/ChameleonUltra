@@ -433,7 +433,7 @@ class BaseChameleonCMD:
         data.extend(uid)
         return self.device.send_cmd_sync(DATA_CMD_SET_MF1_ANTI_COLLISION_RES, 0X00, data)
     
-    def set_slot_tag_nick_name(self, slot: int, sense_type: int, name: str):
+    def set_slot_tag_nick_name(self, slot: int, sense_type: int, name: bytes):
         """
             设置MF1的模拟卡的防冲撞资源信息
         :param slot: 卡槽号码
@@ -443,7 +443,7 @@ class BaseChameleonCMD:
         """
         data = bytearray()
         data.extend([slot, sense_type])
-        data.extend(name.encode(encoding="gbk"))
+        data.extend(name)
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_TAG_NICK, 0x00, data)
     
     def get_slot_tag_nick_name(self, slot: int, sense_type: int):
@@ -620,7 +620,7 @@ class PositiveChameleonCMD(BaseChameleonCMD):
         self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
         return ret
     
-    def set_slot_tag_nick_name(self, slot: int, sense_type: int, name: str):
+    def set_slot_tag_nick_name(self, slot: int, sense_type: int, name: bytes):
         ret = super(PositiveChameleonCMD, self).set_slot_tag_nick_name(slot, sense_type, name)
         self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
         return ret

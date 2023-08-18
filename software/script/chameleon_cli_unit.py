@@ -940,9 +940,10 @@ class HWSlotNickSet(SlotIndexRequireUint, SenseTypeRequireUint):
         slot_num = args.slot
         sense_type = args.sense_type
         name: str = args.name
-        if len(name.encode(encoding="gbk")) > 32:
+        uname = name.encode(encoding="utf8")
+        if len(uname) > 32:
             raise ValueError("Your tag nick name too long.")
-        self.cmd_positive.set_slot_tag_nick_name(slot_num, sense_type, name)
+        self.cmd_positive.set_slot_tag_nick_name(slot_num, sense_type, uname)
         print(f' - Set tag nick name for slot {slot_num} success.')
 
 
@@ -958,7 +959,7 @@ class HWSlotNickGet(SlotIndexRequireUint, SenseTypeRequireUint):
         slot_num = args.slot
         sense_type = args.sense_type
         res = self.cmd_positive.get_slot_tag_nick_name(slot_num, sense_type)
-        print(f' - Get tag nick name for slot {slot_num}: {res.data.decode(encoding="gbk")}')
+        print(f' - Get tag nick name for slot {slot_num}: {res.data.decode(encoding="utf8")}')
 
 
 class HWSlotUpdate(DeviceRequiredUnit):
