@@ -54,34 +54,24 @@ DATA_CMD_GET_MF1_DETECTION_RESULT = 5005
 
 @enum.unique
 class SlotNumber(enum.IntEnum):
-    SLOT_1 = 0,
-    SLOT_2 = 1,
-    SLOT_3 = 2,
-    SLOT_4 = 3,
-    SLOT_5 = 4,
-    SLOT_6 = 5,
-    SLOT_7 = 6,
-    SLOT_8 = 7,
-    SLOT_NO = 8,
+    SLOT_1 = 1,
+    SLOT_2 = 2,
+    SLOT_3 = 3,
+    SLOT_4 = 4,
+    SLOT_5 = 5,
+    SLOT_6 = 6,
+    SLOT_7 = 7,
+    SLOT_8 = 8,
 
     @staticmethod
-    def list(exclude_unknown=True):
-        enum_list = []
-        for name, value in SlotNumber.__members__.items():
-            if value == SlotNumber.SLOT_NO:
-                continue
-            enum_list.append(int(name.replace('SLOT_','')))
-
-        return enum_list
+    def to_fw(index: int): # can be int or SlotNumber
+        # SlotNumber() will raise error for us if index not in slot range
+        return SlotNumber(index).value - 1
 
     @staticmethod
-    def fix(index: int):
-        for name, value in SlotNumber.__members__.items():
-            if value == SlotNumber.SLOT_NO:
-                continue
-            if index == int(name.replace('SLOT_','')):
-                return value
-
+    def from_fw(index: int):
+        # SlotNumber() will raise error for us if index not in fw range
+        return SlotNumber(index + 1)
 
 
 @enum.unique
@@ -93,26 +83,20 @@ class TagSenseType(enum.IntEnum):
     # 高频13.56mhz场感应
     TAG_SENSE_HF = 2,
 
+
     @staticmethod
     def list(exclude_unknown=True):
-        enum_list = []
-        for name, value in TagSenseType.__members__.items():
-            if value == TagSenseType.TAG_SENSE_NO:
-                continue
-            enum_list.append(f"{name.replace('TAG_SENSE_','')} = {value}")
-
+        enum_list = list(map(int, TagSenseType))
+        if exclude_unknown:
+            enum_list.remove(TagSenseType.TAG_SENSE_NO)
         return enum_list
-    
-    @staticmethod
-    def choices(exclude_unknown=True):
-        choice_list = []
-        for name, value in TagSenseType.__members__.items():
-            if value == TagSenseType.TAG_SENSE_NO:
-                continue
-            choice_list.append(value)
 
-        return choice_list
-
+    def __str__(self):
+        if self == TagSenseType.TAG_SENSE_LF:
+            return "LF"
+        elif self == TagSenseType.TAG_SENSE_HF:
+            return "HF"
+        return "None"
 
 @enum.unique
 class TagSpecificType(enum.IntEnum):
@@ -138,21 +122,21 @@ class TagSpecificType(enum.IntEnum):
         return enum_list
 
     def __str__(self):
-        if self.value == TagSpecificType.TAG_TYPE_EM410X:
+        if self == TagSpecificType.TAG_TYPE_EM410X:
             return "EM410X"
-        elif self.value == TagSpecificType.TAG_TYPE_MIFARE_Mini:
+        elif self == TagSpecificType.TAG_TYPE_MIFARE_Mini:
             return "Mifare Mini"
-        elif self.value == TagSpecificType.TAG_TYPE_MIFARE_1024:
+        elif self == TagSpecificType.TAG_TYPE_MIFARE_1024:
             return "Mifare Classic 1k"
-        elif self.value == TagSpecificType.TAG_TYPE_MIFARE_2048:
+        elif self == TagSpecificType.TAG_TYPE_MIFARE_2048:
             return "Mifare Classic 2k"
-        elif self.value == TagSpecificType.TAG_TYPE_MIFARE_4096:
+        elif self == TagSpecificType.TAG_TYPE_MIFARE_4096:
             return "Mifare Classic 4k"
-        elif self.value == TagSpecificType.TAG_TYPE_NTAG_213:
+        elif self == TagSpecificType.TAG_TYPE_NTAG_213:
             return "NTAG 213"
-        elif self.value == TagSpecificType.TAG_TYPE_NTAG_215:
+        elif self == TagSpecificType.TAG_TYPE_NTAG_215:
             return "NTAG 215"
-        elif self.value == TagSpecificType.TAG_TYPE_NTAG_216:
+        elif self == TagSpecificType.TAG_TYPE_NTAG_216:
             return "NTAG 216"
         return "Unknown"
 
@@ -371,10 +355,9 @@ class BaseChameleonCMD:
         :param slot_index: 卡槽索引，从 1 - 8（不是从0下标开始）
         :return:
         """
-        if slot_index < 1 or slot_index > 8:
-            raise ValueError("The slot index range error(1-8)")
+        # SlotNumber() will raise error for us if slot_index not in slot range
         data = bytearray()
-        data.append(SlotNumber.fix(slot_index))
+        data.append(SlotNumber.to_fw(slot_index))
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_ACTIVATED, 0x00, data)
 
     def set_slot_tag_type(self, slot_index: SlotNumber, tag_type: TagSpecificType):
@@ -385,10 +368,9 @@ class BaseChameleonCMD:
         :param tag_type: 标签类型
         :return:
         """
-        if slot_index < 1 or slot_index > 8:
-            raise ValueError("The slot index range error(1-8)")
+        # SlotNumber() will raise error for us if slot_index not in slot range
         data = bytearray()
-        data.append(SlotNumber.fix(slot_index))
+        data.append(SlotNumber.to_fw(slot_index))
         data.append(tag_type)
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_TAG_TYPE, 0x00, data)
 
@@ -400,10 +382,9 @@ class BaseChameleonCMD:
         :param tag_type: 要设置的缺省标签类型
         :return:
         """
-        if slot_index < 1 or slot_index > 8:
-            raise ValueError("The slot index range error(1-8)")
+        # SlotNumber() will raise error for us if slot_index not in slot range
         data = bytearray()
-        data.append(SlotNumber.fix(slot_index))
+        data.append(SlotNumber.to_fw(slot_index))
         data.append(tag_type)
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_DATA_DEFAULT, 0x00, data)
 
@@ -414,10 +395,9 @@ class BaseChameleonCMD:
         :param enable: 是否使能
         :return:
         """
-        if slot_index < 1 or slot_index > 8:
-            raise ValueError("The slot index range error(1-8)")
+        # SlotNumber() will raise error for us if slot_index not in slot range
         data = bytearray()
-        data.append(SlotNumber.fix(slot_index))
+        data.append(SlotNumber.to_fw(slot_index))
         data.append(0x01 if enable else 0x00)
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_ENABLE, 0X00, data)
 
@@ -492,8 +472,9 @@ class BaseChameleonCMD:
         :param name: 卡槽昵称
         :return:
         """
+        # SlotNumber() will raise error for us if slot not in slot range
         data = bytearray()
-        data.extend([SlotNumber.fix(slot), sense_type])
+        data.extend([SlotNumber.to_fw(slot), sense_type])
         data.extend(name.encode(encoding="gbk"))
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_TAG_NICK, 0x00, data)
     
@@ -505,8 +486,9 @@ class BaseChameleonCMD:
         :param name: 卡槽昵称
         :return:
         """
+        # SlotNumber() will raise error for us if slot not in slot range
         data = bytearray()
-        data.extend([SlotNumber.fix(slot), sense_type])
+        data.extend([SlotNumber.to_fw(slot), sense_type])
         return self.device.send_cmd_sync(DATA_CMD_GET_SLOT_TAG_NICK, 0x00, data)
     
     def update_slot_data_config(self):
