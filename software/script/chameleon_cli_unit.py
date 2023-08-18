@@ -818,6 +818,18 @@ class SenseTypeRequireUint(DeviceRequiredUnit):
                             help="Sense type", metavar="number", choices=slot_choices)
         return parser
 
+class HWSlotInfo(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        return
+
+    # hw slot info
+    def on_exec(self, args: argparse.Namespace):
+        data = self.cmd_positive.get_slot_info().data
+        selected = self.cmd_positive.get_active_slot().data[0]
+        for slot in range(8):
+            print(f' - Slot {slot + 1} data{" (active)" if slot == selected else ""}:')
+            print(f' HF: {chameleon_cmd.TagSpecificType(data[slot * 2])}')
+            print(f' LF: {chameleon_cmd.TagSpecificType(data[slot * 2 + 1])}')
 
 class HWSlotSet(SlotIndexRequireUint):
 
