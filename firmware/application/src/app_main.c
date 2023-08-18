@@ -27,6 +27,7 @@ NRF_LOG_MODULE_REGISTER();
 #include "ble_main.h"
 #include "bsp_delay.h"
 #include "bsp_time.h"
+#include "bsp_wdt.h"
 #include "dataframe.h"
 #include "fds_util.h"
 #include "hex_utils.h"
@@ -37,7 +38,6 @@ NRF_LOG_MODULE_REGISTER();
 #include "rgb_marquee.h"
 
 #include "settings.h"
-
 
 // Defining soft timers
 APP_TIMER_DEF(m_button_check_timer); // Timer for button debounce
@@ -545,6 +545,7 @@ int main(void) {
     // usbd event listener
     APP_ERROR_CHECK(app_usbd_power_events_enable());
 
+    bsp_wdt_init();
     // Enter main loop.
     NRF_LOG_INFO("Chameleon working");
     while (1) {
@@ -558,6 +559,8 @@ int main(void) {
         while (NRF_LOG_PROCESS());
         // USB event process
         while (app_usbd_event_queue_process());
+        // WDT refresh
+        bsp_wdt_feed();
         // No task to process, system sleep enter.
         // If system idle sometime, we can enter deep sleep state.
         // Some task process done, we can enter cpu sleep state.

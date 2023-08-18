@@ -17,6 +17,7 @@ SRC_FILES += \
   $(PROJ_DIR)/rgb_marquee.c \
   $(PROJ_DIR)/bsp/bsp_delay.c \
   $(PROJ_DIR)/bsp/bsp_time.c \
+  $(PROJ_DIR)/bsp/bsp_wdt.c \
   $(PROJ_DIR)/rfid/crc_utils.c \
   $(PROJ_DIR)/rfid/hex_utils.c \
   $(PROJ_DIR)/rfid/mf1_crapto1.c \
@@ -93,6 +94,7 @@ SRC_FILES += \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_spi.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_rng.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_ppi.c \
+  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_wdt.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_Syscalls_GCC.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_printf.c \
