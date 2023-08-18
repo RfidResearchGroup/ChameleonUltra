@@ -340,6 +340,23 @@ data_frame_tx_t* cmd_processor_slot_data_config_save(uint16_t cmd, uint16_t stat
     return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 0, NULL);
 }
 
+data_frame_tx_t* cmd_processor_get_activated_slot(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t slot = tag_emulation_get_slot();
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 1, &slot);
+}
+
+data_frame_tx_t* cmd_processor_get_slot_info(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t slot_info[16] = {};
+    tag_specific_type_t tag_type[2];
+    for (uint8_t slot = 0; slot < 8; slot++) {
+        tag_emulation_get_specific_type_by_slot(slot, tag_type);
+        slot_info[slot * 2] = tag_type[0];
+        slot_info[slot * 2 + 1] = tag_type[1];
+    }
+
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 16, slot_info);
+}
+
 data_frame_tx_t* cmd_processor_set_em410x_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length == LF_EM410X_TAG_ID_SIZE) {
         tag_data_buffer_t* buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
@@ -596,6 +613,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_SET_SLOT_DATA_DEFAULT,        NULL,                        cmd_processor_set_slot_data_default,         NULL                   },
     {    DATA_CMD_SET_SLOT_ENABLE,              NULL,                        cmd_processor_set_slot_enable,               NULL                   },
     {    DATA_CMD_SLOT_DATA_CONFIG_SAVE,        NULL,                        cmd_processor_slot_data_config_save,         NULL                   },
+    {    DATA_CMD_GET_ACTIVE_SLOT,              NULL,                        cmd_processor_get_activated_slot,            NULL                   },
+    {    DATA_CMD_GET_SLOT_INFO,                NULL,                        cmd_processor_get_slot_info,                 NULL                   },
     
 
     {    DATA_CMD_SET_EM410X_EMU_ID,            NULL,                        cmd_processor_set_em410x_emu_id,             NULL                   },

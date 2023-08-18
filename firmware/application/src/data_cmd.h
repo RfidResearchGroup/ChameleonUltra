@@ -25,6 +25,8 @@
 #define DATA_CMD_SET_ANIMATION_MODE             (1015)
 #define DATA_CMD_GET_ANIMATION_MODE             (1016)
 #define DATA_CMD_GET_GIT_VERSION                (1017)
+#define DATA_CMD_GET_ACTIVE_SLOT                (1018)
+#define DATA_CMD_GET_SLOT_INFO                  (1019)
 //
 // ******************************************************************
 
