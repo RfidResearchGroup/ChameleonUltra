@@ -120,6 +120,7 @@ class ChameleonCLI:
                     },
                     'sim': new_uint(chameleon_cli_unit.HFMFSim, "Simulation a mifare classic card"),
                     'eload': new_uint(chameleon_cli_unit.HFMFELoad, "Load data to emulator memory"),
+                    'eread': new_uint(chameleon_cli_unit.HFMFERead, "Read data from emulator memory"),
                     'help': "Mifare Classic mini/1/2/4, attack/read/write"
                 },
                 'help': "high frequency tag/reader",
@@ -128,7 +129,11 @@ class ChameleonCLI:
                 'em': {
                     'read': new_uint(chameleon_cli_unit.LFEMRead, "Scan em410x tag and print id"),
                     'write': new_uint(chameleon_cli_unit.LFEMWriteT55xx, "Write em410x id to t55xx"),
-                    'sim': new_uint(chameleon_cli_unit.LFEMSim, "Simulation a em410x id card"),
+                    'sim': {
+                        'set': new_uint(chameleon_cli_unit.LFEMSimSet, "Set simulated em410x card id"),
+                        'get': new_uint(chameleon_cli_unit.LFEMSimGet, "Get simulated em410x card id"),
+                        'help': "Manage EM410x emulation data for selected slot"
+                    },
                     'help': "EM410x read/write/emulator",
                 },
                 'help': "low frequency tag/reader",

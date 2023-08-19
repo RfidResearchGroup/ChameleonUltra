@@ -377,6 +377,14 @@ data_frame_tx_t* cmd_processor_set_em410x_emu_id(uint16_t cmd, uint16_t status, 
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+data_frame_tx_t* cmd_processor_get_em410x_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    tag_data_buffer_t* buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
+    uint8_t responseData[LF_EM410X_TAG_ID_SIZE];
+    memcpy(responseData, buffer->buffer, LF_EM410X_TAG_ID_SIZE);
+    status = STATUS_DEVICE_SUCCESS;
+    return data_frame_make(cmd, status, LF_EM410X_TAG_ID_SIZE, responseData);
+}
+
 data_frame_tx_t* cmd_processor_set_mf1_detection_enable(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length == 1 && (data[0] == 0 || data[0] == 1)) {
         nfc_tag_mf1_detection_log_clear();
@@ -453,6 +461,33 @@ data_frame_tx_t* cmd_processor_set_mf1_emulator_block(uint16_t cmd, uint16_t sta
     } else {
         status = STATUS_PAR_ERR;
     }
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+data_frame_tx_t* cmd_processor_get_mf1_emulator_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length == 3) {
+        uint8_t block_index = data[0];
+        uint16_t block_count = data[1] | (data[2] << 8);
+        if (block_count == 0 || block_index + block_count > NFC_TAG_MF1_BLOCK_MAX) {
+            status = STATUS_PAR_ERR;
+        }
+        else {
+            tag_data_buffer_t* buffer = get_buffer_by_tag_type(TAG_TYPE_MIFARE_4096);
+            nfc_tag_mf1_information_t *info = (nfc_tag_mf1_information_t *)buffer->buffer;
+            uint16_t result_length = block_count * NFC_TAG_MF1_DATA_SIZE;
+            uint8_t result_buffer[result_length];
+            for (int i = 0, j = block_index; i < result_length; i += NFC_TAG_MF1_DATA_SIZE, j++) {
+                uint8_t *p_block = &result_buffer[i];
+                memcpy(p_block, info->memory[j], NFC_TAG_MF1_DATA_SIZE);
+            }
+
+            return data_frame_make(cmd, status, result_length, result_buffer);
+        }
+    }
+    else {
+        status = STATUS_PAR_ERR;
+    }
+
     return data_frame_make(cmd, status, 0, NULL);
 }
 
@@ -617,12 +652,14 @@ static cmd_data_map_t m_data_cmd_map[] = {
     
 
     {    DATA_CMD_SET_EM410X_EMU_ID,            NULL,                        cmd_processor_set_em410x_emu_id,             NULL                   },
+    {    DATA_CMD_GET_EM410X_EMU_ID,            NULL,                        cmd_processor_get_em410x_emu_id,             NULL                   },
 
     {    DATA_CMD_GET_MF1_DETECTION_STATUS,     NULL,                        cmd_processor_get_mf1_detection_status,      NULL                   },
     {    DATA_CMD_SET_MF1_DETECTION_ENABLE,     NULL,                        cmd_processor_set_mf1_detection_enable,      NULL                   },
     {    DATA_CMD_GET_MF1_DETECTION_COUNT,      NULL,                        cmd_processor_get_mf1_detection_count,       NULL                   },
     {    DATA_CMD_GET_MF1_DETECTION_RESULT,     NULL,                        cmd_processor_get_mf1_detection_log,         NULL                   },
-    {    DATA_CMD_LOAD_MF1_BLOCK_DATA,          NULL,                        cmd_processor_set_mf1_emulator_block,        NULL                   },
+    {    DATA_CMD_LOAD_MF1_EMU_BLOCK_DATA,      NULL,                        cmd_processor_set_mf1_emulator_block,        NULL                   },
+    {    DATA_CMD_READ_MF1_EMU_BLOCK_DATA,      NULL,                        cmd_processor_get_mf1_emulator_block,        NULL                   },
     {    DATA_CMD_SET_MF1_ANTI_COLLISION_RES,   NULL,                        cmd_processor_set_mf1_anti_collision_res,    NULL                   },
 
     {    DATA_CMD_SET_SLOT_TAG_NICK,            NULL,                        cmd_processor_set_slot_tag_nick_name,        NULL                   },
