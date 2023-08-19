@@ -76,7 +76,8 @@ jobs:
           name: ${{ matrix.device_type }}-dfu-full
           path: firmware/objects/dfu-full/*
   create_release:
-    permissions: write-all
+    permissions:
+      contents: write
     name: Create Pre-Release with dfu app images
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
@@ -85,52 +86,34 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.run_number }}
-          release_name: Compiled commit ${{ github.sha }}
-          body: |
-            Auto-Generated DFU images
-          draft: false
-          prerelease: true
       - name: Download Ultra DFU
         uses: actions/download-artifact@v3
         with:
           name: ultra-dfu-app
-          path: dfu-app-artifacts
-      - name: Compress
+          path: ultra-dfu-app
+      - name: Compress Ultra DFU package
         run: |
-          zip --junk-paths -0 -r ./dfu-app-artifacts/dfu-app.zip ./dfu-app-artifacts/*
-      - name: Upload Ultra DFU
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./dfu-app-artifacts/dfu-app.zip
-          asset_name: ultra-dfu-app.zip
-          asset_content_type: application/zip
-      - name: Clear
-        run: |
-          rm -rf ./dfu-app-artifacts/
+          zip --junk-paths -0 -r ./ultra-dfu-app.zip ./ultra-dfu-app/*
       - name: Download Lite DFU
         uses: actions/download-artifact@v3
         with:
           name: lite-dfu-app
-          path: dfu-app-artifacts
-      - name: Compress
+          path: lite-dfu-app
+      - name: Compress Lite DFU package
         run: |
-          zip --junk-paths -0 -r ./dfu-app-artifacts/dfu-app.zip ./dfu-app-artifacts/*
-      - name: Upload Lite DFU
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          zip --junk-paths -0 -r ./lite-dfu-app.zip ./lite-dfu-app/*
+      - name: Upload to dev release
+        uses: softprops/action-gh-release@v1
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./dfu-app-artifacts/dfu-app.zip
-          asset_name: lite-dfu-app.zip
-          asset_content_type: application/zip
+          body: |
+            Auto-Generated DFU packages from latest `main` commit.
+            For development purposes only. 
+            These are not tested, here be dragons.
+            Built from commit ${{ github.sha }}
+          tag_name: dev
+          name: Development release
+          draft: false
+          prerelease: true
+          target_commitish: main
+          generate_release_notes: true
+          files: ./*-dfu-app.zip
