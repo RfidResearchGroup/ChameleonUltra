@@ -14,29 +14,6 @@ import chameleon_cstruct
 import chameleon_status
 from chameleon_utils import *
 
-description_public = "Please enter correct parameters"
-
-
-
-class ArgumentParserNoExit(argparse.ArgumentParser):
-    """
-        If arg ArgumentParser parse error, we can't exit process,
-        we must raise exception to stop parse
-    """
-
-    def __init__(self, **args):
-        super().__init__(*args)
-        self.add_help = False
-        self.description = description_public
-
-    def exit(self, status: int = ..., message: str or None = ...):
-        if message:
-            raise ParserExitIntercept(message)
-
-    def error(self, message: str):
-        args = {'prog': self.prog, 'message': message}
-        raise ArgsParserError('%(prog)s: error: %(message)s\n' % args)
-
 
 class BaseCLIUnit:
 

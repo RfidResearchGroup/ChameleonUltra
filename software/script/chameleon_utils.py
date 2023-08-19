@@ -1,6 +1,8 @@
+import argparse
 from functools import wraps
-from typing import Union
+from typing import Iterable, Union
 from prompt_toolkit.completion import Completer, NestedCompleter, WordCompleter
+from prompt_toolkit.completion.base import CompleteEvent, Completion
 from prompt_toolkit.document import Document
 
 import chameleon_status
@@ -18,6 +20,27 @@ class UnexpectedResponseError(Exception):
     """
     Unexpected response exception
     """
+
+
+class ArgumentParserNoExit(argparse.ArgumentParser):
+    """
+        If arg ArgumentParser parse error, we can't exit process,
+        we must raise exception to stop parse
+    """
+
+    def __init__(self, **args):
+        super().__init__(*args)
+        self.add_help = False
+        self.description = "Please enter correct parameters"
+
+    def exit(self, status: int = ..., message: str or None = ...):
+        if message:
+            raise ParserExitIntercept(message)
+
+    def error(self, message: str):
+        args = {'prog': self.prog, 'message': message}
+        raise ArgsParserError('%(prog)s: error: %(message)s\n' % args)
+
 
 def expect_response(accepted_responses: Union[int, list[int]]):
     """
@@ -116,8 +139,13 @@ class CustomNestedCompleter(NestedCompleter):
             elif isinstance(value, set):
                 options[key] = cls.from_nested_dict({item: None for item in value})
             elif isinstance(value, CLITree):
-                options[key] = cls.from_clitree(value)
-                meta_dict[key] = value.helptext
+                if value.cls:
+                    # CLITree is a standalone command
+                    options[key] = ArgparseCompleter(value.cls().args_parser())
+                else:
+                    # CLITree is a command group
+                    options[key] = cls.from_clitree(value)
+                    meta_dict[key] = value.helptext
             else:
                 assert value is None
                 options[key] = None
@@ -130,8 +158,13 @@ class CustomNestedCompleter(NestedCompleter):
         meta_dict = {}
 
         for child_node in node.children:
-            options[child_node.name] = cls.from_clitree(child_node)
-            meta_dict[child_node.name] = child_node.helptext
+            if child_node.cls and child_node.cls().args_parser():
+                # CLITree is a standalone command with arguments
+                options[child_node.name] = ArgparseCompleter(child_node.cls().args_parser())
+            else:
+                # CLITree is a command group
+                options[child_node.name] = cls.from_clitree(child_node)
+                meta_dict[child_node.name] = child_node.helptext
 
         return cls(options, meta_dict=meta_dict)
 
@@ -165,3 +198,76 @@ class CustomNestedCompleter(NestedCompleter):
             )
             yield from completer.get_completions(document, complete_event)
 
+
+class ArgparseCompleter(Completer):
+    """
+    Completer instance for autocompletion of ArgumentParser arguments
+
+    :param parser: ArgumentParser instance
+    """
+
+    def __init__(self, parser) -> None:
+        self.parser: ArgumentParserNoExit = parser
+    
+    def check_tokens(self, parsed, unparsed):
+        suggestions = {}
+        def check_arg(tokens):
+            return tokens and tokens[0].startswith('-')
+        
+        if not parsed and not unparsed:
+            # No tokens detected, just show all flags
+            for action in self.parser._actions:
+                for opt in action.option_strings:
+                    suggestions[opt] = action.help
+            return [], [], suggestions
+        
+        token = unparsed.pop(0)
+
+        for action in self.parser._actions:
+            if any(opt == token for opt in action.option_strings):
+                # Argument fully matches the token
+                parsed.append(token)
+
+                if action.choices:
+                    # Autocomplete with choices
+                    if unparsed:
+                        # Autocomplete values
+                        value = unparsed.pop(0)
+                        for choice in action.choices:
+                            if str(choice).startswith(value):
+                                suggestions[str(choice)] = None
+                        
+                        parsed.append(value)
+
+                        if check_arg(unparsed):
+                            parsed, unparsed, suggestions = self.check_tokens(parsed, unparsed)
+                        
+                    else:
+                        # Show all possible values
+                        for choice in action.choices:
+                            suggestions[str(choice)] = None
+                    
+                    break
+                else:
+                    # No choices, process further arguments
+                    if check_arg(unparsed):
+                        parsed, unparsed, suggestions = self.check_tokens(parsed, unparsed)
+                    break
+            elif any(opt.startswith(token) for opt in action.option_strings):
+                for opt in action.option_strings:
+                    if opt.startswith(token):
+                        suggestions[opt] = action.help
+        
+        if suggestions:
+            unparsed.insert(0, token)
+        
+        return parsed, unparsed, suggestions
+    
+    def get_completions(self, document, complete_event):
+        text = document.text_before_cursor
+        word_before_cursor = document.get_word_before_cursor()
+
+        _, _, suggestions = self.check_tokens(list(), text.split())
+
+        for key, suggestion in suggestions.items():
+            yield Completion(key, -len(word_before_cursor), display=key, display_meta=suggestion)
