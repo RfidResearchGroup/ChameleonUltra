@@ -1,4 +1,5 @@
 import enum
+import struct
 
 import chameleon_com
 import chameleon_status
@@ -48,8 +49,14 @@ DATA_CMD_MF1_WRITE_ONE_BLOCK = 2009
 DATA_CMD_SCAN_EM410X_TAG = 3000
 DATA_CMD_WRITE_EM410X_TO_T5577 = 3001
 
-DATA_CMD_LOAD_MF1_BLOCK_DATA = 4000
+DATA_CMD_LOAD_MF1_EMU_BLOCK_DATA = 4000
 DATA_CMD_SET_MF1_ANTI_COLLISION_RES = 4001
+
+DATA_CMD_SET_MF1_DETECTION_ENABLE = 4004
+DATA_CMD_GET_MF1_DETECTION_COUNT = 4005
+DATA_CMD_GET_MF1_DETECTION_RESULT = 4006
+
+DATA_CMD_READ_MF1_EMU_BLOCK_DATA = 4008
 
 DATA_CMD_GET_MF1_EMULATOR_CONFIG = 4009
 DATA_CMD_GET_MF1_GEN1A_MODE = 4010
@@ -62,9 +69,7 @@ DATA_CMD_GET_MF1_WRITE_MODE = 4016
 DATA_CMD_SET_MF1_WRITE_MODE = 4017
 
 DATA_CMD_SET_EM410X_EMU_ID = 5000
-DATA_CMD_SET_MF1_DETECTION_ENABLE = 5003
-DATA_CMD_GET_MF1_DETECTION_COUNT = 5004
-DATA_CMD_GET_MF1_DETECTION_RESULT = 5005
+DATA_CMD_GET_EM410X_EMU_ID = 5001
 
 
 @enum.unique
@@ -439,7 +444,7 @@ class BaseChameleonCMD:
         data.append(0x01 if enable else 0x00)
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_ENABLE, 0X00, data)
 
-    def set_em140x_sim_id(self, id_bytes: bytearray):
+    def set_em410x_sim_id(self, id_bytes: bytearray):
         """
             设置EM410x模拟的卡号
         :param id_bytes: 卡号的字节
@@ -448,6 +453,12 @@ class BaseChameleonCMD:
         if len(id_bytes) != 5:
             raise ValueError("The id bytes length must equal 5")
         return self.device.send_cmd_sync(DATA_CMD_SET_EM410X_EMU_ID, 0x00, id_bytes)
+    
+    def get_em410x_sim_id(self):
+        """
+            Get the simulated EM410x card id
+        """
+        return self.device.send_cmd_sync(DATA_CMD_GET_EM410X_EMU_ID, 0x00)
 
     def set_mf1_detection_enable(self, enable: bool):
         """
@@ -486,7 +497,14 @@ class BaseChameleonCMD:
         data = bytearray()
         data.append(block_start & 0xFF)
         data.extend(block_data)
-        return self.device.send_cmd_sync(DATA_CMD_LOAD_MF1_BLOCK_DATA, 0x00, data)
+        return self.device.send_cmd_sync(DATA_CMD_LOAD_MF1_EMU_BLOCK_DATA, 0x00, data)
+    
+    def get_mf1_block_data(self, block_start: int, block_count: int):
+        """
+            Gets data for selected block range
+        """
+        data = struct.pack('<BH', block_start, block_count)
+        return self.device.send_cmd_sync(DATA_CMD_READ_MF1_EMU_BLOCK_DATA, 0x00, data)
 
     def set_mf1_anti_collision_res(self, sak: bytearray, atqa: bytearray, uid: bytearray):
         """
@@ -710,8 +728,8 @@ class PositiveChameleonCMD(BaseChameleonCMD):
         self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
         return ret
 
-    def set_em140x_sim_id(self, id_bytes: bytearray):
-        ret = super(PositiveChameleonCMD, self).set_em140x_sim_id(id_bytes)
+    def set_em410x_sim_id(self, id_bytes: bytearray):
+        ret = super(PositiveChameleonCMD, self).set_em410x_sim_id(id_bytes)
         self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
         return ret
 
