@@ -41,6 +41,8 @@
 #include <nrfx.h>
 
 #if NRFX_CHECK(NRFX_NFCT_ENABLED)
+// ChameleonUltra: workaround because NFC IRQ gets repetitively called when in HF field once a comm has started
+#include "bsp_wdt.h"
 
 #include <nrfx_nfct.h>
 
@@ -907,6 +909,8 @@ void nrfx_nfct_irq_handler(void)
             m_nfct_cb.config.cb(&nfct_evt);
         }
     }
+    // ChameleonUltra: workaround because NFC IRQ gets repetitively called when in HF field once a comm has started
+    bsp_wdt_feed();
 }
 
 #endif // NRFX_CHECK(NRFX_NFCT_ENABLED)
