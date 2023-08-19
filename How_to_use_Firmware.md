@@ -309,3 +309,14 @@ in a second terminal:
 ```
 JLinkRTTClient
 ```
+
+## Using SWO pin as UART to monitor NRF_LOG
+
+One can set `NRF_LOG_UART_ON_SWO_ENABLED := 1` in `Makefile.defs` to activate this functionality.
+When activated, NRF_LOG will be available if one connects a UART bridge to the SWO pin which will work as a UART TX pin.
+UART works at 115200 bauds. E.g. one can use a FTDI dongle and `screen /dev/ttyUSB0 115200`.
+Contrary to RTT that needs to be activated by a JTAG probe, UART logs are immediately available.
+
+Limitations:
+* SWO pin is shared with... SWO so when e.g. reflashing the device, garbage may appear on the monitoring terminal.
+* SWO pin is also shared with the blue channel of the RGB slot LEDs, so faint blue may appear briefly when logs are sent and LED might not work properly when supposed to be blue.

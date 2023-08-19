@@ -10,10 +10,11 @@ NRF_LOG_MODULE_REGISTER();
 
 // current write record info
 static struct {
-    uint16_t id;    // file id
-    uint16_t key;   // file key
-    bool success;   // task is success
-    bool waiting;   // task waiting done.
+    uint32_t record_id; // record id, used for sync delete
+    uint16_t id;        // file id
+    uint16_t key;       // file key
+    bool success;       // task is success
+    bool waiting;       // task waiting done.
 } fds_operation_info;
 
 
@@ -120,12 +121,7 @@ bool fds_write_sync(uint16_t id, uint16_t key, uint16_t data_length_words, void*
     } else if (err_code == FDS_ERR_NO_SPACE_IN_FLASH) {   // 确保还有空间可以操作，否则需要GC
         // 当前报错是属于空间不足的报错，可能我们需要进行GC
         NRF_LOG_INFO("FDS no space, gc auto start.");
-        err_code = fds_gc();            // 发起GC操作
-        APP_ERROR_CHECK(err_code);      // 检查GC是否正常执行
-        // 等待GC完成
-        while(!fds_operation_info.success) {
-            __NOP();
-        };
+        fds_gc_sync();
         
         // gc完成后，可以重新进行相应的操作了
         NRF_LOG_INFO("FDS auto gc success, write record continue.");
@@ -162,6 +158,7 @@ int fds_delete_sync(uint16_t id, uint16_t key) {
     ret_code_t          err_code;
     while(fds_find_record(id, key, &record_desc)) {
         fds_operation_info.success = false;
+        fds_record_id_from_desc(&record_desc, &fds_operation_info.record_id);
         err_code = fds_record_delete(&record_desc);
         APP_ERROR_CHECK(err_code);
         delete_count++;
@@ -199,9 +196,13 @@ static void fds_evt_handler(fds_evt_t const * p_evt) {
         } break;
         case FDS_EVT_DEL_RECORD: {
             if (p_evt->result == NRF_SUCCESS) {
-                NRF_LOG_INFO("Record remove: FileID: 0x%04x, RecordKey: 0x%04x", p_evt->del.file_id, p_evt->del.record_key);
-                if (p_evt->write.file_id == fds_operation_info.id && p_evt->write.record_key == fds_operation_info.key) {
-                    // 上面的逻辑已经确保是我们当前删除记录的任务完成了！
+                NRF_LOG_INFO(
+                    "Record remove: FileID: 0x%04x, RecordKey: 0x%04x, RecordID: %08x",
+                    p_evt->del.file_id, p_evt->del.record_key, p_evt->del.record_id
+                );
+                if (p_evt->del.record_id == fds_operation_info.record_id) {
+                    // Only check record id because fileID and recordKey aren't available
+                    // if deleting via fds_record_iterate. record id is guaranteed to be unique.
                     fds_operation_info.success = true;
                 }
             } else {
@@ -233,4 +234,46 @@ void fds_util_init() {
     // 开始初始化fds库
     err_code = fds_init();
     APP_ERROR_CHECK(err_code);
+}
+
+void fds_gc_sync(void) {
+    fds_operation_info.success = false;
+    ret_code_t err_code = fds_gc();
+    APP_ERROR_CHECK(err_code);
+    while(!fds_operation_info.success) {
+        __NOP();
+    };
+}
+
+static bool fds_next_record_delete_sync() {
+    fds_find_token_t  tok   = {0};
+    fds_record_desc_t desc  = {0};
+    if (fds_record_iterate(&desc, &tok) != NRF_SUCCESS) {
+        NRF_LOG_INFO("No more records to delete");
+        return false;
+    }
+
+    fds_record_id_from_desc(&desc, &fds_operation_info.record_id);
+    NRF_LOG_INFO("Deleting record with id=%08x", fds_operation_info.record_id);
+
+    fds_operation_info.success = false;
+    ret_code_t rc = fds_record_delete(&desc);
+    if (rc != NRF_SUCCESS) {
+        NRF_LOG_WARNING("Record id=%08x deletion failed with rc=%d!", fds_operation_info.record_id, rc);
+        return false;
+    }
+
+    while(!fds_operation_info.success) {
+        __NOP();
+    }
+
+    NRF_LOG_INFO("Record id=%08x deleted successfully", fds_operation_info.record_id);
+    return true;
+}
+
+bool fds_wipe(void) {
+    NRF_LOG_INFO("Full fds wipe requested");
+    while (fds_next_record_delete_sync()) {}
+    fds_gc_sync();
+    return true;
 }

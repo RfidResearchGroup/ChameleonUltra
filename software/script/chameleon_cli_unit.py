@@ -157,6 +157,8 @@ hw_address = hw.subgroup('address', 'Device address get')
 hw_mode = hw.subgroup('mode', 'Device mode get/set')
 hw_slot = hw.subgroup('slot', 'Emulation tag slot.')
 hw_slot_nick = hw_slot.subgroup('nick', 'Get/Set tag nick name for slot')
+hw_settings = hw.subgroup('settings', 'Chameleon settings management')
+hw_settings_animation = hw_settings.subgroup('animation', 'Manage wake-up and sleep animation modes')
 
 hf = CLITree('hf', 'high frequency tag/reader')
 hf_14a = hf.subgroup('14a', 'ISO14443-a tag read/write/info...')
@@ -246,6 +248,19 @@ class HWAddressGet(DeviceRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         print(f' - Device address: ' + self.cmd.get_device_address())
+
+
+@hw.command('version', 'Get current device firmware version')
+class HWVersion(DeviceRequiredUnit):
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        return None
+
+    def on_exec(self, args: argparse.Namespace):
+        fw_version_int = self.cmd.get_firmware_version()
+        fw_version = f'v{fw_version_int // 256}.{fw_version_int % 256}'
+        git_version = self.cmd.get_git_version()
+        print(f' - Version: {fw_version} ({git_version})')
 
 
 @hf_14a.command('scan', 'Scan 14a tag, and print basic information')
@@ -795,10 +810,13 @@ class SlotIndexRequireUnit(DeviceRequiredUnit):
 
     @staticmethod
     def add_slot_args(parser: ArgumentParserNoExit):
-        slot_choices = [1, 2, 3, 4, 5, 6, 7, 8]
+        slot_choices = [x.value for x in chameleon_cmd.SlotNumber]
+        help_str = f"Slot Indexes: {slot_choices}"
+
         parser.add_argument('-s', "--slot", type=int, required=True,
-                            help="Slot index", metavar="number", choices=slot_choices)
+                            help=help_str, metavar="number", choices=slot_choices)
         return parser
+
 
 class SenseTypeRequireUnit(DeviceRequiredUnit):
 
@@ -810,10 +828,32 @@ class SenseTypeRequireUnit(DeviceRequiredUnit):
 
     @staticmethod
     def add_sense_type_args(parser: ArgumentParserNoExit):
-        slot_choices = [1, 2]
+        sense_choices = chameleon_cmd.TagSenseType.list()
+
+        help_str = ""
+        for s in chameleon_cmd.TagSenseType:
+            if s == chameleon_cmd.TagSenseType.TAG_SENSE_NO:
+                continue
+            help_str += f"{s.value} = {s}, "
+
         parser.add_argument('-st', "--sense_type", type=int, required=True,
-                            help="Sense type", metavar="number", choices=slot_choices)
+                            help=help_str, metavar="number", choices=sense_choices)
         return parser
+
+
+@hw_slot.command('info', 'Get information about slots')
+class HWSlotInfo(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        return
+
+    # hw slot info
+    def on_exec(self, args: argparse.Namespace):
+        data = self.cmd.get_slot_info().data
+        selected = chameleon_cmd.SlotNumber.from_fw(self.cmd.get_active_slot().data[0])
+        for slot in chameleon_cmd.SlotNumber:
+            print(f' - Slot {slot} data{" (active)" if slot == selected else ""}:')
+            print(f' HF: {chameleon_cmd.TagSpecificType(data[chameleon_cmd.SlotNumber.to_fw(slot) * 2])}')
+            print(f' LF: {chameleon_cmd.TagSpecificType(data[chameleon_cmd.SlotNumber.to_fw(slot) * 2 + 1])}')
 
 
 @hw_slot.command('change', 'Set emulation tag slot activated.')
@@ -836,10 +876,10 @@ class TagTypeRequiredUnit(DeviceRequiredUnit):
     def add_type_args(parser: ArgumentParserNoExit):
         type_choices = chameleon_cmd.TagSpecificType.list()
         help_str = ""
-        for name, value in chameleon_cmd.TagSpecificType.__members__.items():
-            if value == chameleon_cmd.TagSpecificType.TAG_TYPE_UNKNOWN:
+        for t in chameleon_cmd.TagSpecificType:
+            if t == chameleon_cmd.TagSpecificType.TAG_TYPE_UNKNOWN:
                 continue
-            help_str += f"{value} = {name.replace('TAG_TYPE_', '')}, "
+            help_str += f"{t.value} = {t}, "
         parser.add_argument('-t', "--type", type=int, required=True, help=help_str,
                             metavar="number", choices=type_choices)
         return parser
@@ -923,7 +963,7 @@ class HWSlotNickSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
         parser = ArgumentParserNoExit()
         self.add_slot_args(parser)
         self.add_sense_type_args(parser)
-        parser.add_argument('-n', '--name', type=str, required=True, help="Yout tag nick name for slot")
+        parser.add_argument('-n', '--name', type=str, required=True, help="Your tag nick name for slot")
         return parser
 
     # hw slot nick set -s 1 -st 1 -n 测试名称保存
@@ -931,7 +971,8 @@ class HWSlotNickSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
         slot_num = args.slot
         sense_type = args.sense_type
         name: str = args.name
-        if len(name.encode(encoding="gbk")) > 32:
+        uname = name.encode(encoding="utf8")
+        if len(uname) > 32:
             raise ValueError("Your tag nick name too long.")
         self.cmd.set_slot_tag_nick_name(slot_num, sense_type, name)
         print(f' - Set tag nick name for slot {slot_num} success.')
@@ -950,7 +991,7 @@ class HWSlotNickGet(SlotIndexRequireUnit, SenseTypeRequireUnit):
         slot_num = args.slot
         sense_type = args.sense_type
         res = self.cmd.get_slot_tag_nick_name(slot_num, sense_type)
-        print(f' - Get tag nick name for slot {slot_num}: {res.data.decode(encoding="gbk")}')
+        print(f' - Get tag nick name for slot {slot_num}: {res.data.decode(encoding="utf8")}')
 
 
 @hw_slot.command('update', 'Update config & data to device flash')
@@ -978,8 +1019,8 @@ class HWSlotOpenAll(DeviceRequiredUnit):
         lf_type = chameleon_cmd.TagSpecificType.TAG_TYPE_EM410X
 
         # set all slot
-        for slot in range(1,9):
-            print(f' Slot{slot} setting...')
+        for slot in chameleon_cmd.SlotNumber:
+            print(f' Slot {slot} setting...')
             # first to set tag type
             self.cmd.set_slot_tag_type(slot, hf_type)
             self.cmd.set_slot_tag_type(slot, lf_type)
@@ -988,11 +1029,11 @@ class HWSlotOpenAll(DeviceRequiredUnit):
             self.cmd.set_slot_data_default(slot, lf_type)
             # finally, we can enable this slot.
             self.cmd.set_slot_enable(slot, True)
-            print(f' Open slot{slot} finish')
+            print(f' Slot {slot} setting done.')
 
         # update config and save to flash
         self.cmd.update_slot_data_config()
-        print(f' - Open all slot and set data to default success.')
+        print(f' - Succeeded opening all slots and setting data to default.')
 
 
 @hw.command('dfu', 'Restart application to bootloader mode(Not yet implement dfu).')
@@ -1011,3 +1052,86 @@ class HWDFU(DeviceRequiredUnit):
         print(" - Enter success @.@~")
         # let time for comm thread to send dfu cmd and close port
         time.sleep(0.1)
+
+
+@hw_settings_animation.command('get', 'Get current animation mode value')
+class HWSettingsAnimationGet(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        return None
+    def on_exec(self, args: argparse.Namespace):
+        resp: chameleon_com.Response = self.cmd.get_settings_animation()
+        if resp.data[0] == 0:
+            print("Full animation")
+        elif resp.data[0] == 1:
+            print("Minimal animation")
+        elif resp.data[0] == 2:
+            print("No animation")
+        else:
+            print("Unknown setting value, something failed.")
+
+
+@hw_settings_animation.command('set', 'Change chameleon animation mode')
+class HWSettingsAnimationSet(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        parser = ArgumentParserNoExit()
+        parser.add_argument('-m', '--mode', type=int, required=True, help="0 is full (default), 1 is minimal (only single pass on button wakeup), 2 is none", choices=[0, 1, 2])
+        return parser
+    
+    def on_exec(self, args: argparse.Namespace):
+        mode = args.mode
+        self.cmd.set_settings_animation(mode)
+        print("Animation mode change success. Do not forget to store your settings in flash!")
+    
+
+@hw_settings.command('store', 'Store current settings to flash')
+class HWSettingsStore(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        return None
+    
+    def on_exec(self, args: argparse.Namespace):
+        print("Storing settings...")
+        resp: chameleon_com.Response = self.cmd.store_settings()
+        if resp.status == chameleon_status.Device.STATUS_DEVICE_SUCCESS:
+            print(" - Store success @.@~")
+        else:
+            print(" - Store failed")
+
+
+@hw_settings.command('reset', 'Reset settings to default values')
+class HWSettingsReset(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        return None
+
+    def on_exec(self, args: argparse.Namespace):
+        print("Initializing settings...")
+        resp: chameleon_com.Response = self.cmd.reset_settings()
+        if resp.status == chameleon_status.Device.STATUS_DEVICE_SUCCESS:
+            print(" - Reset success @.@~")
+        else:
+            print(" - Reset failed")
+
+
+@hw.command('factory_reset', 'Wipe all data and return to factory settings')
+class HWFactoryReset(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Permanently wipes Chameleon to factory settings. " \
+            "This will delete all your slot data and custom settings. " \
+            "There's no going back."
+        parser.add_argument(
+            "--i-know-what-im-doing",
+            default=False,
+            action="store_true",
+            help="Just to be sure :)"
+        )
+        return parser
+    def on_exec(self, args: argparse.Namespace):
+        if not args.i_know_what_im_doing:
+            print("This time your data's safe. Read the command documentation next time.")
+            return
+        resp = self.cmd.factory_reset()
+        if resp.status == chameleon_status.Device.STATUS_DEVICE_SUCCESS:
+            print(" - Reset successful! Please reconnect.")
+            print(" - A Serial Error below is normal, please ignore it")
+        else:
+            print(" - Reset failed!")

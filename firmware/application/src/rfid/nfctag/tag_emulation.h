@@ -5,12 +5,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "utils.h"
 #include "tag_base_type.h"
 
 // 最多八张卡槽
 #define TAG_MAX_SLOT_NUM    8
-// u32 size align.
-#define ALIGN_U32  __attribute__((aligned(4)))
 
 extern bool g_is_tag_emulating;
 

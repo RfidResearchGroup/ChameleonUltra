@@ -27,6 +27,7 @@ NRF_LOG_MODULE_REGISTER();
 #include "ble_main.h"
 #include "bsp_delay.h"
 #include "bsp_time.h"
+#include "bsp_wdt.h"
 #include "dataframe.h"
 #include "fds_util.h"
 #include "hex_utils.h"
@@ -36,6 +37,7 @@ NRF_LOG_MODULE_REGISTER();
 #include "usb_main.h"
 #include "rgb_marquee.h"
 
+#include "settings.h"
 
 // Defining soft timers
 APP_TIMER_DEF(m_button_check_timer); // Timer for button debounce
@@ -219,22 +221,25 @@ static void system_off_enter(void) {
         for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
             nrf_gpio_pin_clear(p_led_array[i]);
         }
-        uint8_t slot = tag_emulation_get_slot();
-        // Power off animation
-        uint8_t dir = slot > 3 ? 1 : 0;
-        uint8_t color = get_color_by_slot(slot);
-        if (m_reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) {
-            if (m_reset_source & NRF_POWER_RESETREAS_NFC_MASK) {
-                color = 1;
-            } else {
-                color = 2;
+        uint8_t animation_config = settings_get_animation_config();
+        if (animation_config == SettingsAnimationModeFull) {
+            uint8_t slot = tag_emulation_get_slot();
+            // Power off animation
+            uint8_t dir = slot > 3 ? 1 : 0;
+            uint8_t color = get_color_by_slot(slot);
+            if (m_reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) {
+                if (m_reset_source & NRF_POWER_RESETREAS_NFC_MASK) {
+                    color = 1;
+                } else {
+                    color = 2;
+                }
             }
+            ledblink5(color, slot, dir ? 7 : 0);
+            ledblink4(color, dir, 7, 99, 75);
+            ledblink4(color, !dir, 7, 75, 50);
+            ledblink4(color, dir, 7, 50, 25);
+            ledblink4(color, !dir, 7, 25, 0);
         }
-        ledblink5(color, slot, dir ? 7 : 0);
-        ledblink4(color, dir, 7, 99, 75);
-        ledblink4(color, !dir, 7, 75, 50);
-        ledblink4(color, dir, 7, 50, 25);
-        ledblink4(color, !dir, 7, 25, 0);
         rgb_marquee_stop();
     }
 
@@ -346,9 +351,18 @@ static void check_wakeup_src(void) {
         advertising_start(); // Turn on Bluetooth radio
 
         // Button wake-up boot animation
-        ledblink2(color, !dir, 11);
-        ledblink2(color, dir, 11);
-        ledblink2(color, !dir, dir ? slot : 7 - slot);
+        uint8_t animation_config = settings_get_animation_config();
+        if (animation_config == SettingsAnimationModeFull)
+        {
+            ledblink2(color, !dir, 11);
+            ledblink2(color, dir, 11);
+            ledblink2(color, !dir, dir ? slot : 7 - slot);
+        } else if (animation_config == SettingsAnimationModeMinimal) {
+            ledblink2(color, !dir, dir ? slot : 7 - slot);
+        } else {
+            set_slot_light_color(color);
+        }
+
         // The indicator of the current card slot lights up at the end of the animation
         light_up_by_slot();
 
@@ -374,8 +388,11 @@ static void check_wakeup_src(void) {
         // 当前是模拟卡事件唤醒系统，我们可以让场强灯先亮起来
         TAG_FIELD_LED_ON();
 
-        // In the case of field wake-up, only one round of RGB is swept as the power-on animation
-        ledblink2(color, !dir, dir ? slot : 7 - slot);
+        uint8_t animation_config = settings_get_animation_config();
+        if (animation_config == SettingsAnimationModeFull) {
+            // In the case of field wake-up, only one round of RGB is swept as the power-on animation
+            ledblink2(color, !dir, dir ? slot : 7 - slot);
+        }
         set_slot_light_color(color);
         light_up_by_slot();
 
@@ -517,6 +534,8 @@ int main(void) {
     tag_emulation_init();     // Analog card initialization
     rgb_marquee_init();       // Light effect initialization
 
+    settings_load_config();   // Load settings from flash
+
     // cmd callback register
     on_data_frame_complete(on_data_frame_received);
     
@@ -526,6 +545,7 @@ int main(void) {
     // usbd event listener
     APP_ERROR_CHECK(app_usbd_power_events_enable());
 
+    bsp_wdt_init();
     // Enter main loop.
     NRF_LOG_INFO("Chameleon working");
     while (1) {
@@ -539,6 +559,8 @@ int main(void) {
         while (NRF_LOG_PROCESS());
         // USB event process
         while (app_usbd_event_queue_process());
+        // WDT refresh
+        bsp_wdt_feed();
         // No task to process, system sleep enter.
         // If system idle sometime, we can enter deep sleep state.
         // Some task process done, we can enter cpu sleep state.
