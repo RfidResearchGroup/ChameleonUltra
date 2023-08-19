@@ -463,7 +463,7 @@ data_frame_tx_t* cmd_processor_set_mf1_anti_collision_res(uint16_t cmd, uint16_t
     } else {
         uint8_t uid_length = length - 3;
         if (is_valid_uid_size(uid_length)) {
-            nfc_tag_14a_coll_res_referen_t* info = get_miafre_coll_res();
+            nfc_tag_14a_coll_res_referen_t* info = get_mifare_coll_res();
             // copy sak
             info->sak[0] = data[0];
             // copy atqa
@@ -526,6 +526,124 @@ data_frame_tx_t* cmd_processor_get_slot_tag_nick_name(uint16_t cmd, uint16_t sta
         }
     }
     return data_frame_make(cmd, status, length, data);
+}
+
+data_frame_tx_t* cmd_processor_get_mf1_info(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t mf1_info[5] = {};
+    mf1_info[0] = nfc_tag_mf1_is_detection_enable();
+    mf1_info[1] = nfc_tag_mf1_is_gen1a_magic_mode();
+    mf1_info[2] = nfc_tag_mf1_is_gen2_magic_mode();
+    mf1_info[3] = nfc_tag_mf1_is_use_mf1_coll_res();
+    nfc_tag_mf1_write_mode_t write_mode = nfc_tag_mf1_get_write_mode();
+    if (write_mode == NFC_TAG_MF1_WRITE_NORMAL) {
+        mf1_info[4] = 0;
+    } else if (write_mode == NFC_TAG_MF1_WRITE_DENIED) {
+        mf1_info[4] = 1;
+    } else if (write_mode == NFC_TAG_MF1_WRITE_DECEIVE) {
+        mf1_info[4] = 2;
+    } else if (write_mode == NFC_TAG_MF1_WRITE_SHADOW) {
+        mf1_info[4] = 3;
+    }
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 5, mf1_info);
+}
+
+data_frame_tx_t* cmd_processor_get_mf1_gen1a_magic_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (nfc_tag_mf1_is_gen1a_magic_mode()) {
+        status = 1;
+    } else {
+        status = 0;
+    }
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 1, (uint8_t*)&status);
+}
+
+data_frame_tx_t* cmd_processor_set_mf1_gen1a_magic_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length == 1 && (data[0] == 0 || data[0] == 1)) {
+        nfc_tag_mf1_set_gen1a_magic_mode(data[0]);
+        status = STATUS_DEVICE_SUCCESS;
+	} else {
+        status = STATUS_PAR_ERR;
+    }
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+data_frame_tx_t* cmd_processor_get_mf1_gen2_magic_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (nfc_tag_mf1_is_gen2_magic_mode()) {
+        status = 1;
+    } else {
+        status = 0;
+    }
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 1, (uint8_t*)&status);
+}
+
+data_frame_tx_t* cmd_processor_set_mf1_gen2_magic_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length == 1 && (data[0] == 0 || data[0] == 1)) {
+        nfc_tag_mf1_set_gen2_magic_mode(data[0]);
+        status = STATUS_DEVICE_SUCCESS;
+	} else {
+        status = STATUS_PAR_ERR;
+    }
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+data_frame_tx_t* cmd_processor_get_mf1_use_coll_res(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (nfc_tag_mf1_is_use_mf1_coll_res()) {
+        status = 1;
+    } else {
+        status = 0;
+    }
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 1, (uint8_t*)&status);
+}
+
+data_frame_tx_t* cmd_processor_set_mf1_use_coll_res(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length == 1 && (data[0] == 0 || data[0] == 1)) {
+        nfc_tag_mf1_set_use_mf1_coll_res(data[0]);
+        status = STATUS_DEVICE_SUCCESS;
+	} else {
+        status = STATUS_PAR_ERR;
+    }
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+data_frame_tx_t* cmd_processor_get_mf1_write_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    nfc_tag_mf1_write_mode_t write_mode = nfc_tag_mf1_get_write_mode();
+    if (write_mode == NFC_TAG_MF1_WRITE_NORMAL) {
+        status = 0;
+    } else if (write_mode == NFC_TAG_MF1_WRITE_DENIED) {
+        status = 1;
+    } else if (write_mode == NFC_TAG_MF1_WRITE_DECEIVE) {
+        status = 2;
+    } else if (write_mode == NFC_TAG_MF1_WRITE_SHADOW) {
+        status = 3;
+    }
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 1, (uint8_t*)&status);
+}
+
+data_frame_tx_t* cmd_processor_set_mf1_write_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length == 1 && (data[0] >= 0 || data[0] <= 3)) {
+        uint8_t mode = data[0];
+        if (mode == 0) {
+            nfc_tag_mf1_set_write_mode(NFC_TAG_MF1_WRITE_NORMAL);
+        } else if (mode == 1) {
+            nfc_tag_mf1_set_write_mode(NFC_TAG_MF1_WRITE_DENIED);
+        } else if (mode == 2) {
+            nfc_tag_mf1_set_write_mode(NFC_TAG_MF1_WRITE_DECEIVE);
+        } else if (mode == 3) {
+            nfc_tag_mf1_set_write_mode(NFC_TAG_MF1_WRITE_SHADOW);
+        }
+        status = STATUS_DEVICE_SUCCESS;
+	} else {
+        status = STATUS_PAR_ERR;
+    }
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+data_frame_tx_t* cmd_processor_get_enabled_slots(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t slot_info[8] = {};
+    for (uint8_t slot = 0; slot < 8; slot++) {
+        slot_info[slot] = tag_emulation_slot_is_enable(slot);
+    }
+
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 8, slot_info);
 }
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
@@ -614,6 +732,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_ACTIVE_SLOT,              NULL,                        cmd_processor_get_activated_slot,            NULL                   },
     {    DATA_CMD_GET_SLOT_INFO,                NULL,                        cmd_processor_get_slot_info,                 NULL                   },
     {    DATA_CMD_WIPE_FDS,                     NULL,                        cmd_processor_wipe_fds,                      NULL                   },
+    {    DATA_CMD_GET_ENABLED_SLOTS,            NULL,                        cmd_processor_get_enabled_slots,             NULL                   },
+
     
 
     {    DATA_CMD_SET_EM410X_EMU_ID,            NULL,                        cmd_processor_set_em410x_emu_id,             NULL                   },
@@ -624,6 +744,15 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_MF1_DETECTION_RESULT,     NULL,                        cmd_processor_get_mf1_detection_log,         NULL                   },
     {    DATA_CMD_LOAD_MF1_BLOCK_DATA,          NULL,                        cmd_processor_set_mf1_emulator_block,        NULL                   },
     {    DATA_CMD_SET_MF1_ANTI_COLLISION_RES,   NULL,                        cmd_processor_set_mf1_anti_collision_res,    NULL                   },
+    {    DATA_CMD_GET_MF1_EMULATOR_CONFIG,      NULL,                        cmd_processor_get_mf1_info,                  NULL                   },
+    {    DATA_CMD_GET_MF1_GEN1A_MODE,           NULL,                        cmd_processor_get_mf1_gen1a_magic_mode,      NULL                   },
+    {    DATA_CMD_SET_MF1_GEN1A_MODE,           NULL,                        cmd_processor_set_mf1_gen1a_magic_mode,      NULL                   },
+    {    DATA_CMD_GET_MF1_GEN2_MODE,            NULL,                        cmd_processor_get_mf1_gen2_magic_mode,       NULL                   },
+    {    DATA_CMD_SET_MF1_GEN2_MODE,            NULL,                        cmd_processor_set_mf1_gen2_magic_mode,       NULL                   },
+    {    DATA_CMD_GET_MF1_USE_FIRST_BLOCK_COLL, NULL,                        cmd_processor_get_mf1_use_coll_res,          NULL                   },
+    {    DATA_CMD_SET_MF1_USE_FIRST_BLOCK_COLL, NULL,                        cmd_processor_set_mf1_use_coll_res,          NULL                   },
+    {    DATA_CMD_GET_MF1_WRITE_MODE,           NULL,                        cmd_processor_get_mf1_write_mode,            NULL                   },
+    {    DATA_CMD_SET_MF1_WRITE_MODE,           NULL,                        cmd_processor_set_mf1_write_mode,            NULL                   },
 
     {    DATA_CMD_SET_SLOT_TAG_NICK,            NULL,                        cmd_processor_set_slot_tag_nick_name,        NULL                   },
     {    DATA_CMD_GET_SLOT_TAG_NICK,            NULL,                        cmd_processor_get_slot_tag_nick_name,        NULL                   },

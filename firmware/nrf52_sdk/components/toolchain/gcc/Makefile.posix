@@ -1,3 +1,3 @@
-GNU_INSTALL_ROOT ?= /usr/local/gcc-arm-none-eabi-10.3-2021.10/bin/
+GNU_INSTALL_ROOT ?= /usr/bin/
 GNU_VERSION ?= 9.3.1
 GNU_PREFIX ?= arm-none-eabi

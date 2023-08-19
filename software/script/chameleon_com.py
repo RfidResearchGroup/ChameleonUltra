@@ -40,8 +40,6 @@ class ChameleonCom:
         Chameleon device base class
         Communication and Data frame implemented
     """
-
-    baudrate = 115200
     data_frame_sof = 0x11
     data_max_length = 512
 
@@ -49,7 +47,7 @@ class ChameleonCom:
         """
             Create a chameleon device instance
         """
-        self.serial_instance: serial.Serial = None
+        self.serial_instance: serial.Serial | None = None
         self.send_data_queue = queue.Queue()
         self.wait_response_map = {}
         self.event_closing = threading.Event()
@@ -72,7 +70,7 @@ class ChameleonCom:
             error = None
             try:
                 # open serial port
-                self.serial_instance = serial.Serial(port=port, baudrate=self.baudrate)
+                self.serial_instance = serial.Serial(port=port, baudrate=115200)
             except Exception as e:
                 error = e
             finally:
@@ -80,7 +78,7 @@ class ChameleonCom:
                     raise OpenFailException(error)
             try:
                 self.serial_instance.dtr = 1  # must make dtr enable
-            except Exception as e:
+            except:
                 # not all serial support dtr, e.g. virtual serial over BLE
                 pass
             self.serial_instance.timeout = 0  # noblock
@@ -89,9 +87,9 @@ class ChameleonCom:
             self.wait_response_map.clear()
             # Start a sub thread to process data
             self.event_closing.clear()
-            threading.Thread(target=self.thread_data_receive, ).start()
-            threading.Thread(target=self.thread_data_transfer, ).start()
-            threading.Thread(target=self.thread_check_timeout, ).start()
+            threading.Thread(target=self.thread_data_receive).start()
+            threading.Thread(target=self.thread_data_transfer).start()
+            threading.Thread(target=self.thread_check_timeout).start()
         return self
 
     def check_open(self):
@@ -200,11 +198,8 @@ class ChameleonCom:
                                     del self.wait_response_map[data_cmd]
                                     fn_call(data_cmd, data_status, data_response)
                                 else:
-                                    self.wait_response_map[data_cmd]['response'] = Response(
-                                        data_cmd,
-                                        data_status,
-                                        data_response
-                                    )
+                                    self.wait_response_map[data_cmd]['response'] = Response(data_cmd, data_status,
+                                                                                            data_response)
                             else:
                                 print(f"No task wait process: ${data_cmd}")
                         else:
@@ -232,13 +227,9 @@ class ChameleonCom:
             task_close = task['close']
             # register to wait map
             if 'callback' in task and callable(task['callback']):
-                self.wait_response_map[task_cmd] = {
-                    'callback': task['callback']  # The callback for this task
-                }
+                self.wait_response_map[task_cmd] = {'callback': task['callback']}  # The callback for this task
             else:
-                self.wait_response_map[task_cmd] = {
-                    'response': None,
-                }
+                self.wait_response_map[task_cmd] = {'response': None}
             # set start time
             start_time = time.time()
             self.wait_response_map[task_cmd]['start_time'] = start_time
@@ -279,7 +270,6 @@ class ChameleonCom:
         :return: frame
         """
         frame = bytearray()
-        lrc = 0x00
         # sof and sof lrc byte
         frame.append(self.data_frame_sof)
         frame.append(self.lrc_calc(frame[0:1]))
@@ -295,7 +285,8 @@ class ChameleonCom:
         frame.append(self.lrc_calc(frame))
         return frame
 
-    def send_cmd_auto(self, cmd: int, status: int, data: bytearray = None, callback=None, timeout: int = 3, close: bool = False):
+    def send_cmd_auto(self, cmd: int, status: int, data: bytearray = None, callback=None, timeout: int = 3,
+                      close: bool = False):
         """
             Send cmd to device
         :param timeout: wait response timeout
@@ -303,6 +294,7 @@ class ChameleonCom:
         :param status: status(optional)
         :param callback: call on response
         :param data: bytes data
+        :param close: close connection after executing
         :return:
         """
         self.check_open()
@@ -311,12 +303,7 @@ class ChameleonCom:
             del self.wait_response_map[cmd]
         # make data frame
         data_frame = self.make_data_frame_bytes(cmd, status, data)
-        task = {
-            'cmd': cmd,
-            'frame': data_frame,
-            'timeout': timeout,
-            'close': close,
-        }
+        task = {'cmd': cmd, 'frame': data_frame, 'timeout': timeout, 'close': close}
         if callable(callback):
             task['callback'] = callback
         self.send_data_queue.put(task)

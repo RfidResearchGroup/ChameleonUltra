@@ -1,5 +1,4 @@
 import argparse
-import os
 import platform
 import sys
 import traceback
@@ -9,9 +8,6 @@ import chameleon_cmd
 import colorama
 import chameleon_cli_unit
 import os
-
-if os.name == 'posix':
-   import readline
 
 ULTRA = r"""
                                                                 ╦ ╦╦ ╔╦╗╦═╗╔═╗
@@ -43,10 +39,7 @@ def new_uint(unit_clz, help_msg):
     :param help_msg: unit usage
     :return: a dict...
     """
-    return {
-        'unit': unit_clz,
-        'help': help_msg,
-    }
+    return {'unit': unit_clz, 'help': help_msg}
 
 
 class ChameleonCLI:
@@ -60,7 +53,7 @@ class ChameleonCLI:
                 'connect': new_uint(chameleon_cli_unit.HWConnect, "Connect to chameleon by serial port"),
                 'chipid': {
                     'get': new_uint(chameleon_cli_unit.HWChipIdGet, "Get device chipset ID"),
-                    'help': "Device chipsed ID get"
+                    'help': "Device chipset ID get"
                 },
                 'address': {
                     'get': new_uint(chameleon_cli_unit.HWAddressGet, "Get device address (used with Bluetooth)"),
@@ -72,7 +65,7 @@ class ChameleonCLI:
                     'help': "Device mode get/set"
                 },
                 'slot': {
-                    'info': new_uint(chameleon_cli_unit.HWSlotInfo, "Get information about slots"),
+                    'list': new_uint(chameleon_cli_unit.HWSlotList, "Get information about slots"),
                     'change': new_uint(chameleon_cli_unit.HWSlotSet, "Set emulation tag slot activated."),
                     'type': new_uint(chameleon_cli_unit.HWSlotTagType, "Set emulation tag type"),
                     'init': new_uint(chameleon_cli_unit.HWSlotDataDefault, "Set emulation tag data to default"),
@@ -87,7 +80,8 @@ class ChameleonCLI:
                     'help': "Emulation tag slot.",
                 },
                 'version': new_uint(chameleon_cli_unit.HWVersion, "Get current device firmware version"),
-                'dfu': new_uint(chameleon_cli_unit.HWDFU, "Restart application to bootloader mode(Not yet implement dfu)."),
+                'dfu': new_uint(chameleon_cli_unit.HWDFU, "Restart application to bootloader mode(Not yet implement "
+                                                          "dfu)."),
                 'settings': {
                     'animation': {
                         'get': new_uint(chameleon_cli_unit.HWSettingsAnimationGet, "Get current animation mode value"),
@@ -98,7 +92,8 @@ class ChameleonCLI:
                     'reset': new_uint(chameleon_cli_unit.HWSettingsReset, "Reset settings to default values"),
                     'help': "Chameleon settings management"
                 },
-                'factory_reset': new_uint(chameleon_cli_unit.HWFactoryReset, "Wipe all data and return to factory settings"),
+                'factory_reset': new_uint(chameleon_cli_unit.HWFactoryReset, "Wipe all data and return to factory "
+                                                                             "settings"),
                 'help': "hardware controller",
             },
             'hf': {
@@ -110,15 +105,16 @@ class ChameleonCLI:
                 'mf': {
                     'nested': new_uint(chameleon_cli_unit.HFMFNested, "Mifare Classic nested recover key"),
                     'darkside': new_uint(chameleon_cli_unit.HFMFDarkside, "Mifare Classic darkside recover key"),
-                    'rdbl': new_uint(chameleon_cli_unit.HFMFRDBL, "MiFARE Classic read one block"),
-                    'wrbl': new_uint(chameleon_cli_unit.HFMFWRBL, "MiFARE Classic write one block"),
+                    'rdbl': new_uint(chameleon_cli_unit.HFMFRDBL, "Mifare Classic read one block"),
+                    'wrbl': new_uint(chameleon_cli_unit.HFMFWRBL, "Mifare Classic write one block"),
                     'detection': {
                         'enable': new_uint(chameleon_cli_unit.HFMFDetectionEnable, "Detection enable"),
                         'count': new_uint(chameleon_cli_unit.HFMFDetectionLogCount, "Detection log count"),
                         'decrypt': new_uint(chameleon_cli_unit.HFMFDetectionDecrypt, "Download log and decrypt keys"),
                         'help': "Mifare Classic detection log"
                     },
-                    'sim': new_uint(chameleon_cli_unit.HFMFSim, "Simulation a mifare classic card"),
+                    'settings': new_uint(chameleon_cli_unit.HFMFSettings, "Settings of Mifare Classic emulator"),
+                    'sim': new_uint(chameleon_cli_unit.HFMFSim, "Simulate a Mifare Classic card"),
                     'eload': new_uint(chameleon_cli_unit.HFMFELoad, "Load data to emulator memory"),
                     'help': "Mifare Classic mini/1/2/4, attack/read/write"
                 },
@@ -154,12 +150,10 @@ class ChameleonCLI:
         """
         cmds = cmd_str.split(" ")
         cmd_maps: dict or types.FunctionType = self.cmd_maps
-        cmd_end = ""
         cmd_end_position = 0
         for cmd in cmds:
             if cmd in cmd_maps:  # CMD found in map, we can continue find next
                 cmd_maps = cmd_maps[cmd]
-                cmd_end = cmd
                 cmd_end_position += len(cmd) + 1
             else:  # CMD not found
                 break
@@ -175,13 +169,15 @@ class ChameleonCLI:
         while True:
             # wait user input
             status = f"{colorama.Fore.GREEN}USB" if self.device_com.isOpen() else f"{colorama.Fore.RED}Offline"
+            cmd_str = ""
             try:
                 cmd_str = input(f"[{status}{colorama.Style.RESET_ALL}] chameleon --> ").strip()
             except EOFError:
                 print("")
                 closing = True
 
-            if closing or cmd_str == "exit" or cmd_str == "quit" or cmd_str.startswith('q', 0) or cmd_str.startswith('e', 0):
+            if closing or cmd_str == "exit" or cmd_str == "quit" or cmd_str.startswith('q', 0) or cmd_str.startswith(
+                    'e', 0):
                 print("Bye, thank you.  ^.^ ")
                 self.device_com.close()
                 sys.exit(996)
