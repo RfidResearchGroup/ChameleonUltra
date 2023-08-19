@@ -44,10 +44,10 @@ typedef enum {
 // mf1配置
 typedef struct {
     /**
-     *  正常写入模式（根据当前的状态去正常写入，受控制位和后门卡影响）
-     *  拒绝写入模式（类似控制位锁死，直接拒绝任何写入，返回nack）
-     *  欺诈写入模式（表面上返回ack表示写入成功，其实连RAM都不写入）
-     *  影子写入模式（写入到RAM里面，并且返回ack表示成功，但是不保存到flash里面）
+     * Normal write mode (write normally according to the current state, affected by the control bit and the back door card)
+     * Deny write mode (similar to control bit lock, directly reject any write, return nack)
+     * Fraudulent writing mode (on the surface, returning ack indicates that the writing is successful, but in fact, even RAM is not written)
+     * Shadow write mode (write to RAM, and return ack to indicate success, but not save to flash)
      *  @see nfc_tag_mf1_write_mode_t
      */
     nfc_tag_mf1_write_mode_t mode_block_write;
@@ -66,8 +66,10 @@ typedef struct {
      * 使能侦测，将自动记录mf1的验证日志
      */
     uint8_t detection_enable: 1;
+    // Allow to write block 0 (CUID/gen2 mode)
+    uint8_t mode_gen2_magic: 1;
     // 保留
-    uint8_t reserved1: 5;
+    uint8_t reserved1: 4;
     uint8_t reserved2;
     uint8_t reserved3;
 } nfc_tag_mf1_configure_t;
@@ -140,6 +142,15 @@ void nfc_tag_mf1_set_detection_enable(bool enable);
 bool nfc_tag_mf1_is_detection_enable(void);
 void nfc_tag_mf1_detection_log_clear(void);
 uint32_t nfc_tag_mf1_detection_log_count(void);
-nfc_tag_14a_coll_res_referen_t* get_miafre_coll_res(void);
+nfc_tag_14a_coll_res_referen_t* get_mifare_coll_res(void);
+void nfc_tag_mf1_set_gen1a_magic_mode(bool enable);
+bool nfc_tag_mf1_is_gen1a_magic_mode(void);
+void nfc_tag_mf1_set_gen2_magic_mode(bool enable);
+bool nfc_tag_mf1_is_gen2_magic_mode(void);
+void nfc_tag_mf1_set_use_mf1_coll_res(bool enable);
+bool nfc_tag_mf1_is_use_mf1_coll_res(void);
+void nfc_tag_mf1_set_write_mode(nfc_tag_mf1_write_mode_t write_mode);
+nfc_tag_mf1_write_mode_t nfc_tag_mf1_get_write_mode(void);
+
 
 #endif

@@ -38,14 +38,14 @@ NRF_LOG_MODULE_REGISTER();
 #define CMD_AUTH_A                  0x60
 #define CMD_AUTH_B                  0x61
 #define CMD_AUTH_FRAME_SIZE         2         /* Bytes without CRCA */
-#define CMD_AUTH_RB_FRAME_SIZE      4        /* Bytes */
-#define CMD_AUTH_AB_FRAME_SIZE      8        /* Bytes */
-#define CMD_AUTH_BA_FRAME_SIZE      4        /* Bytes */
+#define CMD_AUTH_RB_FRAME_SIZE      4         /* Bytes */
+#define CMD_AUTH_AB_FRAME_SIZE      8         /* Bytes */
+#define CMD_AUTH_BA_FRAME_SIZE      4         /* Bytes */
 #define CMD_HALT                    0x50
-#define CMD_HALT_FRAME_SIZE         2        /* Bytes without CRCA */
+#define CMD_HALT_FRAME_SIZE         2         /* Bytes without CRCA */
 #define CMD_READ                    0x30
 #define CMD_READ_FRAME_SIZE         2         /* Bytes without CRCA */
-#define CMD_READ_RESPONSE_FRAME_SIZE 16 /* Bytes without CRCA */
+#define CMD_READ_RESPONSE_FRAME_SIZE 16       /* Bytes without CRCA */
 #define CMD_WRITE                   0xA0
 #define CMD_WRITE_FRAME_SIZE        2         /* Bytes without CRCA */
 #define CMD_DECREMENT               0xC0
@@ -54,8 +54,6 @@ NRF_LOG_MODULE_REGISTER();
 #define CMD_INCREMENT_FRAME_SIZE    2         /* Bytes without CRCA */
 #define CMD_RESTORE                 0xC2
 #define CMD_RESTORE_FRAME_SIZE      2         /* Bytes without CRCA */
-#define CMD_SIG_READ                0xC2
-#define CMD_SIG_READ_FRAME_SIZE     1         /* Bytes without CRCA */
 #define CMD_TRANSFER                0xB0
 #define CMD_TRANSFER_FRAME_SIZE     2         /* Bytes without CRCA */
 
@@ -311,9 +309,18 @@ void ValueToBlock(uint8_t *Block, uint32_t Value) {
 /** @brief mf1获取一个随机数
  * @param nonce      随机数的Buffer
  */
-void nfc_tag_mf1_random_nonce(uint8_t nonce[4]) {
+void nfc_tag_mf1_random_nonce(uint8_t nonce[4], bool isNested) {
     // 使用rand进行快速产生随机数，性能损耗较小 
-    num_to_bytes(rand(), 4, nonce);
+    // isNested provides more randomness for hardnested attack
+    if (isNested) {
+        nonce[0] = rand() & 0xff;
+        nonce[1] = rand() & 0xff;
+        nonce[2] = rand() & 0xff;
+        nonce[3] = rand() & 0xff;
+    } else {
+        // fast for most readers
+        num_to_bytes(rand(), 4, nonce);
+    }
 }
 
 /** 
@@ -494,7 +501,7 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                             m_tag_trailer_info = (nfc_tag_mf1_trailer_info_t*)m_tag_information->memory[BlockEnd];
 
                             // 生成随机数
-                            nfc_tag_mf1_random_nonce(CardNonce);
+                            nfc_tag_mf1_random_nonce(CardNonce, false);
 
                             // 根据卡随机数预先计算读卡器应答
                             for (uint8_t i = 0; i < sizeof(ReaderResponse); i++) {
@@ -674,10 +681,10 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                         case CMD_READ: {
                             // 保存当前操作的块地址
                             CurrentAddress = p_data[1];
+                            // 生成访问控制，用于下面的数据访问控制
+                            uint8_t Acc = abTrailorAccessConditions[ GetAccessCondition(CurrentAddress) ][ KeyInUse ];
                             // 读取命令。从内存中读取数据并附加CRCA。注意：读取操作受到控制位的限制，但是目前我们只限制控制位的读取
-                            if ((p_data[1] < 128 && (p_data[1] & 3) == 3) || ((p_data[1] & 15) == 15)) {
-                                // 生成访问控制，用于下面的数据访问控制
-                                uint8_t Acc = abTrailorAccessConditions[ GetAccessCondition(CurrentAddress) ][ KeyInUse ];
+                            if ((CurrentAddress < 128 && (CurrentAddress & 3) == 3) || ((CurrentAddress & 15) == 15)) {
                                 // 清空一下buffer，避免缓存的数据影响到后续操作
                                 memset(m_tag_tx_buffer.tx_raw_buffer, 0x00, sizeof(m_tag_tx_buffer.tx_raw_buffer));
                                 // 让这块数据区域变成我们需要的尾部块类型
@@ -717,7 +724,7 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                         }
                         case CMD_WRITE: {
                             //	正常的卡不允许写block0，不然会被CUID防火墙识别到
-                            if (p_data[1] == 0x00) {
+                            if (p_data[1] == 0x00 && !m_tag_information->config.mode_gen2_magic) {
                                 // 直接重置14a的状态机，让标签休眠
                                 nfc_tag_14a_set_state(NFC_TAG_STATE_14A_HALTED);
                                 // 告知一下读头此操作不被允许
@@ -823,7 +830,7 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                             m_tag_trailer_info = (nfc_tag_mf1_trailer_info_t*)m_tag_information->memory[BlockEnd];
                             
                             // 生成随机数
-                            nfc_tag_mf1_random_nonce(CardNonce);
+                            nfc_tag_mf1_random_nonce(CardNonce, true);
                             
                             // 根据卡随机数预先计算读卡器响应
                             for (uint8_t i = 0; i < sizeof(ReaderResponse); i++) {
@@ -1041,7 +1048,7 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
 /**
  * @brief 提供mifare标签必要的防冲突资源（仅提供指针）
  */
-nfc_tag_14a_coll_res_referen_t* get_miafre_coll_res() {
+nfc_tag_14a_coll_res_referen_t* get_mifare_coll_res() {
     // 根据当前的互通配置，选择性的返回其中配置的数据，假设开启了数据互通，那么我们还需要确保当前模拟的卡是4BYTE的
     if (m_tag_information->config.use_mf1_coll_res && m_tag_information->res_coll.size == NFC_TAG_14A_UID_SINGLE_SIZE) {
         // 获得数据区域的厂商信息
@@ -1119,7 +1126,7 @@ int nfc_tag_mf1_data_loadcb(tag_specific_type_t type, tag_data_buffer_t* buffer)
         m_tag_type = type;
         // 注册14a通信管理接口
         nfc_tag_14a_handler_t handler_for_14a = {
-            .get_coll_res = get_miafre_coll_res, 
+            .get_coll_res = get_mifare_coll_res,
             .cb_state = nfc_tag_mf1_state_handler, 
             .cb_reset = nfc_tag_mf1_reset_handler,
         };
@@ -1166,6 +1173,7 @@ bool nfc_tag_mf1_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     
     // default mf1 config
     p_mf1_information->config.mode_gen1a_magic = false;
+    p_mf1_information->config.mode_gen2_magic = false;
     p_mf1_information->config.use_mf1_coll_res = false;
     p_mf1_information->config.mode_block_write = NFC_TAG_MF1_WRITE_NORMAL;
     p_mf1_information->config.detection_enable = false;
@@ -1204,3 +1212,44 @@ void nfc_tag_mf1_detection_log_clear(void) {
 uint32_t nfc_tag_mf1_detection_log_count(void) {
     return m_auth_log.count;
 }
+
+// Set gen1a magic mode
+void nfc_tag_mf1_set_gen1a_magic_mode(bool enable) {
+    m_tag_information->config.mode_gen1a_magic = enable;
+}
+
+// Is in gen1a magic mode?
+bool nfc_tag_mf1_is_gen1a_magic_mode(void) {
+    return m_tag_information->config.mode_gen1a_magic;
+}
+
+// Set gen2 magic mode
+void nfc_tag_mf1_set_gen2_magic_mode(bool enable) {
+    m_tag_information->config.mode_gen2_magic = enable;
+}
+
+// Is in gen2 magic mode?
+bool nfc_tag_mf1_is_gen2_magic_mode(void) {
+    return m_tag_information->config.mode_gen2_magic;
+}
+
+// Set anti collision data from block 0
+void nfc_tag_mf1_set_use_mf1_coll_res(bool enable) {
+    m_tag_information->config.use_mf1_coll_res = enable;
+}
+
+// Get is anti collision data from block 0
+bool nfc_tag_mf1_is_use_mf1_coll_res(void) {
+    return m_tag_information->config.use_mf1_coll_res;
+}
+
+// Set write mode
+void nfc_tag_mf1_set_write_mode(nfc_tag_mf1_write_mode_t write_mode) {
+    m_tag_information->config.mode_block_write = write_mode;
+}
+
+// Get write mode
+nfc_tag_mf1_write_mode_t nfc_tag_mf1_get_write_mode(void) {
+    return m_tag_information->config.mode_block_write;
+}
+

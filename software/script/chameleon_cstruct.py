@@ -22,7 +22,7 @@ def parse_14a_scan_tag_result(data: bytearray):
         'uid_size': data[10],
         'uid_hex': data[0:data[10]].hex(),
         'sak_hex': hex(data[12]).lstrip('0x').rjust(2, '0'),
-        'atqa_hex': data[13:15].hex().upper(),
+        'atqa_hex': data[13:15].hex().upper()
     }
 
 
@@ -49,7 +49,7 @@ def parse_nested_nt_acquire_group(data: bytearray):
         group.append({
             'nt': bytes_to_u32(data[i: i + 4]),
             'nt_enc': bytes_to_u32(data[i + 4: i + 8]),
-            'par': data[i + 8],
+            'par': data[i + 8]
         })
         i += 9
     return group
@@ -62,30 +62,13 @@ def parse_darkside_acquire_result(data: bytearray):
     :return:
     """
     return {
-        'uid': bytes_to_u32(data[0 : 4]),
-        'nt1': bytes_to_u32(data[4 : 8]),
-        'par': bytes_to_u32(data[8 : 16]),
+        'uid': bytes_to_u32(data[0: 4]),
+        'nt1': bytes_to_u32(data[4: 8]),
+        'par': bytes_to_u32(data[8: 16]),
         'ks1': bytes_to_u32(data[16: 24]),
         'nr':  bytes_to_u32(data[24: 28]),
-        'ar':  bytes_to_u32(data[28: 32]),
+        'ar':  bytes_to_u32(data[28: 32])
     }
-
-
-"""
-// 验证的基础信息
-    struct {
-        uint8_t block;
-        uint8_t is_keyb: 1;
-        uint8_t is_nested: 1;
-        // 空域，占位置用的
-        uint8_t : 6;
-    } cmd;
-    // mfkey32必要参数
-    uint8_t uid[4];
-    uint8_t nt[4];
-    uint8_t nr[4];
-    uint8_t ar[4];
-"""
 
 
 def parse_mf1_detection_result(data: bytearray):
@@ -105,7 +88,7 @@ def parse_mf1_detection_result(data: bytearray):
             'uid': data[2 + pos: 6 + pos].hex(),
             'nt': data[6 + pos: 10 + pos].hex(),
             'nr': data[10 + pos: 14 + pos].hex(),
-            'ar': data[14 + pos: 18 + pos].hex(),
+            'ar': data[14 + pos: 18 + pos].hex()
         })
         pos += 18
 
@@ -127,5 +110,3 @@ def parse_mf1_detection_result(data: bytearray):
         result_map[uid][block][type_chr].append(item)
 
     return result_map
-
-

@@ -28,6 +28,7 @@
 #define DATA_CMD_GET_ACTIVE_SLOT                (1018)
 #define DATA_CMD_GET_SLOT_INFO                  (1019)
 #define DATA_CMD_WIPE_FDS                       (1020)
+#define DATA_CMD_GET_ENABLED_SLOTS              (1023)
 //
 // ******************************************************************
 
@@ -76,6 +77,15 @@
 #define DATA_CMD_GET_MF1_DETECTION_RESULT       (4006)
 #define DATA_CMD_GET_MF1_DETECTION_STATUS       (4007)
 #define DATA_CMD_READ_MF1_EMU_BLOCK_DATA        (4008)
+#define DATA_CMD_GET_MF1_EMULATOR_CONFIG        (4009)
+#define DATA_CMD_GET_MF1_GEN1A_MODE             (4010)
+#define DATA_CMD_SET_MF1_GEN1A_MODE             (4011)
+#define DATA_CMD_GET_MF1_GEN2_MODE              (4012)
+#define DATA_CMD_SET_MF1_GEN2_MODE              (4013)
+#define DATA_CMD_GET_MF1_USE_FIRST_BLOCK_COLL   (4014)
+#define DATA_CMD_SET_MF1_USE_FIRST_BLOCK_COLL   (4015)
+#define DATA_CMD_GET_MF1_WRITE_MODE             (4016)
+#define DATA_CMD_SET_MF1_WRITE_MODE             (4017)
 //
 // ******************************************************************
 
