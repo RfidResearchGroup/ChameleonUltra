@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import argparse
 import os
 import platform
@@ -13,8 +14,6 @@ import os
 import prompt_toolkit
 from prompt_toolkit.formatted_text import ANSI
 
-if os.name == 'posix':
-   import readline
 
 ULTRA = r"""
                                                                 ╦ ╦╦ ╔╦╗╦═╗╔═╗
