@@ -309,6 +309,11 @@ SRC_FILES += \
 $(info  Chameleon <Application>: enable NRF_LOG on UART via SWO pin.)
 endif
 
+ifeq (${SDK_VALIDATION}, 1)
+SRC_FILES += \
+  $(SRC_COMMON)/sdk_validation.c
+endif
+
 # Optimization flags
 OPT = -O3 -g3
 # Uncomment the line below to enable link time optimization

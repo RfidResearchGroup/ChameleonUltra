@@ -102,6 +102,7 @@ SRC_FILES += \
 INC_FOLDERS += \
   $(PROJ_DIR) \
   ${SRC_COMMON} \
+  $(SDK_ROOT)/components \
   $(SDK_ROOT)/modules/nrfx/drivers/include \
   $(SDK_ROOT)/components/libraries/crypto/backend/micro_ecc \
   $(SDK_ROOT)/components/libraries/memobj \
@@ -173,6 +174,10 @@ else
 $(error Chameleon <Bootloader>: No device type define.)
 endif
 
+ifeq (${SDK_VALIDATION}, 1)
+SRC_FILES += \
+  $(SRC_COMMON)/sdk_validation.c
+endif
 
 # Optimization flags
 OPT = -Os -g3

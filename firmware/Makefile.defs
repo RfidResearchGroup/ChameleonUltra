@@ -30,3 +30,6 @@ GIT_VERSION := "$(shell git describe --abbrev=7 --dirty --always --tags)"
 
 # Enable NRF_LOG on SWO pin as UART TX
 NRF_LOG_UART_ON_SWO_ENABLED := 0
+
+# Enable SDK validation checks
+SDK_VALIDATION := 0
