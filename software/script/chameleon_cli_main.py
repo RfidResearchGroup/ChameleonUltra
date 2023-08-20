@@ -9,6 +9,10 @@ import colorama
 import chameleon_cli_unit
 import os
 
+# Don't remove this, it allows shell history on Posix operating systems.
+if os.name == 'posix':
+    import readline
+
 ULTRA = r"""
                                                                 ╦ ╦╦ ╔╦╗╦═╗╔═╗
                                                    ███████      ║ ║║  ║ ╠╦╝╠═╣
