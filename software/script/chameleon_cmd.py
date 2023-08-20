@@ -574,7 +574,7 @@ class BaseChameleonCMD:
         """
         Set 0 block anti-collision data
         """
-        return self.device.send_cmd_sync(DATA_CMD_SET_MF1_ANTI_COLLISION_RES, 0x00, bytearray([1 if enabled else 0]))
+        return self.device.send_cmd_sync(DATA_CMD_SET_MF1_USE_FIRST_BLOCK_COLL, 0x00, bytearray([1 if enabled else 0]))
 
     def set_mf1_write_mode(self, mode: int):
         """
