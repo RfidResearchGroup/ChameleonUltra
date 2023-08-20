@@ -41,8 +41,6 @@
 #include <nrfx.h>
 
 #if NRFX_CHECK(NRFX_NFCT_ENABLED)
-// ChameleonUltra: workaround because NFC IRQ gets repetitively called when in HF field once a comm has started
-#include "bsp_wdt.h"
 
 #include <nrfx_nfct.h>
 
@@ -786,6 +784,12 @@ void nrfx_nfct_irq_handler(void)
         nrfx_nfct_field_event_handler(current_field);
     }
 
+    // ChameleonUltra: fix busy IRQ when HF field is on and a first frame got received
+    if (NRFX_NFCT_EVT_ACTIVE(RXFRAMESTART))
+    {
+        // nothing to do but clear the event else IRQ handler will be called continuously
+        nrf_nfct_event_clear(NRF_NFCT_EVENT_RXFRAMESTART);
+    }
     if (NRFX_NFCT_EVT_ACTIVE(RXFRAMEEND))
     {
         nrf_nfct_event_clear(NRF_NFCT_EVENT_RXFRAMEEND);
@@ -909,8 +913,6 @@ void nrfx_nfct_irq_handler(void)
             m_nfct_cb.config.cb(&nfct_evt);
         }
     }
-    // ChameleonUltra: workaround because NFC IRQ gets repetitively called when in HF field once a comm has started
-    bsp_wdt_feed();
 }
 
 #endif // NRFX_CHECK(NRFX_NFCT_ENABLED)
