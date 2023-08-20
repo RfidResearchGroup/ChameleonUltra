@@ -10,8 +10,10 @@ import colorama
 import chameleon_cli_unit
 import chameleon_utils
 import os
+import pathlib
 import prompt_toolkit
 from prompt_toolkit.formatted_text import ANSI
+from prompt_toolkit.history import FileHistory
 
 
 ULTRA = r"""
@@ -44,7 +46,7 @@ class ChameleonCLI:
 
     def __init__(self):
         self.completer = chameleon_utils.CustomNestedCompleter.from_nested_dict(chameleon_cli_unit.root_commands)
-        self.session = prompt_toolkit.PromptSession(completer=self.completer)
+        self.session = prompt_toolkit.PromptSession(completer=self.completer, history=FileHistory(pathlib.Path.home() / ".chameleon_history"))
 
         # new a device communication instance(only communication)
         self.device_com = chameleon_com.ChameleonCom()
