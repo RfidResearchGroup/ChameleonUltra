@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
- - Changed CLI prompt autocompletion and internal cmd registration (@szymex73)
+ - Changed CLI prompt autocompletion, saved history and internal cmd registration (@szymex73)
  - Fixed SDK NFC IRQ handler busy loop (@doegox)
  - Added `hf mf eread` to download slot dump to file (@domints)
  - Added `lf em sim get` and old `lf em sim` is now `lf em sim set` (@domints)
