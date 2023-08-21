@@ -304,6 +304,23 @@ data_frame_tx_t* cmd_processor_set_slot_tag_type(uint16_t cmd, uint16_t status, 
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+data_frame_tx_t* cmd_processor_delete_slot_sense_type(uint16_t cmd, uint16_t status, uint16_t length, uint8_t* data) {
+    status = STATUS_PAR_ERR;
+    if (length == 2 && data[0] < TAG_MAX_SLOT_NUM && (data[1] == TAG_SENSE_HF || data[1] == TAG_SENSE_LF)) {
+        uint8_t slot_num = data[0];
+        uint8_t sense_type = data[1];
+        uint8_t other_st_index = sense_type == TAG_SENSE_LF ? 0 : 1;
+
+        tag_specific_type_t tag_types[2];
+        tag_emulation_get_specific_type_by_slot(slot_num, tag_types);
+        if (tag_types[other_st_index] != TAG_TYPE_UNKNOWN) {
+            tag_emulation_delete_data(slot_num, sense_type);
+            status = STATUS_DEVICE_SUCCESS;
+        }
+    }
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
 data_frame_tx_t* cmd_processor_set_slot_data_default(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length == 2 && data[0] < TAG_MAX_SLOT_NUM && data[1] != TAG_TYPE_UNKNOWN) {
         uint8_t num_slot = data[0];
@@ -768,6 +785,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_SLOT_INFO,                NULL,                        cmd_processor_get_slot_info,                 NULL                   },
     {    DATA_CMD_WIPE_FDS,                     NULL,                        cmd_processor_wipe_fds,                      NULL                   },
     {    DATA_CMD_GET_ENABLED_SLOTS,            NULL,                        cmd_processor_get_enabled_slots,             NULL                   },
+    {    DATA_CMD_DELETE_SLOT_SENSE_TYPE,       NULL,                        cmd_processor_delete_slot_sense_type,        NULL                   },
 
     
 
