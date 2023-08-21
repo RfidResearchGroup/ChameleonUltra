@@ -15,6 +15,7 @@
 #include "settings.h"
 #include "delayed_reset.h"
 
+#error breaking compilation on purpose
 
 #define NRF_LOG_MODULE_NAME app_cmd
 #include "nrf_log.h"
