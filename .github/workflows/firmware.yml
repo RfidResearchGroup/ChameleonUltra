@@ -1,7 +1,12 @@
 name: Firmware build
 
 on:
-  push:
+  [push, pull_request]:
+    paths-ignore:
+      - 'resource/**'
+      - 'hardware/**'
+      - 'software/**'
+      - '*.md'
 
 jobs:
   build_fw_builder:
