@@ -628,7 +628,7 @@ class ChameleonCMD:
 
     def get_enabled_slots(self):
         """
-        Get animation mode value
+        Get enabled slots
         """
         return self.device.send_cmd_sync(DATA_CMD_GET_ENABLED_SLOTS, 0x00)
 
