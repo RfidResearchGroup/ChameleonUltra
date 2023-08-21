@@ -35,6 +35,7 @@ DATA_CMD_GET_SLOT_INFO = 1019
 DATA_CMD_WIPE_FDS = 1020
 
 DATA_CMD_GET_ENABLED_SLOTS = 1023
+DATA_CMD_DELETE_SLOT_SENSE_TYPE = 1024
 
 DATA_CMD_SCAN_14A_TAG = 2000
 DATA_CMD_MF1_SUPPORT_DETECT = 2001
@@ -431,6 +432,21 @@ class ChameleonCMD:
         data.append(SlotNumber.to_fw(slot_index))
         data.append(tag_type)
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_TAG_TYPE, 0x00, data)
+
+    @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
+    def delete_slot_sense_type(self, slot_index: SlotNumber, sense_type: TagSenseType):
+        """
+            Delete a sense type for a specific slot.
+            Another sense type must be enabled for the same slot,
+            otherwise an error will be thrown.
+        :param slot_index: Slot index
+        :param sense_type: Sense type to disable
+        :return:
+        """
+        return self.device.send_cmd_sync(DATA_CMD_DELETE_SLOT_SENSE_TYPE, 0x00, bytearray([
+            SlotNumber.to_fw(slot_index),
+            sense_type,
+        ]))
 
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_slot_data_default(self, slot_index: SlotNumber, tag_type: TagSpecificType):

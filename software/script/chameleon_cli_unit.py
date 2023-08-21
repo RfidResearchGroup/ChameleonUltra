@@ -1012,6 +1012,23 @@ class HWSlotTagType(TagTypeRequiredUnit, SlotIndexRequireUnit):
         print(f' - Set slot tag type success.')
 
 
+@hw_slot.command('delete', 'Delete sense type data for slot')
+class HWDeleteSlotSense(SlotIndexRequireUnit, SenseTypeRequireUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Delete sense type data for a specific slot. " \
+                "The slot needs to have the other sense type correctly configured, " \
+                "otherwise an error will be thrown."
+        self.add_slot_args(parser)
+        self.add_sense_type_args(parser)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        slot = args.slot
+        sense_type = args.sense_type
+        self.cmd.delete_slot_sense_type(slot, sense_type)
+
+
 @hw_slot.command('init', 'Set emulation tag data to default')
 class HWSlotDataDefault(TagTypeRequiredUnit, SlotIndexRequireUnit):
 
