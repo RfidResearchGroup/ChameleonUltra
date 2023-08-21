@@ -189,10 +189,7 @@ class HWConnect(BaseCLIUnit):
         try:
             if args.port is None:  # Chameleon auto-detect if no port is supplied
                 platformname = uname().release
-                if 'microsoft-standard-WSL2' in platformname:
-                    #wsl2 serial support is broken anyway
-                    pass
-                elif 'Microsoft' in platformname:
+                if 'Microsoft' in platformname:
                     process = subprocess.Popen(["powershell.exe","Get-CimInstance -ClassName Win32_serialport | Where-Object {$_.PNPDeviceID -like '*VID_6868&PID_8686*'} | Select -expandproperty DeviceID"],stdout=subprocess.PIPE);
                     res = process.communicate()[0]
                     _comport = res.decode('utf-8').strip()
