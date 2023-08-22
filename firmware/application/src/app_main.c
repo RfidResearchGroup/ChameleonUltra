@@ -502,13 +502,10 @@ static void btn_fn_copy_ic_uid(void) {
             tag_emulation_load_by_buffer(TAG_TYPE_EM410X, false);
 
             // keep reader mode or exit reader mode.
-            if (!is_reader_mode_now) {
-                tag_mode_enter();
-            }
-        } else {
-            if (!is_reader_mode_now) {
-                tag_mode_enter();
-            }
+        }
+
+        if (!is_reader_mode_now) {
+            tag_mode_enter();
         }
     }
 
