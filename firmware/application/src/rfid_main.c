@@ -54,6 +54,9 @@ void tag_mode_enter(void) {
 
         nrf_gpio_cfg_output(HF_ANT_SEL);
         nrf_gpio_pin_set(HF_ANT_SEL);       // hf ant switch to emulation mode
+        // give time for fields to shutdown, else we get spurious LF detection triggered in LF emul
+        // need at least about 30ms on dev kit
+        bsp_delay_ms(60);
 #endif
 
         // to run tag emulation

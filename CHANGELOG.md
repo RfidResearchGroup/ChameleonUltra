@@ -4,6 +4,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 
 ## [unreleased][unreleased]
  - Changed `hw slot delete`, now it can always delete from slot. (@augustozanellato)
+ - Refactor CI pipeline. (@augustozanellato)
  - Added offline copy EM card uid for btnpress.(@nemanjan00)
  - Added offline copy ic card uid for btnpress.(@xianglin1998)
  - Added `hw settings btnpress` to get and set button press function.(@xianglin1998)

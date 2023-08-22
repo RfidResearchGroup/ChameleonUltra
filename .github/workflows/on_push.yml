@@ -1,0 +1,51 @@
+name: Push handler
+
+on:
+  push:
+
+jobs:
+  firmware_pipeline:
+    name: Build Firmware
+    permissions:
+      packages: write
+      contents: read
+    uses: ./.github/workflows/build_firmware.yml
+  client_pipeline:
+    name: Build Firmware
+    uses: ./.github/workflows/build_client.yml
+  create_release:
+    permissions:
+      contents: write
+    name: Create dev pre-release with artifacts
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs:
+      - firmware_pipeline
+      - client_pipeline
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+      - name: Download release artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: release-artifacts
+          path: release-artifacts
+      - name: Upload to dev release
+        uses: softprops/action-gh-release@v1
+        with:
+          body: |
+            Auto-Generated DFU packages from latest `main` commit.
+            For development purposes only. 
+            These are not tested, here be dragons.
+            Built from commit ${{ github.sha }}
+          tag_name: dev
+          name: Development release
+          draft: false
+          prerelease: true
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          files: release-artifacts/*
+      - name: Fix up release tag
+        run: |
+          git tag -f dev
+          git push --tags -f

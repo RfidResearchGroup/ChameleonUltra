@@ -1,18 +1,11 @@
 name: Firmware build
 
 on:
-  push:
-    paths-ignore:
-      - 'resource/**'
-      - 'hardware/**'
-      - 'software/**'
-      - '*.md'
-  pull_request:
-    paths-ignore:
-      - 'resource/**'
-      - 'hardware/**'
-      - 'software/**'
-      - '*.md'
+  workflow_call:
+    inputs:
+      checkout-sha:
+        required: false
+        type: string
 
 jobs:
   build_fw_builder:
@@ -28,6 +21,8 @@ jobs:
         uses: docker/setup-buildx-action@v2
       - name: Check out the repo
         uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.checkout-sha == null && github.sha || inputs.checkout-sha }}
       - name: ghcr.io login
         uses: docker/login-action@v2
         with:
@@ -59,6 +54,8 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.checkout-sha == null && github.sha || inputs.checkout-sha }}
       - name: Build firmware
         env:
           repo: ${{ github.repository }}
@@ -72,59 +69,22 @@ jobs:
       - name: Unzip dfu images
         run: |
           sudo chown -R $USER:$USER firmware/objects
-          mkdir firmware/objects/dfu-app
-          mkdir firmware/objects/dfu-full
-          unzip firmware/objects/dfu-app.zip -d firmware/objects/dfu-app
-          unzip firmware/objects/dfu-full.zip -d firmware/objects/dfu-full
+          mkdir firmware/objects/${{ matrix.device_type }}-dfu-app
+          mkdir firmware/objects/${{ matrix.device_type }}-dfu-full
+          unzip firmware/objects/${{ matrix.device_type }}-dfu-app.zip -d firmware/objects/${{ matrix.device_type }}-dfu-app
+          unzip firmware/objects/${{ matrix.device_type }}-dfu-full.zip -d firmware/objects/${{ matrix.device_type }}-dfu-full
       - name: Upload dfu app image
         uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.device_type }}-dfu-app
-          path: firmware/objects/dfu-app/*
+          path: firmware/objects/${{ matrix.device_type }}-dfu-app/*
       - name: Upload dfu full image
         uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.device_type }}-dfu-full
-          path: firmware/objects/dfu-full/*
-  create_release:
-    permissions:
-      contents: write
-    name: Create Pre-Release with dfu app images
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    needs:
-      - build_fw
-    steps:
-      - name: Check out the repo
-        uses: actions/checkout@v3
-      - name: Download Ultra DFU
-        uses: actions/download-artifact@v3
+          path: firmware/objects/${{ matrix.device_type }}-dfu-full/*
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v3
         with:
-          name: ultra-dfu-app
-          path: ultra-dfu-app
-      - name: Compress Ultra DFU package
-        run: |
-          zip --junk-paths -0 -r ./ultra-dfu-app.zip ./ultra-dfu-app/*
-      - name: Download Lite DFU
-        uses: actions/download-artifact@v3
-        with:
-          name: lite-dfu-app
-          path: lite-dfu-app
-      - name: Compress Lite DFU package
-        run: |
-          zip --junk-paths -0 -r ./lite-dfu-app.zip ./lite-dfu-app/*
-      - name: Upload to dev release
-        uses: softprops/action-gh-release@v1
-        with:
-          body: |
-            Auto-Generated DFU packages from latest `main` commit.
-            For development purposes only. 
-            These are not tested, here be dragons.
-            Built from commit ${{ github.sha }}
-          tag_name: dev
-          name: Development release
-          draft: false
-          prerelease: true
-          target_commitish: main
-          generate_release_notes: true
-          files: ./*-dfu-app.zip
+          name: release-artifacts
+          path: firmware/objects/*.zip

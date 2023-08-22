@@ -1,0 +1,44 @@
+name: PR handler
+on:
+  pull_request_target:
+
+jobs:
+  firmware_pipeline:
+    name: Build Firmware
+    permissions:
+      packages: write
+      contents: read
+    uses: ./.github/workflows/build_firmware.yml
+    with:
+      checkout-sha: "${{ github.event.pull_request.merge_commit_sha }}"
+  client_pipeline:
+    name: Build Firmware
+    uses: ./.github/workflows/build_client.yml
+    with:
+      checkout-sha: "${{ github.event.pull_request.merge_commit_sha }}"
+  comment:
+    runs-on: ubuntu-latest
+    name: Comment on PR
+    needs:
+      - firmware_pipeline
+      - client_pipeline
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          message: |
+            # Built artifacts for commit ${{ github.event.pull_request.head.sha }}
+
+            ## Firmware
+
+            - [Ultra APP DFU Package](https://nightly.link/${{ github.repository }}/actions/runs/${{ github.run_id }}/ultra-dfu-app.zip)
+            - [Ultra binaries](https://nightly.link/${{ github.repository }}/actions/runs/${{ github.run_id }}/ultra-firmware.zip)
+            - [Lite APP DFU Package](https://nightly.link/${{ github.repository }}/actions/runs/${{ github.run_id }}/lite-dfu-app.zip)
+            - [Lite binaries](https://nightly.link/${{ github.repository }}/actions/runs/${{ github.run_id }}/lite-firmware.zip)
+
+            ## Client
+
+            - [Linux](https://nightly.link/${{ github.repository }}/actions/runs/${{ github.run_id }}/client-linux.zip)
+            - [macOS](https://nightly.link/${{ github.repository }}/actions/runs/${{ github.run_id }}/client-macos.zip)
+            - [Windows](https://nightly.link/${{ github.repository }}/actions/runs/${{ github.run_id }}/client-windows.zip)
