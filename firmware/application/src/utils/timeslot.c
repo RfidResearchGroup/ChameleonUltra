@@ -23,8 +23,7 @@ static volatile bool m_is_timeslot_working = false;
 
 /**@brief Configure next timeslot event in earliest configuration
  */
-void configure_next_event_earliest(void)
-{
+void configure_next_event_earliest(void) {
     m_timeslot_request.request_type                = NRF_RADIO_REQ_TYPE_EARLIEST;       // 首次请求timeslot必须要
     m_timeslot_request.params.earliest.hfclk       = NRF_RADIO_HFCLK_CFG_NO_GUARANTEE;  // 不必自动使能外部高频晶振
     m_timeslot_request.params.earliest.priority    = NRF_RADIO_PRIORITY_HIGH;           // 必须使用高优先级
@@ -34,8 +33,7 @@ void configure_next_event_earliest(void)
 
 /**@brief Request next timeslot event in earliest configuration
  */
-uint32_t request_next_event_earliest(void)
-{
+uint32_t request_next_event_earliest(void) {
     configure_next_event_earliest();
     return sd_radio_request(&m_timeslot_request);
 }
@@ -43,8 +41,7 @@ uint32_t request_next_event_earliest(void)
 
 /**@brief Timeslot signal handler
  */
-static void t55xx_soc_evt_handler(uint32_t evt_id, void * p_context)
-{
+static void t55xx_soc_evt_handler(uint32_t evt_id, void *p_context) {
     //NRF_LOG_INFO("t55xx_soc_evt_handler: %d", evt_id);
     uint32_t err_code;
     switch (evt_id) {
@@ -74,10 +71,9 @@ NRF_SDH_SOC_OBSERVER(m_sys_obs, 0, t55xx_soc_evt_handler, NULL);
 
 /**@brief Timeslot event handler
  */
-nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
-{
+nrf_radio_signal_callback_return_param_t *radio_callback(uint8_t signal_type) {
     //NRF_LOG_INFO("radio_callback: %d", signal_type);
-    switch(signal_type) {
+    switch (signal_type) {
         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_START:
             signal_callback_return_param.params.request.p_next = NULL;
             signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
@@ -115,7 +111,7 @@ void request_timeslot(uint32_t time_us, timeslot_callback_t callback, bool wait_
     APP_ERROR_CHECK(err_code);
 
     // 堵塞等待时序请求成功
-    while(!m_is_timeslot_working) {
+    while (!m_is_timeslot_working) {
         NRF_LOG_PROCESS();
     }
 
@@ -141,7 +137,7 @@ void request_timeslot(uint32_t time_us, timeslot_callback_t callback, bool wait_
     // 关闭会话并且等待关闭完成
     err_code = sd_radio_session_close();
     APP_ERROR_CHECK(err_code);
-    while(m_is_timeslot_working) {
+    while (m_is_timeslot_working) {
         __NOP();
     }
 
@@ -172,7 +168,7 @@ void timeslot_start(uint32_t time_us) {
     APP_ERROR_CHECK(err_code);
 
     // 堵塞等待时序请求成功
-    while(!m_is_timeslot_working) {
+    while (!m_is_timeslot_working) {
         NRF_LOG_PROCESS();
     }
 
@@ -204,7 +200,7 @@ void timeslot_stop(void) {
     // 关闭会话并且等待关闭完成
     err_code = sd_radio_session_close();
     APP_ERROR_CHECK(err_code);
-    while(m_is_timeslot_working) {
+    while (m_is_timeslot_working) {
         __NOP();
     }
 

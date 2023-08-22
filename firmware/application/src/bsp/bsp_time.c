@@ -25,7 +25,7 @@ static volatile enum {
 * 1、会自动跑滴答
 * 2、是空闲的
 */
-autotimer* bsp_obtain_timer(uint32_t start_value) {
+autotimer *bsp_obtain_timer(uint32_t start_value) {
     uint8_t i;
     for (i = 0; i < TIMER_BSP_COUNT; i++) {
         if (bsptimers[i].busy == 0) {
@@ -40,8 +40,8 @@ autotimer* bsp_obtain_timer(uint32_t start_value) {
 /*
 * 设置定时器，该操作会操作目标定时器，修改当前值
 */
-inline uint8_t bsp_set_timer(autotimer* timer,uint32_t start_value) {
-    if(timer->busy == 0) return 0;
+inline uint8_t bsp_set_timer(autotimer *timer, uint32_t start_value) {
+    if (timer->busy == 0) return 0;
     timer->time = start_value;
     return 1;
 }
@@ -50,7 +50,7 @@ inline uint8_t bsp_set_timer(autotimer* timer,uint32_t start_value) {
 * 归还定时器，该操作会自动释放定时器
 * 并且对定时器归零
 */
-inline void bsp_return_timer(autotimer* timer) {
+inline void bsp_return_timer(autotimer *timer) {
     timer->busy = 0;
     timer->time = 0;
 }
@@ -59,8 +59,7 @@ inline void bsp_return_timer(autotimer* timer) {
  * @param arg 回调参数
  * @return 无
  */
-void timer_app_callback(void *arg)
-{
+void timer_app_callback(void *arg) {
     UNUSED_PARAMETER(arg);
     for (g_timer_fori = 0; g_timer_fori < TIMER_BSP_COUNT; g_timer_fori++) {
         if (bsptimers[g_timer_fori].busy == 1) {

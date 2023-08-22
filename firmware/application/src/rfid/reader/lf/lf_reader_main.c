@@ -18,7 +18,7 @@ uint32_t g_timeout_readem_ms = 500;
 /**
 * 搜索EM410X标签
 */
-uint8_t PcdScanEM410X(uint8_t* uid) {
+uint8_t PcdScanEM410X(uint8_t *uid) {
     uint8_t ret = EM410X_TAG_NO_FOUND;
     init_em410x_hw();
     if (em410x_read(uid, g_timeout_readem_ms) == 1) {
@@ -30,20 +30,20 @@ uint8_t PcdScanEM410X(uint8_t* uid) {
 /**
 * 检测当前的场内是否有指定的UID的标签
 */
-uint8_t check_write_ok(uint8_t* uid, uint8_t* newuid, uint8_t on_uid_diff_return) {
+uint8_t check_write_ok(uint8_t *uid, uint8_t *newuid, uint8_t on_uid_diff_return) {
     // 写卡完成后，我们需要进行一次回读，
     // 如果回读的数据不正确，说明写入失败
-    if(PcdScanEM410X(newuid) != LF_TAG_OK) {
+    if (PcdScanEM410X(newuid) != LF_TAG_OK) {
         return EM410X_TAG_NO_FOUND;
     }
     // 如果回读到的卡号一样
     // 说明写入成功了（或许吧）
-    if(
+    if (
         uid[0] == newuid[0] &&
         uid[1] == newuid[1] &&
         uid[2] == newuid[2] &&
         uid[3] == newuid[3] &&
-        uid[4] == newuid[4] ) {
+        uid[4] == newuid[4]) {
         return LF_TAG_OK;
     }
     // 如果发现卡，但是卡号不对，
@@ -54,7 +54,7 @@ uint8_t check_write_ok(uint8_t* uid, uint8_t* newuid, uint8_t on_uid_diff_return
 /**
 * 写T55XX标签
 */
-uint8_t PcdWriteT55XX(uint8_t* uid, uint8_t* newkey, uint8_t* old_keys, uint8_t old_key_count) {
+uint8_t PcdWriteT55XX(uint8_t *uid, uint8_t *newkey, uint8_t *old_keys, uint8_t old_key_count) {
     uint8_t datas[8] = { 255 };
     uint8_t i;
 

@@ -47,92 +47,92 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst, app_usb
     // app_usbd_cdc_acm_t const *p_cdc_acm = app_usbd_cdc_acm_class_get(p_inst);
 
     switch (event) {
-    case APP_USBD_CDC_ACM_USER_EVT_PORT_OPEN: {
-        /*
-         * 整个USB接收数据的大概关键之处就是 app_usbd_cdc_acm_read
-         * app_usbd_cdc_acm_read函数其实不是正经的接收，是给了一个指针，然后等USB的buffer填充到此处
-         * 所以需要在 APP_USBD_CDC_ACM_USER_EVT_PORT_OPEN 时先初始化设置头部指针，达到预先设置接收缓冲区的效果
-         * 如果在 APP_USBD_CDC_ACM_USER_EVT_RX_DONE 使用下标 0 去访问缓冲区，将会导致丢失第一个发送过来的字节。。
-         */
-        ret_code_t ret = app_usbd_cdc_acm_read(&m_app_cdc_acm, cdc_data_buffer, 1);
-        UNUSED_VARIABLE(ret);
-        NRF_LOG_INFO("CDC ACM port opened");
-        g_usb_port_opened = true;
-        break;
-    }
+        case APP_USBD_CDC_ACM_USER_EVT_PORT_OPEN: {
+            /*
+             * 整个USB接收数据的大概关键之处就是 app_usbd_cdc_acm_read
+             * app_usbd_cdc_acm_read函数其实不是正经的接收，是给了一个指针，然后等USB的buffer填充到此处
+             * 所以需要在 APP_USBD_CDC_ACM_USER_EVT_PORT_OPEN 时先初始化设置头部指针，达到预先设置接收缓冲区的效果
+             * 如果在 APP_USBD_CDC_ACM_USER_EVT_RX_DONE 使用下标 0 去访问缓冲区，将会导致丢失第一个发送过来的字节。。
+             */
+            ret_code_t ret = app_usbd_cdc_acm_read(&m_app_cdc_acm, cdc_data_buffer, 1);
+            UNUSED_VARIABLE(ret);
+            NRF_LOG_INFO("CDC ACM port opened");
+            g_usb_port_opened = true;
+            break;
+        }
 
-    case APP_USBD_CDC_ACM_USER_EVT_PORT_CLOSE:
-        NRF_LOG_INFO("CDC ACM port closed");
-        g_usb_port_opened = false;
-        g_usb_led_marquee_enable = true;
-        break;
+        case APP_USBD_CDC_ACM_USER_EVT_PORT_CLOSE:
+            NRF_LOG_INFO("CDC ACM port closed");
+            g_usb_port_opened = false;
+            g_usb_led_marquee_enable = true;
+            break;
 
-    case APP_USBD_CDC_ACM_USER_EVT_TX_DONE:
-        break;
+        case APP_USBD_CDC_ACM_USER_EVT_TX_DONE:
+            break;
 
-    case APP_USBD_CDC_ACM_USER_EVT_RX_DONE: {
-        ret_code_t ret;
-        // 先取出第一个字节
-        data_frame_receive(cdc_data_buffer, 1);
-        do {
-            ret = app_usbd_cdc_acm_read(&m_app_cdc_acm, cdc_data_buffer, 1);
-            if (ret == NRF_SUCCESS) {
-                // 成功取到之后的字节
-                data_frame_receive(cdc_data_buffer, 1);
-            }
-        } while (ret == NRF_SUCCESS);
-        break;
-    }
-    default:
-        break;
+        case APP_USBD_CDC_ACM_USER_EVT_RX_DONE: {
+            ret_code_t ret;
+            // 先取出第一个字节
+            data_frame_receive(cdc_data_buffer, 1);
+            do {
+                ret = app_usbd_cdc_acm_read(&m_app_cdc_acm, cdc_data_buffer, 1);
+                if (ret == NRF_SUCCESS) {
+                    // 成功取到之后的字节
+                    data_frame_receive(cdc_data_buffer, 1);
+                }
+            } while (ret == NRF_SUCCESS);
+            break;
+        }
+        default:
+            break;
     }
 }
 
 static void usbd_user_ev_handler(app_usbd_event_type_t event) {
     switch (event) {
-    case APP_USBD_EVT_DRV_SUSPEND:
-        NRF_LOG_INFO("USB SUSPEND");
-        break;
+        case APP_USBD_EVT_DRV_SUSPEND:
+            NRF_LOG_INFO("USB SUSPEND");
+            break;
 
-    case APP_USBD_EVT_DRV_RESUME:
-        NRF_LOG_INFO("USB RESUME");
-        break;
+        case APP_USBD_EVT_DRV_RESUME:
+            NRF_LOG_INFO("USB RESUME");
+            break;
 
-    case APP_USBD_EVT_STARTED:
-        NRF_LOG_INFO("USB STARTED");
-        break;
+        case APP_USBD_EVT_STARTED:
+            NRF_LOG_INFO("USB STARTED");
+            break;
 
-    case APP_USBD_EVT_STOPPED:
-        NRF_LOG_INFO("USB STOPPED");
-        app_usbd_disable();
-        break;
+        case APP_USBD_EVT_STOPPED:
+            NRF_LOG_INFO("USB STOPPED");
+            app_usbd_disable();
+            break;
 
-    case APP_USBD_EVT_POWER_DETECTED:
-        sleep_timer_stop();
-        NRF_LOG_INFO("USB power detected");
-        if (!nrf_drv_usbd_is_enabled()) {
-            app_usbd_enable();
-        }
-        g_usb_led_marquee_enable = true;
-        break;
+        case APP_USBD_EVT_POWER_DETECTED:
+            sleep_timer_stop();
+            NRF_LOG_INFO("USB power detected");
+            if (!nrf_drv_usbd_is_enabled()) {
+                app_usbd_enable();
+            }
+            g_usb_led_marquee_enable = true;
+            break;
 
-    case APP_USBD_EVT_POWER_REMOVED:
-        sleep_timer_start(SLEEP_DELAY_MS_USB_POWER_DISCONNECTED);
-        NRF_LOG_INFO("USB power removed");
-        g_usb_connected = false;
-        g_usb_led_marquee_enable = false;
-        app_usbd_stop();
-        break;
+        case APP_USBD_EVT_POWER_REMOVED:
+            sleep_timer_start(SLEEP_DELAY_MS_USB_POWER_DISCONNECTED);
+            NRF_LOG_INFO("USB power removed");
+            g_usb_connected = false;
+            g_usb_led_marquee_enable = false;
+            app_usbd_stop();
+            break;
 
-    case APP_USBD_EVT_POWER_READY:
-        NRF_LOG_INFO("USB ready");
-        g_usb_connected = true;
-        app_usbd_start();
-        break;
+        case APP_USBD_EVT_POWER_READY:
+            NRF_LOG_INFO("USB ready");
+            g_usb_connected = true;
+            app_usbd_start();
+            break;
 
-    default:
-        // NRF_LOG_INFO("Other usb event: %d", event);
-        break;
+        default:
+            // NRF_LOG_INFO("Other usb event: %d", event);
+            break;
     }
 }
 
@@ -141,7 +141,8 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event) {
 void usb_cdc_init(void) {
     ret_code_t ret;
     static const app_usbd_config_t usbd_config = {
-        .ev_state_proc = usbd_user_ev_handler};
+        .ev_state_proc = usbd_user_ev_handler
+    };
 
     app_usbd_serial_num_generate();
 

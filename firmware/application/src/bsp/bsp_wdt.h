@@ -2,7 +2,7 @@
 #define __BSP_WDT_H__
 
 #ifdef __cplusplus
- extern "C" {
+extern "C" {
 #endif
 
 void bsp_wdt_init(void);

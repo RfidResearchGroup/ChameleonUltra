@@ -360,12 +360,11 @@ void nfc_tag_14a_tx_nbit_delay_window(uint8_t data, uint32_t bits) {
 /**
  * 14a监听到PCD过来的数据处理的封装函数
  */
-void nfc_tag_14a_data_process(uint8_t *p_data)
-{
+void nfc_tag_14a_data_process(uint8_t *p_data) {
     // 统计一下当前收到的bit数
     uint16_t szDataBits = (NRF_NFCT->RXD.AMOUNT & (NFCT_RXD_AMOUNT_RXDATABITS_Msk | NFCT_RXD_AMOUNT_RXDATABYTES_Msk));
     // 防冲撞可能要用上的资源
-    nfc_tag_14a_coll_res_referen_t* auto_coll_res = m_tag_handler.get_coll_res != NULL ? m_tag_handler.get_coll_res() : NULL;
+    nfc_tag_14a_coll_res_referen_t *auto_coll_res = m_tag_handler.get_coll_res != NULL ? m_tag_handler.get_coll_res() : NULL;
 
     // 我也不知道为什么，这里CPU必须要空跑一段周期，数据才能正常收到。
     // 如果接收数据有任何问题，请尝试恢复此处，这个是2021年发现的问题，但是2022年又消失了
@@ -461,7 +460,7 @@ void nfc_tag_14a_data_process(uint8_t *p_data)
                     }
                 }
                 // 匹配UID长度，为uid的返回数据做准备
-                switch(*auto_coll_res->size) {
+                switch (*auto_coll_res->size) {
                     case NFC_TAG_14A_UID_SINGLE_SIZE: {
                         if (level == NFC_TAG_14A_CASCADE_LEVEL_1) {    // 首次级联，只有一次
                             // 4字节的标签最多只能一次级联
@@ -655,7 +654,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
         }
         case NRFX_NFCT_EVT_ERROR: {
             // 根据错误原因，进行日志打印，以帮助开发时排查可能性的BUG
-            switch(p_event->params.error.reason) {
+            switch (p_event->params.error.reason) {
                 case NRFX_NFCT_ERROR_FRAMEDELAYTIMEOUT: {
                     // 如果我们在通信窗口中回应了标签但是却是没有及时回应，那就需要进行报错打印
                     // 如果此错误非常频繁的出现，则可能是MCU处理速度没跟上，此时开发者就需要优化代码了
@@ -690,7 +689,7 @@ void nfc_tag_14a_set_state(nfc_tag_14a_state_t state) {
  * 14A的处理器注册函数
  * @param handler 处理器句柄
  */
-void nfc_tag_14a_set_handler(nfc_tag_14a_handler_t* handler) {
+void nfc_tag_14a_set_handler(nfc_tag_14a_handler_t *handler) {
     if (handler != NULL) {
         // 直接取出传入的实现赋值到我们的全局对象即可
         m_tag_handler.cb_reset = handler->cb_reset;
@@ -733,6 +732,6 @@ void nfc_tag_14a_sense_switch(bool enable) {
 
 bool is_valid_uid_size(uint8_t uid_length) {
     return uid_length == NFC_TAG_14A_UID_SINGLE_SIZE ||
-        uid_length == NFC_TAG_14A_UID_DOUBLE_SIZE ||
-        uid_length == NFC_TAG_14A_UID_TRIPLE_SIZE;
+           uid_length == NFC_TAG_14A_UID_DOUBLE_SIZE ||
+           uid_length == NFC_TAG_14A_UID_TRIPLE_SIZE;
 }

@@ -18,8 +18,7 @@ extern bool g_is_tag_emulating; // 标志模拟卡的状态
  * @param 无
  * @return 无
  */
-static void timer_sleep_event_handle(void *arg)
-{
+static void timer_sleep_event_handle(void *arg) {
     // 休眠条件达到，设置标志位，让main中处理即可
     m_system_off_enter = true;
 }

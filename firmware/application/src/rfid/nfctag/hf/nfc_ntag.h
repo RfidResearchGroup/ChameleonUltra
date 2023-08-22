@@ -25,14 +25,15 @@ typedef struct __attribute__((aligned(4))) {
     nfc_tag_14a_coll_res_entity_t res_coll;
     nfc_tag_ntag_configure_t config;
     uint8_t memory[NFC_TAG_NTAG_BLOCK_MAX][NFC_TAG_NTAG_DATA_SIZE];
-} nfc_tag_ntag_information_t;
+}
+nfc_tag_ntag_information_t;
 
 typedef struct {
     uint8_t tx_buffer[NFC_TAG_NTAG_FRAME_SIZE];
 } nfc_tag_ntag_tx_buffer_t;
 
-int nfc_tag_ntag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t* buffer);
-int nfc_tag_ntag_data_savecb(tag_specific_type_t type, tag_data_buffer_t* buffer);
+int nfc_tag_ntag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer);
+int nfc_tag_ntag_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 bool nfc_tag_ntag_data_factory(uint8_t slot, tag_specific_type_t tag_type);
 
 #endif

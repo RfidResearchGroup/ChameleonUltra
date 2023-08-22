@@ -18,7 +18,7 @@ typedef struct {
 } DarksideParam;
 
 // 转换字符串为U32类型
-uint64_t atoui(const char* str) {
+uint64_t atoui(const char *str) {
 
     uint64_t result = 0;
     for (int i = 0; str[i] != '\0'; ++i) {
@@ -29,15 +29,14 @@ uint64_t atoui(const char* str) {
     return result;
 }
 
-void num_to_bytes(uint64_t n, uint32_t len, uint8_t* dest)
-{
+void num_to_bytes(uint64_t n, uint32_t len, uint8_t *dest) {
     while (len--) {
         dest[len] = (uint8_t)n;
         n >>= 8;
     }
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
 
     if (((argc - 2) % 5) != 0) {
         printf("Unexcepted param count\n");
@@ -47,8 +46,8 @@ int main(int argc, char* argv[]) {
     uint32_t uid = (uint32_t)atoui(argv[1]);
     uint32_t count = 0, i = 0;
     uint32_t keycount = 0;
-    uint64_t* keylist = NULL, * last_keylist = NULL;
-    DarksideParam* dps = NULL;
+    uint64_t *keylist = NULL, * last_keylist = NULL;
+    DarksideParam *dps = NULL;
     bool no_key_recover = true;
 
     for (i = 1; i + 5 < argc;) {
@@ -106,8 +105,7 @@ int main(int argc, char* argv[]) {
             for (i = 0; i < keycount; i++) {
                 if (par_list == 0) {
                     num_to_bytes(last_keylist[i], 6, key_tmp);
-                }
-                else {
+                } else {
                     num_to_bytes(keylist[i], 6, key_tmp);
                 }
                 printf("Key%d: %02X%02X%02X%02X%02X%02X\r\n", i + 1, key_tmp[0], key_tmp[1], key_tmp[2], key_tmp[3], key_tmp[4], key_tmp[5]);
@@ -121,8 +119,7 @@ int main(int argc, char* argv[]) {
 
     if (last_keylist == keylist && last_keylist != NULL) {
         free(keylist);
-    }
-    else {
+    } else {
         if (last_keylist) {
             free(last_keylist);
         }

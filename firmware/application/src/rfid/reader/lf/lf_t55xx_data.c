@@ -92,21 +92,18 @@ void empty_callback() { }
 
 
 //启动定时器和初始化相关外设，启动低频读卡
-void init_t55xx_hw(void)
-{
+void init_t55xx_hw(void) {
     //注册读卡器io中断回调
     register_rio_callback(empty_callback);
 }
 
-void T55xx_SendGap(unsigned int tm)
-{
+void T55xx_SendGap(unsigned int tm) {
     stop_lf_125khz_radio();    // 关闭pwm输出
     bsp_delay_us(tm);
     start_lf_125khz_radio();     // 启动pwm输出
 }
 
-void TxBitRfid(uint8_t data)
-{
+void TxBitRfid(uint8_t data) {
     if (data & 1)
         bsp_delay_us(54 * 8);
     else
@@ -114,10 +111,8 @@ void TxBitRfid(uint8_t data)
     T55xx_SendGap(9 * 8); //write gap
 }
 
-void TxByteRfid(uint8_t data)
-{
-    for (uint8_t n_bit = 0; n_bit < 8; n_bit++)
-    {
+void TxByteRfid(uint8_t data) {
+    for (uint8_t n_bit = 0; n_bit < 8; n_bit++) {
         TxBitRfid(data & 1);
         data = data >> 1;
     }
@@ -134,32 +129,26 @@ void T55XX_Timeslot_Callback() {
     //指令为00时不需要发送后面的东西了
     if (t55xx_cmd.opcode != 0) {
         //指令后如果有需要才发密码
-        if (t55xx_cmd.usepassword)
-        {
-            for (uint8_t i = 0; i < 32; i++)
-            {
+        if (t55xx_cmd.usepassword) {
+            for (uint8_t i = 0; i < 32; i++) {
                 TxBitRfid((t55xx_cmd.password >> (31 - i)) & 1);
             }
         }
 
         //处理锁定位
-        if (t55xx_cmd.lockBit == 0 || t55xx_cmd.lockBit == 1)
-        {
+        if (t55xx_cmd.lockBit == 0 || t55xx_cmd.lockBit == 1) {
             TxBitRfid(t55xx_cmd.lockBit & 1);
         }
 
         //有需求才发数据
-        if (t55xx_cmd.usedata)
-        {
-            for (uint8_t i = 0; i < 32; i++)
-            {
+        if (t55xx_cmd.usedata) {
+            for (uint8_t i = 0; i < 32; i++) {
                 TxBitRfid((t55xx_cmd.data >> (31 - i)) & 1);
             }
         }
 
         //处理地址位
-        if (t55xx_cmd.blokAddr != 255)
-        {
+        if (t55xx_cmd.blokAddr != 255) {
             TxBitRfid(t55xx_cmd.blokAddr >> 2);
             TxBitRfid(t55xx_cmd.blokAddr >> 1);
             TxBitRfid(t55xx_cmd.blokAddr & 1);
@@ -178,8 +167,7 @@ void T55XX_Timeslot_Callback() {
  * @param data 数据，32个bit，从下标0开始传输
  * @param blokAddr 块编号，3个bit 0-7块，输入255代表不使用该位（用于密码唤醒模式）
  */
-void T55xx_Send_Cmd(uint8_t opcode, uint8_t usepassword, uint32_t password, uint8_t lockBit, uint8_t usedata, uint32_t data, uint8_t blokAddr)
-{
+void T55xx_Send_Cmd(uint8_t opcode, uint8_t usepassword, uint32_t password, uint8_t lockBit, uint8_t usedata, uint32_t data, uint8_t blokAddr) {
     //密码读取模式，        2op(1+bck)  32pw    1(0)            3addr
     //密码写入模式，        2op(1+bck)  32pw    1l      32data  3addr
     //密码唤醒模式，        2op(1+0)    32pw
@@ -216,37 +204,34 @@ void T55xx_Send_Cmd(uint8_t opcode, uint8_t usepassword, uint32_t password, uint
  * @param passwd 用于最后加密的密码（也是卡片当前密码）(是一个指针，4字节宽度小端byte序存储)
  * @param datas em410x运算后的数据，需要调用EM410X_Encoder计算
  */
-void T55xx_Write_data(uint8_t *passwd, uint8_t *datas)
-{
+void T55xx_Write_data(uint8_t *passwd, uint8_t *datas) {
     uint32_t blk1data = 0, blk2data = 0, u32passwd = 0;
     //提取两个block的数据和密码
-    for (uint8_t dataindex = 0; dataindex < 4; dataindex++)
-    {
+    for (uint8_t dataindex = 0; dataindex < 4; dataindex++) {
         blk1data = blk1data << 8;
         blk1data |= (uint8_t)datas[dataindex];
         u32passwd = u32passwd << 8;
         u32passwd |= (uint8_t)passwd[dataindex];
     }
-    for (uint8_t dataindex = 4; dataindex < 8; dataindex++)
-    {
+    for (uint8_t dataindex = 4; dataindex < 8; dataindex++) {
         blk2data = blk2data << 8;
         blk2data |= (uint8_t)datas[dataindex];
     }
-                                                                //先写入密码区
+    //先写入密码区
     T55xx_Send_Cmd(2, 1, u32passwd, 0, 1, u32passwd, 7);        //0区 7块 用当前密码写当前密码（密码）
     T55xx_Send_Cmd(2, 1, u32passwd, 0, 1, u32passwd, 7);        //0区 7块 用当前密码写当前密码（密码）
-                                                                //然后写入控制区
+    //然后写入控制区
     T55xx_Send_Cmd(2, 1, u32passwd, 0, 1, 0X00148050, 0);       //0区 0块 用当前密码写00148050（控制区）
-                                                                //然后写入数据
+    //然后写入数据
     T55xx_Send_Cmd(2, 1, u32passwd, 0, 1, blk1data, 1);         //0区 1块 用当前密码写blk1data（数据）
     T55xx_Send_Cmd(3, 1, u32passwd, 0, 1, blk1data, 1);         //1区 1块 用当前密码写blk1data（数据）
     T55xx_Send_Cmd(2, 1, u32passwd, 0, 1, blk2data, 2);         //0区 2块 用当前密码写blk2data（数据）
     T55xx_Send_Cmd(3, 1, u32passwd, 0, 1, blk2data, 2);         //1区 2块 用当前密码写blk2data（数据）
-                                                                //然后写入射频参数
+    //然后写入射频参数
     // 2021-12-15 fix：写此数据会导致小卡无法重复写
     // T55xx_Send_Cmd(3, 1, u32passwd, 0, 1, 0X60000800, 3);    //1区 3块 用当前密码写60000800（射频参数）
 
-                                                                //然后用无密码指令再写一遍
+    //然后用无密码指令再写一遍
     T55xx_Send_Cmd(2, 0, 0, 0, 1, 0X00148050, 0);               //0区 0块 写00148050（控制区）
     T55xx_Send_Cmd(2, 0, 0, 0, 1, blk1data, 1);                 //0区 1块 写blk1data（数据）
     T55xx_Send_Cmd(2, 0, 0, 0, 1, blk2data, 2);                 //0区 2块 写blk2data（数据）
@@ -259,11 +244,10 @@ void T55xx_Write_data(uint8_t *passwd, uint8_t *datas)
  * @param oldpasswd 卡片当前密码(是一个指针，4字节宽度小端byte序存储)
  * @param newpasswd 用于最后加密的密码(是一个指针，4字节宽度小端byte序存储)
  */
-void T55xx_Reset_Passwd(uint8_t *oldpasswd, uint8_t *newpasswd){
+void T55xx_Reset_Passwd(uint8_t *oldpasswd, uint8_t *newpasswd) {
     uint32_t u32oldpasswd = 0, u32newpasswd = 0;
     //提取两个block的数据和密码
-    for (uint8_t dataindex = 0; dataindex < 4; dataindex++)
-    {
+    for (uint8_t dataindex = 0; dataindex < 4; dataindex++) {
         u32oldpasswd = u32oldpasswd << 8;
         u32oldpasswd |= (uint8_t)oldpasswd[dataindex];
         u32newpasswd = u32newpasswd << 8;

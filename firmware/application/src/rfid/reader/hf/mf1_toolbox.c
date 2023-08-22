@@ -115,23 +115,23 @@ uint8_t sendcmd(struct Crypto1State *pcs, uint8_t crypted, uint8_t cmd, uint8_t 
             par[pos] = filter(pcs->odd) ^ oddparity8(dcmd[pos]);
         }
         *status = pcd_14a_reader_bits_transfer(
-            ecmd,
-            32,
-            par,
-            answer,
-            answer_parity,
-            &len,
-            answer_max_bit
-        );
+                      ecmd,
+                      32,
+                      par,
+                      answer,
+                      answer_parity,
+                      &len,
+                      answer_max_bit
+                  );
     } else {
         *status = pcd_14a_reader_bytes_transfer(
-            PCD_TRANSCEIVE,
-            dcmd,
-            4,
-            answer,
-            &len,
-            answer_max_bit
-        );
+                      PCD_TRANSCEIVE,
+                      dcmd,
+                      4,
+                      answer,
+                      &len,
+                      answer_max_bit
+                  );
     }
 
     // 通信有问题，不继续接下来的任务
@@ -268,7 +268,7 @@ uint8_t Darkside_Select_Nonces(picc_14a_tag_t *tag, uint8_t block, uint8_t keyty
     crc_14a_append(tag_auth, 2);
 
     // 进行随机数采集
-    for(i = 0; i < NT_COUNT; i++) {
+    for (i = 0; i < NT_COUNT; i++) {
         // 在进行天线重置时，我们必须要确保
         // 1、天线断电足够久，以此确保卡片完全断电，否则无法重置卡片的伪随机数生成器
         // 2、断电时间适中，不要太长，会影响效率，也不要太短，会无法无法重置卡片
@@ -291,9 +291,9 @@ uint8_t Darkside_Select_Nonces(picc_14a_tag_t *tag, uint8_t block, uint8_t keyty
     }
 
     // 对随机数进行取重
-    for(i = 0; i < NT_COUNT; i++) {
+    for (i = 0; i < NT_COUNT; i++) {
         uint32_t nt_a = nt_list[i];
-        for(m = i + 1; m < NT_COUNT; m++) {
+        for (m = i + 1; m < NT_COUNT; m++) {
             uint32_t nt_b = nt_list[m];
             if (nt_a == nt_b) {
                 nt_count[i] += 1;
@@ -304,8 +304,8 @@ uint8_t Darkside_Select_Nonces(picc_14a_tag_t *tag, uint8_t block, uint8_t keyty
     // 对取重后的最大次数值进行取值
     max = nt_count[0];
     m = 0;
-    for(i = 1; i < NT_COUNT; i++) {
-        if(nt_count[i] > max) {
+    for (i = 1; i < NT_COUNT; i++) {
+        if (nt_count[i] > max) {
             max = nt_count[i];
             m = i;
         }
@@ -313,7 +313,7 @@ uint8_t Darkside_Select_Nonces(picc_14a_tag_t *tag, uint8_t block, uint8_t keyty
 
     // 最终，我们判定一下max次数是否大于0，
     // 如果不大于0，说明无法同步时钟。
-    if(max == 0) {
+    if (max == 0) {
         NRF_LOG_INFO("Can't sync nt.\n");
         return DARKSIDE_CANT_FIXED_NT;
     }
@@ -332,7 +332,7 @@ uint8_t Darkside_Select_Nonces(picc_14a_tag_t *tag, uint8_t block, uint8_t keyty
 *
 */
 uint8_t Darkside_Recover_Key(uint8_t targetBlk, uint8_t targetTyp,
-    uint8_t firstRecover, uint8_t ntSyncMax, DarksideCore* dc) {
+                             uint8_t firstRecover, uint8_t ntSyncMax, DarksideCore *dc) {
 
     // 被固定使用的卡片信息
     static uint32_t uid_ori                 = 0;
@@ -507,7 +507,7 @@ uint8_t Darkside_Recover_Key(uint8_t targetBlk, uint8_t targetTyp,
                 par = ((par & 0x1F) + 1) | par_low;
             }
         }
-    } while(1);
+    } while (1);
 
     mf_nr_ar[3] &= 0x1F;
 
@@ -703,8 +703,7 @@ uint8_t Check_WeakNested_Support() {
 * @retval   : 距离值
 *
 */
-uint32_t measure_nonces(uint32_t from, uint32_t to)
-{
+uint32_t measure_nonces(uint32_t from, uint32_t to) {
     // 给出初始的坐标值
     uint32_t msb = from >> 16;
     uint32_t lsb = to >> 16;
@@ -729,10 +728,10 @@ uint32_t measure_medin(uint32_t *src, uint32_t length) {
         return src[0];
     }
 
-    for (i = 0;i < len;i++) {
+    for (i = 0; i < len; i++) {
         // i是已排列的序列的末尾
         minIndex = i;
-        for (int j = i + 1;j < len;j++) {
+        for (int j = i + 1; j < len; j++) {
             if (src[j] < src[minIndex]) {
                 minIndex = j;
             }
@@ -772,12 +771,12 @@ uint8_t Measure_Distance(uint64_t u64Key, uint8_t block, uint8_t type, uint32_t 
             return HF_TAG_NO;
         }
         // 进行第一次验证，以便获取未经加密的NT1
-        if(authex(pcs, uid, block, type, u64Key, AUTH_FIRST, &nt1) != HF_TAG_OK) {
+        if (authex(pcs, uid, block, type, u64Key, AUTH_FIRST, &nt1) != HF_TAG_OK) {
             NRF_LOG_INFO("Auth failed 1\r\n");
             return MF_ERRAUTH;
         }
         // 进行嵌套验证，以便获取经过加密的NT2_ENC
-        if(authex(pcs, uid, block, type, u64Key, AUTH_NESTED, &nt2) != HF_TAG_OK) {
+        if (authex(pcs, uid, block, type, u64Key, AUTH_NESTED, &nt2) != HF_TAG_OK) {
             NRF_LOG_INFO("Auth failed 2\r\n");
             return MF_ERRAUTH;
         }
@@ -791,7 +790,7 @@ uint8_t Measure_Distance(uint64_t u64Key, uint8_t block, uint8_t type, uint32_t 
         // 测量完成之后存放到buffer中
         distances[index++] = measure_nonces(nt1, nt2);
         // dbg_block_printf("dist = %"PRIu32"\n\n", distances[index - 1]);
-    } while(index < DIST_NR);
+    } while (index < DIST_NR);
 
     // 最终计算两个NT的距离并且直接传出
     *distance =  measure_medin(distances, DIST_NR);
@@ -826,7 +825,7 @@ uint8_t Nested_Recover_Core(NestedCore *pnc, uint64_t keyKnown, uint8_t blkKnown
         return HF_TAG_NO;
     }
     // 第一步验证，基础验证不需要嵌套加密
-    if(authex(pcs, uid, blkKnown, typKnown, keyKnown, AUTH_FIRST, &nt1) != HF_TAG_OK) {
+    if (authex(pcs, uid, blkKnown, typKnown, keyKnown, AUTH_FIRST, &nt1) != HF_TAG_OK) {
         return MF_ERRAUTH;
     }
     // 然后就是嵌套验证
@@ -860,19 +859,19 @@ uint8_t Nested_Recover_Key(uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown
     uint8_t m, res;
     // 先寻卡，所有的操作都要基于有卡的情况
     res = pcd_14a_reader_scan_auto(p_tag_info);
-    if (res!= HF_TAG_OK) {
+    if (res != HF_TAG_OK) {
         return res;
     }
     // 然后采集指定个数的随机数组
     for (m = 0; m < SETS_NR; m++) {
         res = Nested_Recover_Core(
-            &(ncs[m]),
-            keyKnown,
-            blkKnown,
-            typKnown,
-            targetBlock,
-            targetType
-        );
+                  &(ncs[m]),
+                  keyKnown,
+                  blkKnown,
+                  typKnown,
+                  targetBlock,
+                  targetType
+              );
         if (res != HF_TAG_OK) {
             return res;
         }
@@ -902,11 +901,11 @@ uint8_t Nested_Distacne_Detect(uint8_t block, uint8_t type, uint8_t *key, Nested
     }
     // 获取距离，为接下来的攻击做准备
     status = Measure_Distance(
-        bytes_to_num(key, 6),
-        block,
-        type,
-        &distance
-    );
+                 bytes_to_num(key, 6),
+                 block,
+                 type,
+                 &distance
+             );
     // 一切正常，我们需要将距离值放入结果中
     if (status == HF_TAG_OK) {
         num_to_bytes(distance, 4, nd->distance);
@@ -919,7 +918,7 @@ uint8_t Nested_Distacne_Detect(uint8_t block, uint8_t type, uint8_t *key, Nested
 * @retval   : 验证结果
 *
 */
-uint8_t auth_key_use_522_hw(uint8_t block, uint8_t type, uint8_t* key) {
+uint8_t auth_key_use_522_hw(uint8_t block, uint8_t type, uint8_t *key) {
     // 每次验证一个block都要重新寻卡
     if (pcd_14a_reader_scan_auto(p_tag_info) != HF_TAG_OK) {
         return HF_TAG_NO;

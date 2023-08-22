@@ -6,7 +6,7 @@
 // #define debug410x
 
 #ifdef __cplusplus
- extern "C" {
+extern "C" {
 #endif
 
 typedef void(*RIO_CALLBACK_S)(void); // 调用函数格式

@@ -73,17 +73,17 @@ typedef struct {
 
 // 防冲突资源的封装引用，纯引用空间占用比较小
 typedef struct {
-    nfc_tag_14a_uid_size* size;
-    uint8_t* atqa;
-    uint8_t* sak;
-    uint8_t* uid;
-    nfc_14a_ats_t* ats;
+    nfc_tag_14a_uid_size *size;
+    uint8_t *atqa;
+    uint8_t *sak;
+    uint8_t *uid;
+    nfc_14a_ats_t *ats;
 } nfc_tag_14a_coll_res_referen_t;
 
 // 通信接管需要实现的回调函数
 typedef void (*nfc_tag_14a_reset_handler_t)(void);
-typedef void (*nfc_tag_14a_state_handler_t)(uint8_t* data, uint16_t szBits);
-typedef nfc_tag_14a_coll_res_referen_t* (*nfc_tag_14a_coll_handler_t)(void);
+typedef void (*nfc_tag_14a_state_handler_t)(uint8_t *data, uint16_t szBits);
+typedef nfc_tag_14a_coll_res_referen_t *(*nfc_tag_14a_coll_handler_t)(void);
 
 // 14a通信接管者需要实现的接口
 typedef struct {
@@ -106,7 +106,7 @@ uint8_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBi
 
 // 14a通信控制
 void nfc_tag_14a_sense_switch(bool enable);
-void nfc_tag_14a_set_handler(nfc_tag_14a_handler_t* handler);
+void nfc_tag_14a_set_handler(nfc_tag_14a_handler_t *handler);
 void nfc_tag_14a_set_state(nfc_tag_14a_state_t state);
 void nfc_tag_14a_tx_bytes(uint8_t *data, uint32_t bytes, bool appendCrc);
 void nfc_tag_14a_tx_bytes_delay_freerun(uint8_t *data, uint32_t bytes, bool appendCrc);

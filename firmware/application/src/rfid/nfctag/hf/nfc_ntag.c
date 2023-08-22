@@ -70,7 +70,7 @@ const uint8_t ntagVersion[8] = {0x00, 0x04, 0x04, 0x02, 0x01, 0x00, 0x11, 0x03};
 uint8_t ntagPwdOK[2] = {0x80, 0x80};
 
 // 指向标签信息的数据结构指针
-static nfc_tag_ntag_information_t* m_tag_information = NULL;
+static nfc_tag_ntag_information_t *m_tag_information = NULL;
 // 定义并且使用影子防冲撞资源
 static nfc_tag_14a_coll_res_referen_t m_shadow_coll_res;
 // 定义并且使用ntag专用通信缓冲区
@@ -80,7 +80,7 @@ static tag_specific_type_t m_tag_type;
 
 static int get_block_max_by_tag_type(tag_specific_type_t tag_type) {
     int block_max;
-    switch(tag_type) {
+    switch (tag_type) {
         case TAG_TYPE_NTAG_213:
             block_max = NTAG213_PAGES;
             break;
@@ -97,7 +97,7 @@ static int get_block_max_by_tag_type(tag_specific_type_t tag_type) {
 
 static int get_block_cfg_by_tag_type(tag_specific_type_t tag_type) {
     int block_max;
-    switch(tag_type) {
+    switch (tag_type) {
         case TAG_TYPE_NTAG_213:
             block_max = NTAG213_CONFIG_AREA_START_ADDRESS;
             break;
@@ -112,31 +112,31 @@ static int get_block_cfg_by_tag_type(tag_specific_type_t tag_type) {
     return block_max;
 }
 
-void nfc_tag_ntag_state_handler(uint8_t* p_data, uint16_t szDataBits) {
+void nfc_tag_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits) {
     uint8_t command = p_data[0];
     uint8_t block_num = p_data[1];
 
-    switch(command) {
+    switch (command) {
         case CMD_GET_VERSION:
             memcpy(m_tag_tx_buffer.tx_buffer, ntagVersion, 8);
             switch (m_tag_type) {
-            case TAG_TYPE_NTAG_213:
-                m_tag_tx_buffer.tx_buffer[6] = NTAG213_VERSION;
-                break;
-            default:
-            case TAG_TYPE_NTAG_215:
-                m_tag_tx_buffer.tx_buffer[6] = NTAG215_VERSION;
-                break;
-            case TAG_TYPE_NTAG_216:
-                m_tag_tx_buffer.tx_buffer[6] = NTAG216_VERSION;
-                break;
+                case TAG_TYPE_NTAG_213:
+                    m_tag_tx_buffer.tx_buffer[6] = NTAG213_VERSION;
+                    break;
+                default:
+                case TAG_TYPE_NTAG_215:
+                    m_tag_tx_buffer.tx_buffer[6] = NTAG215_VERSION;
+                    break;
+                case TAG_TYPE_NTAG_216:
+                    m_tag_tx_buffer.tx_buffer[6] = NTAG216_VERSION;
+                    break;
             }
             nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, 8, true);
             break;
         case CMD_READ:
             if (block_num < get_block_max_by_tag_type(m_tag_type)) {
                 for (int block = 0; block < 4; block++) {
-                    memcpy(m_tag_tx_buffer.tx_buffer + block*4, m_tag_information->memory[block_num+block], NFC_TAG_NTAG_DATA_SIZE);
+                    memcpy(m_tag_tx_buffer.tx_buffer + block * 4, m_tag_information->memory[block_num + block], NFC_TAG_NTAG_DATA_SIZE);
                 }
                 nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, BYTES_PER_READ, true);
             } else {
@@ -150,7 +150,7 @@ void nfc_tag_ntag_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                 break;
             }
             for (int block = block_num; block <= end_block_num; block++) {
-                memcpy(m_tag_tx_buffer.tx_buffer + (block - block_num)*4, m_tag_information->memory[block], NFC_TAG_NTAG_DATA_SIZE);
+                memcpy(m_tag_tx_buffer.tx_buffer + (block - block_num) * 4, m_tag_information->memory[block], NFC_TAG_NTAG_DATA_SIZE);
             }
             nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, (end_block_num - block_num + 1) * NFC_TAG_NTAG_DATA_SIZE, true);
             break;
@@ -171,7 +171,7 @@ void nfc_tag_ntag_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                 break;
             }
             /* Authenticate the user */
-            //RESET AUTHLIM COUNTER, CURRENTLY NOT IMPLEMENTED 
+            //RESET AUTHLIM COUNTER, CURRENTLY NOT IMPLEMENTED
             // TODO
             /* Send the PACK value back */
             if (m_tag_information->config.mode_uid_magic) {
@@ -189,7 +189,7 @@ void nfc_tag_ntag_state_handler(uint8_t* p_data, uint16_t szDataBits) {
     return;
 }
 
-nfc_tag_14a_coll_res_referen_t* get_ntag_coll_res() {
+nfc_tag_14a_coll_res_referen_t *get_ntag_coll_res() {
     // 使用单独的防冲突信息，而不是使用扇区中的信息
     m_shadow_coll_res.sak = m_tag_information->res_coll.sak;
     m_shadow_coll_res.atqa = m_tag_information->res_coll.atqa;
@@ -213,7 +213,7 @@ static int get_information_size_by_tag_type(tag_specific_type_t type) {
  * @param buffer    数据缓冲区
  * @return 需要保存的数据的长度，为0时表示不保存
  */
-int nfc_tag_ntag_data_savecb(tag_specific_type_t type, tag_data_buffer_t* buffer) {
+int nfc_tag_ntag_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     if (m_tag_type != TAG_TYPE_UNKNOWN) {
         // 根据当前标签类型保存对应大小的数据
         return get_information_size_by_tag_type(type);
@@ -222,7 +222,7 @@ int nfc_tag_ntag_data_savecb(tag_specific_type_t type, tag_data_buffer_t* buffer
     }
 }
 
-int nfc_tag_ntag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t* buffer) {
+int nfc_tag_ntag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     int info_size = get_information_size_by_tag_type(type);
     if (buffer->length >= info_size) {
         // 将数据缓冲区强转为ntag结构类型
@@ -231,8 +231,8 @@ int nfc_tag_ntag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t* buffer
         m_tag_type = type;
         // 注册14a通信管理接口
         nfc_tag_14a_handler_t handler_for_14a = {
-            .get_coll_res = get_ntag_coll_res, 
-            .cb_state = nfc_tag_ntag_state_handler, 
+            .get_coll_res = get_ntag_coll_res,
+            .cb_state = nfc_tag_ntag_state_handler,
             .cb_reset = nfc_tag_ntag_reset_handler,
         };
         nfc_tag_14a_set_handler(&handler_for_14a);
@@ -266,8 +266,8 @@ bool nfc_tag_ntag_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
             memcpy(p_ntag_information->memory[block], default_p2, NFC_TAG_NTAG_DATA_SIZE);
         }
     }
-    
-    // default ntag auto ant-collision res 
+
+    // default ntag auto ant-collision res
     p_ntag_information->res_coll.atqa[0] = 0x44;
     p_ntag_information->res_coll.atqa[1] = 0x00;
     p_ntag_information->res_coll.sak[0] = 0x00;
@@ -280,11 +280,11 @@ bool nfc_tag_ntag_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     p_ntag_information->res_coll.uid[6] = 0x64;
     p_ntag_information->res_coll.size = NFC_TAG_14A_UID_DOUBLE_SIZE;
     p_ntag_information->res_coll.ats.length = 0;
-    
+
     // default ntag config
     p_ntag_information->config.mode_uid_magic = true;
     p_ntag_information->config.detection_enable = false;
-    
+
     // save data to flash
     tag_sense_type_t sense_type = get_sense_type_from_tag_type(tag_type);
     fds_slot_record_map_t map_info;

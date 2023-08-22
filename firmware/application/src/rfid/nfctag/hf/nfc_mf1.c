@@ -181,11 +181,11 @@ static nfc_tag_mf1_std_state_machine_t m_mf1_state = MF1_STATE_UNAUTH;
 // 保存当前的GEN1A状态
 static nfc_tag_mf1_gen1a_state_machine_t m_gen1a_state = GEN1A_STATE_DISABLE;
 // 指向标签信息的数据结构指针
-static nfc_tag_mf1_information_t* m_tag_information = NULL;
+static nfc_tag_mf1_information_t *m_tag_information = NULL;
 // 定义并且使用影子防冲撞资源
 static nfc_tag_14a_coll_res_referen_t m_shadow_coll_res;
 // 指向标签扇区中的尾部块（控制数据块）
-static nfc_tag_mf1_trailer_info_t* m_tag_trailer_info = NULL;
+static nfc_tag_mf1_trailer_info_t *m_tag_trailer_info = NULL;
 // 定义并且使用mf1专用通信缓冲区
 static nfc_tag_mf1_tx_buffer_t m_tag_tx_buffer;
 // 保存当前正在模拟的MF1的具体类型
@@ -388,7 +388,7 @@ void append_mf1_auth_log_step3(bool is_auth_success) {
 /** @brief mf1获得验证日志
  * @param count: 验证日志的统计个数
  */
-nfc_tag_mf1_auth_log_t* get_mf1_auth_log(uint32_t* count) {
+nfc_tag_mf1_auth_log_t *get_mf1_auth_log(uint32_t *count) {
     // 先传递验证的日志条目总数出去
     *count = m_auth_log.count;
     // 直接返回日志数组的头部指针就好了
@@ -397,7 +397,7 @@ nfc_tag_mf1_auth_log_t* get_mf1_auth_log(uint32_t* count) {
 
 static int get_block_max_by_tag_type(tag_specific_type_t tag_type) {
     int block_max;
-    switch(tag_type) {
+    switch (tag_type) {
         case TAG_TYPE_MIFARE_Mini:
             block_max = 20;
             break;
@@ -433,7 +433,7 @@ void mf1_prng_by_bytes(uint8_t *nonces, uint32_t n) {
  * @param szBits    数据的比特流长度
  * @param state     有限状态机
  */
-void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
+void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
     // 处理特殊指令，比如兼容mifare gen1a标签
     if (szDataBits <= 8) {
         // 只有启用了GEN1A模式的情况下才允许后门指令的响应
@@ -469,7 +469,7 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
         case MF1_STATE_UNAUTH: {    // 未验证状态，通信是开放性的
             if (szDataBits == 32) {    // 32位，可能是指令
                 if (nfc_tag_14a_checks_crc(p_data, 4)) {
-                    switch(p_data[0]) {
+                    switch (p_data[0]) {
                         case CMD_AUTH_A:
                         case CMD_AUTH_B: {
                             uint8_t BlockAuth = p_data[1];
@@ -498,7 +498,7 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                             KeyInUse = p_data[0] & 1;
 
                             // 获得指定的扇区访问控制字节，此处我们直接取巧，将内存转为结构体，让编译器帮我们维护指针的指向
-                            m_tag_trailer_info = (nfc_tag_mf1_trailer_info_t*)m_tag_information->memory[BlockEnd];
+                            m_tag_trailer_info = (nfc_tag_mf1_trailer_info_t *)m_tag_information->memory[BlockEnd];
 
                             // 生成随机数
                             nfc_tag_mf1_random_nonce(CardNonce, false);
@@ -549,9 +549,9 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                             crypto1_deinit(pcs);
                             // 加载密钥流
                             crypto1_init(pcs,
-                                // 根据当前的指令类型选择验证A或者B秘钥
-                                bytes_to_num(KeyInUse ? m_tag_trailer_info->keyb : m_tag_trailer_info->keya, 6)
-                            );
+                                         // 根据当前的指令类型选择验证A或者B秘钥
+                                         bytes_to_num(KeyInUse ? m_tag_trailer_info->keyb : m_tag_trailer_info->keya, 6)
+                                        );
                             // 设置密钥流
                             crypto1_word(pcs, bytes_to_num(UID_BY_CASCADE_LEVEL, 4) ^ bytes_to_num(CardNonce, 4), 0);
 #endif
@@ -688,7 +688,7 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                                 // 清空一下buffer，避免缓存的数据影响到后续操作
                                 memset(m_tag_tx_buffer.tx_raw_buffer, 0x00, sizeof(m_tag_tx_buffer.tx_raw_buffer));
                                 // 让这块数据区域变成我们需要的尾部块类型
-                                nfc_tag_mf1_trailer_info_t* respTrailerInfo = (nfc_tag_mf1_trailer_info_t*)m_tag_tx_buffer.tx_raw_buffer;
+                                nfc_tag_mf1_trailer_info_t *respTrailerInfo = (nfc_tag_mf1_trailer_info_t *)m_tag_tx_buffer.tx_raw_buffer;
                                 // 尾部块的读取有以下条件限制：
                                 // 1、要始终可以复制GPB（Global Public Byte）也就是控制位最后一个字节
                                 // 2、秘钥A永远无法被读取！
@@ -792,9 +792,9 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                                 status = ACK_VALUE;
                             }
 #ifdef NFC_MF1_FAST_SIM
-                                nfc_tag_14a_tx_nbit(status ^ Crypto1Nibble(), 4);
+                            nfc_tag_14a_tx_nbit(status ^ Crypto1Nibble(), 4);
 #else
-                                nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, status), 4);
+                            nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, status), 4);
 #endif
                             break;
                         }
@@ -827,7 +827,7 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                             KeyInUse = p_data[0] & 1;
 
                             // 获得指定的扇区访问控制字节，此处我们直接取巧，将内存转为结构体，让编译器帮我们维护指针的指向
-                            m_tag_trailer_info = (nfc_tag_mf1_trailer_info_t*)m_tag_information->memory[BlockEnd];
+                            m_tag_trailer_info = (nfc_tag_mf1_trailer_info_t *)m_tag_information->memory[BlockEnd];
 
                             // 生成随机数
                             nfc_tag_mf1_random_nonce(CardNonce, true);
@@ -884,9 +884,9 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                             crypto1_deinit(pcs);
                             // 加载密钥流
                             crypto1_init(pcs,
-                                // 根据当前的指令类型选择验证A或者B秘钥
-                                bytes_to_num(KeyInUse ? m_tag_trailer_info->keyb : m_tag_trailer_info->keya, 6)
-                            );
+                                         // 根据当前的指令类型选择验证A或者B秘钥
+                                         bytes_to_num(KeyInUse ? m_tag_trailer_info->keyb : m_tag_trailer_info->keya, 6)
+                                        );
                             // 进行随机数加密
                             uint8_t m_auth_nt_keystream[4];
                             num_to_bytes(bytes_to_num(UID_BY_CASCADE_LEVEL, 4) ^ bytes_to_num(CardNonce, 4), 4, m_auth_nt_keystream);
@@ -1048,11 +1048,11 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
 /**
  * @brief 提供mifare标签必要的防冲突资源（仅提供指针）
  */
-nfc_tag_14a_coll_res_referen_t* get_mifare_coll_res() {
+nfc_tag_14a_coll_res_referen_t *get_mifare_coll_res() {
     // 根据当前的互通配置，选择性的返回其中配置的数据，假设开启了数据互通，那么我们还需要确保当前模拟的卡是4BYTE的
     if (m_tag_information->config.use_mf1_coll_res && m_tag_information->res_coll.size == NFC_TAG_14A_UID_SINGLE_SIZE) {
         // 获得数据区域的厂商信息
-        nfc_tag_mf1_factory_info_t* block0_factory_info = (nfc_tag_mf1_factory_info_t*)m_tag_information->memory[0];
+        nfc_tag_mf1_factory_info_t *block0_factory_info = (nfc_tag_mf1_factory_info_t *)m_tag_information->memory[0];
         m_shadow_coll_res.sak = block0_factory_info->sak;               // 替换sak
         m_shadow_coll_res.atqa = block0_factory_info->atqa;             // 替换atqa
         m_shadow_coll_res.uid = block0_factory_info->uid;               // 替换uid
@@ -1099,7 +1099,7 @@ static int get_information_size_by_tag_type(tag_specific_type_t type, bool auth_
  * @param buffer    数据缓冲区
  * @return 需要保存的数据的长度，为0时表示不保存
  */
-int nfc_tag_mf1_data_savecb(tag_specific_type_t type, tag_data_buffer_t* buffer) {
+int nfc_tag_mf1_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     if (m_tag_type != TAG_TYPE_UNKNOWN) {
         if (m_tag_information->config.mode_block_write == NFC_TAG_MF1_WRITE_SHADOW) {
             NRF_LOG_INFO("The mf1 is shadow write mode.");
@@ -1116,7 +1116,7 @@ int nfc_tag_mf1_data_savecb(tag_specific_type_t type, tag_data_buffer_t* buffer)
  * @param type      细化的标签类型
  * @param buffer    数据缓冲区
  */
-int nfc_tag_mf1_data_loadcb(tag_specific_type_t type, tag_data_buffer_t* buffer) {
+int nfc_tag_mf1_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     // 确保外部容量足够转换为信息结构体
     int info_size = get_information_size_by_tag_type(type, false);
     if (buffer->length >= info_size) {

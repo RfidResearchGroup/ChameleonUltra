@@ -50,7 +50,7 @@ bool fds_is_exists(uint16_t id, uint16_t key) {
 /**
  * 读取记录
  */
-bool fds_read_sync(uint16_t id, uint16_t key, uint16_t max_length, uint8_t* buffer) {
+bool fds_read_sync(uint16_t id, uint16_t key, uint16_t max_length, uint8_t *buffer) {
     ret_code_t          err_code;       // 操作的结果码
     fds_flash_record_t  flash_record;   // 指向flash中的实际信息
     fds_record_desc_t   record_desc;    // 记录的句柄
@@ -75,7 +75,7 @@ bool fds_read_sync(uint16_t id, uint16_t key, uint16_t max_length, uint8_t* buff
 /**
  * 没有GC过程的写入操作函数的实现
  */
-static ret_code_t fds_write_record_nogc(uint16_t id, uint16_t key, uint16_t data_length_words, void* buffer) {
+static ret_code_t fds_write_record_nogc(uint16_t id, uint16_t key, uint16_t data_length_words, void *buffer) {
     ret_code_t          err_code;       // 操作的结果码
     fds_record_desc_t   record_desc;    // 记录的句柄
     fds_record_t record = {             // 记录的实体，写和更新操作时用的上
@@ -101,7 +101,7 @@ static ret_code_t fds_write_record_nogc(uint16_t id, uint16_t key, uint16_t data
 /**
  * 写入记录
  */
-bool fds_write_sync(uint16_t id, uint16_t key, uint16_t data_length_words, void* buffer) {
+bool fds_write_sync(uint16_t id, uint16_t key, uint16_t data_length_words, void *buffer) {
     // Make only one task running
     APP_ERROR_CHECK_BOOL(!fds_operation_info.waiting);
     // write result
@@ -115,7 +115,7 @@ bool fds_write_sync(uint16_t id, uint16_t key, uint16_t data_length_words, void*
     // 调用无自动GC的写实现函数
     ret_code_t err_code = fds_write_record_nogc(id, key, data_length_words, buffer);
     if (err_code == NRF_SUCCESS) {
-        while(!fds_operation_info.success) {
+        while (!fds_operation_info.success) {
             __NOP();
         }; // 等待操作完成
     } else if (err_code == FDS_ERR_NO_SPACE_IN_FLASH) {   // 确保还有空间可以操作，否则需要GC
@@ -128,7 +128,7 @@ bool fds_write_sync(uint16_t id, uint16_t key, uint16_t data_length_words, void*
         fds_operation_info.success = false;
         err_code = fds_write_record_nogc(id, key, data_length_words, buffer);
         if (err_code == NRF_SUCCESS) {
-            while(!fds_operation_info.success) {
+            while (!fds_operation_info.success) {
                 __NOP();
             }; // 等待操作完成
         } else if (err_code == FDS_ERR_NO_SPACE_IN_FLASH) {
@@ -156,13 +156,13 @@ int fds_delete_sync(uint16_t id, uint16_t key) {
     int                 delete_count = 0;
     fds_record_desc_t   record_desc;
     ret_code_t          err_code;
-    while(fds_find_record(id, key, &record_desc)) {
+    while (fds_find_record(id, key, &record_desc)) {
         fds_operation_info.success = false;
         fds_record_id_from_desc(&record_desc, &fds_operation_info.record_id);
         err_code = fds_record_delete(&record_desc);
         APP_ERROR_CHECK(err_code);
         delete_count++;
-        while(!fds_operation_info.success) {
+        while (!fds_operation_info.success) {
             __NOP();
         }; // 等待操作完成
     }
@@ -172,7 +172,7 @@ int fds_delete_sync(uint16_t id, uint16_t key) {
 /**
  * FDS事件回调
  */
-static void fds_evt_handler(fds_evt_t const * p_evt) {
+static void fds_evt_handler(fds_evt_t const *p_evt) {
     // To process fds event
     switch (p_evt->id) {
         case FDS_EVT_INIT: {
@@ -181,7 +181,8 @@ static void fds_evt_handler(fds_evt_t const * p_evt) {
             } else {
                 APP_ERROR_CHECK(p_evt->result);
             }
-        } break;
+        }
+        break;
         case FDS_EVT_WRITE:
         case FDS_EVT_UPDATE: {
             if (p_evt->result == NRF_SUCCESS) {
@@ -193,7 +194,8 @@ static void fds_evt_handler(fds_evt_t const * p_evt) {
             } else {
                 APP_ERROR_CHECK(p_evt->result);
             }
-        } break;
+        }
+        break;
         case FDS_EVT_DEL_RECORD: {
             if (p_evt->result == NRF_SUCCESS) {
                 NRF_LOG_INFO(
@@ -208,14 +210,16 @@ static void fds_evt_handler(fds_evt_t const * p_evt) {
             } else {
                 APP_ERROR_CHECK(p_evt->result);
             }
-        } break;
+        }
+        break;
         case FDS_EVT_GC: {
             if (p_evt->result == NRF_SUCCESS) {
                 fds_operation_info.success = true;
             } else {
                 APP_ERROR_CHECK(p_evt->result);
             }
-        } break;
+        }
+        break;
         default: {
             // nothing to do...
         } break;
@@ -240,7 +244,7 @@ void fds_gc_sync(void) {
     fds_operation_info.success = false;
     ret_code_t err_code = fds_gc();
     APP_ERROR_CHECK(err_code);
-    while(!fds_operation_info.success) {
+    while (!fds_operation_info.success) {
         __NOP();
     };
 }
@@ -263,7 +267,7 @@ static bool fds_next_record_delete_sync() {
         return false;
     }
 
-    while(!fds_operation_info.success) {
+    while (!fds_operation_info.success) {
         __NOP();
     }
 

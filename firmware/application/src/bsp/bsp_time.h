@@ -27,9 +27,9 @@ void bsp_timer_uninit(void);
 void bsp_timer_start(void);
 void bsp_timer_stop(void);
 
-void bsp_return_timer(autotimer* timer);
-autotimer* bsp_obtain_timer(uint32_t start_value);
-uint8_t bsp_set_timer(autotimer* timer,uint32_t start_value);
+void bsp_return_timer(autotimer *timer);
+autotimer *bsp_obtain_timer(uint32_t start_value);
+uint8_t bsp_set_timer(autotimer *timer, uint32_t start_value);
 
 
 #endif

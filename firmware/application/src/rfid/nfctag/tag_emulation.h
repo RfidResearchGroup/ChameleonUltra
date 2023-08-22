@@ -16,16 +16,16 @@ extern bool g_is_tag_emulating;
 // 标签的数据缓冲区
 typedef struct {
     uint16_t length;
-    uint8_t* buffer;
-    uint16_t* crc;
+    uint8_t *buffer;
+    uint16_t *crc;
 } tag_data_buffer_t;
 
 // 场感应使能与闭能切换函数
 typedef void (*tag_sense_switch_t)(bool enable);
 // flash数据加载到RAM后通知给注册者
-typedef int (*tag_datas_loadcb_t)(tag_specific_type_t type, tag_data_buffer_t* buffer);
+typedef int (*tag_datas_loadcb_t)(tag_specific_type_t type, tag_data_buffer_t *buffer);
 // 数据要保存到flash之前通知给注册者
-typedef int (*tag_datas_savecb_t)(tag_specific_type_t type, tag_data_buffer_t* buffer);
+typedef int (*tag_datas_savecb_t)(tag_specific_type_t type, tag_data_buffer_t *buffer);
 // 数据的工厂初始化函数
 typedef bool (*tag_datas_factory_t)(uint8_t slot, tag_specific_type_t type);
 
@@ -86,7 +86,7 @@ void tag_emulation_change_type(uint8_t slot, tag_specific_type_t tag_type);
 bool tag_emulation_load_by_buffer(tag_specific_type_t tag_type, bool update_crc);
 
 tag_sense_type_t get_sense_type_from_tag_type(tag_specific_type_t type);
-tag_data_buffer_t* get_buffer_by_tag_type(tag_specific_type_t type);
+tag_data_buffer_t *get_buffer_by_tag_type(tag_specific_type_t type);
 
 // 设置当前使用的卡槽
 void tag_emulation_set_slot(uint8_t index);

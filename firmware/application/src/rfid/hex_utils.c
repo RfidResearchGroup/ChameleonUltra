@@ -9,8 +9,7 @@
 * @retval   : 无
 *
 */
-void num_to_bytes(uint64_t n, uint8_t len, uint8_t* dest)
-{
+void num_to_bytes(uint64_t n, uint8_t len, uint8_t *dest) {
     while (len--) {
         dest[len] = (uint8_t)n;
         n >>= 8;
@@ -24,8 +23,7 @@ void num_to_bytes(uint64_t n, uint8_t len, uint8_t* dest)
 * @retval   : 转换结果
 *
 */
-uint64_t bytes_to_num(uint8_t* src, uint8_t len)
-{
+uint64_t bytes_to_num(uint8_t *src, uint8_t len) {
     uint64_t num = 0;
     while (len--) {
         num = (num << 8) | (*src);

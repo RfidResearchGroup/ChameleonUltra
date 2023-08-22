@@ -141,7 +141,7 @@ tag_sense_type_t get_sense_type_from_tag_type(tag_specific_type_t type) {
 /**
  * 根据类型获取缓冲区信息
  */
-tag_data_buffer_t* get_buffer_by_tag_type(tag_specific_type_t type) {
+tag_data_buffer_t *get_buffer_by_tag_type(tag_specific_type_t type) {
     for (int i = 0; i < ARRAY_SIZE(tag_base_map); i++) {
         if (tag_base_map[i].tag_type == type) {
             return tag_base_map[i].data_buffer;
@@ -309,13 +309,15 @@ void tag_emulation_delete_data(uint8_t slot, tag_sense_type_t sense_type) {
     // 删除数据
     delete_data_by_tag_type(slot, sense_type);
     // 关闭对应的卡槽的模拟卡类型
-    switch(sense_type) {
+    switch (sense_type) {
         case TAG_SENSE_HF: {
             slotConfig.group[slot].tag_hf = TAG_TYPE_UNKNOWN;
-        } break;
+        }
+        break;
         case TAG_SENSE_LF: {
             slotConfig.group[slot].tag_lf = TAG_TYPE_UNKNOWN;
-        } break;
+        }
+        break;
         default:
             break;
     }
@@ -545,7 +547,8 @@ void tag_emulation_change_type(uint8_t slot, tag_specific_type_t tag_type) {
             slotConfig.group[slot].tag_hf = tag_type;
             break;
         }
-        default: break; // 永远不能发生
+        default:
+            break; // 永远不能发生
     }
     NRF_LOG_INFO("tag type = %d", tag_type);
     // 更新完成之后，我们需要通知更新内存中的相关数据

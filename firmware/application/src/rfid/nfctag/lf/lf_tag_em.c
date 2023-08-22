@@ -53,54 +53,136 @@ uint64_t em410x_id_to_memory64(uint8_t id[5]) {
         uint64_t u64;
         struct {
             // 9 header bits
-            uint8_t h00: 1; uint8_t h01: 1; uint8_t h02: 1; uint8_t h03: 1; uint8_t h04: 1; uint8_t h05: 1; uint8_t h06: 1; uint8_t h07: 1; uint8_t h08: 1;
+            uint8_t h00: 1;
+            uint8_t h01: 1;
+            uint8_t h02: 1;
+            uint8_t h03: 1;
+            uint8_t h04: 1;
+            uint8_t h05: 1;
+            uint8_t h06: 1;
+            uint8_t h07: 1;
+            uint8_t h08: 1;
             // 8 version bits and 2 bit parity
-            uint8_t d00: 1; uint8_t d01: 1; uint8_t d02: 1; uint8_t d03: 1; uint8_t p0: 1;
-            uint8_t d10: 1; uint8_t d11: 1; uint8_t d12: 1; uint8_t d13: 1; uint8_t p1: 1;
+            uint8_t d00: 1;
+            uint8_t d01: 1;
+            uint8_t d02: 1;
+            uint8_t d03: 1;
+            uint8_t p0: 1;
+            uint8_t d10: 1;
+            uint8_t d11: 1;
+            uint8_t d12: 1;
+            uint8_t d13: 1;
+            uint8_t p1: 1;
             // 32 data bits and 8 bit parity
-            uint8_t d20: 1; uint8_t d21: 1; uint8_t d22: 1; uint8_t d23: 1; uint8_t p2: 1;
-            uint8_t d30: 1; uint8_t d31: 1; uint8_t d32: 1; uint8_t d33: 1; uint8_t p3: 1;
-            uint8_t d40: 1; uint8_t d41: 1; uint8_t d42: 1; uint8_t d43: 1; uint8_t p4: 1;
-            uint8_t d50: 1; uint8_t d51: 1; uint8_t d52: 1; uint8_t d53: 1; uint8_t p5: 1;
-            uint8_t d60: 1; uint8_t d61: 1; uint8_t d62: 1; uint8_t d63: 1; uint8_t p6: 1;
-            uint8_t d70: 1; uint8_t d71: 1; uint8_t d72: 1; uint8_t d73: 1; uint8_t p7: 1;
-            uint8_t d80: 1; uint8_t d81: 1; uint8_t d82: 1; uint8_t d83: 1; uint8_t p8: 1;
-            uint8_t d90: 1; uint8_t d91: 1; uint8_t d92: 1; uint8_t d93: 1; uint8_t p9: 1;
+            uint8_t d20: 1;
+            uint8_t d21: 1;
+            uint8_t d22: 1;
+            uint8_t d23: 1;
+            uint8_t p2: 1;
+            uint8_t d30: 1;
+            uint8_t d31: 1;
+            uint8_t d32: 1;
+            uint8_t d33: 1;
+            uint8_t p3: 1;
+            uint8_t d40: 1;
+            uint8_t d41: 1;
+            uint8_t d42: 1;
+            uint8_t d43: 1;
+            uint8_t p4: 1;
+            uint8_t d50: 1;
+            uint8_t d51: 1;
+            uint8_t d52: 1;
+            uint8_t d53: 1;
+            uint8_t p5: 1;
+            uint8_t d60: 1;
+            uint8_t d61: 1;
+            uint8_t d62: 1;
+            uint8_t d63: 1;
+            uint8_t p6: 1;
+            uint8_t d70: 1;
+            uint8_t d71: 1;
+            uint8_t d72: 1;
+            uint8_t d73: 1;
+            uint8_t p7: 1;
+            uint8_t d80: 1;
+            uint8_t d81: 1;
+            uint8_t d82: 1;
+            uint8_t d83: 1;
+            uint8_t p8: 1;
+            uint8_t d90: 1;
+            uint8_t d91: 1;
+            uint8_t d92: 1;
+            uint8_t d93: 1;
+            uint8_t p9: 1;
             // 5 bit end.
-            uint8_t pc0: 1; uint8_t pc1: 1; uint8_t pc2: 1; uint8_t pc3: 1; uint8_t s0: 1;
+            uint8_t pc0: 1;
+            uint8_t pc1: 1;
+            uint8_t pc2: 1;
+            uint8_t pc3: 1;
+            uint8_t s0: 1;
         } bit;
     } memory;
 
     // 好了，到了目前最关键的时候了，现在需要赋值和计算奇偶校验位了
     // 1、先把前导码给赋值了
     memory.bit.h00 = memory.bit.h01 = memory.bit.h02 =
-    memory.bit.h03 = memory.bit.h04 = memory.bit.h05 =
-    memory.bit.h06 = memory.bit.h07 = memory.bit.h08 = 1;
+                                          memory.bit.h03 = memory.bit.h04 = memory.bit.h05 =
+                                                               memory.bit.h06 = memory.bit.h07 = memory.bit.h08 = 1;
     // 2、把8bit的版本或者自定义ID给赋值了
-    memory.bit.d00 = GETBIT(id[0], 7); memory.bit.d01 = GETBIT(id[0], 6); memory.bit.d02 = GETBIT(id[0], 5); memory.bit.d03 = GETBIT(id[0], 4);
+    memory.bit.d00 = GETBIT(id[0], 7);
+    memory.bit.d01 = GETBIT(id[0], 6);
+    memory.bit.d02 = GETBIT(id[0], 5);
+    memory.bit.d03 = GETBIT(id[0], 4);
     memory.bit.p0 = memory.bit.d00 ^ memory.bit.d01 ^ memory.bit.d02 ^ memory.bit.d03;
-    memory.bit.d10 = GETBIT(id[0], 3); memory.bit.d11 = GETBIT(id[0], 2); memory.bit.d12 = GETBIT(id[0], 1); memory.bit.d13 = GETBIT(id[0], 0);
+    memory.bit.d10 = GETBIT(id[0], 3);
+    memory.bit.d11 = GETBIT(id[0], 2);
+    memory.bit.d12 = GETBIT(id[0], 1);
+    memory.bit.d13 = GETBIT(id[0], 0);
     memory.bit.p1 = memory.bit.d10 ^ memory.bit.d11 ^ memory.bit.d12 ^ memory.bit.d13;
     // 3、把32bit的数据给赋值了
     // - byte1
-    memory.bit.d20 = GETBIT(id[1], 7); memory.bit.d21 = GETBIT(id[1], 6); memory.bit.d22 = GETBIT(id[1], 5); memory.bit.d23 = GETBIT(id[1], 4);
+    memory.bit.d20 = GETBIT(id[1], 7);
+    memory.bit.d21 = GETBIT(id[1], 6);
+    memory.bit.d22 = GETBIT(id[1], 5);
+    memory.bit.d23 = GETBIT(id[1], 4);
     memory.bit.p2 = memory.bit.d20 ^ memory.bit.d21 ^ memory.bit.d22 ^ memory.bit.d23;
-    memory.bit.d30 = GETBIT(id[1], 3); memory.bit.d31 = GETBIT(id[1], 2); memory.bit.d32 = GETBIT(id[1], 1); memory.bit.d33 = GETBIT(id[1], 0);
+    memory.bit.d30 = GETBIT(id[1], 3);
+    memory.bit.d31 = GETBIT(id[1], 2);
+    memory.bit.d32 = GETBIT(id[1], 1);
+    memory.bit.d33 = GETBIT(id[1], 0);
     memory.bit.p3 = memory.bit.d30 ^ memory.bit.d31 ^ memory.bit.d32 ^ memory.bit.d33;
     // - byte2
-    memory.bit.d40 = GETBIT(id[2], 7); memory.bit.d41 = GETBIT(id[2], 6); memory.bit.d42 = GETBIT(id[2], 5); memory.bit.d43 = GETBIT(id[2], 4);
+    memory.bit.d40 = GETBIT(id[2], 7);
+    memory.bit.d41 = GETBIT(id[2], 6);
+    memory.bit.d42 = GETBIT(id[2], 5);
+    memory.bit.d43 = GETBIT(id[2], 4);
     memory.bit.p4 = memory.bit.d40 ^ memory.bit.d41 ^ memory.bit.d42 ^ memory.bit.d43;
-    memory.bit.d50 = GETBIT(id[2], 3); memory.bit.d51 = GETBIT(id[2], 2); memory.bit.d52 = GETBIT(id[2], 1); memory.bit.d53 = GETBIT(id[2], 0);
+    memory.bit.d50 = GETBIT(id[2], 3);
+    memory.bit.d51 = GETBIT(id[2], 2);
+    memory.bit.d52 = GETBIT(id[2], 1);
+    memory.bit.d53 = GETBIT(id[2], 0);
     memory.bit.p5 = memory.bit.d50 ^ memory.bit.d51 ^ memory.bit.d52 ^ memory.bit.d53;
     // - byte3
-    memory.bit.d60 = GETBIT(id[3], 7); memory.bit.d61 = GETBIT(id[3], 6); memory.bit.d62 = GETBIT(id[3], 5); memory.bit.d63 = GETBIT(id[3], 4);
+    memory.bit.d60 = GETBIT(id[3], 7);
+    memory.bit.d61 = GETBIT(id[3], 6);
+    memory.bit.d62 = GETBIT(id[3], 5);
+    memory.bit.d63 = GETBIT(id[3], 4);
     memory.bit.p6 = memory.bit.d60 ^ memory.bit.d61 ^ memory.bit.d62 ^ memory.bit.d63;
-    memory.bit.d70 = GETBIT(id[3], 3); memory.bit.d71 = GETBIT(id[3], 2); memory.bit.d72 = GETBIT(id[3], 1); memory.bit.d73 = GETBIT(id[3], 0);
+    memory.bit.d70 = GETBIT(id[3], 3);
+    memory.bit.d71 = GETBIT(id[3], 2);
+    memory.bit.d72 = GETBIT(id[3], 1);
+    memory.bit.d73 = GETBIT(id[3], 0);
     memory.bit.p7 = memory.bit.d70 ^ memory.bit.d71 ^ memory.bit.d72 ^ memory.bit.d73;
     // - byte4
-    memory.bit.d80 = GETBIT(id[4], 7); memory.bit.d81 = GETBIT(id[4], 6); memory.bit.d82 = GETBIT(id[4], 5); memory.bit.d83 = GETBIT(id[4], 4);
+    memory.bit.d80 = GETBIT(id[4], 7);
+    memory.bit.d81 = GETBIT(id[4], 6);
+    memory.bit.d82 = GETBIT(id[4], 5);
+    memory.bit.d83 = GETBIT(id[4], 4);
     memory.bit.p8 = memory.bit.d80 ^ memory.bit.d81 ^ memory.bit.d82 ^ memory.bit.d83;
-    memory.bit.d90 = GETBIT(id[4], 3); memory.bit.d91 = GETBIT(id[4], 2); memory.bit.d92 = GETBIT(id[4], 1); memory.bit.d93 = GETBIT(id[4], 0);
+    memory.bit.d90 = GETBIT(id[4], 3);
+    memory.bit.d91 = GETBIT(id[4], 2);
+    memory.bit.d92 = GETBIT(id[4], 1);
+    memory.bit.d93 = GETBIT(id[4], 0);
     memory.bit.p9 = memory.bit.d90 ^ memory.bit.d91 ^ memory.bit.d92 ^ memory.bit.d93;
     // 4、计算纵向的偶校验
     memory.bit.pc0 = memory.bit.d00 ^ memory.bit.d10 ^ memory.bit.d20 ^ memory.bit.d30 ^ memory.bit.d40 ^ memory.bit.d50 ^ memory.bit.d60 ^ memory.bit.d70 ^ memory.bit.d80 ^ memory.bit.d90;
@@ -117,14 +199,14 @@ uint64_t em410x_id_to_memory64(uint8_t id[5]) {
 /**
 * @brief 判断场状态
  */
- bool lf_is_field_exists(void) {
+bool lf_is_field_exists(void) {
     nrf_drv_lpcomp_enable();
     bsp_delay_us(20);                                   // 延迟一段时间再采样，避免误判
     nrf_lpcomp_task_trigger(NRF_LPCOMP_TASK_SAMPLE);    // 触发一次采样
     return nrf_lpcomp_result_get() == 1;                // 判断LF场状态的采样结果
 }
 
-void timer_ce_handler(nrf_timer_event_t event_type, void* p_context) {
+void timer_ce_handler(nrf_timer_event_t event_type, void *p_context) {
     bool mod;
     switch (event_type) {
         // 因为我们配置的是使用CC通道2，所以事件回调
@@ -156,8 +238,8 @@ void timer_ce_handler(nrf_timer_event_t event_type, void* p_context) {
 
             // measure field only during no-mod half of last bit of last broadcast
             if ((! mod) &&
-                (m_bit_send_position + 1 >= LF_125KHZ_EM410X_BIT_SIZE) &&
-                (m_send_id_count + 1 >= LF_125KHZ_BORADCAST_MAX)) {
+                    (m_bit_send_position + 1 >= LF_125KHZ_EM410X_BIT_SIZE) &&
+                    (m_send_id_count + 1 >= LF_125KHZ_BORADCAST_MAX)) {
                 nrfx_timer_disable(&m_timer_send_id);                       // 关闭广播场的定时器
                 // 我们不需要任何的事件，仅仅需要检测一下场的状态
                 NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
@@ -294,7 +376,7 @@ void lf_tag_125khz_sense_switch(bool enable) {
  * @param type      细化的标签类型
  * @param buffer    数据缓冲区
  */
-int lf_tag_em410x_data_loadcb(tag_specific_type_t type, tag_data_buffer_t* buffer) {
+int lf_tag_em410x_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     // 确保外部容量足够转换为信息结构体
     if (buffer->length >= LF_EM410X_TAG_ID_SIZE) {
         // 此处直接转换ID卡号为对应的bit数据流
@@ -312,7 +394,7 @@ int lf_tag_em410x_data_loadcb(tag_specific_type_t type, tag_data_buffer_t* buffe
  * @param buffer    数据缓冲区
  * @return 需要保存的数据的长度，为0时表示不保存
  */
-int lf_tag_em410x_data_savecb(tag_specific_type_t type, tag_data_buffer_t* buffer) {
+int lf_tag_em410x_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     // 确保加载了此标签才允许保存
     if (m_tag_type != TAG_TYPE_UNKNOWN) {
         // 直接保存原本的卡包即可

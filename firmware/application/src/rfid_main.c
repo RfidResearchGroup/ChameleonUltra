@@ -68,7 +68,7 @@ void tag_mode_enter(void) {
  * @brief Function for light up led by slot index
  */
 void light_up_by_slot(void) {
-    uint32_t* led_pins = hw_get_led_array();
+    uint32_t *led_pins = hw_get_led_array();
     // 目前的亮灯逻辑并没有非常大的变动，因此我们暂时只需要亮起指定的位置的灯即可
     uint8_t slot = tag_emulation_get_slot();
     for (int i = 0; i < RGB_LIST_NUM; i++) {

@@ -30,12 +30,12 @@ int main(int argc, char *argv[]) {
     if (enclen == NULL) {
         return 1;
     }
-    uint8_t **enc = (uint8_t**)malloc(encc * sizeof(uint8_t*));
+    uint8_t **enc = (uint8_t **)malloc(encc * sizeof(uint8_t *));
     if (enc == NULL) {
         return 1;
     }
     for (int i = 0; i < encc; i++) {
-        *(enc + i) = (uint8_t*)malloc(120 * sizeof(uint8_t*));
+        *(enc + i) = (uint8_t *)malloc(120 * sizeof(uint8_t *));
         if (*(enc + i) == NULL) {
             return 1;
         }
@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
 
     for (int i = 0; i < encc; i++) {
         *(enclen + i) = strlen(argv[i + 6]) / 2;
-        for (int i2 = 0; i2 < *(enclen + i); i2++) {
+        for (int i2 = 0; i2 < * (enclen + i); i2++) {
             sscanf(argv[i + 6] + i2 * 2, "%2hhx", &enc[i][i2]);
         }
     }

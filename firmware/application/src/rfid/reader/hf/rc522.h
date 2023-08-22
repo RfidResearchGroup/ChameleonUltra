@@ -162,74 +162,74 @@ typedef struct {
 #ifdef __cplusplus
 extern "C" {
 #endif
-    // Device control
-    void pcd_14a_reader_init(void);
-    void pcd_14a_reader_uninit(void);
-    void pcd_14a_reader_reset(void);
-    void pcd_14a_reader_antenna_on(void);
-    void pcd_14a_reader_antenna_off(void);
+// Device control
+void pcd_14a_reader_init(void);
+void pcd_14a_reader_uninit(void);
+void pcd_14a_reader_reset(void);
+void pcd_14a_reader_antenna_on(void);
+void pcd_14a_reader_antenna_off(void);
 
-    // Device register
-    uint8_t read_register_single(uint8_t Address);
-    void write_register_single(uint8_t Address, uint8_t value);
-    void clear_register_mask(uint8_t reg, uint8_t mask);
-    void set_register_mask(uint8_t reg, uint8_t mask);
+// Device register
+uint8_t read_register_single(uint8_t Address);
+void write_register_single(uint8_t Address, uint8_t value);
+void clear_register_mask(uint8_t reg, uint8_t mask);
+void set_register_mask(uint8_t reg, uint8_t mask);
 
-    // Device comunication control
-    uint16_t pcd_14a_reader_timeout_get(void);
-    void pcd_14a_reader_timeout_set(uint16_t timeout_ms);
+// Device comunication control
+uint16_t pcd_14a_reader_timeout_get(void);
+void pcd_14a_reader_timeout_set(uint16_t timeout_ms);
 
-    // Device comunication interface
-    uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command,
-        uint8_t* pIn,
-        uint8_t  InLenByte,
-        uint8_t* pOut,
-        uint16_t* pOutLenBit,
-        uint16_t maxOutLenBit);
-    uint8_t pcd_14a_reader_bits_transfer(uint8_t* pTx,
-        uint16_t  szTxBits,
-        uint8_t* pTxPar,
-        uint8_t* pRx,
-        uint8_t* pRxPar,
-        uint16_t* pRxLenBit,
-        uint16_t szRxLenBitMax);
+// Device comunication interface
+uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command,
+                                      uint8_t *pIn,
+                                      uint8_t  InLenByte,
+                                      uint8_t *pOut,
+                                      uint16_t *pOutLenBit,
+                                      uint16_t maxOutLenBit);
+uint8_t pcd_14a_reader_bits_transfer(uint8_t *pTx,
+                                     uint16_t  szTxBits,
+                                     uint8_t *pTxPar,
+                                     uint8_t *pRx,
+                                     uint8_t *pRxPar,
+                                     uint16_t *pRxLenBit,
+                                     uint16_t szRxLenBitMax);
 
-    // Device auto append and check 14443-A parity enable or disable.
-    void pcd_14a_reader_parity_on(void);
-    void pcd_14a_reader_parity_off(void);
+// Device auto append and check 14443-A parity enable or disable.
+void pcd_14a_reader_parity_on(void);
+void pcd_14a_reader_parity_off(void);
 
-    // 14443-A tag operation
-    uint8_t pcd_14a_reader_scan_auto(picc_14a_tag_t *tag);
-    uint8_t pcd_14a_reader_ats_request(uint8_t *pAts, uint16_t *szAts, uint16_t szAtsBitMax);
-    uint8_t pcd_14a_reader_atqa_request(uint8_t *resp, uint8_t *resp_par, uint16_t resp_max_bit);
+// 14443-A tag operation
+uint8_t pcd_14a_reader_scan_auto(picc_14a_tag_t *tag);
+uint8_t pcd_14a_reader_ats_request(uint8_t *pAts, uint16_t *szAts, uint16_t szAtsBitMax);
+uint8_t pcd_14a_reader_atqa_request(uint8_t *resp, uint8_t *resp_par, uint16_t resp_max_bit);
 
-    // M1 tag operation
-    uint8_t pcd_14a_reader_mf1_auth(picc_14a_tag_t *tag, uint8_t type, uint8_t addr, uint8_t* pKey);
-    void pcd_14a_reader_mf1_unauth(void);
-    // 写卡操作
-    uint8_t pcd_14a_reader_mf1_write_by_cmd(uint8_t cmd, uint8_t addr, uint8_t* p);
-    uint8_t pcd_14a_reader_mf1_write(uint8_t addr, uint8_t* pData);
-    // 读卡操作
-    uint8_t pcd_14a_reader_mf1_read_by_cmd(uint8_t cmd, uint8_t addr, uint8_t* p);
-    uint8_t pcd_14a_reader_mf1_read(uint8_t addr, uint8_t* pData);
-    // 休眠卡操作
-    uint8_t pcd_14a_reader_halt_tag(void);
-    void pcd_14a_reader_fast_halt_tag(void);
+// M1 tag operation
+uint8_t pcd_14a_reader_mf1_auth(picc_14a_tag_t *tag, uint8_t type, uint8_t addr, uint8_t *pKey);
+void pcd_14a_reader_mf1_unauth(void);
+// 写卡操作
+uint8_t pcd_14a_reader_mf1_write_by_cmd(uint8_t cmd, uint8_t addr, uint8_t *p);
+uint8_t pcd_14a_reader_mf1_write(uint8_t addr, uint8_t *pData);
+// 读卡操作
+uint8_t pcd_14a_reader_mf1_read_by_cmd(uint8_t cmd, uint8_t addr, uint8_t *p);
+uint8_t pcd_14a_reader_mf1_read(uint8_t addr, uint8_t *pData);
+// 休眠卡操作
+uint8_t pcd_14a_reader_halt_tag(void);
+void pcd_14a_reader_fast_halt_tag(void);
 
-    // UID & UFUID tag operation
-    uint8_t pcd_14a_reader_gen1a_unlock(void);
-    uint8_t pcd_14a_reader_gen1a_uplock(void);
+// UID & UFUID tag operation
+uint8_t pcd_14a_reader_gen1a_unlock(void);
+uint8_t pcd_14a_reader_gen1a_uplock(void);
 
-    // CRC calulate
-    void pcd_14a_reader_calc_crc(uint8_t* pbtData, size_t szLen, uint8_t* pbtCrc);
-    void crc_14a_calculate(uint8_t* pbtData, size_t szLen, uint8_t* pbtCrc);
-    void crc_14a_append(uint8_t* pbtData, size_t szLen);
-    void pcd_14a_reader_crc_computer(uint8_t use522CalcCRC);
+// CRC calulate
+void pcd_14a_reader_calc_crc(uint8_t *pbtData, size_t szLen, uint8_t *pbtCrc);
+void crc_14a_calculate(uint8_t *pbtData, size_t szLen, uint8_t *pbtCrc);
+void crc_14a_append(uint8_t *pbtData, size_t szLen);
+void pcd_14a_reader_crc_computer(uint8_t use522CalcCRC);
 
-    // other
-    uint8_t cascade_to_cmd(uint8_t cascade);
-    uint32_t get_u32_tag_uid(picc_14a_tag_t *tag);
-    uint8_t* get_4byte_tag_uid(picc_14a_tag_t *tag, uint8_t *out);
+// other
+uint8_t cascade_to_cmd(uint8_t cascade);
+uint32_t get_u32_tag_uid(picc_14a_tag_t *tag);
+uint8_t *get_4byte_tag_uid(picc_14a_tag_t *tag, uint8_t *out);
 #ifdef __cplusplus
 }
 #endif

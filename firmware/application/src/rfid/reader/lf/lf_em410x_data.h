@@ -15,8 +15,7 @@ extern "C"
 #define rawbufsize 24           // 最大记录buffer
 #define cardbufsize 8           // 卡片大小
 
-typedef struct
-{
+typedef struct {
     uint8_t rawa[rawbufsize];    // 记录变化沿之间的时间差
     uint8_t rawb[rawbufsize];    // 记录变化沿之间的时间差
     uint8_t hexbuf[cardbufsize]; // 解析后的卡数据

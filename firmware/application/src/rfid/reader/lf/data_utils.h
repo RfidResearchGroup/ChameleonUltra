@@ -5,7 +5,7 @@
 
 
 #ifdef __cplusplus
- extern "C" {
+extern "C" {
 #endif
 
 #define DEBUG_READ_BUFF_CHAR(WATCH, PDATA, LENG) \

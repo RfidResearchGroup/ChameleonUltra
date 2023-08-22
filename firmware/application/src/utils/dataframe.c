@@ -50,7 +50,7 @@ static data_frame_tx_t m_frame_tx_buf_info = {
  * @param length: 应答数据长度
  * @param data: 应答数据
  */
-data_frame_tx_t* data_frame_make(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+data_frame_tx_t *data_frame_make(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t lrc_tx = 0x00;
     uint16_t i, j;
     // sof

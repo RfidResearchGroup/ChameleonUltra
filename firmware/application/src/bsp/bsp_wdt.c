@@ -4,10 +4,9 @@
 
 static nrf_drv_wdt_channel_id m_channel_id;
 
-static void wdt_event_handler(void)
-{
+static void wdt_event_handler(void) {
     //NOTE: The max amount of time we can spend in WDT interrupt is two cycles of 32768[Hz] clock - after that, reset occurs
-    uint32_t* p_led_array = hw_get_led_array();
+    uint32_t *p_led_array = hw_get_led_array();
     for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
         nrf_gpio_pin_clear(p_led_array[i]);
     }

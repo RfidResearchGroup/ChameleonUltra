@@ -12,40 +12,40 @@ See also https://stackoverflow.com/questions/73742774/gcc-arm-none-eabi-11-3-is-
 extern int errno;
 
 int _close(int file) {
-  errno = EINVAL;
-  return -1;
+    errno = EINVAL;
+    return -1;
 }
 
 int _fstat(int file, struct stat *st) {
-  errno = EINVAL;
-  return -1;
+    errno = EINVAL;
+    return -1;
 }
 
 int _getpid(void) {
-  return 1;
+    return 1;
 }
 
 int _isatty(int file) {
-  errno = EINVAL;
-  return 0;
+    errno = EINVAL;
+    return 0;
 }
 
 int _kill(int pid, int sig) {
-  errno = EINVAL;
-  return -1;
+    errno = EINVAL;
+    return -1;
 }
 
 int _lseek(int file, int ptr, int dir) {
-  errno = EINVAL;
-  return -1;
+    errno = EINVAL;
+    return -1;
 }
 
 int _read(int file, char *ptr, int len) {
-  errno = EINVAL;
-  return -1;
+    errno = EINVAL;
+    return -1;
 }
 
 int _write(int file, char *ptr, int len) {
-  errno = EINVAL;
-  return -1;
+    errno = EINVAL;
+    return -1;
 }

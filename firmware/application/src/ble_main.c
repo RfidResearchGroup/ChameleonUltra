@@ -83,8 +83,7 @@ volatile bool g_is_low_battery_shutdown = false;
  * @details This function will set up all the necessary GAP (Generic Access Profile) parameters of
  *          the device. It also sets the permissions and appearance.
  */
-static void gap_params_init(void)
-{
+static void gap_params_init(void) {
     uint32_t                err_code;
     ble_gap_conn_params_t   gap_conn_params;
     ble_gap_conn_sec_mode_t sec_mode;
@@ -113,10 +112,8 @@ static void gap_params_init(void)
  * @param[in] p_bas  Battery Service structure.
  * @param[in] p_evt  Event received from the Battery Service.
  */
-static void on_bas_evt(ble_bas_t * p_bas, ble_bas_evt_t * p_evt)
-{
-    switch (p_evt->evt_type)
-    {
+static void on_bas_evt(ble_bas_t *p_bas, ble_bas_evt_t *p_evt) {
+    switch (p_evt->evt_type) {
         case BLE_BAS_EVT_NOTIFICATION_ENABLED:
             break; // BLE_BAS_EVT_NOTIFICATION_ENABLED
 
@@ -136,13 +133,11 @@ static void on_bas_evt(ble_bas_t * p_bas, ble_bas_evt_t * p_evt)
  * @param[in] p_evt       Nordic UART Service event.
  */
 /**@snippet [Handling the data received over BLE] */
-static void nus_data_handler(ble_nus_evt_t * p_evt)
-{
-    if (p_evt->type == BLE_NUS_EVT_RX_DATA)
-    {
+static void nus_data_handler(ble_nus_evt_t *p_evt) {
+    if (p_evt->type == BLE_NUS_EVT_RX_DATA) {
         NRF_LOG_DEBUG("Received data from BLE NUS.");
         NRF_LOG_HEXDUMP_DEBUG(p_evt->params.rx_data.p_data, p_evt->params.rx_data.length);
-        data_frame_receive((uint8_t*)(p_evt->params.rx_data.p_data), p_evt->params.rx_data.length);
+        data_frame_receive((uint8_t *)(p_evt->params.rx_data.p_data), p_evt->params.rx_data.length);
     }
 }
 /**@snippet [Handling the data received over BLE] */
@@ -167,8 +162,8 @@ void nus_data_reponse(uint8_t *p_data, uint16_t length) {
             continue;
         }
         if ((err_code != NRF_ERROR_INVALID_STATE) &&
-            (err_code != NRF_ERROR_RESOURCES) &&
-            (err_code != NRF_ERROR_NOT_FOUND)) {
+                (err_code != NRF_ERROR_RESOURCES) &&
+                (err_code != NRF_ERROR_NOT_FOUND)) {
             APP_ERROR_CHECK(err_code);
         }
 
@@ -186,19 +181,16 @@ bool is_nus_working(void) {
  *
  * @param[in]   nrf_error   Error code containing information about what went wrong.
  */
-static void nrf_qwr_error_handler(uint32_t nrf_error)
-{
+static void nrf_qwr_error_handler(uint32_t nrf_error) {
     APP_ERROR_HANDLER(nrf_error);
 }
 
-__INLINE uint32_t map(uint32_t x, uint32_t in_min, uint32_t in_max, uint32_t out_min, uint32_t out_max)
-{
+__INLINE uint32_t map(uint32_t x, uint32_t in_min, uint32_t in_max, uint32_t out_min, uint32_t out_max) {
     return (uint32_t)((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min);
 }
 
 //电池电压到百分比计算
-uint32_t BATVOL2PERCENT(uint16_t VOL)
-{
+uint32_t BATVOL2PERCENT(uint16_t VOL) {
     //100%  4.20V   1
     //90 %  4.06V       80%-100%    白
     //80 %  3.98V   1
@@ -238,33 +230,22 @@ uint32_t BATVOL2PERCENT(uint16_t VOL)
 #define P5VOL   3230
 
 
-    if(VOL > P80VOL)
-    {
+    if (VOL > P80VOL) {
         //80-100
         return map(VOL, P80VOL, P100VOL, 80, 100);
-    }
-    else if(VOL > P60VOL)
-    {
+    } else if (VOL > P60VOL) {
         //60-80
         return map(VOL, P60VOL, P80VOL, 60, 80);
-    }
-    else if(VOL > P40VOL)
-    {
+    } else if (VOL > P40VOL) {
         //40-60
         return map(VOL, P40VOL, P60VOL, 40, 60);
-    }
-    else if(VOL > P20VOL)
-    {
+    } else if (VOL > P20VOL) {
         //20-60
         return map(VOL, P20VOL, P40VOL, 20, 40);
-    }
-    else if(VOL > P5VOL)
-    {
+    } else if (VOL > P5VOL) {
         //5-20
         return map(VOL, P5VOL, P20VOL, 5, 20);
-    }
-    else
-    {
+    } else {
         //<5
         return 0;
     }
@@ -272,8 +253,7 @@ uint32_t BATVOL2PERCENT(uint16_t VOL)
 
 /**@brief Function for initializing services that will be used by the application.
  */
-static void services_init(void)
-{
+static void services_init(void) {
     uint32_t           err_code;
 
     // -------------------------------------------------------------
@@ -326,12 +306,10 @@ static void services_init(void)
  *
  * @param[in] p_evt  Event received from the Connection Parameters Module.
  */
-static void on_conn_params_evt(ble_conn_params_evt_t * p_evt)
-{
+static void on_conn_params_evt(ble_conn_params_evt_t *p_evt) {
     uint32_t err_code;
 
-    if (p_evt->evt_type == BLE_CONN_PARAMS_EVT_FAILED)
-    {
+    if (p_evt->evt_type == BLE_CONN_PARAMS_EVT_FAILED) {
         err_code = sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_CONN_INTERVAL_UNACCEPTABLE);
         APP_ERROR_CHECK(err_code);
     }
@@ -341,15 +319,13 @@ static void on_conn_params_evt(ble_conn_params_evt_t * p_evt)
  *
  * @param[in] nrf_error  Error code containing information about what went wrong.
  */
-static void conn_params_error_handler(uint32_t nrf_error)
-{
+static void conn_params_error_handler(uint32_t nrf_error) {
     APP_ERROR_HANDLER(nrf_error);
 }
 
 /**@brief Function for initializing the Connection Parameters module.
  */
-static void conn_params_init(void)
-{
+static void conn_params_init(void) {
     uint32_t               err_code;
     ble_conn_params_init_t cp_init;
 
@@ -374,10 +350,8 @@ static void conn_params_init(void)
  *
  * @param[in] ble_adv_evt  Advertising event.
  */
-static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
-{
-    switch (ble_adv_evt)
-    {
+static void on_adv_evt(ble_adv_evt_t ble_adv_evt) {
+    switch (ble_adv_evt) {
         case BLE_ADV_EVT_FAST:
             NRF_LOG_INFO("BLE_ADV_EVT_FAST");
             break;
@@ -394,12 +368,10 @@ static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
  * @param[in]   p_ble_evt   Bluetooth stack event.
  * @param[in]   p_context   Unused.
  */
-static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
-{
+static void ble_evt_handler(ble_evt_t const *p_ble_evt, void *p_context) {
     ret_code_t err_code;
 
-    switch (p_ble_evt->header.evt_id)
-    {
+    switch (p_ble_evt->header.evt_id) {
         case BLE_GAP_EVT_CONNECTED:
             sleep_timer_stop();
 
@@ -419,17 +391,16 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             sleep_timer_start(SLEEP_DELAY_MS_BLE_DISCONNECTED);
             break;
 
-        case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
-        {
+        case BLE_GAP_EVT_PHY_UPDATE_REQUEST: {
             NRF_LOG_DEBUG("PHY update request.");
-            ble_gap_phys_t const phys =
-            {
+            ble_gap_phys_t const phys = {
                 .rx_phys = BLE_GAP_PHY_AUTO,
                 .tx_phys = BLE_GAP_PHY_AUTO,
             };
             err_code = sd_ble_gap_phy_update(p_ble_evt->evt.gap_evt.conn_handle, &phys);
             APP_ERROR_CHECK(err_code);
-        } break;
+        }
+        break;
 
         case BLE_GAP_EVT_SEC_PARAMS_REQUEST:
             // Pairing not supported
@@ -469,8 +440,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
  *
  * @details This function initializes the SoftDevice and the BLE event interrupt.
  */
-static void ble_stack_init(void)
-{
+static void ble_stack_init(void) {
     ret_code_t err_code;
 
     err_code = nrf_sdh_enable_request();
@@ -492,10 +462,8 @@ static void ble_stack_init(void)
 
 
 /**@brief Function for handling events from the GATT library. */
-void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt)
-{
-    if ((m_conn_handle == p_evt->conn_handle) && (p_evt->evt_id == NRF_BLE_GATT_EVT_ATT_MTU_UPDATED))
-    {
+void gatt_evt_handler(nrf_ble_gatt_t *p_gatt, nrf_ble_gatt_evt_t const *p_evt) {
+    if ((m_conn_handle == p_evt->conn_handle) && (p_evt->evt_id == NRF_BLE_GATT_EVT_ATT_MTU_UPDATED)) {
         m_ble_nus_max_data_len = p_evt->params.att_mtu_effective - OPCODE_LENGTH - HANDLE_LENGTH;
         NRF_LOG_INFO("Data len is set to 0x%X(%d)", m_ble_nus_max_data_len, m_ble_nus_max_data_len);
     }
@@ -506,8 +474,7 @@ void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt)
 
 
 /**@brief Function for initializing the GATT library. */
-void gatt_init(void)
-{
+void gatt_init(void) {
     ret_code_t err_code;
 
     err_code = nrf_ble_gatt_init(&m_gatt, gatt_evt_handler);
@@ -520,8 +487,7 @@ void gatt_init(void)
 
 /**@brief Function for initializing the Advertising functionality.
  */
-static void advertising_init(void)
-{
+static void advertising_init(void) {
     uint32_t               err_code;
     ble_advertising_init_t init;
 
@@ -548,8 +514,7 @@ static void advertising_init(void)
 /**
  * @brief Function for starting advertising.
  */
-void advertising_start(void)
-{
+void advertising_start(void) {
     uint32_t err_code = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(err_code);
 }
@@ -561,10 +526,8 @@ void advertising_start(void)
  * @details  This function will fetch the conversion result from the ADC, convert the value into
  *           percentage and send it to peer.
  */
-void saadc_event_handler(nrf_drv_saadc_evt_t const * p_event)
-{
-    if (p_event->type == NRF_DRV_SAADC_EVT_DONE)
-    {
+void saadc_event_handler(nrf_drv_saadc_evt_t const *p_event) {
+    if (p_event->type == NRF_DRV_SAADC_EVT_DONE) {
         nrf_saadc_value_t adc_result;
         uint32_t          err_code;
 
@@ -581,12 +544,11 @@ void saadc_event_handler(nrf_drv_saadc_evt_t const * p_event)
         // if battery service is notification enable, we can send msg to device.
         err_code = ble_bas_battery_level_update(&m_bas, percentage_batt_lvl, BLE_CONN_HANDLE_ALL);
         if ((err_code != NRF_SUCCESS) &&
-            (err_code != NRF_ERROR_INVALID_STATE) &&
-            (err_code != NRF_ERROR_RESOURCES) &&
-            (err_code != NRF_ERROR_BUSY) &&
-            (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING)
-        )
-        {
+                (err_code != NRF_ERROR_INVALID_STATE) &&
+                (err_code != NRF_ERROR_RESOURCES) &&
+                (err_code != NRF_ERROR_BUSY) &&
+                (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING)
+           ) {
             APP_ERROR_HANDLER(err_code);
         }
 
@@ -603,8 +565,7 @@ void saadc_event_handler(nrf_drv_saadc_evt_t const * p_event)
 
 /**@brief Function for configuring ADC to do battery level conversion.
  */
-static void adc_configure(void)
-{
+static void adc_configure(void) {
     ret_code_t err_code = nrf_drv_saadc_init(NULL, saadc_event_handler);
     APP_ERROR_CHECK(err_code);
 
@@ -627,8 +588,7 @@ static void adc_configure(void)
  * @param[in] p_context   Pointer used for passing some arbitrary information (context) from the
  *                        app_start_timer() call to the timeout handler.
  */
-static void battery_level_meas_timeout_handler(void * p_context)
-{
+static void battery_level_meas_timeout_handler(void *p_context) {
     UNUSED_PARAMETER(p_context);
 
     ret_code_t err_code;

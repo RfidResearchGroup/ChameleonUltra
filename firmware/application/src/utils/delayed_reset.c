@@ -7,7 +7,7 @@
 
 APP_TIMER_DEF(m_reset_timer);
 
-static void delayed_reset_event_handler(void* ctx) {
+static void delayed_reset_event_handler(void *ctx) {
     while (NRF_LOG_PROCESS());
     ret_code_t ret = sd_nvic_SystemReset();
     APP_ERROR_CHECK(ret);

@@ -4,7 +4,7 @@
 #include "stdint.h"
 
 #ifdef __cplusplus
- extern "C" {
+extern "C" {
 #endif
 
 void bsp_delay_init(void);

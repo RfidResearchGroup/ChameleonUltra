@@ -201,11 +201,11 @@ static void system_off_enter(void) {
 
     // Configure RAM hibernation hold
     uint32_t ram8_retention = // RAM8 Each section has 32KB capacity
-                              // POWER_RAM_POWER_S0RETENTION_On << POWER_RAM_POWER_S0RETENTION_Pos ;
-                              // POWER_RAM_POWER_S1RETENTION_On << POWER_RAM_POWER_S1RETENTION_Pos |
-                              // POWER_RAM_POWER_S2RETENTION_On << POWER_RAM_POWER_S2RETENTION_Pos |
-                              // POWER_RAM_POWER_S3RETENTION_On << POWER_RAM_POWER_S3RETENTION_Pos |
-                              // POWER_RAM_POWER_S4RETENTION_On << POWER_RAM_POWER_S4RETENTION_Pos |
+        // POWER_RAM_POWER_S0RETENTION_On << POWER_RAM_POWER_S0RETENTION_Pos ;
+        // POWER_RAM_POWER_S1RETENTION_On << POWER_RAM_POWER_S1RETENTION_Pos |
+        // POWER_RAM_POWER_S2RETENTION_On << POWER_RAM_POWER_S2RETENTION_Pos |
+        // POWER_RAM_POWER_S3RETENTION_On << POWER_RAM_POWER_S3RETENTION_Pos |
+        // POWER_RAM_POWER_S4RETENTION_On << POWER_RAM_POWER_S4RETENTION_Pos |
         POWER_RAM_POWER_S5RETENTION_On << POWER_RAM_POWER_S5RETENTION_Pos;
     ret = sd_power_ram_power_set(8, ram8_retention);
     APP_ERROR_CHECK(ret);
@@ -222,7 +222,7 @@ static void system_off_enter(void) {
         }
     } else {
         // close all led.
-        uint32_t* p_led_array = hw_get_led_array();
+        uint32_t *p_led_array = hw_get_led_array();
         for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
             nrf_gpio_pin_clear(p_led_array[i]);
         }
@@ -296,7 +296,7 @@ static void system_off_enter(void) {
     app_timer_stop_all();
 
     // 检查是否存在低频场，解决休眠时有非常强的场信号一直使比较器处于高电平输入状态从而无法产生上升沿而无法唤醒系统的问题。
-    if(lf_is_field_exists()) {
+    if (lf_is_field_exists()) {
         // 关闭比较器
         nrf_drv_lpcomp_disable();
         // 设置reset原因，重启后需要拿到此原因，避免误判唤醒源
@@ -357,8 +357,7 @@ static void check_wakeup_src(void) {
 
         // Button wake-up boot animation
         uint8_t animation_config = settings_get_animation_config();
-        if (animation_config == SettingsAnimationModeFull)
-        {
+        if (animation_config == SettingsAnimationModeFull) {
             ledblink2(color, !dir, 11);
             ledblink2(color, dir, 11);
             ledblink2(color, !dir, dir ? slot : 7 - slot);
@@ -476,12 +475,12 @@ static void offline_status_blink_color(uint8_t blink_color) {
 
     uint8_t color = get_color_by_slot(slot);
 
-    uint32_t* p_led_array = hw_get_led_array();
+    uint32_t *p_led_array = hw_get_led_array();
 
     set_slot_light_color(blink_color);
 
     for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
-        if(i == slot) {
+        if (i == slot) {
             continue;
         }
         nrf_gpio_pin_set(p_led_array[i]);
@@ -508,7 +507,7 @@ static void btn_fn_copy_ic_uid(void) {
     tag_specific_type_t tag_type[2];
     tag_emulation_get_specific_type_by_slot(slot_now, tag_type);
 
-    nfc_tag_14a_coll_res_entity_t* antres;
+    nfc_tag_14a_coll_res_entity_t *antres;
 
     bool is_reader_mode_now = get_device_mode() == DEVICE_MODE_READER;
     // first, we need switch to reader mode.
@@ -519,14 +518,14 @@ static void btn_fn_copy_ic_uid(void) {
         NRF_LOG_INFO("Start reader mode to offline copy.")
     }
 
-    switch(tag_type[1]) {
+    switch (tag_type[1]) {
         case TAG_TYPE_EM410X:
             uint8_t status;
             uint8_t id_buffer[5] = { 0x00 };
             status = PcdScanEM410X(id_buffer);
 
-            if(status == LF_TAG_OK) {
-                tag_data_buffer_t* buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
+            if (status == LF_TAG_OK) {
+                tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
                 memcpy(buffer->buffer, id_buffer, LF_EM410X_TAG_ID_SIZE);
                 tag_emulation_load_by_buffer(TAG_TYPE_EM410X, false);
                 NRF_LOG_INFO("Offline LF uid copied")
@@ -546,8 +545,8 @@ static void btn_fn_copy_ic_uid(void) {
             offline_status_error();
     }
 
-    tag_data_buffer_t* buffer = get_buffer_by_tag_type(tag_type[0]);
-    switch(tag_type[0]) {
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(tag_type[0]);
+    switch (tag_type[0]) {
         case TAG_TYPE_MIFARE_Mini:
         case TAG_TYPE_MIFARE_1024:
         case TAG_TYPE_MIFARE_2048:
@@ -611,24 +610,23 @@ exit:
 /**@brief Execute the corresponding logic based on the functional settings of the buttons.
  */
 static void run_button_function_by_settings(settings_button_function_t sbf) {
-    switch (sbf)
-    {
-    case SettingsButtonCycleSlot:
-        cycle_slot(false);
-        break;
-    case SettingsButtonCycleSlotDec:
-        cycle_slot(true);
-        break;
+    switch (sbf) {
+        case SettingsButtonCycleSlot:
+            cycle_slot(false);
+            break;
+        case SettingsButtonCycleSlotDec:
+            cycle_slot(true);
+            break;
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
-    case SettingsButtonCloneIcUid:
-        btn_fn_copy_ic_uid();
-        break;
+        case SettingsButtonCloneIcUid:
+            btn_fn_copy_ic_uid();
+            break;
 #endif
 
-    default:
-        NRF_LOG_ERROR("Unsupported button function")
-        break;
+        default:
+            NRF_LOG_ERROR("Unsupported button function")
+            break;
     }
 }
 
