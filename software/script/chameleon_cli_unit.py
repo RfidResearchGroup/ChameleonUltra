@@ -1016,9 +1016,7 @@ class HWSlotTagType(TagTypeRequiredUnit, SlotIndexRequireUnit):
 class HWDeleteSlotSense(SlotIndexRequireUnit, SenseTypeRequireUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = "Delete sense type data for a specific slot. " \
-                "The slot needs to have the other sense type correctly configured, " \
-                "otherwise an error will be thrown."
+        parser.description = "Delete sense type data for a specific slot"
         self.add_slot_args(parser)
         self.add_sense_type_args(parser)
         return parser
