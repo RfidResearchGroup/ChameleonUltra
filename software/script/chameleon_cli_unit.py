@@ -157,6 +157,7 @@ hw_slot = hw.subgroup('slot', 'Emulation tag slot.')
 hw_slot_nick = hw_slot.subgroup('nick', 'Get/Set tag nick name for slot')
 hw_settings = hw.subgroup('settings', 'Chameleon settings management')
 hw_settings_animation = hw_settings.subgroup('animation', 'Manage wake-up and sleep animation modes')
+hw_settings_button_press = hw_settings.subgroup('btnpress', 'Manage button press function')
 
 hf = CLITree('hf', 'high frequency tag/reader')
 hf_14a = hf.subgroup('14a', 'ISO14443-a tag read/write/info...')
@@ -1284,3 +1285,48 @@ class HWBatteryInfo(DeviceRequiredUnit):
         print(f"   percentage -> {percentage}%")
         if percentage < HWBatteryInfo.BATTERY_LOW_LEVEL:
             print(f"{colorama.Fore.RED}[!] Low battery, please charge.{colorama.Style.RESET_ALL}")
+
+
+@hw_settings_button_press.command('get', 'Get button press function of Button A and Button B.')
+class HWButtonSettingsGet(DeviceRequiredUnit):
+    
+    def args_parser(self) -> ArgumentParserNoExit:
+        return None
+
+    def on_exec(self, args: argparse.Namespace):
+        # all button in here.
+        button_list = [
+            chameleon_cmd.ButtonType.ButtonA,
+            chameleon_cmd.ButtonType.ButtonB,
+        ]
+        print("")
+        for button in button_list:
+            resp = self.cmd.get_button_press_fun(button)
+            button_fn = chameleon_cmd.ButtonPressFunction.from_int(resp.data[0])
+            print(f" - {colorama.Fore.GREEN}{button}{colorama.Style.RESET_ALL}: {button_fn}")
+            print(f"      usage: {button_fn.usage()}")
+            print("")
+        print(" - Successfully get button function from settings")
+
+
+@hw_settings_button_press.command('set', 'Set button press function of Button A and Button B.')
+class HWButtonSettingsSet(DeviceRequiredUnit):
+    
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.add_argument('-b', type=str, required=True,
+                            help="Change the function of the pressed button(?).",
+                            choices=chameleon_cmd.ButtonType.list_str())
+        function_usage = ""
+        for fun in chameleon_cmd.ButtonPressFunction:
+            function_usage += f"{int(fun)} = {fun.usage()}, "
+        function_usage = function_usage.rstrip(' ').rstrip(',')
+        parser.add_argument('-f', type=int, required=True, 
+                            help=function_usage, choices=chameleon_cmd.ButtonPressFunction.list())
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        button = chameleon_cmd.ButtonType.from_str(args.b)
+        function = chameleon_cmd.ButtonPressFunction.from_int(args.f)
+        self.cmd.set_button_press_fun(button, function)
+        print(" - Successfully set button function to settings")

@@ -101,6 +101,7 @@ data_frame_tx_t* cmd_processor_reset_settings(uint16_t cmd, uint16_t status, uin
 
 data_frame_tx_t* cmd_processor_set_animation_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length == 1) {
+        status = STATUS_DEVICE_SUCCESS;
         settings_set_animation_config(data[0]);
     }
     else {
@@ -121,6 +122,29 @@ data_frame_tx_t* cmd_processor_get_battery_info(uint16_t cmd, uint16_t status, u
     // set percentage
     resp[2] = percentage_batt_lvl;
     return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, sizeof(resp), resp);
+}
+
+data_frame_tx_t* cmd_processor_get_button_press_config(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t button_press_config;
+    if (length == 1 && is_settings_button_type_valid(data[0])) {
+        button_press_config = settings_get_button_press_config(data[0]);
+        status = STATUS_DEVICE_SUCCESS;
+    } else {
+        length = 0;
+        status = STATUS_PAR_ERR; 
+    }
+    return data_frame_make(cmd, status, length, (uint8_t *)(&button_press_config));
+}
+
+data_frame_tx_t* cmd_processor_set_button_press_config(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length == 2 && is_settings_button_type_valid(data[0])) {
+        settings_set_button_press_config(data[0], data[1]);
+        status = STATUS_DEVICE_SUCCESS;
+    } else {
+        length = 0;
+        status = STATUS_PAR_ERR; 
+    }
+    return data_frame_make(cmd, status, 0, NULL);
 }
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
@@ -765,7 +789,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_ANIMATION_MODE,           NULL,                        cmd_processor_get_animation_mode,            NULL                   },
     {    DATA_CMD_GET_GIT_VERSION,              NULL,                        cmd_processor_get_git_version,               NULL                   },
     {    DATA_CMD_GET_BATTERY_INFO,             NULL,                        cmd_processor_get_battery_info,              NULL                   },
-
+    {    DATA_CMD_GET_BUTTON_PRESS_CONFIG,      NULL,                        cmd_processor_get_button_press_config,       NULL                   },
+    {    DATA_CMD_SET_BUTTON_PRESS_CONFIG,      NULL,                        cmd_processor_set_button_press_config,       NULL                   },
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 

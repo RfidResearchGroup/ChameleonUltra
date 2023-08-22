@@ -31,6 +31,9 @@
 #define DATA_CMD_GET_ENABLED_SLOTS              (1023)
 #define DATA_CMD_DELETE_SLOT_SENSE_TYPE         (1024)
 #define DATA_CMD_GET_BATTERY_INFO               (1025)
+#define DATA_CMD_GET_BUTTON_PRESS_CONFIG        (1026)
+#define DATA_CMD_SET_BUTTON_PRESS_CONFIG        (1027)
+
 //
 // ******************************************************************
 
