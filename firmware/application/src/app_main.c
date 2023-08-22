@@ -478,7 +478,7 @@ static void offline_status_blink_color(uint8_t blink_color) {
 
     uint32_t* p_led_array = hw_get_led_array();
 
-	set_slot_light_color(blink_color);
+    set_slot_light_color(blink_color);
 
     for (uint8_t i = 0; i <= RGB_LIST_NUM; i++) {
         if(i == slot) {
