@@ -502,13 +502,6 @@ static void btn_fn_copy_ic_uid(void) {
         case TAG_TYPE_EM410X: {
             uint8_t status;
 
-            uint8_t id_buffer[5] = { 0x00 };
-            status = PcdScanEM410X(id_buffer);
-
-            if(status != LF_TAG_OK) {
-                return;
-            }
-
             bool is_reader_mode_now = get_device_mode() == DEVICE_MODE_READER;
             // first, we need switch to reader mode.
             if (!is_reader_mode_now) {
@@ -516,6 +509,13 @@ static void btn_fn_copy_ic_uid(void) {
                 reader_mode_enter();
                 bsp_delay_ms(8);
                 NRF_LOG_INFO("Start reader mode to offline copy.")
+            }
+
+            uint8_t id_buffer[5] = { 0x00 };
+            status = PcdScanEM410X(id_buffer);
+
+            if(status != LF_TAG_OK) {
+                return;
             }
 
             tag_data_buffer_t* buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
