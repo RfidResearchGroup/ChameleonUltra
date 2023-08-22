@@ -8,6 +8,7 @@ import timeit
 import sys
 import time
 import serial.tools.list_ports
+from platform import uname
 
 import chameleon_com
 import chameleon_cmd
@@ -17,7 +18,6 @@ from chameleon_utils import *
 
 
 class BaseCLIUnit:
-
     def __init__(self):
         # new a device command transfer and receiver instance(Send cmd and receive response)
         self._device_com: chameleon_com.ChameleonCom | None = None
@@ -183,11 +183,50 @@ class HWConnect(BaseCLIUnit):
 
     def before_exec(self, args: argparse.Namespace):
         return True
+        
+    @staticmethod
+    def is_wsl1():
+        return open("/proc/cmdline", "rb").read().startswith(b"BOOT_IMAGE=/kernel init=/init")
+        
+    @staticmethod
+    def fast_probe_wsl():
+        valid = []
+        for port in serial.tools.list_ports.comports():
+            try:
+                serial.Serial(port.device)
+                valid.append(port.device)
+            except Exception as e:
+                if "[Errno 13] Permission denied" in str(e):
+                    print("Run CLI with `sudo`. WSL doesn't allow to access serial ports without superuser privileges")
+                    break
+        return valid
+
+    @staticmethod
+    def slow_probe_wsl(ports):
+        for port_name in ports:
+            try:
+                port = serial.Serial(port_name, baudrate=115200)
+                port.dtr = 1
+                port.timeout = 0
+                port.write(bytes.fromhex("11ef03f5000000000800"))
+                time.sleep(0.1)
+                data = port.read(1024)
+                port.close()
+                if data.hex() == "11ef03f500680000a000":
+                    return port_name
+            except:
+                pass
+
 
     def on_exec(self, args: argparse.Namespace):
         try:
             if args.port is None:  # Chameleon auto-detect if no port is supplied
                 # loop through all ports and find chameleon
+                if "Microsoft" in uname().release:
+                    if self.is_wsl1():
+                        print("Detected WSL1, will probe all ports (won't work on very old firmware)...")
+                        ports = self.fast_probe_wsl()
+                        args.port = self.slow_probe_wsl(ports)
                 for port in serial.tools.list_ports.comports():
                     if port.vid == 0x6868:
                         args.port = port.device
@@ -282,7 +321,6 @@ class HF14AScan(ReaderRequiredUnit):
 
 @hf_14a.command('info', 'Scan 14a tag, and print detail information')
 class HF14AInfo(ReaderRequiredUnit):
-
     def args_parser(self) -> ArgumentParserNoExit or None:
         pass
 
@@ -313,7 +351,6 @@ class HF14AInfo(ReaderRequiredUnit):
 
 @hf_mf.command('nested', 'Mifare Classic nested recover key')
 class HFMFNested(ReaderRequiredUnit):
-
     def args_parser(self) -> ArgumentParserNoExit or None:
         type_choices = ['A', 'B', 'a', 'b']
         parser = ArgumentParserNoExit()
@@ -418,7 +455,6 @@ class HFMFNested(ReaderRequiredUnit):
 
 @hf_mf.command('darkside', 'Mifare Classic darkside recover key')
 class HFMFDarkside(ReaderRequiredUnit):
-
     def __init__(self):
         super().__init__()
         self.darkside_list = []
@@ -484,7 +520,6 @@ class HFMFDarkside(ReaderRequiredUnit):
 
 
 class BaseMF1AuthOpera(ReaderRequiredUnit):
-
     def args_parser(self) -> ArgumentParserNoExit or None:
         type_choices = ['A', 'B', 'a', 'b']
         parser = ArgumentParserNoExit()
@@ -824,7 +859,6 @@ class HFMFSim(DeviceRequiredUnit):
 
 @lf_em.command('read', 'Scan em410x tag and print id')
 class LFEMRead(ReaderRequiredUnit):
-
     def args_parser(self) -> ArgumentParserNoExit or None:
         return None
 
@@ -835,7 +869,6 @@ class LFEMRead(ReaderRequiredUnit):
 
 
 class LFEMCardRequiredUnit(DeviceRequiredUnit):
-
     @staticmethod
     def add_card_arg(parser: ArgumentParserNoExit):
         parser.add_argument("--id", type=str, required=True, help="EM410x tag id", metavar="hex")
@@ -857,7 +890,6 @@ class LFEMCardRequiredUnit(DeviceRequiredUnit):
 
 @lf_em.command('write', 'Write em410x id to t55xx')
 class LFEMWriteT55xx(LFEMCardRequiredUnit, ReaderRequiredUnit):
-
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
         return self.add_card_arg(parser)
@@ -876,7 +908,6 @@ class LFEMWriteT55xx(LFEMCardRequiredUnit, ReaderRequiredUnit):
 
 
 class SlotIndexRequireUnit(DeviceRequiredUnit):
-
     def args_parser(self) -> ArgumentParserNoExit or None:
         raise NotImplementedError()
 
@@ -961,7 +992,6 @@ class HWSlotList(DeviceRequiredUnit):
 
 @hw_slot.command('change', 'Set emulation tag slot activated.')
 class HWSlotSet(SlotIndexRequireUnit):
-
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
         return self.add_slot_args(parser)
@@ -974,7 +1004,6 @@ class HWSlotSet(SlotIndexRequireUnit):
 
 
 class TagTypeRequiredUnit(DeviceRequiredUnit):
-
     @staticmethod
     def add_type_args(parser: ArgumentParserNoExit):
         type_choices = chameleon_cmd.TagSpecificType.list()
@@ -997,7 +1026,6 @@ class TagTypeRequiredUnit(DeviceRequiredUnit):
 
 @hw_slot.command('type', 'Set emulation tag type')
 class HWSlotTagType(TagTypeRequiredUnit, SlotIndexRequireUnit):
-
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
         self.add_type_args(parser)
@@ -1031,7 +1059,6 @@ class HWDeleteSlotSense(SlotIndexRequireUnit, SenseTypeRequireUnit):
 
 @hw_slot.command('init', 'Set emulation tag data to default')
 class HWSlotDataDefault(TagTypeRequiredUnit, SlotIndexRequireUnit):
-
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
         self.add_type_args(parser)
@@ -1065,7 +1092,6 @@ class HWSlotEnableSet(SlotIndexRequireUnit):
 
 @lf_em_sim.command('set', 'Set simulated em410x card id')
 class LFEMSimSet(LFEMCardRequiredUnit):
-
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
         return self.add_card_arg(parser)
@@ -1080,7 +1106,6 @@ class LFEMSimSet(LFEMCardRequiredUnit):
 
 @lf_em_sim.command('get', 'Get simulated em410x card id')
 class LFEMSimGet(DeviceRequiredUnit):
-
     def args_parser(self) -> ArgumentParserNoExit or None:
         return None
 
