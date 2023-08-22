@@ -471,44 +471,82 @@ static void cycle_slot(bool dec) {
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
+static void offline_status_blink_color(uint8_t blink_color) {
+    uint8_t slot = tag_emulation_get_slot();
+
+    uint8_t color = get_color_by_slot(slot);
+
+    uint32_t* p_led_array = hw_get_led_array();
+
+    set_slot_light_color(blink_color);
+
+    for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
+        if(i == slot) {
+            continue;
+        }
+        nrf_gpio_pin_set(p_led_array[i]);
+        bsp_delay_ms(10);
+        nrf_gpio_pin_clear(p_led_array[i]);
+        bsp_delay_ms(10);
+    }
+
+    set_slot_light_color(color);
+}
+
+static void offline_status_error(void) {
+	offline_status_blink_color(0);
+}
+
+static void offline_status_ok(void) {
+	offline_status_blink_color(1);
+}
+
 // fast detect a 14a tag uid to sim
 static void btn_fn_copy_ic_uid(void) {
     // get 14a tag res buffer;
     uint8_t slot_now = tag_emulation_get_slot();
     tag_specific_type_t tag_type[2];
     tag_emulation_get_specific_type_by_slot(slot_now, tag_type);
-    tag_data_buffer_t* buffer = get_buffer_by_tag_type(tag_type[0]);
 
     nfc_tag_14a_coll_res_entity_t* antres;
 
-    if(tag_type[1] == TAG_TYPE_EM410X) {
-        uint8_t status;
-
-        bool is_reader_mode_now = get_device_mode() == DEVICE_MODE_READER;
-        // first, we need switch to reader mode.
-        if (!is_reader_mode_now) {
-            // enter reader mode
-            reader_mode_enter();
-            bsp_delay_ms(8);
-            NRF_LOG_INFO("Start reader mode to offline copy.")
-        }
-
-        uint8_t id_buffer[5] = { 0x00 };
-        status = PcdScanEM410X(id_buffer);
-
-        if(status == LF_TAG_OK) {
-            tag_data_buffer_t* buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
-            memcpy(buffer->buffer, id_buffer, LF_EM410X_TAG_ID_SIZE);
-            tag_emulation_load_by_buffer(TAG_TYPE_EM410X, false);
-
-            // keep reader mode or exit reader mode.
-        }
-
-        if (!is_reader_mode_now) {
-            tag_mode_enter();
-        }
+    bool is_reader_mode_now = get_device_mode() == DEVICE_MODE_READER;
+    // first, we need switch to reader mode.
+    if (!is_reader_mode_now) {
+        // enter reader mode
+        reader_mode_enter();
+        bsp_delay_ms(8);
+        NRF_LOG_INFO("Start reader mode to offline copy.")
     }
 
+    switch(tag_type[1]) {
+        case TAG_TYPE_EM410X:
+            uint8_t status;
+            uint8_t id_buffer[5] = { 0x00 };
+            status = PcdScanEM410X(id_buffer);
+
+            if(status == LF_TAG_OK) {
+                tag_data_buffer_t* buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
+                memcpy(buffer->buffer, id_buffer, LF_EM410X_TAG_ID_SIZE);
+                tag_emulation_load_by_buffer(TAG_TYPE_EM410X, false);
+                NRF_LOG_INFO("Offline LF uid copied")
+                offline_status_ok();
+                // no need to check for HF tag if we already cloned a LF tag
+                goto exit;
+            } else {
+                NRF_LOG_INFO("No LF tag found");
+                offline_status_error();
+            }
+            break;
+        case TAG_TYPE_UNKNOWN:
+            // empty LF slot, nothing to do, move on to HF
+            break;
+        default:
+            NRF_LOG_ERROR("Unsupported LF tag type")
+            offline_status_error();
+    }
+
+    tag_data_buffer_t* buffer = get_buffer_by_tag_type(tag_type[0]);
     switch(tag_type[0]) {
         case TAG_TYPE_MIFARE_Mini:
         case TAG_TYPE_MIFARE_1024:
@@ -527,23 +565,22 @@ static void btn_fn_copy_ic_uid(void) {
             break;
         }
 
+        case TAG_TYPE_UNKNOWN:
+            // empty HF slot, nothing to do
+            goto exit;
+
         default:
-            NRF_LOG_ERROR("Unsupported tag type")
-            return;
+            NRF_LOG_ERROR("Unsupported HF tag type")
+            offline_status_error();
+            goto exit;
     }
 
-    bool is_reader_mode_now = get_device_mode() == DEVICE_MODE_READER;
-    // first, we need switch to reader mode.
     if (!is_reader_mode_now) {
-        // enter reader mode
-        reader_mode_enter();
-        bsp_delay_ms(8);
+        // finish HF reader initialization
         pcd_14a_reader_reset();
         pcd_14a_reader_antenna_on();
         bsp_delay_ms(8);
-        NRF_LOG_INFO("Start reader mode to offline copy.")
     }
-
     // select a tag
     picc_14a_tag_t tag;
     uint8_t status;
@@ -556,11 +593,13 @@ static void btn_fn_copy_ic_uid(void) {
         memcpy(antres->atqa, tag.atqa, 2);
         // copy sak
         antres->sak[0] = tag.sak;
-        NRF_LOG_INFO("Offline uid copied")
+        NRF_LOG_INFO("Offline HF uid copied")
+        offline_status_ok();
     } else {
-        NRF_LOG_INFO("No tag found: %d", status);
+        NRF_LOG_INFO("No HF tag found");
+        offline_status_error();
     }
-
+exit:
     // keep reader mode or exit reader mode.
     if (!is_reader_mode_now) {
         tag_mode_enter();
