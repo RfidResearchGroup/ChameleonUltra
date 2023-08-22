@@ -50,6 +50,12 @@ void rgb_marquee_stop(void){
 	ledblink1_step = 0;
 }
 
+// reset RGB state machines to force a refresh of the LED color
+void rgb_marquee_reset(void){
+	ledblink6_step = 0;
+	ledblink1_step = 0;
+}
+
 // 亮度转PWM值
 uint16_t get_pwmduty(uint8_t light_level){
     return PWM_MAX-(PWM_MAX*pow(((double)light_level/LIGHT_LEVEL_MAX),2.2));

@@ -7,6 +7,7 @@
 #include "fds_util.h"
 #include "tag_emulation.h"
 #include "tag_persistence.h"
+#include "rgb_marquee.h"
 
 
 #define NRF_LOG_MODULE_NAME tag_emu
@@ -458,6 +459,7 @@ uint8_t tag_emulation_get_slot(void) {
  */
 void tag_emulation_set_slot(uint8_t index) {
     slotConfig.config.activated = index;    // 重设到新切换的卡槽上
+    rgb_marquee_reset(); // force animation color refresh according to new slot
 }
 
 /**
