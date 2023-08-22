@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Changed `hw slot delete`, now it can always delete from slot. (@augustozanellato)
  - Refactor CI pipeline. (@augustozanellato)
  - Added offline copy EM card uid for btnpress.(@nemanjan00)
  - Added offline copy ic card uid for btnpress.(@xianglin1998)
