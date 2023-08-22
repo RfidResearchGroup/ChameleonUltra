@@ -515,6 +515,9 @@ static void btn_fn_copy_ic_uid(void) {
             status = PcdScanEM410X(id_buffer);
 
             if(status != LF_TAG_OK) {
+                if (!is_reader_mode_now) {
+                    tag_mode_enter();
+                }
                 return;
             }
 
