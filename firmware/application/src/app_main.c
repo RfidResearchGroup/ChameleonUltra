@@ -469,7 +469,7 @@ static void cycle_slot(bool dec) {
     set_slot_light_color(color_new);
 }
 
-//#if defined(PROJECT_CHAMELEON_ULTRA)
+#if defined(PROJECT_CHAMELEON_ULTRA)
 
 // fast detect a 14a tag uid to sim
 static void btn_fn_copy_ic_uid(void) {
@@ -539,7 +539,7 @@ static void btn_fn_copy_ic_uid(void) {
     }
 }
 
-//#endif
+#endif
 
 /**@brief Execute the corresponding logic based on the functional settings of the buttons.
  */
