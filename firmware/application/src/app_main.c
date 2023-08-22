@@ -481,6 +481,37 @@ static void btn_fn_copy_ic_uid(void) {
 
     nfc_tag_14a_coll_res_entity_t* antres;
 
+    if(tag_type[1] == TAG_TYPE_EM410X) {
+        uint8_t status;
+
+        bool is_reader_mode_now = get_device_mode() == DEVICE_MODE_READER;
+        // first, we need switch to reader mode.
+        if (!is_reader_mode_now) {
+            // enter reader mode
+            reader_mode_enter();
+            bsp_delay_ms(8);
+            NRF_LOG_INFO("Start reader mode to offline copy.")
+        }
+
+        uint8_t id_buffer[5] = { 0x00 };
+        status = PcdScanEM410X(id_buffer);
+
+        if(status == LF_TAG_OK) {
+            tag_data_buffer_t* buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
+            memcpy(buffer->buffer, id_buffer, LF_EM410X_TAG_ID_SIZE);
+            tag_emulation_load_by_buffer(TAG_TYPE_EM410X, false);
+
+            // keep reader mode or exit reader mode.
+            if (!is_reader_mode_now) {
+                tag_mode_enter();
+            }
+        } else {
+            if (!is_reader_mode_now) {
+                tag_mode_enter();
+            }
+        }
+    }
+
     switch(tag_type[0]) {
         case TAG_TYPE_MIFARE_Mini:
         case TAG_TYPE_MIFARE_1024:
@@ -497,40 +528,6 @@ static void btn_fn_copy_ic_uid(void) {
             nfc_tag_ntag_information_t *p_info = (nfc_tag_ntag_information_t *)buffer->buffer;
             antres = &(p_info->res_coll);
             break;
-        }
-
-        case TAG_TYPE_EM410X: {
-            uint8_t status;
-
-            bool is_reader_mode_now = get_device_mode() == DEVICE_MODE_READER;
-            // first, we need switch to reader mode.
-            if (!is_reader_mode_now) {
-                // enter reader mode
-                reader_mode_enter();
-                bsp_delay_ms(8);
-                NRF_LOG_INFO("Start reader mode to offline copy.")
-            }
-
-            uint8_t id_buffer[5] = { 0x00 };
-            status = PcdScanEM410X(id_buffer);
-
-            if(status != LF_TAG_OK) {
-                if (!is_reader_mode_now) {
-                    tag_mode_enter();
-                }
-                return;
-            }
-
-            tag_data_buffer_t* buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
-            memcpy(buffer->buffer, id_buffer, LF_EM410X_TAG_ID_SIZE);
-            tag_emulation_load_by_buffer(TAG_TYPE_EM410X, false);
-
-           // keep reader mode or exit reader mode.
-           if (!is_reader_mode_now) {
-               tag_mode_enter();
-           }
-
-            return;
         }
 
         default:
