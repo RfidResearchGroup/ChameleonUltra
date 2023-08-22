@@ -41,8 +41,8 @@ NRF_LOG_MODULE_REGISTER();
 
 // Defining soft timers
 APP_TIMER_DEF(m_button_check_timer); // Timer for button debounce
-static bool m_is_read_btn_press = false;
-static bool m_is_write_btn_press = false;
+static bool m_is_b_btn_press = false;
+static bool m_is_a_btn_press = false;
 
 // cpu reset reason
 static uint32_t m_reset_source;
@@ -148,12 +148,17 @@ static void timer_button_event_handle(void *arg) {
     // Check here if the current GPIO is at the pressed level
     if (nrf_gpio_pin_read(pin) == 1) {
         if (pin == BUTTON_1) {
-            NRF_LOG_INFO("BUTTON_LEFT");
-            m_is_read_btn_press = true;
+            // If button is disable, we can didn't dispatch key event.
+            if (settings_get_button_press_config('b') != SettingsButtonDisable) {
+                NRF_LOG_INFO("BUTTON_LEFT"); // Button B?
+                m_is_b_btn_press = true;
+            }
         }
         if (pin == BUTTON_2) {
-            NRF_LOG_INFO("BUTTON_RIGHT");
-            m_is_write_btn_press = true;
+            if (settings_get_button_press_config('a') != SettingsButtonDisable) {
+                NRF_LOG_INFO("BUTTON_RIGHT"); // Button A?
+                m_is_a_btn_press = true;
+            }
         }
     }
 }
@@ -439,41 +444,143 @@ static void check_wakeup_src(void) {
     }
 }
 
+/**@brief change slot
+ */
+static void cycle_slot(bool dec) {
+    // In any case, a button event occurs and we need to get the currently active card slot first
+    uint8_t slot_now = tag_emulation_get_slot();
+    uint8_t slot_new = slot_now;
+    // Handle the events of a button
+    if (dec) {
+        slot_new = tag_emulation_slot_find_prev(slot_now);
+    } else {
+        slot_new = tag_emulation_slot_find_next(slot_now);
+    }
+    // Update status only if the new card slot switch is valid
+    tag_emulation_change_slot(slot_new, true); // Tell the analog card module that we need to switch card slots
+    // Go back to the color corresponding to the field enablement type
+    uint8_t color_now = get_color_by_slot(slot_now);
+    uint8_t color_new = get_color_by_slot(slot_new);
+    // Switching the light effect of the card slot
+    ledblink3(slot_now, color_now, slot_new, color_new);
+    // Switched the card slot, we need to re-light
+    light_up_by_slot();
+    // Then switch the color of the light again
+    set_slot_light_color(color_new);
+}
+
+//#if defined(PROJECT_CHAMELEON_ULTRA)
+
+// fast detect a 14a tag uid to sim
+static void btn_fn_copy_ic_uid(void) {
+    // get 14a tag res buffer;
+    uint8_t slot_now = tag_emulation_get_slot();
+    tag_specific_type_t tag_type[2];
+    tag_emulation_get_specific_type_by_slot(slot_now, tag_type);
+    tag_data_buffer_t* buffer = get_buffer_by_tag_type(tag_type[0]);
+
+    nfc_tag_14a_coll_res_entity_t* antres;
+
+    switch(tag_type[0]) {
+        case TAG_TYPE_MIFARE_Mini:
+        case TAG_TYPE_MIFARE_1024:
+        case TAG_TYPE_MIFARE_2048:
+        case TAG_TYPE_MIFARE_4096: {
+            nfc_tag_mf1_information_t *p_info = (nfc_tag_mf1_information_t *)buffer->buffer;
+            antres = &(p_info->res_coll);
+            break;
+        }
+
+        case TAG_TYPE_NTAG_213:
+        case TAG_TYPE_NTAG_215:
+        case TAG_TYPE_NTAG_216: {
+            nfc_tag_ntag_information_t *p_info = (nfc_tag_ntag_information_t *)buffer->buffer;
+            antres = &(p_info->res_coll);
+            break;
+        }
+
+        default:
+            NRF_LOG_ERROR("Unsupported tag type")
+            return;
+    }
+
+    bool is_reader_mode_now = get_device_mode() == DEVICE_MODE_READER;
+    // first, we need switch to reader mode.
+    if (!is_reader_mode_now) {
+        // enter reader mode
+        reader_mode_enter();
+        bsp_delay_ms(8);
+        pcd_14a_reader_reset();
+        pcd_14a_reader_antenna_on();
+        bsp_delay_ms(8);
+        NRF_LOG_INFO("Start reader mode to offline copy.")
+    }
+
+    // select a tag
+    picc_14a_tag_t tag;
+    uint8_t status;
+
+    status = pcd_14a_reader_scan_auto(&tag);
+    if (status == HF_TAG_OK) {
+        // copy uid
+        memcpy(antres->uid, tag.uid, tag.uid_len);
+        // copy atqa
+        memcpy(antres->atqa, tag.atqa, 2);
+        // copy sak
+        antres->sak[0] = tag.sak;
+        NRF_LOG_INFO("Offline uid copied")
+    } else {
+        NRF_LOG_INFO("No tag found: %d", status);
+    }
+
+    // keep reader mode or exit reader mode.
+    if (!is_reader_mode_now) {
+        tag_mode_enter();
+    }
+}
+
+//#endif
+
+/**@brief Execute the corresponding logic based on the functional settings of the buttons.
+ */
+static void run_button_function_by_settings(settings_button_function_t sbf) {
+    switch (sbf)
+    {
+    case SettingsButtonCycleSlot:
+        cycle_slot(false);
+        break;
+    case SettingsButtonCycleSlotDec:
+        cycle_slot(true);
+        break;
+
+#if defined(PROJECT_CHAMELEON_ULTRA)
+    case SettingsButtonCloneIcUid:
+        btn_fn_copy_ic_uid();
+        break;
+#endif
+
+    default:
+        NRF_LOG_ERROR("Unsupported button function")
+        break;
+    }
+}
+
 /**@brief button press event process
  */
 extern bool g_usb_led_marquee_enable;
 static void button_press_process(void) {
     // Make sure that one of the AB buttons has a click event
-    if (m_is_read_btn_press || m_is_write_btn_press) {
-        // In any case, a button event occurs and we need to get the currently active card slot first
-        uint8_t slot_now = tag_emulation_get_slot();
-        uint8_t slot_new = slot_now;
-        // Handle the events of a button
-        if (m_is_read_btn_press) {
-            // Button left press
-            m_is_read_btn_press = false;
-            slot_new = tag_emulation_slot_find_prev(slot_now);
+    if (m_is_b_btn_press || m_is_a_btn_press) {
+        if (m_is_a_btn_press) {
+            run_button_function_by_settings(settings_get_button_press_config('a'));
+            m_is_a_btn_press = false;
         }
-        if (m_is_write_btn_press) {
-            // Button right press
-            m_is_write_btn_press = false;
-            slot_new = tag_emulation_slot_find_next(slot_now);
+        if (m_is_b_btn_press) {
+            run_button_function_by_settings(settings_get_button_press_config('b'));
+            m_is_b_btn_press = false;
         }
-        // Update status only if the new card slot switch is valid
-        if (slot_new != slot_now) {
-            tag_emulation_change_slot(slot_new, true); // Tell the analog card module that we need to switch card slots
-            g_usb_led_marquee_enable = false;
-            // Go back to the color corresponding to the field enablement type
-            uint8_t color_now = get_color_by_slot(slot_now);
-            uint8_t color_new = get_color_by_slot(slot_new);
-            
-            // Switching the light effect of the card slot
-            ledblink3(slot_now, color_now, slot_new, color_new);
-            // Switched the card slot, we need to re-light
-            light_up_by_slot();
-            // Then switch the color of the light again
-            set_slot_light_color(color_new);
-        }
+        // Disable led marquee for usb at button pressed.
+        g_usb_led_marquee_enable = false;
         // Re-delay into hibernation
         sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
     }
@@ -493,7 +600,6 @@ static void blink_usb_led_status(void) {
             is_working = false;
         }
     } else {
-
         // The light effect is enabled and can be displayed
         if (is_rgb_marquee_enable()) {
             is_working = true;
