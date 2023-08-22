@@ -471,6 +471,36 @@ static void cycle_slot(bool dec) {
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
+static void offline_status_blink_color(uint8_t blink_color) {
+    uint8_t slot = tag_emulation_get_slot();
+
+    uint8_t color = get_color_by_slot(slot);
+
+    uint32_t* p_led_array = hw_get_led_array();
+
+	set_slot_light_color(blink_color);
+
+    for (uint8_t i = 0; i <= RGB_LIST_NUM; i++) {
+        if(i == slot) {
+            continue;
+        }
+        nrf_gpio_pin_set(p_led_array[i]);
+        bsp_delay_ms(10);
+        nrf_gpio_pin_clear(p_led_array[i]);
+        bsp_delay_ms(10);
+    }
+
+    set_slot_light_color(color);
+}
+
+static void offline_status_error(void) {
+	offline_status_blink_color(0);
+}
+
+static void offline_status_ok(void) {
+	offline_status_blink_color(2);
+}
+
 // fast detect a 14a tag uid to sim
 static void btn_fn_copy_ic_uid(void) {
     // get 14a tag res buffer;
@@ -501,6 +531,7 @@ static void btn_fn_copy_ic_uid(void) {
 
         default:
             NRF_LOG_ERROR("Unsupported tag type")
+            offline_status_error();
             return;
     }
 
@@ -529,8 +560,10 @@ static void btn_fn_copy_ic_uid(void) {
         // copy sak
         antres->sak[0] = tag.sak;
         NRF_LOG_INFO("Offline uid copied")
+        offline_status_ok();
     } else {
         NRF_LOG_INFO("No tag found: %d", status);
+        offline_status_error();
     }
 
     // keep reader mode or exit reader mode.
