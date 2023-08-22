@@ -1109,7 +1109,7 @@ class HWSlotNickSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
         uname = name.encode(encoding="utf8")
         if len(uname) > 32:
             raise ValueError("Your tag nick name too long.")
-        self.cmd.set_slot_tag_nick_name(slot_num, sense_type, name)
+        self.cmd.set_slot_tag_nick_name(slot_num, sense_type, uname)
         print(f' - Set tag nick name for slot {slot_num} success.')
 
 
