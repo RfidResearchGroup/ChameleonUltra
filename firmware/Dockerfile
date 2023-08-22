@@ -6,7 +6,7 @@ ARG NRF_CLT_URL=https://nsscprodmedia.blob.core.windows.net/prod/software-and-ot
 RUN set -xe; \
   DEBIAN_FRONTEND=noninteractive; \
   apt update -q; \
-  apt install -qy --no-install-recommends ca-certificates curl xz-utils make git; \
+  apt install -qy --no-install-recommends ca-certificates curl xz-utils make git zip; \
   git config --global --add safe.directory /workdir; \
   curl -sLo /usr/bin/nrfutil https://developer.nordicsemi.com/.pc-tools/nrfutil/x64-linux/nrfutil; \
   curl -sLo /tmp/nrf-clt.deb $NRF_CLT_URL; \
