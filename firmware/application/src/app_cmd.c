@@ -114,6 +114,15 @@ data_frame_tx_t* cmd_processor_get_animation_mode(uint16_t cmd, uint16_t status,
     return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 1, (uint8_t *)(&animation_mode));
 }
 
+data_frame_tx_t* cmd_processor_get_battery_info(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t resp[3] = { 0x00 };
+    // set voltage
+    num_to_bytes(batt_lvl_in_milli_volts, 2, resp);
+    // set percentage
+    resp[2] = percentage_batt_lvl;
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, sizeof(resp), resp);
+}
+
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
 data_frame_tx_t* cmd_processor_14a_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -755,6 +764,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_SET_ANIMATION_MODE,           NULL,                        cmd_processor_set_animation_mode,            NULL                   },
     {    DATA_CMD_GET_ANIMATION_MODE,           NULL,                        cmd_processor_get_animation_mode,            NULL                   },
     {    DATA_CMD_GET_GIT_VERSION,              NULL,                        cmd_processor_get_git_version,               NULL                   },
+    {    DATA_CMD_GET_BATTERY_INFO,             NULL,                        cmd_processor_get_battery_info,              NULL                   },
+
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 

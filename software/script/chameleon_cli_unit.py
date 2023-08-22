@@ -1265,3 +1265,22 @@ class HWFactoryReset(DeviceRequiredUnit):
             print(" - A Serial Error below is normal, please ignore it")
         else:
             print(" - Reset failed!")
+
+
+@hw.command('battery', 'Get battery information, voltage and level.')
+class HWBatteryInfo(DeviceRequiredUnit):
+    # How much remaining battery is considered low?
+    BATTERY_LOW_LEVEL = 30
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        return None
+
+    def on_exec(self, args: argparse.Namespace):
+        resp = self.cmd.battery_informartion()
+        voltage =  int.from_bytes(resp.data[:2], 'big')
+        percentage = resp.data[2]
+        print(" - Battery informartion:")
+        print(f"   voltage    -> {voltage}mV")
+        print(f"   percentage -> {percentage}%")
+        if percentage < HWBatteryInfo.BATTERY_LOW_LEVEL:
+            print(f"{colorama.Fore.RED}[!] Low battery, please charge.{colorama.Style.RESET_ALL}")

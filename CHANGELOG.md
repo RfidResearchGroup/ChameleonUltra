@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Added `hw battery` to get battery informartion (@xianglin1998)
  - Added `hw slot delete` to delete HF or LF out of a HF+LF slot (@augustozanellato)
  - Changed CLI prompt autocompletion, saved history and internal cmd registration (@szymex73)
  - Fixed SDK NFC IRQ handler busy loop (@doegox)

@@ -575,7 +575,7 @@ void saadc_event_handler(nrf_drv_saadc_evt_t const * p_event)
         APP_ERROR_CHECK(err_code);
 
         batt_lvl_in_milli_volts = ADC_RESULT_IN_MILLI_VOLTS(adc_result) + 100;
-        NRF_LOG_INFO("batt_lvl_in_milli_volts: %d", batt_lvl_in_milli_volts);
+        // NRF_LOG_INFO("batt_lvl_in_milli_volts: %d", batt_lvl_in_milli_volts);
         percentage_batt_lvl = BATVOL2PERCENT(batt_lvl_in_milli_volts);
 
         // if battery service is notification enable, we can send msg to device.

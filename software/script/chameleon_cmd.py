@@ -37,6 +37,8 @@ DATA_CMD_WIPE_FDS = 1020
 DATA_CMD_GET_ENABLED_SLOTS = 1023
 DATA_CMD_DELETE_SLOT_SENSE_TYPE = 1024
 
+DATA_CMD_GET_BATTERY_INFO = 1025
+
 DATA_CMD_SCAN_14A_TAG = 2000
 DATA_CMD_MF1_SUPPORT_DETECT = 2001
 DATA_CMD_MF1_NT_LEVEL_DETECT = 2002
@@ -671,6 +673,13 @@ class ChameleonCMD:
         Reset to factory settings
         """
         return self.device.send_cmd_sync(DATA_CMD_WIPE_FDS, 0x00)
+    
+    @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
+    def battery_informartion(self):
+        """
+        Get battery info
+        """
+        return self.device.send_cmd_sync(DATA_CMD_GET_BATTERY_INFO, 0x00)
 
 
 if __name__ == '__main__':
