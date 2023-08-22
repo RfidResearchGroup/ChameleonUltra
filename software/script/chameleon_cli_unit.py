@@ -8,6 +8,7 @@ import timeit
 import sys
 import time
 import serial.tools.list_ports
+from platform import uname
 
 import chameleon_com
 import chameleon_cmd
@@ -188,11 +189,28 @@ class HWConnect(BaseCLIUnit):
     def on_exec(self, args: argparse.Namespace):
         try:
             if args.port is None:  # Chameleon auto-detect if no port is supplied
-                # loop through all ports and find chameleon
-                for port in serial.tools.list_ports.comports():
-                    if port.vid == 0x6868:
-                        args.port = port.device
-                        break
+                platformname = uname().release
+                if 'Microsoft' in platformname:
+                    path = os.environ["PATH"].split(os.pathsep)
+                    path.append("/mnt/c/Windows/System32/WindowsPowerShell/v1.0/")
+                    for prefix in path:
+                        fn = os.path.join(prefix, "powershell.exe")
+                        if not os.path.isdir(fn) and os.access(fn, os.X_OK):
+                            PSHEXE=fn
+                            break
+                    if PSHEXE:
+                        #process = subprocess.Popen([PSHEXE,"Get-CimInstance -ClassName Win32_serialport | Where-Object {$_.PNPDeviceID -like '*VID_6868&PID_8686*'} | Select -expandproperty DeviceID"],stdout=subprocess.PIPE);
+                        process = subprocess.Popen([PSHEXE,"Get-PnPDevice -Class Ports -PresentOnly | where {$_.DeviceID -like '*VID_6868&PID_8686*'} | Select-Object FriendlyName | % FriendlyName | select-string COM\d+ |% { $_.matches.value }"],stdout=subprocess.PIPE);
+                        res = process.communicate()[0]
+                        _comport = res.decode('utf-8').strip()
+                        if _comport:
+                            args.port = _comport.replace('COM', '/dev/ttyS')
+                else:
+                    # loop through all ports and find chameleon
+                    for port in serial.tools.list_ports.comports():
+                        if port.vid == 0x6868:
+                            args.port = port.device
+                            break
                 if args.port is None:  # If no chameleon was found, exit
                     print("Chameleon not found, please connect the device or try connecting manually with the -p flag.")
                     return
