@@ -511,8 +511,6 @@ class ChameleonCMD:
     def delete_slot_sense_type(self, slot_index: SlotNumber, sense_type: TagSenseType):
         """
             Delete a sense type for a specific slot.
-            Another sense type must be enabled for the same slot,
-            otherwise an error will be thrown.
         :param slot_index: Slot index
         :param sense_type: Sense type to disable
         :return:
