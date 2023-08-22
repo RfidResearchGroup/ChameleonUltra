@@ -532,6 +532,9 @@ static void btn_fn_copy_ic_uid(void) {
             tag_emulation_load_by_buffer(TAG_TYPE_EM410X, false);
 
             // keep reader mode or exit reader mode.
+            offline_status_ok();
+        } else {
+            offline_status_error();
         }
 
         if (!is_reader_mode_now) {
