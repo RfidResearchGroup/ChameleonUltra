@@ -190,11 +190,19 @@ class HWConnect(BaseCLIUnit):
             if args.port is None:  # Chameleon auto-detect if no port is supplied
                 platformname = uname().release
                 if 'Microsoft' in platformname:
-                    process = subprocess.Popen(["powershell.exe","Get-CimInstance -ClassName Win32_serialport | Where-Object {$_.PNPDeviceID -like '*VID_6868&PID_8686*'} | Select -expandproperty DeviceID"],stdout=subprocess.PIPE);
-                    res = process.communicate()[0]
-                    _comport = res.decode('utf-8').strip()
-                    if _comport:
-                        args.port = _comport.replace('COM', '/dev/ttyS')
+                    path = os.environ["PATH"].split(os.pathsep)
+                    path.append("/mnt/c/Windows/System32/WindowsPowerShell/v1.0/")
+                    for prefix in path:
+                        fn = os.path.join(prefix, "powershell.exe")
+                        if not os.path.isdir(fn) and os.access(fn, os.X_OK):
+                            PSHEXE=fn
+                            break
+                    if PSHEXE:
+                        process = subprocess.Popen(["powershell.exe","Get-CimInstance -ClassName Win32_serialport | Where-Object {$_.PNPDeviceID -like '*VID_6868&PID_8686*'} | Select -expandproperty DeviceID"],stdout=subprocess.PIPE);
+                        res = process.communicate()[0]
+                        _comport = res.decode('utf-8').strip()
+                        if _comport:
+                            args.port = _comport.replace('COM', '/dev/ttyS')
                 else:
                     # loop through all ports and find chameleon
                     for port in serial.tools.list_ports.comports():
