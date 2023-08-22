@@ -318,7 +318,7 @@ data_frame_tx_t* cmd_processor_delete_slot_sense_type(uint16_t cmd, uint16_t sta
     if (length == 2 && data[0] < TAG_MAX_SLOT_NUM && (data[1] == TAG_SENSE_HF || data[1] == TAG_SENSE_LF)) {
         uint8_t slot_num = data[0];
         uint8_t sense_type = data[1];
-        uint8_t other_st_index = sense_type == TAG_SENSE_LF ? 0 : 1;
+        uint8_t other_st_index = sense_type == TAG_SENSE_HF ? 0 : 1; // HF is first there
 
         tag_specific_type_t tag_types[2];
         tag_emulation_get_specific_type_by_slot(slot_num, tag_types);
