@@ -94,7 +94,7 @@ void bsp_timer_start(void) {
             bsp_timer_state = START;
         }
     }
-    
+
 }
 
 // 停止定时器

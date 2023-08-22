@@ -277,7 +277,7 @@ static void system_off_enter(void) {
 
     // IOs that need to be configured as push-pull outputs and pulled low
     uint32_t gpio_cfg_output_low[] = {
-        LED_1, LED_2, LED_3, LED_4, LED_5, LED_6, LED_7, LED_8, LF_MOD, 
+        LED_1, LED_2, LED_3, LED_4, LED_5, LED_6, LED_7, LED_8, LF_MOD,
 #if defined(PROJECT_CHAMELEON_ULTRA)
         READER_POWER, LF_ANT_DRIVER
 #endif
@@ -350,7 +350,7 @@ static void check_wakeup_src(void) {
     uint8_t slot = tag_emulation_get_slot();
     uint8_t dir = slot > 3 ? 1 : 0;
     uint8_t color = get_color_by_slot(slot);
-    
+
     if (m_reset_source & NRF_POWER_RESETREAS_OFF_MASK) {
         NRF_LOG_INFO("WakeUp from button");
         advertising_start(); // Turn on Bluetooth radio
@@ -406,7 +406,7 @@ static void check_wakeup_src(void) {
     } else if (m_reset_source & NRF_POWER_RESETREAS_VBUS_MASK) {
         // nrfx_power_usbstatus_get() can check usb attach status
         NRF_LOG_INFO("WakeUp from VBUS(USB)");
-        
+
         // USB plugged in and open communication break has its own light effect, no need to light up for the time being
         // set_slot_light_color(color);
         // light_up_by_slot();
@@ -711,7 +711,7 @@ int main(void) {
 
     // cmd callback register
     on_data_frame_complete(on_data_frame_received);
-    
+
     check_wakeup_src();       // Detect wake-up source and decide BLE broadcast and subsequent hibernation action according to the wake-up source
     tag_mode_enter();         // Enter card simulation mode by default
 

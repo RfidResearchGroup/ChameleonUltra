@@ -174,9 +174,9 @@ static void dfu_observer(nrf_dfu_evt_type_t evt_type)
 }
 
 /**
- * It is normal that the DFU will automatically reboot the entire hardware 
+ * It is normal that the DFU will automatically reboot the entire hardware
  * after the USB connection is not started for a period of time.
- * 
+ *
  */
 
 /**@brief Function for application main entry. */

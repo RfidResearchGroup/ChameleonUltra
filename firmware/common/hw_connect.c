@@ -103,7 +103,7 @@ void hw_connect_init(void) {
     // 测试的时候可以直接改写此版本号
     m_hw_ver = 1;
 
-    
+
 #if defined(PROJECT_CHAMELEON_ULTRA)
     if (m_hw_ver == 1) {
         LED_FIELD       =   (NRF_GPIO_PIN_MAP(1, 1));
@@ -181,7 +181,7 @@ void hw_connect_init(void) {
     INIT_LED_ARRAY(6, LED_6);
     INIT_LED_ARRAY(7, LED_7);
     INIT_LED_ARRAY(8, LED_8);
-    
+
     INIT_RGB_ARRAY(1, LED_R);
     INIT_RGB_ARRAY(2, LED_G);
     INIT_RGB_ARRAY(3, LED_B);
@@ -214,7 +214,7 @@ uint8_t hw_get_version_code(void) {
 void init_leds(void) {
     uint32_t* led_pins = hw_get_led_array();
     uint32_t* led_rgb_pins = hw_get_rgb_array();
-    
+
     // 初始化卡槽那几颗LED灯的GPIO（其他的LED由其他的模块控制）
     for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
         nrf_gpio_cfg_output(led_pins[i]);
@@ -251,5 +251,5 @@ void set_slot_light_color(uint8_t color) {
             nrf_gpio_pin_clear(LED_B);
             break;
     }
-    
+
 }

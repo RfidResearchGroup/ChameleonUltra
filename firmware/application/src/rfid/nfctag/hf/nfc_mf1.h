@@ -34,7 +34,7 @@ typedef enum {
     MF1_STATE_UNAUTH,
     MF1_STATE_AUTHING,
     MF1_STATE_AUTHED,
-    
+
     // 操作状态机
     MF1_STATE_WRITE,
     MF1_STATE_INCREMENT,

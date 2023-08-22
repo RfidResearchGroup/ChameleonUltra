@@ -11,7 +11,7 @@ extern "C"
 #endif
 
 #define cardbufbytesize 5		// 卡片字节buffer大小
-	
+
 #define rawbufsize 24			// 最大记录buffer
 #define cardbufsize 8			// 卡片大小
 

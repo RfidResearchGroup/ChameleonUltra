@@ -44,12 +44,12 @@ class ArgumentParserNoExit(argparse.ArgumentParser):
 
 def expect_response(accepted_responses: Union[int, list[int]]):
     """
-    Decorator for wrapping a Chameleon CMD function to check its response 
+    Decorator for wrapping a Chameleon CMD function to check its response
     for expected return codes and throwing an exception otherwise
     """
     if isinstance(accepted_responses, int):
         accepted_responses = [accepted_responses]
-    
+
     def decorator(func):
         @wraps(func)
         def error_throwing_func(*args, **kwargs):
@@ -151,7 +151,7 @@ class CustomNestedCompleter(NestedCompleter):
                 options[key] = None
 
         return cls(options, meta_dict=meta_dict)
-    
+
     @classmethod
     def from_clitree(cls, node):
         options = {}
@@ -208,19 +208,19 @@ class ArgparseCompleter(Completer):
 
     def __init__(self, parser) -> None:
         self.parser: ArgumentParserNoExit = parser
-    
+
     def check_tokens(self, parsed, unparsed):
         suggestions = {}
         def check_arg(tokens):
             return tokens and tokens[0].startswith('-')
-        
+
         if not parsed and not unparsed:
             # No tokens detected, just show all flags
             for action in self.parser._actions:
                 for opt in action.option_strings:
                     suggestions[opt] = action.help
             return [], [], suggestions
-        
+
         token = unparsed.pop(0)
 
         for action in self.parser._actions:
@@ -236,17 +236,17 @@ class ArgparseCompleter(Completer):
                         for choice in action.choices:
                             if str(choice).startswith(value):
                                 suggestions[str(choice)] = None
-                        
+
                         parsed.append(value)
 
                         if check_arg(unparsed):
                             parsed, unparsed, suggestions = self.check_tokens(parsed, unparsed)
-                        
+
                     else:
                         # Show all possible values
                         for choice in action.choices:
                             suggestions[str(choice)] = None
-                    
+
                     break
                 else:
                     # No choices, process further arguments
@@ -257,12 +257,12 @@ class ArgparseCompleter(Completer):
                 for opt in action.option_strings:
                     if opt.startswith(token):
                         suggestions[opt] = action.help
-        
+
         if suggestions:
             unparsed.insert(0, token)
-        
+
         return parsed, unparsed, suggestions
-    
+
     def get_completions(self, document, complete_event):
         text = document.text_before_cursor
         word_before_cursor = document.get_word_before_cursor()

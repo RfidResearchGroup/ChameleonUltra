@@ -217,7 +217,7 @@ uint32_t BATVOL2PERCENT(uint16_t VOL)
 	//#define P40VOL	3790
 	//#define P20VOL	3740
 	//#define P5VOL	3450
-	
+
 	//100%	4.20V	1
 	//90 %	4.00V		80%-100%	白
 	//80 %	3.89V	1
@@ -236,7 +236,7 @@ uint32_t BATVOL2PERCENT(uint16_t VOL)
 #define P40VOL	3570
 #define P20VOL	3510
 #define P5VOL	3230
-	
+
 
 	if(VOL > P80VOL)
 	{
@@ -402,7 +402,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
     {
         case BLE_GAP_EVT_CONNECTED:
             sleep_timer_stop();
-        
+
             NRF_LOG_INFO("Connected");
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
             err_code = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);

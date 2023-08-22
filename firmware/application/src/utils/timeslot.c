@@ -81,11 +81,11 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_START:
             signal_callback_return_param.params.request.p_next = NULL;
             signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
-        
+
             // 请求成功，设置一下标志位
             m_is_timeslot_working = true;
             break;
-        
+
         default:
             // No implementation needed
             break;
@@ -98,27 +98,27 @@ nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
  */
 void request_timeslot(uint32_t time_us, timeslot_callback_t callback, bool wait_end) {
     ret_code_t err_code;
-    
+
     // 确保同一时间只有一个
     APP_ERROR_CHECK_BOOL(!m_is_timeslot_running);
     m_is_timeslot_running = true;
-    
+
     m_slot_length = time_us;    // 配置申请的时间
     m_callback    = callback;   // 配置时间申请到之后执行的操作
-    
+
     // 打开会话
     err_code = sd_radio_session_open(radio_callback);
     APP_ERROR_CHECK(err_code);
-    
+
     // 请求时序
     err_code = request_next_event_earliest();
     APP_ERROR_CHECK(err_code);
-    
+
     // 堵塞等待时序请求成功
     while(!m_is_timeslot_working) {
         NRF_LOG_PROCESS();
     }
-    
+
     // 进入临界点
 	NVIC_DisableIRQ(RADIO_IRQn);
 	NVIC_DisableIRQ(TIMER0_IRQn);
@@ -126,28 +126,28 @@ void request_timeslot(uint32_t time_us, timeslot_callback_t callback, bool wait_
 	NVIC_DisableIRQ(GPIOTE_IRQn);
 	NVIC_DisableIRQ(MWU_IRQn);
 	NVIC_DisableIRQ(RTC1_IRQn);
-    
+
     // 请求时序成功，快处理任务
     if (m_callback != NULL) {
         m_callback();       // 执行任务
         m_callback = NULL;  // 销毁记录
     }
-    
+
     // 退出临界点
 	NVIC_EnableIRQ(GPIOTE_IRQn);
 	NVIC_EnableIRQ(RTC1_IRQn);
 	NVIC_EnableIRQ(MWU_IRQn);
 
     // 关闭会话并且等待关闭完成
-    err_code = sd_radio_session_close();   
+    err_code = sd_radio_session_close();
     APP_ERROR_CHECK(err_code);
     while(m_is_timeslot_working) {
         __NOP();
     }
-    
+
     // 任务处理完成，进行收尾工作
     m_is_timeslot_running = false;
-    
+
     //NRF_LOG_INFO("request timeslot done.");
 }
 
@@ -156,26 +156,26 @@ void request_timeslot(uint32_t time_us, timeslot_callback_t callback, bool wait_
  */
 void timeslot_start(uint32_t time_us) {
     ret_code_t err_code;
-    
+
     // 确保同一时间只有一个
     APP_ERROR_CHECK_BOOL(!m_is_timeslot_running);
     m_is_timeslot_running = true;
-    
+
     m_slot_length = time_us * 1000;    // 配置申请的时间
-    
+
     // 打开会话
     err_code = sd_radio_session_open(radio_callback);
     APP_ERROR_CHECK(err_code);
-    
+
     // 请求时序
     err_code = request_next_event_earliest();
     APP_ERROR_CHECK(err_code);
-    
+
     // 堵塞等待时序请求成功
     while(!m_is_timeslot_working) {
         NRF_LOG_PROCESS();
     }
-    
+
     // 进入临界点
 	NVIC_DisableIRQ(RADIO_IRQn);
 	NVIC_DisableIRQ(TIMER0_IRQn);
@@ -191,7 +191,7 @@ void timeslot_start(uint32_t time_us) {
  */
 void timeslot_stop(void) {
     ret_code_t err_code;
-    
+
     // 确保已经有一个timeslot运行
     APP_ERROR_CHECK_BOOL(m_is_timeslot_running);
     m_is_timeslot_running = false;
@@ -202,12 +202,12 @@ void timeslot_stop(void) {
 	NVIC_EnableIRQ(MWU_IRQn);
 
     // 关闭会话并且等待关闭完成
-    err_code = sd_radio_session_close();   
+    err_code = sd_radio_session_close();
     APP_ERROR_CHECK(err_code);
     while(m_is_timeslot_working) {
         __NOP();
     }
-    
+
     // 任务处理完成，进行收尾工作
     m_is_timeslot_running = false;
     //NRF_LOG_INFO("timeslot stop.");

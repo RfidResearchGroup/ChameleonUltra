@@ -7,7 +7,7 @@
 * @param 	:len  : 存放转换后的数值的字节长度
 * @param 	:dest : 存放转换结果的缓冲区
 * @retval 	: 无
-*			
+*
 */
 void num_to_bytes(uint64_t n, uint8_t len, uint8_t* dest)
 {

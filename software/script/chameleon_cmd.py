@@ -204,11 +204,11 @@ class ButtonType(enum.IntEnum):
     @staticmethod
     def list():
         return list(map(int, ButtonType))
-    
+
     @staticmethod
     def list_str():
         return list(map(chr, ButtonType))
-    
+
     @staticmethod
     def from_str(val):
         if ButtonType.ButtonA == ord(val):
@@ -246,11 +246,11 @@ class ButtonPressFunction(enum.IntEnum):
         elif self == ButtonPressFunction.SettingsButtonCloneIcUid:
             return "Quickly Copy Ic Uid"
         return "None"
-    
+
     @staticmethod
     def from_int(val):
         return ButtonPressFunction(val)
-    
+
     # get usage for button function
     def usage(self):
         if self == ButtonPressFunction.SettingsButtonDisable:
@@ -559,7 +559,7 @@ class ChameleonCMD:
         if len(id_bytes) != 5:
             raise ValueError("The id bytes length must equal 5")
         return self.device.send_cmd_sync(DATA_CMD_SET_EM410X_EMU_ID, 0x00, id_bytes)
-    
+
     def get_em410x_sim_id(self):
         """
             Get the simulated EM410x card id
@@ -607,7 +607,7 @@ class ChameleonCMD:
         data.append(block_start & 0xFF)
         data.extend(block_data)
         return self.device.send_cmd_sync(DATA_CMD_LOAD_MF1_EMU_BLOCK_DATA, 0x00, data)
-    
+
     def get_mf1_block_data(self, block_start: int, block_count: int):
         """
             Gets data for selected block range
@@ -629,7 +629,7 @@ class ChameleonCMD:
         data.extend(atqa)
         data.extend(uid)
         return self.device.send_cmd_sync(DATA_CMD_SET_MF1_ANTI_COLLISION_RES, 0X00, data)
-    
+
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_slot_tag_nick_name(self, slot: SlotNumber, sense_type: TagSenseType, name: bytes):
         """
@@ -644,7 +644,7 @@ class ChameleonCMD:
         data.extend([SlotNumber.to_fw(slot), sense_type])
         data.extend(name)
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_TAG_NICK, 0x00, data)
-    
+
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def get_slot_tag_nick_name(self, slot: SlotNumber, sense_type: TagSenseType):
         """
@@ -743,14 +743,14 @@ class ChameleonCMD:
         Reset to factory settings
         """
         return self.device.send_cmd_sync(DATA_CMD_WIPE_FDS, 0x00)
-    
+
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def battery_informartion(self):
         """
         Get battery info
         """
         return self.device.send_cmd_sync(DATA_CMD_GET_BATTERY_INFO, 0x00)
-    
+
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def get_button_press_fun(self, button: ButtonType):
         """
@@ -764,8 +764,8 @@ class ChameleonCMD:
         Set config of button press function
         """
         return self.device.send_cmd_sync(
-            DATA_CMD_SET_BUTTON_PRESS_CONFIG, 
-            0x00, 
+            DATA_CMD_SET_BUTTON_PRESS_CONFIG,
+            0x00,
             bytearray([button, function])
         )
 

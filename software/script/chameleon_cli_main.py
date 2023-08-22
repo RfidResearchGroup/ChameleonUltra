@@ -24,8 +24,8 @@ ULTRA = r"""
 
 LITE = r"""
                                                                 ╦  ╦╔╦╗╔═╗
-                                                   ███████      ║  ║ ║ ║╣ 
-                                                                ╩═╝╩ ╩ ╚═╝                                                
+                                                   ███████      ║  ║ ║ ║╣
+                                                                ╩═╝╩ ╩ ╚═╝
 """
 
 # create by http://patorjk.com/software/taag/#p=display&f=ANSI%20Shadow&t=Chameleon%20Ultra
@@ -50,28 +50,28 @@ class ChameleonCLI:
 
         # new a device communication instance(only communication)
         self.device_com = chameleon_com.ChameleonCom()
-    
+
     def get_cmd_node(self, node: chameleon_utils.CLITree, cmdline: list[str]) -> tuple[chameleon_utils.CLITree, list[str]]:
         """
         Recursively traverse the command line tree to get to the matching node
-        
+
         :return: last matching CLITree node, remaining tokens
         """
         # No more subcommands to parse, return node
         if cmdline == []:
             return node, []
-        
+
         for child in node.children:
             if cmdline[0] == child.name:
                 return self.get_cmd_node(child, cmdline[1:])
-        
+
         # No matching child node
         return node, cmdline[:]
 
     def get_prompt(self):
         """
         Retrieve the cli prompt
-        
+
         :return: current cmd prompt
         """
         device_string = f"{colorama.Fore.GREEN}USB" if self.device_com.isOpen(
@@ -102,7 +102,7 @@ class ChameleonCLI:
                 closing = True
             except KeyboardInterrupt:
                 closing = True
-            
+
             if closing or cmd_str in ["exit", "quit", "q", "e"]:
                 print("Bye, thank you.  ^.^ ")
                 self.device_com.close()

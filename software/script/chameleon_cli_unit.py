@@ -743,7 +743,7 @@ class HFMFERead(DeviceRequiredUnit):
                     fd.write(bytes([0x0a]))
                 else:
                     fd.write(response.data)
-        
+
         print("\n - Read success")
 
 
@@ -1287,7 +1287,7 @@ class HWBatteryInfo(DeviceRequiredUnit):
 
 @hw_settings_button_press.command('get', 'Get button press function of Button A and Button B.')
 class HWButtonSettingsGet(DeviceRequiredUnit):
-    
+
     def args_parser(self) -> ArgumentParserNoExit:
         return None
 
@@ -1309,7 +1309,7 @@ class HWButtonSettingsGet(DeviceRequiredUnit):
 
 @hw_settings_button_press.command('set', 'Set button press function of Button A and Button B.')
 class HWButtonSettingsSet(DeviceRequiredUnit):
-    
+
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.add_argument('-b', type=str, required=True,
@@ -1319,7 +1319,7 @@ class HWButtonSettingsSet(DeviceRequiredUnit):
         for fun in chameleon_cmd.ButtonPressFunction:
             function_usage += f"{int(fun)} = {fun.usage()}, "
         function_usage = function_usage.rstrip(' ').rstrip(',')
-        parser.add_argument('-f', type=int, required=True, 
+        parser.add_argument('-f', type=int, required=True,
                             help=function_usage, choices=chameleon_cmd.ButtonPressFunction.list())
         return parser
 

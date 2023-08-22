@@ -136,7 +136,7 @@ void ledblink2(uint8_t color,uint8_t dir, uint8_t end){
 	else{
 		led_pins_arr = hw_get_led_reversal_array();
 	}
-	
+
 	//调整颜色
 	set_slot_light_color(color);
 	pwm_sequ_val.channel_3 = 1; //最亮的
@@ -149,7 +149,7 @@ void ledblink2(uint8_t color,uint8_t dir, uint8_t end){
 		pwm_config.output_pins[1] = NRF_DRV_PWM_PIN_NOT_USED;
 		pwm_config.output_pins[2] = NRF_DRV_PWM_PIN_NOT_USED;
 		pwm_config.output_pins[3] = NRF_DRV_PWM_PIN_NOT_USED;
-		
+
 		setled = startled;
 		if(setled<3){//正向期间，0，1，2的时候只能点亮前几个led
 			//首先确定能点亮几个灯
@@ -157,7 +157,7 @@ void ledblink2(uint8_t color,uint8_t dir, uint8_t end){
 			//然后设置pwm输出通道
 			for(i=0;i<leds2turnon;i++){
 				pwm_config.output_pins[3-i] = led_pins_arr[setled-i];
-			}	
+			}
 		}else if (setled<=7){//正向期间，大于4小于8的时候能点亮4个led
 			//设置pwm输出通道
 			for(i=0;i<4;i++){
@@ -170,8 +170,8 @@ void ledblink2(uint8_t color,uint8_t dir, uint8_t end){
 			//然后设置pwm输出通道
 			for(i=0;i<leds2turnon;i++){
 				pwm_config.output_pins[i] = led_pins_arr[setled-3+i];
-			}	
-			
+			}
+
 		}else{//正向期间，达到11
 			//什么都不干
 		}
@@ -187,7 +187,7 @@ void ledblink2(uint8_t color,uint8_t dir, uint8_t end){
 			if(end <= 7){
 				pwm_config.output_pins[3] = led_pins_arr[end];
 			}
-			
+
 		}
 		nrfx_pwm_uninit(&pwm0_ins);
 		nrf_drv_pwm_init(&pwm0_ins, &pwm_config, NULL);
@@ -222,18 +222,18 @@ void ledblink3(uint8_t led_down,uint8_t color_led_down, uint8_t led_up, uint8_t 
 		while(light_level >= 0){
 			//处理亮度
 			pwm_sequ_val.channel_0 = get_pwmduty(light_level);
-		
+
 			nrfx_pwm_uninit(&pwm0_ins);	//关闭pwm输出
-			
+
 			if(led_up>=0 &&led_up<=7){
 				nrf_gpio_pin_clear(led_pins[led_up]);
 			}
-			
+
 			set_slot_light_color(color_led_down);
-			
+
 			nrf_drv_pwm_init(&pwm0_ins, &pwm_config, ledblink3_pwm_callback);
 			nrf_drv_pwm_simple_playback(&pwm0_ins, &seq, 1,NRF_DRV_PWM_FLAG_LOOP);
-			
+
 			while(callback_waiting == 0);//等待pwm模块输出完成
 			bsp_delay_us(1234);
 			callback_waiting = 0;
@@ -250,18 +250,18 @@ void ledblink3(uint8_t led_down,uint8_t color_led_down, uint8_t led_up, uint8_t 
 		while(light_level < 99){
 			//处理亮度
 			pwm_sequ_val.channel_0 = get_pwmduty(light_level);
-		
+
 			nrfx_pwm_uninit(&pwm0_ins);	//关闭pwm输出
-			
+
 			if(led_down>=0 &&led_down<=7){
 				nrf_gpio_pin_clear(led_pins[led_down]);
 			}
-			
+
 			set_slot_light_color(color_led_up);
-				
+
 			nrf_drv_pwm_init(&pwm0_ins, &pwm_config, ledblink3_pwm_callback);
 			nrf_drv_pwm_simple_playback(&pwm0_ins, &seq, 1,NRF_DRV_PWM_FLAG_LOOP);
-			
+
 			while(callback_waiting == 0);//等待pwm模块输出完成
 			bsp_delay_us(1234);
 			callback_waiting = 0;
@@ -288,7 +288,7 @@ void ledblink4(uint8_t color,uint8_t dir, uint8_t end,uint8_t start_light,uint8_
 	else{
 		led_pins_arr = hw_get_led_reversal_array();
 	}
-	
+
 	//调整颜色
 	set_slot_light_color(color);
 	while(1) {
@@ -305,7 +305,7 @@ void ledblink4(uint8_t color,uint8_t dir, uint8_t end,uint8_t start_light,uint8_
 		pwm_config.output_pins[1] = NRF_DRV_PWM_PIN_NOT_USED;
 		pwm_config.output_pins[2] = NRF_DRV_PWM_PIN_NOT_USED;
 		pwm_config.output_pins[3] = NRF_DRV_PWM_PIN_NOT_USED;
-		
+
 		setled = startled;
 		if(setled<3){//正向期间，0，1，2的时候只能点亮前几个led
 			//首先确定能点亮几个灯
@@ -326,8 +326,8 @@ void ledblink4(uint8_t color,uint8_t dir, uint8_t end,uint8_t start_light,uint8_
 			//然后设置pwm输出通道
 			for(i=0;i<leds2turnon;i++){
 				pwm_config.output_pins[i] = led_pins_arr[setled-3+i];
-			}	
-			
+			}
+
 		}else{//正向期间，达到11
 			//什么都不干
 		}
@@ -409,7 +409,7 @@ void ledblink6(void){
 		// 重置USB未开启通信时的灯的状态
 		ledblink1_step = 0;
 	}
-	
+
 	if (ledblink6_step == 1) {
 		light_level  = 0;
 		ledblink6_step = 2;
@@ -487,7 +487,7 @@ void ledblink6(void){
 
 /**
  * @brief 当前的灯效是否使能
- * 
+ *
  * @return true 使能状态，处于灯效闪烁状态
  * @return false 禁止状态，处于普通卡槽指示灯状态
  */

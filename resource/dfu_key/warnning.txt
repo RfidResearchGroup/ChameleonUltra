@@ -1,4 +1,4 @@
-It is absolutely and absolutely forbidden to modify the files in this directory. 
+It is absolutely and absolutely forbidden to modify the files in this directory.
 Modification will cause DFU exceptions of all subsequent devices.
 
 绝对绝对绝对禁止修改此目录下的文件，修改会造成后续所有的设备的DFU异常。

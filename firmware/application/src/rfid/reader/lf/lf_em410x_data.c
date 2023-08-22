@@ -294,7 +294,7 @@ void em410x_encoder(uint8_t *pData, uint8_t *pOut)
 
 //读卡函数,需要不停调用，返回0为没读到卡，1为读到了
 uint8_t em410x_acquire(void)
-{	
+{
 	if (dataindex >= rawbufsize * 8)
 	{
 #ifdef debug410x
@@ -423,10 +423,10 @@ void init_em410x_hw(void)
 uint8_t em410x_read(uint8_t *uid, uint32_t timeout_ms)
 {
 	uint8_t ret = 0;
-    
+
     init_em410x_hw();           // 初始化下降沿采样回调函数
 	start_lf_125khz_radio();    // 启动125khz调制
-	
+
 	// 在超时中读卡
 	autotimer* p_at = bsp_obtain_timer(0);
 	// NO_TIMEOUT_1MS(p_at, timeout_ms)
@@ -444,13 +444,13 @@ uint8_t em410x_read(uint8_t *uid, uint32_t timeout_ms)
 			break;
 		}
 	}
-    
+
     if (ret != 1) {  // 如果没有搜索到卡，说明超时了，我们这里要手动结束读卡器
 		stop_lf_125khz_radio();
 	}
-    
+
     dataindex = 0;  // 结束后谨记重置采集的数据的索引
-	
+
 	bsp_return_timer(p_at);
 	p_at = NULL;
 

@@ -53,16 +53,16 @@ uint8_t Darkside_Recover_Key(
 	DarksideCore* dc
 );
 uint8_t Nested_Distacne_Detect(
-	uint8_t block, 
-	uint8_t type, 
-	uint8_t *key, 
+	uint8_t block,
+	uint8_t type,
+	uint8_t *key,
 	NestedDist *nd
 );
 uint8_t Nested_Recover_Key(
-    uint64_t keyKnown, 
-    uint8_t blkKnown, 
-    uint8_t typKnown, 
-    uint8_t targetBlock, 
+    uint64_t keyKnown,
+    uint8_t blkKnown,
+    uint8_t typKnown,
+    uint8_t targetBlock,
     uint8_t targetType,
     NestedCore ncs[SETS_NR]
 );

@@ -133,7 +133,7 @@ void data_frame_receive(uint8_t *data, uint16_t length) {
             }
         } else if (m_data_rx_position == 8) {  // frame head lrc
             if (m_data_rx_buffer[m_data_rx_position] != DATA_LRC_CUT(m_data_rx_lrc)) {
-                // frame head lrc error 
+                // frame head lrc error
                 NRF_LOG_ERROR("Data frame head lrc error.");
                 data_frame_reset();
                 return;
@@ -178,7 +178,7 @@ void data_frame_receive(uint8_t *data, uint16_t length) {
  *          如果数据处理是耗时操作，则需要将此函数放在main循环中调用
  */
 void data_frame_process(void) {
-    // check if data frame 
+    // check if data frame
     if (m_data_completed) {
         // to process data frame
         if (m_frame_process_cbk != NULL) {

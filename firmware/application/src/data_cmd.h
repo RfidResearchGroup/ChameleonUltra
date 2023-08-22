@@ -42,7 +42,7 @@
 //                      CMD for hf reader
 //                  Range from 2000 -> 2999
 // ******************************************************************
-// 
+//
 #define DATA_CMD_SCAN_14A_TAG                   (2000)
 #define DATA_CMD_MF1_SUPPORT_DETECT             (2001)
 #define DATA_CMD_MF1_NT_LEVEL_DETECT            (2002)
@@ -61,7 +61,7 @@
 //                      CMD for lf reader
 //                  Range from 3000 -> 3999
 // ******************************************************************
-// 
+//
 #define DATA_CMD_SCAN_EM410X_TAG                (3000)
 #define DATA_CMD_WRITE_EM410X_TO_T5577          (3001)
 //
@@ -72,7 +72,7 @@
 //                      CMD for hf emulator
 //                  Range from 4000 -> 4999
 // ******************************************************************
-// 
+//
 #define DATA_CMD_LOAD_MF1_EMU_BLOCK_DATA        (4000)
 #define DATA_CMD_SET_MF1_ANTI_COLLISION_RES     (4001)
 #define DATA_CMD_SET_MF1_ANTICOLLISION_INFO     (4002)
@@ -99,7 +99,7 @@
 //                      CMD for lf emulator
 //                  Range from 5000 -> 5999
 // ******************************************************************
-// 
+//
 
 //
 // ******************************************************************

@@ -27,7 +27,7 @@ typedef enum {
 
 typedef struct ALIGN_U32 {
     uint16_t version;
-    
+
     // 1 byte
     uint8_t animation_config : 2;
     uint8_t reserved0 : 6;
@@ -35,7 +35,7 @@ typedef struct ALIGN_U32 {
     // 1 byte
     uint8_t button_a_press : 4;
     uint8_t button_b_press : 4;
-    
+
     // 8 byte
     uint32_t reserved1;
     uint32_t reserved2;

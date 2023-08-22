@@ -64,9 +64,9 @@ data_frame_tx_t* cmd_processor_get_device_mode(uint16_t cmd, uint16_t status, ui
 
 data_frame_tx_t* cmd_processor_enter_bootloader(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     // restart to boot
-    #define BOOTLOADER_DFU_GPREGRET_MASK            (0xB0)      
-    #define BOOTLOADER_DFU_START_BIT_MASK           (0x01)  
-    #define BOOTLOADER_DFU_START    (BOOTLOADER_DFU_GPREGRET_MASK |         BOOTLOADER_DFU_START_BIT_MASK)      
+    #define BOOTLOADER_DFU_GPREGRET_MASK            (0xB0)
+    #define BOOTLOADER_DFU_START_BIT_MASK           (0x01)
+    #define BOOTLOADER_DFU_START    (BOOTLOADER_DFU_GPREGRET_MASK |         BOOTLOADER_DFU_START_BIT_MASK)
     APP_ERROR_CHECK(sd_power_gpregret_clr(0,0xffffffff));
     APP_ERROR_CHECK(sd_power_gpregret_set(0, BOOTLOADER_DFU_START));
     nrf_pwr_mgmt_shutdown(NRF_PWR_MGMT_SHUTDOWN_GOTO_DFU);
@@ -105,7 +105,7 @@ data_frame_tx_t* cmd_processor_set_animation_mode(uint16_t cmd, uint16_t status,
         settings_set_animation_config(data[0]);
     }
     else {
-        status = STATUS_PAR_ERR; 
+        status = STATUS_PAR_ERR;
     }
     return data_frame_make(cmd, status, 0, NULL);
 }
@@ -131,7 +131,7 @@ data_frame_tx_t* cmd_processor_get_button_press_config(uint16_t cmd, uint16_t st
         status = STATUS_DEVICE_SUCCESS;
     } else {
         length = 0;
-        status = STATUS_PAR_ERR; 
+        status = STATUS_PAR_ERR;
     }
     return data_frame_make(cmd, status, length, (uint8_t *)(&button_press_config));
 }
@@ -142,7 +142,7 @@ data_frame_tx_t* cmd_processor_set_button_press_config(uint16_t cmd, uint16_t st
         status = STATUS_DEVICE_SUCCESS;
     } else {
         length = 0;
-        status = STATUS_PAR_ERR; 
+        status = STATUS_PAR_ERR;
     }
     return data_frame_make(cmd, status, 0, NULL);
 }
@@ -569,11 +569,11 @@ data_frame_tx_t* cmd_processor_set_slot_tag_nick_name(uint16_t cmd, uint16_t sta
         fds_slot_record_map_t map_info;
 
         get_fds_map_by_slot_sense_type_for_nick(slot, sense_type, &map_info);
-        
+
         uint8_t buffer[36];
         buffer[0] = length - 2;
         memcpy(buffer + 1, data + 2, buffer[0]);
-        
+
         bool ret = fds_write_sync(map_info.id, map_info.key, sizeof(buffer) / 4, buffer);
         if (ret) {
             status = STATUS_DEVICE_SUCCESS;
@@ -818,7 +818,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_ENABLED_SLOTS,            NULL,                        cmd_processor_get_enabled_slots,             NULL                   },
     {    DATA_CMD_DELETE_SLOT_SENSE_TYPE,       NULL,                        cmd_processor_delete_slot_sense_type,        NULL                   },
 
-    
+
 
     {    DATA_CMD_SET_EM410X_EMU_ID,            NULL,                        cmd_processor_set_em410x_emu_id,             NULL                   },
     {    DATA_CMD_GET_EM410X_EMU_ID,            NULL,                        cmd_processor_get_em410x_emu_id,             NULL                   },
@@ -846,12 +846,12 @@ static cmd_data_map_t m_data_cmd_map[] = {
 
 
 /**
- * @brief Auto select source to response 
- * 
+ * @brief Auto select source to response
+ *
  * @param resp data
  */
 void auto_response_data(data_frame_tx_t* resp) {
-	// TODO Please select the reply source automatically according to the message source, 
+	// TODO Please select the reply source automatically according to the message source,
     //  and do not reply by checking the validity of the link layer by layer
 	if (is_usb_working()) {
 		usb_cdc_write(resp->buffer, resp->length);

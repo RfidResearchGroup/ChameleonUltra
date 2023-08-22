@@ -81,7 +81,7 @@ static struct {
     uint8_t usepassword;
     uint32_t password;
     uint8_t lockBit;
-    uint8_t usedata; 
+    uint8_t usedata;
     uint32_t data;
     uint8_t blokAddr;
 } t55xx_cmd;
@@ -130,7 +130,7 @@ void T55XX_Timeslot_Callback() {
 	//先发送指令
 	TxBitRfid(t55xx_cmd.opcode >> 1);
 	TxBitRfid(t55xx_cmd.opcode & 1);
-    
+
 	//指令为00时不需要发送后面的东西了
 	if (t55xx_cmd.opcode != 0) {
         //指令后如果有需要才发密码
@@ -169,7 +169,7 @@ void T55XX_Timeslot_Callback() {
 
 /**
  * @brief 向5577写入指令，这个指令可以是读写
- * 
+ *
  * @param opcode 操作码，在正常操作模式下一定是1*的格式，只有重置是00
  * @param usepassword 是否使用密码，为1时指令为密码模式
  * @param password 密码，在usepasswd有效的时候发送，32个bit，从下标0开始传输
@@ -190,7 +190,7 @@ void T55xx_Send_Cmd(uint8_t opcode, uint8_t usepassword, uint32_t password, uint
 	//这个不实现//标准读取页模式，		2op(1+bck)
 
 	//重置模式，			2op(0+0)
-    
+
     t55xx_cmd.opcode = opcode;
     t55xx_cmd.usepassword = usepassword;
     t55xx_cmd.password = password;
@@ -198,11 +198,11 @@ void T55xx_Send_Cmd(uint8_t opcode, uint8_t usepassword, uint32_t password, uint
     t55xx_cmd.usedata = usedata;
     t55xx_cmd.data = data;
     t55xx_cmd.blokAddr = blokAddr;
-    
+
 
     // 请求时序，并且等待时序操作完成
 	request_timeslot(37 * 1000, T55XX_Timeslot_Callback, true);
-    
+
     if (opcode != 0) {
         bsp_delay_ms(6);    // 可能继续下次写卡，需要多等一会儿
     } else {
@@ -212,7 +212,7 @@ void T55xx_Send_Cmd(uint8_t opcode, uint8_t usepassword, uint32_t password, uint
 
 /**
  * @brief T55xx写入EM410x数据
- * 
+ *
  * @param passwd 用于最后加密的密码（也是卡片当前密码）(是一个指针，4字节宽度小端byte序存储)
  * @param datas em410x运算后的数据，需要调用EM410X_Encoder计算
  */
@@ -255,7 +255,7 @@ void T55xx_Write_data(uint8_t *passwd, uint8_t *datas)
 
 /**
  * @brief 重置密码函数，用于将现有已知密码的卡重置为目标密码
- * 
+ *
  * @param oldpasswd 卡片当前密码(是一个指针，4字节宽度小端byte序存储)
  * @param newpasswd 用于最后加密的密码(是一个指针，4字节宽度小端byte序存储)
  */

@@ -35,10 +35,10 @@ static void lf_125khz_gpio_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity
 // 初始化125khz信号pwm调制
 void lf_125khz_radio_init(void) {
     nrfx_err_t err_code;
-    
+
     if (!m_is_125khz_radio_init) {
         m_is_125khz_radio_init = true;
-        
+
         // ******************************************************************
 
         // 配置pwm
@@ -57,44 +57,44 @@ void lf_125khz_radio_init(void) {
         // 初始化pwm
         err_code = nrfx_pwm_init(&m_pwm, &config, NULL);
         APP_ERROR_CHECK(err_code);
-        
+
         // ******************************************************************
-        
+
         // 定义定时器配置结构体，并使用默认配置参数初始化结构体
         nrfx_timer_config_t timer_cfg = NRFX_TIMER_DEFAULT_CONFIG;
         timer_cfg.mode = NRF_TIMER_MODE_COUNTER;    // 使用计数器模式
-        
+
         // 初始化定时器
         err_code = nrfx_timer_init(&m_timer_lf_reader, &timer_cfg, NULL);
         APP_ERROR_CHECK(err_code);
-        
+
         // 使能定时器
         nrfx_timer_enable(&m_timer_lf_reader);
-        
+
         // ******************************************************************
-        
+
         // 初始化ppi
         err_code = nrf_drv_ppi_init();
         APP_ERROR_CHECK(err_code);
 
         err_code = nrf_drv_ppi_channel_alloc(&m_ppi_channel1);
         APP_ERROR_CHECK(err_code);
-        
+
         err_code = nrf_drv_ppi_channel_assign(m_ppi_channel1, nrf_drv_pwm_event_address_get(&m_pwm, NRF_PWM_EVENT_PWMPERIODEND), nrf_drv_timer_task_address_get(&m_timer_lf_reader, NRF_TIMER_TASK_COUNT));
         APP_ERROR_CHECK(err_code);
 
         // Enable both configured PPI channels
         err_code = nrf_drv_ppi_channel_enable(m_ppi_channel1);
         APP_ERROR_CHECK(err_code);
-        
+
         // ******************************************************************
-        
+
         // LF采集下降沿中断，默认将gpio下拉，触发方式为下降沿触发
         nrf_drv_gpiote_in_config_t in_config = NRFX_GPIOTE_CONFIG_IN_SENSE_LOTOHI(false);
         err_code = nrf_drv_gpiote_in_init(LF_OA_OUT, &in_config, lf_125khz_gpio_handler);
         APP_ERROR_CHECK(err_code);
         nrf_drv_gpiote_in_event_enable(LF_OA_OUT, true);
-        
+
         // ******************************************************************
     }
 }

@@ -15,7 +15,7 @@ void reader_mode_enter(void) {
 #if defined(PROJECT_CHAMELEON_ULTRA)
     if (rfid_state != DEVICE_MODE_READER) {
         rfid_state = DEVICE_MODE_READER;
-        
+
         tag_emulation_sense_end();          // to end tag emulation
 
         // pin init
@@ -89,7 +89,7 @@ device_mode_t get_device_mode(void) {
 
 /**
  * @brief Get the color by slot
- * 
+ *
  * @param slot slot number, 0 - 7
  * @return uint8_t Color 0R, 1G, 2B
  */

@@ -32,7 +32,7 @@ static bool fds_find_record(uint16_t id, uint16_t key, fds_record_desc_t *desc) 
 
 /**
  * @brief Determine whether the record exists.
- * 
+ *
  * @param id record id
  * @param key record key
  * @return true on record exists
@@ -111,7 +111,7 @@ bool fds_write_sync(uint16_t id, uint16_t key, uint16_t data_length_words, void*
     fds_operation_info.key = key;
     fds_operation_info.success = false;
     fds_operation_info.waiting = true;
-    
+
     // 调用无自动GC的写实现函数
     ret_code_t err_code = fds_write_record_nogc(id, key, data_length_words, buffer);
     if (err_code == NRF_SUCCESS) {
@@ -122,7 +122,7 @@ bool fds_write_sync(uint16_t id, uint16_t key, uint16_t data_length_words, void*
         // 当前报错是属于空间不足的报错，可能我们需要进行GC
         NRF_LOG_INFO("FDS no space, gc auto start.");
         fds_gc_sync();
-        
+
         // gc完成后，可以重新进行相应的操作了
         NRF_LOG_INFO("FDS auto gc success, write record continue.");
         fds_operation_info.success = false;
@@ -143,7 +143,7 @@ bool fds_write_sync(uint16_t id, uint16_t key, uint16_t data_length_words, void*
         // 同上
         APP_ERROR_CHECK(err_code);
     }
-    
+
     // task process finish
     fds_operation_info.waiting = false;
     return ret;

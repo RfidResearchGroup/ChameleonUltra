@@ -68,7 +68,7 @@ void settings_migrate(void)
          *
          * Note that the `break` statement should only be used on the last migration step, all the previous steps must fall
          * through to the next case.
-         * 
+         *
          * Note that the `settings_update_version_for_config` function should only be used on the last migration step.
          */
         default:
@@ -135,7 +135,7 @@ void settings_set_animation_config(uint8_t value)
 
 /**
  * @brief check the button type is valid?
- * 
+ *
  * @param type Button type, 'a' or 'b' or 'A' or 'B'
  * @return true Button type valid.
  * @return false Button type Invalid.
@@ -155,7 +155,7 @@ bool is_settings_button_type_valid(char type) {
 
 /**
  * @brief Get the button press config
- * 
+ *
  * @param which 'a' or 'b'
  * @return uint8_t @link{ settings_button_function_t }
  */
@@ -182,7 +182,7 @@ uint8_t settings_get_button_press_config(char which)
 
 /**
  * @brief Set the button press config
- * 
+ *
  * @param which 'a' or 'b'
  * @param value @link{ settings_button_function_t }
  */

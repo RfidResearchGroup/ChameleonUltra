@@ -23,7 +23,7 @@ NRF_LOG_MODULE_REGISTER();
  * 如果检索到的卡槽的配置拥有指定的类型的卡片，那么应当进行指定类型的数据的加载，初始化必要的参数
  * 检测到场入场出时，除了需要对相关的LED进行操作外，还需要根据当前数据是否加载来开始模拟卡
  * 在模拟卡，所有的操作应当都是基于RAM中加载的数据进行，在模拟卡结束后，应当将修改的数据进行保存更新到flash
- * 
+ *
  *
  *
  * ......
@@ -293,7 +293,7 @@ void tag_emulation_save_data(void) {
 
 /**
  * @brief 获取模拟卡的标签类型，从对应卡槽中。
- * 
+ *
  * @param slot 卡槽
  * @param tag_type 标签类型
  */
@@ -522,7 +522,7 @@ uint8_t tag_emulation_slot_find_prev(uint8_t slot_now) {
         if (i == slot_now) return slot_now;         // 一次轮回之后没有发现其他被激活的卡槽
         if (slotConfig.group[i].enable) return i;   // 查看当前遍历的卡槽是否使能，使能则认定当前卡槽为有效使能的卡槽
         if (i - 1 < 0) {    // 继续下一个轮回
-            i = (TAG_MAX_SLOT_NUM - 1); 
+            i = (TAG_MAX_SLOT_NUM - 1);
         } else {
             i -= 1;
         }
@@ -570,7 +570,7 @@ void tag_emulation_factory_init(void) {
         bool is_slot1_lf_data_exists = fds_is_exists(map_info.id, map_info.key);
         // 此处判断卡槽1的高频卡和低频卡都不存在
         if (!is_slot1_hf_data_exists && !is_slot1_lf_data_exists) {
-            tag_emulation_factory_data(0, slotConfig.group[0].tag_hf);   
+            tag_emulation_factory_data(0, slotConfig.group[0].tag_hf);
             tag_emulation_factory_data(0, slotConfig.group[0].tag_lf);
         }
     }

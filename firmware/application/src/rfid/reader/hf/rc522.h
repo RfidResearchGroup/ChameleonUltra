@@ -86,7 +86,7 @@
 #define     BitFramingReg         0x0D    //面向位的帧的调节
 #define     CollReg               0x0E    //RF接口上检测到的第一个位冲突的位的位置
 #define     RFU0F                 0x0F    //保留
-// PAGE 1     
+// PAGE 1
 #define     RFU10                 0x10    //保留
 #define     ModeReg               0x11    //定义发送和接收的常用模式
 #define     TxModeReg             0x12    //定义发送过程的数据传输速率
@@ -103,7 +103,7 @@
 #define     MfRxReg               0x1D    //控制ISO 14443/ MIFARE模式中106kbit/s的通信 (比如奇偶校验位的计算)
 #define     RFU1E                 0x1E    //保留
 #define     SerialSpeedReg        0x1F    //选择串行UART接口的速率
-// PAGE 2    
+// PAGE 2
 #define     RFU20                 0x20    //保留
 #define     CRCResultRegM         0x21    //显示CRC计算的实际MSB值
 #define     CRCResultRegL         0x22    //显示CRC计算的实际LSB值
@@ -118,12 +118,12 @@
 #define     TPrescalerReg         0x2B    //定义内部定时器的设置
 #define     TReloadRegH           0x2C    //描述16位长的定时器重装值
 #define     TReloadRegL           0x2D    //描述16位长的定时器重装值
-#define     TCounterValueRegH     0x2E   
+#define     TCounterValueRegH     0x2E
 #define     TCounterValueRegL     0x2F    //显示16位长的实际定时器值
-// PAGE 3      
+// PAGE 3
 #define     RFU30                 0x30    //保留
 #define     TestSel1Reg           0x31    //常用测试信号配置
-#define     TestSel2Reg           0x32    //常用测试信号配置和PRBS控制 
+#define     TestSel2Reg           0x32    //常用测试信号配置和PRBS控制
 #define     TestPinEnReg          0x33    //D1-D7输出驱动器的使能管脚（仅用于串行接口）
 #define     TestPinValueReg       0x34    //定义D1-D7用作I/O总线时的值
 #define     TestBusReg            0x35    //显示内部测试总线的状态
@@ -174,11 +174,11 @@ extern "C" {
     void write_register_single(uint8_t Address, uint8_t value);
     void clear_register_mask(uint8_t reg, uint8_t mask);
     void set_register_mask(uint8_t reg, uint8_t mask);
-	
+
 	// Device comunication control
 	uint16_t pcd_14a_reader_timeout_get(void);
 	void pcd_14a_reader_timeout_set(uint16_t timeout_ms);
-	
+
 	// Device comunication interface
     uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command,
         uint8_t* pIn,
@@ -193,16 +193,16 @@ extern "C" {
         uint8_t* pRxPar,
 		uint16_t* pRxLenBit,
 		uint16_t szRxLenBitMax);
-	
+
 	// Device auto append and check 14443-A parity enable or disable.
 	void pcd_14a_reader_parity_on(void);
     void pcd_14a_reader_parity_off(void);
-    
+
 	// 14443-A tag operation
 	uint8_t pcd_14a_reader_scan_auto(picc_14a_tag_t *tag);
 	uint8_t pcd_14a_reader_ats_request(uint8_t *pAts, uint16_t *szAts, uint16_t szAtsBitMax);
 	uint8_t pcd_14a_reader_atqa_request(uint8_t *resp, uint8_t *resp_par, uint16_t resp_max_bit);
-	
+
 	// M1 tag operation
     uint8_t pcd_14a_reader_mf1_auth(picc_14a_tag_t *tag, uint8_t type, uint8_t addr, uint8_t* pKey);
 	void pcd_14a_reader_mf1_unauth(void);
@@ -215,17 +215,17 @@ extern "C" {
     // 休眠卡操作
 	uint8_t pcd_14a_reader_halt_tag(void);
 	void pcd_14a_reader_fast_halt_tag(void);
-		
+
 	// UID & UFUID tag operation
 	uint8_t pcd_14a_reader_gen1a_unlock(void);
 	uint8_t pcd_14a_reader_gen1a_uplock(void);
-	
+
 	// CRC calulate
 	void pcd_14a_reader_calc_crc(uint8_t* pbtData, size_t szLen, uint8_t* pbtCrc);
 	void crc_14a_calculate(uint8_t* pbtData, size_t szLen, uint8_t* pbtCrc);
     void crc_14a_append(uint8_t* pbtData, size_t szLen);
 	void pcd_14a_reader_crc_computer(uint8_t use522CalcCRC);
-	
+
 	// other
 	uint8_t cascade_to_cmd(uint8_t cascade);
 	uint32_t get_u32_tag_uid(picc_14a_tag_t *tag);

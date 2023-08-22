@@ -48,35 +48,35 @@ static const nrf_drv_spi_t s_spiHandle = NRF_DRV_SPI_INSTANCE(SPI_INSTANCE);	// 
 uint8_t read_register_single(uint8_t Address)
 {
 	RC522_DOSEL;
-    
+
     Address = (uint8_t)(((Address << 1) & 0x7E) | 0x80);
-    
+
     NRF_SPI0->TXD = Address;
     while ( NRF_SPI0->EVENTS_READY == 0 );
     NRF_SPI0->EVENTS_READY = 0;
     (void)NRF_SPI0->RXD;
-    
+
     NRF_SPI0->TXD = Address;
     while ( NRF_SPI0->EVENTS_READY == 0 );
     NRF_SPI0->EVENTS_READY = 0;
     Address = NRF_SPI0->RXD;
-	
+
 	RC522_UNSEL;
-	
+
 	return Address;
 }
 
 void read_register_buffer(uint8_t Address, uint8_t *pInBuffer, uint8_t len)
-{ 
+{
 	RC522_DOSEL;
-	
+
 	Address = (((Address << 1) & 0x7E) | 0x80);
-    
+
     NRF_SPI0->TXD = Address;
     while ( NRF_SPI0->EVENTS_READY == 0 );  // 等待传输结束
     NRF_SPI0->EVENTS_READY = 0;
     (void)NRF_SPI0->RXD;    // 读取一次，给一个电平
-    
+
     uint8_t i = 0;
     do {
         // 然后开始收数据
@@ -99,33 +99,33 @@ void ONCE_OPT write_register_single(uint8_t Address, uint8_t value)
 	RC522_DOSEL;
 
 	Address = ((Address << 1) & 0x7E);
-    
+
     // 先传地址
     NRF_SPI0->TXD = Address;
     while ( NRF_SPI0->EVENTS_READY == 0 );
     NRF_SPI0->EVENTS_READY = 0;
     (void)NRF_SPI0->RXD;
-    
+
     // 再传要写的值
     NRF_SPI0->TXD = value;
     while ( NRF_SPI0->EVENTS_READY == 0 );
     NRF_SPI0->EVENTS_READY = 0;
     (void)NRF_SPI0->RXD;
-    
+
 	RC522_UNSEL;
 }
 
 void write_register_buffer(uint8_t Address, uint8_t *values, uint8_t len)
 {
 	RC522_DOSEL;
-	
+
 	Address = ((Address << 1) & 0x7E);
-    
+
     NRF_SPI0->TXD = Address;
     while ( NRF_SPI0->EVENTS_READY == 0 );
     NRF_SPI0->EVENTS_READY = 0;
     (void)NRF_SPI0->RXD;
-    
+
     uint8_t i = 0;
     do {
         // 然后疯狂发数据
@@ -134,7 +134,7 @@ void write_register_buffer(uint8_t Address, uint8_t *values, uint8_t len)
         NRF_SPI0->EVENTS_READY = 0;
         (void)NRF_SPI0->RXD;
     } while(++i < len);
-    
+
 	RC522_UNSEL;
 }
 
@@ -171,10 +171,10 @@ void pcd_14a_reader_init(void)
 
 		// 初始化NSS脚GPIO
 		nrf_gpio_cfg_output(HF_SPI_SELECT);
-		
+
 		// 初始化SPI
 		ret_code_t errCode;
-		
+
 		nrf_drv_spi_config_t spiConfig = NRF_DRV_SPI_DEFAULT_CONFIG;				// 使用SPI默认配置
 		// 配置SPI端口，注意CSN不要在这设置，另外用GPIO口控制
 		spiConfig.miso_pin = HF_SPI_MISO;
@@ -203,19 +203,19 @@ void pcd_14a_reader_reset(void)
 		// 软重置 522
 		write_register_single(CommandReg, PCD_IDLE);
 		write_register_single(CommandReg, PCD_RESET);
-		
+
 		// 开关天线
 		clear_register_mask(TxControlReg, 0x03);
 		set_register_mask(TxControlReg, 0x03);
-		
+
 		// 禁用522的定时器，使用MCU的定时器超时
 		write_register_single(TModeReg, 0x00);
-		
+
 		// 调制发送信号为100%ASK
 		write_register_single(TxAutoReg, 0x40);
 		// 定义发送和接收常用模式 和Mifare卡通讯，CRC初始值0x6363
 		write_register_single(ModeReg, 0x3D);
-		
+
 		// 然后默认不使能天线
 		// 请不要持续使能高频的天线
 		pcd_14a_reader_antenna_off();
@@ -265,7 +265,7 @@ uint16_t pcd_14a_reader_timeout_get() {
 *          pOutLenBit：返回数据的位长度
 * @retval ：状态值MI_OK，成功
 */
-uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command, uint8_t* pIn, uint8_t  InLenByte, uint8_t* pOut, uint16_t* pOutLenBit, uint16_t maxOutLenBit) 
+uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command, uint8_t* pIn, uint8_t  InLenByte, uint8_t* pOut, uint16_t* pOutLenBit, uint16_t maxOutLenBit)
 {
 	uint8_t	status 		= HF_ERRSTAT;
 	uint8_t	waitFor 	= 0x00;
@@ -275,12 +275,12 @@ uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command, uint8_t* pIn, uint8_t  In
 	uint8_t	not_timeout	= 0;
 	// 重置接收到的数据的长度
 	*pOutLenBit			= 0;
-	
+
 	switch(Command) {
 		case PCD_AUTHENT: 						//	Mifare认证
 			waitFor = 0x10;						//	认证寻卡等待时候 查询空闲中断标志位
 			break;
-		
+
 		case PCD_TRANSCEIVE:
 			waitFor = 0x30;						//	寻卡等待时候 查询接收中断标志位与 空闲中断标志位
 			break;
@@ -296,7 +296,7 @@ uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command, uint8_t* pIn, uint8_t  In
 	if (Command == PCD_TRANSCEIVE) {
 		set_register_mask(BitFramingReg, 0x80);		// StartSend置位启动数据发送 该位与收发命令使用时才有效
 	}
-	
+
 	if (pOut == NULL) {
 		// 如果开发者不需要接收数据，那么在发送完成后直接返回！
 		while((read_register_single(Status2Reg) & 0x07) == 0x03);
@@ -304,7 +304,7 @@ uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command, uint8_t* pIn, uint8_t  In
 	}
 
 	bsp_set_timer(g_timeout_auto_timer, 0);			// 在启动操作前先归零超时计数器
-	
+
 	do {
 		n = read_register_single(ComIrqReg);				// 读取通信中断寄存器，判断当前的IO任务是否完成！
 		not_timeout = NO_TIMEOUT_1MS(g_timeout_auto_timer, g_com_timeout_ms);
@@ -314,7 +314,7 @@ uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command, uint8_t* pIn, uint8_t  In
 	if (Command == PCD_TRANSCEIVE) {
 		clear_register_mask(BitFramingReg, 0x80);		// 清理允许StartSend位与比特长度位
 	}
-	
+
 	// 是否接收超时
 	if (not_timeout) {
 		// 先判断是否有错误寄存器的置位
@@ -351,12 +351,12 @@ uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command, uint8_t* pIn, uint8_t  In
 			if (Command == PCD_TRANSCEIVE) {
 				n = read_register_single(FIFOLevelReg); 							// 读FIFO中保存的字节数
 				if (n == 0) { n = 1; }
-                
+
 				lastBits = read_register_single(Control522Reg) & 0x07; 			// 最后接收到得字节的有效位数
-                
+
 				if (lastBits) { *pOutLenBit = (n - 1) * 8 + lastBits; } // N个字节数减去1（最后一个字节）+ 最后一位的位数 读取到的数据总位数
 				else { *pOutLenBit = n * 8; } 							// 最后接收到的字节整个字节有效
-				
+
 				if (*pOutLenBit <= maxOutLenBit) {
 					// 将FIFO中的所有数据读取出来
 					read_register_buffer(FIFODataReg, pOut, n);
@@ -378,14 +378,14 @@ uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command, uint8_t* pIn, uint8_t  In
 		status = HF_TAG_NO;
 		// NRF_LOG_INFO("Tag lost(timeout).\n");
 	}
-	
+
 	if (status != HF_TAG_OK) {
 		// 如果有某些操作异常的话，
 		// 我们可能需要清除 MFCrypto1On 这个寄存器标志，
 		// 因为可能是因为验证过导致的错误加密的通信
 		clear_register_mask(Status2Reg, 0x08);
 	}
-	
+
 	// NRF_LOG_INFO("Com status: %d\n", status);
 	return status;
 }
@@ -401,13 +401,13 @@ uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command, uint8_t* pIn, uint8_t  In
 * @retval ：成功的时候返回卡片回应的数据的比特长度，
 			  失败的时候返回对应的错误码。
 */
-uint8_t pcd_14a_reader_bits_transfer(uint8_t* pTx, uint16_t  szTxBits, uint8_t* pTxPar, uint8_t* pRx, uint8_t* pRxPar, uint16_t* pRxLenBit, uint16_t szRxLenBitMax) 
+uint8_t pcd_14a_reader_bits_transfer(uint8_t* pTx, uint16_t  szTxBits, uint8_t* pTxPar, uint8_t* pRx, uint8_t* pRxPar, uint16_t* pRxLenBit, uint16_t szRxLenBitMax)
 {
 
 	static uint8_t buffer[DEF_FIFO_LENGTH];
-	uint8_t status		= 0, 
-			modulus 	= 0, 
-			i 			= 0, 
+	uint8_t status		= 0,
+			modulus 	= 0,
+			i 			= 0,
 			dataLen 	= 0;
 
 	buffer[0] = pTx[0];
@@ -454,13 +454,13 @@ uint8_t pcd_14a_reader_bits_transfer(uint8_t* pTx, uint16_t  szTxBits, uint8_t* 
 
 	clear_register_mask(BitFramingReg, modulus);
 	clear_register_mask(MfRxReg, 0x10);  // 使能奇偶校验位
-	
+
 	// 单纯判断数据传输的长度
 	if (status != HF_TAG_OK) {
 		// NRF_LOG_INFO("pcd_14a_reader_bytes_transfer error status: %d\n", status);
 		return status;
 	}
-	
+
 	pRx[0] = buffer[0];
 	modulus = 0;
 	if (*pRxLenBit > 8) {
@@ -470,7 +470,7 @@ uint8_t pcd_14a_reader_bits_transfer(uint8_t* pTx, uint16_t  szTxBits, uint8_t* 
 		dataLen  = *pRxLenBit / 8 + (modulus > 0);
 		// 取比特数，这个是最终的数据的长度
 		*pRxLenBit = *pRxLenBit - modulus;
-		
+
 		// 进一步判断数据解码之后是否会溢出
 		if (*pRxLenBit > szRxLenBitMax) {
 			NRF_LOG_INFO("pcd_14a_reader_bits_transfer decode parity data overflow: %d, max = %d\n", *pRxLenBit, szRxLenBitMax);
@@ -478,7 +478,7 @@ uint8_t pcd_14a_reader_bits_transfer(uint8_t* pTx, uint16_t  szTxBits, uint8_t* 
 			*pRxLenBit = 0;
 			return HF_ERRSTAT;
 		}
-		
+
 		// 最终的奇偶校验与数据的分离解包过程
 		for(i = 1; i < dataLen - 1; i++) {
 			if (pRxPar != NULL) {
@@ -492,7 +492,7 @@ uint8_t pcd_14a_reader_bits_transfer(uint8_t* pTx, uint16_t  szTxBits, uint8_t* 
 	}
 	return HF_TAG_OK;
 }
-	
+
 /**
 * @brief  : ISO14443-A 寻找一张卡片，只执行一次！
 * @param  ：tag: 存放卡片信息的buffer
@@ -506,21 +506,21 @@ uint8_t pcd_14a_reader_scan_once(picc_14a_tag_t *tag) {
     } else {
 		return STATUS_PAR_ERR;  // 寻卡不允许不传入标签信息结构体
 	}
-	
+
 	// 唤醒
     if (pcd_14a_reader_atqa_request(tag->atqa, NULL, U8ARR_BIT_LEN(tag->atqa)) != HF_TAG_OK) {
 		// NRF_LOG_INFO("pcd_14a_reader_atqa_request HF_TAG_NO\r\n");
 		return HF_TAG_NO;
 	}
-	
+
     uint8_t resp[DEF_FIFO_LENGTH] = {0}; // theoretically. A usual RATS will be much smaller
     // uint8_t resp_par[MAX_PARITY_SIZE] = {0};
-	
+
 	uint16_t len;
 	uint8_t status;
     uint8_t do_cascade = 1;
     uint8_t cascade_level = 0;
-	
+
 	// OK we will select at least at cascade 1, lets see if first byte of UID was 0x88 in
     // which case we need to make a cascade 2 request and select - this is a long UID
     // While the UID is not complete, the 3nd bit (from the right) is set in the SAK.
@@ -530,10 +530,10 @@ uint8_t pcd_14a_reader_scan_once(picc_14a_tag_t *tag) {
         uint8_t sel_uid[]    = { PICC_ANTICOLL1, 0x70, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
         uint8_t uid_resp[5] = {0}; // UID + original BCC
         sel_uid[0] = sel_all[0] = PICC_ANTICOLL1 + cascade_level * 2;
-		
+
 		// 发送防冲撞指令
 		status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, sel_all, sizeof(sel_all), resp, &len, U8ARR_BIT_LEN(resp));
-		
+
 		// 出现标签冲撞，我们需要解决冲撞
 		if (status != HF_TAG_OK) {
 			// 该冲撞还是得冲撞，解密过程中还是不要有这种情况发生
@@ -543,35 +543,35 @@ uint8_t pcd_14a_reader_scan_once(picc_14a_tag_t *tag) {
 		} else {  // no collision, use the response to SELECT_ALL as current uid
 			memcpy(uid_resp, resp, 5); // UID + original BCC
 		}
-		
+
 		uint8_t uid_resp_len = 4;
-		
+
 		// 永远使用最后的UID段当做u32类型的UID，
 		// 不管是几字节的UID段
 		// *u32Uid = bytes_to_num(uid_resp, 4);
-		
+
 		// Construct SELECT UID command
         sel_uid[1] = 0x70;  // transmitting a full UID (1 Byte cmd, 1 Byte NVB, 4 Byte UID, 1 Byte BCC, 2 Bytes CRC)
-		
+
 		memcpy(sel_uid + 2, uid_resp, 5);	// the UID received during anticollision with original BCC
 		uint8_t bcc = sel_uid[2] ^ sel_uid[3] ^ sel_uid[4] ^ sel_uid[5]; // calculate BCC
 		if (sel_uid[6] != bcc) {
 			NRF_LOG_INFO("BCC%d incorrect, got 0x%02x, expected 0x%02x\n", cascade_level, sel_uid[6], bcc);
 			return HF_ERRBCC;
 		}
-		
+
 		crc_14a_append(sel_uid, 7);	// calculate and add CRC
-		
+
 		// 发送 9x 70 去选卡
         status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, sel_uid, sizeof(sel_uid), resp, &len, U8ARR_BIT_LEN(resp));
 		if (status != HF_TAG_OK) {
 			NRF_LOG_INFO("Err at sak receive.\n");
 			return HF_ERRSTAT;
 		}
-		
+
 		// 缓冲接收到的SAK
 		tag->sak = resp[0];
-		
+
 		// 如果UID是以 0X88 的形式开头的，说明UID还不完整
 		// 下次循环我们需要进行递增级联，返回结束防冲撞，完成级联
         do_cascade = (((tag->sak & 0x04) /* && uid_resp[0] == 0x88 */) > 0);
@@ -583,7 +583,7 @@ uint8_t pcd_14a_reader_scan_once(picc_14a_tag_t *tag) {
             uid_resp[2] = uid_resp[3];
             uid_resp_len = 3;
         }
-		
+
 		// 拷贝卡片的UID信息到传入的结构体中
 		memcpy(tag->uid + (cascade_level * 3), uid_resp, uid_resp_len);
 		tag->uid_len += uid_resp_len;
@@ -601,19 +601,19 @@ uint8_t pcd_14a_reader_scan_once(picc_14a_tag_t *tag) {
 */
 uint8_t pcd_14a_reader_scan_auto(picc_14a_tag_t *tag) {
 	uint8_t status;
-	
+
 	// 第一次寻卡
 	status = pcd_14a_reader_scan_once(tag);
 	if (status == HF_TAG_OK) {
 		return HF_TAG_OK;
 	}
-	
+
 	// 第二次寻卡
 	status = pcd_14a_reader_scan_once(tag);
 	if (status == HF_TAG_OK) {
 		return HF_TAG_OK;
 	}
-	
+
 	// 超过上限次数
 	return status;
 }
@@ -627,16 +627,16 @@ uint8_t pcd_14a_reader_scan_auto(picc_14a_tag_t *tag) {
 uint8_t pcd_14a_reader_ats_request(uint8_t *pAts, uint16_t *szAts, uint16_t szAtsBitMax) {
 	uint8_t rats[] = { PICC_RATS, 0x80, 0x31, 0x73 }; // FSD=256, FSDI=8, CID=0
 	uint8_t status;
-	
+
 	status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, rats, sizeof(rats), pAts, szAts, szAtsBitMax);
-	
+
 	if (status != HF_TAG_OK) {
 		NRF_LOG_INFO("Err at ats receive.\n");
 		return status;
 	}
-	
+
 	// NRF_LOG_INFO("Length: %d\n", *szAts);
-	
+
 	if (*szAts > 0) { *szAts = *szAts / 8; }
     return HF_TAG_OK;
 }
@@ -658,14 +658,14 @@ uint8_t pcd_14a_reader_atqa_request(uint8_t *resp, uint8_t *resp_par, uint16_t r
         status = pcd_14a_reader_bits_transfer(wupa, 7, NULL, resp, resp_par, &len, resp_max_bit);
 		// NRF_LOG_INFO("pcd_14a_reader_atqa_request len: %d\n", len);
     } while (len != 16 && (retry++ < 10));
-	
+
 	// 正常的 ATQA 是2字节，也就是16bit的，
 	// 我们需要进行判断，收到的数据是否正确
 	if (status == HF_TAG_OK && len == 16) {
 		// 可以确认当前场内存在至少一张14A的卡了
 		return HF_TAG_OK;
 	}
-	
+
 	// 不存在卡片
     return HF_TAG_NO;
 }
@@ -684,10 +684,10 @@ uint8_t pcd_14a_reader_gen1a_unlock(void)
 	uint8_t unlock, status;
 	uint16_t rx_length = 0;
 	uint8_t recvbuf[1] = { 0x00 };
-	
+
 	// 重启通信（非常重要）
 	pcd_14a_reader_halt_tag();
-	
+
 	// 第一步解锁，发送7bit的 0x40
 	unlock = PICC_MAGICWUPC1;
 	status = pcd_14a_reader_bits_transfer(&unlock, 7, NULL, recvbuf, NULL, &rx_length, U8ARR_BIT_LEN(recvbuf));
@@ -695,7 +695,7 @@ uint8_t pcd_14a_reader_gen1a_unlock(void)
 		NRF_LOG_INFO("UNLOCK(MAGICWUPC1) FAILED! Length: %d, Status: %02x\n", rx_length, status);
 		return HF_ERRSTAT;
 	}
-	
+
 	// 第二步解锁，发送整字节的 0x43
 	unlock = PICC_MAGICWUPC2;
 	status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, &unlock, 1, recvbuf, &rx_length, U8ARR_BIT_LEN(recvbuf));
@@ -703,7 +703,7 @@ uint8_t pcd_14a_reader_gen1a_unlock(void)
 		NRF_LOG_INFO("UNLOCK(MAGICWUPC2) FAILED! Length: %d, Status: %02x\n", rx_length, status);
 		return HF_ERRSTAT;
 	}
-	
+
 	// 两次解锁都没问题，我们默认这次解锁操作成功！
 	return HF_TAG_OK;
 }
@@ -721,24 +721,24 @@ uint8_t pcd_14a_reader_gen1a_uplock(void)
 {
 	uint8_t status;
 	uint16_t rx_length = 0;
-	
+
 	// 我们已知的双层封卡指令
 	uint8_t uplock_1[] = { 0xE1,  0x00,  0xE1,  0xEE };
 	uint8_t uplock_2[] = { 0x85,  0x00,  0x00,  0x00,
 						   0x00,  0x00,  0x00,  0x00,
 						   0x00,  0x00,  0x00,  0x00,
 						   0x00,  0x00,  0x00,  0x08,
-						   0x18,  0x47 
+						   0x18,  0x47
 						 };
-	
+
 	uint8_t recvbuf[1] = { 0x00 };
-	
+
 	status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, uplock_1, sizeof(uplock_1), recvbuf, &rx_length, U8ARR_BIT_LEN(recvbuf));
 	if (!(status == HF_TAG_OK && rx_length == 4 && recvbuf[0] == 0x0A)) {
 		NRF_LOG_INFO("UPLOCK1(UFUID) FAILED!\n");
 		return HF_ERRSTAT;
 	}
-	
+
 	status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, uplock_2, sizeof(uplock_2), recvbuf, &rx_length, U8ARR_BIT_LEN(recvbuf));
 	if (!(status == HF_TAG_OK && rx_length == 4 && recvbuf[0] == 0x0A)) {
 		NRF_LOG_INFO("UPLOCK2(UFUID) FAILED!\n");
@@ -763,18 +763,18 @@ uint8_t pcd_14a_reader_mf1_auth(picc_14a_tag_t *tag, uint8_t type, uint8_t addr,
 {
 	uint8_t dat_buff[12] = { type, addr };
 	uint16_t data_len = 0;
-	
+
 	memcpy(&dat_buff[2], pKey, 6);
 	get_4byte_tag_uid(tag, &dat_buff[8]);
 
 	pcd_14a_reader_bytes_transfer(PCD_AUTHENT, dat_buff, 12, dat_buff, &data_len, U8ARR_BIT_LEN(dat_buff));
-	
+
 	// 为了提高兼容性，我们此处直接判断执行完成 PCD_AUTHENT
 	// 指令之后，Status2Reg中的通信加密位是否被置位就行了。
 	if (read_register_single(Status2Reg) & 0x08) {
 		return HF_TAG_OK;
 	}
-	
+
 	// 其他的情况都认为失败！
 	return MF_ERRAUTH;
 }
@@ -810,8 +810,8 @@ uint8_t pcd_14a_reader_mf1_read_by_cmd(uint8_t cmd, uint8_t addr, uint8_t* p) {
 			// 我们可以让 522 去计算
 			crc_14a_calculate(dat_buff, 16, crc_buff);
 			// 校验一下CRC，避免数据出错
-			if ((crc_buff[0] != dat_buff[16]) || (crc_buff[1] != dat_buff[17])) { 
-				status = HF_ERRCRC; 
+			if ((crc_buff[0] != dat_buff[16]) || (crc_buff[1] != dat_buff[17])) {
+				status = HF_ERRCRC;
 			}
 			// 虽然 CRC 校验有毛病，但是我们还是可以回传
 			// 读取到的卡片数据，因为开发者有可能有特殊用法
@@ -842,17 +842,17 @@ uint8_t pcd_14a_reader_mf1_read(uint8_t addr, uint8_t* p)
 * @param  ：cmd : 写块指令
 *			addr：块地址
 *           p	：写入的数据，16字节
-*			
+*
 * @retval ：状态值HF_TAG_OK，成功
 */
 uint8_t pcd_14a_reader_mf1_write_by_cmd(uint8_t cmd, uint8_t addr, uint8_t* p) {
 	uint8_t status;
 	uint16_t dat_len;
-	
+
 	// 准备写卡数据，用于发起写卡
 	uint8_t dat_buff[18] = { cmd, addr };
 	crc_14a_append(dat_buff, 2);
-	
+
 	// NRF_LOG_INFO("0 pcd_14a_reader_mf1_write addr = %d\r\n", addr);
 
 	// 请求写卡，此时，卡片应当回复ACK
@@ -871,10 +871,10 @@ uint8_t pcd_14a_reader_mf1_write_by_cmd(uint8_t cmd, uint8_t addr, uint8_t* p) {
 		// 1、拷贝数据并且计算 CRC
 		memcpy(dat_buff, p, 16);
 		crc_14a_calculate(dat_buff, 16, &dat_buff[16]);
-		
+
 		// NRF_LOG_INFO_hex("Will send: ", (uint8_t *)p, 16);
 		// NRF_LOG_INFO("\n");
-		
+
 		// 2、传输最终的写卡数据完成写卡
 		status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, dat_buff, 18, dat_buff, &dat_len, U8ARR_BIT_LEN(dat_buff));
 		// 通信失败，直接返回原因
@@ -939,16 +939,16 @@ void pcd_14a_reader_fast_halt_tag(void)
 void pcd_14a_reader_calc_crc(uint8_t* pbtData, size_t szLen, uint8_t* pbtCrc)
 {
 	uint8_t i, n;
-	
+
 	// 重置状态机
 	clear_register_mask(Status1Reg, 0x20);
 	write_register_single(CommandReg, PCD_IDLE);
 	set_register_mask(FIFOLevelReg, 0x80);
-	
+
 	// 向FIFO写入要计算CRC的数据
 	write_register_buffer(FIFODataReg, pbtData, szLen);
 	write_register_single(CommandReg, PCD_CALCCRC);
-	
+
 	// 等待计算完成
 	i = szLen * 2;
 	do
@@ -956,7 +956,7 @@ void pcd_14a_reader_calc_crc(uint8_t* pbtData, size_t szLen, uint8_t* pbtCrc)
 		n = read_register_single(Status1Reg);
 		i--;
 	} while ((i != 0) && !(n & 0x20));
-	
+
 	// 获得最终计算出来的CRC数据
 	pbtCrc[0] = read_register_single(CRCResultRegL);
 	pbtCrc[1] = read_register_single(CRCResultRegM);
@@ -1009,11 +1009,11 @@ uint8_t cascade_to_cmd(uint8_t cascade)
 		case 1:
 			ret = PICC_ANTICOLL1;
 			break;
-		
+
 		case 2:
 			ret = PICC_ANTICOLL2;
 			break;
-		
+
 		case 3:
 			ret = PICC_ANTICOLL3;
 			break;
@@ -1040,11 +1040,11 @@ uint8_t* get_4byte_tag_uid(picc_14a_tag_t *tag, uint8_t *pUid)
 		case 1:
 			p_TmpUid = tag->uid;
 			break;
-		
+
 		case 2:
 			p_TmpUid = tag->uid + 3;
 			break;
-		
+
 		case 3:
 			p_TmpUid = tag->uid + 6;
 			break;
@@ -1085,7 +1085,7 @@ inline void crc_14a_calculate(uint8_t* pbtData, size_t szLen, uint8_t* pbtCrc) {
 			pcd_14a_reader_calc_crc(pbtData, szLen, pbtCrc);
 		} break;
 		default: {
-			// 
+			//
 		} break;
 	}
 }

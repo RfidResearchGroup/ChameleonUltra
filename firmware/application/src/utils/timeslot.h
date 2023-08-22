@@ -1,6 +1,6 @@
 #ifndef TIME_SLOT_H__
 #define TIME_SLOT_H__
-    
+
 #include <stdint.h>
 #include <stdbool.h>
 

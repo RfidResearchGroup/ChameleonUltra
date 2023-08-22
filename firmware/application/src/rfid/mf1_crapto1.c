@@ -147,7 +147,7 @@ uint32_t crypto1_word(struct Crypto1State *s, uint32_t in, int is_encrypted) {
 uint32_t prng_successor(uint32_t x, uint32_t n) {
     // SWAPENDIAN(x);
 	x = __REV(x);
-	
+
     while (n--)
         x = x >> 1 | (x >> 16 ^ x >> 18 ^ x >> 19 ^ x >> 21) << 31;
 

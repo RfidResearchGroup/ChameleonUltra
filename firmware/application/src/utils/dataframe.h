@@ -23,9 +23,9 @@ void data_frame_process(void);
 void on_data_frame_complete(data_frame_cbk_t callback);
 
 data_frame_tx_t* data_frame_make(
-    uint16_t cmd, 
-    uint16_t status, 
-    uint16_t length, 
+    uint16_t cmd,
+    uint16_t status,
+    uint16_t length,
     uint8_t *data
 );
 

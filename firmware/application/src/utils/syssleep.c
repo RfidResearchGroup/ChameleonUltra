@@ -14,9 +14,9 @@ extern bool g_is_ble_connected; // 标志BLE的链接状态
 extern bool g_is_tag_emulating; // 标志模拟卡的状态
 
 
-/** @brief 设备休眠定时器事件 
- * @param 无 
- * @return 无 
+/** @brief 设备休眠定时器事件
+ * @param 无
+ * @return 无
  */
 static void timer_sleep_event_handle(void *arg)
 {
@@ -28,7 +28,7 @@ static void timer_sleep_event_handle(void *arg)
  */
 void sleep_timer_init(void) {
     ret_code_t err_code;
-    
+
     // 创建软定时器，等待一段时间后进行休眠
     err_code = app_timer_create(&m_app_sleep_timer, APP_TIMER_MODE_SINGLE_SHOT, timer_sleep_event_handle);
     APP_ERROR_CHECK(err_code);

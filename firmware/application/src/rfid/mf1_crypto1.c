@@ -1051,7 +1051,7 @@ void Crypto1ByteArrayWithParityHasIn(uint8_t *Buffer, uint8_t *Parity, uint8_t C
 
     while (Count--) {
         uint8_t In = *Buffer;
-        
+
         /* Bit 0, initialise keystream from parity */
         SHIFT8(KeyStream, Out);
         Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2) ^ In;
@@ -1190,7 +1190,7 @@ void Crypto1PRNG(uint8_t State[4], uint8_t ClockCount) {
  */
 uint32_t Crypto1FreePRNG(uint32_t x, uint32_t n) {
     x = __builtin_bswap32(x);
-    
+
     while (n--)
         x = x >> 1 | (x >> 16 ^ x >> 18 ^ x >> 19 ^ x >> 21) << 31;
 

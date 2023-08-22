@@ -294,7 +294,7 @@ flash_stlink:
 
 erase:
 	nrfjprog -f nrf52 --eraseall
-    
+
 # Erase with ST-Link
 erase_stlink:
 	openocd -f interface/stlink.cfg -f target/nrf52.cfg -c "flash init; init; reset halt; flash erase_sector 0 1 last; exit"
