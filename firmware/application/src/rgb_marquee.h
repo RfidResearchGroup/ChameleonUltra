@@ -7,6 +7,7 @@
 
 void rgb_marquee_init(void);
 void rgb_marquee_stop(void);
+void rgb_marquee_reset(void);
 bool is_rgb_marquee_enable(void);
 void ledblink1(uint8_t color,uint8_t dir);
 void ledblink2(uint8_t color,uint8_t dir, uint8_t end);
