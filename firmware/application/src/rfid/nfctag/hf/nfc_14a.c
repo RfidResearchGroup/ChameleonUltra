@@ -142,14 +142,14 @@ bool nfc_tag_14a_checks_crc(uint8_t *pbtData, size_t szLen) {
 
 /**
 * @brief  ：包装ISO14443A的比特帧
-*			自动进行奇偶校验位与数据的包装合并
+*           自动进行奇偶校验位与数据的包装合并
 * @param  ：pbtTx：将要传输的比特流
 *          szTxBits：比特流的长度
 *          pbtTxPar：奇偶校验位的比特流，这个数据的长度一定是 szTxBits / 8，也就是说
-*					 实际上合并之后的比特流的组成结构为：
-*					 data(1byte) - par(1bit) - data(1byte) - par(1bit) ...
-*					   00001000  -   0       - 10101110    - 1
-*					 这种类似的数据结构
+*                    实际上合并之后的比特流的组成结构为：
+*                    data(1byte) - par(1bit) - data(1byte) - par(1bit) ...
+*                      00001000  -   0       - 10101110    - 1
+*                    这种类似的数据结构
 *          pbtFrame： 最终组装完成的数据的缓冲区
 * @retval ：比特流组装结果缓冲区的长度，注意，是比特长度，换算字节请除以8再取模
 */
@@ -208,7 +208,7 @@ uint8_t nfc_tag_14a_wrap_frame(const uint8_t *pbtTx, const size_t szTxBits, cons
 
 /**
 * @brief  ：解包ISO14443A的比特帧
-*			自动进行奇偶校验位与数据的解包分离
+*           自动进行奇偶校验位与数据的解包分离
 * @param  ：pbtFrame：将要解包的比特流
 *          szFrameBits：比特流的长度
 *          pbtRx：解包后的比特流的存放的缓冲区，数据区

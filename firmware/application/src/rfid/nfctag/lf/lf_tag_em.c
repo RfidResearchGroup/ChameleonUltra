@@ -129,7 +129,7 @@ void timer_ce_handler(nrf_timer_event_t event_type, void* p_context) {
     switch (event_type) {
         // 因为我们配置的是使用CC通道2，所以事件回调
         // 函数中判断NRF_TIMER_EVENT_COMPARE0事件
-		case NRF_TIMER_EVENT_COMPARE2: {
+        case NRF_TIMER_EVENT_COMPARE2: {
             if (m_is_send_first_edge) {
                 if (GETBIT(m_id_bit_data, m_bit_send_position)) {
                     // 发送 1 的第一个沿

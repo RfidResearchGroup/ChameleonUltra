@@ -31,7 +31,7 @@ autotimer* bsp_obtain_timer(uint32_t start_value) {
         if (bsptimers[i].busy == 0) {
             bsptimers[i].time = start_value;
             bsptimers[i].busy = 1;
-			break;
+            break;
         }
     }
     return &bsptimers[i];

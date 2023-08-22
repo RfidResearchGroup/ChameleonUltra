@@ -15,7 +15,7 @@
 #define PCD_RECEIVE           0x08               //接收数据
 #define PCD_TRANSMIT          0x04               //发送数据
 #define PCD_TRANSCEIVE        0x0C               //发送并接收数据
-#define PCD_RESET		      0x0F               //复位
+#define PCD_RESET             0x0F               //复位
 #define PCD_CALCCRC           0x03               //CRC计算
 
 /*
@@ -26,7 +26,7 @@
 #define PICC_ANTICOLL1        0x93               //防冲撞
 #define PICC_ANTICOLL2        0x95               //防冲撞
 #define PICC_ANTICOLL3        0x97               //防冲撞
-#define PICC_RATS          	  0xE0				 //选择应答
+#define PICC_RATS             0xE0               //选择应答
 
 /*
 * M1卡片命令字
@@ -42,28 +42,28 @@
 #define PICC_HALT             0x50               //休眠
 
 // GEN1A标签的命令字
-#define PICC_MAGICWUPC1 	  0x40				 // 后门指令1
-#define PICC_MAGICWUPC2		  0x43				 // 后门指令2
-#define PICC_MAGICWIPEC		  0x41				 // 后门清卡指令
+#define PICC_MAGICWUPC1       0x40               // 后门指令1
+#define PICC_MAGICWUPC2       0x43               // 后门指令2
+#define PICC_MAGICWIPEC       0x41               // 后门清卡指令
 
 /* RC522 FIFO长度定义 */
-#define DEF_FIFO_LENGTH       	64               //FIFO size=64byte
+#define DEF_FIFO_LENGTH         64               //FIFO size=64byte
 
 // RC522 CRC长度定义
-#define DEF_CRC_LENGTH       	2
+#define DEF_CRC_LENGTH          2
 
 /*
-	RC522 默认定时器超时配置，这个值可以动态调整，通过 PcdSetTimeout 函数
-	操作标准M1卡最大等待时间 25ms
-	我们可以提高超时以兼容一些反应比较迟钝的卡
-	比如某些手环模拟的卡，比如某些其他硬件模拟的卡，例如变色龙
-	如果超时值太小，就有可能没办法读到UID(Gen1A)卡！
+    RC522 默认定时器超时配置，这个值可以动态调整，通过 PcdSetTimeout 函数
+    操作标准M1卡最大等待时间 25ms
+    我们可以提高超时以兼容一些反应比较迟钝的卡
+    比如某些手环模拟的卡，比如某些其他硬件模拟的卡，例如变色龙
+    如果超时值太小，就有可能没办法读到UID(Gen1A)卡！
 */
-#define DEF_COM_TIMEOUT        	25
+#define DEF_COM_TIMEOUT         25
 
 // 数据IO长度定义
-#define MAX_MIFARE_FRAME_SIZE   18  							// biggest Mifare frame is answer to a read (one block = 16 Bytes) + 2 Bytes CRC
-#define MAX_MIFARE_PARITY_SIZE  3   							// need 18 parity bits for the 18 Byte above. 3 Bytes are enough to store these
+#define MAX_MIFARE_FRAME_SIZE   18                              // biggest Mifare frame is answer to a read (one block = 16 Bytes) + 2 Bytes CRC
+#define MAX_MIFARE_PARITY_SIZE  3                               // need 18 parity bits for the 18 Byte above. 3 Bytes are enough to store these
 #define CARD_MEMORY_SIZE        4096
 
 /////////////////////////////////////////////////////////////////////
@@ -136,7 +136,7 @@
 #define     RFU3C                 0x3C    //保留
 #define     RFU3D                 0x3D    //保留
 #define     RFU3E                 0x3E    //保留
-#define     RFU3F		  		  0x3F    //保留
+#define     RFU3F                 0x3F    //保留
 
 
 /////////////////////////////////////////////////////////////////////
@@ -152,84 +152,84 @@
 
 // 标签信息的基本结构封装
 typedef struct {
-	uint8_t uid[10];  // 卡号的字节数组，最长10字节
-	uint8_t uid_len;  // 卡号的长度
-	uint8_t cascade;  // 防冲撞等级 值为1表示 4byte，2表示7byte，3表示10byte
-	uint8_t sak;	  // 选择确认
-	uint8_t atqa[2];  // 请求应答
+    uint8_t uid[10];  // 卡号的字节数组，最长10字节
+    uint8_t uid_len;  // 卡号的长度
+    uint8_t cascade;  // 防冲撞等级 值为1表示 4byte，2表示7byte，3表示10byte
+    uint8_t sak;      // 选择确认
+    uint8_t atqa[2];  // 请求应答
 } picc_14a_tag_t;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-	// Device control
-	void pcd_14a_reader_init(void);
+    // Device control
+    void pcd_14a_reader_init(void);
     void pcd_14a_reader_uninit(void);
     void pcd_14a_reader_reset(void);
     void pcd_14a_reader_antenna_on(void);
     void pcd_14a_reader_antenna_off(void);
 
-	// Device register
-	uint8_t read_register_single(uint8_t Address);
+    // Device register
+    uint8_t read_register_single(uint8_t Address);
     void write_register_single(uint8_t Address, uint8_t value);
     void clear_register_mask(uint8_t reg, uint8_t mask);
     void set_register_mask(uint8_t reg, uint8_t mask);
 
-	// Device comunication control
-	uint16_t pcd_14a_reader_timeout_get(void);
-	void pcd_14a_reader_timeout_set(uint16_t timeout_ms);
+    // Device comunication control
+    uint16_t pcd_14a_reader_timeout_get(void);
+    void pcd_14a_reader_timeout_set(uint16_t timeout_ms);
 
-	// Device comunication interface
+    // Device comunication interface
     uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command,
         uint8_t* pIn,
         uint8_t  InLenByte,
         uint8_t* pOut,
         uint16_t* pOutLenBit,
-		uint16_t maxOutLenBit);
+        uint16_t maxOutLenBit);
     uint8_t pcd_14a_reader_bits_transfer(uint8_t* pTx,
         uint16_t  szTxBits,
         uint8_t* pTxPar,
         uint8_t* pRx,
         uint8_t* pRxPar,
-		uint16_t* pRxLenBit,
-		uint16_t szRxLenBitMax);
+        uint16_t* pRxLenBit,
+        uint16_t szRxLenBitMax);
 
-	// Device auto append and check 14443-A parity enable or disable.
-	void pcd_14a_reader_parity_on(void);
+    // Device auto append and check 14443-A parity enable or disable.
+    void pcd_14a_reader_parity_on(void);
     void pcd_14a_reader_parity_off(void);
 
-	// 14443-A tag operation
-	uint8_t pcd_14a_reader_scan_auto(picc_14a_tag_t *tag);
-	uint8_t pcd_14a_reader_ats_request(uint8_t *pAts, uint16_t *szAts, uint16_t szAtsBitMax);
-	uint8_t pcd_14a_reader_atqa_request(uint8_t *resp, uint8_t *resp_par, uint16_t resp_max_bit);
+    // 14443-A tag operation
+    uint8_t pcd_14a_reader_scan_auto(picc_14a_tag_t *tag);
+    uint8_t pcd_14a_reader_ats_request(uint8_t *pAts, uint16_t *szAts, uint16_t szAtsBitMax);
+    uint8_t pcd_14a_reader_atqa_request(uint8_t *resp, uint8_t *resp_par, uint16_t resp_max_bit);
 
-	// M1 tag operation
+    // M1 tag operation
     uint8_t pcd_14a_reader_mf1_auth(picc_14a_tag_t *tag, uint8_t type, uint8_t addr, uint8_t* pKey);
-	void pcd_14a_reader_mf1_unauth(void);
-	// 写卡操作
-	uint8_t pcd_14a_reader_mf1_write_by_cmd(uint8_t cmd, uint8_t addr, uint8_t* p);
+    void pcd_14a_reader_mf1_unauth(void);
+    // 写卡操作
+    uint8_t pcd_14a_reader_mf1_write_by_cmd(uint8_t cmd, uint8_t addr, uint8_t* p);
     uint8_t pcd_14a_reader_mf1_write(uint8_t addr, uint8_t* pData);
-	// 读卡操作
-	uint8_t pcd_14a_reader_mf1_read_by_cmd(uint8_t cmd, uint8_t addr, uint8_t* p);
+    // 读卡操作
+    uint8_t pcd_14a_reader_mf1_read_by_cmd(uint8_t cmd, uint8_t addr, uint8_t* p);
     uint8_t pcd_14a_reader_mf1_read(uint8_t addr, uint8_t* pData);
     // 休眠卡操作
-	uint8_t pcd_14a_reader_halt_tag(void);
-	void pcd_14a_reader_fast_halt_tag(void);
+    uint8_t pcd_14a_reader_halt_tag(void);
+    void pcd_14a_reader_fast_halt_tag(void);
 
-	// UID & UFUID tag operation
-	uint8_t pcd_14a_reader_gen1a_unlock(void);
-	uint8_t pcd_14a_reader_gen1a_uplock(void);
+    // UID & UFUID tag operation
+    uint8_t pcd_14a_reader_gen1a_unlock(void);
+    uint8_t pcd_14a_reader_gen1a_uplock(void);
 
-	// CRC calulate
-	void pcd_14a_reader_calc_crc(uint8_t* pbtData, size_t szLen, uint8_t* pbtCrc);
-	void crc_14a_calculate(uint8_t* pbtData, size_t szLen, uint8_t* pbtCrc);
+    // CRC calulate
+    void pcd_14a_reader_calc_crc(uint8_t* pbtData, size_t szLen, uint8_t* pbtCrc);
+    void crc_14a_calculate(uint8_t* pbtData, size_t szLen, uint8_t* pbtCrc);
     void crc_14a_append(uint8_t* pbtData, size_t szLen);
-	void pcd_14a_reader_crc_computer(uint8_t use522CalcCRC);
+    void pcd_14a_reader_crc_computer(uint8_t use522CalcCRC);
 
-	// other
-	uint8_t cascade_to_cmd(uint8_t cascade);
-	uint32_t get_u32_tag_uid(picc_14a_tag_t *tag);
-	uint8_t* get_4byte_tag_uid(picc_14a_tag_t *tag, uint8_t *out);
+    // other
+    uint8_t cascade_to_cmd(uint8_t cascade);
+    uint32_t get_u32_tag_uid(picc_14a_tag_t *tag);
+    uint8_t* get_4byte_tag_uid(picc_14a_tag_t *tag, uint8_t *out);
 #ifdef __cplusplus
 }
 #endif

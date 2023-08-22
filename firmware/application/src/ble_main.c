@@ -193,81 +193,81 @@ static void nrf_qwr_error_handler(uint32_t nrf_error)
 
 __INLINE uint32_t map(uint32_t x, uint32_t in_min, uint32_t in_max, uint32_t out_min, uint32_t out_max)
 {
-	return (uint32_t)((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min);
+    return (uint32_t)((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min);
 }
 
 //电池电压到百分比计算
 uint32_t BATVOL2PERCENT(uint16_t VOL)
 {
-	//100%	4.20V	1
-	//90 %	4.06V		80%-100%	白
-	//80 %	3.98V	1
-	//70 %	3.92V		60%-80%		白
-	//60 %	3.87V	1
-	//50 %	3.82V		40%-60%		白
-	//40 %	3.79V	1
-	//30 %	3.77V		20%-40%		白
-	//20 %	3.74V	1
-	//10 %	3.68V		5%-20%		红
-	//5 %	3.45V	1				关机
-	//0 %	3.00V
-	//#define P100VOL	4200
-	//#define P80VOL	3980
-	//#define P60VOL	3870
-	//#define P40VOL	3790
-	//#define P20VOL	3740
-	//#define P5VOL	3450
+    //100%  4.20V   1
+    //90 %  4.06V       80%-100%    白
+    //80 %  3.98V   1
+    //70 %  3.92V       60%-80%     白
+    //60 %  3.87V   1
+    //50 %  3.82V       40%-60%     白
+    //40 %  3.79V   1
+    //30 %  3.77V       20%-40%     白
+    //20 %  3.74V   1
+    //10 %  3.68V       5%-20%      红
+    //5 %   3.45V   1               关机
+    //0 %   3.00V
+    //#define P100VOL   4200
+    //#define P80VOL    3980
+    //#define P60VOL    3870
+    //#define P40VOL    3790
+    //#define P20VOL    3740
+    //#define P5VOL 3450
 
-	//100%	4.20V	1
-	//90 %	4.00V		80%-100%	白
-	//80 %	3.89V	1
-	//70 %	3.79V		60%-80%		白
-	//60 %	3.70V	1
-	//50 %	3.62V		40%-60%		白
-	//40 %	3.57V	1
-	//30 %	3.53V		20%-40%		白
-	//20 %	3.51V	1
-	//10 %	3.46V		5%-20%		红
-	//5 %	3.43V	1				关机
-	//0 %	3.00V
-#define P100VOL	4200
-#define P80VOL	3890
-#define P60VOL	3700
-#define P40VOL	3570
-#define P20VOL	3510
-#define P5VOL	3230
+    //100%  4.20V   1
+    //90 %  4.00V       80%-100%    白
+    //80 %  3.89V   1
+    //70 %  3.79V       60%-80%     白
+    //60 %  3.70V   1
+    //50 %  3.62V       40%-60%     白
+    //40 %  3.57V   1
+    //30 %  3.53V       20%-40%     白
+    //20 %  3.51V   1
+    //10 %  3.46V       5%-20%      红
+    //5 %   3.43V   1               关机
+    //0 %   3.00V
+#define P100VOL 4200
+#define P80VOL  3890
+#define P60VOL  3700
+#define P40VOL  3570
+#define P20VOL  3510
+#define P5VOL   3230
 
 
-	if(VOL > P80VOL)
-	{
-		//80-100
-		return map(VOL, P80VOL, P100VOL, 80, 100);
-	}
-	else if(VOL > P60VOL)
-	{
-		//60-80
-		return map(VOL, P60VOL, P80VOL, 60, 80);
-	}
-	else if(VOL > P40VOL)
-	{
-		//40-60
-		return map(VOL, P40VOL, P60VOL, 40, 60);
-	}
-	else if(VOL > P20VOL)
-	{
-		//20-60
-		return map(VOL, P20VOL, P40VOL, 20, 40);
-	}
-	else if(VOL > P5VOL)
-	{
-		//5-20
-		return map(VOL, P5VOL, P20VOL, 5, 20);
-	}
-	else
-	{
-		//<5
-		return 0;
-	}
+    if(VOL > P80VOL)
+    {
+        //80-100
+        return map(VOL, P80VOL, P100VOL, 80, 100);
+    }
+    else if(VOL > P60VOL)
+    {
+        //60-80
+        return map(VOL, P60VOL, P80VOL, 60, 80);
+    }
+    else if(VOL > P40VOL)
+    {
+        //40-60
+        return map(VOL, P40VOL, P60VOL, 40, 60);
+    }
+    else if(VOL > P20VOL)
+    {
+        //20-60
+        return map(VOL, P20VOL, P40VOL, 20, 40);
+    }
+    else if(VOL > P5VOL)
+    {
+        //5-20
+        return map(VOL, P5VOL, P20VOL, 5, 20);
+    }
+    else
+    {
+        //<5
+        return 0;
+    }
 }
 
 /**@brief Function for initializing services that will be used by the application.

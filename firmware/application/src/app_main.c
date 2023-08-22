@@ -494,11 +494,11 @@ static void offline_status_blink_color(uint8_t blink_color) {
 }
 
 static void offline_status_error(void) {
-	offline_status_blink_color(0);
+    offline_status_blink_color(0);
 }
 
 static void offline_status_ok(void) {
-	offline_status_blink_color(1);
+    offline_status_blink_color(1);
 }
 
 // fast detect a 14a tag uid to sim

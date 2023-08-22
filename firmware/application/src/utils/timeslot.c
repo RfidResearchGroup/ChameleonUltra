@@ -120,12 +120,12 @@ void request_timeslot(uint32_t time_us, timeslot_callback_t callback, bool wait_
     }
 
     // 进入临界点
-	NVIC_DisableIRQ(RADIO_IRQn);
-	NVIC_DisableIRQ(TIMER0_IRQn);
-	NVIC_DisableIRQ(TIMER2_IRQn);
-	NVIC_DisableIRQ(GPIOTE_IRQn);
-	NVIC_DisableIRQ(MWU_IRQn);
-	NVIC_DisableIRQ(RTC1_IRQn);
+    NVIC_DisableIRQ(RADIO_IRQn);
+    NVIC_DisableIRQ(TIMER0_IRQn);
+    NVIC_DisableIRQ(TIMER2_IRQn);
+    NVIC_DisableIRQ(GPIOTE_IRQn);
+    NVIC_DisableIRQ(MWU_IRQn);
+    NVIC_DisableIRQ(RTC1_IRQn);
 
     // 请求时序成功，快处理任务
     if (m_callback != NULL) {
@@ -134,9 +134,9 @@ void request_timeslot(uint32_t time_us, timeslot_callback_t callback, bool wait_
     }
 
     // 退出临界点
-	NVIC_EnableIRQ(GPIOTE_IRQn);
-	NVIC_EnableIRQ(RTC1_IRQn);
-	NVIC_EnableIRQ(MWU_IRQn);
+    NVIC_EnableIRQ(GPIOTE_IRQn);
+    NVIC_EnableIRQ(RTC1_IRQn);
+    NVIC_EnableIRQ(MWU_IRQn);
 
     // 关闭会话并且等待关闭完成
     err_code = sd_radio_session_close();
@@ -177,12 +177,12 @@ void timeslot_start(uint32_t time_us) {
     }
 
     // 进入临界点
-	NVIC_DisableIRQ(RADIO_IRQn);
-	NVIC_DisableIRQ(TIMER0_IRQn);
-	NVIC_DisableIRQ(TIMER2_IRQn);
-	//NVIC_DisableIRQ(GPIOTE_IRQn);
-	NVIC_DisableIRQ(MWU_IRQn);
-	NVIC_DisableIRQ(RTC1_IRQn);
+    NVIC_DisableIRQ(RADIO_IRQn);
+    NVIC_DisableIRQ(TIMER0_IRQn);
+    NVIC_DisableIRQ(TIMER2_IRQn);
+    //NVIC_DisableIRQ(GPIOTE_IRQn);
+    NVIC_DisableIRQ(MWU_IRQn);
+    NVIC_DisableIRQ(RTC1_IRQn);
     //NRF_LOG_INFO("timeslot start.");
 }
 
@@ -197,9 +197,9 @@ void timeslot_stop(void) {
     m_is_timeslot_running = false;
 
     // 退出临界点
-	//NVIC_EnableIRQ(GPIOTE_IRQn);
-	NVIC_EnableIRQ(RTC1_IRQn);
-	NVIC_EnableIRQ(MWU_IRQn);
+    //NVIC_EnableIRQ(GPIOTE_IRQn);
+    NVIC_EnableIRQ(RTC1_IRQn);
+    NVIC_EnableIRQ(MWU_IRQn);
 
     // 关闭会话并且等待关闭完成
     err_code = sd_radio_session_close();

@@ -12,10 +12,10 @@
   uint8_t (*(WATCH))[(LENG)] = (uint8_t (*)[(LENG)])(PDATA)
 #define DEBUG_READ_BREAK(WATCH)  (*(WATCH))[0] = (*(WATCH))[0]
 
-#define setbit(x,y)  		(x|=(1<<y))
-#define clrbit(x,y)  		(x&=~(1<<y))
-#define reversebit(x,y)  	(x^=(1<<y))
-#define getbit(x,y)   		((x) >> (y)&1)
+#define setbit(x,y)         (x|=(1<<y))
+#define clrbit(x,y)         (x&=~(1<<y))
+#define reversebit(x,y)     (x^=(1<<y))
+#define getbit(x,y)         ((x) >> (y)&1)
 
 void writebit(uint8_t *dataa, uint8_t *datab, uint8_t pos, uint8_t adata);
 uint8_t readbit(uint8_t *dataa, uint8_t *datab, uint8_t pos);

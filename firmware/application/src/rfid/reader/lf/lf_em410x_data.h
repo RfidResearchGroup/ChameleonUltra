@@ -10,17 +10,17 @@ extern "C"
 {
 #endif
 
-#define cardbufbytesize 5		// 卡片字节buffer大小
+#define cardbufbytesize 5       // 卡片字节buffer大小
 
-#define rawbufsize 24			// 最大记录buffer
-#define cardbufsize 8			// 卡片大小
+#define rawbufsize 24           // 最大记录buffer
+#define cardbufsize 8           // 卡片大小
 
 typedef struct
 {
-	uint8_t rawa[rawbufsize];	 // 记录变化沿之间的时间差
-	uint8_t rawb[rawbufsize];	 // 记录变化沿之间的时间差
-	uint8_t hexbuf[cardbufsize]; // 解析后的卡数据
-	uint8_t startbit;
+    uint8_t rawa[rawbufsize];    // 记录变化沿之间的时间差
+    uint8_t rawb[rawbufsize];    // 记录变化沿之间的时间差
+    uint8_t hexbuf[cardbufsize]; // 解析后的卡数据
+    uint8_t startbit;
 } RAWBUF_TYPE_S;
 
 //卡片数据

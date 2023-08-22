@@ -12,12 +12,12 @@ void bsp_delay_init(void)
 //注意nms的范围
 void bsp_delay_ms(uint16_t nms)
 {
-	nrf_delay_us(nms * 1000);
+    nrf_delay_us(nms * 1000);
 }
 
 //延时nus
 //nus为要延时的us数.
 void bsp_delay_us(uint32_t nus)
 {
-	nrf_delay_us(nus);
+    nrf_delay_us(nus);
 }

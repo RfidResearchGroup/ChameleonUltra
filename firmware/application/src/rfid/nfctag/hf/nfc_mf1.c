@@ -723,7 +723,7 @@ void nfc_tag_mf1_state_handler(uint8_t* p_data, uint16_t szDataBits) {
                             return;
                         }
                         case CMD_WRITE: {
-                            //	正常的卡不允许写block0，不然会被CUID防火墙识别到
+                            //  正常的卡不允许写block0，不然会被CUID防火墙识别到
                             if (p_data[1] == 0x00 && !m_tag_information->config.mode_gen2_magic) {
                                 // 直接重置14a的状态机，让标签休眠
                                 nfc_tag_14a_set_state(NFC_TAG_STATE_14A_HALTED);
