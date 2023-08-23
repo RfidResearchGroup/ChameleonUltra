@@ -60,15 +60,19 @@ set -xe
     --merge \
     settings.hex \
     application.hex \
-    --output application.hex
-  rm settings.hex
+    --output application_merged.hex
 
   mergehex \
     --merge \
       bootloader.hex \
-      application.hex \
+      application_merged.hex \
       softdevice.hex \
     --output fullimage.hex
 
-  zip ${device_type}-binaries.zip *.hex
+  tmp_dir=$(mktemp -d -t cu_binaries_XXXXXXXXXX)
+  cp *.hex "$tmp_dir"
+  mv $tmp_dir/application_merged.hex $tmp_dir/application.hex
+  rm $tmp_dir/settings.hex
+  zip -j ${device_type}-binaries.zip $tmp_dir/*.hex
+  rm -rf $tmp_dir
 )
