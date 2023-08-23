@@ -1,7 +1,7 @@
 #include "data_utils.h"
 #include <ctype.h>
 
-//向raw写入2bit数据，datab存0bit，dataa存1bit
+//Write2BitDataToRaw,DataBStores0Bit,DataaStores1Bit
 void writebit(uint8_t *dataa, uint8_t *datab, uint8_t pos, uint8_t adata) {
     if (adata >= 4) {
         return;
@@ -14,7 +14,7 @@ void writebit(uint8_t *dataa, uint8_t *datab, uint8_t pos, uint8_t adata) {
     getbit(adata, 0) ? setbit(datab[aimbyte], aimbit) : clrbit(datab[aimbyte], aimbit);
 }
 
-//输出raw的2bit组合数据
+//OutputRaw's2BitCombinationData
 uint8_t readbit(uint8_t *dataa, uint8_t *datab, uint8_t pos) {
     static uint8_t aimbyte = 0;
     static uint8_t aimbit = 0;
@@ -25,7 +25,7 @@ uint8_t readbit(uint8_t *dataa, uint8_t *datab, uint8_t pos) {
                (getbit(datab[aimbyte], aimbit)));
 }
 
-//向raw写入2bit数据(大端方法，每个byte的第8位写数据的第1位)，datab存0bit，dataa存1bit
+// Write 2bit data to RAW (large -end method, 1st place for each Byte's 8th position), datab deposit 0bit, dataa save 1bit 1bit
 void writebit_msb(uint8_t *dataa, uint8_t *datab, uint8_t pos, uint8_t adata) {
     if (adata >= 4) {
         return;
@@ -38,7 +38,7 @@ void writebit_msb(uint8_t *dataa, uint8_t *datab, uint8_t pos, uint8_t adata) {
     getbit(adata, 0) ? setbit(datab[aimbyte], aimbit) : clrbit(datab[aimbyte], aimbit);
 }
 
-//输出raw的2bit组合数据(大端方法，每个byte的第8位读数据的第1位)
+// Output RAW's 2bit combination data (large -end method, No. 1 of the 8th reading data of each byte)
 uint8_t readbit_msb(uint8_t *dataa, uint8_t *datab, uint8_t pos) {
     static uint8_t aimbyte = 0;
     static uint8_t aimbit = 0;
@@ -49,7 +49,7 @@ uint8_t readbit_msb(uint8_t *dataa, uint8_t *datab, uint8_t pos) {
                (getbit(datab[aimbyte], aimbit)));
 }
 
-//高低位翻转
+//High and low flip
 uint8_t invert_num(uint8_t num) {
     uint8_t temp = 0, sh = 0xf;
     uint8_t i = 0;
@@ -63,7 +63,7 @@ uint8_t invert_num(uint8_t num) {
     return num;
 }
 
-//原始数据转换为2倍长度的hex字符数组
+//The original data is converted to the HEX character array with a 2x length
 void ByteToHexStr(uint8_t *source, uint8_t *dest, uint8_t sourceLen) {
     uint8_t i, highByte, lowByte;
 

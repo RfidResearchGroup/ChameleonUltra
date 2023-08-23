@@ -9,14 +9,14 @@
 extern "C" {
 #endif
 
-typedef void(*RIO_CALLBACK_S)(void); // 调用函数格式
+typedef void(*RIO_CALLBACK_S)(void); // Call the function format
 
 void register_rio_callback(RIO_CALLBACK_S P);
 void blank_function(void);
 void unregister_rio_callback(void);
 void GPIO_INT0_IRQHandler(void);
 
-// 计数器操作
+// Counter
 uint32_t get_lf_counter_value(void);
 void clear_lf_counter_value(void);
 

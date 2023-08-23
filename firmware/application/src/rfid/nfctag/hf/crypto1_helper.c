@@ -24,9 +24,9 @@ void mf_crypto1_encryptEx(struct Crypto1State *pcs, uint8_t *data_in, uint8_t *k
     int i;
     for (i = 0; i < len; i++) {
         uint8_t bt = data_in[i];
-        // 加密字节流
+        // Encrypted bytes
         data_out[i] = crypto1_byte(pcs, keystream ? keystream[i] : 0x00, 0) ^ data_in[i];
-        // 生成奇偶校验位
+        // Generate strange school inspection
         par[i] = filter(pcs->odd) ^ oddparity8(bt);
     }
 }

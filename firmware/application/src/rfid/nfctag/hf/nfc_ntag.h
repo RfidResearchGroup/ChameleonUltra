@@ -15,7 +15,7 @@
 typedef struct {
     uint8_t mode_uid_magic: 1;
     uint8_t detection_enable: 1;
-    // 保留
+    // reserve
     uint8_t reserved1: 5;
     uint8_t reserved2;
     uint8_t reserved3;

@@ -14,7 +14,7 @@ nrf_drv_pwm_t m_pwm = NRF_DRV_PWM_INSTANCE(0);
 nrf_ppi_channel_t m_ppi_channel1;
 nrfx_timer_t m_timer_lf_reader = NRFX_TIMER_INSTANCE(2);
 
-// 目前只用到通道1，因此只配置通道一即可
+// At present, only channel 1 is used, so only one channel can be configured
 nrf_pwm_values_individual_t m_lf_125khz_pwm_seq_val[] = { { 2, 0, 0, 0}, };
 nrf_pwm_sequence_t const m_lf_125khz_pwm_seq_obj = {
     .values.p_individual = m_lf_125khz_pwm_seq_val,
@@ -25,14 +25,14 @@ nrf_pwm_sequence_t const m_lf_125khz_pwm_seq_obj = {
 static bool m_is_125khz_radio_init = false;
 
 
-/**@brief 低频读卡下降沿触发采集事件
+/**@brief Low -frequency reading card decrease along the trigger collection event
  */
 static void lf_125khz_gpio_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action) {
-    // 直接转交事件过去
+    // Directly transfer to the event
     GPIO_INT0_IRQHandler();
 }
 
-// 初始化125khz信号pwm调制
+// Initialize 125kHz signal PWM modulation
 void lf_125khz_radio_init(void) {
     nrfx_err_t err_code;
 
@@ -41,7 +41,7 @@ void lf_125khz_radio_init(void) {
 
         // ******************************************************************
 
-        // 配置pwm
+        // Configure pwm
         nrfx_pwm_config_t config = NRFX_PWM_DEFAULT_CONFIG;
         config.output_pins[0] = LF_ANT_DRIVER | NRF_DRV_PWM_PIN_INVERTED;
         for (uint8_t i = 1; i < NRF_PWM_CHANNEL_COUNT; i++) {
@@ -54,26 +54,26 @@ void lf_125khz_radio_init(void) {
         config.load_mode = (nrf_pwm_dec_load_t)NRF_PWM_LOAD_INDIVIDUAL;
         config.step_mode = (nrf_pwm_dec_step_t)NRF_PWM_STEP_AUTO;
 
-        // 初始化pwm
+        // Initialization PWM
         err_code = nrfx_pwm_init(&m_pwm, &config, NULL);
         APP_ERROR_CHECK(err_code);
 
         // ******************************************************************
 
-        // 定义定时器配置结构体，并使用默认配置参数初始化结构体
+        // Define the timer configuration structure, and use the default configuration parameter to initialize the structure
         nrfx_timer_config_t timer_cfg = NRFX_TIMER_DEFAULT_CONFIG;
-        timer_cfg.mode = NRF_TIMER_MODE_COUNTER;    // 使用计数器模式
+        timer_cfg.mode = NRF_TIMER_MODE_COUNTER;    // Use the counter mode
 
-        // 初始化定时器
+        // Initialized timer
         err_code = nrfx_timer_init(&m_timer_lf_reader, &timer_cfg, NULL);
         APP_ERROR_CHECK(err_code);
 
-        // 使能定时器
+        // Enable timer
         nrfx_timer_enable(&m_timer_lf_reader);
 
         // ******************************************************************
 
-        // 初始化ppi
+        // Initialized PPI
         err_code = nrf_drv_ppi_init();
         APP_ERROR_CHECK(err_code);
 
@@ -89,7 +89,7 @@ void lf_125khz_radio_init(void) {
 
         // ******************************************************************
 
-        // LF采集下降沿中断，默认将gpio下拉，触发方式为下降沿触发
+        // The LF collection decline is interrupted, and the GPIO is pulled down by default. The trigger method is triggering
         nrf_drv_gpiote_in_config_t in_config = NRFX_GPIOTE_CONFIG_IN_SENSE_LOTOHI(false);
         err_code = nrf_drv_gpiote_in_init(LF_OA_OUT, &in_config, lf_125khz_gpio_handler);
         APP_ERROR_CHECK(err_code);
@@ -99,7 +99,7 @@ void lf_125khz_radio_init(void) {
     }
 }
 
-// 反初始化
+// Anti -initialization
 void lf_125khz_radio_uninit(void) {
     if (m_is_125khz_radio_init) {
         m_is_125khz_radio_init = false;
@@ -113,14 +113,14 @@ void lf_125khz_radio_uninit(void) {
 }
 
 /**
- * 启动125khz广播
+ * Start the 125kHz broadcast
  */
 void start_lf_125khz_radio(void) {
     nrf_drv_pwm_simple_playback(&m_pwm, &m_lf_125khz_pwm_seq_obj, 1, NRF_DRV_PWM_FLAG_LOOP);
 }
 
 /**
- * 关闭125khz射频广播
+ * Close 125kHz RF broadcast
  */
 void stop_lf_125khz_radio(void) {
     nrf_drv_pwm_stop(&m_pwm, true);

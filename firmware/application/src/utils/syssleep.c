@@ -7,33 +7,33 @@
 #include "nrf_log_default_backends.h"
 
 
-APP_TIMER_DEF(m_app_sleep_timer);       // 用于设备休眠的定时器
+APP_TIMER_DEF(m_app_sleep_timer);       //The timer for equipment dormant
 static volatile bool m_system_off_enter = false;
 
-extern bool g_is_ble_connected; // 标志BLE的链接状态
-extern bool g_is_tag_emulating; // 标志模拟卡的状态
+extern bool g_is_ble_connected; //Link to log in BLE
+extern bool g_is_tag_emulating; //The status of the logo simulation card
 
 
-/** @brief 设备休眠定时器事件
- * @param 无
- * @return 无
+/** @brief Equipment dormant timer event
+ * @param none
+ * @return none
  */
 static void timer_sleep_event_handle(void *arg) {
-    // 休眠条件达到，设置标志位，让main中处理即可
+    // The dormant conditions are achieved, set the logo bit, so that the processing in the main
     m_system_off_enter = true;
 }
 
-/**@brief 休眠软定时器初始化
+/**@brief Sleep soft timer initialization
  */
 void sleep_timer_init(void) {
     ret_code_t err_code;
 
-    // 创建软定时器，等待一段时间后进行休眠
+    // Create a soft timer and wait for a period of time to sleep
     err_code = app_timer_create(&m_app_sleep_timer, APP_TIMER_MODE_SINGLE_SHOT, timer_sleep_event_handle);
     APP_ERROR_CHECK(err_code);
 }
 
-/**@brief 休眠软定时器停止
+/**@brief Sleeping soft timer stop
  */
 void sleep_timer_stop() {
     m_system_off_enter = false;
@@ -41,16 +41,16 @@ void sleep_timer_stop() {
     APP_ERROR_CHECK(err_code);
 }
 
-/**@brief 休眠软定时器启动
+/**@brief Sleep soft timer startup
  */
 void sleep_timer_start(uint32_t time_ms) {
-    // 先关闭之前的休眠定时器
+    // Close the previous dormant timer first
     sleep_timer_stop();
-    // 非USB供电状态
+    // Non -USB power supply status
     if (nrfx_power_usbstatus_get() == NRFX_POWER_USB_STATE_DISCONNECTED) {
-        // 如果蓝牙还连接着，或者还在模拟卡状态，就不需要启动休眠
+        // If Bluetooth is still connected, or is still in the state of simulation card, you don't need to start dormant
         if (g_is_ble_connected == false && g_is_tag_emulating == false) {
-            // 启动定时器
+            // Start the timer
             ret_code_t err_code = app_timer_start(m_app_sleep_timer, APP_TIMER_TICKS(time_ms), NULL);
             APP_ERROR_CHECK(err_code);
         }
@@ -58,7 +58,7 @@ void sleep_timer_start(uint32_t time_ms) {
 }
 
 /**
- *@brief 运行休眠的具体实现
+ *@brief Specific implementation of dormant
  *@param sysOff: The system off function implment.
  */
 void sleep_system_run(void (*sysOffSleep)(), void (*sysOnSleep)()) {

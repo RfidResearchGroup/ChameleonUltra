@@ -8,28 +8,28 @@
 #include "utils.h"
 #include "tag_base_type.h"
 
-// 最多八张卡槽
+//Up to eight card slots
 #define TAG_MAX_SLOT_NUM    8
 
 extern bool g_is_tag_emulating;
 
-// 标签的数据缓冲区
+// Label data buffer
 typedef struct {
     uint16_t length;
     uint8_t *buffer;
     uint16_t *crc;
 } tag_data_buffer_t;
 
-// 场感应使能与闭能切换函数
+//Farming impact enable and closed energy switching function
 typedef void (*tag_sense_switch_t)(bool enable);
-// flash数据加载到RAM后通知给注册者
+// Flash data is notified to the registrar after loading to RAM
 typedef int (*tag_datas_loadcb_t)(tag_specific_type_t type, tag_data_buffer_t *buffer);
-// 数据要保存到flash之前通知给注册者
+// The data should be saved to the registered person before Flash
 typedef int (*tag_datas_savecb_t)(tag_specific_type_t type, tag_data_buffer_t *buffer);
-// 数据的工厂初始化函数
+// Data factory initialization function
 typedef bool (*tag_datas_factory_t)(uint8_t slot, tag_specific_type_t type);
 
-// 标签的数据加载与保存事件的回调函数映射表
+// The data of the label data loading and the recovery function of the preservation event mapping table
 typedef struct {
     tag_sense_type_t     sense_type;
     tag_specific_type_t  tag_type;
@@ -40,70 +40,70 @@ typedef struct {
 } tag_base_handler_map_t;
 
 /**
- * 卡槽内模拟的卡的类型之类的参数的存放配置
- * 此配置可以被持久化保存到Flash
- * 4字节一个Word，谨记进行整字对齐
+ * The storage configuration of parameters such as the type of card simulated in the card slot
+ * This configuration can be preserved by persistently to Flash
+ * 4 bytes a word, keep in mind the entire word alignment
  */
 typedef struct ALIGN_U32 {
-    // 基础配置
+    //Basic configuration
     struct {
-        uint8_t activated;      // 当前激活了哪个卡槽（哪个卡槽被使用了）
-        uint8_t reserved1;      // 保留
-        uint8_t reserved2;      // 保留
-        uint8_t reserved3;      // 保留
+        uint8_t activated;      //Which card slot is currently activated (which card slot is used)
+        uint8_t reserved1;      // reserve
+        uint8_t reserved2;      //reserve
+        uint8_t reserved3;      // reserve
     } config;
-    // 每个卡槽自身的配置
+    // The configuration of each card slot itself
     struct {
-        // 基础配置，占用两个字节
-        uint8_t enable: 1;      // 是否使能该卡槽
-        uint8_t reserved1: 7;   // 保留
-        uint8_t reserved2;      // 保留
-        // 具体的正在模拟卡的类型
+        //Basic configuration, occupying two bytes
+        uint8_t enable: 1;      // Whether to enable the card
+        uint8_t reserved1: 7;   // reserve
+        uint8_t reserved2;      //reserve
+        // Specific type of simulation card
         tag_specific_type_t tag_hf;
         tag_specific_type_t tag_lf;
     } group[TAG_MAX_SLOT_NUM];
 } tag_slot_config_t;
 
 
-// 最基本的模拟卡初始化程序
+// The most basic simulation card initialization program
 void tag_emulation_init(void);
-// 标签的一些存放在RAM中的数据可以通过此接口持久化保存到flash
+//Some of the data stored in RAM can be saved to Flash through this interface
 void tag_emulation_save(void);
 
-// 模拟卡的启动与结束
+// Starting and ending of the simulation card
 void tag_emulation_sense_run(void);
 void tag_emulation_sense_end(void);
 
-// 场感应使能状态切换封装函数
+// Farming response enable state switching package function
 void tag_emulation_sense_switch(tag_sense_type_t type, bool enable);
-// 删除卡槽中指定的场类型的卡片
+// Delete the type of card specified in the card slot
 void tag_emulation_delete_data(uint8_t slot, tag_sense_type_t sense_type);
-// 将指定卡槽初始化为指定类型的卡片的出厂数据
+// Initial data of the factory data of the specified card slot into the factory of the specified type of card
 bool tag_emulation_factory_data(uint8_t slot, tag_specific_type_t tag_type);
-// 更改正在模拟的卡片的类型
+// Change the type of the card that is being simulated
 void tag_emulation_change_type(uint8_t slot, tag_specific_type_t tag_type);
-// 从内存中加载数据到模拟卡缓冲区
+//Load the data from the memory to the simulation card buffer
 bool tag_emulation_load_by_buffer(tag_specific_type_t tag_type, bool update_crc);
 
 tag_sense_type_t get_sense_type_from_tag_type(tag_specific_type_t type);
 tag_data_buffer_t *get_buffer_by_tag_type(tag_specific_type_t type);
 
-// 设置当前使用的卡槽
+// Set the card slot currently used
 void tag_emulation_set_slot(uint8_t index);
-// 获取当前使用的卡槽
+// Get the card slot currently used
 uint8_t tag_emulation_get_slot(void);
-// 切换卡槽，根据传入参数控制是否在切换期间关闭场监听
+// Switch the card slot to control whether the passing parameter control is closed during the switching period to listen to
 void tag_emulation_change_slot(uint8_t index, bool sense_disable);
-// 获取卡槽使能状态
+// Get the card slot to enable the state
 bool tag_emulation_slot_is_enable(uint8_t slot);
-// 设置卡槽使能
+// Set the card slot to enable
 void tag_emulation_slot_set_enable(uint8_t slot, bool enable);
-// 获取对应卡槽的模拟卡类型
+// Get the simulation card type of the corresponding card slot
 void tag_emulation_get_specific_type_by_slot(uint8_t slot, tag_specific_type_t tag_type[2]);
-// 初始化某些出厂数据
+// Initialize some factory data
 void tag_emulation_factory_init(void);
 
-// 在某个方向上查询任何一个使能的卡槽
+//In the direction, query any card slot that enable
 uint8_t tag_emulation_slot_find_next(uint8_t slot_now);
 uint8_t tag_emulation_slot_find_prev(uint8_t slot_now);
 

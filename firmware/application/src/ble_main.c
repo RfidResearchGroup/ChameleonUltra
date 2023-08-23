@@ -189,19 +189,19 @@ __INLINE uint32_t map(uint32_t x, uint32_t in_min, uint32_t in_max, uint32_t out
     return (uint32_t)((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min);
 }
 
-//电池电压到百分比计算
+//Battery voltage to percentage calculation
 uint32_t BATVOL2PERCENT(uint16_t VOL) {
     //100%  4.20V   1
-    //90 %  4.06V       80%-100%    白
+    //90 %  4.06V       80%-100%    white
     //80 %  3.98V   1
-    //70 %  3.92V       60%-80%     白
+    //70 %  3.92V       60%-80%     white
     //60 %  3.87V   1
-    //50 %  3.82V       40%-60%     白
+    //50 %  3.82V       40%-60%     white
     //40 %  3.79V   1
-    //30 %  3.77V       20%-40%     白
+    //30 %  3.77V       20%-40%     white
     //20 %  3.74V   1
-    //10 %  3.68V       5%-20%      红
-    //5 %   3.45V   1               关机
+    //10 %  3.68V       5%-20%      red
+    //5 %   3.45V   1               Turn off
     //0 %   3.00V
     //#define P100VOL   4200
     //#define P80VOL    3980
@@ -211,16 +211,16 @@ uint32_t BATVOL2PERCENT(uint16_t VOL) {
     //#define P5VOL 3450
 
     //100%  4.20V   1
-    //90 %  4.00V       80%-100%    白
+    //90 %  4.00V       80%-100%    white
     //80 %  3.89V   1
-    //70 %  3.79V       60%-80%     白
+    //70 %  3.79V       60%-80%     white
     //60 %  3.70V   1
-    //50 %  3.62V       40%-60%     白
+    //50 %  3.62V       40%-60%     white
     //40 %  3.57V   1
-    //30 %  3.53V       20%-40%     白
+    //30 %  3.53V       20%-40%     white
     //20 %  3.51V   1
-    //10 %  3.46V       5%-20%      红
-    //5 %   3.43V   1               关机
+    //10 %  3.46V       5%-20%      red
+    //5 %   3.43V   1               Turn off
     //0 %   3.00V
 #define P100VOL 4200
 #define P80VOL  3890
@@ -610,12 +610,12 @@ void create_battery_timer(void) {
  * @brief Function for init ble slave.
  */
 void ble_slave_init(void) {
-    adc_configure();                    // ADC初始化
-    create_battery_timer();             // 创建电池电量更新定时器
-    ble_stack_init();                   // BLE协议栈初始化
-    gap_params_init();                  // GAP参数初始化
-    gatt_init();                        // GATT协议初始化
-    services_init();                    // 服务特征初始化
-    advertising_init();                 // 广播参数初始化
-    conn_params_init();                 // 连接参数初始化
+    adc_configure();                    // ADC initialization
+    create_battery_timer();             // Create a battery power update timer
+    ble_stack_init();                   // BLE protocol stack initialization
+    gap_params_init();                  // GAP parameter initialization
+    gatt_init();                        // Gatt protocol initialization
+    services_init();                    // Initialization of service characteristics
+    advertising_init();                 // Broadcast parameter initialization
+    conn_params_init();                 // Connection parameter initialization
 }

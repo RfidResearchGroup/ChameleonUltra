@@ -49,10 +49,7 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst, app_usb
     switch (event) {
         case APP_USBD_CDC_ACM_USER_EVT_PORT_OPEN: {
             /*
-             * 整个USB接收数据的大概关键之处就是 app_usbd_cdc_acm_read
-             * app_usbd_cdc_acm_read函数其实不是正经的接收，是给了一个指针，然后等USB的buffer填充到此处
-             * 所以需要在 APP_USBD_CDC_ACM_USER_EVT_PORT_OPEN 时先初始化设置头部指针，达到预先设置接收缓冲区的效果
-             * 如果在 APP_USBD_CDC_ACM_USER_EVT_RX_DONE 使用下标 0 去访问缓冲区，将会导致丢失第一个发送过来的字节。。
+             *theProbabilityOfTheEntireUsbReceivingDataIsTheAppUsbdCdcAcmRead *AppUsbdCdcAcmReadFunctionIsNotASeriousReception,ItIsGivenAPointer,AndThenWaitForTheUsbBuffer *SoYouNeedToInitializeTheHeadPointerFirstWhenTheAppUsbdCdcAcmUserEvtPortOpenIsInitialized *IfTheAppUsbdCdcAcmUserEvtRxDoneUsesASubscribed0ToAccessTheBuffer,ItWillCauseTheFirstByteToLoseTheFirstSendEssence
              */
             ret_code_t ret = app_usbd_cdc_acm_read(&m_app_cdc_acm, cdc_data_buffer, 1);
             UNUSED_VARIABLE(ret);
@@ -72,12 +69,12 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst, app_usb
 
         case APP_USBD_CDC_ACM_USER_EVT_RX_DONE: {
             ret_code_t ret;
-            // 先取出第一个字节
+            //Take out the first byte first
             data_frame_receive(cdc_data_buffer, 1);
             do {
                 ret = app_usbd_cdc_acm_read(&m_app_cdc_acm, cdc_data_buffer, 1);
                 if (ret == NRF_SUCCESS) {
-                    // 成功取到之后的字节
+                    // The byte after success
                     data_frame_receive(cdc_data_buffer, 1);
                 }
             } while (ret == NRF_SUCCESS);

@@ -12,7 +12,7 @@
 #define NFC_TAG_MF1_BLOCK_MAX   256
 
 
-// mf1标签写入模式
+//MF1 label writing mode
 typedef enum {
     NFC_TAG_MF1_WRITE_NORMAL    = 0u,
     NFC_TAG_MF1_WRITE_DENIED    = 1u,
@@ -20,7 +20,7 @@ typedef enum {
     NFC_TAG_MF1_WRITE_SHADOW    = 3u,
 } nfc_tag_mf1_write_mode_t;
 
-// mf1标签gen1a模式状态机
+// MF1 tag Gen1a mode state machine
 typedef enum {
     GEN1A_STATE_DISABLE,
     GEN1A_STATE_UNLOCKING,
@@ -28,21 +28,21 @@ typedef enum {
     GEN1A_STATE_WRITING,
 } nfc_tag_mf1_gen1a_state_machine_t;
 
-// mf1标签标准模式状态机
+// MF1 label standard mode state machine
 typedef enum {
-    // 验证状态机
+    // Verification state machine
     MF1_STATE_UNAUTH,
     MF1_STATE_AUTHING,
     MF1_STATE_AUTHED,
 
-    // 操作状态机
+    // Operating state machine
     MF1_STATE_WRITE,
     MF1_STATE_INCREMENT,
     MF1_STATE_DECREMENT,
     MF1_STATE_RESTORE
 } nfc_tag_mf1_std_state_machine_t;
 
-// mf1配置
+// MF1 configuration
 typedef struct {
     /**
      * Normal write mode (write normally according to the current state, affected by the control bit and the back door card)
@@ -53,31 +53,31 @@ typedef struct {
      */
     nfc_tag_mf1_write_mode_t mode_block_write;
     /**
-     * 互通模式，如果启用了互通模式，将会使用m1扇区数据中的部分信息
-     * 否则将会使用防冲撞阶段单独定义的信息，此设置仅限4字节 NFC_TAG_14A_UID_SINGLE_SIZE 的卡有效
-     * 除非有任何文档表明7字节和10字节的卡的0块有相关SAK的规范说明
+     * In communication mode, if the interoperability mode is enabled, some information in the M1 sector data will be used
+     * Otherwise, the information defined by the anti -collision phase will be used alone. This setting is limited to 4 bytes NFC_TAG_14A_UID_SINGLE_SIZE.
+     * Unless there are any documents that indicate 0 blocks of 7 -bytes and 10 -byte cards with relevant SAK specifications
      */
     uint8_t use_mf1_coll_res: 1;
     /**
-     * Chinese Gen1A 后门卡模式，此模式权限最高
-     * 开启后将响应后门卡操作指令，并且所有的操作直接放行，不受 mode_block_write 和控制位影响
+     * Chinese Gen1A back door card mode, the highest permissions of this mode
+     * After turning on, the response of the back door card operation instruction, and all operations are released directly, not affected by the Mode_block_write and control bit
      */
     uint8_t mode_gen1a_magic: 1;
     /**
-     * 使能侦测，将自动记录mf1的验证日志
+     * Make detection, it will automatically record the verification log of MF1
      */
     uint8_t detection_enable: 1;
     // Allow to write block 0 (CUID/gen2 mode)
     uint8_t mode_gen2_magic: 1;
-    // 保留
+    // reserve
     uint8_t reserved1: 4;
     uint8_t reserved2;
     uint8_t reserved3;
 } nfc_tag_mf1_configure_t;
 
 /*
- * mf1标签信息结构，谨记进行4字节对齐
- * 如果不进行字节对齐，在直接将此结构体申明并且保存到flash时将发生访问越界的异常
+ * MF1 label information structure, keep in mind the 4 -byte alignment
+ * If the byte alignment is not performed, the abnormalities of visiting the cross -border will occur when the structure is directly stated and saved directly to the Flash
  */
 typedef struct __attribute__((aligned(4))) {
     nfc_tag_14a_coll_res_entity_t res_coll;
@@ -86,9 +86,9 @@ typedef struct __attribute__((aligned(4))) {
 }
 nfc_tag_mf1_information_t;
 
-// 4Byte卡片的出厂固化的0块结构
+// 4 -earte card's 0 block structure of factory solidification
 typedef struct {
-    // 例如：
+    // For example:
     // 30928E04 28 08 0400 0177A2CC35AFA51D
     uint8_t uid[4];
     uint8_t bcc[1];
@@ -97,38 +97,38 @@ typedef struct {
     uint8_t manufacturer[8];
 } nfc_tag_mf1_factory_info_t;
 
-// 通用的mf1扇区尾部块数据结构
+// General MF1 sector rear block data structure
 typedef struct {
-    uint8_t keya[6];    // 秘钥A
-    uint8_t acs[4];     // 控制位
-    uint8_t keyb[6];    // 秘钥B
+    uint8_t keya[6];    // Secret A
+    uint8_t acs[4];     // Control position
+    uint8_t keyb[6];    // Secret B
 } nfc_tag_mf1_trailer_info_t;
 
-// 专用于mifare通信的发送缓冲区
+// Send buffer dedicated to miFare communication
 typedef struct {
-    // 原始buffer，用于承载任何未经加密的指令
+    // Primitive buffer, used to carry any unblocked instructions
     uint8_t tx_raw_buffer[NFC_TAG_MF1_FRAME_SIZE];
-    // 经过crypto1加密后，每个字节的奇偶校验位
+    // After Crypto1 encrypted, each byte of the puppet test is
     uint8_t tx_bit_parity[NFC_TAG_MF1_FRAME_SIZE];
-    // 用于承载crypto1加密后的数据与parity合并之后的数据
-    // The maximum frame length is 163 bits (16 data bytes + 2 CRC bytes = 16 × 9 + 2 × 9 + 1 start bit).
+    // Used to carry data after Crypto1 encrypted data and Parity merged data
+    // The maximum frame length is 163 bits (16 data bytes + 2 CRC bytes = 16 * 9 + 2 * 9 + 1 start bit).
     uint8_t tx_warp_frame[21];
-    // 打包之后的数据的长度，根据上面的消息可知，mf1通信的最大bit数量不超过163个，
-    // 因此一个字节足够存放长度值
+    // The length of the data after packing, according to the above news, it can be seen that the maximum number of BITs of MF1 communication does
+    // Therefore, a byte is sufficient to store the length value
     uint8_t tx_frame_bit_size;
 } nfc_tag_mf1_tx_buffer_t;
 
-// mf1标签验证历史记录
+// MF1 label verification history
 typedef struct {
-    // 验证的基础信息
+    // Basic information of verification
     struct {
         uint8_t block;
         uint8_t is_keyb: 1;
         uint8_t is_nested: 1;
-        // 空域，占位置用的
+        // Airspace, occupying positions
         uint8_t : 6;
     } cmd;
-    // mfkey32必要参数
+    // MFKEY32 necessary parametersessary parameters
     uint8_t uid[4];
     uint8_t nt[4];
     uint8_t nr[4];

@@ -8,8 +8,8 @@
 #include <stdlib.h>
 
 
-#define SETS_NR         2       // 使用几组随机数探针，至少是2个能确保有两组随机数组合进行交集查询，这个值越大越容易成功
-#define DIST_NR         3       // 越多的距离值越能准确判断当前卡片的通信稳定性
+#define SETS_NR         2       // Using several sets of random number probes, at least two can ensure that there are two sets of random number combinations for intersection inquiries. The larger the value, the easier it is to succeed.
+#define DIST_NR         3       // The more distance the distance can accurately judge the communication stability of the current card
 
 // mifare authentication
 #define CRYPT_NONE      0
@@ -18,16 +18,16 @@
 #define AUTH_FIRST      0
 #define AUTH_NESTED     2
 
-typedef struct {            // 应答 nested 攻击需要的 距离参数
-    uint8_t uid[4];         // 这个距离数据的所属UID的U32部分
-    uint8_t distance[4];    // 未经加密的明文随机数
+typedef struct {            //Answer the distance parameters required for Nested attack
+    uint8_t uid[4];         //The U32 part of the UID part of this distance data
+    uint8_t distance[4];    //Unblocked explicitly random number
 } NestedDist;
 
 
-typedef struct {            // 应答 nested 攻击需要的 随机数参数
-    uint8_t nt1[4];         // 未经加密的明文随机数
-    uint8_t nt2[4];         // 嵌套验证加密的随机数
-    uint8_t par;            // 嵌套验证加密的通信过程的奇偶校验位，只用到了 '低3位'，也就是右3位
+typedef struct {            //Answer the random number parameters required for Nested attack
+    uint8_t nt1[4];         //Unblocked explicitly random number
+    uint8_t nt2[4];         //Random number of nested verification encryption
+    uint8_t par;            //The puppet test of the communication process of nested verification encryption, only the "low 3 digits', that is, the right 3
 } NestedCore;
 
 typedef struct {

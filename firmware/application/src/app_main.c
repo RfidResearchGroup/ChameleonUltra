@@ -295,24 +295,24 @@ static void system_off_enter(void) {
     // Turn off all soft timers
     app_timer_stop_all();
 
-    // 检查是否存在低频场，解决休眠时有非常强的场信号一直使比较器处于高电平输入状态从而无法产生上升沿而无法唤醒系统的问题。
+    // Check whether there are low -frequency fields, solving very strong field signals during dormancy have always caused the comparator to be at a high level input state, so that the problem of uprising the rising edge cannot be awakened.
     if (lf_is_field_exists()) {
-        // 关闭比较器
+        // Close the comparator
         nrf_drv_lpcomp_disable();
-        // 设置reset原因，重启后需要拿到此原因，避免误判唤醒源
+        // Set the reason for Reset. After restarting, you need to get this reason to avoid misjudgment from the source of wake up.
         sd_power_gpregret_clr(1, GPREGRET_CLEAR_VALUE_DEFAULT);
         sd_power_gpregret_set(1, RESET_ON_LF_FIELD_EXISTS_Msk);
-        // 触发reset唤醒系统，重新启动模拟过程
+        // Trigger the RESET awakening system, restart the simulation process
         nrf_pwr_mgmt_shutdown(NRF_PWR_MGMT_SHUTDOWN_RESET);
         return;
     };
 
     // Go to system-off mode (this function will not return; wakeup will cause a reset).
-    // 注意，如果插着jlink或者开着debug，进入低功耗的函数可能会报错，
-    // 开启调试时我们应当禁用低功耗状态值检测，或者干脆不进入低功耗
+    // Note that if you insert jlink or drive a Debug, you may report an error when entering the low power consumption.
+    // When starting debugging, we should disable low power consumption state values, or simply not enter low power consumption
     ret = sd_power_system_off();
 
-    // OK，此处非常重要，如果开启了日志输出并且使能了RTT，则不去检查低功耗模式的错误
+    // OK, here is very important. If you open the log output and enable RTT, you will not check the error of the low power mode
 #if !(NRF_LOG_ENABLED && NRF_LOG_BACKEND_RTT_ENABLED)
     APP_ERROR_CHECK(ret);
 #else
@@ -389,7 +389,7 @@ static void check_wakeup_src(void) {
             }
         }
 
-        // 当前是模拟卡事件唤醒系统，我们可以让场强灯先亮起来
+        // It is currently the wake -up system of the simulation card event, we can make the strong lights on the field first
         TAG_FIELD_LED_ON();
 
         uint8_t animation_config = settings_get_animation_config();

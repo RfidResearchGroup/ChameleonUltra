@@ -23,7 +23,7 @@ NRF_LOG_MODULE_REGISTER();
 #define NRF_NFCT_PARITY_FRAMECONFIG 0x04;
 #endif
 
-// 使用宏定义展开数据的接收使能实现
+//Use macro definition data to receive data enable to achieve
 #define NRFX_NFCT_RX_BYTES                                                                                          \
     do {                                                                                                            \
         NRF_NFCT->RXD.FRAMECONFIG = NRF_NFCT_PARITY_FRAMECONFIG;                                                    \
@@ -36,17 +36,17 @@ NRF_LOG_MODULE_REGISTER();
     } while(0);
 
 
-// 14443a协议状态机
+//14443A protocol status machine
 nfc_tag_14a_state_t m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
 
-// 14443a协议处理器
+// 14443A protocol processor
 nfc_tag_14a_handler_t m_tag_handler = {
-    .cb_reset = NULL,       // 标签重置回调
-    .cb_state = NULL,       // 标签状态机回调
-    .get_coll_res = NULL,   // 标签的防冲突资源的获取封装
+    .cb_reset = NULL,       // Tag Resetback
+    .cb_state = NULL,       // Label status machine callback
+    .get_coll_res = NULL,   // Obtain packaging of anti -conflict resources of labels
 };
 
-// 字节镜像
+// Byte mirror
 const uint8_t ByteMirror[256] = {
     0x00, 0x80, 0x40, 0xc0, 0x20, 0xa0, 0x60, 0xe0,
     0x10, 0x90, 0x50, 0xd0, 0x30, 0xb0, 0x70, 0xf0,
@@ -82,7 +82,7 @@ const uint8_t ByteMirror[256] = {
     0x1f, 0x9f, 0x5f, 0xdf, 0x3f, 0xbf, 0x7f, 0xff,
 };
 
-// RATS FSDI 长度查表
+// RATS FSDI length check table
 const uint16_t ats_fsdi_table[] = {
     // 0 - 8
     16, 24, 32, 40, 48, 64, 96, 128, 256,
@@ -91,20 +91,20 @@ const uint16_t ats_fsdi_table[] = {
 };
 
 
-// 当前是否已经应答
+// Whether it is responding to
 static volatile  bool m_is_responded = false;
-// 接收缓冲区
+// Receiving buffer
 static uint8_t m_nfc_rx_buffer[MAX_NFC_RX_BUFFER_SIZE] = { 0x00 };
 static uint8_t m_nfc_tx_buffer[MAX_NFC_TX_BUFFER_SIZE] = { 0x00 };
-// N次级联需要用上的SAK，在SAK中的 '第三个' 比特为1时，标志UID不完整
+// The N -secondary connection needs to use SAK, when the "third 'bit' in SAK is 1 is 1, the logo UID is incomplete
 static uint8_t m_uid_incomplete_sak[]   = { 0x04, 0xda, 0x17 };
 
 /**
- * @brief 计算BCC
+ * @brief Calculate BCC
  *
  */
 void nfc_tag_14a_create_bcc(uint8_t *pbtData, size_t szLen, uint8_t *pbtBcc) {
-    // 最好是在使用输出缓冲区时重置其
+    // It is best to reset it when using the output buffer
     *pbtBcc = 0x00;
     do {
         *pbtBcc ^= *pbtData++;
@@ -112,7 +112,7 @@ void nfc_tag_14a_create_bcc(uint8_t *pbtData, size_t szLen, uint8_t *pbtBcc) {
 }
 
 /**
- * @brief 追加BCC到数据流尾部
+ * @brief Add BCC to the end of the data streaming
  *
  */
 inline void nfc_tag_14a_append_bcc(uint8_t *pbtData, size_t szLen) {
@@ -120,8 +120,8 @@ inline void nfc_tag_14a_append_bcc(uint8_t *pbtData, size_t szLen) {
 }
 
 /**
- * @brief 在数据流尾部追加CRC，记住：
- *  pbtData一定要有足够的长度去容纳CRC计算结果（两个字节）
+ * @brief Add CRC at the end of the data flow, remember:
+ *  PBTData must have enough length to accommodate the CRC calculation results (two bytes)
  *
  */
 inline void nfc_tag_14a_append_crc(uint8_t *pbtData, size_t szLen) {
@@ -129,7 +129,7 @@ inline void nfc_tag_14a_append_crc(uint8_t *pbtData, size_t szLen) {
 }
 
 /**
- * @brief 检查CRC是否正确
+ * @brief Check whether the CRC is correct
  *
  */
 bool nfc_tag_14a_checks_crc(uint8_t *pbtData, size_t szLen) {
@@ -141,17 +141,17 @@ bool nfc_tag_14a_checks_crc(uint8_t *pbtData, size_t szLen) {
 }
 
 /**
-* @brief  ：包装ISO14443A的比特帧
-*           自动进行奇偶校验位与数据的包装合并
-* @param  ：pbtTx：将要传输的比特流
-*          szTxBits：比特流的长度
-*          pbtTxPar：奇偶校验位的比特流，这个数据的长度一定是 szTxBits / 8，也就是说
-*                    实际上合并之后的比特流的组成结构为：
+* @brief  : Bit frames for packaging ISO14443A
+* Automatically conduct the merger of the parity of the coupling school and the data of the data
+* @param   pbtTx: Bit flow to be transmitted
+*          szTxBits: The length of the bandwing
+*          pbtTxPar: Bit flow of the puppet school inspection, the length of this data must be sztxbits / 8, that is,
+* In fact, the composition of the bit flow after the merger is:
 *                    data(1byte) - par(1bit) - data(1byte) - par(1bit) ...
 *                      00001000  -   0       - 10101110    - 1
-*                    这种类似的数据结构
-*          pbtFrame： 最终组装完成的数据的缓冲区
-* @retval ：比特流组装结果缓冲区的长度，注意，是比特长度，换算字节请除以8再取模
+*                    This similar data structure
+*          pbtFrame: The final assembled data buffer
+* @retval :The length of the bit flow assembly results buffer. Note that it is the length of the bit.
 */
 uint8_t nfc_tag_14a_wrap_frame(const uint8_t *pbtTx, const size_t szTxBits, const uint8_t *pbtTxPar, uint8_t *pbtFrame) {
     uint8_t btData;
@@ -207,13 +207,13 @@ uint8_t nfc_tag_14a_wrap_frame(const uint8_t *pbtTx, const size_t szTxBits, cons
 }
 
 /**
-* @brief  ：解包ISO14443A的比特帧
-*           自动进行奇偶校验位与数据的解包分离
-* @param  ：pbtFrame：将要解包的比特流
-*          szFrameBits：比特流的长度
-*          pbtRx：解包后的比特流的存放的缓冲区，数据区
-*          pbtRxPar： 解包后的比特流的存放的缓冲区，奇偶校验位区
-* @retval ：比特流解包后的数据长度，注意，是数据区的比特流长度，换算字节请 retval / 8
+* @brief  :Bit frame of ISO14443A
+*           Automatically perform the unpacking of the puppet school inspection and the data
+* @param  :pbtFrame:Bit flow that will be dismissed
+*          szFrameBits:The length of the bandwing
+*          pbtRx:Caps, data areas, data areas, data areas, data areas, data areas.
+*          pbtRxPar: The buffer of the Bitflow Store after the packaging, the coupling school inspection area
+* @retval :The data length of the Bit flow packaging, note that the length of the data area is the length of the data area.retval / 8
 */
 uint8_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBits, uint8_t *pbtRx, uint8_t *pbtRxPar) {
     uint8_t btFrame;
@@ -288,21 +288,21 @@ uint8_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBi
     } while(0);                                                                                                  \
 
 
-/**@brief 发送字节流的函数实现，此实现自动发送SOF
+/**@brief The function of sending the byte flow, this implementation automatically sends SOF
  *
- * @param[in]   data        要发送的字节流数据
- * @param[in]   bytes       要发送的字节流的长度
- * @param[in]   appendCrc   是否在发送完成字节流后，自动追加发送crc16校验
+ * @param[in]   data       The byte flow data to be sent
+ * @param[in]   bytes       The length of the byte flow to be sent
+ * @param[in]   appendCrc  Whether to send the byte flow, automatically send the CRC16 verification automatically
  */
 void nfc_tag_14a_tx_bytes(uint8_t *data, uint32_t bytes, bool appendCrc) {
     NFC_14A_TX_BYTE_CORE(data, bytes, appendCrc, NRF_NFCT_FRAME_DELAY_MODE_WINDOW);
 }
 
-/**@brief 发送字节流的函数实现，此实现自动发送SOF
+/**@brief The function of sending the byte flow, this implementation automatically sends SOF
  *
- * @param[in]   data        要发送的字节流数据
- * @param[in]   bytes       要发送的字节流的长度
- * @param[in]   appendCrc   是否在发送完成字节流后，自动追加发送crc16校验
+ * @param[in]   data        The byte flow data to be sent
+ * @param[in]   bytes       The length of the byte flow to be sent
+ * @param[in]   appendCrc   Whether to send the byte flow, automatically send the CRC16 verification automatically
  */
 void nfc_tag_14a_tx_bytes_delay_freerun(uint8_t *data, uint32_t bytes, bool appendCrc) {
     NFC_14A_TX_BYTE_CORE(data, bytes, appendCrc, NRF_NFCT_FRAME_DELAY_MODE_FREERUN);
@@ -324,10 +324,10 @@ void nfc_tag_14a_tx_bytes_delay_freerun(uint8_t *data, uint32_t bytes, bool appe
         NRF_NFCT->TASKS_STARTTX = 1;                                                            \
     } while(0);                                                                                 \
 
-/**@brief 发送bit流的函数实现，此实现自动发送SOF
+/**@brief The function of sending the BIT stream, this implementation automatically sends SOF
  *
- * @param[in]   data   要发送的bit流数据
- * @param[in]   bits   要发送的bit流的长度
+ * @param[in]   data   BIT stream data to be sent
+ * @param[in]   bits   The length of the bit stream to be sent
  */
 void nfc_tag_14a_tx_bits(uint8_t *data, uint32_t bits) {
     m_is_responded = true;
@@ -335,10 +335,10 @@ void nfc_tag_14a_tx_bits(uint8_t *data, uint32_t bits) {
     NFC_14A_TX_BITS_CORE(bits, NRF_NFCT_FRAME_DELAY_MODE_FREERUN);
 }
 
-/**@brief 发送N个bit的函数实现，此实现自动发送SOF
+/**@brief The function of sending n bits is implemented, and this implementation is automatically sent SOF
  *
- * @param[in]   data   要发送的bit数据
- * @param[in]   bits   要发送几个bit
+ * @param[in]   data   BIT data to be sent
+ * @param[in]   bits   To send a few bites
  */
 void nfc_tag_14a_tx_nbit(uint8_t data, uint32_t bits) {
     m_is_responded = true;
@@ -346,10 +346,10 @@ void nfc_tag_14a_tx_nbit(uint8_t data, uint32_t bits) {
     NFC_14A_TX_BITS_CORE(bits, NRF_NFCT_FRAME_DELAY_MODE_FREERUN);
 }
 
-/**@brief 发送N个bit的函数实现，此实现自动发送SOF
+/**@brief The function of sending n bits is implemented, and this implementation is automatically sent SOF
  *
- * @param[in]   data   要发送的bit数据
- * @param[in]   bits   要发送几个bit
+ * @param[in]   data   BIT data to be sent
+ * @param[in]   bits   To send a few bites
  */
 void nfc_tag_14a_tx_nbit_delay_window(uint8_t data, uint32_t bits) {
     m_is_responded = true;
@@ -358,51 +358,51 @@ void nfc_tag_14a_tx_nbit_delay_window(uint8_t data, uint32_t bits) {
 }
 
 /**
- * 14a监听到PCD过来的数据处理的封装函数
+ * 14A monitoring the packaging function of data processing from PCD
  */
 void nfc_tag_14a_data_process(uint8_t *p_data) {
-    // 统计一下当前收到的bit数
+    // Statistize the number of bit currently received
     uint16_t szDataBits = (NRF_NFCT->RXD.AMOUNT & (NFCT_RXD_AMOUNT_RXDATABITS_Msk | NFCT_RXD_AMOUNT_RXDATABYTES_Msk));
-    // 防冲撞可能要用上的资源
+    // The resource that may be used in anti -collision
     nfc_tag_14a_coll_res_referen_t *auto_coll_res = m_tag_handler.get_coll_res != NULL ? m_tag_handler.get_coll_res() : NULL;
 
-    // 我也不知道为什么，这里CPU必须要空跑一段周期，数据才能正常收到。
-    // 如果接收数据有任何问题，请尝试恢复此处，这个是2021年发现的问题，但是2022年又消失了
-    // 可能是由于更新了SDK版本
+    // I don't know why, here the CPU must run empty for a period of time before the data can be received normally.
+    // If you have any problems with the receiving data, please try to restore this. This is a problem found in 2021, but it disappeared again in 2022
+    // It may be due to the update of the SDK version
     // for (int i = 0; i < 88; i++) __NOP();
 
-    // 一定要确保接收到的数据无误，上限和下限都要判断处理！！！
+    // Be sure to ensure that the received data is correct.IntersectionIntersection
     if (0 == szDataBits || (szDataBits > (MAX_NFC_RX_BUFFER_SIZE * 8))) {
         // NRF_LOG_INFO("Invalid size: %d\n", szDataBits);
-        // 如果有异常的数据接收到，我们直接跳过，不处理，
-        // 因为这个有可能干扰导致的错误接收事件
+        // If there are abnormal data received, we skip it directly without processing,
+        // Because of this error receiving event caused by this possible interference
         return;
     }
-    // 手动抽帧，分离数据和奇偶校验位
+    // Manually draw frame, separate data and strange school inspection
 #if !NFC_TAG_14A_RX_PARITY_AUTO_DEL_ENABLE
     if (szDataBits >= 9) {
-        // 由于我们暂时不需奇偶校验位，所以取出的时候直接丢弃
+        //Since we do not need a strange school test for the time being, discard it directly when we take it out
         szDataBits = nfc_tag_14a_unwrap_frame(p_data, szDataBits, p_data, NULL);
     }
 #endif
 
-    // 开始处理接收到的数据，如果是比特帧可以将数据交由此环节处理
+    // Start processing the received data, if it is a special frame, you can hand over the data to this link
     if (szDataBits <= 8) {
-        // 我们可能收到了一个wupa或者reqa指令，或者其他的特殊指令
+        // We may receive a Wupa or REQA instruction, or other special instructions
         bool isREQA = (p_data[0] == NFC_TAG_14A_CMD_REQA);
         bool isWUPA = (p_data[0] == NFC_TAG_14A_CMD_WUPA);
-        // 触发条件为：非halt模式下的REQA响应
-        // 暂时全通过：非选择状态下的WUPA响应，现在无论处于何种状态都能用WUPA指令唤醒
+        // The trigger conditions are: Reqa response in non -Halt mode
+        // Temporary through: Wupa response in non -choice state, no matter what state is in the state, you can use the Wupa instruction to wake up
         if ((szDataBits == 7) && ((isREQA && m_tag_state_14a != NFC_TAG_STATE_14A_HALTED) || isWUPA)) {
-            // 通知14a通信的接管者们，该重置内部状态机了
+            // The receiver of the 14A communication is notified, the internal state machine is reset
             if (m_tag_handler.cb_reset != NULL) {
                 m_tag_handler.cb_reset();
             }
-            // 仅在能提供防冲撞资源的情况下，
+            // Only in the case that can provide anti -collision resources,
             if (auto_coll_res != NULL) {
-                // 状态机设置为准备状态，下次操作是进入选卡环节
+                // The status machine is set to the preparation state, and the next operation is to enter the card selection link
                 m_tag_state_14a = NFC_TAG_STATE_14A_READY;
-                // 收到了wupa或者reqa指令，此时我们需要回复atqa
+                // After receiving the WUPA or REQA instruction, we need to reply to ATQA
                 nfc_tag_14a_tx_bytes(auto_coll_res->atqa, 2, false);
                 // NRF_LOG_INFO("ATQA reply.");
             } else {
@@ -411,32 +411,32 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
             }
             return;
         } else {
-            // TODO 此处可以匹配一些其他的指令，回调一些注册好的处理函数单独处理此逻辑
-            // 正常通信过程不会有N个比特的帧，因为那是14a协议里面用于面向bit的防冲突帧
-            // 所以此处可以单独处理这个协议帧，实现类似UID后门卡的标签（chinese magic）
-            // 注意，我们如果是发现了REQA或者WUPA，就不去重复处理了（只处理特殊比特帧）
+            // TODOHere you can match some other instructions, call back some registered processing functions to handle this logic separately
+            // Normal communication process will not have N bits of frames, because it is the anti -conflict frame used in the 14A protocol for BIT
+            // So you can handle this protocol frame separately here to realize the tag similar to the UID back door card (Chinese Magic)
+            // Note that if we find Reqa or wupa, we will not repeat the processing (only the special ratio special frame)
             if ((!isREQA && !isWUPA) && m_tag_handler.cb_state != NULL) {
-                // 如果7bit的处理器被注册并且成功的处理了此命令，则完成此次状态机更新
+                // If the 7bit processor is registered and successfully processed this command, the state machine update is completed
                 m_tag_handler.cb_state(p_data, szDataBits);
                 return;
             }
         }
         return;
     }
-    // 根据当前卡片的状态做出相应的处理
+    //Make corresponding treatment according to the status of the current card
     switch (m_tag_state_14a) {
-        // 空闲状态和休眠状态不处理任何任务，就让来自星星的消息随风而去吧~
+        // If you do not handle any tasks in the idle state and the dormant state, let the news from the stars go with the wind ~
         case NFC_TAG_STATE_14A_IDLE:
         case NFC_TAG_STATE_14A_HALTED: {
             break;
         }
-        // 准备状态，处理跟防冲撞有关的消息
+        // Preparation status, processing news related to anti -collision
         case NFC_TAG_STATE_14A_READY: {
             static uint8_t uid[5] = { 0x00 };
             nfc_tag_14a_cascade_level_t level;
             // Extract cascade level
             if (szDataBits >= 16) {
-                // 匹配级联指令
+                // Matching grade joint instructions
                 switch (p_data[0]) {
                     case NFC_TAG_14A_CMD_ANTICOLL_OR_SELECT_1:
                         level = NFC_TAG_14A_CASCADE_LEVEL_1;
@@ -453,59 +453,59 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
                         }
                         return;
                     default: {
-                        // 收到了错误的级联指令，直接重置状态机
+                        // After receiving the wrong level instruction, directly reset the status machine
                         NRF_LOG_INFO("[MFEMUL_SELECT] Incorrect cascade level received: %02x", p_data[0]);
                         m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
                         return;
                     }
                 }
-                // 匹配UID长度，为uid的返回数据做准备
+                // Match the length of UID and prepare for the return data of UID
                 switch (*auto_coll_res->size) {
                     case NFC_TAG_14A_UID_SINGLE_SIZE: {
-                        if (level == NFC_TAG_14A_CASCADE_LEVEL_1) {    // 首次级联，只有一次
-                            // 4字节的标签最多只能一次级联
+                        if (level == NFC_TAG_14A_CASCADE_LEVEL_1) {    // The first level, only once
+                            // The 4 -byte label can only be connected at most at one time
                             memcpy(uid, auto_coll_res->uid, 4);
-                        } else {    // 4字节的卡永远不能进行第二次级联
+                        } else {    // 4 -byte cards can never perform second -level coupons
                             m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
                             return;
                         }
                         break;
                     }
                     case NFC_TAG_14A_UID_DOUBLE_SIZE: {
-                        if (level == NFC_TAG_14A_CASCADE_LEVEL_1) {    // 首次级联，还剩一次
+                        if (level == NFC_TAG_14A_CASCADE_LEVEL_1) {    //At the first time, there is one left
                             uid[0] = NFC_TAG_14A_CASCADE_CT;
                             uid[1] = auto_coll_res->uid[0];
                             uid[2] = auto_coll_res->uid[1];
                             uid[3] = auto_coll_res->uid[2];
-                        } else if (level == NFC_TAG_14A_CASCADE_LEVEL_2) {  // 第二次级联已经完整
+                        } else if (level == NFC_TAG_14A_CASCADE_LEVEL_2) {  //The second level is complete
                             memcpy(uid, auto_coll_res->uid + 3, 4);
-                        } else {    // 7字节的卡永远不能进行第三次级联
+                        } else {    //The 7 -byte card can never perform the third level
                             m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
                             return;
                         }
                         break;
                     }
                     case NFC_TAG_14A_UID_TRIPLE_SIZE: {
-                        if (level == NFC_TAG_14A_CASCADE_LEVEL_1) {    // 首次级联，还剩两次
+                        if (level == NFC_TAG_14A_CASCADE_LEVEL_1) {    // At the first level, there are two left
                             uid[0] = NFC_TAG_14A_CASCADE_CT;
                             uid[1] = auto_coll_res->uid[0];
                             uid[2] = auto_coll_res->uid[1];
                             uid[3] = auto_coll_res->uid[2];
-                        } else if (level == NFC_TAG_14A_CASCADE_LEVEL_2) {  // 第二次级联，还剩余一次级联
+                        } else if (level == NFC_TAG_14A_CASCADE_LEVEL_2) {  // The second level, there is still the remaining first -level joint
                             uid[0] = NFC_TAG_14A_CASCADE_CT;
                             uid[1] = auto_coll_res->uid[3];
                             uid[2] = auto_coll_res->uid[4];
                             uid[3] = auto_coll_res->uid[5];
-                        } else {    // 10字节的卡的最后一次级联
+                        } else {    // The last step of the 10 -byte card
                             memcpy(uid, auto_coll_res->uid + 6, 4);
                         }
                         break;
                     }
                 }
-                // BCC计算，完成最终的防冲撞数据准备
+                // BCC calculation, complete the final anti -collision data preparation
                 nfc_tag_14a_append_bcc(uid, 4);
             } else {
-                // 收到了错误长度的级联指令，重置状态机
+                // Receive the grade joint instructions of the error length, reset the status machine
                 m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
                 return;
             }
@@ -527,7 +527,7 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
                         m_tag_state_14a = NFC_TAG_STATE_14A_ACTIVE;
                         nfc_tag_14a_tx_bytes(auto_coll_res->sak, 1, true);
                     } else {
-                        // 此处需要继续级联，因此我们需要回应一个在SAK内标志UID不完整的数据
+                        // It is necessary to continue the level, so we need to respond to a data that marks the incomplete UID in SAK
                         nfc_tag_14a_tx_bytes(m_uid_incomplete_sak, 3, false);
                     }
                 } else {
@@ -542,35 +542,35 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
             // NRF_LOG_INFO("[MFEMUL_SELECT] Unknown selection procedure");
             break;
         }
-        // 激活状态，转发处理任何消息
+        // Activation status, repost processing of any message
         case NFC_TAG_STATE_14A_ACTIVE: {
-            // 需要判断是否收到了需要直接处理而不转发的指令
+            // You need to judge whether you have received instructions that need to be handled directly without forwarding
             if (szDataBits == 32) {
-                // HALT指令
+                // Halt instruction
                 if (p_data[0] == NFC_TAG_14A_CMD_HALT && p_data[1] == 0x00 && p_data[2] == 0x57 && p_data[3] == 0xCD) {
-                    // 将状态机置为中止态，然后等待下一轮通信
+                    // Set the status machine to the suspension state, and then wait for the next round of communication
                     m_tag_state_14a = NFC_TAG_STATE_14A_HALTED;
                     return;
                 }
-                // RATS指令
+                // RATS instruction
                 if (p_data[0] == NFC_TAG_14A_CMD_RATS && nfc_tag_14a_checks_crc(p_data, 4)) {
-                    // 确保子封装开启了ATS的支持
+                    // Make sure the sub -packaging opens the support of ATS
                     if (auto_coll_res->ats->length > 0) {
-                        // 将FSD取出，根据最大FSD进行返回
+                        // Take out FSD and return according to the maximum FSD
                         uint8_t fsd = ats_fsdi_table[p_data[1] >> 4 & 0x0F] - 2;
-                        // 如果fsd大于设置的ats长度，那么就返回正常的ats数据，否则返回fsd限定长度的数据
+                        // If the FSD is larger than the set of ATS, then returns normal ATS data, otherwise the data of the FSD limited length will be returned
                         uint8_t len = fsd >= auto_coll_res->ats->length ? auto_coll_res->ats->length : fsd;
-                        // 根据FSD返回ATS数据，FSD是PCD支持的最大帧大小，去掉CRC后才是实际的数据帧大小支持
+                        // Back to ATS data according to FSD, FSD is the largest frame size supported by PCD. After removing CRC, it is the actual data frame size support
                         nfc_tag_14a_tx_bytes(auto_coll_res->ats->data, len, true);
                     } else {
                         nfc_tag_14a_tx_nbit_delay_window(NAK_INVALID_OPERATION_TBIV, 4);
                     }
-                    // 在外部直接处理了明文发送的RATS指令之后直接等待下一轮通信
+                    // After handling the explicitly sending RATS instructions outside the outside, wait directly for the next round of communication
                     return;
                 }
             }
-            // 没有处理成功，可能是其他的一些数据，需要转发处理
-            if (m_tag_handler.cb_state != NULL) {    // 激活状态，将消息转由其他被注册的处理器处理
+            // No processing is successful, it may be some other data. You need to repost processing
+            if (m_tag_handler.cb_state != NULL) {    //Activation status, transfer the message to other registered processor processing
                 m_tag_handler.cb_state(p_data, szDataBits);
                 break;
             }
@@ -581,7 +581,7 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
 extern bool g_usb_led_marquee_enable;
 
 /**
- * 14a事件回调函数
+ * 14A incident callback function
  */
 void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
     // Select action to process.
@@ -597,8 +597,8 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
 
             NRF_LOG_INFO("HF FIELD DETECTED");
 
-            // 关闭自动防冲撞，MCU管理所有的交互过程，然后使能NFC外设，使能之后就可以进行IO了
-            // 20221108 修复nrf52840与nrf52832不同的使能切换流程
+            //Turn off the automatic anti -collision, MCU management all the interaction process, and then enable the NFC peripherals so that Io can be performed after enable
+            // 20221108 Fix the different enable switching process of NRF52840 and NRF52832
 #if defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
             nrfx_nfct_autocolres_disable();
             nrfx_nfct_state_force(NRFX_NFCT_STATE_ACTIVATED);
@@ -607,7 +607,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             NRF_NFCT->TASKS_ACTIVATE = 1;
 #endif
 
-            // 直接使能接收
+            //Directly enable receiving
             NRFX_NFCT_RX_BYTES
             break;
         }
@@ -629,7 +629,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
         }
         case NRFX_NFCT_EVT_TX_FRAMEEND: {
             // NRF_LOG_INFO("TX end.\n");
-            // 传输结束后需要使能接收
+            // After the transmission is over, you need to be able to receive it
             NRFX_NFCT_RX_BYTES
             break;
         }
@@ -638,26 +638,26 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             TAG_FIELD_LED_ON()
 
             // NRF_LOG_INFO("RX FRAMEEND.\n");
-            // TODO 谨记一个BUG，在收到消息后如果不回复消息，就需要手动使能接收
-            //   不然上面的 NRFX_NFCT_EVT_TX_FRAMEEND 条件不会触发，不会调用 NRFX_NFCT_RX_BYTES
-            //   接下来的所有的通信，都将会出问题，出问题了还怎么玩，玩个蛋嘞。
+            // TODO Remember a bug, if you do not reply to the message after receiving the message, you need to manually enable you
+            //   Otherwise, the nrfx_nfct_evt_tx_framend conditions above will not be triggered, and nrfx_nfct_rx_bytes will not be called
+            // All the next communication will have problems. How can I play if there is a problem? Play an egg.
             m_is_responded = false;
-            // 多一层压栈，但是似乎对性能影响不大
-            // 这个函数处理了读卡器发过来的数据，然后看没有需要回复读卡器，有需要的话就回复
-            // 没需要的就不回复，很有道理是吧？这就是科学。
+            // One more layer of pressure stack, but it seems to have little effect on performance
+            // This function processes the data sent by the card reader, and then read that you don't need to reply to the card reader. If you need it, reply
+            // Don't reply if you don't need it, it makes sense, right?This is science.
             nfc_tag_14a_data_process(m_nfc_rx_buffer);
-            // 上面的提示告诉我们，我们在不需要回复读卡器的时候，需要手动使能接收
+            // The above prompt tells us that when we do not need to reply to the card reader, we need to manually enable it
             if (!m_is_responded) {
                 NRFX_NFCT_RX_BYTES
             }
             break;
         }
         case NRFX_NFCT_EVT_ERROR: {
-            // 根据错误原因，进行日志打印，以帮助开发时排查可能性的BUG
+            // According to the error reasons, the log prints to help the development of the possibilities during development
             switch (p_event->params.error.reason) {
                 case NRFX_NFCT_ERROR_FRAMEDELAYTIMEOUT: {
-                    // 如果我们在通信窗口中回应了标签但是却是没有及时回应，那就需要进行报错打印
-                    // 如果此错误非常频繁的出现，则可能是MCU处理速度没跟上，此时开发者就需要优化代码了
+                    //If we respond to the label in the communication window, but we did not respond in time, then we need to make an error printing
+                    // If this error appears very frequently, it may be that the MCU processing speed does not keep up. At this time, the developer needs to optimize the code
                     if (m_is_responded) {
                         NRF_LOG_ERROR("NRFX_NFCT_ERROR_FRAMEDELAYTIMEOUT: %d", m_tag_state_14a);
                     }
@@ -678,20 +678,20 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
 }
 
 /**
- * 14A的状态机更新函数，可将14A标签置为指定的状态
- * @param state 新的状态
+ * The 14A status machine update function, which can set the 14A label to the specified state
+ * @param state New state
  */
 void nfc_tag_14a_set_state(nfc_tag_14a_state_t state) {
     m_tag_state_14a = state;
 }
 
 /**
- * 14A的处理器注册函数
- * @param handler 处理器句柄
+ * 14A processor registration function
+ * @param handler Processor handle
  */
 void nfc_tag_14a_set_handler(nfc_tag_14a_handler_t *handler) {
     if (handler != NULL) {
-        // 直接取出传入的实现赋值到我们的全局对象即可
+        // Take it directly to the implementation of the introduction to our global object
         m_tag_handler.cb_reset = handler->cb_reset;
         m_tag_handler.cb_state = handler->cb_state;
         m_tag_handler.get_coll_res = handler->get_coll_res;
@@ -705,26 +705,26 @@ static enum  {
 } m_nfc_sense_state = NFC_SENSE_STATE_NONE;
 
 /**
- * 14A的场感应使能和闭能实现函数
- * @param enable 是否使能场感应
+ * 14A field sensing enable and closed capacity to implement functions
+ * @param enable Whether to make the field induction
  */
 void nfc_tag_14a_sense_switch(bool enable) {
     if (m_nfc_sense_state == NFC_SENSE_STATE_NONE || m_nfc_sense_state == NFC_SENSE_STATE_DISABLE) {
         if (enable) {
             m_nfc_sense_state = NFC_SENSE_STATE_ENABLE;
-            // 初始化中断事件和回调
+            // Initialized interrupt event and callback
             nrfx_nfct_config_t nnct = { .rxtx_int_mask = (uint32_t)0xFFFFFFFF, .cb = nfc_tag_14a_event_callback };
             if (nrfx_nfct_init(&nnct) != NRFX_SUCCESS) {
                 NRF_LOG_INFO("Cannot setup NFC!");
             }
-            // 启动场感应
+            // Starting field sensing
             nrfx_nfct_enable();
         }
     } else {
         if (!enable) {
             m_nfc_sense_state = NFC_SENSE_STATE_DISABLE;
-            // 直接反初始化NFC外设即可关闭NFC场感应
-            // SDK内部帮我们调用了 nrfx_nfct_disable
+            //Directly anti -initialization NFC peripherals can turn off NFC field induction
+            // SDK inside us to call us nrfx_nfct_disable
             nrfx_nfct_uninit();
         }
     }

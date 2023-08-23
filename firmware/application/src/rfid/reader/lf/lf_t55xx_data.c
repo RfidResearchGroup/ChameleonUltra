@@ -20,7 +20,7 @@ NRF_LOG_MODULE_REGISTER();
 
 
 /*
-小机器写卡：
+Small machine writing card:
 01 00000000000001000010000000010000 0 000
 
 01 1 00010100010010010000110110010010 000 00000000000000000000000000000 000 011
@@ -34,30 +34,30 @@ NRF_LOG_MODULE_REGISTER();
 |                      70bit Password write found                          |
 |--------------------------------------------------------------------------|
 |OP|PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP|L|DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD|AAA|
-|10|01010001001001000011011001001000|0|01010001001001000011011001001000|111|    0区 7块 用当前密码写当前密码（密码）
-|10|01010001001001000011011001001000|0|01010001001001000111011001001000|111|    0区 7块 用当前密码写当前密码（密码）
-|10|01010001001001000011011001001000|0|00000000000101001000000001010000|000|    0区 0块 用当前密码写00148050（控制区）
-|10|01010001001001000011011001001000|0|11111111101001010010000000000100|001|    0区 1块 用当前密码写FFA52004（数据）
-|11|01010001001001000011011001001000|0|11111111101001010010000000000100|001|    1区 1块 用当前密码写FFA52004（数据）
-|10|01010001001001000011011001001000|0|10100101011100011001011101101010|010|    0区 2块 用当前密码写A571976A（数据）
-|11|01010001001001000011011001001000|0|10100101011100011001011101101010|010|    1区 2块 用当前密码写A571976A（数据）
-|11|01010001001001000011011001001000|0|01100000000000000000100000000000|011|    1区 3块 用当前密码写60000800（射频参数）
+|10|01010001001001000011011001001000|0|01010001001001000011011001001000|111|    Zone 0 7 blocks to write the current password (password)
+|10|01010001001001000011011001001000|0|01010001001001000111011001001000|111|    Zone 0 7 blocks to write the current password (password)
+|10|01010001001001000011011001001000|0|00000000000101001000000001010000|000|    Zone 0 0 blocks are written in the current password00148050 (control zone)
+|10|01010001001001000011011001001000|0|11111111101001010010000000000100|001|    Zone 0 1 block is written in the current passwordFFA52004 (data)
+|11|01010001001001000011011001001000|0|11111111101001010010000000000100|001|    zone 1 1 block is written in the current passwordFFA52004 (data)
+|10|01010001001001000011011001001000|0|10100101011100011001011101101010|010|    Zone 0 2 are written in the current passwordA571976A (data)
+|11|01010001001001000011011001001000|0|10100101011100011001011101101010|010|    zone 1 2 are written in the current passwordA571976A (data)
+|11|01010001001001000011011001001000|0|01100000000000000000100000000000|011|    zone 1 3 blocks are written in the current password60000800 (radio frequency parameter)
 |--------------------------------------------------------------------------|
 RESET Pack received
 |-----------------------------------------|
 |       38bit regular write found         |
 |OP|L|DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD|AAA|
-|10|0|00000000000101001000000001000000|000|0区 0块 写00148050（控制区）
-|10|0|11111111101001010010000000000100|001|0区 1块 写FFA52004（数据）
-|10|0|10100101011100011001011101101010|010|0区 2块 写A571976A（数据）
+| 10 | 0 | 00000000000101001000000000000 | 000 | 0 area 0 block writing00148050 (control zone)
+| 10 | 0 | 111111111010010000000000100 | 001 | 0 area 1 pieceFFA52004 (data)
+| 10 | 0 | 1010010101100011000101110101010 | 010 | 0 area 2 pieces of writingA571976A (data)
 |-----------------------------------------|
 RESET Pack received
 
-拷贝齐写卡：
+Copy Qiji Writing Card:
 |-----------------------------------------|
 |OP|L|DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD|AAA|
-|10|0|00011001100100100000010000100111|111|0区 7块 写19920427（密码）
-|10|0|00000000000101001000000001010000|000|0区 0块 写00148050（控制区）
+| 10 | 0 | 00011001100100000000100111 | 111 | 0 area 7 pieces19920427 (password)
+| 10 | 0 | 000000000001010010000000010000 | 000 | 0 area 0 block writing00148050 (control zone)
 |-----------------------------------------|
 |--------------------------------------------------------------------------|
 |OP|PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP|L|DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD|AAA|
@@ -87,20 +87,20 @@ static struct {
 } t55xx_cmd;
 
 
-// 空函数，t55xx写卡不需要关心读取的数据
+// Air function, T55XX writing card does not need to care about the data you read
 void empty_callback() { }
 
 
-//启动定时器和初始化相关外设，启动低频读卡
+//Start the timer and initialize related peripherals, start a low -frequency card reading
 void init_t55xx_hw(void) {
-    //注册读卡器io中断回调
+    //Registered card reader IO interrupt recovery
     register_rio_callback(empty_callback);
 }
 
 void T55xx_SendGap(unsigned int tm) {
-    stop_lf_125khz_radio();    // 关闭pwm输出
+    stop_lf_125khz_radio();    // Turn off PWM output
     bsp_delay_us(tm);
-    start_lf_125khz_radio();     // 启动pwm输出
+    start_lf_125khz_radio();     // Start PWM output
 }
 
 void TxBitRfid(uint8_t data) {
@@ -118,36 +118,36 @@ void TxByteRfid(uint8_t data) {
     }
 }
 
-// T55XX高精度时序控制函数
+// T55XX high -precision timing control function
 void T55XX_Timeslot_Callback() {
     T55xx_SendGap(30 * 8); // start gap
 
-    //先发送指令
+    //Send instructions first
     TxBitRfid(t55xx_cmd.opcode >> 1);
     TxBitRfid(t55xx_cmd.opcode & 1);
 
-    //指令为00时不需要发送后面的东西了
+    //The instruction does not need to be sent when it is 00
     if (t55xx_cmd.opcode != 0) {
-        //指令后如果有需要才发密码
+        //If you need it after the instruction, you can send the password
         if (t55xx_cmd.usepassword) {
             for (uint8_t i = 0; i < 32; i++) {
                 TxBitRfid((t55xx_cmd.password >> (31 - i)) & 1);
             }
         }
 
-        //处理锁定位
+        //Process lock position
         if (t55xx_cmd.lockBit == 0 || t55xx_cmd.lockBit == 1) {
             TxBitRfid(t55xx_cmd.lockBit & 1);
         }
 
-        //有需求才发数据
+        //Only need to send data if there is a need
         if (t55xx_cmd.usedata) {
             for (uint8_t i = 0; i < 32; i++) {
                 TxBitRfid((t55xx_cmd.data >> (31 - i)) & 1);
             }
         }
 
-        //处理地址位
+        //Processing address
         if (t55xx_cmd.blokAddr != 255) {
             TxBitRfid(t55xx_cmd.blokAddr >> 2);
             TxBitRfid(t55xx_cmd.blokAddr >> 1);
@@ -157,27 +157,27 @@ void T55XX_Timeslot_Callback() {
 }
 
 /**
- * @brief 向5577写入指令，这个指令可以是读写
+ * @brief Write to 5577 instructions, this instruction can be read and write
  *
- * @param opcode 操作码，在正常操作模式下一定是1*的格式，只有重置是00
- * @param usepassword 是否使用密码，为1时指令为密码模式
- * @param password 密码，在usepasswd有效的时候发送，32个bit，从下标0开始传输
- * @param lockBit 锁定位，只有可能是1或者0，传入其他值代表不使用lock位（用于密码唤醒模式）
- * @param usedata 是否使用数据区域，为1时传输数据
- * @param data 数据，32个bit，从下标0开始传输
- * @param blokAddr 块编号，3个bit 0-7块，输入255代表不使用该位（用于密码唤醒模式）
+ * @param opcode The operating code must be 1*in normal operation mode, only the reset is 00
+ * @param usepassword Whether the password is used, the password is the password mode
+ * @param password Password, send it when USepAssWD is valid, 32 BIT, start transmission from the bidding 0
+ * @param lockBit Locking position may only be 1 or 0. Passing other values means not using LOCK bit (for password awakening mode)
+ * @param usedata Whether the data area is used to transmit the data for 1 time
+ * @param data Data, 32 bits, transmitted from the lower bid 0
+ * @param blokAddr Block number, 3 bit 0-7 yuan, input 255 means not using this bit (for password wake-up mode)
  */
 void T55xx_Send_Cmd(uint8_t opcode, uint8_t usepassword, uint32_t password, uint8_t lockBit, uint8_t usedata, uint32_t data, uint8_t blokAddr) {
-    //密码读取模式，        2op(1+bck)  32pw    1(0)            3addr
-    //密码写入模式，        2op(1+bck)  32pw    1l      32data  3addr
-    //密码唤醒模式，        2op(1+0)    32pw
+    //Password reading mode,        2op(1+bck)  32pw    1(0)            3addr
+    //Password writing mode,        2op(1+bck)  32pw    1l      32data  3addr
+    //Password wake -up mode,        2op(1+0)    32pw
 
-    //直接读取模式，        2op(1+bck)          1(0)            3addr
-    //标准写入模式，        2op(1+bck)          1l      32data  3addr
+    //Read the mode directly,        2op(1+bck)          1(0)            3addr
+    //Standard writing mode,        2op(1+bck)          1l      32data  3addr
 
-    //这个不实现//标准读取页模式，      2op(1+bck)
+    //This will not be implemented // Standard read page mode,      2op(1+bck)
 
-    //重置模式，            2op(0+0)
+    //Reset mode,            2op(0+0)
 
     t55xx_cmd.opcode = opcode;
     t55xx_cmd.usepassword = usepassword;
@@ -188,25 +188,25 @@ void T55xx_Send_Cmd(uint8_t opcode, uint8_t usepassword, uint32_t password, uint
     t55xx_cmd.blokAddr = blokAddr;
 
 
-    // 请求时序，并且等待时序操作完成
+    // Request timing, and wait for the order operation to complete
     request_timeslot(37 * 1000, T55XX_Timeslot_Callback, true);
 
     if (opcode != 0) {
-        bsp_delay_ms(6);    // 可能继续下次写卡，需要多等一会儿
+        bsp_delay_ms(6);    // Maybe continue to write a card next time, you need to wait more for a while
     } else {
         bsp_delay_ms(1);
     }
 }
 
 /**
- * @brief T55xx写入EM410x数据
+ * @brief T55XX Write into EM410X data
  *
- * @param passwd 用于最后加密的密码（也是卡片当前密码）(是一个指针，4字节宽度小端byte序存储)
- * @param datas em410x运算后的数据，需要调用EM410X_Encoder计算
+ * @param passwd The password for the final encryption (also the current password of the card) (is a pointer, 4 -byte width small end byte sequence storage)
+ * @param datas After the data of EM410X, you need to call the EM410X_ENCODER calculation
  */
 void T55xx_Write_data(uint8_t *passwd, uint8_t *datas) {
     uint32_t blk1data = 0, blk2data = 0, u32passwd = 0;
-    //提取两个block的数据和密码
+    //Extract the data and passwords of two blocks
     for (uint8_t dataindex = 0; dataindex < 4; dataindex++) {
         blk1data = blk1data << 8;
         blk1data |= (uint8_t)datas[dataindex];
@@ -217,36 +217,36 @@ void T55xx_Write_data(uint8_t *passwd, uint8_t *datas) {
         blk2data = blk2data << 8;
         blk2data |= (uint8_t)datas[dataindex];
     }
-    //先写入密码区
-    T55xx_Send_Cmd(2, 1, u32passwd, 0, 1, u32passwd, 7);        //0区 7块 用当前密码写当前密码（密码）
-    T55xx_Send_Cmd(2, 1, u32passwd, 0, 1, u32passwd, 7);        //0区 7块 用当前密码写当前密码（密码）
-    //然后写入控制区
-    T55xx_Send_Cmd(2, 1, u32passwd, 0, 1, 0X00148050, 0);       //0区 0块 用当前密码写00148050（控制区）
-    //然后写入数据
-    T55xx_Send_Cmd(2, 1, u32passwd, 0, 1, blk1data, 1);         //0区 1块 用当前密码写blk1data（数据）
-    T55xx_Send_Cmd(3, 1, u32passwd, 0, 1, blk1data, 1);         //1区 1块 用当前密码写blk1data（数据）
-    T55xx_Send_Cmd(2, 1, u32passwd, 0, 1, blk2data, 2);         //0区 2块 用当前密码写blk2data（数据）
-    T55xx_Send_Cmd(3, 1, u32passwd, 0, 1, blk2data, 2);         //1区 2块 用当前密码写blk2data（数据）
-    //然后写入射频参数
-    // 2021-12-15 fix：写此数据会导致小卡无法重复写
-    // T55xx_Send_Cmd(3, 1, u32passwd, 0, 1, 0X60000800, 3);    //1区 3块 用当前密码写60000800（射频参数）
+    //writeToThePasswordAreaFirst
+    T55xx_Send_Cmd(2, 1, u32passwd, 0, 1, u32passwd, 7);        // 0 area 7 blocks to write the current password (password)
+    T55xx_Send_Cmd(2, 1, u32passwd, 0, 1, u32passwd, 7);        // 0 area 7 blocks to write the current password (password)
+    //Then write to the control area
+    T55xx_Send_Cmd(2, 1, u32passwd, 0, 1, 0X00148050, 0);       // 0 area 0 blocks are written in the current password00148050 (control zone)
+    //Then write the data
+    T55xx_Send_Cmd(2, 1, u32passwd, 0, 1, blk1data, 1);         // 0 area 1 block is written in the current passwordblk1data (data)
+    T55xx_Send_Cmd(3, 1, u32passwd, 0, 1, blk1data, 1);         //zone 1 1 block is written in the current passwordblk1data (data)
+    T55xx_Send_Cmd(2, 1, u32passwd, 0, 1, blk2data, 2);         // 0 area 2 are written in the current passwordblk2data (data)
+    T55xx_Send_Cmd(3, 1, u32passwd, 0, 1, blk2data, 2);         //zone 1 2 are written in the current passwordblk2data (data)
+    //Then write in the radio frequency parameter
+    // 2021-12-15 FIX: Writing this data will cause the small card to be unable to write repeatedly
+    // T55xx_Send_Cmd(3, 1, u32passwd, 0, 1, 0X60000800, 3);    //zone 1 3 blocks are written in the current password60000800 (radio frequency parameter)
 
-    //然后用无密码指令再写一遍
-    T55xx_Send_Cmd(2, 0, 0, 0, 1, 0X00148050, 0);               //0区 0块 写00148050（控制区）
-    T55xx_Send_Cmd(2, 0, 0, 0, 1, blk1data, 1);                 //0区 1块 写blk1data（数据）
-    T55xx_Send_Cmd(2, 0, 0, 0, 1, blk2data, 2);                 //0区 2块 写blk2data（数据）
-    T55xx_Send_Cmd(0, 0, 0, 0, 0, 0, 0);                        //重启卡片
+    //Then write again with non -password instructions
+    T55xx_Send_Cmd(2, 0, 0, 0, 1, 0X00148050, 0);               // 0 area 0 block writing00148050 (control zone)
+    T55xx_Send_Cmd(2, 0, 0, 0, 1, blk1data, 1);                 // 0 area 1 pieceblk1data (data)
+    T55xx_Send_Cmd(2, 0, 0, 0, 1, blk2data, 2);                 // 0 area 2 pieces of writingblk2data (data)
+    T55xx_Send_Cmd(0, 0, 0, 0, 0, 0, 0);                        //Restart card
 }
 
 /**
- * @brief 重置密码函数，用于将现有已知密码的卡重置为目标密码
+ * @brief Reset the password function to set the card that is used to set the existing known password into a target password
  *
- * @param oldpasswd 卡片当前密码(是一个指针，4字节宽度小端byte序存储)
- * @param newpasswd 用于最后加密的密码(是一个指针，4字节宽度小端byte序存储)
+ * @param oldpasswd The current password of the card (is a pointer, 4 -byte width small end byte sequential storage)
+ * @param newpasswd The password for the final encryption (is a pointer, 4 -byte width small end byte sequential storage)
  */
 void T55xx_Reset_Passwd(uint8_t *oldpasswd, uint8_t *newpasswd) {
     uint32_t u32oldpasswd = 0, u32newpasswd = 0;
-    //提取两个block的数据和密码
+    //Extract the data and passwords of two blocks
     for (uint8_t dataindex = 0; dataindex < 4; dataindex++) {
         u32oldpasswd = u32oldpasswd << 8;
         u32oldpasswd |= (uint8_t)oldpasswd[dataindex];
@@ -254,7 +254,7 @@ void T55xx_Reset_Passwd(uint8_t *oldpasswd, uint8_t *newpasswd) {
         u32newpasswd |= (uint8_t)newpasswd[dataindex];
     }
 
-    T55xx_Send_Cmd(2, 1, u32oldpasswd, 0, 1, u32newpasswd, 7);  //0区 7块 用当前密码写新密码（密码）
-    T55xx_Send_Cmd(2, 1, u32oldpasswd, 0, 1, u32newpasswd, 7);  //0区 7块 用当前密码写新密码（密码）
-    T55xx_Send_Cmd(0, 0, 0, 0, 0, 0, 0);                        //重启卡片
+    T55xx_Send_Cmd(2, 1, u32oldpasswd, 0, 1, u32newpasswd, 7);  // 0 area 7 blocks to write new passwords (passwords)
+    T55xx_Send_Cmd(2, 1, u32oldpasswd, 0, 1, u32newpasswd, 7);  // 0 area 7 blocks to write new passwords (passwords)
+    T55xx_Send_Cmd(0, 0, 0, 0, 0, 0, 0);                        //Restart card
 }

@@ -18,37 +18,37 @@
 NRF_LOG_MODULE_REGISTER();
 
 
-// 获取指定的位置的bit
+// Get the specified position bit
 #define GETBIT(v, bit) ((v >> bit) & 0x01)
-// 天线控制
+// Antenna control
 #define ANT_TO_MOD()   nrf_gpio_pin_set(LF_MOD)
 #define ANT_NO_MOD()  nrf_gpio_pin_clear(LF_MOD)
 
 
-// usb灯效是否允许使能
+// Whether the USB light effect is allowed to enable
 extern bool g_usb_led_marquee_enable;
 
-// 承载64位ID号的比特数据
+// Bit data carrying 64 -bit ID number
 static uint64_t m_id_bit_data = 0;
-// 当前发送的卡片ID的bit位置
+// The bit position of the card ID currently sent
 static uint8_t m_bit_send_position;
-// 当前是否在发送第一个沿
+// Whether to send the first edge
 static bool m_is_send_first_edge;
-// 当前广播ID号总计几次 33ms 一次，一秒钟大概能广播30次
+// The current broadcast ID number is 33ms every few times, and can be broadcast about 30 times a second
 static uint8_t m_send_id_count;
-// 当前是否正在广播低频卡号中
+// Whether it is currently in the low -frequency card number of broadcasting
 static volatile bool m_is_lf_emulating = false;
-// 发送卡号的定时器，我们使用定时器 3
+// The timer of the delivery card number, we use the timer 3
 const nrfx_timer_t m_timer_send_id = NRFX_TIMER_INSTANCE(3);
-// 缓存标签类型
+// Cache label type
 static tag_specific_type_t m_tag_type = TAG_TYPE_UNKNOWN;
 
 /**
- * @brief 将EM410X的卡号转为U64的内存布局，计算奇偶校验位
- *  根据手册的说明 EM4100 使用U64足以容纳
+ * @brief Convert the card number of EM410X to the memory layout of U64 and calculate the puppet school inspection
+ *  According to the instructions of the manual, EM4100 is sufficient to accommodate U64
  */
 uint64_t em410x_id_to_memory64(uint8_t id[5]) {
-    // 联合体，所见即所得
+    //Union, what you see is obtained
     union {
         uint64_t u64;
         struct {
@@ -123,12 +123,12 @@ uint64_t em410x_id_to_memory64(uint8_t id[5]) {
         } bit;
     } memory;
 
-    // 好了，到了目前最关键的时候了，现在需要赋值和计算奇偶校验位了
-    // 1、先把前导码给赋值了
+    // Okay, it's the most critical time at present, and now you need to assign and calculate the Qiqi school inspection
+    // 1. First assign the front guide code
     memory.bit.h00 = memory.bit.h01 = memory.bit.h02 =
                                           memory.bit.h03 = memory.bit.h04 = memory.bit.h05 =
                                                                memory.bit.h06 = memory.bit.h07 = memory.bit.h08 = 1;
-    // 2、把8bit的版本或者自定义ID给赋值了
+    //2. Assign the 8bit version or custom ID
     memory.bit.d00 = GETBIT(id[0], 7);
     memory.bit.d01 = GETBIT(id[0], 6);
     memory.bit.d02 = GETBIT(id[0], 5);
@@ -139,8 +139,8 @@ uint64_t em410x_id_to_memory64(uint8_t id[5]) {
     memory.bit.d12 = GETBIT(id[0], 1);
     memory.bit.d13 = GETBIT(id[0], 0);
     memory.bit.p1 = memory.bit.d10 ^ memory.bit.d11 ^ memory.bit.d12 ^ memory.bit.d13;
-    // 3、把32bit的数据给赋值了
-    // - byte1
+    // 3. Assign the data of 32Bit
+    // -byte1
     memory.bit.d20 = GETBIT(id[1], 7);
     memory.bit.d21 = GETBIT(id[1], 6);
     memory.bit.d22 = GETBIT(id[1], 5);
@@ -184,85 +184,85 @@ uint64_t em410x_id_to_memory64(uint8_t id[5]) {
     memory.bit.d92 = GETBIT(id[4], 1);
     memory.bit.d93 = GETBIT(id[4], 0);
     memory.bit.p9 = memory.bit.d90 ^ memory.bit.d91 ^ memory.bit.d92 ^ memory.bit.d93;
-    // 4、计算纵向的偶校验
+    // 4. Calculate the vertical puppet verification
     memory.bit.pc0 = memory.bit.d00 ^ memory.bit.d10 ^ memory.bit.d20 ^ memory.bit.d30 ^ memory.bit.d40 ^ memory.bit.d50 ^ memory.bit.d60 ^ memory.bit.d70 ^ memory.bit.d80 ^ memory.bit.d90;
     memory.bit.pc1 = memory.bit.d01 ^ memory.bit.d11 ^ memory.bit.d21 ^ memory.bit.d31 ^ memory.bit.d41 ^ memory.bit.d51 ^ memory.bit.d61 ^ memory.bit.d71 ^ memory.bit.d81 ^ memory.bit.d91;
     memory.bit.pc2 = memory.bit.d02 ^ memory.bit.d12 ^ memory.bit.d22 ^ memory.bit.d32 ^ memory.bit.d42 ^ memory.bit.d52 ^ memory.bit.d62 ^ memory.bit.d72 ^ memory.bit.d82 ^ memory.bit.d92;
     memory.bit.pc3 = memory.bit.d03 ^ memory.bit.d13 ^ memory.bit.d23 ^ memory.bit.d33 ^ memory.bit.d43 ^ memory.bit.d53 ^ memory.bit.d63 ^ memory.bit.d73 ^ memory.bit.d83 ^ memory.bit.d93;
-    // 5、设置最后一个EOF的位，这波转换就算是结束了
+    //5. Set the position of the last EOF, this wave of conversion is over
     memory.bit.s0 = 0;
-    // 返回联合体中的u64数据，这才是我们最终需要的数据，
-    // 后期模拟卡只需要拿出每个bit去发送就行了
+    //Return to the U64 data in the combination, this is the data we finally need,
+    // In the later stage analog card, just take out each bit to send it
     return memory.u64;
 }
 
 /**
-* @brief 判断场状态
+* @brief Judgment field status
  */
 bool lf_is_field_exists(void) {
     nrf_drv_lpcomp_enable();
-    bsp_delay_us(20);                                   // 延迟一段时间再采样，避免误判
-    nrf_lpcomp_task_trigger(NRF_LPCOMP_TASK_SAMPLE);    // 触发一次采样
-    return nrf_lpcomp_result_get() == 1;                // 判断LF场状态的采样结果
+    bsp_delay_us(20);                                   // Display for a period of time and sampling to avoid misjudgment
+    nrf_lpcomp_task_trigger(NRF_LPCOMP_TASK_SAMPLE);    //Trigger a sampling
+    return nrf_lpcomp_result_get() == 1;                //Determine the sampling results of the LF field status
 }
 
 void timer_ce_handler(nrf_timer_event_t event_type, void *p_context) {
     bool mod;
     switch (event_type) {
-        // 因为我们配置的是使用CC通道2，所以事件回调
-        // 函数中判断NRF_TIMER_EVENT_COMPARE0事件
+        // Because we are configured using the CC channel 2, the event recovers
+        // Detect nrf_timer_event_compare0 event in the function
         case NRF_TIMER_EVENT_COMPARE2: {
             if (m_is_send_first_edge) {
                 if (GETBIT(m_id_bit_data, m_bit_send_position)) {
-                    // 发送 1 的第一个沿
+                    // The first edge of the send 1
                     ANT_TO_MOD();
                     mod = true;
                 } else {
-                    // 发送 0 的第一个沿
+                    // The first edge of the send 0
                     ANT_NO_MOD();
                     mod = false;
                 }
-                m_is_send_first_edge = false;   // 下次发送第二个沿
+                m_is_send_first_edge = false;   //The second edge is sent next time
             } else {
                 if (GETBIT(m_id_bit_data, m_bit_send_position)) {
-                    // 发送 1 的第二个沿
+                    // Send the second edge of 1
                     ANT_NO_MOD();
                     mod = false;
                 } else {
-                    // 发送 0 的第二个沿
+                    //The second edge of the send 0
                     ANT_TO_MOD();
                     mod = true;
                 }
-                m_is_send_first_edge = true;    // 下次发送第一个沿
+                m_is_send_first_edge = true;    //The first edge of the next sends next time
             }
 
             // measure field only during no-mod half of last bit of last broadcast
             if ((! mod) &&
                     (m_bit_send_position + 1 >= LF_125KHZ_EM410X_BIT_SIZE) &&
                     (m_send_id_count + 1 >= LF_125KHZ_BORADCAST_MAX)) {
-                nrfx_timer_disable(&m_timer_send_id);                       // 关闭广播场的定时器
-                // 我们不需要任何的事件，仅仅需要检测一下场的状态
+                nrfx_timer_disable(&m_timer_send_id);                       // Close the timer of the broadcast venue
+                // We don't need any events, but only need to detect the state of the field
                 NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
                 if (lf_is_field_exists()) {
                     nrf_drv_lpcomp_disable();
-                    nrfx_timer_enable(&m_timer_send_id);                    // 打开广播场的定时器，继续模拟
+                    nrfx_timer_enable(&m_timer_send_id);                    // Open the timer of the broadcaster and continue to simulate
                 } else {
-                    // 开启事件中断，让下次场事件可以正常出入
-                    g_is_tag_emulating = false;                             // 重设模拟中的标志位
+                    // Open the incident interruption, so that the next event can be in and out normally
+                    g_is_tag_emulating = false;                             // Reset the flag in the simulation
                     m_is_lf_emulating = false;
-                    TAG_FIELD_LED_OFF()                                     // 确保关闭LF的场状态的指示灯
+                    TAG_FIELD_LED_OFF()                                     // Make sure the indicator light of the LF field status
                     NRF_LPCOMP->INTENSET = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
                     // call sleep_timer_start *after* unsetting g_is_tag_emulating
-                    sleep_timer_start(SLEEP_DELAY_MS_FIELD_125KHZ_LOST);    // 启动进入休眠的定时器
+                    sleep_timer_start(SLEEP_DELAY_MS_FIELD_125KHZ_LOST);    // Start the timer to enter the sleep
                     NRF_LOG_INFO("LF FIELD LOST");
                 }
             }
 
-            if (m_is_send_first_edge == true) { // 下次发送第一个沿
+            if (m_is_send_first_edge == true) { // The first edge of the next sends next time
                 if (++m_bit_send_position >= LF_125KHZ_EM410X_BIT_SIZE) {
-                    m_bit_send_position = 0;    // 广播一次成功，bit位置归零
+                    m_bit_send_position = 0;    // The broadcast is successful once, and the BIT position is zero
                     if (++m_send_id_count >= LF_125KHZ_BORADCAST_MAX) {
-                        m_send_id_count = 0;                                        // 广播次数达到上限，重新识别场状态并且重新统计广播次数
+                        m_send_id_count = 0;                                        //The number of broadcasts reaches the upper limit, re -identifies the status of the field and re -statistically count the number of broadcast times
                     }
                 }
             }
@@ -284,30 +284,30 @@ void timer_ce_handler(nrf_timer_event_t event_type, void *p_context) {
  * priority is set to APP_IRQ_PRIORITY_HIGH).
  */
 static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
-    // 仅限于未启动低频模拟时，并且是上升沿事件才去启动模拟卡
+    // Only when the low -frequency simulation is not launched, and the analog card is started
     if (!m_is_lf_emulating && event == NRF_LPCOMP_EVENT_UP) {
-        // 关闭休眠延时
+        // Turn off dormant delay
         sleep_timer_stop();
-        // 关闭比较器
+        // Close the comparator
         nrf_drv_lpcomp_disable();
 
-        // 设置模拟状态标志位
+        // Set the simulation status logo bit
         m_is_lf_emulating = true;
         g_is_tag_emulating = true;
 
-        // 模拟卡状态应当关闭USB灯效
+        // Simulation card status should be turned off the USB light effect
         g_usb_led_marquee_enable = false;
 
-        // LED状态更新
+        // LED status update
         set_slot_light_color(2);
         TAG_FIELD_LED_ON()
 
-        // 无论如何，每次场状态发现变化都需要重置发送的bit位置
+        //In any case, every time the state finds changes, you need to reset the BIT location of the sending
         m_send_id_count = 0;
         m_bit_send_position = 0;
         m_is_send_first_edge = true;
 
-        // 开启精准的硬件定时器去广播卡号
+        // openThePreciseHardwareTimerToTheBroadcastCardNumber
         nrfx_timer_enable(&m_timer_send_id);
 
         NRF_LOG_INFO("LF FIELD DETECTED");
@@ -338,9 +338,9 @@ static void lf_sense_enable(void) {
 }
 
 static void lf_sense_disable(void) {
-    nrfx_timer_uninit(&m_timer_send_id);    // 反初始化定时器
-    nrfx_lpcomp_uninit();                   // 反初始化比较器
-    m_is_lf_emulating = false;              // 设置为非模拟中状态
+    nrfx_timer_uninit(&m_timer_send_id);    //counterInitializationTimer
+    nrfx_lpcomp_uninit();                   //antiInitializationComparator
+    m_is_lf_emulating = false;              //setAsNonSimulatedState
 }
 
 static enum  {
@@ -350,21 +350,21 @@ static enum  {
 } m_lf_sense_state = LF_SENSE_STATE_NONE;
 
 /**
- * @brief 切换LF场感应使能状态
+ * @brief switchLfFieldInductionToEnableTheState
  */
 void lf_tag_125khz_sense_switch(bool enable) {
-    // 初始化调制脚为输出
+    // initializationModulationFootIsOutput
     nrf_gpio_cfg_output(LF_MOD);
-    // 默认不短路天线（短路会导致RSSI无法判断）
+    //theDefaultIsNotShortCircuitAntenna (shortCircuitWillCauseRssiToBeUnableToJudge)
     ANT_NO_MOD();
 
-    // 首次执行或者是禁用状态，只允许初始化
+    //forTheFirstTimeOrDisabled,OnlyInitializationIsAllowed
     if (m_lf_sense_state == LF_SENSE_STATE_NONE || m_lf_sense_state == LF_SENSE_STATE_DISABLE) {
         if (enable) {
             m_lf_sense_state = LF_SENSE_STATE_ENABLE;
             lf_sense_enable();
         }
-    } else {    // 其他情况只允许反初始化
+    } else {    // inOtherCases,OnlyAntiInitializationIsAllowed
         if (!enable) {
             m_lf_sense_state = LF_SENSE_STATE_DISABLE;
             lf_sense_disable();
@@ -372,14 +372,14 @@ void lf_tag_125khz_sense_switch(bool enable) {
     }
 }
 
-/** @brief em410x加载数据
- * @param type      细化的标签类型
- * @param buffer    数据缓冲区
+/** @brief EM410X load data
+ * @param type     Refined label type
+ * @param buffer   Data buffer
  */
 int lf_tag_em410x_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
-    // 确保外部容量足够转换为信息结构体
+    //Make sure that external capacity is enough to convert to an information structure
     if (buffer->length >= LF_EM410X_TAG_ID_SIZE) {
-        // 此处直接转换ID卡号为对应的bit数据流
+        // The ID card number is directly converted here as the corresponding BIT data stream
         m_tag_type = type;
         m_id_bit_data = em410x_id_to_memory64(buffer->buffer);
         NRF_LOG_INFO("LF Em410x data load finish.");
@@ -389,34 +389,34 @@ int lf_tag_em410x_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffe
     return LF_EM410X_TAG_ID_SIZE;
 }
 
-/** @brief ID卡保存卡号之前的回调
- * @param type      细化的标签类型
- * @param buffer    数据缓冲区
- * @return 需要保存的数据的长度，为0时表示不保存
+/** @brief Id card deposit card number before callback
+ * @param type      Refined label type
+ * @param buffer    Data buffer
+ * @return The length of the data that needs to be saved is that it does not save when 0
  */
 int lf_tag_em410x_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
-    // 确保加载了此标签才允许保存
+    // Make sure to load this label before allowing saving
     if (m_tag_type != TAG_TYPE_UNKNOWN) {
-        // 直接保存原本的卡包即可
+        // Just save the original card package directly
         return LF_EM410X_TAG_ID_SIZE;
     } else {
         return 0;
     }
 }
 
-/** @brief ID卡保存卡号之前的回调
- * @param slot      卡槽号码
- * @param tag_type  细化的标签类型
- * @return 是否格式化成功，如果格式化成功，将返回true，否则返回false
+/** @brief Id card deposit card number before callback
+ * @param slot     Card slot number
+ * @param tag_type  Refined label type
+ * @return Whether the format is successful, if the formatting is successful, it will return to True, otherwise False will be returned
  */
 bool lf_tag_em410x_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     // default id, must to align(4), more word...
     uint8_t tag_id[8] = { 0xDE, 0xAD, 0xBE, 0xEF, 0x88 };
-    // 将数据写进去flash
+    // Write the data in Flash
     tag_sense_type_t sense_type = get_sense_type_from_tag_type(tag_type);
-    fds_slot_record_map_t map_info; // 获取专用卡槽FDS记录信息
+    fds_slot_record_map_t map_info; // Get the special card slot FDS record information
     get_fds_map_by_slot_sense_type_for_dump(slot, sense_type, &map_info);
-    // 调用堵塞式的fds写入函数，将卡槽指定场类型的数据写入到flash中
+    //Call the blocked FDS to write the function, and write the data of the specified field type of the card slot into the Flash
     bool ret = fds_write_sync(map_info.id, map_info.key, sizeof(tag_id) / 4, (uint8_t *)tag_id);
     if (ret) {
         NRF_LOG_INFO("Factory slot data success.");

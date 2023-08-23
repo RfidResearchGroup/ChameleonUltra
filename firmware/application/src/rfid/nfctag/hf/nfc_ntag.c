@@ -69,13 +69,13 @@ const uint8_t ntagVersion[8] = {0x00, 0x04, 0x04, 0x02, 0x01, 0x00, 0x11, 0x03};
 /* pwd auth for amiibo */
 uint8_t ntagPwdOK[2] = {0x80, 0x80};
 
-// 指向标签信息的数据结构指针
+// Data structure pointer to the label information
 static nfc_tag_ntag_information_t *m_tag_information = NULL;
-// 定义并且使用影子防冲撞资源
+// Define and use shadow anti -collision resources
 static nfc_tag_14a_coll_res_referen_t m_shadow_coll_res;
-// 定义并且使用ntag专用通信缓冲区
+//Define and use NTAG special communication buffer
 static nfc_tag_ntag_tx_buffer_t m_tag_tx_buffer;
-// 保存当前正在模拟的NTAG的具体类型
+// Save the specific type of NTAG currently being simulated
 static tag_specific_type_t m_tag_type;
 
 static int get_block_max_by_tag_type(tag_specific_type_t tag_type) {
@@ -190,13 +190,13 @@ void nfc_tag_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits) {
 }
 
 nfc_tag_14a_coll_res_referen_t *get_ntag_coll_res() {
-    // 使用单独的防冲突信息，而不是使用扇区中的信息
+    // Use a separate anti -conflict information instead of using the information in the sector
     m_shadow_coll_res.sak = m_tag_information->res_coll.sak;
     m_shadow_coll_res.atqa = m_tag_information->res_coll.atqa;
     m_shadow_coll_res.uid = m_tag_information->res_coll.uid;
     m_shadow_coll_res.size = &(m_tag_information->res_coll.size);
     m_shadow_coll_res.ats = &(m_tag_information->res_coll.ats);
-    // 最终返回一个只带引用，不带实体的影子数据结构指针
+    // Finally, a shadow data structure pointer with only reference, no physical shadow,
     return &m_shadow_coll_res;
 }
 
@@ -208,14 +208,14 @@ static int get_information_size_by_tag_type(tag_specific_type_t type) {
     return sizeof(nfc_tag_14a_coll_res_entity_t) + sizeof(nfc_tag_ntag_configure_t) + (get_block_max_by_tag_type(type) * NFC_TAG_NTAG_DATA_SIZE);
 }
 
-/** @brief ntag保存数据之前的回调
- * @param type      细化的标签类型
- * @param buffer    数据缓冲区
- * @return 需要保存的数据的长度，为0时表示不保存
+/** @brief ntag's callback before saving data
+ * @param type detailed label type
+ * @param buffer data buffer
+ * @return to be saved, the length of the data that needs to be saved, it means not saved when 0
  */
 int nfc_tag_ntag_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     if (m_tag_type != TAG_TYPE_UNKNOWN) {
-        // 根据当前标签类型保存对应大小的数据
+        // Save the corresponding size data according to the current label type
         return get_information_size_by_tag_type(type);
     } else {
         return 0;
@@ -225,11 +225,11 @@ int nfc_tag_ntag_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer
 int nfc_tag_ntag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     int info_size = get_information_size_by_tag_type(type);
     if (buffer->length >= info_size) {
-        // 将数据缓冲区强转为ntag结构类型
+        // Convert the data buffer to NTAG structure type
         m_tag_information = (nfc_tag_ntag_information_t *)buffer->buffer;
-        // 缓存正在模拟的Ntag的具体类型
+        // The specific type of NTAG that is simulated by the cache
         m_tag_type = type;
-        // 注册14a通信管理接口
+        // Register 14A communication management interface
         nfc_tag_14a_handler_t handler_for_14a = {
             .get_coll_res = get_ntag_coll_res,
             .cb_state = nfc_tag_ntag_state_handler,
@@ -243,7 +243,7 @@ int nfc_tag_ntag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer
     return info_size;
 }
 
-// 初始化ntag的工厂数据
+// Initialized NTAG factory data
 bool nfc_tag_ntag_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     // default ntag data
     uint8_t default_p0[] = { 0x04, 0x68, 0x95, 0x71 };

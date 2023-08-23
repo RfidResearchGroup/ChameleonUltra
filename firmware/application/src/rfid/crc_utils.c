@@ -1,6 +1,6 @@
 #include "crc_utils.h"
 
-// CRC查表
+//CRC check table
 static uint16_t crc_table[256] = {
     0x0000, 0x1189, 0x2312, 0x329B, 0x4624, 0x57AD, 0x6536, 0x74BF,
     0x8C48, 0x9DC1, 0xAF5A, 0xBED3, 0xCA6C, 0xDBE5, 0xE97E, 0xF8F7,
@@ -38,17 +38,17 @@ static uint16_t crc_table[256] = {
 
 
 /**
- * @brief 在MCU上使用查表法计算14443a协议专用的CRC（crc16）
- * @param data 将被计算的CRC的原始数据
- * @param length 数据的长度，不包括CRC
- * @param output 输出缓冲区，长度必须是大于等于两个字节
+ * @brief Use the table check method on the MCU to calculate the CRC (CRC16) dedicated to the 144443A protocol.
+ * @param data The original data of the calculated CRC
+ * @param length The length of the data does not include CRC
+ * @param output The output buffer must be greater than or equal to two bytes
  *
  */
 void calc_14a_crc_lut(uint8_t *data, int length, uint8_t *output) {
-    // 取巧，强制指针类型转换
+    //Take the clever, compulsory pointer type conversion
     uint16_t *crc = (uint16_t *)output;
-    // 赋予多项式初始值
+    //Give the initial value of polynomial
     *crc = 0x6363;
-    // 然后开始对每个字节进行查表
+    //Then start checking the table of each byte
     while (length--) *crc = (*crc >> 8) ^ crc_table[(*crc & 0xFF) ^ *data++];
 }

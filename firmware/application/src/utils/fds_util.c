@@ -19,11 +19,11 @@ static struct {
 
 
 /**
- * 查询记录是否存在，并且获得记录的句柄
+ *The query record exists, and get the handle of the record
  */
 static bool fds_find_record(uint16_t id, uint16_t key, fds_record_desc_t *desc) {
     fds_find_token_t ftok;
-    memset(&ftok, 0x00, sizeof(fds_find_token_t));  // 使用之前需要先清空
+    memset(&ftok, 0x00, sizeof(fds_find_token_t));  // You need to be empty before use
     if (fds_record_find(id, key, desc, &ftok) == NRF_SUCCESS) {
         return true;
     }
@@ -48,48 +48,48 @@ bool fds_is_exists(uint16_t id, uint16_t key) {
 
 
 /**
- * 读取记录
+ *Read record
  */
 bool fds_read_sync(uint16_t id, uint16_t key, uint16_t max_length, uint8_t *buffer) {
-    ret_code_t          err_code;       // 操作的结果码
-    fds_flash_record_t  flash_record;   // 指向flash中的实际信息
-    fds_record_desc_t   record_desc;    // 记录的句柄
+    ret_code_t          err_code;       //The results of the operation
+    fds_flash_record_t  flash_record;   // Pointing to the actual information in Flash
+    fds_record_desc_t   record_desc;    // Recorded handle
     if (fds_find_record(id, key, &record_desc)) {
-        err_code = fds_record_open(&record_desc, &flash_record);            // 打开记录，使之被标记为打开状态
+        err_code = fds_record_open(&record_desc, &flash_record);            //Open the record so that it is marked as the open state
         APP_ERROR_CHECK(err_code);
-        if (flash_record.p_header->length_words * 4 <= max_length) {        // 在此处将flash中的数据读取到给定的RAM中
-            // 确保缓冲区不会溢出后，读出此记录
+        if (flash_record.p_header->length_words * 4 <= max_length) {        // Read the data in Flash here to the given RAM
+            // Make sure that the buffer will not overflow, read this record
             memcpy(buffer, flash_record.p_data, flash_record.p_header->length_words * 4);
             NRF_LOG_INFO("FDS read success.");
             return true;
         } else {
             NRF_LOG_INFO("FDS buffer too small, can't run memcpy, fds size = %d, buffer size = %d", flash_record.p_header->length_words * 4, max_length);
         }
-        err_code = fds_record_close(&record_desc);                          // 操作完成后关闭文件
+        err_code = fds_record_close(&record_desc);                          // Close the file after the operation is completed
         APP_ERROR_CHECK(err_code);
     }
-    // 加载不到正确的数据，可能是不存在这个记录
+    //If the correct data is not loaded, this record may not exist
     return false;
 }
 
 /**
- * 没有GC过程的写入操作函数的实现
+ * There is no realization of the writing operation function of the GC process
  */
 static ret_code_t fds_write_record_nogc(uint16_t id, uint16_t key, uint16_t data_length_words, void *buffer) {
-    ret_code_t          err_code;       // 操作的结果码
-    fds_record_desc_t   record_desc;    // 记录的句柄
-    fds_record_t record = {             // 记录的实体，写和更新操作时用的上
+    ret_code_t          err_code;       // The results of the operation
+    fds_record_desc_t   record_desc;    // Recorded handle
+    fds_record_t record = {             // The entity of the record is used for writing and updating the operation.
         .file_id = id, .key = key,
         .data = { .p_data = buffer, .length_words = data_length_words, }
     };
-    if (fds_find_record(id, key, &record_desc)) {   // 查找具有指定特征的记录
-        // 能找得到这个记录，我们可以进行update操作
+    if (fds_find_record(id, key, &record_desc)) {   // Find a record with specified characteristics
+        //If you can find this record, we can perform the update operation
         err_code = fds_record_update(&record_desc, &record);
         if (err_code == NRF_SUCCESS) {
             NRF_LOG_INFO("Search FileID: 0x%04x, FileKey: 0x%04x is found, will update.", id, key);
         }
     } else {
-        // 无法找到有效的记录，我们进行第一次写入操作
+        // Unable to find effective records, we will write for the first time
         err_code = fds_record_write(&record_desc, &record);
         if (err_code == NRF_SUCCESS) {
             NRF_LOG_INFO("Search FileID: 0x%04x, FileKey: 0x%04x no found, will create.", id, key);
@@ -99,7 +99,7 @@ static ret_code_t fds_write_record_nogc(uint16_t id, uint16_t key, uint16_t data
 }
 
 /**
- * 写入记录
+ * Write record
  */
 bool fds_write_sync(uint16_t id, uint16_t key, uint16_t data_length_words, void *buffer) {
     // Make only one task running
@@ -112,35 +112,35 @@ bool fds_write_sync(uint16_t id, uint16_t key, uint16_t data_length_words, void 
     fds_operation_info.success = false;
     fds_operation_info.waiting = true;
 
-    // 调用无自动GC的写实现函数
+    // Call the real function of the realistic unmnled GC
     ret_code_t err_code = fds_write_record_nogc(id, key, data_length_words, buffer);
     if (err_code == NRF_SUCCESS) {
         while (!fds_operation_info.success) {
             __NOP();
-        }; // 等待操作完成
-    } else if (err_code == FDS_ERR_NO_SPACE_IN_FLASH) {   // 确保还有空间可以操作，否则需要GC
-        // 当前报错是属于空间不足的报错，可能我们需要进行GC
+        }; // Waiting for operation to complete
+    } else if (err_code == FDS_ERR_NO_SPACE_IN_FLASH) {   //Make sure there is space to operate, otherwise GC will be required
+        // The current error is an error with insufficient space. Maybe we need GC
         NRF_LOG_INFO("FDS no space, gc auto start.");
         fds_gc_sync();
 
-        // gc完成后，可以重新进行相应的操作了
+        // After the GC is completed, it can be re -operated
         NRF_LOG_INFO("FDS auto gc success, write record continue.");
         fds_operation_info.success = false;
         err_code = fds_write_record_nogc(id, key, data_length_words, buffer);
         if (err_code == NRF_SUCCESS) {
             while (!fds_operation_info.success) {
                 __NOP();
-            }; // 等待操作完成
+            }; // Waiting for operation to complete
         } else if (err_code == FDS_ERR_NO_SPACE_IN_FLASH) {
-            // gc了一次之后，发现还是没有空间，那么可能是开发者没有考虑好空间分配导致溢出了
+            //After gc once, I found that there is still no space, so it may be that the developer did not consider the space distribution and caused overflow
             NRF_LOG_ERROR("FDS no space to write.");
             ret = false;
         } else {
-            // 如果不是空间不足的报错，那么我们就需要catch这个错误，开发时就解决
+            //If it is not an error with insufficient space, then we need Catch the error, and we solve it during development
             APP_ERROR_CHECK(err_code);
         }
     } else {
-        // 同上
+        // Above
         APP_ERROR_CHECK(err_code);
     }
 
@@ -150,7 +150,7 @@ bool fds_write_sync(uint16_t id, uint16_t key, uint16_t data_length_words, void 
 }
 
 /*
- * 删除记录
+ * Delete Record
  */
 int fds_delete_sync(uint16_t id, uint16_t key) {
     int                 delete_count = 0;
@@ -164,13 +164,13 @@ int fds_delete_sync(uint16_t id, uint16_t key) {
         delete_count++;
         while (!fds_operation_info.success) {
             __NOP();
-        }; // 等待操作完成
+        }; //Waiting for operation to complete
     }
     return delete_count;
 }
 
 /**
- * FDS事件回调
+ *FDS event callback
  */
 static void fds_evt_handler(fds_evt_t const *p_evt) {
     // To process fds event
@@ -188,7 +188,7 @@ static void fds_evt_handler(fds_evt_t const *p_evt) {
             if (p_evt->result == NRF_SUCCESS) {
                 NRF_LOG_INFO("Record change: FileID 0x%04x, RecordKey 0x%04x", p_evt->write.file_id, p_evt->write.record_key);
                 if (p_evt->write.file_id == fds_operation_info.id && p_evt->write.record_key == fds_operation_info.key) {
-                    // 上面的逻辑已经确保是我们当前正在写的任务完成了！
+                    // The logic above has ensured that the task we are currently writing is completed!
                     fds_operation_info.success = true;
                 }
             } else {
@@ -227,15 +227,15 @@ static void fds_evt_handler(fds_evt_t const *p_evt) {
 }
 
 /**
- * 初始化nrf52的fds库
+ *Initialize the FDS library of NRF52
  */
 void fds_util_init() {
     // reset waiting flag
     fds_operation_info.waiting = false;
-    // 先注册事件回调
+    //Register the incident first
     ret_code_t err_code = fds_register(fds_evt_handler);
     APP_ERROR_CHECK(err_code);
-    // 开始初始化fds库
+    //Start the initialization FDS library
     err_code = fds_init();
     APP_ERROR_CHECK(err_code);
 }

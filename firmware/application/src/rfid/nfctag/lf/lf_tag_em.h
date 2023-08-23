@@ -7,11 +7,11 @@
 
 
 /**
- * 低频模拟卡调制曼彻斯特信号
- * 封装工具宏定义只需要调制0和1
+ * Low -frequency analog card adjustment Manchester signal
+ * The definition of the packaging tool macro only needs to be modulated 0 and 1
  */
 #define LF_125KHZ_EM410X_BIT_SIZE   64
-#define LF_125KHZ_BORADCAST_MAX     3      // 32.768ms一次，一秒大概能广播31次
+#define LF_125KHZ_BORADCAST_MAX     3      // 32.768ms once, about 31 times in one second
 #define LF_125KHZ_EM410X_BIT_CLOCK  256
 #define LF_EM410X_TAG_ID_SIZE       5
 

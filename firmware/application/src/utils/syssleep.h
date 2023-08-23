@@ -3,18 +3,18 @@
 
 #include <stdint.h>
 
-//           休眠态唤醒设备
-#define SLEEP_DELAY_MS_BUTTON_WAKEUP            4000    // 按钮唤醒的休眠延迟
-#define SLEEP_DELAY_MS_FIELD_WAKEUP             4000    // 场唤醒的休眠延迟（包括高低频）
-#define SLEEP_DELAY_MS_FRIST_POWER              1000    // 首次供电的休眠延迟（接入电池）
+//           Wake up equipment
+#define SLEEP_DELAY_MS_BUTTON_WAKEUP            4000    // The dormant delay of the button awakened
+#define SLEEP_DELAY_MS_FIELD_WAKEUP             4000    // The dormant delay (including high and low frequencies) of the field wake -up (including high and low frequency)
+#define SLEEP_DELAY_MS_FRIST_POWER              1000    // The dormant delay of the first power supply (access to the battery)
 
-//           运行态重新延迟
-#define SLEEP_DELAY_MS_BUTTON_CLICK             4000    // 按钮点击的休眠延迟
-#define SLEEP_DELAY_MS_FIELD_NFC_LOST           3000    // 高频模拟卡离开场后的休眠延迟
-#define SLEEP_DELAY_MS_FIELD_125KHZ_LOST        3000    // 低频模拟卡离开场后的休眠延迟
-#define SLEEP_DELAY_MS_BLE_DISCONNECTED         4000    // BLE断开后的休眠延迟
-#define SLEEP_DELAY_MS_USB_POWER_DISCONNECTED   3000    // USB供电断开后的休眠延迟
-#define SLEEP_NO_BATTERY_SHUTDOWN               1       // 低电量关机
+//           The operating state is delayed
+#define SLEEP_DELAY_MS_BUTTON_CLICK             4000    //The dormant delay of the button click
+#define SLEEP_DELAY_MS_FIELD_NFC_LOST           3000    //High -frequency analog card after leaving the field
+#define SLEEP_DELAY_MS_FIELD_125KHZ_LOST        3000    // Dormation delay after leaving the field after leaving the field
+#define SLEEP_DELAY_MS_BLE_DISCONNECTED         4000    //BLE's dormant delay after disconnection
+#define SLEEP_DELAY_MS_USB_POWER_DISCONNECTED   3000    //The dormant delay after the USB power supply is broken
+#define SLEEP_NO_BATTERY_SHUTDOWN               1       //Turn off at a low volume
 
 
 void sleep_timer_init(void);

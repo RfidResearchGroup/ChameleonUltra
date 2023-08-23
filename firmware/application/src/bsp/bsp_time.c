@@ -2,16 +2,16 @@
 #include "app_timer.h"
 
 
-#define TICK_PERIOD APP_TIMER_TICKS(10) // 定时时间
+#define TICK_PERIOD APP_TIMER_TICKS(10) // Timing
 
-// 定义一个软定时器
+// Define a soft timer
 APP_TIMER_DEF(m_app_timer);
 
-// 定时器池
+// Timer pool
 autotimer bsptimers[TIMER_BSP_COUNT] = { 0 };
-// 定时器迭代位置
+// Timer iteration position
 static uint8_t g_timer_fori;
-// 当前定时器运行状态
+// The current timer is running status
 static volatile enum {
     UNINIT,
     INIT,
@@ -21,9 +21,9 @@ static volatile enum {
 
 
 /*
-* 获取一个空闲的定时器，这个定时器
-* 1、会自动跑滴答
-* 2、是空闲的
+* Get a free timer, this timer
+* 1. Will run automatically
+* 2. It's free
 */
 autotimer *bsp_obtain_timer(uint32_t start_value) {
     uint8_t i;
@@ -38,7 +38,7 @@ autotimer *bsp_obtain_timer(uint32_t start_value) {
 }
 
 /*
-* 设置定时器，该操作会操作目标定时器，修改当前值
+* Set the timer, the operation will operate the target timer and modify the current value
 */
 inline uint8_t bsp_set_timer(autotimer *timer, uint32_t start_value) {
     if (timer->busy == 0) return 0;
@@ -47,17 +47,17 @@ inline uint8_t bsp_set_timer(autotimer *timer, uint32_t start_value) {
 }
 
 /*
-* 归还定时器，该操作会自动释放定时器
-* 并且对定时器归零
+* Return the timer, the operation will automatically release the timer
+* And zero to the timer
 */
 inline void bsp_return_timer(autotimer *timer) {
     timer->busy = 0;
     timer->time = 0;
 }
 
-/** @brief 测试定时器的回调函数
- * @param arg 回调参数
- * @return 无
+/** @brief Test timer callback function
+ * @param arg Callback parameter
+ * @return none
  */
 void timer_app_callback(void *arg) {
     UNUSED_PARAMETER(arg);
@@ -68,26 +68,26 @@ void timer_app_callback(void *arg) {
     }
 }
 
-// 初始化定时器
+// Initialized timer
 void bsp_timer_init(void) {
     if (bsp_timer_state == UNINIT) {
         bsp_timer_state = INIT;
-        // 创建定时器
+        // Create a timer
         ret_code_t err_code = app_timer_create(&m_app_timer, APP_TIMER_MODE_REPEATED, timer_app_callback);
         APP_ERROR_CHECK(err_code);
     }
 }
 
-// 反初始化定时器
+// Counter -initialization timer
 void bsp_timer_uninit(void) {
-    // 暂时无法反初始化软定时器，只能关闭
+    // Can't reverse the initialized soft timer for the time being, it can only be closed
     bsp_timer_stop();
 }
 
-// 启动定时器
+// Start the timer
 void bsp_timer_start(void) {
     if (bsp_timer_state != UNINIT) {
-        // 确保定时器没有被启动过
+        // Make sure the timer is not started
         if (bsp_timer_state != START) {
             app_timer_start(m_app_timer, TICK_PERIOD, NULL);
             bsp_timer_state = START;
@@ -96,11 +96,11 @@ void bsp_timer_start(void) {
 
 }
 
-// 停止定时器
+// Stop timer
 void bsp_timer_stop(void) {
     if (bsp_timer_state != UNINIT) {
         if (bsp_timer_state == START) {
-            // 停止定时器
+            // Stop timer
             app_timer_stop(m_app_timer);
             bsp_timer_state = STOP;
         }

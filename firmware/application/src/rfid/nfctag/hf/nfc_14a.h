@@ -8,7 +8,7 @@
 
 #define NFC_TAG_14A_CRC_LENGTH  2
 
-// 是否使能自动移除奇偶校验位（硬件移除）
+// Whether to automatically remove the coupling school test (hardware removed)
 #define NFC_TAG_14A_RX_PARITY_AUTO_DEL_ENABLE  0
 
 #define NFC_TAG_14A_CASCADE_CT  0x88
@@ -27,51 +27,51 @@
 // TBIV = Transfer Buffer Invalid
 #define ACK_NAK_FRAME_SIZE          4         /* Bits */
 #define ACK_VALUE                   0x0A
-#define NAK_INVALID_OPERATION_TBV   0x00    // 这个不常用
-#define NAK_CRC_PARITY_ERROR_TBV    0x01    // 这个不常用
+#define NAK_INVALID_OPERATION_TBV   0x00    //This is not commonly used
+#define NAK_CRC_PARITY_ERROR_TBV    0x01    //This is not commonly used
 #define NAK_INVALID_OPERATION_TBIV  0x04
 #define NAK_CRC_PARITY_ERROR_TBIV   0x05
-#define NAK_OTHER_ERROR             0x06    // 这个不在手册中定义，属于变色龙特有（可能需要扇区）
+#define NAK_OTHER_ERROR             0x06    // This is not defined in the manual, it belongs to the color -changing dragon special (may need the sector)
 
 
-// ISO14443-A 通用状态机
+// ISO14443-A Universal state machine
 typedef enum {
-    NFC_TAG_STATE_14A_IDLE,     // 空闲状态，可等待任何指令
-    NFC_TAG_STATE_14A_READY,    // 选卡状态，当前在进行标准的14A防冲撞
-    NFC_TAG_STATE_14A_ACTIVE,   // 选卡或者其他指令使其进入工作状态，可接收处理所有的数据
-    NFC_TAG_STATE_14A_HALTED,   // 标签中止工作状态，只能由halt或者其他特殊指令（非标）唤醒
+    NFC_TAG_STATE_14A_IDLE,     // Leisure, you can wait for any instructions
+    NFC_TAG_STATE_14A_READY,    // Select card status, currently the standard 14A anti -rushing collision
+    NFC_TAG_STATE_14A_ACTIVE,   // Select cards or other instructions to enter the working status, which can receive all data
+    NFC_TAG_STATE_14A_HALTED,   // The label stops working status and can only be awakened by Halt or other special instructions (non -labels)
 } nfc_tag_14a_state_t;
 
-// 枚举规范内的长度的UID
+//UID of the length in the enumeration specification
 typedef enum {
     NFC_TAG_14A_UID_SINGLE_SIZE = 4u,   ///< Length of single-size NFCID1.
     NFC_TAG_14A_UID_DOUBLE_SIZE = 7u,   ///< Length of double-size NFCID1.
     NFC_TAG_14A_UID_TRIPLE_SIZE = 10u,  ///< Length of triple-size NFCID1.
 } nfc_tag_14a_uid_size;
 
-// 枚举规范内的级联等级
+// Extraordinarian level level level level level
 typedef enum {
     NFC_TAG_14A_CASCADE_LEVEL_1,
     NFC_TAG_14A_CASCADE_LEVEL_2,
     NFC_TAG_14A_CASCADE_LEVEL_3,
 } nfc_tag_14a_cascade_level_t;
 
-// ats封装结构体
+// ATS packaging structure
 typedef struct {
     uint8_t data[0xFF];
     uint8_t length;
 } nfc_14a_ats_t;
 
-// 基于bit的防冲撞需要用上的资源实体，占用空间大
+// Bit -based anti -bumps need to use the resource entity that needs to be used, occupying a large space
 typedef struct {
-    nfc_tag_14a_uid_size size;          // uid的长度
+    nfc_tag_14a_uid_size size;          // UID length
     uint8_t atqa[2];                    // atqa
     uint8_t sak[1];                     // sak
-    uint8_t uid[10];                    // uid，最大十个字节
+    uint8_t uid[10];                    // uid,The largest ten bytes
     nfc_14a_ats_t ats;
 } nfc_tag_14a_coll_res_entity_t;
 
-// 防冲突资源的封装引用，纯引用空间占用比较小
+// Calculation of anti -conflict resources, pure quoting space occupation is relatively small
 typedef struct {
     nfc_tag_14a_uid_size *size;
     uint8_t *atqa;
@@ -80,31 +80,31 @@ typedef struct {
     nfc_14a_ats_t *ats;
 } nfc_tag_14a_coll_res_referen_t;
 
-// 通信接管需要实现的回调函数
+// Communication reception function that needs to be implemented
 typedef void (*nfc_tag_14a_reset_handler_t)(void);
 typedef void (*nfc_tag_14a_state_handler_t)(uint8_t *data, uint16_t szBits);
 typedef nfc_tag_14a_coll_res_referen_t *(*nfc_tag_14a_coll_handler_t)(void);
 
-// 14a通信接管者需要实现的接口
+// The interface that 14A communication receiver needs to be implemented
 typedef struct {
     nfc_tag_14a_reset_handler_t cb_reset;
     nfc_tag_14a_state_handler_t cb_state;
     nfc_tag_14a_coll_handler_t get_coll_res;
 } nfc_tag_14a_handler_t;
 
-// 异或校验码
+// Different or verification code
 void nfc_tag_14a_create_bcc(uint8_t *pbtData, size_t szLen, uint8_t *pbtBcc);
 void nfc_tag_14a_append_bcc(uint8_t *pbtData, size_t szLen);
 
-// 14a循环冗余校验码
+// 14A cycle redundant school code
 void nfc_tag_14a_append_crc(uint8_t *pbtData, size_t szLen);
 bool nfc_tag_14a_checks_crc(uint8_t *pbtData, size_t szLen);
 
-// 14a帧组解
+// 14A frame combination
 uint8_t nfc_tag_14a_wrap_frame(const uint8_t *pbtTx, const size_t szTxBits, const uint8_t *pbtTxPar, uint8_t *pbtFrame);
 uint8_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBits, uint8_t *pbtRx, uint8_t *pbtRxPar);
 
-// 14a通信控制
+// 14A communication control
 void nfc_tag_14a_sense_switch(bool enable);
 void nfc_tag_14a_set_handler(nfc_tag_14a_handler_t *handler);
 void nfc_tag_14a_set_state(nfc_tag_14a_state_t state);
@@ -114,7 +114,7 @@ void nfc_tag_14a_tx_bits(uint8_t *data, uint32_t bits);
 void nfc_tag_14a_tx_nbit_delay_window(uint8_t data, uint32_t bits);
 void nfc_tag_14a_tx_nbit(uint8_t data, uint32_t bits);
 
-// 判断是否是有效的uid长度
+// Determine whether it is an effective UID length
 bool is_valid_uid_size(uint8_t uid_length);
 
 #endif
