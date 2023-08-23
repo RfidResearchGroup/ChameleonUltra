@@ -1348,7 +1348,7 @@ class HWButtonSettingsSet(DeviceRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         button = chameleon_cmd.ButtonType.from_str(args.b)
         function = chameleon_cmd.ButtonPressFunction.from_int(args.f)
-        long = args.l == 1
+        long = args.long == 1
         if long:
             self.cmd.set_long_button_press_fun(button, function)
         else:
