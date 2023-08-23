@@ -678,7 +678,7 @@ static void button_press_process(void) {
             if(!m_is_btn_long_press) {
                 run_button_function_by_settings(settings_get_button_press_config('a'));
             } else {
-                run_button_function_by_settings(settings_get_button_press_config('c'));
+                run_button_function_by_settings(settings_get_long_button_press_config('a'));
             }
             m_is_a_btn_release = false;
         }
@@ -686,7 +686,7 @@ static void button_press_process(void) {
             if(!m_is_btn_long_press) {
                 run_button_function_by_settings(settings_get_button_press_config('b'));
             } else {
-                run_button_function_by_settings(settings_get_button_press_config('d'));
+                run_button_function_by_settings(settings_get_long_button_press_config('b'));
             }
             m_is_b_btn_release = false;
         }
