@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
 
 #include "nordic_common.h"
 #include "nrf.h"
@@ -41,8 +42,16 @@ NRF_LOG_MODULE_REGISTER();
 
 // Defining soft timers
 APP_TIMER_DEF(m_button_check_timer); // Timer for button debounce
+
+static uint32_t m_last_btn_press = 0;
+
+static bool m_is_btn_long_press = false;
+
 static bool m_is_b_btn_press = false;
 static bool m_is_a_btn_press = false;
+
+static bool m_is_b_btn_release = false;
+static bool m_is_a_btn_release = false;
 
 // cpu reset reason
 static uint32_t m_reset_source;
@@ -152,12 +161,41 @@ static void timer_button_event_handle(void *arg) {
             if (settings_get_button_press_config('b') != SettingsButtonDisable) {
                 NRF_LOG_INFO("BUTTON_LEFT"); // Button B?
                 m_is_b_btn_press = true;
+                m_last_btn_press = app_timer_cnt_get();
             }
         }
         if (pin == BUTTON_2) {
             if (settings_get_button_press_config('a') != SettingsButtonDisable) {
                 NRF_LOG_INFO("BUTTON_RIGHT"); // Button A?
                 m_is_a_btn_press = true;
+                m_last_btn_press = app_timer_cnt_get();
+            }
+        }
+    }
+
+    if (nrf_gpio_pin_read(pin) == 0) {
+        uint32_t now = app_timer_cnt_get();
+        uint32_t ticks = app_timer_cnt_diff_compute(now, m_last_btn_press);
+
+        uint32_t time = ticks * ((APP_TIMER_CONFIG_RTC_FREQUENCY + 1 ) * 1000 ) / APP_TIMER_CLOCK_FREQ;
+
+        bool is_long_press = time > 1000;
+
+        if (pin == BUTTON_1 && m_is_b_btn_press == true) {
+            // If button is disable, we can didn't dispatch key event.
+            if (settings_get_button_press_config('b') != SettingsButtonDisable) {
+                NRF_LOG_INFO("BUTTON_LEFT_RELEASE"); // Button B?
+                m_is_b_btn_release = true;
+                m_is_b_btn_press = false;
+                m_is_btn_long_press = is_long_press;
+            }
+        }
+        if (pin == BUTTON_2 && m_is_a_btn_press == true) {
+            if (settings_get_button_press_config('a') != SettingsButtonDisable) {
+                NRF_LOG_INFO("BUTTON_RIGHT_RELEASE"); // Button A?
+                m_is_a_btn_release = true;
+                m_is_a_btn_press = false;
+                m_is_btn_long_press = is_long_press;
             }
         }
     }
@@ -173,7 +211,7 @@ static void button_init(void) {
     APP_ERROR_CHECK(err_code);
 
     // Configure SENSE mode, select false for sense configuration
-    nrf_drv_gpiote_in_config_t in_config = NRFX_GPIOTE_CONFIG_IN_SENSE_LOTOHI(false);
+    nrf_drv_gpiote_in_config_t in_config = NRFX_GPIOTE_CONFIG_IN_SENSE_TOGGLE(false);
     in_config.pull = NRF_GPIO_PIN_PULLDOWN; // Pulldown
 
     // Configure key binding POTR
@@ -635,14 +673,22 @@ static void run_button_function_by_settings(settings_button_function_t sbf) {
 extern bool g_usb_led_marquee_enable;
 static void button_press_process(void) {
     // Make sure that one of the AB buttons has a click event
-    if (m_is_b_btn_press || m_is_a_btn_press) {
-        if (m_is_a_btn_press) {
-            run_button_function_by_settings(settings_get_button_press_config('a'));
-            m_is_a_btn_press = false;
+    if (m_is_b_btn_release || m_is_a_btn_release) {
+        if (m_is_a_btn_release) {
+            if(!m_is_btn_long_press) {
+                run_button_function_by_settings(settings_get_button_press_config('a'));
+            } else {
+                run_button_function_by_settings(settings_get_button_press_config('c'));
+            }
+            m_is_a_btn_release = false;
         }
-        if (m_is_b_btn_press) {
-            run_button_function_by_settings(settings_get_button_press_config('b'));
-            m_is_b_btn_press = false;
+        if (m_is_b_btn_release) {
+            if(!m_is_btn_long_press) {
+                run_button_function_by_settings(settings_get_button_press_config('b'));
+            } else {
+                run_button_function_by_settings(settings_get_button_press_config('d'));
+            }
+            m_is_b_btn_release = false;
         }
         // Disable led marquee for usb at button pressed.
         g_usb_led_marquee_enable = false;

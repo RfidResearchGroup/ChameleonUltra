@@ -51,6 +51,10 @@ void settings_migrate(void) {
             settings_update_version_for_config();
             break;
 
+        case 2:
+            config.button_a_long_press = SettingsButtonCloneIcUid;
+            config.button_b_long_press = SettingsButtonCloneIcUid;
+
         /*
          * When needed migrations can be implemented like this:
          *
@@ -168,6 +172,31 @@ uint8_t settings_get_button_press_config(char which) {
 }
 
 /**
+ * @brief Get the long button press config
+ *
+ * @param which 'a' or 'b'
+ * @return uint8_t @link{ settings_button_function_t }
+ */
+uint8_t settings_get_long_button_press_config(char which) {
+    switch (which) {
+        case 'a':
+        case 'A':
+            return config.button_a_long_press;
+
+        case 'b':
+        case 'B':
+            return config.button_b_long_press;
+
+        default:
+            // can't to here.
+            APP_ERROR_CHECK_BOOL(false);
+            break;
+    }
+    // can't to here.
+    return SettingsButtonDisable;
+}
+
+/**
  * @brief Set the button press config
  *
  * @param which 'a' or 'b'
@@ -183,6 +212,31 @@ void settings_set_button_press_config(char which, uint8_t value) {
         case 'b':
         case 'B':
             config.button_b_press = value;
+            break;
+
+        default:
+            // can't to here.
+            APP_ERROR_CHECK_BOOL(false);
+            break;
+    }
+}
+
+/**
+ * @brief Set the long button press config
+ *
+ * @param which 'a' or 'b'
+ * @param value @link{ settings_button_function_t }
+ */
+void settings_set_long_button_press_config(char which, uint8_t value) {
+    switch (which) {
+        case 'a':
+        case 'A':
+            config.button_a_long_press = value;
+            break;
+
+        case 'b':
+        case 'B':
+            config.button_b_long_press = value;
             break;
 
         default:
