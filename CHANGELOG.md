@@ -51,5 +51,6 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Fixed compilation errors with GCC 12 (@Foxushka)
  - Added documentation for JLink (@xianglin1998)
  - Added support for ST-Link and debugging documentation (@derGraph)
+ - Added support for long-press of buttons
 
 ## [v1.0][2023-06-06]
