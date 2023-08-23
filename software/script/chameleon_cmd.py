@@ -42,6 +42,9 @@ DATA_CMD_GET_BATTERY_INFO = 1025
 DATA_CMD_GET_BUTTON_PRESS_CONFIG = 1026
 DATA_CMD_SET_BUTTON_PRESS_CONFIG = 1027
 
+DATA_CMD_GET_LONG_BUTTON_PRESS_CONFIG = 1028
+DATA_CMD_SET_LONG_BUTTON_PRESS_CONFIG = 1029
+
 DATA_CMD_SCAN_14A_TAG = 2000
 DATA_CMD_MF1_SUPPORT_DETECT = 2001
 DATA_CMD_MF1_NT_LEVEL_DETECT = 2002
@@ -765,6 +768,24 @@ class ChameleonCMD:
         """
         return self.device.send_cmd_sync(
             DATA_CMD_SET_BUTTON_PRESS_CONFIG,
+            0x00,
+            bytearray([button, function])
+        )
+
+    @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
+    def get_long_button_press_fun(self, button: ButtonType):
+        """
+        Get config of button press function
+        """
+        return self.device.send_cmd_sync(DATA_CMD_GET_LONG_BUTTON_PRESS_CONFIG, 0x00, bytearray([button]))
+
+    @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
+    def set_long_button_press_fun(self, button: ButtonType, function: ButtonPressFunction):
+        """
+        Set config of button press function
+        """
+        return self.device.send_cmd_sync(
+            DATA_CMD_SET_LONG_BUTTON_PRESS_CONFIG,
             0x00,
             bytearray([button, function])
         )

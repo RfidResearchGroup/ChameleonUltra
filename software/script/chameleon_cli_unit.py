@@ -1318,9 +1318,12 @@ class HWButtonSettingsGet(DeviceRequiredUnit):
         print("")
         for button in button_list:
             resp = self.cmd.get_button_press_fun(button)
+            resp_long = self.cmd.get_long_button_press_fun(button)
             button_fn = chameleon_cmd.ButtonPressFunction.from_int(resp.data[0])
+            button_long_fn = chameleon_cmd.ButtonPressFunction.from_int(resp_long.data[0])
             print(f" - {colorama.Fore.GREEN}{button}{colorama.Style.RESET_ALL}: {button_fn}")
             print(f"      usage: {button_fn.usage()}")
+            print(f"      long press usage: {button_long_fn.usage()}")
             print("")
         print(" - Successfully get button function from settings")
 
@@ -1330,6 +1333,7 @@ class HWButtonSettingsSet(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.add_argument('-l', '--long', type=int, required=True, help="1 is Long or 0 Short", choices=[0, 1])
         parser.add_argument('-b', type=str, required=True,
                             help="Change the function of the pressed button(?).",
                             choices=chameleon_cmd.ButtonType.list_str())
@@ -1344,5 +1348,9 @@ class HWButtonSettingsSet(DeviceRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         button = chameleon_cmd.ButtonType.from_str(args.b)
         function = chameleon_cmd.ButtonPressFunction.from_int(args.f)
-        self.cmd.set_button_press_fun(button, function)
+        long = args.l == 1
+        if long:
+            self.cmd.set_long_button_press_fun(button, function)
+        else:
+            self.cmd.set_button_press_fun(button, function)
         print(" - Successfully set button function to settings")
