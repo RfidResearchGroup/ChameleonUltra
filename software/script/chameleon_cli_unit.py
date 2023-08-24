@@ -1333,7 +1333,8 @@ class HWButtonSettingsSet(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.add_argument('-l', '--long', type=int, required=True, help="1 is Long or 0 Short", choices=[0, 1])
+        parser.add_argument('-l', '--long', action='store_true', default=False,
+                            help="set keybinding for long-press")
         parser.add_argument('-b', type=str, required=True,
                             help="Change the function of the pressed button(?).",
                             choices=chameleon_cmd.ButtonType.list_str())
@@ -1348,7 +1349,7 @@ class HWButtonSettingsSet(DeviceRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         button = chameleon_cmd.ButtonType.from_str(args.b)
         function = chameleon_cmd.ButtonPressFunction.from_int(args.f)
-        long = args.long == 1
+        long = args.long == True
         if long:
             self.cmd.set_long_button_press_fun(button, function)
         else:
