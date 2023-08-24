@@ -1321,9 +1321,10 @@ class HWButtonSettingsGet(DeviceRequiredUnit):
             resp_long = self.cmd.get_long_button_press_fun(button)
             button_fn = chameleon_cmd.ButtonPressFunction.from_int(resp.data[0])
             button_long_fn = chameleon_cmd.ButtonPressFunction.from_int(resp_long.data[0])
-            print(f" - {colorama.Fore.GREEN}{button}{colorama.Style.RESET_ALL}: {button_fn}")
+            print(f" - {colorama.Fore.GREEN}{button} {colorama.Fore.YELLOW}short{colorama.Style.RESET_ALL}: {button_fn}")
             print(f"      usage: {button_fn.usage()}")
-            print(f"      long press usage: {button_long_fn.usage()}")
+            print(f" - {colorama.Fore.GREEN}{button} {colorama.Fore.YELLOW}long {colorama.Style.RESET_ALL}: {button_long_fn}")
+            print(f"      usage: {button_long_fn.usage()}")
             print("")
         print(" - Successfully get button function from settings")
 
