@@ -574,8 +574,6 @@ static void btn_fn_copy_ic_uid(void) {
                 tag_emulation_load_by_buffer(TAG_TYPE_EM410X, false);
                 NRF_LOG_INFO("Offline LF uid copied")
                 offline_status_ok();
-                // no need to check for HF tag if we already cloned a LF tag
-                goto exit;
             } else {
                 NRF_LOG_INFO("No LF tag found");
                 offline_status_error();
