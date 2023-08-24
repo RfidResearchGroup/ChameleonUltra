@@ -92,6 +92,9 @@ class ChameleonCLI:
             start listen input.
         :return:
         """
+        if sys.version_info < (3,9):
+            raise Exception("This script requires at least Python 3.9")
+
         self.print_banner()
         closing = False
         while True:
