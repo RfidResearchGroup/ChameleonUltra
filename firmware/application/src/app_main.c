@@ -177,7 +177,7 @@ static void timer_button_event_handle(void *arg) {
         uint32_t now = app_timer_cnt_get();
         uint32_t ticks = app_timer_cnt_diff_compute(now, m_last_btn_press);
 
-        bool is_long_press = time > APP_TIMER_TICKS(1000);
+        bool is_long_press = ticks > APP_TIMER_TICKS(1000);
 
         if (pin == BUTTON_1 && m_is_b_btn_press == true) {
             // If button is disable, we can didn't dispatch key event.
