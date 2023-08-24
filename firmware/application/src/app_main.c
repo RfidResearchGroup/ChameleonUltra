@@ -157,16 +157,16 @@ static void timer_button_event_handle(void *arg) {
     // Check here if the current GPIO is at the pressed level
     if (nrf_gpio_pin_read(pin) == 1) {
         if (pin == BUTTON_1) {
-            // If button is disable, we can didn't dispatch key event.
+            // If button is disabled, we can't dispatch key event.
             if (settings_get_button_press_config('b') != SettingsButtonDisable) {
-                NRF_LOG_INFO("BUTTON_LEFT"); // Button B?
+                NRF_LOG_INFO("BUTTON_B_PRESS");
                 m_is_b_btn_press = true;
                 m_last_btn_press = app_timer_cnt_get();
             }
         }
         if (pin == BUTTON_2) {
             if (settings_get_button_press_config('a') != SettingsButtonDisable) {
-                NRF_LOG_INFO("BUTTON_RIGHT"); // Button A?
+                NRF_LOG_INFO("BUTTON_A_PRESS");
                 m_is_a_btn_press = true;
                 m_last_btn_press = app_timer_cnt_get();
             }
@@ -180,19 +180,27 @@ static void timer_button_event_handle(void *arg) {
         bool is_long_press = ticks > APP_TIMER_TICKS(1000);
 
         if (pin == BUTTON_1 && m_is_b_btn_press == true) {
-            // If button is disable, we can didn't dispatch key event.
+            // If button is disabled, we can't dispatch key event.
             if (settings_get_button_press_config('b') != SettingsButtonDisable) {
-                NRF_LOG_INFO("BUTTON_LEFT_RELEASE"); // Button B?
                 m_is_b_btn_release = true;
                 m_is_b_btn_press = false;
+                if (!is_long_press) {
+                    NRF_LOG_INFO("BUTTON_B_RELEASE_SHORT");
+                } else {
+                    NRF_LOG_INFO("BUTTON_B_RELEASE_LONG");
+                }
                 m_is_btn_long_press = is_long_press;
             }
         }
         if (pin == BUTTON_2 && m_is_a_btn_press == true) {
             if (settings_get_button_press_config('a') != SettingsButtonDisable) {
-                NRF_LOG_INFO("BUTTON_RIGHT_RELEASE"); // Button A?
                 m_is_a_btn_release = true;
                 m_is_a_btn_press = false;
+                if (!is_long_press) {
+                    NRF_LOG_INFO("BUTTON_A_RELEASE_SHORT");
+                } else {
+                    NRF_LOG_INFO("BUTTON_A_RELEASE_LONG");
+                }
                 m_is_btn_long_press = is_long_press;
             }
         }
