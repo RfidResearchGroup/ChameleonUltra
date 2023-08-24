@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Added support for long-press of buttons (@nemanjan00)
  - Changed `hw slot delete`, now it can always delete from slot. (@augustozanellato)
  - Refactor CI pipeline. (@augustozanellato)
  - Added offline copy EM card uid for btnpress.(@nemanjan00)
@@ -51,6 +52,5 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Fixed compilation errors with GCC 12 (@Foxushka)
  - Added documentation for JLink (@xianglin1998)
  - Added support for ST-Link and debugging documentation (@derGraph)
- - Added support for long-press of buttons
 
 ## [v1.0][2023-06-06]
