@@ -29,15 +29,24 @@ void settings_update_version_for_config(void) {
     config.version = SETTINGS_CURRENT_VERSION;
 }
 
+// add on version2
 void settings_init_button_press_config(void) {
     config.button_a_press = SettingsButtonCycleSlot;
     config.button_b_press = SettingsButtonCycleSlotDec;
 }
 
+// add on version3
+void settings_init_button_long_press_config(void) {
+    config.button_a_long_press = SettingsButtonCloneIcUid;
+    config.button_b_long_press = SettingsButtonCloneIcUid;
+}
+
 void settings_init_config(void) {
     settings_update_version_for_config();
+    // add on version1
     config.animation_config = SettingsAnimationModeFull;
     settings_init_button_press_config();
+    settings_init_button_long_press_config();
 }
 
 void settings_migrate(void) {
@@ -48,12 +57,11 @@ void settings_migrate(void) {
 
         case 1:
             settings_init_button_press_config();
-            settings_update_version_for_config();
-            break;
 
         case 2:
-            config.button_a_long_press = SettingsButtonCloneIcUid;
-            config.button_b_long_press = SettingsButtonCloneIcUid;
+            settings_init_button_long_press_config();
+            settings_update_version_for_config();
+            break;
 
         /*
          * When needed migrations can be implemented like this:
