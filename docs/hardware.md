@@ -17,3 +17,19 @@ The deivce itself features 4 screws holding it together, 2 Buttons labled `A` an
 ![ultra.png](./images/ultra.png)
 
 ## The Lite
+
+The Chameleon Lite comes in a white box with blue printing. This box has the dimensons: 9.5cm x 6cm x 3.5cm
+
+![lite-box.jpg](C:\Users\bened\Desktop\ChameleonUltra\docs\images\lite-box.jpg)
+
+The Box contains a foam pad, a USB cable that has a removable end to convert it to USB-C and the device itself.
+
+![lite-box.-contents.jpg](C:\Users\bened\Desktop\ChameleonUltra\docs\images\lite-box.-contents.jpg)
+
+The deivce itself features 2 Buttons labled with arrows. The Device consists of one PCB in a blue plastic housing. This one PCB contains the Electronic and the HF, antenna as well as the 8 Leds indecating which is currently active and the USB-C port. The LF antenna is glued onto the back of the PCB and is visible through the housing. The Battery is soldered in place and the housing is hold together by thin fragile pins which are easy to snap, it is not designed to be disassembled. The Keychain Loop is also relatively fragile so be careful. The Chameleon Lites dimensions are: 3.6cm x 6.1cm x 8mm
+
+![lite.jpg](C:\Users\bened\Desktop\ChameleonUltra\docs\images\lite.jpg)
+
+## The Devkit
+
+Just like the Chameleon Ultra, the Devkit comes in a black box with gold printing. This box has the dimensions: 
