@@ -60,25 +60,15 @@ void settings_migrate(void) {
 
         case 2:
             settings_init_button_long_press_config();
-            settings_update_version_for_config();
-            break;
 
         /*
-         * When needed migrations can be implemented like this:
-         *
-         * case 1:
-         *   config->new_field = some_default_value;
-         * case 2:
-         *   config->another_new_field = some_default_value;
-         * case 3:
-         *   config->another_new_field = some_default_value;
-         *   break;
-         *
-         * Note that the `break` statement should only be used on the last migration step, all the previous steps must fall
+         * Add new migration steps ABOVE THIS COMMENT
+         * `settings_update_version_for_config()` and `break` statements should only be used on the last migration step, all the previous steps must fall
          * through to the next case.
-         *
-         * Note that the `settings_update_version_for_config` function should only be used on the last migration step.
          */
+
+            settings_update_version_for_config();
+            break;
         default:
             NRF_LOG_ERROR("Unsupported configuration migration attempted! (%d -> %d)", config.version, SETTINGS_CURRENT_VERSION);
             break;
