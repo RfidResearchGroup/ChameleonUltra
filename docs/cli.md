@@ -2,6 +2,8 @@
 
 The CLI (**C**ommand **L**ine **I**nterface) is the official way to control your Chameleon.
 
+It requires at least **Python 3.9** version.
+
 ## Installing
 
 There are multiple ways to install the CLI, depending on your OS.
