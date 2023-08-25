@@ -1,48 +1,28 @@
-[tech_white_paper]: https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/Technical_White_Paper.md
+![logo](resource/picture/Header.png)
 
-[how_use_firmware]: https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/How_to_use_Firmware.md
+![hardware picture](resource/picture/Hardware%20Photos.png)
 
-[go_to_buy_lab401]: https://lab401.com/
+# ChameleonUltra Authorized Distributors
 
-[go_to_buy_hackerwarehouse]: https://hackerwarehouse.com/
+Europe: [Lab401](https://lab401.com/)
 
-[go_to_buy_sneaktechnology]: https://sneaktechnology.com
+United States: [Hackerwarehouse](https://hackerwarehouse.com/)
 
-[go_to_buy_proxgrind_aliexpress]: https://proxgrind.aliexpress.com/store/1101312023
+Anywhere else: [Sneaktechnology](https://sneaktechnology.com) / [Aliexpress by RRG](https://proxgrind.aliexpress.com/store/1101312023)
 
+# What is it and how to use ?
 
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/resource/picture/Header.png)
+Read the [available documentation](docs/home.md).
 
-# ChameleonUltra Authorised Distributors
+# Compatible applications
 
-Europe: [Lab401][go_to_buy_lab401]
+* [ChameleonUltraGUI](https://github.com/GameTec-live/ChameleonUltraGUI)
 
-United States: [Hackerwarehouse][go_to_buy_hackerwarehouse]
+# Videos
 
-Anywhere else: [Sneaktechnology][go_to_buy_sneaktechnology] / [Aliexpress by RRG][go_to_buy_proxgrind_aliexpress]
+*Beware some of the instructions might have changed since recording, theck the current documentation in doubt!*
 
-# How to use ?
+* [Downloading and compiling the official CLI](https://www.youtube.com/watch?v=VGpAeitNXH0)
+* [Downloading ChameleonUltraGUI](https://www.youtube.com/watch?v=rHH7iqbX3nY)
 
-- ChameleonUltra: [Technical White Paper][tech_white_paper] (Old content of this readme in here)
-- ChameleonUltra: [Firmware][./docs/development.md]
-
-More Coming Soon.
-
-# Videos to reference
-
-Downloading and compiling the CLI
-
-https://www.youtube.com/watch?v=VGpAeitNXH0
-
-Downloading a GUI
-
-https://www.youtube.com/watch?v=rHH7iqbX3nY
-
-Link to the GUI
-
-https://github.com/GameTec-live/ChameleonUltraGUI
-
-# Hardware Pictures
-
-![alt text](https://github.com/RfidResearchGroup/ChameleonUltra/blob/main/resource/picture/Hardware%20Photos.png)
 
