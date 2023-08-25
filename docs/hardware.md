@@ -40,7 +40,7 @@ Again, just like the lite, the box contains a foam pad, a USB cable that has a r
 
 ![devkit-box-contents.jpg](./images/devkit-box-contents.jpg)
 
-The device itself features 2 buttons labeled `A` and `B`. The device is made of only one PCB without a case. At the bottom of this PCB both the HF and LF coils are found. Because it is a Devkit, this Chameleon has its SWD (**S**ingle **W**ire **D**ebug) port and some testpoints exposed. (In the photos below, a pinheader is already soldered into the SWD port, this is not the case from factory) The Chameleon Devkit dimensions are:  5.3 cm x 8.5 cm x 0.5 cm (with rubber feet, 0.15 cm without)
+The device itself features 2 buttons labeled `A` and `B`. The device is made of only one PCB without a case. At the bottom of this PCB both the HF and LF coils are found. Because it is a Devkit, this Chameleon has its SWD (**S**ingle **W**ire **D**ebug) port and some testpoints exposed. (In the photos below, a pinheader is already soldered into the SWD port, this is not the case from factory) The Chameleon Devkit dimensions are:  5.3 cm x 8.5 cm x 1.1 cm (including rubber feet, battery and buttons. PCB thickness: 0,16 cm)
 
 ![devkit.jpg](./images/devkit.jpg)
 
