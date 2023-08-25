@@ -38,10 +38,10 @@ The communication with the application isnt the easiest but is structured as fol
 
 `MAGIC BYTE(0x11) LRC(Magic Byte) COMMAND STATUS(0x00) DATA LRC(COMMAND + STATUS + DATA)`
 
-You build the Packet by first adding 0x11, this is the "Magic Byte" to say that theres something coming. This is followed by the LRC ([**L**ongitudinal **R**edundancy **C**heck](https://en.wikipedia.org/wiki/Longitudinal_redundancy_check) of the "Magic Byte". Then you put in the command in [Big Endian]([https://en.wikipedia.org/wiki/Endianness). Each command gets assigned a unique number (eg: `factoryReset(1020)`), this is what your sending to the device. Append the status, also in Big Endian. The status is always 0x00. Then you add your Data, this could be anything, for example sending the card keys when reading a block.
+You build the Packet by first adding 0x11, this is the "Magic Byte" to say that theres something coming. This is followed by the LRC ([**L**ongitudinal **R**edundancy **C**heck](https://en.wikipedia.org/wiki/Longitudinal_redundancy_check)) of the "Magic Byte". Then you put in the command in [Big Endian](https://en.wikipedia.org/wiki/Endianness). Each command gets assigned a unique number (eg: `factoryReset(1020)`), this is what your sending to the device. Append the status, also in Big Endian. The status is always 0x00. Then you add your Data, this could be anything, for example sending the card keys when reading a block.
 
 For recieving its the exact same in reverse.
 
 ## The Settings
 
-The Chameleon has a reserved space of memory and flash where it stores settings. This are will not be overwritten by DFU updates and the settings will only be reset by either issuing `hw factory_reset --i-know-what-im-doing` in the CLI or clicking Factory reset in a GUI.
+The Chameleon has a reserved space of memory and flash where it stores settings. This will not be overwritten by DFU updates and the settings will only be reset by either issuing `hw factory_reset --i-know-what-im-doing` in the CLI or clicking Factory reset in a GUI.
