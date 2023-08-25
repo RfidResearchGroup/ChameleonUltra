@@ -14,9 +14,9 @@ You enter DFU mode by of the following methods:
 1. Physical button
 
 - Disconnect the Chameleon and wait for it to enter sleep mode
-- Hold down the `B` button. If you are using Windows you have to wait about ~5s before next step.
+- Hold down the 🅑 button. If you are using Windows you have to wait about ~5s before next step.
 - Plug USB into a PC while still holding the button. If you are using Windows you have to wait about ~10s before next step.
-- Then release the button
+- Then release the 🅑 button
 
 2. From CLI
 
@@ -31,7 +31,7 @@ You enter DFU mode by of the following methods:
 - Execute the script `resource/tools/enter_dfu.py`
 
 The device stays in DFU mode for ~30s.
-While in DFU mode waiting for the update, the LEDs 4 and 5 blink alternatively green.
+While in DFU mode waiting for the update, the LEDs 4 and 5 blink alternatively green 🟢🟢.
 You can then perform firmware upgrades either via a GUI or the command line:
 
 1. Download nRF Util from the [nRF website](https://www.nordicsemi.com/Products/Development-tools/nrf-util)
@@ -46,9 +46,9 @@ You can then perform firmware upgrades either via a GUI or the command line:
 
 Step 5: Alternatively you can connect the Chameleon over USB and use the script `firmware/flash-dfu-app.sh` which will take care of flipping it into DFU mode and flashing it with the adequate firmware.
 
-While flashing firmware is in progress, the LEDs 4 and 5 should blink fast blue and the firmware update should be finished in a matter of seconds. Using DFU and performing a firmware update also helps recovering from most device-related issues.
+While flashing firmware is in progress, the LEDs 4 and 5 should blink fast blue 🔵🔵 and the firmware update should be finished in a matter of seconds. Using DFU and performing a firmware update also helps recovering from most device-related issues.
 
-If LEDs 4 and 5 are flashing slow red, it indicates an issue with DFU. Try to unplug and plug again or unplug and wait for it to timeout and try again the whole procedure.
+If LEDs 4 and 5 are flashing slow red 🔴🔴, it indicates an issue with DFU. Try to unplug and plug again or unplug and wait for it to timeout and try again the whole procedure.
 
 ## The Application
 
@@ -76,21 +76,21 @@ On a new Chameleon (or after a factory reset), 3 slots are defined, slot 1 holdi
 
 When a slot is selected, the LED shows what type of card is loaded with the following color code:
 
-- Green: HF card loaded
-- Blue: LF card loaded
-- Red: Both HF and LF loaded
+- 🟢 HF card loaded
+- 🔵 LF card loaded
+- 🔴 Both HF and LF loaded
 
 When a dual HF/LF slot is activated by an external field, it will turn green or blue according to the frequency.
 
 The application controls the buttons. The behavior of the buttons is customizable via the CLI or a GUI. The default behavior is the following:
 
-- `A` short press: Select previous slot
+- 🅐 short press: Select previous slot
 
-- `B` short press: Select next slot
+- 🅑 short press: Select next slot
 
-- `A` long press: Copy LF or HF tag UID (only Ultra, not Lite)
+- 🅐 long press: Copy LF or HF tag UID (only Ultra, not Lite)
 
-- `B` long press: Copy LF or HF tag UID (only Ultra, not Lite)
+- 🅑 long press: Copy LF or HF tag UID (only Ultra, not Lite)
 
 *About UID copy*: the action depends on the current slot support. So to be able to copy an EM4100 LF tag, the slot must be configured firstly to emulate an EM4100 tag. And to be able to copy a HF 14a tag, the slot must be configured for the right type of HF tag. Only the UID will be copied, not the data.
 
@@ -107,7 +107,7 @@ The device enters sleep mode after about 5s unless it is plugged in USB or if a 
 
 A [SoftDevice](https://infocenter.nordicsemi.com/index.jsp?topic=%2Fstruct_nrf52%2Fstruct%2Fnrf52_softdevices.html) is a precompiled and linked binary software implementing a wireless protocol developed by Nordic Semiconductor.
 
-We are using the [SoftDevice S140](https://infocenter.nordicsemi.com/index.jsp?topic=%2Fstruct_nrf52%2Fstruct%2Fnrf52_softdevices.html) which implements a BLE (Bluetooth® Low Energy) Central and Peripheral protocol stack solution.
+We are using the [SoftDevice S140](https://infocenter.nordicsemi.com/index.jsp?topic=%2Fstruct_nrf52%2Fstruct%2Fnrf52_softdevices.html) which implements a BLE Central and Peripheral protocol stack solution.
 
 ## The User Data
 
