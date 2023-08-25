@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
 
 #include "nordic_common.h"
 #include "nrf.h"
@@ -41,8 +42,18 @@ NRF_LOG_MODULE_REGISTER();
 
 // Defining soft timers
 APP_TIMER_DEF(m_button_check_timer); // Timer for button debounce
+
+static uint32_t m_last_btn_press = 0;
+
+static bool m_is_btn_long_press = false;
+
 static bool m_is_b_btn_press = false;
 static bool m_is_a_btn_press = false;
+
+static bool m_is_b_btn_release = false;
+static bool m_is_a_btn_release = false;
+
+static bool m_system_off_processing = false;
 
 // cpu reset reason
 static uint32_t m_reset_source;
@@ -144,20 +155,61 @@ static void button_pin_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t a
  * @return None
  */
 static void timer_button_event_handle(void *arg) {
+    // if button press during shutdown, it's only to wake up quickly
+    if (m_system_off_processing) {
+        m_system_off_processing = false;
+        NRF_LOG_INFO("BUTTON press during shutdown");
+        return;
+    }
     nrf_drv_gpiote_pin_t pin = *(nrf_drv_gpiote_pin_t *)arg;
     // Check here if the current GPIO is at the pressed level
     if (nrf_gpio_pin_read(pin) == 1) {
         if (pin == BUTTON_1) {
-            // If button is disable, we can didn't dispatch key event.
+            // If button is disabled, we can't dispatch key event.
             if (settings_get_button_press_config('b') != SettingsButtonDisable) {
-                NRF_LOG_INFO("BUTTON_LEFT"); // Button B?
+                NRF_LOG_INFO("BUTTON_B_PRESS");
                 m_is_b_btn_press = true;
+                m_last_btn_press = app_timer_cnt_get();
             }
         }
         if (pin == BUTTON_2) {
             if (settings_get_button_press_config('a') != SettingsButtonDisable) {
-                NRF_LOG_INFO("BUTTON_RIGHT"); // Button A?
+                NRF_LOG_INFO("BUTTON_A_PRESS");
                 m_is_a_btn_press = true;
+                m_last_btn_press = app_timer_cnt_get();
+            }
+        }
+    }
+
+    if (nrf_gpio_pin_read(pin) == 0) {
+        uint32_t now = app_timer_cnt_get();
+        uint32_t ticks = app_timer_cnt_diff_compute(now, m_last_btn_press);
+
+        bool is_long_press = ticks > APP_TIMER_TICKS(1000);
+
+        if (pin == BUTTON_1 && m_is_b_btn_press == true) {
+            // If button is disabled, we can't dispatch key event.
+            if (settings_get_button_press_config('b') != SettingsButtonDisable) {
+                m_is_b_btn_release = true;
+                m_is_b_btn_press = false;
+                if (!is_long_press) {
+                    NRF_LOG_INFO("BUTTON_B_RELEASE_SHORT");
+                } else {
+                    NRF_LOG_INFO("BUTTON_B_RELEASE_LONG");
+                }
+                m_is_btn_long_press = is_long_press;
+            }
+        }
+        if (pin == BUTTON_2 && m_is_a_btn_press == true) {
+            if (settings_get_button_press_config('a') != SettingsButtonDisable) {
+                m_is_a_btn_release = true;
+                m_is_a_btn_press = false;
+                if (!is_long_press) {
+                    NRF_LOG_INFO("BUTTON_A_RELEASE_SHORT");
+                } else {
+                    NRF_LOG_INFO("BUTTON_A_RELEASE_LONG");
+                }
+                m_is_btn_long_press = is_long_press;
             }
         }
     }
@@ -173,7 +225,7 @@ static void button_init(void) {
     APP_ERROR_CHECK(err_code);
 
     // Configure SENSE mode, select false for sense configuration
-    nrf_drv_gpiote_in_config_t in_config = NRFX_GPIOTE_CONFIG_IN_SENSE_LOTOHI(false);
+    nrf_drv_gpiote_in_config_t in_config = NRFX_GPIOTE_CONFIG_IN_SENSE_TOGGLE(false);
     in_config.pull = NRF_GPIO_PIN_PULLDOWN; // Pulldown
 
     // Configure key binding POTR
@@ -190,25 +242,9 @@ static void button_init(void) {
  */
 static void system_off_enter(void) {
     ret_code_t ret;
-
-    // Disable the HF NFC event first
-    NRF_NFCT->INTENCLR = NRF_NFCT_DISABLE_ALL_INT;
-    // Then disable the LF LPCOMP event
-    NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
-
+    m_system_off_processing = true;
     // Save tag data
     tag_emulation_save();
-
-    // Configure RAM hibernation hold
-    uint32_t ram8_retention = // RAM8 Each section has 32KB capacity
-        // POWER_RAM_POWER_S0RETENTION_On << POWER_RAM_POWER_S0RETENTION_Pos ;
-        // POWER_RAM_POWER_S1RETENTION_On << POWER_RAM_POWER_S1RETENTION_Pos |
-        // POWER_RAM_POWER_S2RETENTION_On << POWER_RAM_POWER_S2RETENTION_Pos |
-        // POWER_RAM_POWER_S3RETENTION_On << POWER_RAM_POWER_S3RETENTION_Pos |
-        // POWER_RAM_POWER_S4RETENTION_On << POWER_RAM_POWER_S4RETENTION_Pos |
-        POWER_RAM_POWER_S5RETENTION_On << POWER_RAM_POWER_S5RETENTION_Pos;
-    ret = sd_power_ram_power_set(8, ram8_retention);
-    APP_ERROR_CHECK(ret);
 
     if (g_is_low_battery_shutdown) {
         // Don't create too complex animations, just blink LED1 three times.
@@ -239,14 +275,38 @@ static void system_off_enter(void) {
                     color = 2;
                 }
             }
-            ledblink5(color, slot, dir ? 7 : 0);
-            ledblink4(color, dir, 7, 99, 75);
-            ledblink4(color, !dir, 7, 75, 50);
-            ledblink4(color, dir, 7, 50, 25);
-            ledblink4(color, !dir, 7, 25, 0);
+            if (m_system_off_processing) ledblink5(color, slot, dir ? 7 : 0);
+            if (m_system_off_processing) ledblink4(color, dir, 7, 99, 75);
+            if (m_system_off_processing) ledblink4(color, !dir, 7, 75, 50);
+            if (m_system_off_processing) ledblink4(color, dir, 7, 50, 25);
+            if (m_system_off_processing) ledblink4(color, !dir, 7, 25, 0);
         }
         rgb_marquee_stop();
+        if (!m_system_off_processing) {
+            for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
+                nrf_gpio_pin_clear(p_led_array[i]);
+            }
+            light_up_by_slot();
+            sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
+            return;
+        }
     }
+
+    // Disable the HF NFC event first
+    NRF_NFCT->INTENCLR = NRF_NFCT_DISABLE_ALL_INT;
+    // Then disable the LF LPCOMP event
+    NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
+
+    // Configure RAM hibernation hold
+    uint32_t ram8_retention = // RAM8 Each section has 32KB capacity
+        // POWER_RAM_POWER_S0RETENTION_On << POWER_RAM_POWER_S0RETENTION_Pos ;
+        // POWER_RAM_POWER_S1RETENTION_On << POWER_RAM_POWER_S1RETENTION_Pos |
+        // POWER_RAM_POWER_S2RETENTION_On << POWER_RAM_POWER_S2RETENTION_Pos |
+        // POWER_RAM_POWER_S3RETENTION_On << POWER_RAM_POWER_S3RETENTION_Pos |
+        // POWER_RAM_POWER_S4RETENTION_On << POWER_RAM_POWER_S4RETENTION_Pos |
+        POWER_RAM_POWER_S5RETENTION_On << POWER_RAM_POWER_S5RETENTION_Pos;
+    ret = sd_power_ram_power_set(8, ram8_retention);
+    APP_ERROR_CHECK(ret);
 
     // IOs that need to be configured as floating analog inputs ==> no pull-up or pull-down
     uint32_t gpio_cfg_default_nopull[] = {
@@ -306,6 +366,9 @@ static void system_off_enter(void) {
         nrf_pwr_mgmt_shutdown(NRF_PWR_MGMT_SHUTDOWN_RESET);
         return;
     };
+
+    // Last call, gate is closing
+    NRF_LOG_FLUSH();
 
     // Go to system-off mode (this function will not return; wakeup will cause a reset).
     // Note that if you insert jlink or drive a Debug, you may report an error when entering the low power consumption.
@@ -530,8 +593,6 @@ static void btn_fn_copy_ic_uid(void) {
                 tag_emulation_load_by_buffer(TAG_TYPE_EM410X, false);
                 NRF_LOG_INFO("Offline LF uid copied")
                 offline_status_ok();
-                // no need to check for HF tag if we already cloned a LF tag
-                goto exit;
             } else {
                 NRF_LOG_INFO("No LF tag found");
                 offline_status_error();
@@ -635,14 +696,22 @@ static void run_button_function_by_settings(settings_button_function_t sbf) {
 extern bool g_usb_led_marquee_enable;
 static void button_press_process(void) {
     // Make sure that one of the AB buttons has a click event
-    if (m_is_b_btn_press || m_is_a_btn_press) {
-        if (m_is_a_btn_press) {
-            run_button_function_by_settings(settings_get_button_press_config('a'));
-            m_is_a_btn_press = false;
+    if (m_is_b_btn_release || m_is_a_btn_release) {
+        if (m_is_a_btn_release) {
+            if(!m_is_btn_long_press) {
+                run_button_function_by_settings(settings_get_button_press_config('a'));
+            } else {
+                run_button_function_by_settings(settings_get_long_button_press_config('a'));
+            }
+            m_is_a_btn_release = false;
         }
-        if (m_is_b_btn_press) {
-            run_button_function_by_settings(settings_get_button_press_config('b'));
-            m_is_b_btn_press = false;
+        if (m_is_b_btn_release) {
+            if(!m_is_btn_long_press) {
+                run_button_function_by_settings(settings_get_button_press_config('b'));
+            } else {
+                run_button_function_by_settings(settings_get_long_button_press_config('b'));
+            }
+            m_is_b_btn_release = false;
         }
         // Disable led marquee for usb at button pressed.
         g_usb_led_marquee_enable = false;

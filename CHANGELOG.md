@@ -4,6 +4,10 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 
 ## [unreleased][unreleased]
  - Added initial version of the user guides (@GameTec-live)
+ - Added support for pasting several command lines at once with prompt_toolkit (@doegox)
+ - Added support for interrupting sleep sequence with a button press during animation (@doegox)
+ - Fixed logs corruption and app reset on FDS write, added logs flush on sleep (@doegox)
+ - Added support for long-press of buttons (@nemanjan00)
  - Changed `hw slot delete`, now it can always delete from slot (@augustozanellato)
  - Refactor CI pipeline (@augustozanellato)
  - Added offline copy EM card uid for btnpress (@nemanjan00)

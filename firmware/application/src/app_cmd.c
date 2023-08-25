@@ -146,6 +146,29 @@ data_frame_tx_t *cmd_processor_set_button_press_config(uint16_t cmd, uint16_t st
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+data_frame_tx_t *cmd_processor_get_long_button_press_config(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t button_press_config;
+    if (length == 1 && is_settings_button_type_valid(data[0])) {
+        button_press_config = settings_get_long_button_press_config(data[0]);
+        status = STATUS_DEVICE_SUCCESS;
+    } else {
+        length = 0;
+        status = STATUS_PAR_ERR;
+    }
+    return data_frame_make(cmd, status, length, (uint8_t *)(&button_press_config));
+}
+
+data_frame_tx_t *cmd_processor_set_long_button_press_config(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length == 2 && is_settings_button_type_valid(data[0])) {
+        settings_set_long_button_press_config(data[0], data[1]);
+        status = STATUS_DEVICE_SUCCESS;
+    } else {
+        length = 0;
+        status = STATUS_PAR_ERR;
+    }
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
 data_frame_tx_t *cmd_processor_14a_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -783,6 +806,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_BATTERY_INFO,             NULL,                        cmd_processor_get_battery_info,              NULL                   },
     {    DATA_CMD_GET_BUTTON_PRESS_CONFIG,      NULL,                        cmd_processor_get_button_press_config,       NULL                   },
     {    DATA_CMD_SET_BUTTON_PRESS_CONFIG,      NULL,                        cmd_processor_set_button_press_config,       NULL                   },
+    {    DATA_CMD_GET_LONG_BUTTON_PRESS_CONFIG, NULL,                        cmd_processor_get_long_button_press_config,  NULL                   },
+    {    DATA_CMD_SET_LONG_BUTTON_PRESS_CONFIG, NULL,                        cmd_processor_set_long_button_press_config,  NULL                   },
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 

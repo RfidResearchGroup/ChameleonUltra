@@ -391,8 +391,8 @@ class HFMFNested(ReaderRequiredUnit):
                 sea_obj = re.search(r"([a-fA-F0-9]{12})", line)
                 if sea_obj is not None:
                     key_list.append(sea_obj[1])
-            # 此处得先去验证一下密码，然后获得验证成功的那个
-            # 如果没有验证成功的密码，则说明此次恢复失败了，可以重试一下
+            # Here you have to verify the password first, and then get the one that is successfully verified
+            # If there is no verified password, it means that the recovery failed, you can try again
             print(f" - [{len(key_list)} candidate keys found ]")
             for key in key_list:
                 key_bytes = bytearray.fromhex(key)
@@ -447,7 +447,7 @@ class HFMFDarkside(ReaderRequiredUnit):
 
     def recover_key(self, block_target, type_target):
         """
-            执行darkside采集与解密
+            Execute darkside acquisition and decryption
         :param block_target:
         :param type_target:
         :return:
@@ -595,7 +595,7 @@ class HFMFDetectionDecrypt(DeviceRequiredUnit):
 
     def decrypt_by_list(self, rs: list):
         """
-            从侦测日志列表中解密秘钥
+            Decrypt key from reconnaissance log list
         :param rs:
         :return:
         """
@@ -1055,8 +1055,8 @@ class HWSlotDataDefault(TagTypeRequiredUnit, SlotIndexRequireUnit):
         self.add_slot_args(parser)
         return parser
 
-    # m1 1k卡模拟 hw slot init -s 1 -t 3
-    # em id卡模拟 hw slot init -s 1 -t 1
+    # m1 1k card emulation hw slot init -s 1 -t 3
+    # em id card simulation hw slot init -s 1 -t 1
     def on_exec(self, args: argparse.Namespace):
         tag_type = args.type
         slot_num = args.slot
@@ -1117,7 +1117,7 @@ class HWSlotNickSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
         parser.add_argument('-n', '--name', type=str, required=True, help="Your tag nick name for slot")
         return parser
 
-    # hw slot nick set -s 1 -st 1 -n 测试名称保存
+    # hw slot nick set -s 1 -st 1 -n Save the test name
     def on_exec(self, args: argparse.Namespace):
         slot_num = args.slot
         sense_type = args.sense_type
@@ -1194,9 +1194,9 @@ class HWDFU(DeviceRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         print("Application restarting...")
         self.cmd.enter_dfu_mode()
-        # 理论上，上面的指令执行完成后，dfu模式会进入，然后USB会重启，
-        # 我们判断是否成功进入USB，只需要判断USB是否变成DFU设备的VID和PID即可，
-        # 同时我们记得确认设备的信息，一致时才是同一个设备。
+        # In theory, after the above command is executed, the dfu mode will enter, and then the USB will restart,
+        # To judge whether to enter the USB successfully, we only need to judge whether the USB becomes the VID and PID of the DFU device.
+        # At the same time, we remember to confirm the information of the device, it is the same device when it is consistent.
         print(" - Enter success @.@~")
         # let time for comm thread to send dfu cmd and close port
         time.sleep(0.1)
@@ -1318,9 +1318,13 @@ class HWButtonSettingsGet(DeviceRequiredUnit):
         print("")
         for button in button_list:
             resp = self.cmd.get_button_press_fun(button)
+            resp_long = self.cmd.get_long_button_press_fun(button)
             button_fn = chameleon_cmd.ButtonPressFunction.from_int(resp.data[0])
-            print(f" - {colorama.Fore.GREEN}{button}{colorama.Style.RESET_ALL}: {button_fn}")
+            button_long_fn = chameleon_cmd.ButtonPressFunction.from_int(resp_long.data[0])
+            print(f" - {colorama.Fore.GREEN}{button} {colorama.Fore.YELLOW}short{colorama.Style.RESET_ALL}: {button_fn}")
             print(f"      usage: {button_fn.usage()}")
+            print(f" - {colorama.Fore.GREEN}{button} {colorama.Fore.YELLOW}long {colorama.Style.RESET_ALL}: {button_long_fn}")
+            print(f"      usage: {button_long_fn.usage()}")
             print("")
         print(" - Successfully get button function from settings")
 
@@ -1330,6 +1334,8 @@ class HWButtonSettingsSet(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.add_argument('-l', '--long', action='store_true', default=False,
+                            help="set keybinding for long-press")
         parser.add_argument('-b', type=str, required=True,
                             help="Change the function of the pressed button(?).",
                             choices=chameleon_cmd.ButtonType.list_str())
@@ -1344,5 +1350,9 @@ class HWButtonSettingsSet(DeviceRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         button = chameleon_cmd.ButtonType.from_str(args.b)
         function = chameleon_cmd.ButtonPressFunction.from_int(args.f)
-        self.cmd.set_button_press_fun(button, function)
+        long = args.long == True
+        if long:
+            self.cmd.set_long_button_press_fun(button, function)
+        else:
+            self.cmd.set_button_press_fun(button, function)
         print(" - Successfully set button function to settings")

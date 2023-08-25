@@ -234,11 +234,11 @@ static void nrfx_nfct_field_event_handler(volatile nrfx_nfct_field_state_t field
             {
 
                 /*
-                 *  经过思考，既然低功耗读头无法成功唤醒的原因是读头发送太快，而唤醒NFC外设需要时间，恰巧错过了此通信时序。
-                 *    那我们就需要在首次唤醒NFC模块后，让其留存一段时间，这段时间就是大概能让低功耗读头正常通信的时间。
-                 *    唤醒NFC模块这段过程是为了让外设和时钟稳定的一个过程，特别是在NRF52840上，那么我们就不能改动唤醒到场侦测事件的这个过程
-                 *    假设从场丢失事件的回调关闭为切入点，我们可以假装关闭NFC外设（只分发场丢失事件，而不关闭外设），但是实际上留存着事件监听一段时间，假设在这段时间里接收到数据，我们可以立刻将事件转发给观察者
-                 *    以达到及时处理数据消息的目的，在一段时间内无消息可处理之后，我们可以正式关闭NFC外设，达到节省电量资源的目的。
+                 *  After thinking, since the reason why the low-power reading head cannot be successfully woken up is that the reading head sends too fast, and it takes time to wake up the NFC peripheral, it happened to miss this communication timing.
+                 *    Then we need to keep the NFC module for a period of time after waking it up for the first time. This period of time is about the time for the low-power reading head to communicate normally.
+                 *    The process of waking up the NFC module is to stabilize the peripherals and the clock, especially on the nRF52840, so we cannot change the process of waking up the presence detection event
+                 *    Assuming that the callback from the field loss event is closed as the entry point, we can pretend to turn off the NFC peripheral (only distribute the field loss event, but not close the peripheral), but actually keep the event listening for a period of time, assuming that during this time receivedto the data, we can immediately forward the event to the observer
+                 *    In order to achieve the purpose of processing data messages in a timely manner, after there is no message to process for a period of time, we can officially turn off the NFC peripherals to achieve the purpose of saving power resources.
                  */
 #if defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
                 nrf_nfct_int_disable(NRFX_NFCT_RX_INT_MASK | NRFX_NFCT_TX_INT_MASK);

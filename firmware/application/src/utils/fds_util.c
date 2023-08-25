@@ -84,16 +84,18 @@ static ret_code_t fds_write_record_nogc(uint16_t id, uint16_t key, uint16_t data
     };
     if (fds_find_record(id, key, &record_desc)) {   // Find a record with specified characteristics
         //If you can find this record, we can perform the update operation
+        NRF_LOG_INFO("Search FileID: 0x%04x, FileKey: 0x%04x is found, will update.", id, key);
         err_code = fds_record_update(&record_desc, &record);
-        if (err_code == NRF_SUCCESS) {
-            NRF_LOG_INFO("Search FileID: 0x%04x, FileKey: 0x%04x is found, will update.", id, key);
-        }
+        if (err_code != NRF_SUCCESS) {
+            NRF_LOG_INFO("Record update request failed!");
+        } // Don't NRF_LOG if request succeeded, it would be interrupted by NRF_LOG in record handler
     } else {
         // Unable to find effective records, we will write for the first time
+        NRF_LOG_INFO("Search FileID: 0x%04x, FileKey: 0x%04x no found, will create.", id, key);
         err_code = fds_record_write(&record_desc, &record);
-        if (err_code == NRF_SUCCESS) {
-            NRF_LOG_INFO("Search FileID: 0x%04x, FileKey: 0x%04x no found, will create.", id, key);
-        }
+        if (err_code != NRF_SUCCESS) {
+            NRF_LOG_INFO("Record creation request failed!");
+        } // Don't NRF_LOG if request succeeded, it would be interrupted by NRF_LOG in record handler
     }
     return err_code;
 }
@@ -179,6 +181,7 @@ static void fds_evt_handler(fds_evt_t const *p_evt) {
             if (p_evt->result == NRF_SUCCESS) {
                 NRF_LOG_INFO("NRF52 FDS libraries init success.");
             } else {
+                NRF_LOG_INFO("NRF52 FDS libraries init failed");
                 APP_ERROR_CHECK(p_evt->result);
             }
         }
@@ -189,9 +192,11 @@ static void fds_evt_handler(fds_evt_t const *p_evt) {
                 NRF_LOG_INFO("Record change: FileID 0x%04x, RecordKey 0x%04x", p_evt->write.file_id, p_evt->write.record_key);
                 if (p_evt->write.file_id == fds_operation_info.id && p_evt->write.record_key == fds_operation_info.key) {
                     // The logic above has ensured that the task we are currently writing is completed!
+                    NRF_LOG_INFO("Record change success");
                     fds_operation_info.success = true;
-                }
+                } else NRF_LOG_INFO("Record change mismatch");
             } else {
+                NRF_LOG_INFO("Record change failed");
                 APP_ERROR_CHECK(p_evt->result);
             }
         }
@@ -205,17 +210,21 @@ static void fds_evt_handler(fds_evt_t const *p_evt) {
                 if (p_evt->del.record_id == fds_operation_info.record_id) {
                     // Only check record id because fileID and recordKey aren't available
                     // if deleting via fds_record_iterate. record id is guaranteed to be unique.
+                    NRF_LOG_INFO("Record delete success");
                     fds_operation_info.success = true;
-                }
+                } else NRF_LOG_INFO("Record delete mismatch");
             } else {
+                NRF_LOG_INFO("Record delete failed");
                 APP_ERROR_CHECK(p_evt->result);
             }
         }
         break;
         case FDS_EVT_GC: {
             if (p_evt->result == NRF_SUCCESS) {
+                NRF_LOG_INFO("FDS gc success");
                 fds_operation_info.success = true;
             } else {
+                NRF_LOG_INFO("FDS gc failed");
                 APP_ERROR_CHECK(p_evt->result);
             }
         }

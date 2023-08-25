@@ -17,7 +17,7 @@ typedef struct {
     uint64_t ks_list;
 } DarksideParam;
 
-// 转换字符串为U32类型
+// Convert string to U32 type
 uint64_t atoui(const char *str) {
 
     uint64_t result = 0;
@@ -42,7 +42,7 @@ int main(int argc, char *argv[]) {
         printf("Unexcepted param count\n");
         return EXIT_FAILURE;
     }
-    // 初始化UID
+    // Initialize UID
     uint32_t uid = (uint32_t)atoui(argv[1]);
     uint32_t count = 0, i = 0;
     uint32_t keycount = 0;
@@ -65,7 +65,7 @@ int main(int argc, char *argv[]) {
     }
 
     for (i = 0; i < count; i++) {
-        // 初始化NT, NR, AR
+        // Initialize NT, NR, AR
         uint32_t nt = dps[i].nt;
         uint32_t nr = dps[i].nr;
         uint32_t ar = dps[i].ar;
@@ -82,7 +82,7 @@ int main(int argc, char *argv[]) {
         printf("AR = %"PRIu32"\r\n", ar);
         */
 
-        // 开始解密
+        // start decrypting
         keycount = nonce2key(uid, nt, nr, ar, par_list, ks_list, &keylist);
 
         if (keycount == 0) {
