@@ -4,7 +4,7 @@ The Chameleon comes in 3 Hardware variants, the Ultra, the Lite and the Devkit.
 
 ## The Ultra
 
-The Chameleon Ultra comes in a black box with gold printing. This box has the dimensions: 9.5cm x 5.5cm x 3.5cm
+The Chameleon Ultra comes in a black box with gold printing. This box has the following dimensions: 9.5 cm x 5.5 cm x 3.5 cm
 
 ![box.png](./images/ultra-box.jpg)
 
