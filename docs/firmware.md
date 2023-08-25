@@ -2,7 +2,7 @@
 
 The Chameleons firmware consists of 3 parts, the bootloader, the application and the settings
 
-NOTE: If your developer searching for the building instructions, look into [development](./development)
+NOTE: If your developer searching for the building instructions, look into [development](./development.md)
 
 ## The Bootloader
 
