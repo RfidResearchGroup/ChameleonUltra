@@ -12,7 +12,7 @@ Anywhere else: [Sneaktechnology](https://sneaktechnology.com) / [Aliexpress by R
 
 # What is it and how to use ?
 
-Read the [available documentation](docs/home.md).
+Read the [available documentation](docs/README.md).
 
 # Compatible applications
 
