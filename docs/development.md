@@ -1,6 +1,6 @@
-# How to use the Firmware
+# Development
 
-In this file you can look up how to [install requirements](#Prerequisites-for-compiling), [edit](#Editing-the-code), [compile](#Compiling-the-code) and [debug](#Debugging-the-code) the code!
+In this file you can look up how to [install requirements](#Prerequisites-for-compiling), [edit](#Editing-the-code), [compile](#Compiling-the-code) and [debug](#Debugging-the-code) the firmware!
 
 ## Prerequisites for compiling
 
@@ -25,7 +25,7 @@ Moreover it does not contain the `gdb` debugger.
 * **Windows using Chocolatey:**
   * Open a PowerShell terminal with administrator privileges.
   * If not yet installed, run the following command to install Chocolatey:
-  ``` Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1')) ```
+    ``` Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1')) ```
   * In the same PowerShell terminal, run the following command to install Make using Chocolatey: `choco install make`
 * **macOS:**
   * Open a terminal.
@@ -35,10 +35,10 @@ Moreover it does not contain the `gdb` debugger.
 ### install nRF tools
 
 - Install nRF Util tool [nrfutil](https://www.nordicsemi.com/Products/Development-tools/nrf-util)
-    - Move it to a known path like `C:\nrfutil\` or `/usr/local/bin/`
-    - Add this path to the `PATH` Environment Variable if not yet there.
+  - Move it to a known path like `C:\nrfutil\` or `/usr/local/bin/`
+  - Add this path to the `PATH` Environment Variable if not yet there.
 - Install nRF Util packages:
-    - `nrfutil install completion device nrf5sdk-tools trace`
+  - `nrfutil install completion device nrf5sdk-tools trace`
 - Install [nRF Command Line Tools](https://www.nordicsemi.com/Products/Development-tools/nrf-command-line-tools/download) to get `nrfjprog`, `mergehex` etc.
 
 ### install programmer tools
@@ -46,23 +46,24 @@ Moreover it does not contain the `gdb` debugger.
 Depending on the hardware programmer you want to use, additional tools are needed.
 
 - If you are using a J-Link:
-    - Install [Segger J-Link Software](https://www.segger.com/downloads/jlink)
-    - alternatively, you can use openocd as described below
-    - Note: a JLink OB (or a STLink reflashed as a JLink OB) will not work on a nRF.
+  
+  - Install [Segger J-Link Software](https://www.segger.com/downloads/jlink)
+  - alternatively, you can use openocd as described below
+  - Note: a JLink OB (or a STLink reflashed as a JLink OB) will not work on a nRF.
 
 - If you are using a ST-Link V2:
-    - Install [openocd](https://openocd.org/pages/getting-openocd.html)
-    - If under Windows, install [ST-Link drivers](https://www.st.com/en/development-tools/stsw-link009.html), extract the zip and run `dpinst_amd64.exe`
-
+  
+  - Install [openocd](https://openocd.org/pages/getting-openocd.html)
+  - If under Windows, install [ST-Link drivers](https://www.st.com/en/development-tools/stsw-link009.html), extract the zip and run `dpinst_amd64.exe`
 
 ### configure the project
 
-  - Edit `Makefile.defs`:
-    - Change `GNU_INSTALL_ROOT` (path of previously installed Compiler `bin` folder)
-    - Change `GNU_VERSION` (Version of the installed Compiler) (FIXME: is it really used?)
-    - Change the other paths to match your system if needed
-    - Don't forget to remove the `#` in front of the changed lines
-  - Alternatively, if you are committing often code, it may be easier to leave `Makefile.defs` intact and to invoke `make` with the desired variables from a script, e.g. `make GNU_INSTALL_ROOT=../../../arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin/`
+- Edit `Makefile.defs`:
+  - Change `GNU_INSTALL_ROOT` (path of previously installed Compiler `bin` folder)
+  - Change `GNU_VERSION` (Version of the installed Compiler) (FIXME: is it really used?)
+  - Change the other paths to match your system if needed
+  - Don't forget to remove the `#` in front of the changed lines
+- Alternatively, if you are committing often code, it may be easier to leave `Makefile.defs` intact and to invoke `make` with the desired variables from a script, e.g. `make GNU_INSTALL_ROOT=../../../arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin/`
 
 ## Editing the code
 
@@ -74,11 +75,11 @@ install it!
   the [C++ Extension Pack](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools-extension-pack) in
   VS-Code.
 - Create a new IntelliSense Configuration:
-    - press F1 in VS-Code and enter `C/C++: Edit Configurations (UI)`
-    - Add a new Configuration and name it
-    - Specify your Compiler path (path of previously installed Compiler `bin` folder)
-    - Change IntelliSense mode to `gcc-arm (legacy)`
-    - Add include path `${workspaceFolder}/**`
+  - press F1 in VS-Code and enter `C/C++: Edit Configurations (UI)`
+  - Add a new Configuration and name it
+  - Specify your Compiler path (path of previously installed Compiler `bin` folder)
+  - Change IntelliSense mode to `gcc-arm (legacy)`
+  - Add include path `${workspaceFolder}/**`
 
 ## Compiling the code
 
@@ -86,6 +87,7 @@ install it!
 - Run `build.sh` or try to execute its steps manually if your platform is not yet properly supported. Feedback is always welcome.
 
 The script produces several images in `objects`.
+
 * `fullimage.hex` to be used with a programmer over the SWD pins
 * `dfu-app.zip` and `dfu-full.zip` to be used with DFU mode
 
@@ -94,6 +96,7 @@ The script produces several images in `objects`.
 If the bootloader and the SoftDevice are already properly installed on the Chameleon, you can reflash it directly over DFU.
 
 To set the device in DFU mode:
+
 * you can use the Python client and issue the command `hw dfu`
 * you can use the script `resource/tools/enter_dfu.py` that does exactly the same but may be easier to call from your scripts
 * you can unplug the device, wait for it to sleep, then press the button B and plug it. If the application is bogus, this is the only way.
@@ -115,6 +118,7 @@ Under Linux you can use the scripts `flash-dfu-app.sh` and `flash-dfu-full.sh`, 
 Connect pins GND, SWC (swclk) and SWD (swdio) to your programmer.
 
 With a JLink and `nrfjprog`
+
 ```
 # application only:
 nrfjprog -f nrf52 --program objects/application.hex --sectorerase --verify --reset
@@ -123,6 +127,7 @@ nrfjprog -f nrf52 --program objects/fullimage.hex --sectorerase --verify --reset
 ```
 
 With a JLink and `openocd`
+
 ```
 # application only:
 openocd -f interface/jlink.cfg -f target/nrf52.cfg -c "program objects/application.hex verify reset ; shutdown"
@@ -144,6 +149,7 @@ openocd -f interface/stlink.cfg -f target/nrf52.cfg -c "program objects/fullimag
 If you are adventurous it is possible to flash the device over BLE (DFU mode).
 
 To put the device in DFU mode
+
 * you can use the Python client and issue the command `hw dfu` **TODO:** this will be possible only when the client will be able to work over BLE...
 * you can use the script `resource/tools/enter_dfu_over_ble.py`
 
@@ -208,10 +214,12 @@ Then use the official [nRF Device Firmware Update](https://www.nordicsemi.com/Pr
 ## Debugging the code with gdb and openocd
 
 See first if you can execute `arm-none-eabi-gdb` from the installed tools.
+
 * gcc-arm-none-eabi-10.3-2021.10 gdb requires `libncurses5`
 * arm-gnu-toolchain-12.2.rel1 gdb requires Python 3.8
 
 In case Python 3.8 is not available anymore on your distro, to install a local copy you can do
+
 ```
 wget https://www.python.org/ftp/python/3.8.17/Python-3.8.17.tgz
 tar zxvf Python-3.8.17.tgz
@@ -223,23 +231,29 @@ make install
 ```
 
 Connect openocd to the device with a JLink or a ST-Link V2
+
 ```
 openocd -f interface/jlink.cfg -f target/nrf52.cfg
 ```
+
 ```
 openocd -f interface/stlink.cfg -f target/nrf52.cfg
 ```
+
 Then run gdb as follows
 
 ```
 PYTHONHOME=~/opt/python-3.8.17/ arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin/arm-none-eabi-gdb
 ```
+
 and tell gdb to connect to openocd
+
 ```
 target extended-remote localhost:3333
 ```
 
 ## BlackMagicProbe with RTT support, out of a ST-Link V2
+
 You can reflash a ST-Link V2 to use it as a BlackMagicProbe, to get support for RTT and see NRF_LOG messages.
 Some clones have only 64kb, this is too short.
 Even 128kb is too small when enabling RTT, but we can comment parts of the BMP source code.
@@ -248,11 +262,13 @@ Even 128kb is too small when enabling RTT, but we can comment parts of the BMP s
 git clone --recursive git@github.com:blackmagic-debug/stlink-tool.git
 ( cd stlink-tool && make )
 ```
+
 Then put the `stlink-tool` binary in your path.
 
 Get [BMP full sources](https://github.com/blackmagic-debug/blackmagic/releases)
 
 Comment out all probes except Nordic nrf51 in `src/target/cortexm.c` big switch for probes. It should remain
+
 ```c
     switch (t->designer_code) {
     case JEP106_MANUFACTURER_NORDIC:
@@ -260,13 +276,17 @@ Comment out all probes except Nordic nrf51 in `src/target/cortexm.c` big switch 
         break;
     }
 ```
+
 ```
 make -j PROBE_HOST=stlink ST_BOOTLOADER=1 ENABLE_RTT=1
 ```
+
 Then flash the ST_Link V2
+
 ```
 stlink-tool src/blackmagic.bin
 ```
+
 See [src/platforms/stlink/README.md](https://github.com/blackmagic-debug/blackmagic/blob/main/src/platforms/stlink/README.md) for more details.
 Unplug/plug.  
 Every time you plug the ST-Link, you have to run `stlink-tool` to enable BMP.  
@@ -285,7 +305,9 @@ stlink-tool
 sleep 1
 screen /dev/ttyBmpTarg
 ```
+
 In another terminal
+
 ```
 $ arm-none-eabi-gdb
 (gdb) target extended-remote /dev/ttyBmpGdb
@@ -305,7 +327,9 @@ cf https://embeddedexplorer.com/nrf52-nrf-log-tutorial/
 ```
 JLinkExe -if SWD -device nrf52 -speed 4000 -autoconnect 1
 ```
+
 in a second terminal:
+
 ```
 JLinkRTTClient
 ```
@@ -318,5 +342,6 @@ UART works at 115200 bauds. E.g. one can use a FTDI dongle and `screen /dev/ttyU
 Contrary to RTT that needs to be activated by a JTAG probe, UART logs are immediately available.
 
 Limitations:
+
 * SWO pin is shared with... SWO so when e.g. reflashing the device, garbage may appear on the monitoring terminal.
 * SWO pin is also shared with the blue channel of the RGB slot LEDs, so faint blue may appear briefly when logs are sent and LED might not work properly when supposed to be blue.

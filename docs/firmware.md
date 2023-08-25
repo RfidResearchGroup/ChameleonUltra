@@ -2,7 +2,7 @@
 
 The Chameleons firmware consists of 3 parts, the bootloader, the application and the settings
 
-NOTE: If your developer searching for the building instructions, look into [How_to_use_Firmware.md](../How_to_use_Firmware.md)
+NOTE: If your developer searching for the building instructions, look into [development](./development)
 
 ## The Bootloader
 
@@ -34,6 +34,8 @@ The application is the piece of software being loaded by the bootloader. It comm
 
 The communication with the application is either done via the CLI or a GUI. Communication can be done over USB or BLE (**B**luetooth **L**ow **E**nergy), altough, at time of writing, only GUIs support BLE.
 
+---
+
 The communication with the application isnt the easiest but is structured as follows:
 
 `MAGIC BYTE(0x11) LRC(Magic Byte) COMMAND STATUS(0x00) DATA LRC(COMMAND + STATUS + DATA)`
@@ -41,6 +43,36 @@ The communication with the application isnt the easiest but is structured as fol
 You build the Packet by first adding 0x11, this is the "Magic Byte" to say that theres something coming. This is followed by the LRC ([**L**ongitudinal **R**edundancy **C**heck](https://en.wikipedia.org/wiki/Longitudinal_redundancy_check)) of the "Magic Byte". Then you put in the command in [Big Endian](https://en.wikipedia.org/wiki/Endianness). Each command gets assigned a unique number (eg: `factoryReset(1020)`), this is what your sending to the device. Append the status, also in Big Endian. The status is always 0x00. Then you add your Data, this could be anything, for example sending the card keys when reading a block.
 
 For recieving its the exact same in reverse.
+
+---
+
+The application controls the buttons. The behaviour of the buttons is user customizeable via the CLI or a GUI. The default behaviour is the following:
+
+- `A` short press: Slot -1
+
+- `B` short press: Slot +1
+
+- `A` long press: Copy IC
+
+- `B` long press: Copy ID
+
+When a slot is selected the LED shows what type of card is loaded by changing the LEDs color:
+
+- Green: HF card loaded
+
+- Blue: LF card loaded
+
+- Red: Both loaded
+
+The Chameleon also shows the following LED effects:
+
+- Charging: 4 Pulsing green lights
+
+- CLI / GUI connected over USB: Chasing LEDs in the color of the selected slot (left to right for slots 1-4 and 5-8 chase right to left)
+
+The white LED labled RF lights up when it detects a field and a card corrosponding to that field (HF/LF) is loaded into the currently selected slot.
+
+The device enters sleep mode, if no CLI / GUI is connected over BLE or serial, after ~5s. You can use the buttons to wake it up again.
 
 ## The Settings
 

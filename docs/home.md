@@ -17,3 +17,5 @@ This Guide is split up into multiple "subguides":
 - ["FAQ"](./faq.md) Frequently asked questions, if you have a question, it might already be awnsered here.
 
 - ["Quickstart"](./quickstart.md) for the impatient people to just get you up and running with anything.
+
+- ["Development"](./development.md) for all developers. This covers how to build firmware from source and set up a development enviroment.
