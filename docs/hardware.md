@@ -32,7 +32,7 @@ The device itself features 2 Buttons labled with arrows. The Device consists of 
 
 ## The Devkit
 
-Just like the Chameleon Ultra, the Devkit comes in a black box with gold printing. This box has the dimensions: 12cm x  8cm x 3.5cm
+Just like the Chameleon Ultra, the Devkit comes in a black box with gold printing. This box has the following dimensions: 12 cm x  8 cm x 3.5 cm
 
 ![devkit-box.jpg](./images/devkit-box.jpg)
 
