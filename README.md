@@ -24,7 +24,7 @@ Anywhere else: [Sneaktechnology][go_to_buy_sneaktechnology] / [Aliexpress by RRG
 # How to use ?
 
 - ChameleonUltra: [Technical White Paper][tech_white_paper] (Old content of this readme in here)
-- ChameleonUltra: [Firmware][how_use_firmware]
+- ChameleonUltra: [Firmware][./docs/development.md]
 
 More Coming Soon.
 
