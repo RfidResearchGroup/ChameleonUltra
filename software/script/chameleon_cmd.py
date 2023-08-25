@@ -132,7 +132,7 @@ class TagSenseType(enum.IntEnum):
 class TagSpecificType(enum.IntEnum):
     # Empty slot
     TAG_TYPE_UNKNOWN = 0
-    # 125 kHz（ID）cards
+    # 125 kHz (id) cards
     TAG_TYPE_EM410X = 1
     # Mifare Classic
     TAG_TYPE_MIFARE_Mini = 2
@@ -322,28 +322,28 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def scan_tag_14a(self):
         """
-            扫描场内的14a标签
+     (  )  14a tags in the scanning field
         :return:
         """
         return self.device.send_cmd_sync(DATA_CMD_SCAN_14A_TAG, 0x00)
 
     def detect_mf1_support(self):
         """
-            检测是否是mifare classic标签
+     (  )  Detect whether it is mi (ar)  classic label
         :return:
         """
         return self.device.send_cmd_sync(DATA_CMD_MF1_SUPPORT_DETECT, 0x00)
 
     def detect_mf1_nt_level(self):
         """
-            检测mifare classic的nt漏洞的等级
+     (  )  detect mi (ar)  Class of classic nt vulnerabilities
         :return:
         """
         return self.device.send_cmd_sync(DATA_CMD_MF1_NT_LEVEL_DETECT, 0x00)
 
     def detect_darkside_support(self):
         """
-            检测卡片是否易受mifare classic darkside攻击
+     (  )  Check if the card is vulnerable to mifare cla (si)  darkside attack
         :return:
         """
         return self.device.send_cmd_sync(DATA_CMD_MF1_DARKSIDE_DETECT, 0x00, None, timeout=20)
@@ -351,7 +351,7 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def detect_nt_distance(self, block_known, type_known, key_known):
         """
-            检测卡片的随机数距离
+     (  )  Detect the random number distance of the card
         :return:
         """
         data = bytearray()
@@ -363,7 +363,7 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def acquire_nested(self, block_known, type_known, key_known, block_target, type_target):
         """
-            采集Nested解密需要的关键NT参数
+     (  )  Collect the key NT parameters needed for Nested decryption
         :return:
         """
         data = bytearray()
@@ -377,7 +377,7 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def acquire_darkside(self, block_target, type_target, first_recover: int or bool, sync_max):
         """
-            采集Darkside解密需要的关键参数
+     (  )  Collect the key parameters needed for Darkside decryption
         :param block_target:
         :param type_target:
         :param first_recover:
@@ -399,7 +399,7 @@ class ChameleonCMD:
     ])
     def auth_mf1_key(self, block, type_value, key):
         """
-            验证mf1秘钥，只验证单个扇区的指定类型的秘钥
+     (  )  Verify the mf1 key, only verify the specified type of key for a single sector
         :param block:
         :param type_value:
         :param key:
@@ -414,7 +414,7 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def read_mf1_block(self, block, type_value, key):
         """
-            读取mf1单块
+     (  )  read mf1 monoblock
         :param block:
         :param type_value:
         :param key:
@@ -429,7 +429,7 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def write_mf1_block(self, block, type_value, key, block_data):
         """
-            写入mf1单块
+     (  )  Write mf1 single block
         :param block:
         :param type_value:
         :param key:
@@ -446,7 +446,7 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.LF_TAG_OK)
     def read_em_410x(self):
         """
-            读取EM410X的卡号
+     (  )  Read the card number of EM410X
         :return:
         """
         return self.device.send_cmd_sync(DATA_CMD_SCAN_EM410X_TAG, 0x00)
@@ -454,8 +454,8 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.LF_TAG_OK)
     def write_em_410x_to_t55xx(self, id_bytes: bytearray):
         """
-            写入EM410X卡号到T55XX中
-        :param id_bytes: ID卡号
+     (  )  Write EM410X card number into T55XX
+        :param id_by (es)  ID card number
         :return:
         """
         new_key = [0x20, 0x20, 0x66, 0x66]
@@ -498,10 +498,10 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_slot_tag_type(self, slot_index: SlotNumber, tag_type: TagSpecificType):
         """
-            设置当前卡槽的模拟卡的标签类型
-            注意：此操作并不会更改flash中的数据，flash中的数据的变动仅在下次保存时更新
-        :param slot_index: 卡槽号码
-        :param tag_type: 标签类型
+     (  )  Set the label type of the simulated card of the current card slot
+     (  )  Note: This operation will not change the data in the flash, and the change of the data in the flash will only be updated at the next save
+        :param slot_in (ex)  Card slot number
+        :param tag_t (pe)  label type
         :return:
         """
         # SlotNumber() will raise error for us if slot_index not in slot range
@@ -526,10 +526,10 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_slot_data_default(self, slot_index: SlotNumber, tag_type: TagSpecificType):
         """
-            设置指定卡槽的模拟卡的数据为缺省数据
-            注意：此API会将flash中的数据一并进行设置
-        :param slot_index: 卡槽号码
-        :param tag_type: 要设置的缺省标签类型
+     (  )  Set the data of the simulated card in the specified card slot as the default data
+     (  )  Note: This API will set the data in the flash together
+        :param slot_in (ex)  Card slot number
+        :param tag_t (pe)  The default label type to set
         :return:
         """
         # SlotNumber() will raise error for us if slot_index not in slot range
@@ -541,9 +541,9 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_slot_enable(self, slot_index: SlotNumber, enable: bool):
         """
-            设置指定的卡槽是否使能
-        :param slot_index: 卡槽号码
-        :param enable: 是否使能
+     (  )  Set whether the specified card slot is enabled
+        :param slot_in (ex)  Card slot number
+        :param ena (le)  Whether to enable
         :return:
         """
         # SlotNumber() will raise error for us if slot_index not in slot range
@@ -555,8 +555,8 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_em410x_sim_id(self, id_bytes: bytearray):
         """
-            设置EM410x模拟的卡号
-        :param id_bytes: 卡号的字节
+     (  )  Set the card number simulated by EM410x
+        :param id_by (es)  byte of the card number
         :return:
         """
         if len(id_bytes) != 5:
@@ -572,8 +572,8 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_mf1_detection_enable(self, enable: bool):
         """
-            设置是否使能当前卡槽的侦测
-        :param enable: 是否使能
+     (  )  Set whether to enable the detection of the current card slot
+        :param ena (le)  Whether to enable
         :return:
         """
         data = bytearray()
@@ -582,7 +582,7 @@ class ChameleonCMD:
 
     def get_mf1_detection_count(self):
         """
-            获取当前侦测记录的统计个数
+     (  )  Get the statistics of the current detection records
         :return:
         """
         return self.device.send_cmd_sync(DATA_CMD_GET_MF1_DETECTION_COUNT, 0x00)
@@ -590,8 +590,8 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def get_mf1_detection_log(self, index: int):
         """
-            从指定的index位置开始获取侦测日志
-        :param index: 开始索引
+     (  )  Get detection logs from the specified index position
+        :param in (ex)  start index
         :return:
         """
         data = bytearray()
@@ -601,9 +601,9 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_mf1_block_data(self, block_start: int, block_data: bytearray):
         """
-            设置MF1的模拟卡的块数据
-        :param block_start: 开始设置块数据的位置，包含此位置
-        :param block_data: 要设置的块数据的字节缓冲区，可包含多个块数据，自动从 block_start 递增
+     (  )  Set the block data of the analog card of MF1
+        :param block_st (rt)  Start setting the location of block data, including this location
+        :param block_d (ta)  The byte buffer of the block data to be set can contain multiple block data, automatically from block_s (ar)  increment
         :return:
         """
         data = bytearray()
@@ -621,10 +621,10 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_mf1_anti_collision_res(self, sak: bytearray, atqa: bytearray, uid: bytearray):
         """
-            设置MF1的模拟卡的防冲撞资源信息
-        :param sak: sak字节
-        :param atqa: atqa数组
-        :param uid: 卡号数组
+     (  )  Set the anti-collision resource information of the MF1 analog card
+        :param  (ak)  sak bytes
+        :param a (qa)  atqa array
+        :param  (id)  card number array
         :return:
         """
         data = bytearray()
@@ -636,10 +636,10 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_slot_tag_nick_name(self, slot: SlotNumber, sense_type: TagSenseType, name: bytes):
         """
-            设置MF1的模拟卡的防冲撞资源信息
-        :param slot: 卡槽号码
-        :param sense_type: 场类型
-        :param name: 卡槽昵称
+     (  )  Set the anti-collision resource information of the MF1 analog card
+        :param s (ot)  Card slot number
+        :param sense_t (pe)  field type
+        :param n (me)  Card slot nickname
         :return:
         """
         # SlotNumber() will raise error for us if slot not in slot range
@@ -651,9 +651,9 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def get_slot_tag_nick_name(self, slot: SlotNumber, sense_type: TagSenseType):
         """
-            设置MF1的模拟卡的防冲撞资源信息
-        :param slot: 卡槽号码
-        :param sense_type: 场类型
+     (  )  Set the anti-collision resource information of the MF1 analog card
+        :param s (ot)  Card slot number
+        :param sense_t (pe)  field type
         :return:
         """
         # SlotNumber() will raise error for us if slot not in slot range
@@ -699,14 +699,14 @@ class ChameleonCMD:
 
     def update_slot_data_config(self):
         """
-            更新卡槽的配置和数据到flash中。
+     (  )  Update the configuration and data of the card slot to flash.
         :return:
         """
         return self.device.send_cmd_sync(DATA_CMD_SLOT_DATA_CONFIG_SAVE, 0x00)
 
     def enter_dfu_mode(self):
         """
-            重启进入DFU模式(bootloader)
+     (  )  Reboot into DFU mode (bootloader)
         :return:
         """
         return self.device.send_cmd_auto(DATA_CMD_ENTER_BOOTLOADER, 0x00, close=True)

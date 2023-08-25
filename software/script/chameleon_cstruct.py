@@ -77,7 +77,7 @@ def parse_mf1_detection_result(data: bytearray):
     :param data: data
     :return:
     """
-    # 转换
+    # convert
     result_list = []
     pos = 0
     while pos < len(data):
@@ -92,7 +92,7 @@ def parse_mf1_detection_result(data: bytearray):
         })
         pos += 18
 
-    # 归类
+    # classify
     result_map = {}
     for item in result_list:
         uid = item['uid']
