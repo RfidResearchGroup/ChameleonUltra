@@ -1,6 +1,6 @@
-![logo](resource/picture/Header.png)
+![logo](docs/images/ultra-logo.png)
 
-![hardware picture](resource/picture/Hardware%20Photos.png)
+![ultra picture](docs/images/ultra-overview.png)
 
 # ChameleonUltra Authorized Distributors
 
