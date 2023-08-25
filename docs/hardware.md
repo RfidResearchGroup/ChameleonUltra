@@ -26,7 +26,7 @@ The Box contains a foam pad, a USB cable that has a removable end to convert it 
 
 ![lite-box.-contents.jpg](./images/lite-box-contents.jpg)
 
-The device itself features 2 buttons labeled with arrows. The device consists of one PCB in a blue plastic housing. This one PCB contains the electronics and the HF antenna as well as the 8 LEDs indicating which slot is currently active, and the USB-C port. The LF antenna is glued onto the back of the PCB and is visible through the housing. The battery is soldered in place and the housing is held together by thin fragile pins which are easy to snap. It is not designed to be disassembled. The keychain loop is also relatively fragile, so be careful. The Chameleon Lites dimensions are: 3.6 cm x 6.1 cm x 0.8 cm```
+The device itself features 2 buttons labeled with arrows. The device consists of one PCB in a blue plastic housing. This one PCB contains the electronics and the HF antenna as well as the 8 LEDs indicating which slot is currently active, and the USB-C port. The LF antenna is glued onto the back of the PCB and is visible through the housing. The battery is soldered in place and the housing is held together by thin fragile pins which are easy to snap. It is not designed to be disassembled. The keychain loop is also relatively fragile, so be careful. The Chameleon Lites dimensions are: 3.6 cm x 6.1 cm x 0.8 cm
 
 ![lite.jpg](./images/lite.jpg)
 
