@@ -44,7 +44,7 @@ The device itself features 2 buttons labeled `A` and `B`. The device is made of 
 
 ![devkit.jpg](./images/devkit.jpg)
 
-## Whats the difference?
+## What is the difference between the Lite and the Ultra/DevKit?
 
 The Chameleon Ultra as well as the Dev Kit contain a second chip called [MFRC522 ](https://www.nxp.com/docs/en/data-sheet/MFRC522.pdf) this chip allows the Chameleon to read and write. The Chameleon Lite does not contain this chip and therefore can not rea and write, only simulate. The Chameleon Lite also swaps the big LIPO (**LI**thium **PO**lymer) battery with a smaller buttoncell. The Devkit is a Chameleon Ultra on a bigger PCB and with a bigger battery.
 
