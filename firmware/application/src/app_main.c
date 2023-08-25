@@ -565,6 +565,8 @@ static void offline_status_ok(void) {
 
 // fast detect a 14a tag uid to sim
 static void btn_fn_copy_ic_uid(void) {
+    uint8_t status;
+    uint8_t id_buffer[5] = { 0x00 };
     // get 14a tag res buffer;
     uint8_t slot_now = tag_emulation_get_slot();
     tag_specific_type_t tag_type[2];
@@ -583,8 +585,6 @@ static void btn_fn_copy_ic_uid(void) {
 
     switch (tag_type[1]) {
         case TAG_TYPE_EM410X:
-            uint8_t status;
-            uint8_t id_buffer[5] = { 0x00 };
             status = PcdScanEM410X(id_buffer);
 
             if (status == LF_TAG_OK) {
@@ -643,7 +643,6 @@ static void btn_fn_copy_ic_uid(void) {
     }
     // select a tag
     picc_14a_tag_t tag;
-    uint8_t status;
 
     status = pcd_14a_reader_scan_auto(&tag);
     if (status == HF_TAG_OK) {
