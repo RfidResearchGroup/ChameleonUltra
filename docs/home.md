@@ -10,7 +10,7 @@ This Guide is split up into multiple "subguides":
 
 - ["CLI"](./cli.md) The official way to control your Chameleon is via the **C**ommand **L**ine **I**nterface (CLI) . Learn how to install and master the CLI.
 
-- ["GUIs"](./gui.md) Some people also develop **G**raphical **U**ser **I**nterfaces (GUIs), theese may be a good start for people that dont want to deal with a CLI.
+- ["GUIs"](./gui.md) Some people also develop **G**raphical **U**ser **I**nterfaces (GUIs), theese may be a good start for people that do not want to deal with a CLI.
 
 - ["Troubleshooting"](./troubleshooting.md) For when things go wrong, here are some common tips to maybe fix whatever issue you might have.
 
