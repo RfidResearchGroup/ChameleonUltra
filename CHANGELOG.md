@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Added support for interrupting sleep sequence with a button press during animation (@doegox)
  - Fixed logs corruption and app reset on FDS write, added logs flush on sleep (@doegox)
  - Added support for long-press of buttons (@nemanjan00)
  - Changed `hw slot delete`, now it can always delete from slot. (@augustozanellato)

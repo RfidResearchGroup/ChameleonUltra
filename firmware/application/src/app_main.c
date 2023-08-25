@@ -53,6 +53,8 @@ static bool m_is_a_btn_press = false;
 static bool m_is_b_btn_release = false;
 static bool m_is_a_btn_release = false;
 
+static bool m_system_off_processing = false;
+
 // cpu reset reason
 static uint32_t m_reset_source;
 static uint32_t m_gpregret_val;
@@ -153,6 +155,12 @@ static void button_pin_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t a
  * @return None
  */
 static void timer_button_event_handle(void *arg) {
+    // if button press during shutdown, it's only to wake up quickly
+    if (m_system_off_processing) {
+        m_system_off_processing = false;
+        NRF_LOG_INFO("BUTTON press during shutdown");
+        return;
+    }
     nrf_drv_gpiote_pin_t pin = *(nrf_drv_gpiote_pin_t *)arg;
     // Check here if the current GPIO is at the pressed level
     if (nrf_gpio_pin_read(pin) == 1) {
@@ -234,25 +242,9 @@ static void button_init(void) {
  */
 static void system_off_enter(void) {
     ret_code_t ret;
-
-    // Disable the HF NFC event first
-    NRF_NFCT->INTENCLR = NRF_NFCT_DISABLE_ALL_INT;
-    // Then disable the LF LPCOMP event
-    NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
-
+    m_system_off_processing = true;
     // Save tag data
     tag_emulation_save();
-
-    // Configure RAM hibernation hold
-    uint32_t ram8_retention = // RAM8 Each section has 32KB capacity
-        // POWER_RAM_POWER_S0RETENTION_On << POWER_RAM_POWER_S0RETENTION_Pos ;
-        // POWER_RAM_POWER_S1RETENTION_On << POWER_RAM_POWER_S1RETENTION_Pos |
-        // POWER_RAM_POWER_S2RETENTION_On << POWER_RAM_POWER_S2RETENTION_Pos |
-        // POWER_RAM_POWER_S3RETENTION_On << POWER_RAM_POWER_S3RETENTION_Pos |
-        // POWER_RAM_POWER_S4RETENTION_On << POWER_RAM_POWER_S4RETENTION_Pos |
-        POWER_RAM_POWER_S5RETENTION_On << POWER_RAM_POWER_S5RETENTION_Pos;
-    ret = sd_power_ram_power_set(8, ram8_retention);
-    APP_ERROR_CHECK(ret);
 
     if (g_is_low_battery_shutdown) {
         // Don't create too complex animations, just blink LED1 three times.
@@ -283,14 +275,38 @@ static void system_off_enter(void) {
                     color = 2;
                 }
             }
-            ledblink5(color, slot, dir ? 7 : 0);
-            ledblink4(color, dir, 7, 99, 75);
-            ledblink4(color, !dir, 7, 75, 50);
-            ledblink4(color, dir, 7, 50, 25);
-            ledblink4(color, !dir, 7, 25, 0);
+            if (m_system_off_processing) ledblink5(color, slot, dir ? 7 : 0);
+            if (m_system_off_processing) ledblink4(color, dir, 7, 99, 75);
+            if (m_system_off_processing) ledblink4(color, !dir, 7, 75, 50);
+            if (m_system_off_processing) ledblink4(color, dir, 7, 50, 25);
+            if (m_system_off_processing) ledblink4(color, !dir, 7, 25, 0);
         }
         rgb_marquee_stop();
+        if (!m_system_off_processing) {
+            for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
+                nrf_gpio_pin_clear(p_led_array[i]);
+            }
+            light_up_by_slot();
+            sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
+            return;
+        }
     }
+
+    // Disable the HF NFC event first
+    NRF_NFCT->INTENCLR = NRF_NFCT_DISABLE_ALL_INT;
+    // Then disable the LF LPCOMP event
+    NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
+
+    // Configure RAM hibernation hold
+    uint32_t ram8_retention = // RAM8 Each section has 32KB capacity
+        // POWER_RAM_POWER_S0RETENTION_On << POWER_RAM_POWER_S0RETENTION_Pos ;
+        // POWER_RAM_POWER_S1RETENTION_On << POWER_RAM_POWER_S1RETENTION_Pos |
+        // POWER_RAM_POWER_S2RETENTION_On << POWER_RAM_POWER_S2RETENTION_Pos |
+        // POWER_RAM_POWER_S3RETENTION_On << POWER_RAM_POWER_S3RETENTION_Pos |
+        // POWER_RAM_POWER_S4RETENTION_On << POWER_RAM_POWER_S4RETENTION_Pos |
+        POWER_RAM_POWER_S5RETENTION_On << POWER_RAM_POWER_S5RETENTION_Pos;
+    ret = sd_power_ram_power_set(8, ram8_retention);
+    APP_ERROR_CHECK(ret);
 
     // IOs that need to be configured as floating analog inputs ==> no pull-up or pull-down
     uint32_t gpio_cfg_default_nopull[] = {

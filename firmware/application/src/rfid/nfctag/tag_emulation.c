@@ -407,6 +407,7 @@ void tag_emulation_save_config(void) {
         bool ret = fds_write_sync(FDS_EMULATION_CONFIG_FILE_ID, FDS_EMULATION_CONFIG_RECORD_KEY, sizeof(slotConfig) / 4, (uint8_t *)&slotConfig);
         if (ret) {
             NRF_LOG_INFO("Save tag slot config success.");
+            m_slot_config_crc = new_calc_crc;
         } else {
             NRF_LOG_ERROR("Save tag slot config error.");
         }
