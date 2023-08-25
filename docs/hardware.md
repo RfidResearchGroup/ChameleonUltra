@@ -18,7 +18,7 @@ The device itself features 4 screws holding it together, 2 buttons labeled `A` a
 
 ## The Lite
 
-The Chameleon Lite comes in a white box with blue printing. This box has the dimensons: 9.5cm x 6cm x 3.5cm
+The Chameleon Lite comes in a white box with blue printing. This box has the following dimensions: 9.5 cm x 6 cm x 3.5 cm
 
 ![lite-box.jpg](./images/lite-box.jpg)
 
