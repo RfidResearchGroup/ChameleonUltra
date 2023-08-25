@@ -351,6 +351,9 @@ static void system_off_enter(void) {
         return;
     };
 
+    // Last call, gate is closing
+    NRF_LOG_FLUSH();
+
     // Go to system-off mode (this function will not return; wakeup will cause a reset).
     // Note that if you insert jlink or drive a Debug, you may report an error when entering the low power consumption.
     // When starting debugging, we should disable low power consumption state values, or simply not enter low power consumption
