@@ -12,7 +12,7 @@ The Box contains a foam pad, a USB cable that has a removable end to convert it 
 
 ![box-contents.jpg](./images/ultra-box-contents.jpg)
 
-The deivce itself features 4 screws holding it together, 2 Buttons labled `A` and `B`.  The Device consists of 2 PCBs (**P**rinted **C**ircuit **B**oards) and a plastic spacer, one contains the Electronic and the HF (**H**igh **F**requency), 13.56 MHz, antenna as well as the 8 Leds indecating which is currently active and the other board contains the Chameleon Ultra Text, the screws and the LF (**L**ow **F**requency), 125KHz, antenna. The plastic spacer houses the battery as well as the ferrite pad which enables HF and LF emulation at the same time. It also has has the USB-C charging and data port and a hole for inserting the keychain loop. The Chameleon Ultras dimensions are: 2.4cm x 4cm x 8mm 
+The device itself features 4 screws holding it together, 2 buttons labeled `A` and `B`.  The device consists of 2 PCBs (**P**rinted **C**ircuit **B**oards) and a plastic spacer, one contains the Electronic and the HF (**H**igh **F**requency), 13.56 MHz, antenna as well as the 8 LEDs indicating which slot is currently active and the other board features the Chameleon Ultra text, the screws and the LF (**L**ow **F**requency), 125KHz, antenna. The plastic spacer houses the battery as well as the ferrite pad which enables HF and LF emulation at the same time. It also has has the USB-C charging and data port and a hole for inserting the keychain loop. The Chameleon Ultra dimensions are: 2.4cm x 4cm x 8mm 
 
 ![ultra.png](./images/ultra.jpg)
 
