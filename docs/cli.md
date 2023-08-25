@@ -124,8 +124,8 @@ When in the CLI, plug in your Chameleon and connect with `hw connect`. If autode
 
 In `()` is the argument description, `[]` are possible entries for that argument (eg `[1-8]`)
 
-| Command ID | Command          | Arguments                                                                 | Description                               |
-|:----------:|:----------------:|:-------------------------------------------------------------------------:|:-----------------------------------------:|
-| 1020       | `hw factory_reset` | `--i-know-what-im-doing` (Make sure you really want to wipe your Chameleon) | Returns the Chameleon to factory settings |
-|            |                  |                                                                           |                                           |
-|            |                  |                                                                           |                                           |
+| Command          | Arguments                                                                 | Description                               |
+|:----------------:|:-------------------------------------------------------------------------:|:-----------------------------------------:|
+| `hw factory_reset` | `--i-know-what-im-doing` (Make sure you really want to wipe your Chameleon) | Returns the Chameleon to factory settings |
+|                  |                                                                           |                                           |
+|                  |                                                                           |                                           |
