@@ -10,21 +10,21 @@ There are multiple ways to install the CLI, depending on your OS.
 
 Windows users have the choice of 4 options:
 
-#### Proxspace
+#### ProxSpace
 
-Using Proxspace to build the CLI is the easiest and most comfortable way to get started.
+Using ProxSpace to build the CLI is the easiest and most comfortable way to get started.
 
-1. Download proxspace from the [official github](https://github.com/Gator96100/ProxSpace/releases/latest)
+1. Download ProxSpace from the [official GitHub](https://github.com/Gator96100/ProxSpace/releases/latest)
 
 2. [Download 7zip](https://www.7-zip.org/) to extract the archive
 
 3. Install 7zip by double clicking the Installer and clicking `Install`
 
-4. Rightclick on the downloaded archive and select `7zip -> Unpack to "ProxSpace"`
+4. Right-click on the downloaded archive and select `7zip -> Unpack to "ProxSpace"`
 
-5. Open a terminal in the proxspace folder. If your on a new windows install you should be able to just rightclick and select `Open in Terminal`. If that option is not visible and the ProxSpace folder is still in your downloads folder, press `win+r` and type `powershell` followed by enter. In Powershell now type `cd ~/Downloads/ProxSpace`
+5. Open a terminal in the proxspace folder. If you are on a new Windows install, you should be able to just right-click and select `Open in Terminal`. If that option is not visible and the ProxSpace folder is still in your downloads folder, press `win+r` and type `powershell` followed by enter. In Powershell now type `cd ~/Downloads/ProxSpace`
 
-6. Run the command `.\runme64.bat`. After succesfull completion you should be dropped to the `pm3 ~ $` shell.
+6. Run the command `.\runme64.bat`. After successful completion, you should be dropped to the `pm3 ~ $` shell.
 
 7. Clone the Repository by typing `git clone https://github.com/RfidResearchGroup/ChameleonUltra.git`
 
@@ -62,23 +62,23 @@ Coming Soon
 
 Coming Soon
 
-#### Build Nativly
+#### Build Natively
 
-Building Nativly is a bit more advanced and not recommended for beginners
+Building natively is a bit more advanced and not recommended for beginners
 
 1. Download and install [Visual Studio Community](https://visualstudio.microsoft.com/de/downloads/)
 
-2. On the workload selection screen choose the `Desktop development with C++` workload. Click `Download and Install`
+2. On the workload selection screen, choose the `Desktop development with C++` workload. Click `Download and Install`
 
-3. Download and install [git](https://git-scm.com/download), when asked, add to your path
+3. Download and install [git](https://git-scm.com/download). When asked, add to your path
 
-4. Download and install [cmake](https://cmake.org/download/), again, when asked, add to your path
+4. Download and install [cmake](https://cmake.org/download/). Again, when asked, add to your path
 
-5. Download and install [python](https://www.python.org/downloads/), when asked, add to your path (small checkbox in the bottom left)
+5. Download and install [python](https://www.python.org/downloads/). When asked, add to your path (small checkbox in the bottom left)
 
 6. Choose a suitable location and open a terminal. Clone the repository with `git clone https://github.com/RfidResearchGroup/ChameleonUltra.git`
 
-7. Change into the binarys folder with `cd ChameleonUltra/software/src`
+7. Change into the binaries folder with `cd ChameleonUltra/software/src`
 
 8. Build the required config by running `cmake .`
 
@@ -88,7 +88,7 @@ Building Nativly is a bit more advanced and not recommended for beginners
 
 11. Go into the script folder with `cd ../script/`
 
-12. Create a python virtual enviroment with `python -m venv venv`
+12. Create a python virtual environment with `python -m venv venv`
 
 13. Activate it by running `.\venv\Scripts\Activate.ps1`
 
@@ -104,28 +104,28 @@ To run again after installing, just do the following:
 
 ### Linux
 
-Coming Soon
+*Coming Soon*
 
 ### MacOS
 
-Coming Soon
+*Coming Soon*
 
 ## Usage
 
-When in the CLI, plug in your chameleon and connect with `hw connect`. If this fails, get the Serial Port used by your Chameleon and run `hw connect -p COM11` (Replace `COM11` with your serial port, on linux it may be `/dev/ttyacm0`)
+When in the CLI, plug in your Chameleon and connect with `hw connect`. If autodetection fails, get the Serial Port used by your Chameleon and run `hw connect -p COM11` (Replace `COM11` with your serial port, on Linux it may be `/dev/ttyACM0`)
 
-### Common activites:
+### Common activities
 
 - Change slot: hw slot change -s [1-8]
 
-- More examples coming soon
+*More examples coming soon*
 
-### Available Commands:
+### Available Commands
 
 In `()` is the argument description, `[]` are possible entries for that argument (eg `[1-8]`)
 
 | Command ID | Command          | Arguments                                                                 | Description                               |
 |:----------:|:----------------:|:-------------------------------------------------------------------------:|:-----------------------------------------:|
-| 1020       | hw factory_reset | --i-know-what-im-doing (Make sure you really want to wipe your chameleon) | Returns the Chameleon To factory settings |
+| 1020       | `hw factory_reset` | `--i-know-what-im-doing` (Make sure you really want to wipe your Chameleon) | Returns the Chameleon to factory settings |
 |            |                  |                                                                           |                                           |
 |            |                  |                                                                           |                                           |
