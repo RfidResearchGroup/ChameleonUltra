@@ -61,11 +61,11 @@ void settings_migrate(void) {
         case 2:
             settings_init_button_long_press_config();
 
-        /*
-         * Add new migration steps ABOVE THIS COMMENT
-         * `settings_update_version_for_config()` and `break` statements should only be used on the last migration step, all the previous steps must fall
-         * through to the next case.
-         */
+            /*
+             * Add new migration steps ABOVE THIS COMMENT
+             * `settings_update_version_for_config()` and `break` statements should only be used on the last migration step, all the previous steps must fall
+             * through to the next case.
+             */
 
             settings_update_version_for_config();
             break;

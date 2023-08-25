@@ -697,7 +697,7 @@ static void button_press_process(void) {
     // Make sure that one of the AB buttons has a click event
     if (m_is_b_btn_release || m_is_a_btn_release) {
         if (m_is_a_btn_release) {
-            if(!m_is_btn_long_press) {
+            if (!m_is_btn_long_press) {
                 run_button_function_by_settings(settings_get_button_press_config('a'));
             } else {
                 run_button_function_by_settings(settings_get_long_button_press_config('a'));
@@ -705,7 +705,7 @@ static void button_press_process(void) {
             m_is_a_btn_release = false;
         }
         if (m_is_b_btn_release) {
-            if(!m_is_btn_long_press) {
+            if (!m_is_btn_long_press) {
                 run_button_function_by_settings(settings_get_button_press_config('b'));
             } else {
                 run_button_function_by_settings(settings_get_long_button_press_config('b'));

@@ -46,8 +46,8 @@ typedef struct ALIGN_U32 {
 
     /*
      * Warnning !!!!!!!!!!!!!!!!!!!!!! <-------------
-     * If you need to add settings, 
-     * please be sure to consult the documentation of the bit field 
+     * If you need to add settings,
+     * please be sure to consult the documentation of the bit field
      * and fully use the space of this structure before considering reallocating memory space.
      */
 } settings_data_t;
