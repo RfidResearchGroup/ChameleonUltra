@@ -1279,7 +1279,8 @@ class HWFactoryReset(DeviceRequiredUnit):
         resp = self.cmd.factory_reset()
         if resp.status == chameleon_status.Device.STATUS_DEVICE_SUCCESS:
             print(" - Reset successful! Please reconnect.")
-            print(" - A Serial Error below is normal, please ignore it")
+            # let time for comm thread to close port
+            time.sleep(0.1)
         else:
             print(" - Reset failed!")
 
@@ -1293,10 +1294,10 @@ class HWBatteryInfo(DeviceRequiredUnit):
         return None
 
     def on_exec(self, args: argparse.Namespace):
-        resp = self.cmd.battery_informartion()
+        resp = self.cmd.battery_information()
         voltage =  int.from_bytes(resp.data[:2], 'big')
         percentage = resp.data[2]
-        print(" - Battery informartion:")
+        print(" - Battery information:")
         print(f"   voltage    -> {voltage}mV")
         print(f"   percentage -> {percentage}%")
         if percentage < HWBatteryInfo.BATTERY_LOW_LEVEL:

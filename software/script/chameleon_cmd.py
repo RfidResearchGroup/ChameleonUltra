@@ -745,10 +745,12 @@ class ChameleonCMD:
         """
         Reset to factory settings
         """
-        return self.device.send_cmd_sync(DATA_CMD_WIPE_FDS, 0x00)
+        ret = self.device.send_cmd_sync(DATA_CMD_WIPE_FDS, 0x00)
+        self.device.close()
+        return ret
 
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
-    def battery_informartion(self):
+    def battery_information(self):
         """
         Get battery info
         """
