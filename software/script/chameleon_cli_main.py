@@ -97,14 +97,20 @@ class ChameleonCLI:
 
         self.print_banner()
         closing = False
+        cmd_strs = []
         while True:
-            # wait user input
-            try:
-                cmd_str = self.session.prompt(ANSI(self.get_prompt())).strip()
-            except EOFError:
-                closing = True
-            except KeyboardInterrupt:
-                closing = True
+            if cmd_strs:
+                cmd_str = cmd_strs.pop(0)
+            else:
+                # wait user input
+                try:
+                    cmd_str = self.session.prompt(ANSI(self.get_prompt())).strip()
+                except EOFError:
+                    closing = True
+                except KeyboardInterrupt:
+                    closing = True
+                cmd_strs = cmd_str.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+                cmd_str = cmd_strs.pop(0)
 
             if closing or cmd_str in ["exit", "quit", "q", "e"]:
                 print("Bye, thank you.  ^.^ ")
