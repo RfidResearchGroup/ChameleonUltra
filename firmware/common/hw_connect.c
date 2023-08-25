@@ -96,11 +96,11 @@ void board_lite_high_voltage_set(void) {
 
 void hw_connect_init(void) {
 #if defined(PROJECT_CHAMELEON_LITE)
-    board_lite_high_voltage_set();  // lite需要关闭dcdc并且抬高内核电压
+    board_lite_high_voltage_set();  // lite needs to turn off dcdc and raise the core voltage
 #endif
 
-    // TODO 请实现此处，实现硬件版本号的读取
-    // 测试的时候可以直接改写此版本号
+    // TODO: Please implement here to read the hardware version number
+    // You can directly rewrite this version number when testing
     m_hw_ver = 1;
 
 
@@ -210,31 +210,31 @@ uint8_t hw_get_version_code(void) {
     return m_hw_ver;
 }
 
-// 初始化设备的LED灯珠
+// Initialize the LED light beads of the device
 void init_leds(void) {
     uint32_t *led_pins = hw_get_led_array();
     uint32_t *led_rgb_pins = hw_get_rgb_array();
 
-    // 初始化卡槽那几颗LED灯的GPIO（其他的LED由其他的模块控制）
+    // Initialize the GPIO of the LED lights in the card slot (other LEDs are controlled by other modules)
     for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
         nrf_gpio_cfg_output(led_pins[i]);
         nrf_gpio_pin_clear(led_pins[i]);
     }
 
-    // 初始化RGB脚
+    // Initialize RGB pin
     for (uint8_t i = 0; i < RGB_CTRL_NUM; i++) {
         nrf_gpio_cfg_output(led_rgb_pins[i]);
         nrf_gpio_pin_set(led_rgb_pins[i]);
     }
 
-    // 设置FIELD LED脚为输出且灭掉场灯
+    // set FIELD The LED pin is output and the field light is turned off
     nrf_gpio_cfg_output(LED_FIELD);
     TAG_FIELD_LED_OFF()
 }
 
 /**
  * @brief Function for enter tag emulation mode
- * @param color: 0 表示r, 1表示g, 2表示b
+ * @param color: 0 means r, 1 means g, 2 means b
  */
 void set_slot_light_color(uint8_t color) {
     nrf_gpio_pin_set(LED_R);

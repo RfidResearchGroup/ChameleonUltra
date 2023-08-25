@@ -85,7 +85,7 @@ extern uint32_t g_reader_power;
 #endif
 
 
-// 通用场灯的操作定义
+// Operational Definitions for General Field Lights
 #define TAG_FIELD_LED_ON()     nrf_gpio_pin_clear(LED_FIELD);
 #define TAG_FIELD_LED_OFF()    nrf_gpio_pin_set(LED_FIELD);
 

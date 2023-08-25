@@ -386,13 +386,13 @@ static bool dfu_enter_check(void)
        (nrf_gpio_pin_read(NRF_BL_DFU_ENTER_METHOD_BUTTON_PIN) == 1))
     {
         bool is_usb_attach = false;
-        // 如果按钮一直是按下的状态，则等待用户释放按钮，期间检测USB插入，如果是插入状态，则进入DFU模式
+        // If the button is always pressed, wait for the user to release the button, during which the USB plug-in is detected, and if it is plugged in, enter the DFU mode
         while (nrf_gpio_pin_read(NRF_BL_DFU_ENTER_METHOD_BUTTON_PIN) == 1) {
             is_usb_attach = check_usb_attach();
         }
         NRF_LOG_DEBUG("DFU mode requested via button.");
-        // 按钮按下，但是USB没插入，则进入普通APP模式，
-        // 按钮按下，并且USB插入，则进入bootloader模式
+        // When the button is pressed, but the USB is not plugged in, it will enter the normal APP mode.
+        // When the button is pressed and the USB is plugged in, it enters the bootloader mode
         return is_usb_attach;
     }
 
