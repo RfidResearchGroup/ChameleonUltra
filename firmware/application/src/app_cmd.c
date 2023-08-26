@@ -83,8 +83,12 @@ data_frame_tx_t *cmd_processor_get_device_chip_id(uint16_t cmd, uint16_t status,
 
 data_frame_tx_t *cmd_processor_get_device_address(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint32_t device_address[2];
+    // The FICR value is a just a random number, with no knowledge
+    // of the Bluetooth Specification requirements for random addresses.
+    // So we need to set a Bluetooth LE random address as a static address.
+    // See: https://github.com/zephyrproject-rtos/zephyr/blob/7b6b1328a0cb96fe313a5e2bfc57047471df236e/subsys/bluetooth/controller/hci/nordic/hci_vendor.c#L29
     device_address[0] = NRF_FICR->DEVICEADDR[0];
-    device_address[1] = NRF_FICR->DEVICEADDR[1];
+    device_address[1] = NRF_FICR->DEVICEADDR[1] | 0xC000;
     return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 6, (uint8_t *)(&device_address[0]));
 }
 
