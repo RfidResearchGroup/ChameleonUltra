@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Fixed argument completion bug inserting additional hyphens (@szymex73)
  - Added initial version of the user guides (@GameTec-live)
  - Added support for pasting several command lines at once with prompt_toolkit (@doegox)
  - Added support for interrupting sleep sequence with a button press during animation (@doegox)
