@@ -256,7 +256,7 @@ uint16_t pcd_14a_reader_timeout_get() {
 * @retval : Status value mi_ok, successful
 */
 uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command, uint8_t *pIn, uint8_t  InLenByte, uint8_t *pOut, uint16_t *pOutLenBit, uint16_t maxOutLenBit) {
-    uint8_t status      = HF_ERRSTAT;
+    uint8_t status      = HF_ERR_STAT;
     uint8_t waitFor     = 0x00;
     uint8_t lastBits    = 0;
     uint8_t n           = 0;
@@ -315,24 +315,24 @@ uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command, uint8_t *pIn, uint8_t  In
             if (pcd_err_val & 0x01) {               // ProtocolErr Error only appears in the following two cases:
                 if (Command == PCD_AUTHENT) {       // During the execution of the MFAUTHENT command, if the number of bytes received by a data stream, the position of the place
                     // Therefore, we need to deal with it well, assuming that there are problems during the verification process, then we need to think that this is normal
-                    status = MF_ERRAUTH;
+                    status = MF_ERR_AUTH;
                 } else {                            // If the SOF is wrong, the position is set up and the receiver is automatically cleared during the start -up stage, which is effective at the rate of 106kbd
                     NRF_LOG_INFO("Protocol error\n");
-                    status = HF_ERRSTAT;
+                    status = HF_ERR_STAT;
                 }
             } else if (pcd_err_val & 0x02) {
                 // Detecting whether there are even strange errors
                 NRF_LOG_INFO("Parity error\n");
-                status = HF_ERRPARITY;
+                status = HF_ERR_PARITY;
             } else if (pcd_err_val & 0x04) {        // Detect whether there are CRC errors
                 NRF_LOG_INFO("CRC error\n");
-                status = HF_ERRCRC;
+                status = HF_ERR_CRC;
             } else if (pcd_err_val & 0x08) {        // There is a conflict to detect the label
                 NRF_LOG_INFO("Collision tag\n");
                 status = HF_COLLISION;
             } else {                                // There are other unrepaired abnormalities
                 NRF_LOG_INFO("HF error: 0x%0x2\n", pcd_err_val);
-                status = HF_ERRSTAT;
+                status = HF_ERR_STAT;
             }
         } else {
             // Occasionally occur
@@ -356,7 +356,7 @@ uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command, uint8_t *pIn, uint8_t  In
                     // We can't pass the problem with problems, which is meaningless for the time being
                     *pOutLenBit = 0;
                     // Since there is a problem with the data, let's notify the upper layer and inform me
-                    status = HF_ERRSTAT;
+                    status = HF_ERR_STAT;
                 }
             } else {
                 // Non -transmitted instructions, the execution is completed without errors and considered success!
@@ -464,7 +464,7 @@ uint8_t pcd_14a_reader_bits_transfer(uint8_t *pTx, uint16_t  szTxBits, uint8_t *
             NRF_LOG_INFO("pcd_14a_reader_bits_transfer decode parity data overflow: %d, max = %d\n", *pRxLenBit, szRxLenBitMax);
             // There must be an overflow here, and the length of the data that is valid is reset to avoid misjudgment from external calls.
             *pRxLenBit = 0;
-            return HF_ERRSTAT;
+            return HF_ERR_STAT;
         }
 
         // The process of the separation and dissection process of the unprecedented verification and the data
@@ -545,7 +545,7 @@ uint8_t pcd_14a_reader_scan_once(picc_14a_tag_t *tag) {
         uint8_t bcc = sel_uid[2] ^ sel_uid[3] ^ sel_uid[4] ^ sel_uid[5]; // calculate BCC
         if (sel_uid[6] != bcc) {
             NRF_LOG_INFO("BCC%d incorrect, got 0x%02x, expected 0x%02x\n", cascade_level, sel_uid[6], bcc);
-            return HF_ERRBCC;
+            return HF_ERR_BCC;
         }
 
         crc_14a_append(sel_uid, 7); // calculate and add CRC
@@ -554,7 +554,7 @@ uint8_t pcd_14a_reader_scan_once(picc_14a_tag_t *tag) {
         status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, sel_uid, sizeof(sel_uid), resp, &len, U8ARR_BIT_LEN(resp));
         if (status != HF_TAG_OK) {
             NRF_LOG_INFO("Err at sak receive.\n");
-            return HF_ERRSTAT;
+            return HF_ERR_STAT;
         }
 
         // Sak received by buffer
@@ -680,7 +680,7 @@ uint8_t pcd_14a_reader_gen1a_unlock(void) {
     status = pcd_14a_reader_bits_transfer(&unlock, 7, NULL, recvbuf, NULL, &rx_length, U8ARR_BIT_LEN(recvbuf));
     if (!(status == HF_TAG_OK && rx_length == 4 && recvbuf[0] == 0x0A)) {
         NRF_LOG_INFO("UNLOCK(MAGICWUPC1) FAILED! Length: %d, Status: %02x\n", rx_length, status);
-        return HF_ERRSTAT;
+        return HF_ERR_STAT;
     }
 
     // Step in the second step, send a complete byte 0x43
@@ -688,7 +688,7 @@ uint8_t pcd_14a_reader_gen1a_unlock(void) {
     status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, &unlock, 1, recvbuf, &rx_length, U8ARR_BIT_LEN(recvbuf));
     if (!(status == HF_TAG_OK && rx_length == 4 && recvbuf[0] == 0x0A)) {
         NRF_LOG_INFO("UNLOCK(MAGICWUPC2) FAILED! Length: %d, Status: %02x\n", rx_length, status);
-        return HF_ERRSTAT;
+        return HF_ERR_STAT;
     }
 
     // There is no problem with unlocking twice. We default this unlock operation successfully!
@@ -722,13 +722,13 @@ uint8_t pcd_14a_reader_gen1a_uplock(void) {
     status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, uplock_1, sizeof(uplock_1), recvbuf, &rx_length, U8ARR_BIT_LEN(recvbuf));
     if (!(status == HF_TAG_OK && rx_length == 4 && recvbuf[0] == 0x0A)) {
         NRF_LOG_INFO("UPLOCK1(UFUID) FAILED!\n");
-        return HF_ERRSTAT;
+        return HF_ERR_STAT;
     }
 
     status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, uplock_2, sizeof(uplock_2), recvbuf, &rx_length, U8ARR_BIT_LEN(recvbuf));
     if (!(status == HF_TAG_OK && rx_length == 4 && recvbuf[0] == 0x0A)) {
         NRF_LOG_INFO("UPLOCK2(UFUID) FAILED!\n");
-        return HF_ERRSTAT;
+        return HF_ERR_STAT;
     }
 
     // Successful card sealing
@@ -761,7 +761,7 @@ uint8_t pcd_14a_reader_mf1_auth(picc_14a_tag_t *tag, uint8_t type, uint8_t addr,
     }
 
     // Other situations are considered failure!
-    return MF_ERRAUTH;
+    return MF_ERR_AUTH;
 }
 
 /**
@@ -795,7 +795,7 @@ uint8_t pcd_14a_reader_mf1_read_by_cmd(uint8_t cmd, uint8_t addr, uint8_t *p) {
             crc_14a_calculate(dat_buff, 16, crc_buff);
             // Check the CRC to avoid data errors
             if ((crc_buff[0] != dat_buff[16]) || (crc_buff[1] != dat_buff[17])) {
-                status = HF_ERRCRC;
+                status = HF_ERR_CRC;
             }
             // Although CRC After checking the problem, but we can still pass back
             // Read the card data, because developers may have special usage
@@ -803,7 +803,7 @@ uint8_t pcd_14a_reader_mf1_read_by_cmd(uint8_t cmd, uint8_t addr, uint8_t *p) {
         } else {
             // The data passed back is wrong, which may be an environmental factors or cards that do not comply with specifications!
             // Or the control bit affects reading!
-            status = HF_ERRSTAT;
+            status = HF_ERR_STAT;
         }
     }
     return status;
@@ -847,7 +847,7 @@ uint8_t pcd_14a_reader_mf1_write_by_cmd(uint8_t cmd, uint8_t addr, uint8_t *p) {
     // The communication was successful, but the operation was rejected by the card!
     if ((dat_len != 4) || ((dat_buff[0] & 0x0F) != 0x0A)) {
         // NRF_LOG_INFO("1 status = %d, datalen = %d, data = %02x\n", status, dat_len, dat_buff[0]);
-        status = HF_ERRSTAT;
+        status = HF_ERR_STAT;
     }
     // The communication was successful, the card accepted the card writing operation
     if (status == HF_TAG_OK) {
@@ -868,7 +868,7 @@ uint8_t pcd_14a_reader_mf1_write_by_cmd(uint8_t cmd, uint8_t addr, uint8_t *p) {
         // And reply ACK
         if ((dat_len != 4) || ((dat_buff[0] & 0x0F) != 0x0A)) {
             // NRF_LOG_INFO("2 status = %d, datalen = %d, data = %02x\n", status, dat_len, dat_buff[0]);
-            status = HF_ERRSTAT;
+            status = HF_ERR_STAT;
         }
     }
     return status;

@@ -7,12 +7,12 @@
 /////////////////////////////////////////////////////////////////////
 #define     HF_TAG_OK                               (0x00) // IC card operation successfully
 #define     HF_TAG_NO                               (0x01) // No IC card found
-#define     HF_ERRSTAT                              (0x02) // IC cartoon letter abnormal
-#define     HF_ERRCRC                               (0x03) // IC Card communication verification abnormality
+#define     HF_ERR_STAT                              (0x02) // IC cartoon letter abnormal
+#define     HF_ERR_CRC                               (0x03) // IC Card communication verification abnormality
 #define     HF_COLLISION                            (0x04) // IC card conflict
-#define     HF_ERRBCC                               (0x05) // IC card BCC error
-#define     MF_ERRAUTH                              (0x06) // MF card verification failed
-#define     HF_ERRPARITY                            (0x07) // ica Kazi even verification error
+#define     HF_ERR_BCC                               (0x05) // IC card BCC error
+#define     MF_ERR_AUTH                              (0x06) // MF card verification failed
+#define     HF_ERR_PARITY                            (0x07) // ica Kazi even verification error
 
 
 /////////////////////////////////////////////////////////////////////

@@ -1,8 +1,8 @@
 import argparse
 from functools import wraps
-from typing import Iterable, Union
+from typing import Union
 from prompt_toolkit.completion import Completer, NestedCompleter, WordCompleter
-from prompt_toolkit.completion.base import CompleteEvent, Completion
+from prompt_toolkit.completion.base import Completion
 from prompt_toolkit.document import Document
 
 import chameleon_status
@@ -73,40 +73,40 @@ class CLITree:
     Class holding a
 
     :param name: Name of the command (e.g. "set")
-    :param helptext: Hint displayed for the command
+    :param help_text: Hint displayed for the command
     :param fullname: Full name of the command that includes previous commands (e.g. "hw mode set")
     :param cls: A BaseCLIUnit instance handling the command
     """
 
-    def __init__(self, name=None, helptext=None, fullname=None, children=None, cls=None) -> None:
+    def __init__(self, name=None, help_text=None, fullname=None, children=None, cls=None) -> None:
         self.name: str = name
-        self.helptext: str = helptext
+        self.help_text: str = help_text
         self.fullname: str = fullname if fullname else name
         self.children: list[CLITree] = children if children else list()
         self.cls = cls
 
-    def subgroup(self, name, helptext=None):
+    def subgroup(self, name, help_text=None):
         """
         Create a child command group
 
         :param name: Name of the command group
-        :param helptext: Hint displayed for the group
+        :param help_text: Hint displayed for the group
         """
         child = CLITree(
-            name=name, fullname=f'{self.fullname} {name}', helptext=helptext)
+            name=name, fullname=f'{self.fullname} {name}', help_text=help_text)
         self.children.append(child)
         return child
 
-    def command(self, name, helptext=None):
+    def command(self, name, help_text=None):
         """
         Create a child command
 
         :param name: Name of the command
-        :param helptext: Hint displayed for the command
+        :param help_text: Hint displayed for the command
         """
         def decorator(cls):
             self.children.append(
-                CLITree(name=name, fullname=f'{self.fullname} {name}', helptext=helptext, cls=cls))
+                CLITree(name=name, fullname=f'{self.fullname} {name}', help_text=help_text, cls=cls))
             return cls
         return decorator
 
@@ -145,7 +145,7 @@ class CustomNestedCompleter(NestedCompleter):
                 else:
                     # CLITree is a command group
                     options[key] = cls.from_clitree(value)
-                    meta_dict[key] = value.helptext
+                    meta_dict[key] = value.help_text
             else:
                 assert value is None
                 options[key] = None
@@ -164,7 +164,7 @@ class CustomNestedCompleter(NestedCompleter):
             else:
                 # CLITree is a command group
                 options[child_node.name] = cls.from_clitree(child_node)
-                meta_dict[child_node.name] = child_node.helptext
+                meta_dict[child_node.name] = child_node.help_text
 
         return cls(options, meta_dict=meta_dict)
 
@@ -173,15 +173,14 @@ class CustomNestedCompleter(NestedCompleter):
         text = document.text_before_cursor.lstrip()
         stripped_len = len(document.text_before_cursor) - len(text)
 
-        # If there is a space, check for the first term, and use a
-        # subcompleter.
+        # If there is a space, check for the first term, and use a sub_completer.
         if " " in text:
             first_term = text.split()[0]
             completer = self.options.get(first_term)
 
             # If we have a sub completer, use this for the completions.
             if completer is not None:
-                remaining_text = text[len(first_term) :].lstrip()
+                remaining_text = text[len(first_term):].lstrip()
                 move_cursor = len(text) - len(remaining_text) + stripped_len
 
                 new_document = Document(
@@ -211,6 +210,7 @@ class ArgparseCompleter(Completer):
 
     def check_tokens(self, parsed, unparsed):
         suggestions = {}
+
         def check_arg(tokens):
             return tokens and tokens[0].startswith('-')
 

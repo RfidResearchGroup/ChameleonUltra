@@ -81,7 +81,7 @@ class ChameleonCom:
             except Exception:
                 # not all serial support dtr, e.g. virtual serial over BLE
                 pass
-            self.serial_instance.timeout = 0  # noblock
+            self.serial_instance.timeout = 0  # do not block
             # clear variable
             self.send_data_queue.queue.clear()
             self.wait_response_map.clear()

@@ -176,7 +176,7 @@ class MifareClassicWriteMode(enum.IntEnum):
     # Normal write
     NORMAL = 0
     # Send NACK to write attempts
-    DEINED = 1
+    DENIED = 1
     # Acknowledge writes, but don't remember contents
     DECEIVE = 2
     # Store data to RAM, but not to ROM
@@ -189,8 +189,8 @@ class MifareClassicWriteMode(enum.IntEnum):
     def __str__(self):
         if self == MifareClassicWriteMode.NORMAL:
             return "Normal"
-        elif self == MifareClassicWriteMode.DEINED:
-            return "Deined"
+        elif self == MifareClassicWriteMode.DENIED:
+            return "Denied"
         elif self == MifareClassicWriteMode.DECEIVE:
             return "Deceive"
         elif self == MifareClassicWriteMode.SHADOW:
@@ -396,7 +396,7 @@ class ChameleonCMD:
 
     @expect_response([
         chameleon_status.Device.HF_TAG_OK,
-        chameleon_status.Device.MF_ERRAUTH,
+        chameleon_status.Device.MF_ERR_AUTH,
     ])
     def auth_mf1_key(self, block, type_value, key):
         """
@@ -415,7 +415,7 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def read_mf1_block(self, block, type_value, key):
         """
-        read mf1 monoblock
+        read one mf1 block
         :param block:
         :param type_value:
         :param key:

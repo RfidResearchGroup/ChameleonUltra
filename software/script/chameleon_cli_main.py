@@ -129,7 +129,7 @@ class ChameleonCLI:
                 print("".ljust(18, "-") + "".ljust(10) + "".ljust(30, "-"))
                 for cmd_name, cmd_node in chameleon_cli_unit.root_commands.items():
                     cmd_title = f"{colorama.Fore.GREEN}{cmd_name}{colorama.Style.RESET_ALL}"
-                    help_line = (f" - {cmd_title}".ljust(37)) + f"[ {cmd_node.helptext} ]"
+                    help_line = (f" - {cmd_title}".ljust(37)) + f"[ {cmd_node.help_text} ]"
                     print(help_line)
                 continue
 
@@ -140,7 +140,7 @@ class ChameleonCLI:
                 print("".ljust(18, "-") + "".ljust(10) + "".ljust(30, "-"))
                 for child in tree_node.children:
                     cmd_title = f"{colorama.Fore.GREEN}{child.name}{colorama.Style.RESET_ALL}"
-                    help_line = (f" - {cmd_title}".ljust(37)) + f"[ {child.helptext} ]"
+                    help_line = (f" - {cmd_title}".ljust(37)) + f"[ {child.help_text} ]"
                     print(help_line)
                 continue
 

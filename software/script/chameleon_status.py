@@ -16,12 +16,12 @@ class MetaDevice(type):
 class Device(metaclass=MetaDevice):
     HF_TAG_OK = 0x00     # IC card operation is successful
     HF_TAG_NO = 0x01     # IC card not found
-    HF_ERRSTAT = 0x02    # Abnormal IC card communication
-    HF_ERRCRC = 0x03     # IC card communication verification abnormal
+    HF_ERR_STAT = 0x02    # Abnormal IC card communication
+    HF_ERR_CRC = 0x03     # IC card communication verification abnormal
     HF_COLLISION = 0x04  # IC card conflict
-    HF_ERRBCC = 0x05     # IC card BCC error
-    MF_ERRAUTH = 0x06    # MF card verification failed
-    HF_ERRPARITY = 0x07  # IC card parity error
+    HF_ERR_BCC = 0x05     # IC card BCC error
+    MF_ERR_AUTH = 0x06    # MF card verification failed
+    HF_ERR_PARITY = 0x07  # IC card parity error
 
     # Darkside, the random number cannot be fixed, this situation may appear on the UID card
     DARKSIDE_CANT_FIXED_NT = 0x20
@@ -57,12 +57,12 @@ class Device(metaclass=MetaDevice):
 message = {
     Device.HF_TAG_OK: "HF tag operation succeeded",
     Device.HF_TAG_NO: "HF tag no found or lost",
-    Device.HF_ERRSTAT: "HF tag status error",
-    Device.HF_ERRCRC: "HF tag data crc error",
+    Device.HF_ERR_STAT: "HF tag status error",
+    Device.HF_ERR_CRC: "HF tag data crc error",
     Device.HF_COLLISION: "HF tag collision",
-    Device.HF_ERRBCC: "HF tag uid bcc error",
-    Device.MF_ERRAUTH: "HF tag auth fail",
-    Device.HF_ERRPARITY: "HF tag data parity error",
+    Device.HF_ERR_BCC: "HF tag uid bcc error",
+    Device.MF_ERR_AUTH: "HF tag auth fail",
+    Device.HF_ERR_PARITY: "HF tag data parity error",
 
     Device.DARKSIDE_CANT_FIXED_NT: "Darkside Can't select a nt(PRNG is unpredictable)",
     Device.DARKSIDE_LUCK_AUTH_OK: "Darkside try to recover a default key",

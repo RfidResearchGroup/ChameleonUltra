@@ -181,7 +181,7 @@ int authex(struct Crypto1State *pcs, uint32_t uid, uint8_t blockNo, uint8_t keyT
     len = sendcmd(pcs, isNested, keyType, blockNo, &status, answer, parity, U8ARR_BIT_LEN(answer));
     if (len != 32) {
         NRF_LOG_INFO("No 32 data recv on sendcmd: %d\r\n", len);
-        return HF_ERRSTAT;
+        return HF_ERR_STAT;
     }
 
     // Save the tag nonce (nt)
@@ -232,12 +232,12 @@ int authex(struct Crypto1State *pcs, uint32_t uid, uint8_t blockNo, uint8_t keyT
             return HF_TAG_OK;
         } else {
             // fail
-            return MF_ERRAUTH;
+            return MF_ERR_AUTH;
         }
     }
 
     // fail!
-    return MF_ERRAUTH;
+    return MF_ERR_AUTH;
 }
 
 /**
@@ -282,7 +282,7 @@ uint8_t Darkside_Select_Nonces(picc_14a_tag_t *tag, uint8_t block, uint8_t keyty
         // After finding the card, start collecting random numbers
         if (status != HF_TAG_OK || len != 32) {
             NRF_LOG_INFO("Get nt failed.\n");
-            return HF_ERRSTAT;
+            return HF_ERR_STAT;
         }
         // Converted to the type of U32 and cache
         nt_list[i] = bytes_to_num(tag_resp, 4);
@@ -423,7 +423,7 @@ uint8_t Darkside_Recover_Key(uint8_t targetBlk, uint8_t targetTyp,
         // After finding the card, start collecting random numbers
         if (status != HF_TAG_OK || len != 32) {
             NRF_LOG_INFO("Get nt failed.\n");
-            return HF_ERRSTAT;
+            return HF_ERR_STAT;
         }
 
         //The byte array of the conversion response is 10 in NT
@@ -580,7 +580,7 @@ uint8_t Check_Tag_Response_NT(picc_14a_tag_t *tag, uint32_t *nt) {
     *nt = sendcmd(pcs, AUTH_FIRST, PICC_AUTHENT1A, 0x03, &status, dat_recv, par_recv, U8ARR_BIT_LEN(dat_recv));
     if (*nt != 32) {
         // dbg_block_printf("No 32 data recv on sendcmd: %d\n", *nt);
-        return HF_ERRSTAT;
+        return HF_ERR_STAT;
     }
     *nt = bytes_to_num(dat_recv, 4);
     return HF_TAG_OK;
@@ -772,12 +772,12 @@ uint8_t Measure_Distance(uint64_t u64Key, uint8_t block, uint8_t type, uint32_t 
         // Perform the first verification in order to obtain the unblocked NT1
         if (authex(pcs, uid, block, type, u64Key, AUTH_FIRST, &nt1) != HF_TAG_OK) {
             NRF_LOG_INFO("Auth failed 1\r\n");
-            return MF_ERRAUTH;
+            return MF_ERR_AUTH;
         }
         // Met the nested verification to obtain the encrypted NT2_ENC
         if (authex(pcs, uid, block, type, u64Key, AUTH_NESTED, &nt2) != HF_TAG_OK) {
             NRF_LOG_INFO("Auth failed 2\r\n");
-            return MF_ERRAUTH;
+            return MF_ERR_AUTH;
         }
         // Determine whether the two random numbers are the same, under normal circumstances,
         // We can't bring the same random number, because PRNG is updating chip at any time
@@ -825,11 +825,11 @@ uint8_t Nested_Recover_Core(NestedCore *pnc, uint64_t keyKnown, uint8_t blkKnown
     }
     //The first step verification, basic verification does not require nested and encrypted
     if (authex(pcs, uid, blkKnown, typKnown, keyKnown, AUTH_FIRST, &nt1) != HF_TAG_OK) {
-        return MF_ERRAUTH;
+        return MF_ERR_AUTH;
     }
     // Then there is nested verification
     if (sendcmd(pcs, AUTH_NESTED, targetType, targetBlock, &status, answer, parity, U8ARR_BIT_LEN(answer)) != 32) {
-        return HF_ERRSTAT;
+        return HF_ERR_STAT;
     };
     // The first verified explicitly random number
     num_to_bytes(nt1, 4, pnc->nt1);
