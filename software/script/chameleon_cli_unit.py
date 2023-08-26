@@ -14,7 +14,8 @@ import chameleon_com
 import chameleon_cmd
 import chameleon_cstruct
 import chameleon_status
-from chameleon_utils import *
+from chameleon_utils import ArgumentParserNoExit, ArgsParserError, UnexpectedResponseError
+from chameleon_utils import CLITree
 
 
 class BaseCLIUnit:
@@ -176,6 +177,7 @@ root_commands: dict[str, CLITree] = {
     'lf': lf,
 }
 
+
 @hw.command('connect', 'Connect to chameleon by serial port')
 class HWConnect(BaseCLIUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -189,18 +191,25 @@ class HWConnect(BaseCLIUnit):
     def on_exec(self, args: argparse.Namespace):
         try:
             if args.port is None:  # Chameleon auto-detect if no port is supplied
-                platformname = uname().release
-                if 'Microsoft' in platformname:
+                platform_name = uname().release
+                if 'Microsoft' in platform_name:
                     path = os.environ["PATH"].split(os.pathsep)
                     path.append("/mnt/c/Windows/System32/WindowsPowerShell/v1.0/")
                     for prefix in path:
                         fn = os.path.join(prefix, "powershell.exe")
                         if not os.path.isdir(fn) and os.access(fn, os.X_OK):
-                            PSHEXE=fn
+                            PSHEXE = fn
                             break
                     if PSHEXE:
-                        #process = subprocess.Popen([PSHEXE,"Get-CimInstance -ClassName Win32_serialport | Where-Object {$_.PNPDeviceID -like '*VID_6868&PID_8686*'} | Select -expandproperty DeviceID"],stdout=subprocess.PIPE);
-                        process = subprocess.Popen([PSHEXE,"Get-PnPDevice -Class Ports -PresentOnly | where {$_.DeviceID -like '*VID_6868&PID_8686*'} | Select-Object -First 1 FriendlyName | % FriendlyName | select-string COM\d+ |% { $_.matches.value }"],stdout=subprocess.PIPE);
+                        # process = subprocess.Popen([PSHEXE,"Get-CimInstance -ClassName Win32_serialport |"
+                        # " Where-Object {$_.PNPDeviceID -like '*VID_6868&PID_8686*'} |"
+                        # " Select -expandproperty DeviceID"],stdout=subprocess.PIPE);
+                        process = subprocess.Popen([PSHEXE, "Get-PnPDevice -Class Ports -PresentOnly |"
+                                                    " where {$_.DeviceID -like '*VID_6868&PID_8686*'} |"
+                                                    " Select-Object -First 1 FriendlyName |"
+                                                    " % FriendlyName |"
+                                                    " select-string COM\d+ |"
+                                                    "% { $_.matches.value }"], stdout=subprocess.PIPE)
                         res = process.communicate()[0]
                         _comport = res.decode('utf-8').strip()
                         if _comport:
@@ -253,7 +262,7 @@ class HWChipIdGet(DeviceRequiredUnit):
         return None
 
     def on_exec(self, args: argparse.Namespace):
-        print(f' - Device chip ID: ' + self.cmd.get_device_chip_id())
+        print(' - Device chip ID: ' + self.cmd.get_device_chip_id())
 
 
 @hw_address.command('get', 'Get device address (used with Bluetooth)')
@@ -262,7 +271,7 @@ class HWAddressGet(DeviceRequiredUnit):
         return None
 
     def on_exec(self, args: argparse.Namespace):
-        print(f' - Device address: ' + self.cmd.get_device_address())
+        print(' - Device address: ' + self.cmd.get_device_address())
 
 
 @hw.command('version', 'Get current device firmware version')
@@ -639,7 +648,7 @@ class HFMFDetectionDecrypt(DeviceRequiredUnit):
             recv_count = int(len(tmp) / HFMFDetectionDecrypt.detection_log_size)
             index += recv_count
             buffer.extend(tmp)
-            print(f".", end="")
+            print(".", end="")
         print()
         print(f" - Download done ({len(buffer)}bytes), start parse and decrypt")
 
@@ -801,7 +810,7 @@ class HFMFSettings(DeviceRequiredUnit):
         if args.write != -1:
             self.cmd.set_mf1_write_mode(args.write)
             print(f' - Set write mode to {chameleon_cmd.MifareClassicWriteMode(args.write)} success')
-        print(f' - Emulator settings updated')
+        print(' - Emulator settings updated')
 
 
 @hf_mf.command('sim', 'Simulate a Mifare Classic card')
@@ -1028,7 +1037,7 @@ class HWSlotTagType(TagTypeRequiredUnit, SlotIndexRequireUnit):
         tag_type = args.type
         slot_index = args.slot
         self.cmd.set_slot_tag_type(slot_index, tag_type)
-        print(f' - Set slot tag type success.')
+        print(' - Set slot tag type success.')
 
 
 @hw_slot.command('delete', 'Delete sense type data for slot')
@@ -1061,7 +1070,7 @@ class HWSlotDataDefault(TagTypeRequiredUnit, SlotIndexRequireUnit):
         tag_type = args.type
         slot_num = args.slot
         self.cmd.set_slot_data_default(slot_num, tag_type)
-        print(f' - Set slot tag data init success.')
+        print(' - Set slot tag data init success.')
 
 
 @hw_slot.command('enable', 'Set emulation tag slot enable or disable')
@@ -1092,7 +1101,7 @@ class LFEMSimSet(LFEMCardRequiredUnit):
         id_hex = args.id
         id_bytes = bytearray.fromhex(id_hex)
         self.cmd.set_em410x_sim_id(id_bytes)
-        print(f' - Set em410x tag id success.')
+        print(' - Set em410x tag id success.')
 
 
 @lf_em_sim.command('get', 'Get simulated em410x card id')
@@ -1104,7 +1113,7 @@ class LFEMSimGet(DeviceRequiredUnit):
     # lf em sim get
     def on_exec(self, args: argparse.Namespace):
         response = self.cmd.get_em410x_sim_id()
-        print(f' - Get em410x tag id success.')
+        print(' - Get em410x tag id success.')
         print(f'ID: {response.data.hex()}')
 
 
@@ -1153,7 +1162,7 @@ class HWSlotUpdate(DeviceRequiredUnit):
     # hw slot update
     def on_exec(self, args: argparse.Namespace):
         self.cmd.update_slot_data_config()
-        print(f' - Update config and data from device memory to flash success.')
+        print(' - Update config and data from device memory to flash success.')
 
 
 @hw_slot.command('openall', 'Open all slot and set to default data')
@@ -1182,7 +1191,7 @@ class HWSlotOpenAll(DeviceRequiredUnit):
 
         # update config and save to flash
         self.cmd.update_slot_data_config()
-        print(f' - Succeeded opening all slots and setting data to default.')
+        print(' - Succeeded opening all slots and setting data to default.')
 
 
 @hw.command('dfu', 'Restart application to bootloader mode(Not yet implement dfu).')
@@ -1195,8 +1204,10 @@ class HWDFU(DeviceRequiredUnit):
         print("Application restarting...")
         self.cmd.enter_dfu_mode()
         # In theory, after the above command is executed, the dfu mode will enter, and then the USB will restart,
-        # To judge whether to enter the USB successfully, we only need to judge whether the USB becomes the VID and PID of the DFU device.
-        # At the same time, we remember to confirm the information of the device, it is the same device when it is consistent.
+        # To judge whether to enter the USB successfully, we only need to judge whether the USB becomes the VID and PID
+        # of the DFU device.
+        # At the same time, we remember to confirm the information of the device,
+        # it is the same device when it is consistent.
         print(" - Enter success @.@~")
         # let time for comm thread to send dfu cmd and close port
         time.sleep(0.1)
@@ -1295,7 +1306,7 @@ class HWBatteryInfo(DeviceRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         resp = self.cmd.battery_information()
-        voltage =  int.from_bytes(resp.data[:2], 'big')
+        voltage = int.from_bytes(resp.data[:2], 'big')
         percentage = resp.data[2]
         print(" - Battery information:")
         print(f"   voltage    -> {voltage}mV")
@@ -1322,9 +1333,11 @@ class HWButtonSettingsGet(DeviceRequiredUnit):
             resp_long = self.cmd.get_long_button_press_fun(button)
             button_fn = chameleon_cmd.ButtonPressFunction.from_int(resp.data[0])
             button_long_fn = chameleon_cmd.ButtonPressFunction.from_int(resp_long.data[0])
-            print(f" - {colorama.Fore.GREEN}{button} {colorama.Fore.YELLOW}short{colorama.Style.RESET_ALL}: {button_fn}")
+            print(f" - {colorama.Fore.GREEN}{button} {colorama.Fore.YELLOW}short{colorama.Style.RESET_ALL}:"
+                  " {button_fn}")
             print(f"      usage: {button_fn.usage()}")
-            print(f" - {colorama.Fore.GREEN}{button} {colorama.Fore.YELLOW}long {colorama.Style.RESET_ALL}: {button_long_fn}")
+            print(f" - {colorama.Fore.GREEN}{button} {colorama.Fore.YELLOW}long {colorama.Style.RESET_ALL}:"
+                  " {button_long_fn}")
             print(f"      usage: {button_long_fn.usage()}")
             print("")
         print(" - Successfully get button function from settings")
@@ -1351,8 +1364,7 @@ class HWButtonSettingsSet(DeviceRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         button = chameleon_cmd.ButtonType.from_str(args.b)
         function = chameleon_cmd.ButtonPressFunction.from_int(args.f)
-        long = args.long == True
-        if long:
+        if args.long:
             self.cmd.set_long_button_press_fun(button, function)
         else:
             self.cmd.set_button_press_fun(button, function)

@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 import argparse
-import platform
 import sys
 import traceback
-import types
 import chameleon_com
-import chameleon_cmd
 import colorama
 import chameleon_cli_unit
 import chameleon_utils
@@ -29,7 +26,7 @@ LITE = r"""
 """
 
 # create by http://patorjk.com/software/taag/#p=display&f=ANSI%20Shadow&t=Chameleon%20Ultra
-BANNER = f"""
+BANNER = """
  ██████╗██╗  ██╗ █████╗ ██╗   ██╗███████╗██╗     ███████╗ █████╗ ██╗  ██╗
 ██╔════╝██║  ██║██╔══██╗███╗ ███║██╔════╝██║     ██╔════╝██╔══██╗███╗ ██║
 ██║     ███████║███████║████████║█████╗  ██║     █████╗  ██║  ██║████╗██║
@@ -46,12 +43,14 @@ class ChameleonCLI:
 
     def __init__(self):
         self.completer = chameleon_utils.CustomNestedCompleter.from_nested_dict(chameleon_cli_unit.root_commands)
-        self.session = prompt_toolkit.PromptSession(completer=self.completer, history=FileHistory(pathlib.Path.home() / ".chameleon_history"))
+        self.session = prompt_toolkit.PromptSession(completer=self.completer,
+                                                    history=FileHistory(pathlib.Path.home() / ".chameleon_history"))
 
         # new a device communication instance(only communication)
         self.device_com = chameleon_com.ChameleonCom()
 
-    def get_cmd_node(self, node: chameleon_utils.CLITree, cmdline: list[str]) -> tuple[chameleon_utils.CLITree, list[str]]:
+    def get_cmd_node(self, node: chameleon_utils.CLITree,
+                     cmdline: list[str]) -> tuple[chameleon_utils.CLITree, list[str]]:
         """
         Recursively traverse the command line tree to get to the matching node
 
@@ -92,7 +91,7 @@ class ChameleonCLI:
             start listen input.
         :return:
         """
-        if sys.version_info < (3,9):
+        if sys.version_info < (3, 9):
             raise Exception("This script requires at least Python 3.9")
 
         self.print_banner()

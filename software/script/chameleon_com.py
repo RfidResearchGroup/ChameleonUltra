@@ -78,7 +78,7 @@ class ChameleonCom:
                     raise OpenFailException(error)
             try:
                 self.serial_instance.dtr = 1  # must make dtr enable
-            except:
+            except Exception:
                 # not all serial support dtr, e.g. virtual serial over BLE
                 pass
             self.serial_instance.timeout = 0  # noblock
@@ -122,7 +122,7 @@ class ChameleonCom:
         self.event_closing.set()
         try:
             self.serial_instance.close()
-        except:
+        except Exception:
             pass
         finally:
             self.serial_instance = None
@@ -163,7 +163,7 @@ class ChameleonCom:
                         if data_buffer[data_position] != self.lrc_calc(data_buffer[0:1]):
                             data_position = 0
                             data_buffer.clear()
-                            print(f"Data frame sof lrc error.")
+                            print("Data frame sof lrc error.")
                             continue
                 elif data_position == 8:  # frame head lrc
                     if data_buffer[data_position] != self.lrc_calc(data_buffer[0:8]):

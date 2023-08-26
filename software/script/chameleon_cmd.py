@@ -3,7 +3,7 @@ import struct
 
 import chameleon_com
 import chameleon_status
-from chameleon_utils import UnexpectedResponseError, expect_response
+from chameleon_utils import expect_response
 
 DATA_CMD_GET_APP_VERSION = 1000
 DATA_CMD_CHANGE_MODE = 1001
@@ -263,7 +263,8 @@ class ButtonPressFunction(enum.IntEnum):
         elif self == ButtonPressFunction.SettingsButtonCycleSlotDec:
             return "Card slot number sequence decreases after pressing"
         elif self == ButtonPressFunction.SettingsButtonCloneIcUid:
-            return "Read the UID card number immediately after pressing, continue searching, and simulate immediately after reading the card"
+            return "Read the UID card number immediately after pressing, continue searching," + \
+                   "and simulate immediately after reading the card"
         return "Unknown"
 
 
@@ -322,28 +323,28 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def scan_tag_14a(self):
         """
-     (  )  14a tags in the scanning field
+        14a tags in the scanning field
         :return:
         """
         return self.device.send_cmd_sync(DATA_CMD_SCAN_14A_TAG, 0x00)
 
     def detect_mf1_support(self):
         """
-     (  )  Detect whether it is mi (ar)  classic label
+        Detect whether it is mifare classic label
         :return:
         """
         return self.device.send_cmd_sync(DATA_CMD_MF1_SUPPORT_DETECT, 0x00)
 
     def detect_mf1_nt_level(self):
         """
-     (  )  detect mi (ar)  Class of classic nt vulnerabilities
+        detect mifare Class of classic nt vulnerabilities
         :return:
         """
         return self.device.send_cmd_sync(DATA_CMD_MF1_NT_LEVEL_DETECT, 0x00)
 
     def detect_darkside_support(self):
         """
-     (  )  Check if the card is vulnerable to mifare cla (si)  darkside attack
+        Check if the card is vulnerable to mifare classic darkside attack
         :return:
         """
         return self.device.send_cmd_sync(DATA_CMD_MF1_DARKSIDE_DETECT, 0x00, None, timeout=20)
@@ -351,7 +352,7 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def detect_nt_distance(self, block_known, type_known, key_known):
         """
-     (  )  Detect the random number distance of the card
+        Detect the random number distance of the card
         :return:
         """
         data = bytearray()
@@ -363,7 +364,7 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def acquire_nested(self, block_known, type_known, key_known, block_target, type_target):
         """
-     (  )  Collect the key NT parameters needed for Nested decryption
+        Collect the key NT parameters needed for Nested decryption
         :return:
         """
         data = bytearray()
@@ -377,7 +378,7 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def acquire_darkside(self, block_target, type_target, first_recover: int or bool, sync_max):
         """
-     (  )  Collect the key parameters needed for Darkside decryption
+        Collect the key parameters needed for Darkside decryption
         :param block_target:
         :param type_target:
         :param first_recover:
@@ -399,7 +400,7 @@ class ChameleonCMD:
     ])
     def auth_mf1_key(self, block, type_value, key):
         """
-     (  )  Verify the mf1 key, only verify the specified type of key for a single sector
+        Verify the mf1 key, only verify the specified type of key for a single sector
         :param block:
         :param type_value:
         :param key:
@@ -414,7 +415,7 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def read_mf1_block(self, block, type_value, key):
         """
-     (  )  read mf1 monoblock
+        read mf1 monoblock
         :param block:
         :param type_value:
         :param key:
@@ -429,7 +430,7 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def write_mf1_block(self, block, type_value, key, block_data):
         """
-     (  )  Write mf1 single block
+        Write mf1 single block
         :param block:
         :param type_value:
         :param key:
@@ -446,7 +447,7 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.LF_TAG_OK)
     def read_em_410x(self):
         """
-     (  )  Read the card number of EM410X
+        Read the card number of EM410X
         :return:
         """
         return self.device.send_cmd_sync(DATA_CMD_SCAN_EM410X_TAG, 0x00)
@@ -454,8 +455,8 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.LF_TAG_OK)
     def write_em_410x_to_t55xx(self, id_bytes: bytearray):
         """
-     (  )  Write EM410X card number into T55XX
-        :param id_by (es)  ID card number
+        Write EM410X card number into T55XX
+        :param id_bytes: ID card number
         :return:
         """
         new_key = [0x20, 0x20, 0x66, 0x66]
@@ -498,10 +499,11 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_slot_tag_type(self, slot_index: SlotNumber, tag_type: TagSpecificType):
         """
-     (  )  Set the label type of the simulated card of the current card slot
-     (  )  Note: This operation will not change the data in the flash, and the change of the data in the flash will only be updated at the next save
-        :param slot_in (ex)  Card slot number
-        :param tag_t (pe)  label type
+        Set the label type of the simulated card of the current card slot
+        Note: This operation will not change the data in the flash,
+              and the change of the data in the flash will only be updated at the next save
+        :param slot_index:  Card slot number
+        :param tag_type:  label type
         :return:
         """
         # SlotNumber() will raise error for us if slot_index not in slot range
@@ -526,10 +528,10 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_slot_data_default(self, slot_index: SlotNumber, tag_type: TagSpecificType):
         """
-     (  )  Set the data of the simulated card in the specified card slot as the default data
-     (  )  Note: This API will set the data in the flash together
-        :param slot_in (ex)  Card slot number
-        :param tag_t (pe)  The default label type to set
+        Set the data of the simulated card in the specified card slot as the default data
+        Note: This API will set the data in the flash together
+        :param slot_index: Card slot number
+        :param tag_type:  The default label type to set
         :return:
         """
         # SlotNumber() will raise error for us if slot_index not in slot range
@@ -541,9 +543,9 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_slot_enable(self, slot_index: SlotNumber, enable: bool):
         """
-     (  )  Set whether the specified card slot is enabled
-        :param slot_in (ex)  Card slot number
-        :param ena (le)  Whether to enable
+        Set whether the specified card slot is enabled
+        :param slot_index: Card slot number
+        :param enable: Whether to enable
         :return:
         """
         # SlotNumber() will raise error for us if slot_index not in slot range
@@ -555,8 +557,8 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_em410x_sim_id(self, id_bytes: bytearray):
         """
-     (  )  Set the card number simulated by EM410x
-        :param id_by (es)  byte of the card number
+        Set the card number simulated by EM410x
+        :param id_bytes: byte of the card number
         :return:
         """
         if len(id_bytes) != 5:
@@ -572,8 +574,8 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_mf1_detection_enable(self, enable: bool):
         """
-     (  )  Set whether to enable the detection of the current card slot
-        :param ena (le)  Whether to enable
+        Set whether to enable the detection of the current card slot
+        :param enable: Whether to enable
         :return:
         """
         data = bytearray()
@@ -582,7 +584,7 @@ class ChameleonCMD:
 
     def get_mf1_detection_count(self):
         """
-     (  )  Get the statistics of the current detection records
+        Get the statistics of the current detection records
         :return:
         """
         return self.device.send_cmd_sync(DATA_CMD_GET_MF1_DETECTION_COUNT, 0x00)
@@ -590,8 +592,8 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def get_mf1_detection_log(self, index: int):
         """
-     (  )  Get detection logs from the specified index position
-        :param in (ex)  start index
+        Get detection logs from the specified index position
+        :param index: start index
         :return:
         """
         data = bytearray()
@@ -601,9 +603,10 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_mf1_block_data(self, block_start: int, block_data: bytearray):
         """
-     (  )  Set the block data of the analog card of MF1
-        :param block_st (rt)  Start setting the location of block data, including this location
-        :param block_d (ta)  The byte buffer of the block data to be set can contain multiple block data, automatically from block_s (ar)  increment
+        Set the block data of the analog card of MF1
+        :param block_start:  Start setting the location of block data, including this location
+        :param block_data:  The byte buffer of the block data to be set
+        can contain multiple block data, automatically from block_start  increment
         :return:
         """
         data = bytearray()
@@ -621,10 +624,10 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_mf1_anti_collision_res(self, sak: bytearray, atqa: bytearray, uid: bytearray):
         """
-     (  )  Set the anti-collision resource information of the MF1 analog card
-        :param  (ak)  sak bytes
-        :param a (qa)  atqa array
-        :param  (id)  card number array
+        Set the anti-collision resource information of the MF1 analog card
+        :param sak:  sak bytes
+        :param atqa:  atqa array
+        :param uid:  card number array
         :return:
         """
         data = bytearray()
@@ -636,10 +639,10 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_slot_tag_nick_name(self, slot: SlotNumber, sense_type: TagSenseType, name: bytes):
         """
-     (  )  Set the anti-collision resource information of the MF1 analog card
-        :param s (ot)  Card slot number
-        :param sense_t (pe)  field type
-        :param n (me)  Card slot nickname
+        Set the anti-collision resource information of the MF1 analog card
+        :param slot:  Card slot number
+        :param sense_type:  field type
+        :param name:  Card slot nickname
         :return:
         """
         # SlotNumber() will raise error for us if slot not in slot range
@@ -651,9 +654,9 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def get_slot_tag_nick_name(self, slot: SlotNumber, sense_type: TagSenseType):
         """
-     (  )  Set the anti-collision resource information of the MF1 analog card
-        :param s (ot)  Card slot number
-        :param sense_t (pe)  field type
+        Set the anti-collision resource information of the MF1 analog card
+        :param slot:  Card slot number
+        :param sense_type:  field type
         :return:
         """
         # SlotNumber() will raise error for us if slot not in slot range
@@ -699,14 +702,14 @@ class ChameleonCMD:
 
     def update_slot_data_config(self):
         """
-     (  )  Update the configuration and data of the card slot to flash.
+        Update the configuration and data of the card slot to flash.
         :return:
         """
         return self.device.send_cmd_sync(DATA_CMD_SLOT_DATA_CONFIG_SAVE, 0x00)
 
     def enter_dfu_mode(self):
         """
-     (  )  Reboot into DFU mode (bootloader)
+        Reboot into DFU mode (bootloader)
         :return:
         """
         return self.device.send_cmd_auto(DATA_CMD_ENTER_BOOTLOADER, 0x00, close=True)
@@ -791,6 +794,7 @@ class ChameleonCMD:
             0x00,
             bytearray([button, function])
         )
+
 
 if __name__ == '__main__':
     # connect to chameleon
