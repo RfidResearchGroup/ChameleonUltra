@@ -3,7 +3,7 @@
 import serial
 import serial.tools.list_ports as list_ports
 
-DFUCMD=b'\x11\xef\x03\xf2\x00\x00\x00\x00\x0b\x00'
+DFUCMD = b'\x11\xef\x03\xf2\x00\x00\x00\x00\x0b\x00'
 
 port = None
 for comport in list_ports.comports():
@@ -11,8 +11,8 @@ for comport in list_ports.comports():
         print("Chameleon already in DFU mode")
         exit(0)
     if comport.vid == 0x6868 and comport.pid == 0x8686:
-      port = comport.device
-      break
+        port = comport.device
+        break
 
 if port is None:
     print("Chameleon not found")

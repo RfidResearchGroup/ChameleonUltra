@@ -5,17 +5,29 @@ if ! command -v astyle >/dev/null; then
     echo "Please install 'astyle' package first" ;
     exit 1
 fi
+if ! command -v autopep8 >/dev/null; then
+    echo "Please install 'python3-autopep8' package first" ;
+    exit 1
+fi
 # Remove spaces & tabs at EOL, add LF at EOF if needed on *.c, *.h, *.py, Makefile, *.txt
-find . \( -not -path "./.git/*" -and -not -path "./firmware/nrf52_sdk/*" -and -not -path "*/venv/*" -and -not -path "*/tmp/*" -and \( -name "*.[ch]" -or -name "*.py" -or -name "Makefile" -or -name "*.txt" \) \) \
+find . \( -not -path "./.git/*" -and -not -path "./firmware/nrf52_sdk/*" -and -not -path "*/venv/*" -and -not -path "*/tmp/*" -and \
+          \( -name "*.[ch]" -or -name "*.py" -or -name "Makefile" -or -name "*.txt" \) \) \
     -exec perl -pi -e 's/[ \t]+$$//' {} \; \
     -exec sh -c "tail -c1 {} | xxd -p | tail -1 | grep -q -v 0a\$" \; \
     -exec sh -c "echo >> {}" \;
 # Apply astyle on *.c, *.h
-find . \( -not -path "./.git/*" -and -not -path "./firmware/nrf52_sdk/*" -and -not -path "*/venv/*" -and -not -path "*/tmp/*" -and -name "*.[ch]" \) -exec astyle --formatted --mode=c --suffix=none \
+find . \( -not -path "./.git/*" -and -not -path "./firmware/nrf52_sdk/*" -and -not -path "*/venv/*" -and -not -path "*/tmp/*" -and \
+          -name "*.[ch]" \) \
+    -exec astyle --formatted --mode=c --suffix=none \
     --indent=spaces=4 --indent-switches \
     --keep-one-line-blocks --max-instatement-indent=60 \
     --style=google --pad-oper --unpad-paren --pad-header \
     --align-pointer=name {} \;
+# Apply autopep8 on *py
+find . \( -not -path "./.git/*" -and -not -path "./firmware/nrf52_sdk/*" -and -not -path "*/venv/*" -and -not -path "*/tmp/*" -and \
+          -name "*.py" \) \
+    -exec autopep8 -i {} \;
+
 
 # Detecting tabs.
 if [[ "$(uname)" == "Darwin" ]]; then
@@ -32,5 +44,6 @@ else
 fi
 
 # to remove tabs within lines, one can try with: vi $file -c ':set tabstop=4' -c ':set et|retab' -c ':wq'
-find . \( -not -path "./.git/*" -and -not -path "./firmware/nrf52_sdk/*" -and -not -path "*/venv/*" -and -not -path "*/tmp/*" -and \( -name "*.[ch]" -or -name "*.py" -or -name "*.md" -or -name "*.txt" \) \) \
+find . \( -not -path "./.git/*" -and -not -path "./firmware/nrf52_sdk/*" -and -not -path "*/venv/*" -and -not -path "*/tmp/*" -and \
+          \( -name "*.[ch]" -or -name "*.py" -or -name "*.md" -or -name "*.txt" \) \) \
       -exec sh -c "$TABSCMD" \;

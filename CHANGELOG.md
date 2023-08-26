@@ -4,6 +4,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 
 ## [unreleased][unreleased]
  - Fixed argument completion bug inserting additional hyphens (@szymex73)
+ - Fix device address is not the same with APP (@taichunmin)
  - Added initial version of the user guides (@GameTec-live)
  - Added support for pasting several command lines at once with prompt_toolkit (@doegox)
  - Added support for interrupting sleep sequence with a button press during animation (@doegox)

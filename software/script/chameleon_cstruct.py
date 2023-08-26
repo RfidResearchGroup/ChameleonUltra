@@ -43,7 +43,8 @@ def parse_nested_nt_acquire_group(data: bytearray):
     """
     group = []
     if len(data) % 9 != 0:
-        raise ValueError("Nt data length error, except: { nt(4byte), nt_enc(4byte), par(1byte) } * N")
+        raise ValueError(
+            "Nt data length error, except: { nt(4byte), nt_enc(4byte), par(1byte) } * N")
     i = 0
     while i < len(data):
         group.append({

@@ -57,9 +57,11 @@ def expect_response(accepted_responses: Union[int, list[int]]):
 
             if ret.status not in accepted_responses:
                 if ret.status in chameleon_status.Device and ret.status in chameleon_status.message:
-                    raise UnexpectedResponseError(chameleon_status.message[ret.status])
+                    raise UnexpectedResponseError(
+                        chameleon_status.message[ret.status])
                 else:
-                    raise UnexpectedResponseError(f"Unexpected response and unknown status {ret.status}")
+                    raise UnexpectedResponseError(
+                        f"Unexpected response and unknown status {ret.status}")
 
             return ret
 
@@ -137,7 +139,8 @@ class CustomNestedCompleter(NestedCompleter):
             elif isinstance(value, dict):
                 options[key] = cls.from_nested_dict(value)
             elif isinstance(value, set):
-                options[key] = cls.from_nested_dict({item: None for item in value})
+                options[key] = cls.from_nested_dict(
+                    {item: None for item in value})
             elif isinstance(value, CLITree):
                 if value.cls:
                     # CLITree is a standalone command
@@ -160,7 +163,8 @@ class CustomNestedCompleter(NestedCompleter):
         for child_node in node.children:
             if child_node.cls and child_node.cls().args_parser():
                 # CLITree is a standalone command with arguments
-                options[child_node.name] = ArgparseCompleter(child_node.cls().args_parser())
+                options[child_node.name] = ArgparseCompleter(
+                    child_node.cls().args_parser())
             else:
                 # CLITree is a command group
                 options[child_node.name] = cls.from_clitree(child_node)
@@ -240,7 +244,8 @@ class ArgparseCompleter(Completer):
                         parsed.append(value)
 
                         if check_arg(unparsed):
-                            parsed, unparsed, suggestions = self.check_tokens(parsed, unparsed)
+                            parsed, unparsed, suggestions = self.check_tokens(
+                                parsed, unparsed)
 
                     else:
                         # Show all possible values
@@ -251,7 +256,8 @@ class ArgparseCompleter(Completer):
                 else:
                     # No choices, process further arguments
                     if check_arg(unparsed):
-                        parsed, unparsed, suggestions = self.check_tokens(parsed, unparsed)
+                        parsed, unparsed, suggestions = self.check_tokens(
+                            parsed, unparsed)
                     break
             elif any(opt.startswith(token) for opt in action.option_strings):
                 for opt in action.option_strings:
