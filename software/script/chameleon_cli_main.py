@@ -73,7 +73,7 @@ class ChameleonCLI:
 
         :return: current cmd prompt
         """
-        device_string = f"{colorama.Fore.GREEN}USB" if self.device_com.isOpen(
+        device_string = f"{colorama.Fore.GREEN}USB" if self.device_com.is_open(
         ) else f"{colorama.Fore.RED}Offline"
         status = f"[{device_string}{colorama.Style.RESET_ALL}] chameleon --> "
         return status
