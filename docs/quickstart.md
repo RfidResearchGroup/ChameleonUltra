@@ -10,9 +10,9 @@ Quickly get up and running with your Chameleon and no technical skill
    
    - [Linux](https://nightly.link/GameTec-live/ChameleonUltraGUI/workflows/buildapp/main/linux.zip)
    
-   - IOS: Search for Mtools
+   - [IOS](https://apps.apple.com/at/app/mtools-ble-rfid-reader/id1531345398)(MTools)
 
-2. Plug in Chameleon
+2. Plug in or connect via Bluetooth your Chameleon
 
 3. Open GUI
 
