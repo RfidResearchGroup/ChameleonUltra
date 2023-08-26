@@ -45,7 +45,7 @@ typedef struct ALIGN_U32 {
     uint32_t reserved2; // see top.
 
     /*
-     * Warnning !!!!!!!!!!!!!!!!!!!!!! <-------------
+     * Warning !!!!!!!!!!!!!!!!!!!!!! <-------------
      * If you need to add settings,
      * please be sure to consult the documentation of the bit field
      * and fully use the space of this structure before considering reallocating memory space.

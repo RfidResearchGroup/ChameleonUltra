@@ -309,7 +309,7 @@ static void system_off_enter(void) {
     APP_ERROR_CHECK(ret);
 
     // IOs that need to be configured as floating analog inputs ==> no pull-up or pull-down
-    uint32_t gpio_cfg_default_nopull[] = {
+    uint32_t gpio_cfg_default_no_pull[] = {
 #if defined(PROJECT_CHAMELEON_ULTRA)
         HF_SPI_SELECT,
         HF_SPI_MISO,
@@ -319,8 +319,8 @@ static void system_off_enter(void) {
 #endif
         BAT_SENSE_PIN,
     };
-    for (int i = 0; i < ARRAY_SIZE(gpio_cfg_default_nopull); i++) {
-        nrf_gpio_cfg_default(gpio_cfg_default_nopull[i]);
+    for (int i = 0; i < ARRAY_SIZE(gpio_cfg_default_no_pull); i++) {
+        nrf_gpio_cfg_default(gpio_cfg_default_no_pull[i]);
     }
 
     // IO that needs to be configured as a push-pull output and pulled high
@@ -501,7 +501,7 @@ static void check_wakeup_src(void) {
             // usb plugged in can broadcast BLE at will
             advertising_start();
         } else {
-            sleep_timer_start(SLEEP_DELAY_MS_FRIST_POWER); // Wait a while and go straight to hibernation, do nothing
+            sleep_timer_start(SLEEP_DELAY_MS_FIRST_POWER); // Wait a while and go straight to hibernation, do nothing
         }
     }
 }

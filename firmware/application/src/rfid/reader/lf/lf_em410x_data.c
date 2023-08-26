@@ -17,7 +17,7 @@ NRF_LOG_MODULE_REGISTER();
 
 static RAWBUF_TYPE_S carddata;
 static volatile uint8_t dataindex = 0;          //Record changes along the number of times
-uint8_t cardbufbyte[cardbufbytesize];   //Card data
+uint8_t cardbufbyte[CARD_BUF_BYTES_SIZE];   //Card data
 
 #ifdef debug410x
 uint8_t datatest[256] = { 0x00 };
@@ -30,7 +30,7 @@ uint8_t datatest[256] = { 0x00 };
 uint8_t mcst(RAWBUF_TYPE_S *Pdata) {
     uint8_t sync = 1;      //After the current interval process is processed, is it on the judgment line
     uint8_t cardindex = 0; //Record change number
-    for (int i = Pdata->startbit; i < rawbufsize * 8; i++) {
+    for (int i = Pdata->startbit; i < RAW_BUF_SIZE * 8; i++) {
         uint8_t thisbit = readbit(Pdata->rawa, Pdata->rawb, i);
         switch (sync) {
             case 1: //Synchronous state
@@ -74,7 +74,7 @@ uint8_t mcst(RAWBUF_TYPE_S *Pdata) {
                 }
                 break;
         }
-        if (cardindex >= cardbufsize * 8)
+        if (cardindex >= CARD_BUF_SIZE * 8)
             break;
     }
     return 1;
@@ -266,14 +266,14 @@ void em410x_encoder(uint8_t *pData, uint8_t *pOut) {
 
 // Reading the card function, you need to stop calling, return 0 to read the card, 1 is to read
 uint8_t em410x_acquire(void) {
-    if (dataindex >= rawbufsize * 8) {
+    if (dataindex >= RAW_BUF_SIZE * 8) {
 #ifdef debug410x
         {
-            for (int i = 0; i < rawbufsize * 8; i++) {
+            for (int i = 0; i < RAW_BUF_SIZE * 8; i++) {
                 NRF_LOG_INFO("%d ", readbit(carddata.rawa, carddata.rawb, i));
             }
             NRF_LOG_INFO("///raw data\r\n");
-            for (int i = 0; i < rawbufsize * 8; i++) {
+            for (int i = 0; i < RAW_BUF_SIZE * 8; i++) {
                 NRF_LOG_INFO("%d ", datatest[i]);
             }
             NRF_LOG_INFO("///time data\r\n");
@@ -281,7 +281,7 @@ uint8_t em410x_acquire(void) {
 #endif
         //Looking for goals 0 1111 1111
         carddata.startbit = 255;
-        for (int i = 0; i < (rawbufsize * 8) - 8; i++) {
+        for (int i = 0; i < (RAW_BUF_SIZE * 8) - 8; i++) {
             if (readbit(carddata.rawa, carddata.rawb, i) == 1) {
                 carddata.startbit = 0;
                 for (int j = 1; j < 8; j++) {
@@ -296,20 +296,20 @@ uint8_t em410x_acquire(void) {
             }
         }
         // If you find the right beginning to deal with it
-        if (carddata.startbit != 255 && carddata.startbit < (rawbufsize * 8) - 64) {
+        if (carddata.startbit != 255 && carddata.startbit < (RAW_BUF_SIZE * 8) - 64) {
             //Guarantee card data can be fully analyzed
             //NRF_LOG_INFO("do mac,start: %d\r\n",startbit);
             if (mcst(&carddata) == 1) {
                 //Card normal analysis
 #ifdef debug410x
                 {
-                    for (int i = 0; i < cardbufsize; i++) {
+                    for (int i = 0; i < CARD_BUF_SIZE; i++) {
                         NRF_LOG_INFO("%02X", carddata.hexbuf[i]);
                     }
                     NRF_LOG_INFO("///card data\r\n");
                 }
 #endif
-                if (em410x_decoder(carddata.hexbuf, cardbufsize, cardbufbyte)) {
+                if (em410x_decoder(carddata.hexbuf, CARD_BUF_SIZE, cardbufbyte)) {
                     //Card data check passes
 #ifdef debug410x
                     for (int i = 0; i < 5; i++) {
@@ -334,7 +334,7 @@ void GPIO_INT0_callback(void) {
     thistimelen = get_lf_counter_value();
     if (thistimelen > 47) {
         static uint8_t cons_temp = 0;
-        if (dataindex < rawbufsize * 8) {
+        if (dataindex < RAW_BUF_SIZE * 8) {
             if (48 <= thistimelen && thistimelen <= 80) {
                 cons_temp = 0;
             } else if (80 <= thistimelen && thistimelen <= 112) {

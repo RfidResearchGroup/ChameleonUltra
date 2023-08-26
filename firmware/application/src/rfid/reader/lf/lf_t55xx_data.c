@@ -83,7 +83,7 @@ static struct {
     uint8_t lockBit;
     uint8_t usedata;
     uint32_t data;
-    uint8_t blokAddr;
+    uint8_t blockAddr;
 } t55xx_cmd;
 
 
@@ -148,10 +148,10 @@ void T55XX_Timeslot_Callback() {
         }
 
         //Processing address
-        if (t55xx_cmd.blokAddr != 255) {
-            TxBitRfid(t55xx_cmd.blokAddr >> 2);
-            TxBitRfid(t55xx_cmd.blokAddr >> 1);
-            TxBitRfid(t55xx_cmd.blokAddr & 1);
+        if (t55xx_cmd.blockAddr != 255) {
+            TxBitRfid(t55xx_cmd.blockAddr >> 2);
+            TxBitRfid(t55xx_cmd.blockAddr >> 1);
+            TxBitRfid(t55xx_cmd.blockAddr & 1);
         }
     }
 }
@@ -165,9 +165,9 @@ void T55XX_Timeslot_Callback() {
  * @param lockBit Locking position may only be 1 or 0. Passing other values means not using LOCK bit (for password awakening mode)
  * @param usedata Whether the data area is used to transmit the data for 1 time
  * @param data Data, 32 bits, transmitted from the lower bid 0
- * @param blokAddr Block number, 3 bit 0-7 yuan, input 255 means not using this bit (for password wake-up mode)
+ * @param blockAddr Block number, 3 bit 0-7 yuan, input 255 means not using this bit (for password wake-up mode)
  */
-void T55xx_Send_Cmd(uint8_t opcode, uint8_t usepassword, uint32_t password, uint8_t lockBit, uint8_t usedata, uint32_t data, uint8_t blokAddr) {
+void T55xx_Send_Cmd(uint8_t opcode, uint8_t usepassword, uint32_t password, uint8_t lockBit, uint8_t usedata, uint32_t data, uint8_t blockAddr) {
     //Password reading mode,        2op(1+bck)  32pw    1(0)            3addr
     //Password writing mode,        2op(1+bck)  32pw    1l      32data  3addr
     //Password wake -up mode,        2op(1+0)    32pw
@@ -185,7 +185,7 @@ void T55xx_Send_Cmd(uint8_t opcode, uint8_t usepassword, uint32_t password, uint
     t55xx_cmd.lockBit = lockBit;
     t55xx_cmd.usedata = usedata;
     t55xx_cmd.data = data;
-    t55xx_cmd.blokAddr = blokAddr;
+    t55xx_cmd.blockAddr = blockAddr;
 
 
     // Request timing, and wait for the order operation to complete

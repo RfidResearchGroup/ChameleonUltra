@@ -239,7 +239,7 @@ void timer_ce_handler(nrf_timer_event_t event_type, void *p_context) {
             // measure field only during no-mod half of last bit of last broadcast
             if ((! mod) &&
                     (m_bit_send_position + 1 >= LF_125KHZ_EM410X_BIT_SIZE) &&
-                    (m_send_id_count + 1 >= LF_125KHZ_BORADCAST_MAX)) {
+                    (m_send_id_count + 1 >= LF_125KHZ_BROADCAST_MAX)) {
                 nrfx_timer_disable(&m_timer_send_id);                       // Close the timer of the broadcast venue
                 // We don't need any events, but only need to detect the state of the field
                 NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
@@ -261,7 +261,7 @@ void timer_ce_handler(nrf_timer_event_t event_type, void *p_context) {
             if (m_is_send_first_edge == true) { // The first edge of the next sends next time
                 if (++m_bit_send_position >= LF_125KHZ_EM410X_BIT_SIZE) {
                     m_bit_send_position = 0;    // The broadcast is successful once, and the BIT position is zero
-                    if (++m_send_id_count >= LF_125KHZ_BORADCAST_MAX) {
+                    if (++m_send_id_count >= LF_125KHZ_BROADCAST_MAX) {
                         m_send_id_count = 0;                                        //The number of broadcasts reaches the upper limit, re -identifies the status of the field and re -statistically count the number of broadcast times
                     }
                 }

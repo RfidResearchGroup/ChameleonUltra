@@ -19,9 +19,9 @@ NRF_LOG_MODULE_REGISTER();
 
 /*
  * A card slot can simulate up to two cards at the same time, one ID 125kHz EM410X, and one IC 13.56MHz 14A.(May be able to support more in the future)
- * When starting, you should start the startup listener on demand (there is no simulatory card when there is no data, but you need to monitor the state on demand)
+ * When starting, you should start the startup listener on demand (there is no emulated card when there is no data, but you need to monitor the state on demand)
  * If the retrieved card slot configuration has a specified type of card, then loading the specified type of data should be carried out, and the necessary parameters of initialization should be performed.
- * When the on -site entry is detected, in addition to the relevant LED, you also need to start the simulation card according to whether the current data is loaded.
+ * When the on-field entry is detected, in addition to the relevant LED, you also need to start the simulation card according to whether the current data is loaded.
  * In the simulation card, all operations should be carried out based on the data loaded in RAM. After the analog card is over, the modified data should be preserved to Flash
  *
  *
@@ -267,12 +267,12 @@ static void delete_data_by_tag_type(uint8_t slot, tag_sense_type_t sense_type) {
     fds_slot_record_map_t map_info;
     get_fds_map_by_slot_sense_type_for_dump(slot, sense_type, &map_info);
     int count = fds_delete_sync(map_info.id, map_info.key);
-    NRF_LOG_INFO("Slot %d delete senese type %d data, record count: %d", slot, sense_type, count);
+    NRF_LOG_INFO("Slot %d delete sense type %d data, record count: %d", slot, sense_type, count);
 }
 
 /**
  * Load the simulation card data data. Note that loading is just data operation,
- * Start the analog card, please call tag_emuration_sense_run function, otherwise you will not sensor the field event
+ * Start the analog card, please call tag_emulation_sense_run function, otherwise you will not sensor the field event
  */
 void tag_emulation_load_data(void) {
     uint8_t slot = tag_emulation_get_slot();
@@ -281,7 +281,7 @@ void tag_emulation_load_data(void) {
 }
 
 /**
- *Save the simulatory card configuration data. At the right time, this function should be called for data preservation of data
+ *Save the emulated card configuration data. At the right time, this function should be called for data preservation of data
  */
 void tag_emulation_save_data(void) {
     uint8_t slot = tag_emulation_get_slot();
@@ -381,7 +381,7 @@ void tag_emulation_sense_switch(tag_sense_type_t type, bool enable) {
 }
 
 /**
- * Load the simulatory card configuration data, note that loading is just a card slot configuration
+ * Load the emulated card configuration data, note that loading is just a card slot configuration
  */
 void tag_emulation_load_config(void) {
     // Read the card slot configuration data
@@ -396,7 +396,7 @@ void tag_emulation_load_config(void) {
 }
 
 /**
- *Save the simulatory card configuration data
+ *Save the emulated card configuration data
  */
 void tag_emulation_save_config(void) {
     // We are configured the card slot configuration, and we need to calculate the current card slot configuration CRC code to judge whether the data below is updated
@@ -437,7 +437,7 @@ void tag_emulation_sense_end(void) {
  */
 void tag_emulation_init(void) {
     tag_emulation_load_config();    // Configuration of loading the card slot of the simulation card
-    tag_emulation_load_data();      // Load the data of the simulatory card
+    tag_emulation_load_data();      // Load the data of the emulated card
 }
 
 /**
@@ -587,7 +587,7 @@ void tag_emulation_factory_init(void) {
     }
 
     if (slotConfig.group[2].enable && slotConfig.group[2].tag_lf != TAG_TYPE_UNKNOWN) {
-        // Initialize a low -frequency EM410X card at Card Glip 3, if it does not exist.
+        // Initialize a low -frequency EM410X card in slot 3, if it does not exist.
         get_fds_map_by_slot_sense_type_for_dump(2, TAG_SENSE_LF, &map_info);
         bool is_slot3_lf_data_exists = fds_is_exists(map_info.id, map_info.key);
         if (!is_slot3_lf_data_exists) {

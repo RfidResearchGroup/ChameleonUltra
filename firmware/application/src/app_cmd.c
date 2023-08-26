@@ -185,24 +185,24 @@ data_frame_tx_t *cmd_processor_14a_scan(uint16_t cmd, uint16_t status, uint16_t 
 }
 
 data_frame_tx_t *cmd_processor_detect_mf1_support(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    status = Check_STDMifareNT_Support();
+    status = check_std_mifare_nt_support();
     return data_frame_make(cmd, status, 0, NULL);
 }
 
 data_frame_tx_t *cmd_processor_detect_mf1_nt_level(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    status = Check_WeakNested_Support();
+    status = check_weak_nested_support();
     return data_frame_make(cmd, status, 0, NULL);
 }
 
 data_frame_tx_t *cmd_processor_detect_mf1_darkside(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    status = Check_Darkside_Support();
+    status = check_darkside_support();
     return data_frame_make(cmd, status, 0, NULL);
 }
 
 data_frame_tx_t *cmd_processor_mf1_darkside_acquire(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     DarksideCore dc;
     if (length == 4) {
-        status = Darkside_Recover_Key(data[1], data[0], data[2], data[3], &dc);
+        status = darkside_recover_key(data[1], data[0], data[2], data[3], &dc);
         if (status == HF_TAG_OK) {
             length = sizeof(DarksideCore);
             data = (uint8_t *)(&dc);
@@ -219,7 +219,7 @@ data_frame_tx_t *cmd_processor_mf1_darkside_acquire(uint16_t cmd, uint16_t statu
 data_frame_tx_t *cmd_processor_detect_nested_dist(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     NestedDist nd;
     if (length == 8) {
-        status = Nested_Distacne_Detect(data[1], data[0], &data[2], &nd);
+        status = nested_distance_detect(data[1], data[0], &data[2], &nd);
         if (status == HF_TAG_OK) {
             length = sizeof(NestedDist);
             data = (uint8_t *)(&nd);
@@ -236,7 +236,7 @@ data_frame_tx_t *cmd_processor_detect_nested_dist(uint16_t cmd, uint16_t status,
 data_frame_tx_t *cmd_processor_mf1_nt_distance(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     NestedDist nd;
     if (length == 8) {
-        status = Nested_Distacne_Detect(data[1], data[0], &data[2], &nd);
+        status = nested_distance_detect(data[1], data[0], &data[2], &nd);
         if (status == HF_TAG_OK) {
             length = sizeof(NestedDist);
             data = (uint8_t *)(&nd);
@@ -253,7 +253,7 @@ data_frame_tx_t *cmd_processor_mf1_nt_distance(uint16_t cmd, uint16_t status, ui
 data_frame_tx_t *cmd_processor_mf1_nested_acquire(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     NestedCore ncs[SETS_NR];
     if (length == 10) {
-        status = Nested_Recover_Key(bytes_to_num(&data[2], 6), data[1], data[0], data[9], data[8], ncs);
+        status = nested_recover_key(bytes_to_num(&data[2], 6), data[1], data[0], data[9], data[8], ncs);
         if (status == HF_TAG_OK) {
             length = sizeof(ncs);
             data = (uint8_t *)(&ncs);
@@ -563,7 +563,7 @@ data_frame_tx_t *cmd_processor_set_mf1_anti_collision_res(uint16_t cmd, uint16_t
     } else {
         uint8_t uid_length = length - 3;
         if (is_valid_uid_size(uid_length)) {
-            nfc_tag_14a_coll_res_referen_t *info = get_mifare_coll_res();
+            nfc_tag_14a_coll_res_reference_t *info = get_mifare_coll_res();
             // copy sak
             info->sak[0] = data[0];
             // copy atqa
@@ -758,7 +758,7 @@ data_frame_tx_t *before_reader_run(uint16_t cmd, uint16_t status, uint16_t lengt
     if (mode == DEVICE_MODE_READER) {
         return NULL;
     } else {
-        return data_frame_make(cmd, STATUS_DEVIEC_MODE_ERROR, 0, NULL);
+        return data_frame_make(cmd, STATUS_DEVICE_MODE_ERROR, 0, NULL);
     }
 }
 
@@ -878,14 +878,14 @@ void auto_response_data(data_frame_tx_t *resp) {
     if (is_usb_working()) {
         usb_cdc_write(resp->buffer, resp->length);
     } else if (is_nus_working()) {
-        nus_data_reponse(resp->buffer, resp->length);
+        nus_data_response(resp->buffer, resp->length);
     } else {
         NRF_LOG_ERROR("No connection valid found at response client.");
     }
 }
 
 
-/**@brief Function for prcoess data frame(cmd)
+/**@brief Function to process data frame(cmd)
  */
 void on_data_frame_received(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     data_frame_tx_t *response = NULL;
@@ -922,7 +922,7 @@ void on_data_frame_received(uint16_t cmd, uint16_t status, uint16_t length, uint
             auto_response_data(response);
         }
     } else {
-        // response cmd unsupport.
+        // response cmd unsupported.
         response = data_frame_make(cmd, STATUS_INVALID_CMD, 0, NULL);
         auto_response_data(response);
         NRF_LOG_INFO("Data frame cmd invalid: %d,", cmd);

@@ -31,9 +31,9 @@ typedef enum {
 // MF1 label standard mode state machine
 typedef enum {
     // Verification state machine
-    MF1_STATE_UNAUTH,
-    MF1_STATE_AUTHING,
-    MF1_STATE_AUTHED,
+    MF1_STATE_UNAUTHENTICATED,
+    MF1_STATE_AUTHENTICATING,
+    MF1_STATE_AUTHENTICATED,
 
     // Operating state machine
     MF1_STATE_WRITE,
@@ -86,7 +86,7 @@ typedef struct __attribute__((aligned(4))) {
 }
 nfc_tag_mf1_information_t;
 
-// 4 -earte card's 0 block structure of factory solidification
+// Manufacturer block structure
 typedef struct {
     // For example:
     // 30928E04 28 08 0400 0177A2CC35AFA51D
@@ -99,9 +99,9 @@ typedef struct {
 
 // General MF1 sector rear block data structure
 typedef struct {
-    uint8_t keya[6];    // Secret A
+    uint8_t key_a[6];    // Secret A
     uint8_t acs[4];     // Control position
-    uint8_t keyb[6];    // Secret B
+    uint8_t key_b[6];    // Secret B
 } nfc_tag_mf1_trailer_info_t;
 
 // Send buffer dedicated to miFare communication
@@ -123,12 +123,12 @@ typedef struct {
     // Basic information of verification
     struct {
         uint8_t block;
-        uint8_t is_keyb: 1;
+        uint8_t is_key_b: 1;
         uint8_t is_nested: 1;
         // Airspace, occupying positions
         uint8_t : 6;
     } cmd;
-    // MFKEY32 necessary parametersessary parameters
+    // MFKEY32 necessary parameters
     uint8_t uid[4];
     uint8_t nt[4];
     uint8_t nr[4];
@@ -144,7 +144,7 @@ void nfc_tag_mf1_set_detection_enable(bool enable);
 bool nfc_tag_mf1_is_detection_enable(void);
 void nfc_tag_mf1_detection_log_clear(void);
 uint32_t nfc_tag_mf1_detection_log_count(void);
-nfc_tag_14a_coll_res_referen_t *get_mifare_coll_res(void);
+nfc_tag_14a_coll_res_reference_t *get_mifare_coll_res(void);
 void nfc_tag_mf1_set_gen1a_magic_mode(bool enable);
 bool nfc_tag_mf1_is_gen1a_magic_mode(void);
 void nfc_tag_mf1_set_gen2_magic_mode(bool enable);

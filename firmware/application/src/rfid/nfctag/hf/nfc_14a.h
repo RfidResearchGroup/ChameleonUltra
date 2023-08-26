@@ -42,14 +42,14 @@ typedef enum {
     NFC_TAG_STATE_14A_HALTED,   // The label stops working status and can only be awakened by Halt or other special instructions (non -labels)
 } nfc_tag_14a_state_t;
 
-//UID of the length in the enumeration specification
+// UID of the length in the enumeration specification
 typedef enum {
     NFC_TAG_14A_UID_SINGLE_SIZE = 4u,   ///< Length of single-size NFCID1.
     NFC_TAG_14A_UID_DOUBLE_SIZE = 7u,   ///< Length of double-size NFCID1.
     NFC_TAG_14A_UID_TRIPLE_SIZE = 10u,  ///< Length of triple-size NFCID1.
 } nfc_tag_14a_uid_size;
 
-// Extraordinarian level level level level level
+// Cascade levels
 typedef enum {
     NFC_TAG_14A_CASCADE_LEVEL_1,
     NFC_TAG_14A_CASCADE_LEVEL_2,
@@ -78,12 +78,12 @@ typedef struct {
     uint8_t *sak;
     uint8_t *uid;
     nfc_14a_ats_t *ats;
-} nfc_tag_14a_coll_res_referen_t;
+} nfc_tag_14a_coll_res_reference_t;
 
 // Communication reception function that needs to be implemented
 typedef void (*nfc_tag_14a_reset_handler_t)(void);
 typedef void (*nfc_tag_14a_state_handler_t)(uint8_t *data, uint16_t szBits);
-typedef nfc_tag_14a_coll_res_referen_t *(*nfc_tag_14a_coll_handler_t)(void);
+typedef nfc_tag_14a_coll_res_reference_t *(*nfc_tag_14a_coll_handler_t)(void);
 
 // The interface that 14A communication receiver needs to be implemented
 typedef struct {

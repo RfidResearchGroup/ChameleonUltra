@@ -175,11 +175,11 @@ void write_register_single(uint8_t Address, uint8_t value);
 void clear_register_mask(uint8_t reg, uint8_t mask);
 void set_register_mask(uint8_t reg, uint8_t mask);
 
-// Device comunication control
+// Device communication control
 uint16_t pcd_14a_reader_timeout_get(void);
 void pcd_14a_reader_timeout_set(uint16_t timeout_ms);
 
-// Device comunication interface
+// Device communication interface
 uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command,
                                       uint8_t *pIn,
                                       uint8_t  InLenByte,
@@ -220,7 +220,7 @@ void pcd_14a_reader_fast_halt_tag(void);
 uint8_t pcd_14a_reader_gen1a_unlock(void);
 uint8_t pcd_14a_reader_gen1a_uplock(void);
 
-// CRC calulate
+// CRC calculate
 void pcd_14a_reader_calc_crc(uint8_t *pbtData, size_t szLen, uint8_t *pbtCrc);
 void crc_14a_calculate(uint8_t *pbtData, size_t szLen, uint8_t *pbtCrc);
 void crc_14a_append(uint8_t *pbtData, size_t szLen);

@@ -44,7 +44,7 @@ static data_frame_tx_t m_frame_tx_buf_info = {
 
 
 /**
- * @briefcreateAPacket,PutTheCreatedDataPacketIntoTheBuffer,AndWaitForThePostToSetUpANonBusyState
+ * @brief: create a packet, put the created data packet into the buffer, and wait for the post to set up a non busy state
  * @param cmd: instructionResponse
  * @param status:responseStatus
  * @param length: answerDataLength

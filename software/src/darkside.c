@@ -39,7 +39,7 @@ void num_to_bytes(uint64_t n, uint32_t len, uint8_t *dest) {
 int main(int argc, char *argv[]) {
 
     if (((argc - 2) % 5) != 0) {
-        printf("Unexcepted param count\n");
+        printf("Unexpected param count\n");
         return EXIT_FAILURE;
     }
     // Initialize UID

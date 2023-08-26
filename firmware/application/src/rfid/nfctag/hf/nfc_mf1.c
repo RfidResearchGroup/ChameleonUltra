@@ -32,7 +32,7 @@ NRF_LOG_MODULE_REGISTER();
 /* NXP Originality check */
 /* Sector 18/Block 68..71 is used to store signature data for NXP originality check */
 #define MEM_EV1_SIGNATURE_BLOCK     68
-#define MEM_EV1_SIGNATURE_TRAILOR   ((MEM_EV1_SIGNATURE_BLOCK + 3 ) * MEM_BYTES_PER_BLOCK)
+#define MEM_EV1_SIGNATURE_TRAILER   ((MEM_EV1_SIGNATURE_BLOCK + 3 ) * MEM_BYTES_PER_BLOCK)
 
 
 #define CMD_AUTH_A                  0x60
@@ -81,12 +81,12 @@ C1 C2 C3        read  write  read  write  read  write
 
 [1] For this access condition key B is readable and may be used for data
 */
-#define ACC_TRAILOR_READ_KEYA   0x01
-#define ACC_TRAILOR_WRITE_KEYA  0x02
-#define ACC_TRAILOR_READ_ACC    0x04
-#define ACC_TRAILOR_WRITE_ACC   0x08
-#define ACC_TRAILOR_READ_KEYB   0x10
-#define ACC_TRAILOR_WRITE_KEYB  0x20
+#define ACC_TRAILER_READ_KEYA   0x01
+#define ACC_TRAILER_WRITE_KEYA  0x02
+#define ACC_TRAILER_READ_ACC    0x04
+#define ACC_TRAILER_WRITE_ACC   0x08
+#define ACC_TRAILER_READ_KEYB   0x10
+#define ACC_TRAILER_WRITE_KEYB  0x20
 
 
 
@@ -116,74 +116,74 @@ C1 C2 C3     read     write     increment     decrement,
 #define KEY_B 1
 
 
-/* Decoding table for Access conditions of the sector trailor */
-static const uint8_t abTrailorAccessConditions[8][2] = {
+/* Decoding table for Access conditions of the sector trailer */
+static const uint8_t abTrailerAccessConditions[8][2] = {
     /* 0  0  0 RdKA:never WrKA:key A  RdAcc:key A WrAcc:never  RdKB:key A WrKB:key A      Key B may be read[1] */
     {
         /* Access with Key A */
-        ACC_TRAILOR_WRITE_KEYA | ACC_TRAILOR_READ_ACC | ACC_TRAILOR_WRITE_ACC | ACC_TRAILOR_READ_KEYB | ACC_TRAILOR_WRITE_KEYB,
+        ACC_TRAILER_WRITE_KEYA | ACC_TRAILER_READ_ACC | ACC_TRAILER_WRITE_ACC | ACC_TRAILER_READ_KEYB | ACC_TRAILER_WRITE_KEYB,
         /* Access with Key B */
         0
     },
     /* 1  0  0 RdKA:never WrKA:key B  RdAcc:keyA|B WrAcc:never RdKB:never WrKB:key B */
     {
         /* Access with Key A */
-        ACC_TRAILOR_READ_ACC,
+        ACC_TRAILER_READ_ACC,
         /* Access with Key B */
-        ACC_TRAILOR_WRITE_KEYA | ACC_TRAILOR_READ_ACC |  ACC_TRAILOR_WRITE_KEYB
+        ACC_TRAILER_WRITE_KEYA | ACC_TRAILER_READ_ACC |  ACC_TRAILER_WRITE_KEYB
     },
     /* 0  1  0 RdKA:never WrKA:never  RdAcc:key A WrAcc:never  RdKB:key A WrKB:never  Key B may be read[1] */
     {
         /* Access with Key A */
-        ACC_TRAILOR_READ_ACC | ACC_TRAILOR_READ_KEYB,
+        ACC_TRAILER_READ_ACC | ACC_TRAILER_READ_KEYB,
         /* Access with Key B */
         0
     },
     /* 1  1  0         never never  keyA|B never never never */
     {
         /* Access with Key A */
-        ACC_TRAILOR_READ_ACC,
+        ACC_TRAILER_READ_ACC,
         /* Access with Key B */
-        ACC_TRAILOR_READ_ACC
+        ACC_TRAILER_READ_ACC
     },
     /* 0  0  1         never key A  key A  key A key A key A  Key B may be read,transport configuration[1] */
     {
         /* Access with Key A */
-        ACC_TRAILOR_WRITE_KEYA | ACC_TRAILOR_READ_ACC | ACC_TRAILOR_WRITE_ACC | ACC_TRAILOR_READ_KEYB | ACC_TRAILOR_WRITE_KEYB,
+        ACC_TRAILER_WRITE_KEYA | ACC_TRAILER_READ_ACC | ACC_TRAILER_WRITE_ACC | ACC_TRAILER_READ_KEYB | ACC_TRAILER_WRITE_KEYB,
         /* Access with Key B */
         0
     },
     /* 0  1  1         never key B  keyA|B key B never key B */
     {
         /* Access with Key A */
-        ACC_TRAILOR_READ_ACC,
+        ACC_TRAILER_READ_ACC,
         /* Access with Key B */
-        ACC_TRAILOR_WRITE_KEYA | ACC_TRAILOR_READ_ACC | ACC_TRAILOR_WRITE_ACC | ACC_TRAILOR_WRITE_KEYB
+        ACC_TRAILER_WRITE_KEYA | ACC_TRAILER_READ_ACC | ACC_TRAILER_WRITE_ACC | ACC_TRAILER_WRITE_KEYB
     },
     /* 1  0  1         never never  keyA|B key B never never */
     {
         /* Access with Key A */
-        ACC_TRAILOR_READ_ACC,
+        ACC_TRAILER_READ_ACC,
         /* Access with Key B */
-        ACC_TRAILOR_READ_ACC | ACC_TRAILOR_WRITE_ACC
+        ACC_TRAILER_READ_ACC | ACC_TRAILER_WRITE_ACC
     },
     /* 1  1  1         never never  keyA|B never never never */
     {
         /* Access with Key A */
-        ACC_TRAILOR_READ_ACC,
+        ACC_TRAILER_READ_ACC,
         /* Access with Key B */
-        ACC_TRAILOR_READ_ACC
+        ACC_TRAILER_READ_ACC
     },
 };
 
 // Save the current MF1 standard status
-static nfc_tag_mf1_std_state_machine_t m_mf1_state = MF1_STATE_UNAUTH;
+static nfc_tag_mf1_std_state_machine_t m_mf1_state = MF1_STATE_UNAUTHENTICATED;
 // Save the current GEN1A status
 static nfc_tag_mf1_gen1a_state_machine_t m_gen1a_state = GEN1A_STATE_DISABLE;
 // Data structure pointer to the label information
 static nfc_tag_mf1_information_t *m_tag_information = NULL;
 // Define and use shadow anti -collision resources
-static nfc_tag_14a_coll_res_referen_t m_shadow_coll_res;
+static nfc_tag_14a_coll_res_reference_t m_shadow_coll_res;
 //Pind to the tail block in the label sector (control data block)
 static nfc_tag_mf1_trailer_info_t *m_tag_trailer_info = NULL;
 // Define and use MF1 special communication buffer
@@ -344,7 +344,7 @@ void append_mf1_auth_log_step1(bool isKeyB, bool isNested, uint8_t block, uint8_
     }
     // Determine whether this card slot enables the detection log record
     if (m_tag_information->config.detection_enable) {
-        m_auth_log.logs[m_auth_log.count].cmd.is_keyb = isKeyB;
+        m_auth_log.logs[m_auth_log.count].cmd.is_key_b = isKeyB;
         m_auth_log.logs[m_auth_log.count].cmd.block = block;
         m_auth_log.logs[m_auth_log.count].cmd.is_nested = isNested;
         memcpy(m_auth_log.logs[m_auth_log.count].uid, UID_BY_CASCADE_LEVEL, 4);
@@ -430,7 +430,7 @@ void mf1_prng_by_bytes(uint8_t *nonces, uint32_t n) {
 
 /** @brief MF1 status machine
  * @param data      From reading head data
- * @param szBits    Pittering length of data
+ * @param szBits    length of data
  * @param state     Finite State Machine
  */
 void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
@@ -449,7 +449,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                     // NRF_LOG_INFO("MIFARE_MAGICWUPC2 received.\n");
                     nfc_tag_14a_set_state(NFC_TAG_STATE_14A_ACTIVE);    //Update the status machine of the external 14A
                     m_gen1a_state = GEN1A_STATE_UNLOCKED_RW_WAIT;       // Update the Gen1A status machine
-                    m_mf1_state = MF1_STATE_UNAUTH;                     // Update MF1 status machine
+                    m_mf1_state = MF1_STATE_UNAUTHENTICATED;                     // Update MF1 status machine
                     nfc_tag_14a_tx_nbit_delay_window(ACK_VALUE, 4);     //Reply to the card reader Gen1a label unlock the back door success
 #ifndef NFC_MF1_FAST_SIM
                     crypto1_deinit(pcs);                                // Reset crypto1 handler
@@ -466,7 +466,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
 
     // Processing MiFare's status machine
     switch (m_mf1_state) {
-        case MF1_STATE_UNAUTH: {    // Unparalleled state, communication is open
+        case MF1_STATE_UNAUTHENTICATED: {    // Unparalleled state, communication is open
             if (szDataBits == 32) {    // 32 -bit, may be instructions
                 if (nfc_tag_14a_checks_crc(p_data, 4)) {
                     switch (p_data[0]) {
@@ -494,7 +494,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                                 break;
                             }
 
-                            // Set keyinuse as global use to retain information about identity verification
+                            // Set KeyInUse as global use to retain information about identity verification
                             KeyInUse = p_data[0] & 1;
 
                             // Obtain the specified sector access control bytes. Here we directly take the coincidence, convert the memory into a structure, and let the compiler help us maintain the pointing of the pointer
@@ -527,7 +527,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                             append_mf1_auth_log_step1(KeyInUse, false, BlockAuth, CardNonce);
 
                             // Use random card random numbers to respond, and hopes to obtain further authentication from the reader in the next frame.
-                            m_mf1_state = MF1_STATE_AUTHING;
+                            m_mf1_state = MF1_STATE_AUTHENTICATING;
 
                             // The first verification, responding to a clear random number, without CRC
                             m_tag_tx_buffer.tx_raw_buffer[0] = CardNonce[0];
@@ -538,7 +538,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
 #ifdef NFC_MF1_FAST_SIM
                             Crypto1Setup(
                                 // Select A or B secrets based on the current instruction type
-                                KeyInUse ? m_tag_trailer_info->keyb : m_tag_trailer_info->keya,
+                                KeyInUse ? m_tag_trailer_info->key_b : m_tag_trailer_info->key_a,
                                 // Passing the current anti -collision UID
                                 UID_BY_CASCADE_LEVEL,
                                 // Passing into a clear random number, this random number will be used to decrypt subsequent communication
@@ -550,7 +550,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                             // Load key flow
                             crypto1_init(pcs,
                                          // Select A or B secrets based on the current instruction type
-                                         bytes_to_num(KeyInUse ? m_tag_trailer_info->keyb : m_tag_trailer_info->keya, 6)
+                                         bytes_to_num(KeyInUse ? m_tag_trailer_info->key_b : m_tag_trailer_info->key_a, 6)
                                         );
                             // Set key flow
                             crypto1_word(pcs, bytes_to_num(UID_BY_CASCADE_LEVEL, 4) ^ bytes_to_num(CardNonce, 4), 0);
@@ -618,7 +618,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
             break;
         }
 
-        case MF1_STATE_AUTHING: {
+        case MF1_STATE_AUTHENTICATING: {
             if (szDataBits == 64) {
                 //NR + AR responded to the card reader
                 append_mf1_auth_log_step2(p_data, &p_data[4]);
@@ -649,7 +649,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                     mf_crypto1_encrypt(pcs, m_tag_tx_buffer.tx_raw_buffer, 4, m_tag_tx_buffer.tx_bit_parity);
 #endif
                     // The verification is successful, and you need to enter the state that has been successfully verified
-                    m_mf1_state = MF1_STATE_AUTHED;
+                    m_mf1_state = MF1_STATE_AUTHENTICATED;
                     // Package, stitch the Qiqi school inspection, return
                     m_tag_tx_buffer.tx_frame_bit_size = nfc_tag_14a_wrap_frame(m_tag_tx_buffer.tx_raw_buffer, 32, m_tag_tx_buffer.tx_bit_parity, m_tag_tx_buffer.tx_warp_frame);
                     nfc_tag_14a_tx_bits(m_tag_tx_buffer.tx_warp_frame, m_tag_tx_buffer.tx_frame_bit_size);
@@ -667,7 +667,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
             break;
         }
 
-        case MF1_STATE_AUTHED: {
+        case MF1_STATE_AUTHENTICATED: {
             if (szDataBits == 32) {
                 // In this state, all communication is encrypted.Therefore, we must first decrypt the data sent by the read head.
 #ifdef NFC_MF1_FAST_SIM
@@ -682,7 +682,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                             // Save the block address of the current operation
                             CurrentAddress = p_data[1];
                             // Generate access control, for data access control below
-                            uint8_t Acc = abTrailorAccessConditions[ GetAccessCondition(CurrentAddress) ][ KeyInUse ];
+                            uint8_t Acc = abTrailerAccessConditions[ GetAccessCondition(CurrentAddress) ][ KeyInUse ];
                             // Read the command.Read data from memory and add CRCA.Note: Reading operations are limited by the control bit, but at present we only restrict the reading of the control bit
                             if ((CurrentAddress < 128 && (CurrentAddress & 3) == 3) || ((CurrentAddress & 15) == 15)) {
                                 // Clear the buffer to avoid the cache data that affect the follow -up operation
@@ -695,14 +695,14 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                                 // 3. Make the restrictions of the control position reading according to the access conditions of the read during authentication!
                                 respTrailerInfo->acs[3] = m_tag_trailer_info->acs[3];
                                 // Determine whether the control position itself allows reading
-                                if (Acc & ACC_TRAILOR_READ_ACC) {
+                                if (Acc & ACC_TRAILER_READ_ACC) {
                                     respTrailerInfo->acs[0] = m_tag_trailer_info->acs[0];
                                     respTrailerInfo->acs[1] = m_tag_trailer_info->acs[1];
                                     respTrailerInfo->acs[2] = m_tag_trailer_info->acs[2];
                                 }
                                 // In a few cases, the Secret B is readable
-                                if (Acc & ACC_TRAILOR_READ_KEYB) {
-                                    memcpy(respTrailerInfo->keyb, m_tag_trailer_info->keyb, 6);
+                                if (Acc & ACC_TRAILER_READ_KEYB) {
+                                    memcpy(respTrailerInfo->key_b, m_tag_trailer_info->key_b, 6);
                                 }
                             } else {
                                 // For data, just return to the corresponding location sector
@@ -823,7 +823,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                                 break;
                             }
 
-                            // Set keyinuse as global use to retain information about identity verification
+                            // Set KeyInUse as global use to retain information about identity verification
                             KeyInUse = p_data[0] & 1;
 
                             // Obtain the specified sector access control bytes. Here we directly take the coincidence, convert the memory into a structure, and let the compiler help us maintain the pointing of the pointer
@@ -856,7 +856,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                             append_mf1_auth_log_step1(KeyInUse, true, BlockAuth, CardNonce);
 
                             //Use random card random numbers to respond, and hopes to obtain further authentication from the reader in the next frame.
-                            m_mf1_state = MF1_STATE_AUTHING;
+                            m_mf1_state = MF1_STATE_AUTHENTICATING;
 
                             // Copy a random number of a label to the buffer area
                             m_tag_tx_buffer.tx_raw_buffer[0] = CardNonce[0];
@@ -868,7 +868,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                             /* Setup crypto1 cipher. Discard in-place encrypted CardNonce. */
                             Crypto1SetupNested(
                                 // Select A or B secrets based on the current instruction type
-                                KeyInUse ? m_tag_trailer_info->keyb : m_tag_trailer_info->keya,
+                                KeyInUse ? m_tag_trailer_info->key_b : m_tag_trailer_info->key_a,
                                 // Passing the current anti -collision UID
                                 UID_BY_CASCADE_LEVEL,
                                 // Passing into a clear random number, this random number will be encrypted and passed through this buffer area
@@ -885,7 +885,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                             //Load key flow
                             crypto1_init(pcs,
                                          // Select A or B secrets based on the current instruction type
-                                         bytes_to_num(KeyInUse ? m_tag_trailer_info->keyb : m_tag_trailer_info->keya, 6)
+                                         bytes_to_num(KeyInUse ? m_tag_trailer_info->key_b : m_tag_trailer_info->key_a, 6)
                                         );
                             // Random number encryption
                             uint8_t m_auth_nt_keystream[4];
@@ -971,7 +971,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                 status = NAK_CRC_PARITY_ERROR_TBIV;
             }
             // In any case, after the operation, the label will be allowed to return to the verification idle state
-            m_mf1_state = MF1_STATE_AUTHED;
+            m_mf1_state = MF1_STATE_AUTHENTICATED;
 #ifdef NFC_MF1_FAST_SIM
             nfc_tag_14a_tx_nbit(status ^ Crypto1Nibble(), 4);
 #else
@@ -1028,7 +1028,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                 // The length is wrong, but it is counted in the CRC error
                 status = NAK_CRC_PARITY_ERROR_TBIV;
             }
-            m_mf1_state = MF1_STATE_AUTHED;
+            m_mf1_state = MF1_STATE_AUTHENTICATED;
 #ifdef NFC_MF1_FAST_SIM
             nfc_tag_14a_tx_nbit(status ^ Crypto1Nibble(), 4);
 #else
@@ -1048,7 +1048,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
 /**
  * @brief Provide the necessary anti -conflict resources for the MiFare label (only pointer provides pointers)
  */
-nfc_tag_14a_coll_res_referen_t *get_mifare_coll_res() {
+nfc_tag_14a_coll_res_reference_t *get_mifare_coll_res() {
     //According to the current interoperability configuration, selectively return the configuration data to selectively, assuming that the data interoperability is turned on, then we also need to ensure that the current simulation card is 4BYTE
     if (m_tag_information->config.use_mf1_coll_res && m_tag_information->res_coll.size == NFC_TAG_14A_UID_SINGLE_SIZE) {
         // Manufacturer information obtained by the data area
@@ -1074,7 +1074,7 @@ nfc_tag_14a_coll_res_referen_t *get_mifare_coll_res() {
  * @brief Reconcile when the parameter label needs to be reset
  */
 void nfc_tag_mf1_reset_handler() {
-    m_mf1_state = MF1_STATE_UNAUTH;
+    m_mf1_state = MF1_STATE_UNAUTHENTICATED;
     m_gen1a_state = GEN1A_STATE_DISABLE;
 
 #ifndef NFC_MF1_FAST_SIM

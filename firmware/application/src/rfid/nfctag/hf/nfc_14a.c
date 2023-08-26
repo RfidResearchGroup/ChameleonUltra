@@ -41,7 +41,7 @@ nfc_tag_14a_state_t m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
 
 // 14443A protocol processor
 nfc_tag_14a_handler_t m_tag_handler = {
-    .cb_reset = NULL,       // Tag Resetback
+    .cb_reset = NULL,       // Tag Reset callback
     .cb_state = NULL,       // Label status machine callback
     .get_coll_res = NULL,   // Obtain packaging of anti -conflict resources of labels
 };
@@ -143,15 +143,15 @@ bool nfc_tag_14a_checks_crc(uint8_t *pbtData, size_t szLen) {
 /**
 * @brief  : Bit frames for packaging ISO14443A
 * Automatically conduct the merger of the parity of the coupling school and the data of the data
-* @param   pbtTx: Bit flow to be transmitted
-*          szTxBits: The length of the bandwing
-*          pbtTxPar: Bit flow of the puppet school inspection, the length of this data must be sztxbits / 8, that is,
-* In fact, the composition of the bit flow after the merger is:
+* @param   pbtTx: bitstream to be transmitted
+*          szTxBits: The length of the buffer
+*          pbtTxPar: bitstream of the puppet school inspection, the length of this data must be szTxBits / 8, that is,
+* In fact, the composition of the bitstream after the merger is:
 *                    data(1byte) - par(1bit) - data(1byte) - par(1bit) ...
 *                      00001000  -   0       - 10101110    - 1
 *                    This similar data structure
 *          pbtFrame: The final assembled data buffer
-* @retval :The length of the bit flow assembly results buffer. Note that it is the length of the bit.
+* @retval :The length of the bitstream assembly results buffer. Note that it is the length of the bit.
 */
 uint8_t nfc_tag_14a_wrap_frame(const uint8_t *pbtTx, const size_t szTxBits, const uint8_t *pbtTxPar, uint8_t *pbtFrame) {
     uint8_t btData;
@@ -209,11 +209,11 @@ uint8_t nfc_tag_14a_wrap_frame(const uint8_t *pbtTx, const size_t szTxBits, cons
 /**
 * @brief  :Bit frame of ISO14443A
 *           Automatically perform the unpacking of the puppet school inspection and the data
-* @param  :pbtFrame:Bit flow that will be dismissed
-*          szFrameBits:The length of the bandwing
+* @param  :pbtFrame: bitstream that will be dismissed
+*          szFrameBits:The length of the buffer
 *          pbtRx:Caps, data areas, data areas, data areas, data areas, data areas.
-*          pbtRxPar: The buffer of the Bitflow Store after the packaging, the coupling school inspection area
-* @retval :The data length of the Bit flow packaging, note that the length of the data area is the length of the data area.retval / 8
+*          pbtRxPar: The buffer of the bitstream Store after the packaging, the coupling school inspection area
+* @retval :The data length of the bitstream packaging, note that the length of the data area is the length of the data area.retval / 8
 */
 uint8_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBits, uint8_t *pbtRx, uint8_t *pbtRxPar) {
     uint8_t btFrame;
@@ -262,7 +262,7 @@ uint8_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBi
 }
 
 /**
- * @briedf: Function for response reader core implemented
+ * @brief: Function for response reader core implemented
  * @param[in]   data       Send data buffer
  * @param[in]   bytes      Send data length
  * @param[in]   appendCrc  Auto append crc
@@ -309,7 +309,7 @@ void nfc_tag_14a_tx_bytes_delay_freerun(uint8_t *data, uint32_t bytes, bool appe
 }
 
 /**
- * @briedf: Function for response reader core implemented
+ * @brief: Function for response reader core implemented
  * @param[in]   bits   Send bits length
  * @param[in]   mode   communication mode
  *
@@ -361,10 +361,10 @@ void nfc_tag_14a_tx_nbit_delay_window(uint8_t data, uint32_t bits) {
  * 14A monitoring the packaging function of data processing from PCD
  */
 void nfc_tag_14a_data_process(uint8_t *p_data) {
-    // Statistize the number of bit currently received
+    // Compute the number of bits currently received
     uint16_t szDataBits = (NRF_NFCT->RXD.AMOUNT & (NFCT_RXD_AMOUNT_RXDATABITS_Msk | NFCT_RXD_AMOUNT_RXDATABYTES_Msk));
     // The resource that may be used in anti -collision
-    nfc_tag_14a_coll_res_referen_t *auto_coll_res = m_tag_handler.get_coll_res != NULL ? m_tag_handler.get_coll_res() : NULL;
+    nfc_tag_14a_coll_res_reference_t *auto_coll_res = m_tag_handler.get_coll_res != NULL ? m_tag_handler.get_coll_res() : NULL;
 
     // I don't know why, here the CPU must run empty for a period of time before the data can be received normally.
     // If you have any problems with the receiving data, please try to restore this. This is a problem found in 2021, but it disappeared again in 2022
@@ -391,7 +391,7 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
         // We may receive a Wupa or REQA instruction, or other special instructions
         bool isREQA = (p_data[0] == NFC_TAG_14A_CMD_REQA);
         bool isWUPA = (p_data[0] == NFC_TAG_14A_CMD_WUPA);
-        // The trigger conditions are: Reqa response in non -Halt mode
+        // The trigger conditions are: REQA response in non -Halt mode
         // Temporary through: Wupa response in non -choice state, no matter what state is in the state, you can use the Wupa instruction to wake up
         if ((szDataBits == 7) && ((isREQA && m_tag_state_14a != NFC_TAG_STATE_14A_HALTED) || isWUPA)) {
             // The receiver of the 14A communication is notified, the internal state machine is reset
@@ -414,7 +414,7 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
             // TODOHere you can match some other instructions, call back some registered processing functions to handle this logic separately
             // Normal communication process will not have N bits of frames, because it is the anti -conflict frame used in the 14A protocol for BIT
             // So you can handle this protocol frame separately here to realize the tag similar to the UID back door card (Chinese Magic)
-            // Note that if we find Reqa or wupa, we will not repeat the processing (only the special ratio special frame)
+            // Note that if we find REQA or WUPA, we will not repeat the processing (only the special ratio special frame)
             if ((!isREQA && !isWUPA) && m_tag_handler.cb_state != NULL) {
                 // If the 7bit processor is registered and successfully processed this command, the state machine update is completed
                 m_tag_handler.cb_state(p_data, szDataBits);
@@ -542,7 +542,7 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
             // NRF_LOG_INFO("[MFEMUL_SELECT] Unknown selection procedure");
             break;
         }
-        // Activation status, repost processing of any message
+        // Activation status, re-post processing of any message
         case NFC_TAG_STATE_14A_ACTIVE: {
             // You need to judge whether you have received instructions that need to be handled directly without forwarding
             if (szDataBits == 32) {
@@ -569,7 +569,7 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
                     return;
                 }
             }
-            // No processing is successful, it may be some other data. You need to repost processing
+            // No processing is successful, it may be some other data. You need to re-post processing
             if (m_tag_handler.cb_state != NULL) {    //Activation status, transfer the message to other registered processor processing
                 m_tag_handler.cb_state(p_data, szDataBits);
                 break;
@@ -639,7 +639,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
 
             // NRF_LOG_INFO("RX FRAMEEND.\n");
             // TODO Remember a bug, if you do not reply to the message after receiving the message, you need to manually enable you
-            //   Otherwise, the nrfx_nfct_evt_tx_framend conditions above will not be triggered, and nrfx_nfct_rx_bytes will not be called
+            //   Otherwise, the nrfx_nfct_evt_tx_frameend conditions above will not be triggered, and nrfx_nfct_rx_bytes will not be called
             // All the next communication will have problems. How can I play if there is a problem? Play an egg.
             m_is_responded = false;
             // One more layer of pressure stack, but it seems to have little effect on performance
@@ -671,7 +671,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             break;
         }
         default: {
-            NRF_LOG_INFO("No NFCT Event processer: %d\n", p_event->evt_id);
+            NRF_LOG_INFO("No NFCT Event processor: %d\n", p_event->evt_id);
             break;
         }
     }

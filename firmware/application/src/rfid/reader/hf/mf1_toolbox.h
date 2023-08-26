@@ -45,20 +45,20 @@ extern "C" {
 #endif
 
 
-uint8_t Darkside_Recover_Key(
+uint8_t darkside_recover_key(
     uint8_t targetBlk,
     uint8_t targetTyp,
     uint8_t firstRecover,
     uint8_t ntSyncMax,
     DarksideCore *dc
 );
-uint8_t Nested_Distacne_Detect(
+uint8_t nested_distance_detect(
     uint8_t block,
     uint8_t type,
     uint8_t *key,
     NestedDist *nd
 );
-uint8_t Nested_Recover_Key(
+uint8_t nested_recover_key(
     uint64_t keyKnown,
     uint8_t blkKnown,
     uint8_t typKnown,
@@ -66,10 +66,10 @@ uint8_t Nested_Recover_Key(
     uint8_t targetType,
     NestedCore ncs[SETS_NR]
 );
-uint8_t Check_Darkside_Support(void);
-uint8_t Check_WeakNested_Support(void);
-uint8_t Check_STDMifareNT_Support(void);
-void Atenna_Switch_Delay(uint32_t delay_ms);
+uint8_t check_darkside_support(void);
+uint8_t check_weak_nested_support(void);
+uint8_t check_std_mifare_nt_support(void);
+void antenna_switch_delay(uint32_t delay_ms);
 uint8_t auth_key_use_522_hw(uint8_t block, uint8_t type, uint8_t *key);
 
 #ifdef __cplusplus

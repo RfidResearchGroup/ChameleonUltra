@@ -54,11 +54,11 @@ NRF_LOG_MODULE_REGISTER();
 // CONFIG masks to check individual needed bits
 #define CONF_ACCESS_PROT            0x80
 
-#define VERSION_INFO_LENGTH         8 //8 bytes info lenght + crc
+#define VERSION_INFO_LENGTH         8 //8 bytes info length + crc
 
 #define BYTES_PER_READ              16
 
-// SIGNATURE Lenght
+// SIGNATURE Length
 #define SIGNATURE_LENGTH            32
 
 // NTAG215_Version[7] mean:
@@ -72,7 +72,7 @@ uint8_t ntagPwdOK[2] = {0x80, 0x80};
 // Data structure pointer to the label information
 static nfc_tag_ntag_information_t *m_tag_information = NULL;
 // Define and use shadow anti -collision resources
-static nfc_tag_14a_coll_res_referen_t m_shadow_coll_res;
+static nfc_tag_14a_coll_res_reference_t m_shadow_coll_res;
 //Define and use NTAG special communication buffer
 static nfc_tag_ntag_tx_buffer_t m_tag_tx_buffer;
 // Save the specific type of NTAG currently being simulated
@@ -189,7 +189,7 @@ void nfc_tag_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits) {
     return;
 }
 
-nfc_tag_14a_coll_res_referen_t *get_ntag_coll_res() {
+nfc_tag_14a_coll_res_reference_t *get_ntag_coll_res() {
     // Use a separate anti -conflict information instead of using the information in the sector
     m_shadow_coll_res.sak = m_tag_information->res_coll.sak;
     m_shadow_coll_res.atqa = m_tag_information->res_coll.atqa;

@@ -142,7 +142,7 @@ static void nus_data_handler(ble_nus_evt_t *p_evt) {
 }
 /**@snippet [Handling the data received over BLE] */
 
-void nus_data_reponse(uint8_t *p_data, uint16_t length) {
+void nus_data_response(uint8_t *p_data, uint16_t length) {
     NRF_LOG_INFO("BLE nus service response data length: %d", length);
     NRF_LOG_HEXDUMP_DEBUG(p_data, length);
 

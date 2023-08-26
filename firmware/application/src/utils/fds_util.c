@@ -114,7 +114,7 @@ bool fds_write_sync(uint16_t id, uint16_t key, uint16_t data_length_words, void 
     fds_operation_info.success = false;
     fds_operation_info.waiting = true;
 
-    // Call the real function of the realistic unmnled GC
+    // CCall the write implementation function without automatic GC
     ret_code_t err_code = fds_write_record_nogc(id, key, data_length_words, buffer);
     if (err_code == NRF_SUCCESS) {
         while (!fds_operation_info.success) {

@@ -116,7 +116,7 @@
 /* End AVR specific */
 #else
 
-/* Plattform independend code */
+/* Platform independent code */
 
 #define SPLIT_BYTE(__even, __odd, __byte) \
     __even = (__even >> 1) | (__byte<<7); __byte>>=1; \
@@ -143,9 +143,9 @@
 
 #endif
 
-/* Space/speed tradoff. */
+/* Space/speed trade-off. */
 /* We want speed, so we have to pay with size. */
-/* If we combine the A und B Filtertables and precalculate the values */
+/* If we combine the A and B filter tables and precalculate the values */
 /* for each state byte, we get the following tables which gives a */
 /* faster calculation of the filter output */
 /* Table of the filter A/B output per byte */
@@ -314,7 +314,7 @@ static const uint8_t TableC3[32] = {
 
 /* Split Crypto1 state into even and odd bits            */
 /* to speed up the output filter network                 */
-/* Put both into one struct to enable relative adressing */
+/* Put both into one struct to enable relative addressing */
 typedef struct {
     uint8_t Even[LFSR_SIZE / 2];
     uint8_t Odd[LFSR_SIZE / 2];
@@ -519,7 +519,7 @@ void Crypto1Setup(uint8_t Key[6], uint8_t Uid[4], uint8_t CardNonce[4]) {
 }
 
 /* Setup LFSR split into odd and even states, feed in uid ^nonce    */
-/* Vesion for nested authentication.                                */
+/* Version for nested authentication.                               */
 /* Also generates encrypted parity bits at CardNonce[4]..[7]        */
 /* Use: Decrypt = false for the tag, Decrypt = true for the reader  */
 void Crypto1SetupNested(uint8_t Key[6], uint8_t Uid[4], uint8_t CardNonce[4], uint8_t NonceParity[4], bool Decrypt) {
@@ -722,7 +722,7 @@ void Crypto1Auth(uint8_t EncryptedReaderNonce[NONCE_SIZE]) {
     State.Odd[2]  = Odd2;
 }
 
-/* Crypto1Nibble generates keystrem for a nibble (4 bit) */
+/* Crypto1Nibble generates keystream for a nibble (4 bit) */
 /* no input to the LFSR  */
 uint8_t Crypto1Nibble(void) {
     /* state registers */
@@ -772,7 +772,7 @@ uint8_t Crypto1Nibble(void) {
     return (KeyStream);
 }
 
-/* Crypto1Byte generates keystrem for a byte (8 bit) */
+/* Crypto1Byte generates keystream for a byte (8 bit) */
 /* no input to the LFSR  */
 uint8_t Crypto1Byte(void) {
     /* state registers */
@@ -850,10 +850,10 @@ uint8_t Crypto1Byte(void) {
     return (KeyStream);
 }
 
-/* Crypto1ByteArray transcrypts array of bytes        */
-/* No input to the LFSR                               */
-/* Avoids load/store of the LFSR-state for each byte! */
-/* Enhacement for the original function Crypto1Byte() */
+/* Crypto1ByteArray transcripts array of bytes         */
+/* No input to the LFSR                                */
+/* Avoids load/store of the LFSR-state for each byte!  */
+/* Enhancement for the original function Crypto1Byte() */
 void Crypto1ByteArray(uint8_t *Buffer, uint8_t Count) {
     /* state registers */
     register uint8_t Even0, Even1, Even2;
@@ -920,7 +920,7 @@ void Crypto1ByteArray(uint8_t *Buffer, uint8_t Count) {
         Feedback = Crypto1LFSRbyteFeedback(Odd0, Odd1, Odd2, Even0, Even1, Even2);
         SHIFT24(Odd0, Odd1, Odd2, Feedback);
 
-        /* Transcrypt and increment buffer address */
+        /* Transcript and increment buffer address */
         *Buffer++ ^= KeyStream;
     }
 
@@ -1128,10 +1128,10 @@ void Crypto1ByteArrayWithParityHasIn(uint8_t *Buffer, uint8_t *Parity, uint8_t C
 }
 
 /* Function Crypto1PRNG                                           */
-/* New version of the PRNG wich can calculate multiple            */
+/* New version of the PRNG which can calculate multiple           */
 /* feedback bits at once!                                         */
 /* Feedback mask = 0x2d  = 101101 binary                          */
-/* Because pattern 101 is repeated, only 2 shifts are neccessary! */
+/* Because pattern 101 is repeated, only 2 shifts are necessary!  */
 /*      Feedback ^= Feedback >> 3;     folds 101 101 to 101       */
 /*      Feedback ^= Feedback >> 2;     folds 101 => 1             */
 /* With these two lines not only bit 0 is calculated,             */

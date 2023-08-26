@@ -190,7 +190,7 @@ void pcd_14a_reader_init(void) {
 * @retval : Status value hf_tag_ok, success
 */
 void pcd_14a_reader_reset(void) {
-    // Make sure you have initialized and then communicate with soft reworting
+    // Make sure it has been initialized before communicating and soft reset
     if (m_reader_is_init) {
         // Softening 522
         write_register_single(CommandReg, PCD_IDLE);

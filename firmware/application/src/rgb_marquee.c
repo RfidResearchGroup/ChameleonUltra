@@ -371,8 +371,8 @@ void ledblink5(uint8_t color, uint8_t start, uint8_t stop) {
 }
 
 
-//Charging cartoon
-// perc the current percentage of the battery 0-4 4 represents full electric breathing light
+// Charging animation
+// the current percentage of the battery 0-4 4 represents full electric breathing light
 volatile bool callback_waiting6 = 0;
 void ledblink6_pwm_callback(nrfx_pwm_evt_type_t event_type) {
     if (event_type == NRF_DRV_PWM_EVT_FINISHED) {
