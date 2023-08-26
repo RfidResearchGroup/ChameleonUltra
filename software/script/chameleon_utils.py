@@ -271,7 +271,7 @@ class ArgparseCompleter(Completer):
 
     def get_completions(self, document, complete_event):
         text = document.text_before_cursor
-        word_before_cursor = document.get_word_before_cursor()
+        word_before_cursor = document.text_before_cursor.split(' ')[-1]
 
         _, _, suggestions = self.check_tokens(list(), text.split())
 
