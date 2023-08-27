@@ -41,12 +41,19 @@ void settings_init_button_long_press_config(void) {
     config.button_b_long_press = SettingsButtonCloneIcUid;
 }
 
+// add on version4
+void settings_init_ble_connect_key_config(void) {
+    uint8_t p_key_u8[] = DEFAULT_BLE_CONNECT_KEY;
+    settings_set_ble_connect_key(p_key_u8);
+}
+
 void settings_init_config(void) {
     settings_update_version_for_config();
     // add on version1
     config.animation_config = SettingsAnimationModeFull;
     settings_init_button_press_config();
     settings_init_button_long_press_config();
+    settings_init_ble_connect_key_config();
 }
 
 void settings_migrate(void) {
@@ -60,6 +67,9 @@ void settings_migrate(void) {
 
         case 2:
             settings_init_button_long_press_config();
+
+        case 3:
+            settings_init_ble_connect_key_config();
 
             /*
              * Add new migration steps ABOVE THIS COMMENT
@@ -242,4 +252,17 @@ void settings_set_long_button_press_config(char which, uint8_t value) {
             APP_ERROR_CHECK_BOOL(false);
             break;
     }
+}
+
+uint8_t* settings_get_ble_connect_key(void) {
+    return config.ble_connect_key;
+}
+
+/**
+ * @brief Pointer to 6-digit ASCII string (digit 0..9 only, no NULL termination) passkey to be used during pairing.
+ * 
+ * @param key Ble connect key for your device
+ */
+void settings_set_ble_connect_key(uint8_t* key) {
+    memcpy(config.ble_connect_key, key, BLE_CONNECT_KEY_LEN_MAX);
 }
