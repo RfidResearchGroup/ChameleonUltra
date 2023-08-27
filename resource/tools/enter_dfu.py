@@ -10,7 +10,7 @@ for comport in list_ports.comports():
     if comport.vid == 0x1915 and comport.pid == 0x521f:
         print("Chameleon already in DFU mode")
         exit(0)
-    if comport.vid == 0x6868 and comport.pid == 0x8686:
+    if comport.vid == 0x6868 and (comport.pid == 0x8686 or comport.pid == 0x8787):
         port = comport.device
         break
 

@@ -6420,7 +6420,7 @@
 // <i> Selected Product ID
 
 #ifndef APP_USBD_PID
-#define APP_USBD_PID 0x8686
+#define APP_USBD_PID DEVICE_PID
 #endif
 
 // <o> APP_USBD_DEVICE_VER_MAJOR - Major device version  <0-99>

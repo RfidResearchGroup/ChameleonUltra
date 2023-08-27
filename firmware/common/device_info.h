@@ -5,9 +5,11 @@
 #if defined(PROJECT_CHAMELEON_ULTRA)
 #define DEVICE_NAME_STR         "ChameleonUltra"
 #define DEVICE_NAME_STR_SHORT   "CU"
+#define DEVICE_PID              0x8686
 #elif defined(PROJECT_CHAMELEON_LITE)
 #define DEVICE_NAME_STR         "ChameleonLite"
 #define DEVICE_NAME_STR_SHORT   "CL"
+#define DEVICE_PID              0x8787
 #else
 #error "Unknown device name?"
 #endif

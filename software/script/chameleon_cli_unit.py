@@ -210,10 +210,10 @@ class HWConnect(BaseCLIUnit):
                             break
                     if PSHEXE:
                         # process = subprocess.Popen([PSHEXE,"Get-CimInstance -ClassName Win32_serialport |"
-                        # " Where-Object {$_.PNPDeviceID -like '*VID_6868&PID_8686*'} |"
+                        # " Where-Object {$_.PNPDeviceID -like '*VID_6868&PID_*'} |"
                         # " Select -expandproperty DeviceID"],stdout=subprocess.PIPE);
                         process = subprocess.Popen([PSHEXE, "Get-PnPDevice -Class Ports -PresentOnly |"
-                                                    " where {$_.DeviceID -like '*VID_6868&PID_8686*'} |"
+                                                    " where {$_.DeviceID -like '*VID_6868&PID_*'} |"
                                                     " Select-Object -First 1 FriendlyName |"
                                                     " % FriendlyName |"
                                                     " select-string COM\d+ |"
