@@ -221,7 +221,7 @@ static void nrf_qwr_error_handler(uint32_t nrf_error) {
 }
 
 __INLINE uint32_t map(uint32_t x, uint32_t in_min, uint32_t in_max, uint32_t out_min, uint32_t out_max) {
-    return (uint32_t)((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min);
+    return (uint32_t)(MIN((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min, out_max));
 }
 
 //Battery voltage to percentage calculation
