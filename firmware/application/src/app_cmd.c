@@ -750,6 +750,48 @@ data_frame_tx_t *cmd_processor_get_enabled_slots(uint16_t cmd, uint16_t status, 
     return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 8, slot_info);
 }
 
+data_frame_tx_t *cmd_processor_get_ble_connect_key(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    return data_frame_make(
+        cmd, 
+        STATUS_DEVICE_SUCCESS, 
+        BLE_CONNECT_KEY_LEN_MAX, // 6
+        settings_get_ble_connect_key() // Get key point from config
+    );
+}
+
+data_frame_tx_t *cmd_processor_set_ble_connect_key(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length == BLE_CONNECT_KEY_LEN_MAX) {
+        // Must be 6 ASCII characters, can only be 0-9.
+        bool is_valid_key = true;
+        for (uint8_t i = 0; i < BLE_CONNECT_KEY_LEN_MAX; i++) {
+            if (data[i] < 48 || data[i] > 57) {
+                is_valid_key = false;
+                break;
+            }
+        }
+        if (is_valid_key) {
+            // Key is valid, we can update to config
+            settings_set_ble_connect_key(data);
+            advertising_stop();
+            set_ble_connect_key(settings_get_ble_connect_key());
+            // clear bond if exists
+            advertising_start(true);
+            status = STATUS_DEVICE_SUCCESS;
+        } else {
+            status = STATUS_PAR_ERR;
+        }
+    } else {
+        status = STATUS_PAR_ERR;
+    }
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+data_frame_tx_t *cmd_processor_del_ble_all_bonds(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    advertising_stop();
+    delete_bonds_all();
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 0, NULL);
+}
+
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
 
@@ -812,6 +854,9 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_SET_BUTTON_PRESS_CONFIG,      NULL,                        cmd_processor_set_button_press_config,       NULL                   },
     {    DATA_CMD_GET_LONG_BUTTON_PRESS_CONFIG, NULL,                        cmd_processor_get_long_button_press_config,  NULL                   },
     {    DATA_CMD_SET_LONG_BUTTON_PRESS_CONFIG, NULL,                        cmd_processor_set_long_button_press_config,  NULL                   },
+    {    DATA_CMD_GET_BLE_CONNECT_KEY_CONFIG,   NULL,                        cmd_processor_get_ble_connect_key,           NULL                   },
+    {    DATA_CMD_SET_BLE_CONNECT_KEY_CONFIG,   NULL,                        cmd_processor_set_ble_connect_key,           NULL                   },
+    {    DATA_CMD_DELETE_ALL_BLE_BONDS,         NULL,                        cmd_processor_del_ble_all_bonds,             NULL                   },
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
