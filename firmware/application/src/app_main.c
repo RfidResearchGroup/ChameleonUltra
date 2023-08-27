@@ -17,6 +17,7 @@
 #include "nrfx_nfct.h"
 #include "nrfx_power.h"
 #include "nrf_drv_lpcomp.h"
+#include "nrf_ble_lesc.h"
 
 #define NRF_LOG_MODULE_NAME app_main
 #include "nrf_log.h"
@@ -107,7 +108,7 @@ static void power_management_init(void) {
 
 /**@brief Function for initializing power management.
  */
-static void rng_drv_and_srand_init(void) {
+void rng_drv_and_srand_init(void) {
     ret_code_t err_code;
     uint8_t available;
     uint32_t rand_int;
@@ -416,7 +417,7 @@ static void check_wakeup_src(void) {
 
     if (m_reset_source & NRF_POWER_RESETREAS_OFF_MASK) {
         NRF_LOG_INFO("WakeUp from button");
-        advertising_start(); // Turn on Bluetooth radio
+        advertising_start(false); // Turn on Bluetooth radio
 
         // Button wake-up boot animation
         uint8_t animation_config = settings_get_animation_config();
@@ -474,7 +475,7 @@ static void check_wakeup_src(void) {
         // light_up_by_slot();
 
         // Start Bluetooth radio with USB plugged in, no deep hibernation required
-        advertising_start();
+        advertising_start(false);
     } else {
         NRF_LOG_INFO("First power system");
 
@@ -499,7 +500,7 @@ static void check_wakeup_src(void) {
         if (nrfx_power_usbstatus_get() != NRFX_POWER_USB_STATE_DISCONNECTED) {
             NRF_LOG_INFO("USB Power found.");
             // usb plugged in can broadcast BLE at will
-            advertising_start();
+            advertising_start(true);
         } else {
             sleep_timer_start(SLEEP_DELAY_MS_FIRST_POWER); // Wait a while and go straight to hibernation, do nothing
         }
@@ -752,28 +753,40 @@ static void blink_usb_led_status(void) {
     }
 }
 
+static void lesc_event_process(void) {
+    ret_code_t err_code;
+    err_code = nrf_ble_lesc_request_handler();
+    APP_ERROR_CHECK(err_code);
+}
+
+static void ble_passkey_init(void) {
+    set_ble_connect_key(settings_get_ble_connect_key());
+}
+
 /**@brief Application main function.
  */
 int main(void) {
     hw_connect_init();        // Remember to initialize the pins first
-    init_leds();              // LED initialization
 
+    init_leds();              // LED initialization
     log_init();               // Log initialization
     gpio_te_init();           // Initialize GPIO matrix library
     app_timers_init();        // Initialize soft timer
-    fds_util_init();          // Initialize fds tool package
+    power_management_init();  // Power management initialization
+    usb_cdc_init();           // USB cdc emulation initialization
+    ble_slave_init();         // Bluetooth protocol stack initialization
+    
+    rng_drv_and_srand_init(); // Random number generator initialization
     bsp_timer_init();         // Initialize timeout timer
     bsp_timer_start();        // Start BSP TIMER and prepare it for processing business logic
     button_init();            // Button initialization for handling business logic
     sleep_timer_init();       // Soft timer initialization for hibernation
-    rng_drv_and_srand_init(); // Random number generator initialization
-    power_management_init();  // Power management initialization
-    usb_cdc_init();           // USB cdc emulation initialization
-    ble_slave_init();         // Bluetooth protocol stack initialization
+    fds_util_init();          // Initialize fds tool package
     tag_emulation_init();     // Analog card initialization
     rgb_marquee_init();       // Light effect initialization
 
     settings_load_config();   // Load settings from flash
+    ble_passkey_init();       // after settings loaded, we can init ble connect key.
 
     // cmd callback register
     on_data_frame_complete(on_data_frame_received);
@@ -788,6 +801,8 @@ int main(void) {
     // Enter main loop.
     NRF_LOG_INFO("Chameleon working");
     while (1) {
+        // process lesc event
+        lesc_event_process();
         // Button event process
         button_press_process();
         // Led blink at usb status

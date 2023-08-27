@@ -171,10 +171,26 @@ int fds_delete_sync(uint16_t id, uint16_t key) {
     return delete_count;
 }
 
+static bool is_peer_manager_record(uint16_t id_or_key) {
+    if (id_or_key > 0xBFFF) {
+        return true;
+    }
+    return false;
+}
+
 /**
  *FDS event callback
  */
 static void fds_evt_handler(fds_evt_t const *p_evt) {
+    // Skip peermanager event
+    if (is_peer_manager_record(p_evt->write.record_key) 
+            || is_peer_manager_record(p_evt->write.file_id)
+            || is_peer_manager_record(p_evt->del.record_key)
+            || is_peer_manager_record(p_evt->del.file_id)
+        ) {
+        return;
+    }
+
     // To process fds event
     switch (p_evt->id) {
         case FDS_EVT_INIT: {

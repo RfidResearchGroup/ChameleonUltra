@@ -10,7 +10,11 @@
 #include "nrf_sdh_soc.h"
 #include "nrf_sdh_ble.h"
 #include "nrf_ble_gatt.h"
+#include "nrf_ble_lesc.h"
 #include "nrf_drv_saadc.h"
+
+#include "peer_manager.h"
+#include "peer_manager_handler.h"
 
 #include "app_timer.h"
 #include "app_util_platform.h"
@@ -19,6 +23,7 @@
 #include "ble_main.h"
 #include "dataframe.h"
 #include "hw_connect.h"
+#include "settings.h"
 
 #define NRF_LOG_MODULE_NAME ble_main
 #include "nrf_log.h"
@@ -26,6 +31,23 @@
 #include "nrf_log_default_backends.h"
 NRF_LOG_MODULE_REGISTER();
 
+
+#define LESC_DEBUG_MODE                 0                                           /**< Set to 1 to use the LESC debug keys. The debug mode allows you to use a sniffer to inspect traffic. */
+#define LESC_MITM_NC                    1                                           /**< Use MITM (Numeric Comparison). */
+
+#define SEC_PARAMS_BOND                 1                                           /**< Perform bonding. */
+#if LESC_MITM_NC
+#define SEC_PARAMS_MITM                 1                                           /**< Man In The Middle protection required. */
+#define SEC_PARAMS_IO_CAPABILITIES      BLE_GAP_IO_CAPS_DISPLAY_ONLY
+#else
+#define SEC_PARAMS_MITM                 0                                           /**< Man In The Middle protection required. */
+#define SEC_PARAMS_IO_CAPABILITIES      BLE_GAP_IO_CAPS_DISPLAY_ONLY
+#endif
+#define SEC_PARAMS_LESC                 1                                           /**< LE Secure Connections pairing required. */
+#define SEC_PARAMS_KEYPRESS             0                                           /**< Keypress notifications not required. */
+#define SEC_PARAMS_OOB                  0                                           /**< Out Of Band data not available. */
+#define SEC_PARAMS_MIN_KEY_SIZE         7                                           /**< Minimum encryption key size in octets. */
+#define SEC_PARAMS_MAX_KEY_SIZE         16                                          /**< Maximum encryption key size in octets. */
 
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 #define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
@@ -76,7 +98,20 @@ static ble_uuid_t m_adv_uuids[]          =                                      
 };
 volatile bool g_is_ble_connected = false;
 volatile bool g_is_low_battery_shutdown = false;
+static ble_opt_t m_static_pin_option;
 
+
+/**@brief Function for the ble connect key setup.
+ *
+ * @details This function will set up the ble connect passkey.
+ */
+void set_ble_connect_key(uint8_t* key) {
+    static uint8_t passkey[BLE_CONNECT_KEY_LEN_MAX];
+    memcpy(passkey, key, BLE_CONNECT_KEY_LEN_MAX);
+    m_static_pin_option.gap_opt.passkey.p_passkey = passkey;
+    // NRF_LOG_RAW_HEXDUMP_INFO(passkey, 6);
+    APP_ERROR_CHECK(sd_ble_opt_set(BLE_GAP_OPT_PASSKEY, &m_static_pin_option));
+}
 
 /**@brief Function for the GAP initialization.
  *
@@ -287,9 +322,9 @@ static void services_init(void) {
     bas_init_obj.p_report_ref         = NULL;
     bas_init_obj.initial_batt_level   = 100;
 
-    bas_init_obj.bl_rd_sec        = SEC_OPEN;
-    bas_init_obj.bl_cccd_wr_sec   = SEC_OPEN;
-    bas_init_obj.bl_report_rd_sec = SEC_OPEN;
+    bas_init_obj.bl_rd_sec        = SEC_MITM;
+    bas_init_obj.bl_cccd_wr_sec   = SEC_MITM;
+    bas_init_obj.bl_report_rd_sec = SEC_MITM;
 
     err_code = ble_bas_init(&m_bas, &bas_init_obj);
     APP_ERROR_CHECK(err_code);
@@ -403,10 +438,18 @@ static void ble_evt_handler(ble_evt_t const *p_ble_evt, void *p_context) {
         break;
 
         case BLE_GAP_EVT_SEC_PARAMS_REQUEST:
-            // Pairing not supported
-            err_code = sd_ble_gap_sec_params_reply(m_conn_handle, BLE_GAP_SEC_STATUS_PAIRING_NOT_SUPP, NULL, NULL);
-            APP_ERROR_CHECK(err_code);
+            // Pairing not supported? No, is supported now, hahahaha...
+            // err_code = sd_ble_gap_sec_params_reply(m_conn_handle, BLE_GAP_SEC_STATUS_PAIRING_NOT_SUPP, NULL, NULL);
+            // APP_ERROR_CHECK(err_code);
             break;
+        
+        case BLE_GAP_EVT_PASSKEY_DISPLAY: {
+            char passkey[BLE_GAP_PASSKEY_LEN + 1];
+            memcpy(passkey, p_ble_evt->evt.gap_evt.params.passkey_display.passkey, BLE_GAP_PASSKEY_LEN);
+            passkey[BLE_GAP_PASSKEY_LEN] = 0x00;
+            NRF_LOG_INFO("=== PASSKEY: %s =====",   nrf_log_push(passkey));
+        }
+        break;
 
         case BLE_GATTS_EVT_SYS_ATTR_MISSING:
             // No system attributes have been stored.
@@ -511,15 +554,136 @@ static void advertising_init(void) {
     ble_advertising_conn_cfg_tag_set(&m_advertising, APP_BLE_CONN_CFG_TAG);
 }
 
-/**
- * @brief Function for starting advertising.
+/**@brief Clear bond information from persistent storage.
  */
-void advertising_start(void) {
-    uint32_t err_code = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
+void delete_bonds_all(void)
+{
+    ret_code_t err_code;
+
+    NRF_LOG_INFO("Erase bonds!");
+
+    err_code = pm_peers_delete();
     APP_ERROR_CHECK(err_code);
 }
 
+/**@brief Function for setting filtered whitelist.
+ *
+ * @param[in] skip  Filter passed to @ref pm_peer_id_list.
+ */
+static void whitelist_set(pm_peer_id_list_skip_t skip)
+{
+    pm_peer_id_t peer_ids[BLE_GAP_WHITELIST_ADDR_MAX_COUNT];
+    uint32_t     peer_id_count = BLE_GAP_WHITELIST_ADDR_MAX_COUNT;
 
+    ret_code_t err_code = pm_peer_id_list(peer_ids, &peer_id_count, PM_PEER_ID_INVALID, skip);
+    APP_ERROR_CHECK(err_code);
+
+    NRF_LOG_INFO("Whitelist peer cnt %d, MAX_PEERS_WLIST %d", peer_id_count, BLE_GAP_WHITELIST_ADDR_MAX_COUNT);
+
+    err_code = pm_whitelist_set(peer_ids, peer_id_count);
+    APP_ERROR_CHECK(err_code);
+}
+
+/**@brief Function for starting advertising.
+ */
+void advertising_start(bool erase_bonds)
+{
+    if (erase_bonds == true)
+    {
+        delete_bonds_all();
+        // Advertising is started by PM_EVT_PEERS_DELETE_SUCCEEDED event.
+    }
+    else
+    {
+        whitelist_set(PM_PEER_ID_LIST_SKIP_NO_ID_ADDR);
+
+        ret_code_t ret = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
+        APP_ERROR_CHECK(ret);
+    }
+}
+
+/**
+ * @brief Function for stop advertising.
+ */
+void advertising_stop(void)
+{
+    sd_ble_gap_adv_stop(m_advertising.adv_handle);
+}
+
+/**@brief Function for handling Peer Manager events.
+ *
+ * @param[in] p_evt  Peer Manager event.
+ */
+static void pm_evt_handler(pm_evt_t const * p_evt)
+{
+    pm_handler_on_pm_evt(p_evt);
+    pm_handler_disconnect_on_sec_failure(p_evt);
+    pm_handler_flash_clean(p_evt);
+
+    switch (p_evt->evt_id)
+    {
+        case PM_EVT_CONN_SEC_SUCCEEDED:
+            // p_evt->peer_id;
+            break;
+
+        case PM_EVT_PEERS_DELETE_SUCCEEDED:
+            advertising_start(false);
+            break;
+
+        case PM_EVT_PEER_DATA_UPDATE_SUCCEEDED:
+            if (     p_evt->params.peer_data_update_succeeded.flash_changed
+                 && (p_evt->params.peer_data_update_succeeded.data_id == PM_PEER_DATA_ID_BONDING))
+            {
+                NRF_LOG_INFO("New Bond, add the peer to the whitelist if possible");
+                // Note: You should check on what kind of white list policy your application should use.
+
+                whitelist_set(PM_PEER_ID_LIST_SKIP_NO_ID_ADDR);
+            }
+            break;
+        case PM_EVT_CONN_SEC_CONFIG_REQ:
+            {
+                pm_conn_sec_config_t cfg;
+                cfg.allow_repairing = true;
+                pm_conn_sec_config_reply(p_evt->conn_handle, &cfg);
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+/**@brief Function for the Peer Manager initialization.
+ */
+static void peer_manager_init(void)
+{
+    ble_gap_sec_params_t sec_param;
+    ret_code_t           err_code;
+
+    err_code = pm_init();
+    APP_ERROR_CHECK(err_code);
+
+    memset(&sec_param, 0, sizeof(ble_gap_sec_params_t));
+
+    // Security parameters to be used for all security procedures.
+    sec_param.bond           = SEC_PARAMS_BOND;
+    sec_param.mitm           = SEC_PARAMS_MITM;
+    sec_param.lesc           = SEC_PARAMS_LESC;
+    sec_param.keypress       = SEC_PARAMS_KEYPRESS;
+    sec_param.io_caps        = SEC_PARAMS_IO_CAPABILITIES;
+    sec_param.oob            = SEC_PARAMS_OOB;
+    sec_param.min_key_size   = SEC_PARAMS_MIN_KEY_SIZE;
+    sec_param.max_key_size   = SEC_PARAMS_MAX_KEY_SIZE;
+    sec_param.kdist_own.enc  = 1;
+    sec_param.kdist_own.id   = 1;
+    sec_param.kdist_peer.enc = 1;
+    sec_param.kdist_peer.id  = 1;
+
+    err_code = pm_sec_params_set(&sec_param);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = pm_register(pm_evt_handler);
+    APP_ERROR_CHECK(err_code);
+}
 
 /**@brief Function for handling the ADC interrupt.
  *
@@ -618,4 +782,5 @@ void ble_slave_init(void) {
     services_init();                    // Initialization of service characteristics
     advertising_init();                 // Broadcast parameter initialization
     conn_params_init();                 // Connection parameter initialization
+    peer_manager_init();                // Peer manager Initialization
 }
