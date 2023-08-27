@@ -9,7 +9,7 @@ const static chameleon_device_type_t m_device_type =
 #elif defined(PROJECT_CHAMELEON_LITE)
     CHAMELEON_LITE;
 #else
-    "No device define before project build.";
+#error No device defined
 #endif
 
 char g_extern_product_str[sizeof(DEVICE_NAME_STR) + sizeof(": hw_v255, fw_v65535") + 1];

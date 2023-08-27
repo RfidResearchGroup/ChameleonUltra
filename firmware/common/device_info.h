@@ -9,7 +9,7 @@
 #define DEVICE_NAME_STR         "ChameleonLite"
 #define DEVICE_NAME_STR_SHORT   "CL"
 #else
-#error "Unknown device name?"
+#error No device defined
 #endif
 
 
