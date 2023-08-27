@@ -317,6 +317,8 @@ class ChameleonCMD:
         resp = self.device.send_cmd_sync(DATA_CMD_GET_DEVICE_MODE, 0x00)
         return True if resp.data[0] == 1 else False
 
+    # Note: Will return NOT_IMPLEMENTED if one tries to set reader mode on Lite
+    @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_reader_device_mode(self, reader_mode: bool = True):
         """
             Change device mode, reader or tag

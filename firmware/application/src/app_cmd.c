@@ -36,20 +36,23 @@ data_frame_tx_t *cmd_processor_get_git_version(uint16_t cmd, uint16_t status, ui
 
 
 data_frame_tx_t *cmd_processor_change_device_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-#if defined(PROJECT_CHAMELEON_ULTRA)
     if (length == 1) {
         if (data[0] == 1) {
+#if defined(PROJECT_CHAMELEON_ULTRA)
             reader_mode_enter();
+            return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 0, NULL);
+#else
+            return data_frame_make(cmd, STATUS_NOT_IMPLEMENTED, 0, NULL);
+#endif
         } else {
+#if defined(PROJECT_CHAMELEON_ULTRA)
             tag_mode_enter();
+#endif
+            return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 0, NULL);
         }
     } else {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 0, NULL);
-#else
-    return data_frame_make(cmd, STATUS_NOT_IMPLEMENTED, 0, NULL);
-#endif
 }
 
 data_frame_tx_t *cmd_processor_get_device_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {

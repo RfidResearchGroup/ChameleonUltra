@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Fixed CLI takes into account Lite refusing to enter Reader mode (@doegox)
  - Security BLE implemented (@xianglin1998)
  - Added `hw settings blekey` to get and set ble connect key (@xianglin1998)
  - Added `hw ble bonds clear` to delete all ble bonds (@xianglin1998)
