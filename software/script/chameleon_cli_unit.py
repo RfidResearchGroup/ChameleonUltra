@@ -157,11 +157,15 @@ hw_address = hw.subgroup('address', 'Device address get')
 hw_mode = hw.subgroup('mode', 'Device mode get/set')
 hw_slot = hw.subgroup('slot', 'Emulation tag slot.')
 hw_slot_nick = hw_slot.subgroup('nick', 'Get/Set tag nick name for slot')
+hw_ble = hw.subgroup('ble', 'Bluetooth low energy')
+hw_ble_bonds = hw_ble.subgroup('bonds', 'All devices bound by chameleons.')
 hw_settings = hw.subgroup('settings', 'Chameleon settings management')
 hw_settings_animation = hw_settings.subgroup(
     'animation', 'Manage wake-up and sleep animation modes')
 hw_settings_button_press = hw_settings.subgroup(
     'btnpress', 'Manage button press function')
+hw_settings_ble_key = hw_settings.subgroup(
+    'blekey', 'Manage ble connect key')
 
 hf = CLITree('hf', 'high frequency tag/reader')
 hf_14a = hf.subgroup('14a', 'ISO14443-a tag read/write/info...')
@@ -1393,10 +1397,10 @@ class HWButtonSettingsGet(DeviceRequiredUnit):
             button_long_fn = chameleon_cmd.ButtonPressFunction.from_int(
                 resp_long.data[0])
             print(f" - {colorama.Fore.GREEN}{button} {colorama.Fore.YELLOW}short{colorama.Style.RESET_ALL}:"
-                  " {button_fn}")
+                  f" {button_fn}")
             print(f"      usage: {button_fn.usage()}")
             print(f" - {colorama.Fore.GREEN}{button} {colorama.Fore.YELLOW}long {colorama.Style.RESET_ALL}:"
-                  " {button_long_fn}")
+                  f" {button_long_fn}")
             print(f"      usage: {button_long_fn.usage()}")
             print("")
         print(" - Successfully get button function from settings")
@@ -1428,3 +1432,46 @@ class HWButtonSettingsSet(DeviceRequiredUnit):
         else:
             self.cmd.set_button_press_fun(button, function)
         print(" - Successfully set button function to settings")
+
+
+@hw_settings_ble_key.command('set', 'Set the ble connect key')
+class HWSettingsBLEKeySet(DeviceRequiredUnit):
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.add_argument('-k', '--key', required=True,
+                            help="Ble connect key for your device")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if len(args.key) != 6:
+            print(f" - {colorama.Fore.RED}The ble connect key length must be 6{colorama.Style.RESET_ALL}")
+            return
+        if re.match(r'[0-9]{6}', args.key):
+            self.cmd.set_ble_connect_key(args.key)
+            print(" - Successfully set ble connect key to settings")
+        else:
+            print(f" - {colorama.Fore.RED}Only 6 ASCII characters from 0 to 9 are supported.{colorama.Style.RESET_ALL}")
+
+
+@hw_settings_ble_key.command('get', 'Get the ble connect key')
+class HWSettingsBLEKeyGet(DeviceRequiredUnit):
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        return None
+
+    def on_exec(self, args: argparse.Namespace):
+        resp = self.cmd.get_ble_connect_key()
+        print(" - Key(ascii): "
+              f"{colorama.Fore.GREEN}{resp.data.decode(encoding='ascii')}{colorama.Style.RESET_ALL}")
+
+
+@hw_ble_bonds.command('clear', 'Clear all bindings')
+class HWBLEBondsClear(DeviceRequiredUnit):
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        return None
+
+    def on_exec(self, args: argparse.Namespace):
+        self.cmd.delete_ble_all_bonds()
+        print(" - Successfully clear all bonds")

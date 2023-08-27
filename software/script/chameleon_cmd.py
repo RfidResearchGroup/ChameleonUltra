@@ -45,6 +45,11 @@ DATA_CMD_SET_BUTTON_PRESS_CONFIG = 1027
 DATA_CMD_GET_LONG_BUTTON_PRESS_CONFIG = 1028
 DATA_CMD_SET_LONG_BUTTON_PRESS_CONFIG = 1029
 
+DATA_CMD_SET_BLE_CONNECT_KEY_CONFIG = 1030
+DATA_CMD_GET_BLE_CONNECT_KEY_CONFIG = 1031
+
+DATA_CMD_DELETE_ALL_BLE_BONDS = 1032
+
 DATA_CMD_SCAN_14A_TAG = 2000
 DATA_CMD_MF1_SUPPORT_DETECT = 2001
 DATA_CMD_MF1_NT_LEVEL_DETECT = 2002
@@ -794,7 +799,35 @@ class ChameleonCMD:
             0x00,
             bytearray([button, function])
         )
+    
+    @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
+    def set_ble_connect_key(self, key: str):
+        """
+        Set config of ble connect key
+        """
+        data_bytes = key.encode(encoding='ascii')
 
+        # check key length
+        if (len(data_bytes) != 6):
+            raise ValueError("The ble connect key length must be 6")
+        
+        return self.device.send_cmd_sync(
+            DATA_CMD_SET_BLE_CONNECT_KEY_CONFIG,
+            0x00, 
+            data_bytes
+        )
+    
+    def get_ble_connect_key(self):
+        """
+        Get config of ble connect key
+        """
+        return self.device.send_cmd_sync(DATA_CMD_GET_BLE_CONNECT_KEY_CONFIG, 0x00, None)
+    
+    def delete_ble_all_bonds(self):
+        """
+        From peer manager delete all bonds.
+        """
+        return self.device.send_cmd_sync(DATA_CMD_DELETE_ALL_BLE_BONDS, 0x00, None)
 
 if __name__ == '__main__':
     # connect to chameleon
