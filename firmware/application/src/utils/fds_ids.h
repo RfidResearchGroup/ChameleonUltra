@@ -1,6 +1,11 @@
 #ifndef FDS_IDS_H
 #define FDS_IDS_H
 
+/**
+ * Warnning !!!
+ * The data area after 0xBFFF is reserved for use by Peer Manager
+ */
+
 /*
  * Card slot configuration, only one, consistent
  */
