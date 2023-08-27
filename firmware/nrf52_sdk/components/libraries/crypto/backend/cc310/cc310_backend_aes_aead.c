@@ -57,7 +57,7 @@ typedef struct
 {
     nrf_crypto_aead_internal_context_t header;  /**< Common header for context. */
     CRYS_AESCCM_UserContext_t          context;
-    uint8_t                            key[16]; /**< Only supported key size by CC310 is 128 bit */
+    uint8_t                            key[32]; /**< Only supported key size by CC310 is 128 bit */
 } nrf_crypto_backend_cc310_aes_aead_context_t;
 
 static ret_code_t result_get(CRYSError_t error)
