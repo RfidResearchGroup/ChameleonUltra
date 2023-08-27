@@ -46,8 +46,8 @@ CMake Error at C:/Users/moeya/Desktop/Chamelion/ProxSpace/msys2/mingw64/share/cm
 This is due to a version of ninja not aware of the Windows paths. Fix:
 
 ```
-pacman -R ninja
-pacman -S mingw-w64-x86_64-ninja
+pacman -R ninja --noconfirm
+pacman -S mingw-w64-x86_64-ninja --noconfirm
 ```
 
 # CLI usage
