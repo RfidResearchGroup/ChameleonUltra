@@ -50,6 +50,10 @@ DATA_CMD_GET_BLE_CONNECT_KEY_CONFIG = 1031
 
 DATA_CMD_DELETE_ALL_BLE_BONDS = 1032
 
+DATA_CMD_GET_DEVICE = 1033
+DATA_CMD_GET_SETTINGS = 1034
+DATA_CMD_GET_DEVICE_CAPABILITIES = 1035
+
 DATA_CMD_SCAN_14A_TAG = 2000
 DATA_CMD_MF1_SUPPORT_DETECT = 2001
 DATA_CMD_MF1_NT_LEVEL_DETECT = 2002
@@ -283,6 +287,8 @@ class ChameleonCMD:
         :param chameleon: chameleon instance, @see chameleon_device.Chameleon
         """
         self.device = chameleon
+        if not len(self.device.commands):
+            self.get_device_capabilities()
 
     def get_firmware_version(self) -> int:
         """
@@ -810,7 +816,7 @@ class ChameleonCMD:
         data_bytes = key.encode(encoding='ascii')
 
         # check key length
-        if (len(data_bytes) != 6):
+        if len(data_bytes) != 6:
             raise ValueError("The ble connect key length must be 6")
         
         return self.device.send_cmd_sync(
@@ -830,6 +836,27 @@ class ChameleonCMD:
         From peer manager delete all bonds.
         """
         return self.device.send_cmd_sync(DATA_CMD_DELETE_ALL_BLE_BONDS, 0x00, None)
+
+    def get_device_capabilities(self):
+        """
+        Get (and set) commands that client understands
+        """
+
+        commands = []
+
+        try:
+            ret = self.device.send_cmd_sync(DATA_CMD_GET_DEVICE_CAPABILITIES, 0x00)
+
+            for i in range(0, len(ret.data), 2):
+                if i + 1 < len(ret.data):
+                    commands.append((ret.data[i + 1] << 8) | ret.data[i])
+
+            self.device.commands = commands
+        except:
+            print("Chameleon doesn't understand get capabilities command. Please update firmware")
+
+        return commands
+
 
 if __name__ == '__main__':
     # connect to chameleon

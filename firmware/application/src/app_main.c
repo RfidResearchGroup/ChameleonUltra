@@ -767,6 +767,7 @@ static void ble_passkey_init(void) {
  */
 int main(void) {
     hw_connect_init();        // Remember to initialize the pins first
+    cmd_map_init();           // Set function in CMD map for DATA_CMD_GET_DEVICE_CAPABILITIES
 
     init_leds();              // LED initialization
     log_init();               // Log initialization

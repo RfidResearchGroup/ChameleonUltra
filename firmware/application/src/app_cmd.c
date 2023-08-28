@@ -34,6 +34,14 @@ data_frame_tx_t *cmd_processor_get_git_version(uint16_t cmd, uint16_t status, ui
     return data_frame_make(cmd, status, strlen(GIT_VERSION), (uint8_t *)GIT_VERSION);
 }
 
+data_frame_tx_t *cmd_processor_get_device(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+#if defined(PROJECT_CHAMELEON_ULTRA)
+    return data_frame_make(cmd, status, 1, (uint8_t *)1);
+#else
+    return data_frame_make(cmd, status, 1, (uint8_t *)0);
+#endif
+}
+
 
 data_frame_tx_t *cmd_processor_change_device_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length == 1) {
@@ -860,6 +868,9 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_BLE_CONNECT_KEY_CONFIG,   NULL,                        cmd_processor_get_ble_connect_key,           NULL                   },
     {    DATA_CMD_SET_BLE_CONNECT_KEY_CONFIG,   NULL,                        cmd_processor_set_ble_connect_key,           NULL                   },
     {    DATA_CMD_DELETE_ALL_BLE_BONDS,         NULL,                        cmd_processor_del_ble_all_bonds,             NULL                   },
+    {    DATA_CMD_GET_DEVICE,                   NULL,                        cmd_processor_get_device,                    NULL                   },
+    // {    DATA_CMD_GET_SETTINGS,                 NULL,                        NULL,                                        NULL                   },
+    {    DATA_CMD_GET_DEVICE_CAPABILITIES,      NULL,                        NULL,                                        NULL                   },
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
@@ -918,6 +929,31 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_SLOT_TAG_NICK,            NULL,                        cmd_processor_get_slot_tag_nick_name,        NULL                   },
 };
 
+
+data_frame_tx_t *cmd_processor_get_capabilities(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    size_t count = sizeof(m_data_cmd_map) / sizeof(m_data_cmd_map[0]);
+    uint16_t commands[count];
+    memset(commands, 0, count * sizeof(uint16_t));
+
+    for (size_t i = 0; i < count; i++) {
+        // beware: wrong endianness
+        commands[i] = m_data_cmd_map[i].cmd;
+    }
+
+    return data_frame_make(cmd, status, count * sizeof(uint16_t), (uint8_t *)commands);
+}
+
+
+void cmd_map_init() {
+    size_t count = sizeof(m_data_cmd_map) / sizeof(m_data_cmd_map[0]);
+
+    for (size_t i = 0; i < count; i++) {
+        if (m_data_cmd_map[i].cmd == DATA_CMD_GET_DEVICE_CAPABILITIES) {
+            m_data_cmd_map[i].cmd_processor = cmd_processor_get_capabilities;
+            return;
+        }
+    }
+}
 
 /**
  * @brief Auto select source to response
