@@ -26,7 +26,7 @@ find . \( -not -path "./.git/*" -and -not -path "./firmware/nrf52_sdk/*" -and -n
 # Apply autopep8 on *py
 find . \( -not -path "./.git/*" -and -not -path "./firmware/nrf52_sdk/*" -and -not -path "*/venv/*" -and -not -path "*/tmp/*" -and \
           -name "*.py" \) \
-    -exec autopep8 -i {} \;
+    -exec autopep8 --in-place --max-line-length 120 {} \;
 
 
 # Detecting tabs.
