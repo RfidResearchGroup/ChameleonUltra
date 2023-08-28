@@ -34,12 +34,14 @@ data_frame_tx_t *cmd_processor_get_git_version(uint16_t cmd, uint16_t status, ui
     return data_frame_make(cmd, status, strlen(GIT_VERSION), (uint8_t *)GIT_VERSION);
 }
 
+
 data_frame_tx_t *cmd_processor_get_device(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
 #if defined(PROJECT_CHAMELEON_ULTRA)
-    return data_frame_make(cmd, status, 1, (uint8_t *)1);
+    uint8_t device = 1;
 #else
-    return data_frame_make(cmd, status, 1, (uint8_t *)0);
+    uint8_t device = 0;
 #endif
+    return data_frame_make(cmd, status, 1, &device);
 }
 
 
@@ -763,11 +765,11 @@ data_frame_tx_t *cmd_processor_get_enabled_slots(uint16_t cmd, uint16_t status, 
 
 data_frame_tx_t *cmd_processor_get_ble_connect_key(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     return data_frame_make(
-        cmd, 
-        STATUS_DEVICE_SUCCESS, 
-        BLE_CONNECT_KEY_LEN_MAX, // 6
-        settings_get_ble_connect_key() // Get key point from config
-    );
+               cmd,
+               STATUS_DEVICE_SUCCESS,
+               BLE_CONNECT_KEY_LEN_MAX, // 6
+               settings_get_ble_connect_key() // Get key point from config
+           );
 }
 
 data_frame_tx_t *cmd_processor_set_ble_connect_key(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
