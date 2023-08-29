@@ -7,6 +7,15 @@ It has reported that on some devices the electric connection is not good, some g
 You can try to dismantle very gently the screws and PCB, clean them and put them back in place.
 Be very careful the screws have been reported to be quite fragile so be gentle with them!
 
+## Difficulties to use BLE
+
+After BLE pairing, both the phone and ChameleonUltra will save a secret key for encrypted communication. If either party deletes the pairing record, it will result in communication failure. If Bluetooth cannot be connected, clearing the pairing information on the other side can solve the problem:
+
+* Find the Bluetooth settings in the phone's system settings and cancel pairing with the ChameleonUltra.
+* In the CLI of ChameleonUltra, execute the `hw ble bonds clear` command to clear all pairing records.
+
+Default BLE connect key(passkey) is `123456`
+
 # DFU
 
 ## Communication issues between CLI and Chameleon
