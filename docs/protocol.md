@@ -6,11 +6,18 @@
 
 The communication with the application is not the easiest but is structured as follows:
 
-`MAGIC BYTE(0x11) LRC(Magic Byte) COMMAND STATUS(0x00) DATA LRC(COMMAND + STATUS + DATA)`
+![](images/protocol-packet.png)
 
-You build the Packet by first adding 0x11, this is the "Magic Byte" to say that there is something coming. This is followed by the LRC ([**L**ongitudinal **R**edundancy **C**heck](https://en.wikipedia.org/wiki/Longitudinal_redundancy_check)) of the "Magic Byte". Then you put in the command in [Big Endian](https://en.wikipedia.org/wiki/Endianness). Each command gets assigned a unique number (e.g. `factoryReset(1020)`), this is what you are sending to the device. Append the status, also in Big Endian. The status is always 0x00. Then you add your Data, this could be anything, for example sending the card keys when reading a block.
+- **SOF**: `1 Byte`, the "Magic Byte" represent the start of a packet, must be `0x11`.
+- **LRC1**: `1 Byte`, the LRC ([**L**ongitudinal **R**edundancy **C**heck](https://en.wikipedia.org/wiki/Longitudinal_redundancy_check)) of the `SOF`, must be `0xEF`.
+- **CMD**: `2 Bytes` in unsigned [Big Endian](https://en.wikipedia.org/wiki/Endianness) format, each command have been assigned a unique number (e.g. `factoryReset(1020)`), this is what you are sending to the device.
+- **STATUS**: `2 Bytes` in unsigned [Big Endian](https://en.wikipedia.org/wiki/Endianness) format. If the direction is from APP to hardware, the status is always `0x0000`. If the direction is from hardware to APP, the status is the result of the command.
+- **LEN**: `2 Bytes` in unsigned [Big Endian](https://en.wikipedia.org/wiki/Endianness) format, the length of the data, maximum is `512`.
+- **LRC2**: `1 Byte`, the LRC ([**L**ongitudinal **R**edundancy **C**heck](https://en.wikipedia.org/wiki/Longitudinal_redundancy_check)) of the `CMD`, `STATUS` and `LEN`.
+- **DATA**: `LEN Bytes`, the data to send or receive, maximum is `512 Bytes`. This could be anything, for example you should sending key type, block number, and the card keys when reading a block.
+- **LRC3**: `1 Byte`, the LRC ([**L**ongitudinal **R**edundancy **C**heck](https://en.wikipedia.org/wiki/Longitudinal_redundancy_check)) of the `DATA`.
 
-For receiving, it is the exact same in reverse.
+The total length of the packet is `LEN + 10` Bytes. For receiving, it is the exact same format.
 
 ## Packet payloads
 
