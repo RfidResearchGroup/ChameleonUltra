@@ -32,7 +32,7 @@ Using ProxSpace to build the CLI is the easiest and most comfortable way to get 
 
 8. Now go into the newly created folder with `cd ChameleonUltra/software/src`
 
-9. Prepare for package installation with `pacman-key --init; pacman-key --populate; pacman -S msys2-keyring --noconfirm`
+9. Prepare for package installation with `pacman-key --init; pacman-key --populate; pacman -S msys2-keyring --noconfirm; pacman-key --refresh`
 
 10. Proceed by installing Ninja with `pacman -S ninja --noconfirm`
 
