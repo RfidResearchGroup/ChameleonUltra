@@ -708,11 +708,11 @@ void saadc_event_handler(nrf_drv_saadc_evt_t const *p_event) {
         // if battery service is notification enable, we can send msg to device.
         err_code = ble_bas_battery_level_update(&m_bas, percentage_batt_lvl, BLE_CONN_HANDLE_ALL);
         if ((err_code != NRF_SUCCESS) &&
-                (err_code != NRF_ERROR_INVALID_STATE) &&
-                (err_code != NRF_ERROR_RESOURCES) &&
-                (err_code != NRF_ERROR_BUSY) &&
-                (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING)
-           ) {
+            (err_code != NRF_ERROR_INVALID_STATE) &&
+            (err_code != NRF_ERROR_RESOURCES) &&
+            (err_code != NRF_ERROR_BUSY) &&
+            (err_code != NRF_ERROR_FORBIDDEN) &&
+            (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING)) {
             APP_ERROR_HANDLER(err_code);
         }
 
