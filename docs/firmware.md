@@ -102,6 +102,11 @@ The Chameleon also shows the following LED effects:
 
 The device enters sleep mode after about 5s unless it is plugged in USB or if a client is connected over BLE. You can use the buttons to wake it up again. You can also press quickly a button during the sleep animation to keep the device awake.
 
+## Write Modes
+- Normal: Behaves like any norml card
+- Decline: Read only card
+- Decive: Accept write commands but dont change any data (reader thinks write was sucesful but when reading nothing changed)
+- Shadow: Accept writes but revert when device goes to sleep (reader can read and write like a normal card but it reverts when the chameleon goes to sleep) 
 
 ## The SoftDevice
 
