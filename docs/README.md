@@ -4,22 +4,24 @@ This guide goal is to guide you through setting up and using your Chameleon Ultr
 
 This Guide is split up into multiple "subguides":
 
-- ["Whitepaper"](./technical_whitepaper.md): Discover what the Chameleon Ultra is capable of
+- [Whitepaper](./technical_whitepaper.md): Discover what the Chameleon Ultra is capable of
 
-- ["Hardware"](./hardware.md): Learn to know the hardware of your Chameleon
+- [Hardware](./hardware.md): Learn to know the hardware of your Chameleon
 
-- ["Firmware"](./firmware.md): Your Chameleon runs a firmware, learn what it can do and how to use it
+- [Firmware](./firmware.md): Your Chameleon runs a firmware, learn what it can do and how to use it
 
-- ["CLI"](./cli.md): The official way to control your Chameleon is via the **C**ommand **L**ine **I**nterface (CLI) . Learn how to install and master the CLI.
+- [CLI](./cli.md): The official way to control your Chameleon is via the **C**ommand **L**ine **I**nterface (CLI) . Learn how to install and master the CLI.
 
-- ["GUIs"](./gui.md): Some people also develop **G**raphical **U**ser **I**nterfaces (GUIs), these may be a good start for people that do not want to deal with a CLI.
+- [GUIs](./gui.md): Some people also develop **G**raphical **U**ser **I**nterfaces (GUIs), these may be a good start for people that do not want to deal with a CLI.
 
-- ["Troubleshooting"](./troubleshooting.md): For when things go wrong, here are some common tips to maybe fix whatever issue you might have.
+- [Troubleshooting](./troubleshooting.md): For when things go wrong, here are some common tips to maybe fix whatever issue you might have.
 
-- ["FAQ"](./faq.md): Frequently asked questions, if you have a question, it might already be answered here.
+- [FAQ](./faq.md): Frequently Asked Questions, if you have a question, it might already be answered here.
 
-- ["Quickstart"](./quickstart.md): for the impatient people to just get you up and running with anything.
+- [Quickstart](./quickstart.md): for the impatient people to just get you up and running with anything.
 
-- ["Development"](./development.md): for all developers. This covers how to build firmware from source and set up a development environment.
+- [Development](./development.md): for all developers. This covers how to build firmware from source and set up a development environment.
 
-- ["Protocol"](./protocol.md): the gory details of the communication protocol, useful if you want to develop your own client.
+- [Protocol](./protocol.md): the gory details of the communication protocol, useful if you want to develop your own client.
+
+- [Modding](./modding.md): third party moddings worth mentioning.
