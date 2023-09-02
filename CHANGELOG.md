@@ -3,6 +3,8 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Fixed MFC emulation issues with OEM readers, also temporarily disabling NFC_MF1_FAST_SIM (@xianglin1998)
+ - Fixed Chameleon crash during BLE pairing (@Foxushka)
  - Fixed CLI takes into account Lite refusing to enter Reader mode (@doegox)
  - Security BLE implemented (@xianglin1998)
  - Added `hw settings blekey` to get and set ble connect key (@xianglin1998)
@@ -19,7 +21,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Added offline copy EM card uid for btnpress (@nemanjan00)
  - Added offline copy ic card uid for btnpress (@xianglin1998)
  - Added `hw settings btnpress` to get and set button press function (@xianglin1998)
- - Added `hw battery` to get battery informartion (@xianglin1998)
+ - Added `hw battery` to get battery information (@xianglin1998)
  - Added `hw slot delete` to delete HF or LF out of a HF+LF slot (@augustozanellato)
  - Changed CLI prompt autocompletion, saved history and internal cmd registration (@szymex73)
  - Fixed SDK NFC IRQ handler busy loop (@doegox)
