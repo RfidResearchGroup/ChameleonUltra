@@ -775,7 +775,7 @@ int main(void) {
     power_management_init();  // Power management initialization
     usb_cdc_init();           // USB cdc emulation initialization
     ble_slave_init();         // Bluetooth protocol stack initialization
-    
+
     rng_drv_and_srand_init(); // Random number generator initialization
     bsp_timer_init();         // Initialize timeout timer
     bsp_timer_start();        // Start BSP TIMER and prepare it for processing business logic

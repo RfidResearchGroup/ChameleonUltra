@@ -15,6 +15,6 @@ void advertising_stop(void);
 void delete_bonds_all(void);
 void nus_data_response(uint8_t *p_data, uint16_t length);
 bool is_nus_working(void);
-void set_ble_connect_key(uint8_t* key);
+void set_ble_connect_key(uint8_t *key);
 
 #endif

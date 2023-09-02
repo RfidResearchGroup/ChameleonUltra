@@ -755,11 +755,11 @@ data_frame_tx_t *cmd_processor_get_enabled_slots(uint16_t cmd, uint16_t status, 
 
 data_frame_tx_t *cmd_processor_get_ble_connect_key(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     return data_frame_make(
-        cmd, 
-        STATUS_DEVICE_SUCCESS, 
-        BLE_CONNECT_KEY_LEN_MAX, // 6
-        settings_get_ble_connect_key() // Get key point from config
-    );
+               cmd,
+               STATUS_DEVICE_SUCCESS,
+               BLE_CONNECT_KEY_LEN_MAX, // 6
+               settings_get_ble_connect_key() // Get key point from config
+           );
 }
 
 data_frame_tx_t *cmd_processor_set_ble_connect_key(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {

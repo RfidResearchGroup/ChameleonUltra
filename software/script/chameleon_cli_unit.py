@@ -1445,13 +1445,15 @@ class HWSettingsBLEKeySet(DeviceRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         if len(args.key) != 6:
-            print(f" - {colorama.Fore.RED}The ble connect key length must be 6{colorama.Style.RESET_ALL}")
+            print(
+                f" - {colorama.Fore.RED}The ble connect key length must be 6{colorama.Style.RESET_ALL}")
             return
         if re.match(r'[0-9]{6}', args.key):
             self.cmd.set_ble_connect_key(args.key)
             print(" - Successfully set ble connect key to settings")
         else:
-            print(f" - {colorama.Fore.RED}Only 6 ASCII characters from 0 to 9 are supported.{colorama.Style.RESET_ALL}")
+            print(
+                f" - {colorama.Fore.RED}Only 6 ASCII characters from 0 to 9 are supported.{colorama.Style.RESET_ALL}")
 
 
 @hw_settings_ble_key.command('get', 'Get the ble connect key')

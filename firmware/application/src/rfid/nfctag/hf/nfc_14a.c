@@ -579,8 +579,7 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
     }
 }
 
-static inline void nfc_core_reset(void)
-{
+static inline void nfc_core_reset(void) {
     uint32_t int_enabled = nrf_nfct_int_enable_get();
 
     // Reset the NFCT peripheral.
