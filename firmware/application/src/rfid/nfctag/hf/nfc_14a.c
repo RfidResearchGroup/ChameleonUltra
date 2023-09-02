@@ -295,7 +295,7 @@ uint8_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBi
  * @param[in]   appendCrc  Whether to send the byte flow, automatically send the CRC16 verification automatically
  */
 void nfc_tag_14a_tx_bytes(uint8_t *data, uint32_t bytes, bool appendCrc) {
-    NFC_14A_TX_BYTE_CORE(data, bytes, appendCrc, NRF_NFCT_FRAME_DELAY_MODE_WINDOW);
+    NFC_14A_TX_BYTE_CORE(data, bytes, appendCrc, NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
 }
 
 /**@brief The function of sending the byte flow, this implementation automatically sends SOF
@@ -316,6 +316,7 @@ void nfc_tag_14a_tx_bytes_delay_freerun(uint8_t *data, uint32_t bytes, bool appe
  */
 #define NFC_14A_TX_BITS_CORE(bits, mode)                                                        \
     do {                                                                                        \
+        nrf_nfct_frame_delay_max_set(65535);                                                    \
         NRF_NFCT->PACKETPTR = (uint32_t)(m_nfc_tx_buffer);                                      \
         NRF_NFCT->TXD.AMOUNT = bits;                                                            \
         NRF_NFCT->INTENSET = (NRF_NFCT_INT_TXFRAMESTART_MASK | NRF_NFCT_INT_TXFRAMEEND_MASK);   \
@@ -332,7 +333,7 @@ void nfc_tag_14a_tx_bytes_delay_freerun(uint8_t *data, uint32_t bytes, bool appe
 void nfc_tag_14a_tx_bits(uint8_t *data, uint32_t bits) {
     m_is_responded = true;
     memcpy(m_nfc_tx_buffer, data, (bits / 8) + (bits % 8 > 0 ? 1 : 0));
-    NFC_14A_TX_BITS_CORE(bits, NRF_NFCT_FRAME_DELAY_MODE_FREERUN);
+    NFC_14A_TX_BITS_CORE(bits, NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
 }
 
 /**@brief The function of sending n bits is implemented, and this implementation is automatically sent SOF
@@ -354,7 +355,7 @@ void nfc_tag_14a_tx_nbit(uint8_t data, uint32_t bits) {
 void nfc_tag_14a_tx_nbit_delay_window(uint8_t data, uint32_t bits) {
     m_is_responded = true;
     m_nfc_tx_buffer[0] = data;
-    NFC_14A_TX_BITS_CORE(bits, NRF_NFCT_FRAME_DELAY_MODE_WINDOW);
+    NFC_14A_TX_BITS_CORE(bits, NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
 }
 
 /**
@@ -578,6 +579,31 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
     }
 }
 
+static inline void nfc_core_reset(void)
+{
+    uint32_t int_enabled = nrf_nfct_int_enable_get();
+
+    // Reset the NFCT peripheral.
+    *(volatile uint32_t *)0x40005FFC = 0;
+    *(volatile uint32_t *)0x40005FFC;
+    *(volatile uint32_t *)0x40005FFC = 1;
+
+    // Restore parameter settings after the reset of the NFCT peripheral.
+    nrf_nfct_frame_delay_max_set(0x00001000UL);
+    // Use Window Grid frame delay mode.
+    nrf_nfct_frame_delay_mode_set(NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
+
+    // Restore interrupts.
+    nrf_nfct_int_enable(int_enabled);
+}
+
+static inline void nfc_fdt_reset(void) {
+    // STOP TX
+    *(volatile uint32_t *)0x40005010 = 0x01;
+    // Reset fdt max
+    nrf_nfct_frame_delay_max_set(0x00001000UL);
+}
+
 extern bool g_usb_led_marquee_enable;
 
 /**
@@ -619,6 +645,8 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             TAG_FIELD_LED_OFF()
             m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
 
+            nfc_core_reset();
+
             NRF_LOG_INFO("HF FIELD LOST");
             break;
         }
@@ -648,6 +676,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             nfc_tag_14a_data_process(m_nfc_rx_buffer);
             // The above prompt tells us that when we do not need to reply to the card reader, we need to manually enable it
             if (!m_is_responded) {
+                nfc_fdt_reset();
                 NRFX_NFCT_RX_BYTES
             }
             break;
@@ -661,6 +690,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
                     if (m_is_responded) {
                         NRF_LOG_ERROR("NRFX_NFCT_ERROR_FRAMEDELAYTIMEOUT: %d", m_tag_state_14a);
                     }
+                    nfc_fdt_reset();
                     break;
                 }
                 case NRFX_NFCT_ERROR_NUM: {
