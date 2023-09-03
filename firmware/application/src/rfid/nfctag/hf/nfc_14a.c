@@ -689,7 +689,6 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
                     if (m_is_responded) {
                         NRF_LOG_ERROR("NRFX_NFCT_ERROR_FRAMEDELAYTIMEOUT: %d", m_tag_state_14a);
                     }
-                    nfc_fdt_reset();
                     break;
                 }
                 case NRFX_NFCT_ERROR_NUM: {
