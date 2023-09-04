@@ -118,16 +118,43 @@ When in the CLI, plug in your Chameleon and connect with `hw connect`. If autode
 
 ### Common activities
 
-- Change slot: hw slot change -s [1-8]
+- Connect to the CLI: `hw connect`
+- Change slot: `hw slot change -s [1-8]`
 
 *More examples coming soon*
 
-### Available Commands
+### MFKEY32v2 walk-through
+Make sure to be in the `software/` directory and run the Python CLI from there.
 
-In `()` is the argument description, `[]` are possible entries for that argument (eg `[1-8]`)
+- Connect to the CLI: `hw connect`
+- Check which slot can be used: `hw slot list`
+- Change the slot type, here using slot 8 for a MFC 1k emulation: `hw slot type -s8 -t3`
+- Init the slot content: `hw slot init -s8 -t3`
+  - or load an existing dump and set UID and anticollision data, cf `hf mf eload -h` and `hf mf sim -h`
+- Enable the slot: `hw slot enable -s8 -e1`
+- Change to the new slot: `hw slot change -s8`
+- Activate the detection: `hf detection enable -e1`
 
-| Command          | Arguments                                                                 | Description                               |
-|:----------------:|:-------------------------------------------------------------------------:|:-----------------------------------------:|
-| `hw factory_reset` | `--i-know-what-im-doing` (Make sure you really want to wipe your Chameleon) | Returns the Chameleon to factory settings |
-|                  |                                                                           |                                           |
-|                  |                                                                           |                                           |
+Now disconnect, go to a reader and swipe it a few times
+
+- Come back and connect to the CLI: `hw connect`
+- See if nonces were collected: `hf detection count`
+  - We need 2 nonces per key to recover
+- Recover the key(s) based on the collected nonces: `hf detection decrypt`. Output example:
+```
+ - MF1 detection log count = 6, start download.
+ - Download done (144bytes), start parse and decrypt
+ - Detection log for uid [DEADBEEF]
+  > Block 0 detect log decrypting...
+  > Block 1 detect log decrypting...
+  > Result ---------------------------
+  > Block 0, A key result: ['a0a1a2a3a4a5', 'aabbccddeeff']
+  > Block 1, A key result: ['010203040506']
+
+```
+
+- To clean the logged detection nonces: `hf detection enable -e0` then `hf detection enable -e1`
+
+
+
+*More examples coming soon*

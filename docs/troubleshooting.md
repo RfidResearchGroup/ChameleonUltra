@@ -1,9 +1,13 @@
 # Hardware
 
+## Difficulties to get emulation working properly
+
+Try with waking up the Chameleon by pressing a button before presenting it to the reader. Try with keeping some 2-3 cm distance to the reader.
+
 ## Difficulties to get the LF working properly
 
 The LF antenna is on a second PCB attached to the main PCB via little screws which also serve as electric connection.
-It has reported that on some devices the electric connection is not good, some glue or resin residues mai interfere.
+It has reported that on some devices the electric connection is not good, some glue or resin residues may interfere.
 You can try to dismantle very gently the screws and PCB, clean them and put them back in place.
 Be very careful the screws have been reported to be quite fragile so be gentle with them!
 
@@ -63,5 +67,5 @@ pacman -S mingw-w64-x86_64-ninja --noconfirm
 
 ## InvalidException: Device unsupported cmd
 
-You need to update the firmware of you Chameleon.
+You need to update the firmware of your Chameleon.
 
