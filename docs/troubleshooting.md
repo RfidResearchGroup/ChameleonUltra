@@ -11,6 +11,12 @@ It has reported that on some devices the electric connection is not good, some g
 You can try to dismantle very gently the screws and PCB, clean them and put them back in place.
 Be very careful the screws have been reported to be quite fragile so be gentle with them!
 
+# BLE
+
+## Difficulties connecting using BLE
+
+On Android make sure your location is turned, as that allows for scanning of bluetooth devices.
+
 ## Difficulties to use BLE
 
 After BLE pairing, both the phone and ChameleonUltra will save a secret key for encrypted communication. If either party deletes the pairing record, it will result in communication failure. If Bluetooth cannot be connected, clearing the pairing information on the other side can solve the problem:
