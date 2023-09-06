@@ -24,6 +24,7 @@ Read the [available documentation](docs/README.md).
 
 * [Downloading and compiling the official CLI](https://www.youtube.com/watch?v=VGpAeitNXH0)
 * [Downloading ChameleonUltraGUI](https://www.youtube.com/watch?v=rHH7iqbX3nY)
+* [ChameleonGUI features overview](https://www.youtube.com/watch?v=YqE8wyVSse4)
 
 # Official channels
 
