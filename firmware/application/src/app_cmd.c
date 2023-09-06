@@ -14,6 +14,7 @@
 #include "nrf_pwr_mgmt.h"
 #include "settings.h"
 #include "delayed_reset.h"
+#include "lwip_def.h"
 
 
 #define NRF_LOG_MODULE_NAME app_cmd
@@ -921,8 +922,7 @@ data_frame_tx_t *cmd_processor_get_capabilities(uint16_t cmd, uint16_t status, u
     memset(commands, 0, count * sizeof(uint16_t));
 
     for (size_t i = 0; i < count; i++) {
-        // beware: wrong endianness
-        commands[i] = m_data_cmd_map[i].cmd;
+        commands[i] = PP_HTONS(m_data_cmd_map[i].cmd);
     }
 
     return data_frame_make(cmd, status, count * sizeof(uint16_t), (uint8_t *)commands);

@@ -846,12 +846,7 @@ class ChameleonCMD:
 
         try:
             ret = self.device.send_cmd_sync(DATA_CMD_GET_DEVICE_CAPABILITIES, 0x00)
-
-            for i in range(0, len(ret.data), 2):
-                if i + 1 < len(ret.data):
-                    commands.append((ret.data[i + 1] << 8) | ret.data[i])
-
-            self.device.commands = commands
+            self.device.commands = struct.unpack(f"{len(ret.data) // 2}H", ret.data)
         except:
             print("Chameleon doesn't understand get capabilities command. Please update firmware")
 
