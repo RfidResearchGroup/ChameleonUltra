@@ -20,9 +20,15 @@ Read the [available documentation](docs/README.md).
 
 # Videos
 
-*Beware some of the instructions might have changed since recording, theck the current documentation in doubt!*
+*Beware some of the instructions might have changed since recording, check the current documentation when in doubt!*
 
 * [Downloading and compiling the official CLI](https://www.youtube.com/watch?v=VGpAeitNXH0)
 * [Downloading ChameleonUltraGUI](https://www.youtube.com/watch?v=rHH7iqbX3nY)
 
+# Official channels
 
+Where do you find the community?
+
+* [RFID Hacking community discord server](https://t.ly/d4_C)
+  * Software/chameleon-dev for firmware and clients development discussions
+  * Devices/chameleon-ultra for usage discussions

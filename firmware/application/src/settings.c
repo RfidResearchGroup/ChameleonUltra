@@ -254,15 +254,15 @@ void settings_set_long_button_press_config(char which, uint8_t value) {
     }
 }
 
-uint8_t* settings_get_ble_connect_key(void) {
+uint8_t *settings_get_ble_connect_key(void) {
     return config.ble_connect_key;
 }
 
 /**
  * @brief Pointer to 6-digit ASCII string (digit 0..9 only, no NULL termination) passkey to be used during pairing.
- * 
+ *
  * @param key Ble connect key for your device
  */
-void settings_set_ble_connect_key(uint8_t* key) {
+void settings_set_ble_connect_key(uint8_t *key) {
     memcpy(config.ble_connect_key, key, BLE_CONNECT_KEY_LEN_MAX);
 }

@@ -233,23 +233,6 @@ data_frame_tx_t *cmd_processor_mf1_darkside_acquire(uint16_t cmd, uint16_t statu
     return data_frame_make(cmd, status, length, data);
 }
 
-data_frame_tx_t *cmd_processor_detect_nested_dist(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    NestedDist nd;
-    if (length == 8) {
-        status = nested_distance_detect(data[1], data[0], &data[2], &nd);
-        if (status == HF_TAG_OK) {
-            length = sizeof(NestedDist);
-            data = (uint8_t *)(&nd);
-        } else {
-            length = 0;
-        }
-    } else {
-        status = STATUS_PAR_ERR;
-        length = 0;
-    }
-    return data_frame_make(cmd, status, 0, NULL);
-}
-
 data_frame_tx_t *cmd_processor_mf1_nt_distance(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     NestedDist nd;
     if (length == 8) {

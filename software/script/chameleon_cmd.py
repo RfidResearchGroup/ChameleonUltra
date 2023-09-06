@@ -807,7 +807,7 @@ class ChameleonCMD:
             0x00,
             bytearray([button, function])
         )
-    
+
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_ble_connect_key(self, key: str):
         """
@@ -818,19 +818,19 @@ class ChameleonCMD:
         # check key length
         if len(data_bytes) != 6:
             raise ValueError("The ble connect key length must be 6")
-        
+
         return self.device.send_cmd_sync(
             DATA_CMD_SET_BLE_CONNECT_KEY_CONFIG,
-            0x00, 
+            0x00,
             data_bytes
         )
-    
+
     def get_ble_connect_key(self):
         """
         Get config of ble connect key
         """
         return self.device.send_cmd_sync(DATA_CMD_GET_BLE_CONNECT_KEY_CONFIG, 0x00, None)
-    
+
     def delete_ble_all_bonds(self):
         """
         From peer manager delete all bonds.
@@ -856,7 +856,6 @@ class ChameleonCMD:
             print("Chameleon doesn't understand get capabilities command. Please update firmware")
 
         return commands
-
 
 if __name__ == '__main__':
     # connect to chameleon

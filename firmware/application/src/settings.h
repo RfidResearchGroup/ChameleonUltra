@@ -67,6 +67,6 @@ uint8_t settings_get_long_button_press_config(char which);
 void settings_set_button_press_config(char which, uint8_t value);
 void settings_set_long_button_press_config(char which, uint8_t value);
 bool is_settings_button_type_valid(char type);
-uint8_t* settings_get_ble_connect_key(void);
-void settings_set_ble_connect_key(uint8_t* key);
+uint8_t *settings_get_ble_connect_key(void);
+void settings_set_ble_connect_key(uint8_t *key);
 #endif

@@ -1,11 +1,30 @@
 # Hardware
 
+## Difficulties to get emulation working properly
+
+Try with waking up the Chameleon by pressing a button before presenting it to the reader. Try with keeping some 2-3 cm distance to the reader.
+
 ## Difficulties to get the LF working properly
 
 The LF antenna is on a second PCB attached to the main PCB via little screws which also serve as electric connection.
-It has reported that on some devices the electric connection is not good, some glue or resin residues mai interfere.
+It has reported that on some devices the electric connection is not good, some glue or resin residues may interfere.
 You can try to dismantle very gently the screws and PCB, clean them and put them back in place.
 Be very careful the screws have been reported to be quite fragile so be gentle with them!
+
+# BLE
+
+## Difficulties connecting using BLE
+
+On Android make sure your location is turned, as that allows for scanning of bluetooth devices.
+
+## Difficulties to use BLE
+
+After BLE pairing, both the phone and ChameleonUltra will save a secret key for encrypted communication. If either party deletes the pairing record, it will result in communication failure. If Bluetooth cannot be connected, clearing the pairing information on the other side can solve the problem:
+
+* Find the Bluetooth settings in the phone's system settings and cancel pairing with the ChameleonUltra.
+* In the CLI of ChameleonUltra, execute the `hw ble bonds clear` command to clear all pairing records.
+
+Default BLE connect key(passkey) is `123456`
 
 # DFU
 
@@ -54,5 +73,5 @@ pacman -S mingw-w64-x86_64-ninja --noconfirm
 
 ## InvalidException: Device unsupported cmd
 
-You need to update the firmware of you Chameleon.
+You need to update the firmware of your Chameleon.
 

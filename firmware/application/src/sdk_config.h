@@ -298,20 +298,20 @@
 
 //==========================================================
 // <q> NRF_BLE_LESC_ENABLED  - Enable LESC Module
- 
+
 
 #ifndef NRF_BLE_LESC_ENABLED
 #define NRF_BLE_LESC_ENABLED 1
 #endif
 
 // <q> NRF_BLE_LESC_GENERATE_NEW_KEYS  - Generate new LESC keys after every pairing attempt. Keys are generated on the auth status event
- 
+
 
 #ifndef NRF_BLE_LESC_GENERATE_NEW_KEYS
 #define NRF_BLE_LESC_GENERATE_NEW_KEYS 1
 #endif
 
-// </h> 
+// </h>
 //==========================================================
 
 // </h>
@@ -1380,7 +1380,7 @@
 
 //==========================================================
 // <q> NRF_CRYPTO_RNG_STATIC_MEMORY_BUFFERS_ENABLED  - Use static memory buffers for context and temporary init buffer.
- 
+
 
 // <i> Always recommended when using the nRF HW RNG as the context and temporary buffers are small. Consider disabling if using the CC310 RNG in a RAM constrained application. In this case, memory must be provided to nrf_crypto_rng_init, or it can be allocated internally provided that NRF_CRYPTO_ALLOCATOR does not allocate memory on the stack.
 
@@ -1389,7 +1389,7 @@
 #endif
 
 // <q> NRF_CRYPTO_RNG_AUTO_INIT_ENABLED  - Initialize the RNG module automatically when nrf_crypto is initialized.
- 
+
 
 // <i> Automatic initialization is only supported with static or internally allocated context and temporary memory.
 
@@ -1397,7 +1397,7 @@
 #define NRF_CRYPTO_RNG_AUTO_INIT_ENABLED 1
 #endif
 
-// </h> 
+// </h>
 //==========================================================
 
 // </h>

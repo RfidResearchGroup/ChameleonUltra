@@ -183,11 +183,11 @@ static bool is_peer_manager_record(uint16_t id_or_key) {
  */
 static void fds_evt_handler(fds_evt_t const *p_evt) {
     // Skip peermanager event
-    if (is_peer_manager_record(p_evt->write.record_key) 
+    if (is_peer_manager_record(p_evt->write.record_key)
             || is_peer_manager_record(p_evt->write.file_id)
             || is_peer_manager_record(p_evt->del.record_key)
             || is_peer_manager_record(p_evt->del.file_id)
-        ) {
+       ) {
         return;
     }
 
