@@ -644,7 +644,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             TAG_FIELD_LED_OFF()
             m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
 
-            nfc_core_reset();
+            // nfc_core_reset();
 
             NRF_LOG_INFO("HF FIELD LOST");
             break;
