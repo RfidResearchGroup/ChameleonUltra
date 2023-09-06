@@ -841,6 +841,28 @@ class HFMFSim(DeviceRequiredUnit):
         print(" - Set anti-collision resources success")
 
 
+@hf_mf.command('info', 'Get information about current slot (UID/SAK/ATQA)')
+class HFMFInfo(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        pass
+
+    def scan(self):
+        resp: chameleon_com.Response = self.cmd.get_mf1_anti_coll_data()
+        if resp.status == chameleon_status.Device.STATUS_DEVICE_SUCCESS:
+            info = chameleon_cstruct.parse_14a_scan_tag_result(resp.data)
+            print(f"- UID  Size: {info['uid_size']}")
+            print(f"- UID  Hex : {info['uid_hex'].upper()}")
+            print(f"- SAK  Hex : {info['sak_hex'].upper()}")
+            print(f"- ATQA Hex : {info['atqa_hex'].upper()}")
+            return True
+        else:
+            print("No data loaded in slot")
+            return False
+
+    def on_exec(self, args: argparse.Namespace):
+        return self.scan()
+
+
 @lf_em.command('read', 'Scan em410x tag and print id')
 class LFEMRead(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -1354,15 +1376,13 @@ class HWSettingsBLEKeySet(DeviceRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         if len(args.key) != 6:
-            print(
-                f" - {colorama.Fore.RED}The ble connect key length must be 6{colorama.Style.RESET_ALL}")
+            print(f" - {colorama.Fore.RED}The ble connect key length must be 6{colorama.Style.RESET_ALL}")
             return
         if re.match(r'[0-9]{6}', args.key):
             self.cmd.set_ble_connect_key(args.key)
             print(" - Successfully set ble connect key to settings")
         else:
-            print(
-                f" - {colorama.Fore.RED}Only 6 ASCII characters from 0 to 9 are supported.{colorama.Style.RESET_ALL}")
+            print(f" - {colorama.Fore.RED}Only 6 ASCII characters from 0 to 9 are supported.{colorama.Style.RESET_ALL}")
 
 
 @hw_settings_ble_key.command('get', 'Get the ble connect key')

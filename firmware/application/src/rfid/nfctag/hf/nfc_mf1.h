@@ -145,6 +145,7 @@ bool nfc_tag_mf1_is_detection_enable(void);
 void nfc_tag_mf1_detection_log_clear(void);
 uint32_t nfc_tag_mf1_detection_log_count(void);
 nfc_tag_14a_coll_res_reference_t *get_mifare_coll_res(void);
+nfc_tag_14a_coll_res_reference_t *get_saved_mifare_coll_res(void);
 void nfc_tag_mf1_set_gen1a_magic_mode(bool enable);
 bool nfc_tag_mf1_is_gen1a_magic_mode(void);
 void nfc_tag_mf1_set_gen2_magic_mode(bool enable);

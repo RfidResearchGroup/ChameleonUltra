@@ -117,6 +117,19 @@ data_frame_tx_t *cmd_processor_reset_settings(uint16_t cmd, uint16_t status, uin
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+data_frame_tx_t *cmd_processor_get_settings(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t settings[6 + BLE_CONNECT_KEY_LEN_MAX] = {};
+    settings[0] = SETTINGS_CURRENT_VERSION; // current version
+    settings[1] = settings_get_animation_config(); // animation mode
+    settings[2] = settings_get_button_press_config('A'); // short A button press mode
+    settings[3] = settings_get_button_press_config('B'); // short B button press mode
+    settings[4] = settings_get_long_button_press_config('A'); // long A button press mode
+    settings[5] = settings_get_long_button_press_config('B'); // long B button press mode
+    memcpy(settings + 6, settings_get_ble_connect_key(), BLE_CONNECT_KEY_LEN_MAX);
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 6 + BLE_CONNECT_KEY_LEN_MAX, settings);
+}
+
+
 data_frame_tx_t *cmd_processor_set_animation_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length == 1) {
         status = STATUS_DEVICE_SUCCESS;
@@ -446,11 +459,30 @@ data_frame_tx_t *cmd_processor_set_em410x_emu_id(uint16_t cmd, uint16_t status, 
 }
 
 data_frame_tx_t *cmd_processor_get_em410x_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    tag_specific_type_t tag_type[2];
+    tag_emulation_get_specific_type_by_slot(tag_emulation_get_slot(), tag_type);
+    if (tag_type[1] == TAG_TYPE_UNKNOWN) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, data); // no data in slot, don't send garbage
+    }
     tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
     uint8_t responseData[LF_EM410X_TAG_ID_SIZE];
     memcpy(responseData, buffer->buffer, LF_EM410X_TAG_ID_SIZE);
-    status = STATUS_DEVICE_SUCCESS;
-    return data_frame_make(cmd, status, LF_EM410X_TAG_ID_SIZE, responseData);
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, LF_EM410X_TAG_ID_SIZE, responseData);
+}
+
+data_frame_tx_t *cmd_processor_get_mf1_anti_coll_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    tag_specific_type_t tag_type[2];
+    tag_emulation_get_specific_type_by_slot(tag_emulation_get_slot(), tag_type);
+    if (tag_type[0] == TAG_TYPE_UNKNOWN) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, data); // no data in slot, don't send garbage
+    }
+    uint8_t responseData[sizeof(picc_14a_tag_t)] = {};
+    nfc_tag_14a_coll_res_reference_t *info = get_saved_mifare_coll_res();
+    memcpy(responseData, info->uid, *info->size);
+    responseData[10] = *info->size; // size is 2 byte len, but...
+    responseData[12] = info->sak[0];
+    memcpy(&responseData[13], info->atqa, 2);
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, sizeof(picc_14a_tag_t), responseData);
 }
 
 data_frame_tx_t *cmd_processor_set_mf1_detection_enable(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -855,7 +887,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_SET_BLE_CONNECT_KEY_CONFIG,   NULL,                        cmd_processor_set_ble_connect_key,           NULL                   },
     {    DATA_CMD_DELETE_ALL_BLE_BONDS,         NULL,                        cmd_processor_del_ble_all_bonds,             NULL                   },
     {    DATA_CMD_GET_DEVICE,                   NULL,                        cmd_processor_get_device,                    NULL                   },
-    // {    DATA_CMD_GET_SETTINGS,                 NULL,                        NULL,                                        NULL                   },
+    {    DATA_CMD_GET_SETTINGS,                 NULL,                        cmd_processor_get_settings,                  NULL                   },
     {    DATA_CMD_GET_DEVICE_CAPABILITIES,      NULL,                        NULL,                                        NULL                   },
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
@@ -910,6 +942,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_SET_MF1_USE_FIRST_BLOCK_COLL, NULL,                        cmd_processor_set_mf1_use_coll_res,          NULL                   },
     {    DATA_CMD_GET_MF1_WRITE_MODE,           NULL,                        cmd_processor_get_mf1_write_mode,            NULL                   },
     {    DATA_CMD_SET_MF1_WRITE_MODE,           NULL,                        cmd_processor_set_mf1_write_mode,            NULL                   },
+    {    DATA_CMD_GET_MF1_ANTI_COLL_DATA,       NULL,                        cmd_processor_get_mf1_anti_coll_data,        NULL                   },
 
     {    DATA_CMD_SET_SLOT_TAG_NICK,            NULL,                        cmd_processor_set_slot_tag_nick_name,        NULL                   },
     {    DATA_CMD_GET_SLOT_TAG_NICK,            NULL,                        cmd_processor_get_slot_tag_nick_name,        NULL                   },

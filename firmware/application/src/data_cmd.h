@@ -100,6 +100,7 @@
 #define DATA_CMD_SET_MF1_USE_FIRST_BLOCK_COLL   (4015)
 #define DATA_CMD_GET_MF1_WRITE_MODE             (4016)
 #define DATA_CMD_SET_MF1_WRITE_MODE             (4017)
+#define DATA_CMD_GET_MF1_ANTI_COLL_DATA         (4018)
 //
 // ******************************************************************
 
