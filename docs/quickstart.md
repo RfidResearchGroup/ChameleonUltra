@@ -2,7 +2,7 @@
 
 Quickly get up and running with your Chameleon and no technical skill
 
-1. Download any of those applications
+1. Download any of those applications. Note that in spite of what their name may suggest, all GUIs support both the Ultra and the Lite.
    
    - [ChameleonUltraGUI on Google Play](https://play.google.com/store/apps/details?id=io.chameleon.ultra) / [APK](https://nightly.link/GameTec-live/ChameleonUltraGUI/workflows/buildapp/main/apk.zip)
    - [ChameleonUltraGUI on iOS](https://apps.apple.com/dk/app/chameleon-ultra-gui/id6462919364)
