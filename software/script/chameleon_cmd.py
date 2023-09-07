@@ -631,8 +631,7 @@ class ChameleonCMD:
         """
             Gets data for selected block range
         """
-        data = struct.pack('<BH', block_start, block_count)
-        return self.device.send_cmd_sync(DATA_CMD_READ_MF1_EMU_BLOCK_DATA, 0x00, data)
+        return self.device.send_cmd_sync(DATA_CMD_READ_MF1_EMU_BLOCK_DATA, 0x00, bytearray(block_start, block_count))
 
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_mf1_anti_collision_res(self, sak: bytearray, atqa: bytearray, uid: bytearray):
