@@ -4,4 +4,4 @@ There are multiple GUIs to control your Chameleon, two are featured in this docu
 
 - [Chameleon Ultra GUI](./chameleonultragui.md) ([github](https://github.com/GameTec-live/ChameleonUltraGUI))
 
-- [MTools for iOS](https://shop.mtoolstec.com/mifare-classic-tool-for-ios)
+- [MTools Lite for iOS](https://shop.mtoolstec.com/mifare-classic-tool-for-ios)
