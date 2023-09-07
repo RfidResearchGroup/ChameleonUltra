@@ -5,6 +5,8 @@ import chameleon_com
 import chameleon_status
 from chameleon_utils import expect_response
 
+CURRENT_VERSION_SETTINGS = 4
+
 DATA_CMD_GET_APP_VERSION = 1000
 DATA_CMD_CHANGE_MODE = 1001
 DATA_CMD_GET_DEVICE_MODE = 1002
@@ -50,6 +52,10 @@ DATA_CMD_GET_BLE_CONNECT_KEY_CONFIG = 1031
 
 DATA_CMD_DELETE_ALL_BLE_BONDS = 1032
 
+DATA_CMD_GET_DEVICE = 1033
+DATA_CMD_GET_SETTINGS = 1034
+DATA_CMD_GET_DEVICE_CAPABILITIES = 1035
+
 DATA_CMD_SCAN_14A_TAG = 2000
 DATA_CMD_MF1_SUPPORT_DETECT = 2001
 DATA_CMD_MF1_NT_LEVEL_DETECT = 2002
@@ -82,6 +88,7 @@ DATA_CMD_GET_MF1_USE_FIRST_BLOCK_COLL = 4014
 DATA_CMD_SET_MF1_USE_FIRST_BLOCK_COLL = 4015
 DATA_CMD_GET_MF1_WRITE_MODE = 4016
 DATA_CMD_SET_MF1_WRITE_MODE = 4017
+DATA_CMD_GET_MF1_ANTI_COLL_DATA = 4018
 
 DATA_CMD_SET_EM410X_EMU_ID = 5000
 DATA_CMD_GET_EM410X_EMU_ID = 5001
@@ -268,8 +275,8 @@ class ButtonPressFunction(enum.IntEnum):
         elif self == ButtonPressFunction.SettingsButtonCycleSlotDec:
             return "Card slot number sequence decreases after pressing"
         elif self == ButtonPressFunction.SettingsButtonCloneIcUid:
-            return "Read the UID card number immediately after pressing, continue searching," + \
-                   "and simulate immediately after reading the card"
+            return ("Read the UID card number immediately after pressing, continue searching," +
+                    "and simulate immediately after reading the card")
         return "Unknown"
 
 
@@ -283,6 +290,8 @@ class ChameleonCMD:
         :param chameleon: chameleon instance, @see chameleon_device.Chameleon
         """
         self.device = chameleon
+        if not len(self.device.commands):
+            self.get_device_capabilities()
 
     def get_firmware_version(self) -> int:
         """
@@ -401,10 +410,7 @@ class ChameleonCMD:
         data.append(sync_max)
         return self.device.send_cmd_sync(DATA_CMD_MF1_DARKSIDE_ACQUIRE, 0x00, data, timeout=sync_max + 5)
 
-    @expect_response([
-        chameleon_status.Device.HF_TAG_OK,
-        chameleon_status.Device.MF_ERR_AUTH,
-    ])
+    @expect_response([chameleon_status.Device.HF_TAG_OK, chameleon_status.Device.MF_ERR_AUTH])
     def auth_mf1_key(self, block, type_value, key):
         """
         Verify the mf1 key, only verify the specified type of key for a single sector
@@ -527,10 +533,8 @@ class ChameleonCMD:
         :param sense_type: Sense type to disable
         :return:
         """
-        return self.device.send_cmd_sync(DATA_CMD_DELETE_SLOT_SENSE_TYPE, 0x00, bytearray([
-            SlotNumber.to_fw(slot_index),
-            sense_type,
-        ]))
+        return self.device.send_cmd_sync(DATA_CMD_DELETE_SLOT_SENSE_TYPE, 0x00,
+                                         bytearray([SlotNumber.to_fw(slot_index), sense_type]))
 
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_slot_data_default(self, slot_index: SlotNumber, tag_type: TagSpecificType):
@@ -778,11 +782,7 @@ class ChameleonCMD:
         """
         Set config of button press function
         """
-        return self.device.send_cmd_sync(
-            DATA_CMD_SET_BUTTON_PRESS_CONFIG,
-            0x00,
-            bytearray([button, function])
-        )
+        return self.device.send_cmd_sync(DATA_CMD_SET_BUTTON_PRESS_CONFIG, 0x00, bytearray([button, function]))
 
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def get_long_button_press_fun(self, button: ButtonType):
@@ -796,11 +796,7 @@ class ChameleonCMD:
         """
         Set config of button press function
         """
-        return self.device.send_cmd_sync(
-            DATA_CMD_SET_LONG_BUTTON_PRESS_CONFIG,
-            0x00,
-            bytearray([button, function])
-        )
+        return self.device.send_cmd_sync(DATA_CMD_SET_LONG_BUTTON_PRESS_CONFIG, 0x00, bytearray([button, function]))
 
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_ble_connect_key(self, key: str):
@@ -810,14 +806,10 @@ class ChameleonCMD:
         data_bytes = key.encode(encoding='ascii')
 
         # check key length
-        if (len(data_bytes) != 6):
+        if len(data_bytes) != 6:
             raise ValueError("The ble connect key length must be 6")
 
-        return self.device.send_cmd_sync(
-            DATA_CMD_SET_BLE_CONNECT_KEY_CONFIG,
-            0x00,
-            data_bytes
-        )
+        return self.device.send_cmd_sync(DATA_CMD_SET_BLE_CONNECT_KEY_CONFIG, 0x00, data_bytes)
 
     def get_ble_connect_key(self):
         """
@@ -830,6 +822,55 @@ class ChameleonCMD:
         From peer manager delete all bonds.
         """
         return self.device.send_cmd_sync(DATA_CMD_DELETE_ALL_BLE_BONDS, 0x00, None)
+
+    def get_device_capabilities(self):
+        """
+        Get (and set) commands that client understands
+        """
+
+        commands = []
+
+        try:
+            ret = self.device.send_cmd_sync(DATA_CMD_GET_DEVICE_CAPABILITIES, 0x00)
+            self.device.commands = struct.unpack(f"{len(ret.data) // 2}H", ret.data)
+        except:
+            print("Chameleon doesn't understand get capabilities command. Please update firmware")
+
+        return commands
+
+    def get_device_type(self):
+        """
+        Get device type
+        0 - Chameleon Ultra
+        1 - Chameleon Lite
+        """
+
+        return self.device.send_cmd_sync(DATA_CMD_GET_DEVICE, 0x00).data[0]
+
+    def get_device_settings(self):
+        """
+        Get all possible settings
+        For version 4:
+        settings[0] = SETTINGS_CURRENT_VERSION; // current version
+        settings[1] = settings_get_animation_config(); // animation mode
+        settings[2] = settings_get_button_press_config('A'); // short A button press mode
+        settings[3] = settings_get_button_press_config('B'); // short B button press mode
+        settings[4] = settings_get_long_button_press_config('A'); // long A button press mode
+        settings[5] = settings_get_long_button_press_config('B'); // long B button press mode
+        settings[6:12] = settings_get_ble_connect_key(); // BLE connection key
+        """
+        data = self.device.send_cmd_sync(DATA_CMD_GET_SETTINGS, 0x00).data
+        if data[0] != CURRENT_VERSION_SETTINGS:
+            raise ValueError("Settings version in app doesn't match Chameleon response. Upgrade client or Chameleon "
+                             "firmware")
+        return data
+
+    def get_mf1_anti_coll_data(self):
+        """
+        Get data from current slot (UID/SAK/ATQA)
+        :return:
+        """
+        return self.device.send_cmd_sync(DATA_CMD_GET_MF1_ANTI_COLL_DATA, 0x00)
 
 
 if __name__ == '__main__':

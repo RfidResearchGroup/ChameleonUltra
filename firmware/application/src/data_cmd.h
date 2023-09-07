@@ -38,6 +38,10 @@
 #define DATA_CMD_SET_BLE_CONNECT_KEY_CONFIG     (1030)
 #define DATA_CMD_GET_BLE_CONNECT_KEY_CONFIG     (1031)
 #define DATA_CMD_DELETE_ALL_BLE_BONDS           (1032)
+#define DATA_CMD_GET_DEVICE                     (1033)
+#define DATA_CMD_GET_SETTINGS                   (1034)
+#define DATA_CMD_GET_DEVICE_CAPABILITIES        (1035)
+
 
 //
 // ******************************************************************
@@ -80,7 +84,7 @@
 //
 #define DATA_CMD_LOAD_MF1_EMU_BLOCK_DATA        (4000)
 #define DATA_CMD_SET_MF1_ANTI_COLLISION_RES     (4001)
-#define DATA_CMD_SET_MF1_ANTICOLLISION_INFO     (4002)
+#define DATA_CMD_SET_MF1_ANTI_COLLISION_INFO    (4002)
 #define DATA_CMD_SET_MF1_ATS_RESOURCE           (4003)
 #define DATA_CMD_SET_MF1_DETECTION_ENABLE       (4004)
 #define DATA_CMD_GET_MF1_DETECTION_COUNT        (4005)
@@ -96,6 +100,7 @@
 #define DATA_CMD_SET_MF1_USE_FIRST_BLOCK_COLL   (4015)
 #define DATA_CMD_GET_MF1_WRITE_MODE             (4016)
 #define DATA_CMD_SET_MF1_WRITE_MODE             (4017)
+#define DATA_CMD_GET_MF1_ANTI_COLL_DATA         (4018)
 //
 // ******************************************************************
 

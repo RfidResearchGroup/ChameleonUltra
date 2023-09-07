@@ -42,6 +42,7 @@ class ChameleonCom:
     """
     data_frame_sof = 0x11
     data_max_length = 512
+    commands = []
 
     def __init__(self):
         """
@@ -70,8 +71,7 @@ class ChameleonCom:
             error = None
             try:
                 # open serial port
-                self.serial_instance = serial.Serial(
-                    port=port, baudrate=115200)
+                self.serial_instance = serial.Serial(port=port, baudrate=115200)
             except Exception as e:
                 error = e
             finally:
@@ -99,8 +99,7 @@ class ChameleonCom:
         :return:
         """
         if not self.isOpen():
-            raise NotOpenException(
-                "Please call open() function to start device.")
+            raise NotOpenException("Please call open() function to start device.")
 
     @staticmethod
     def lrc_calc(array):
@@ -198,8 +197,7 @@ class ChameleonCom:
                                 if callable(fn_call):
                                     # delete wait task from map
                                     del self.wait_response_map[data_cmd]
-                                    fn_call(data_cmd, data_status,
-                                            data_response)
+                                    fn_call(data_cmd, data_status, data_response)
                                 else:
                                     self.wait_response_map[data_cmd]['response'] = Response(data_cmd, data_status,
                                                                                             data_response)
@@ -230,8 +228,7 @@ class ChameleonCom:
             task_close = task['close']
             # register to wait map
             if 'callback' in task and callable(task['callback']):
-                self.wait_response_map[task_cmd] = {
-                    'callback': task['callback']}  # The callback for this task
+                self.wait_response_map[task_cmd] = {'callback': task['callback']}  # The callback for this task
             else:
                 self.wait_response_map[task_cmd] = {'response': None}
             # set start time
@@ -262,8 +259,7 @@ class ChameleonCom:
                 if time.time() > self.wait_response_map[task_cmd]['end_time']:
                     if 'callback' in self.wait_response_map[task_cmd]:
                         # not sync, call function to notify timeout.
-                        self.wait_response_map[task_cmd]['callback'](
-                            task_cmd, None, None)
+                        self.wait_response_map[task_cmd]['callback'](task_cmd, None, None)
                     else:
                         # sync mode, set timeout flag
                         self.wait_response_map[task_cmd]['is_timeout'] = True
@@ -308,8 +304,7 @@ class ChameleonCom:
             del self.wait_response_map[cmd]
         # make data frame
         data_frame = self.make_data_frame_bytes(cmd, status, data)
-        task = {'cmd': cmd, 'frame': data_frame,
-                'timeout': timeout, 'close': close}
+        task = {'cmd': cmd, 'frame': data_frame, 'timeout': timeout, 'close': close}
         if callable(callback):
             task['callback'] = callback
         self.send_data_queue.put(task)
@@ -327,6 +322,12 @@ class ChameleonCom:
         """
         if isinstance(data, int):
             data = [data]  # warp array.
+        if len(self.commands):
+            # check if chameleon can understand this command
+            if cmd not in self.commands:
+                raise CMDInvalidException(f"This device doesn't declare that it can support this command: {cmd}.\nMake "
+                                          f"sure firmware is up to date and matches client")
+                # return Response(cmd=cmd, status=0, data=b"\0" * 32)  # forge fake response to not break app
         # first to send cmd, no callback mode(sync)
         self.send_cmd_auto(cmd, status, data, None, timeout)
         # wait cmd start process

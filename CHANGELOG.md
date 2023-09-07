@@ -3,6 +3,9 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Add `hf mf info` command to get UID/SAK/ATQA from slot (@Foxushka)
+ - Add `hw raw` to send raw command to Chameleon (@Foxushka)
+ - Implement command to fetch all available commands from Chameleon and test if Chameleon supports it (@Foxushka)
  - ChameleonLite emulation bug fixed (@spp2000)
  - Fixed MFC emulation issues with OEM readers, also temporarily disabling NFC_MF1_FAST_SIM (@xianglin1998)
  - Fixed Chameleon crash during BLE pairing (@Foxushka)

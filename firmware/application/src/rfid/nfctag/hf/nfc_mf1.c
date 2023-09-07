@@ -1070,6 +1070,17 @@ nfc_tag_14a_coll_res_reference_t *get_mifare_coll_res() {
     return &m_shadow_coll_res;
 }
 
+
+nfc_tag_14a_coll_res_reference_t *get_saved_mifare_coll_res() {
+    // Always give saved data, not from block 0
+    m_shadow_coll_res.sak = m_tag_information->res_coll.sak;
+    m_shadow_coll_res.atqa = m_tag_information->res_coll.atqa;
+    m_shadow_coll_res.uid = m_tag_information->res_coll.uid;
+    m_shadow_coll_res.size = &(m_tag_information->res_coll.size);
+    m_shadow_coll_res.ats = &(m_tag_information->res_coll.ats);
+    return &m_shadow_coll_res;
+}
+
 /**
  * @brief Reconcile when the parameter label needs to be reset
  */
