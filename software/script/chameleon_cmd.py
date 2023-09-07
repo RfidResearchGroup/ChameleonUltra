@@ -5,7 +5,7 @@ import chameleon_com
 import chameleon_status
 from chameleon_utils import expect_response
 
-CURRENT_VERSION_SETTINGS = 4
+CURRENT_VERSION_SETTINGS = 5
 
 DATA_CMD_GET_APP_VERSION = 1000
 DATA_CMD_CHANGE_MODE = 1001
@@ -859,7 +859,8 @@ class ChameleonCMD:
         settings[3] = settings_get_button_press_config('B'); // short B button press mode
         settings[4] = settings_get_long_button_press_config('A'); // long A button press mode
         settings[5] = settings_get_long_button_press_config('B'); // long B button press mode
-        settings[6:12] = settings_get_ble_connect_key(); // BLE connection key
+        settings[6] = settings_get_ble_pairing_enable(); // is device require pairing
+        settings[7:13] = settings_get_ble_connect_key(); // BLE connection key
         """
         data = self.device.send_cmd_sync(DATA_CMD_GET_SETTINGS, 0x00).data
         if data[0] != CURRENT_VERSION_SETTINGS:
