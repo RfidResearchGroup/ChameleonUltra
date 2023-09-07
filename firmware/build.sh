@@ -21,6 +21,8 @@ echo "Building firmware for $device_type (hw_version=$hw_version)"
 
 set -xe
 
+rm -rf "objects"
+
 (
   cd bootloader
   make -j
