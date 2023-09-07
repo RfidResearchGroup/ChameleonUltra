@@ -118,15 +118,16 @@ data_frame_tx_t *cmd_processor_reset_settings(uint16_t cmd, uint16_t status, uin
 }
 
 data_frame_tx_t *cmd_processor_get_settings(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t settings[6 + BLE_CONNECT_KEY_LEN_MAX] = {};
+    uint8_t settings[7 + BLE_CONNECT_KEY_LEN_MAX] = {};
     settings[0] = SETTINGS_CURRENT_VERSION; // current version
     settings[1] = settings_get_animation_config(); // animation mode
     settings[2] = settings_get_button_press_config('A'); // short A button press mode
     settings[3] = settings_get_button_press_config('B'); // short B button press mode
     settings[4] = settings_get_long_button_press_config('A'); // long A button press mode
     settings[5] = settings_get_long_button_press_config('B'); // long B button press mode
-    memcpy(settings + 6, settings_get_ble_connect_key(), BLE_CONNECT_KEY_LEN_MAX);
-    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 6 + BLE_CONNECT_KEY_LEN_MAX, settings);
+    settings[6] = settings_get_ble_pairing_enable(); // is device require pairing
+    memcpy(settings + 7, settings_get_ble_connect_key(), BLE_CONNECT_KEY_LEN_MAX);
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 7 + BLE_CONNECT_KEY_LEN_MAX, settings);
 }
 
 data_frame_tx_t *cmd_processor_set_animation_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
