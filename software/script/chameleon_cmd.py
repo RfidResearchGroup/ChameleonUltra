@@ -852,7 +852,7 @@ class ChameleonCMD:
     def get_device_settings(self):
         """
         Get all possible settings
-        For version 4:
+        For version 5:
         settings[0] = SETTINGS_CURRENT_VERSION; // current version
         settings[1] = settings_get_animation_config(); // animation mode
         settings[2] = settings_get_button_press_config('A'); // short A button press mode
