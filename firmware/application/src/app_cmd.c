@@ -583,7 +583,7 @@ data_frame_tx_t *cmd_processor_get_mf1_emulator_block(uint16_t cmd, uint16_t sta
         uint8_t block_index = data[0];
         uint8_t block_count = data[1];
 
-        if (block_count != 0 && (uint16_t) block_index + block_count < NFC_TAG_MF1_BLOCK_MAX) {
+        if (block_count != 0 && (uint16_t) block_index + block_count < NFC_TAG_MF1_BLOCK_MAX && block_count <= 32) {
             tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_MIFARE_4096);
             nfc_tag_mf1_information_t *info = (nfc_tag_mf1_information_t *)buffer->buffer;
             uint16_t result_length = block_count * NFC_TAG_MF1_DATA_SIZE;
