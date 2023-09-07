@@ -5,7 +5,7 @@
 
 #include "utils.h"
 
-#define SETTINGS_CURRENT_VERSION 4
+#define SETTINGS_CURRENT_VERSION 5
 #define BLE_CONNECT_KEY_LEN_MAX 6
 #define DEFAULT_BLE_CONNECT_KEY "123456"  // length must == 6
 
@@ -32,7 +32,8 @@ typedef struct ALIGN_U32 {
 
     // 1 byte
     uint8_t animation_config : 2;
-    uint8_t reserved0 : 6; // If you are add switch field, reallocating me.
+    uint8_t ble_pairing_enable : 1;
+    uint8_t reserved0 : 5; // If you are add switch field, reallocating me.
 
     // 1 byte
     uint8_t button_a_press : 4;
@@ -69,4 +70,7 @@ void settings_set_long_button_press_config(char which, uint8_t value);
 bool is_settings_button_type_valid(char type);
 uint8_t *settings_get_ble_connect_key(void);
 void settings_set_ble_connect_key(uint8_t *key);
+void settings_set_ble_pairing_enable(bool enable);
+bool settings_get_ble_pairing_enable(void);
+bool settings_get_ble_pairing_enable_first_load(void);
 #endif

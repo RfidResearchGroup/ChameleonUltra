@@ -162,7 +162,6 @@ hw_ble_bonds = hw_ble.subgroup('bonds', 'All devices bound by chameleons.')
 hw_settings = hw.subgroup('settings', 'Chameleon settings management')
 hw_settings_animation = hw_settings.subgroup('animation', 'Manage wake-up and sleep animation modes')
 hw_settings_button_press = hw_settings.subgroup('btnpress', 'Manage button press function')
-hw_settings_ble_key = hw_settings.subgroup('blekey', 'Manage ble connect key')
 
 hf = CLITree('hf', 'high frequency tag/reader')
 hf_14a = hf.subgroup('14a', 'ISO14443-a tag read/write/info...')
@@ -1366,35 +1365,64 @@ class HWButtonSettingsSet(DeviceRequiredUnit):
         print(" - Successfully set button function to settings")
 
 
-@hw_settings_ble_key.command('set', 'Set the ble connect key')
-class HWSettingsBLEKeySet(DeviceRequiredUnit):
+@hw_settings.command('blekey', 'Get or set the ble connect key')
+class HWSettingsBLEKey(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
-        parser.add_argument('-k', '--key', required=True, help="Ble connect key for your device")
+        parser.add_argument('-k', '--key', required=False, help="Ble connect key for your device")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        if len(args.key) != 6:
-            print(f" - {colorama.Fore.RED}The ble connect key length must be 6{colorama.Style.RESET_ALL}")
-            return
-        if re.match(r'[0-9]{6}', args.key):
-            self.cmd.set_ble_connect_key(args.key)
-            print(" - Successfully set ble connect key to settings")
-        else:
-            print(f" - {colorama.Fore.RED}Only 6 ASCII characters from 0 to 9 are supported.{colorama.Style.RESET_ALL}")
+        resp = self.cmd.get_ble_connect_key()
+        print(" - The current key of the device(ascii): "
+              f"{colorama.Fore.GREEN}{resp.data.decode(encoding='ascii')}{colorama.Style.RESET_ALL}")
+        
+        if args.key != None:
+            if len(args.key) != 6:
+                print(f" - {colorama.Fore.RED}The ble connect key length must be 6{colorama.Style.RESET_ALL}")
+                return
+            if re.match(r'[0-9]{6}', args.key):
+                self.cmd.set_ble_connect_key(args.key)
+                print(" - Successfully set ble connect key to :", end='')
+                print(f"{colorama.Fore.GREEN}"
+                      f" { args.key }"
+                      f"{colorama.Style.RESET_ALL}"
+                      )
+            else:
+                print(f" - {colorama.Fore.RED}Only 6 ASCII characters from 0 to 9 are supported.{colorama.Style.RESET_ALL}")
 
 
-@hw_settings_ble_key.command('get', 'Get the ble connect key')
-class HWSettingsBLEKeyGet(DeviceRequiredUnit):
+@hw_settings.command('blepair', 'Check if BLE pairing is enabled, or set the enable switch for BLE pairing.')
+class HWRaw(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
-        return None
+        parser = ArgumentParserNoExit()
+        parser.add_argument('-e', '--enable', type=int, required=False, help="Enable = 1 or Disable = 0")
+        return parser
 
     def on_exec(self, args: argparse.Namespace):
-        resp = self.cmd.get_ble_connect_key()
-        print(" - Key(ascii): "
-              f"{colorama.Fore.GREEN}{resp.data.decode(encoding='ascii')}{colorama.Style.RESET_ALL}")
+        is_pairing_enable = self.cmd.get_ble_pairing_enable()
+        print(f" - Is ble pairing enable: ", end='')
+        color = colorama.Fore.GREEN if is_pairing_enable else colorama.Fore.RED
+        print(
+            f"{color}"
+            f"{ 'Yes' if is_pairing_enable else 'No' }"
+            f"{colorama.Style.RESET_ALL}"
+        )
+        if args.enable is not None:
+            if args.enable == 1 and is_pairing_enable:
+                print(f"{colorama.Fore.YELLOW} It is already in an enabled state.{colorama.Style.RESET_ALL}")
+                return
+            if args.enable == 0 and not is_pairing_enable:
+                print(f"{colorama.Fore.YELLOW} It is already in a non enabled state.{colorama.Style.RESET_ALL}")
+                return
+            self.cmd.set_ble_pairing_enable(args.enable)
+            print(f" - Successfully change ble pairing to "
+                  f"{colorama.Fore.GREEN if args.enable else colorama.Fore.RED}"
+                  f"{ 'Enable' if args.enable else 'Disable' } "
+                  f"{colorama.Style.RESET_ALL}"
+                  "state.")
 
 
 @hw_ble_bonds.command('clear', 'Clear all bindings')

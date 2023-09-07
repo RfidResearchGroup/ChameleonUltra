@@ -500,7 +500,7 @@ static void check_wakeup_src(void) {
         if (nrfx_power_usbstatus_get() != NRFX_POWER_USB_STATE_DISCONNECTED) {
             NRF_LOG_INFO("USB Power found.");
             // usb plugged in can broadcast BLE at will
-            advertising_start(true);
+            advertising_start(false);
         } else {
             sleep_timer_start(SLEEP_DELAY_MS_FIRST_POWER); // Wait a while and go straight to hibernation, do nothing
         }
@@ -754,13 +754,17 @@ static void blink_usb_led_status(void) {
 }
 
 static void lesc_event_process(void) {
-    ret_code_t err_code;
-    err_code = nrf_ble_lesc_request_handler();
-    APP_ERROR_CHECK(err_code);
+    if (settings_get_ble_pairing_enable_first_load()) {
+        ret_code_t err_code;
+        err_code = nrf_ble_lesc_request_handler();
+        APP_ERROR_CHECK(err_code);
+    }
 }
 
 static void ble_passkey_init(void) {
-    set_ble_connect_key(settings_get_ble_connect_key());
+    if (settings_get_ble_pairing_enable_first_load()) {
+        set_ble_connect_key(settings_get_ble_connect_key());
+    }
 }
 
 /**@brief Application main function.
@@ -768,6 +772,9 @@ static void ble_passkey_init(void) {
 int main(void) {
     hw_connect_init();        // Remember to initialize the pins first
     cmd_map_init();           // Set function in CMD map for DATA_CMD_GET_DEVICE_CAPABILITIES
+
+    fds_util_init();          // Initialize fds tool
+    settings_load_config();   // Load settings from flash
 
     init_leds();              // LED initialization
     log_init();               // Log initialization
@@ -782,12 +789,10 @@ int main(void) {
     bsp_timer_start();        // Start BSP TIMER and prepare it for processing business logic
     button_init();            // Button initialization for handling business logic
     sleep_timer_init();       // Soft timer initialization for hibernation
-    fds_util_init();          // Initialize fds tool package
     tag_emulation_init();     // Analog card initialization
     rgb_marquee_init();       // Light effect initialization
 
-    settings_load_config();   // Load settings from flash
-    ble_passkey_init();       // after settings loaded, we can init ble connect key.
+    ble_passkey_init();       // init ble connect key.
 
     // cmd callback register
     on_data_frame_complete(on_data_frame_received);

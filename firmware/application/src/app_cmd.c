@@ -129,7 +129,6 @@ data_frame_tx_t *cmd_processor_get_settings(uint16_t cmd, uint16_t status, uint1
     return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 6 + BLE_CONNECT_KEY_LEN_MAX, settings);
 }
 
-
 data_frame_tx_t *cmd_processor_set_animation_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length == 1) {
         status = STATUS_DEVICE_SUCCESS;
@@ -195,6 +194,21 @@ data_frame_tx_t *cmd_processor_set_long_button_press_config(uint16_t cmd, uint16
         status = STATUS_DEVICE_SUCCESS;
     } else {
         length = 0;
+        status = STATUS_PAR_ERR;
+    }
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+data_frame_tx_t *cmd_processor_get_ble_pairing_enable(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t is_enable = settings_get_ble_pairing_enable();
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 1, (uint8_t *)(&is_enable));
+}
+
+data_frame_tx_t *cmd_processor_set_ble_pairing_enable(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length == 1 && (data[0] == true || data[0] == false)) {
+        settings_set_ble_pairing_enable(data[0]);
+        status = STATUS_DEVICE_SUCCESS;
+    } else {
         status = STATUS_PAR_ERR;
     }
     return data_frame_make(cmd, status, 0, NULL);
@@ -781,11 +795,11 @@ data_frame_tx_t *cmd_processor_get_enabled_slots(uint16_t cmd, uint16_t status, 
 
 data_frame_tx_t *cmd_processor_get_ble_connect_key(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     return data_frame_make(
-               cmd,
-               STATUS_DEVICE_SUCCESS,
-               BLE_CONNECT_KEY_LEN_MAX, // 6
-               settings_get_ble_connect_key() // Get key point from config
-           );
+        cmd,
+        STATUS_DEVICE_SUCCESS,
+        BLE_CONNECT_KEY_LEN_MAX, // 6
+        settings_get_ble_connect_key() // Get key point from config
+    );
 }
 
 data_frame_tx_t *cmd_processor_set_ble_connect_key(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -801,10 +815,6 @@ data_frame_tx_t *cmd_processor_set_ble_connect_key(uint16_t cmd, uint16_t status
         if (is_valid_key) {
             // Key is valid, we can update to config
             settings_set_ble_connect_key(data);
-            advertising_stop();
-            set_ble_connect_key(settings_get_ble_connect_key());
-            // clear bond if exists
-            advertising_start(true);
             status = STATUS_DEVICE_SUCCESS;
         } else {
             status = STATUS_PAR_ERR;
@@ -889,6 +899,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_DEVICE,                   NULL,                        cmd_processor_get_device,                    NULL                   },
     {    DATA_CMD_GET_SETTINGS,                 NULL,                        cmd_processor_get_settings,                  NULL                   },
     {    DATA_CMD_GET_DEVICE_CAPABILITIES,      NULL,                        NULL,                                        NULL                   },
+    {    DATA_CMD_GET_BLE_PAIRING_ENABLE,       NULL,                        cmd_processor_get_ble_pairing_enable,        NULL                   },
+    {    DATA_CMD_SET_BLE_PAIRING_ENABLE,       NULL,                        cmd_processor_set_ble_pairing_enable,        NULL                   },
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 

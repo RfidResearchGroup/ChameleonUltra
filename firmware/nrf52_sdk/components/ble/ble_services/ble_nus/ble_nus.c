@@ -42,6 +42,7 @@
 #include "ble.h"
 #include "ble_nus.h"
 #include "ble_srv_common.h"
+#include "settings.h"
 
 #define NRF_LOG_MODULE_NAME ble_nus
 #if BLE_NUS_CONFIG_LOG_ENABLED
@@ -283,10 +284,13 @@ uint32_t ble_nus_init(ble_nus_t * p_nus, ble_nus_init_t const * p_nus_init)
     add_char_params.char_props.write         = 1;
     add_char_params.char_props.write_wo_resp = 1;
 
-    // add_char_params.read_access  = SEC_OPEN;
-    // add_char_params.write_access = SEC_OPEN;
-    add_char_params.read_access  = SEC_MITM;
-    add_char_params.write_access = SEC_MITM;
+    if (settings_get_ble_pairing_enable_first_load()) {
+        add_char_params.read_access  = SEC_MITM;
+        add_char_params.write_access = SEC_MITM;
+    } else {
+        add_char_params.read_access  = SEC_OPEN;
+        add_char_params.write_access = SEC_OPEN;
+    }
 
     err_code = characteristic_add(p_nus->service_handle, &add_char_params, &p_nus->rx_handles);
     if (err_code != NRF_SUCCESS)
@@ -304,12 +308,15 @@ uint32_t ble_nus_init(ble_nus_t * p_nus, ble_nus_init_t const * p_nus_init)
     add_char_params.is_var_len        = true;
     add_char_params.char_props.notify = 1;
 
-    // add_char_params.read_access       = SEC_OPEN;
-    // add_char_params.write_access      = SEC_OPEN;
-    // add_char_params.cccd_write_access = SEC_OPEN;
-    add_char_params.read_access       = SEC_MITM;
-    add_char_params.write_access      = SEC_MITM;
-    add_char_params.cccd_write_access = SEC_MITM;
+    if (settings_get_ble_pairing_enable_first_load()) {
+        add_char_params.read_access       = SEC_MITM;
+        add_char_params.write_access      = SEC_MITM;
+        add_char_params.cccd_write_access = SEC_MITM;
+    } else {
+        add_char_params.read_access       = SEC_OPEN;
+        add_char_params.write_access      = SEC_OPEN;
+        add_char_params.cccd_write_access = SEC_OPEN;
+    }
 
     return characteristic_add(p_nus->service_handle, &add_char_params, &p_nus->tx_handles);
     /**@snippet [Adding proprietary characteristic to the SoftDevice] */

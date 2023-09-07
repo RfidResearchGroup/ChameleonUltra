@@ -55,6 +55,8 @@ DATA_CMD_DELETE_ALL_BLE_BONDS = 1032
 DATA_CMD_GET_DEVICE = 1033
 DATA_CMD_GET_SETTINGS = 1034
 DATA_CMD_GET_DEVICE_CAPABILITIES = 1035
+DATA_CMD_GET_BLE_PAIRING_ENABLE = 1036
+DATA_CMD_SET_BLE_PAIRING_ENABLE = 1037
 
 DATA_CMD_SCAN_14A_TAG = 2000
 DATA_CMD_MF1_SUPPORT_DETECT = 2001
@@ -871,6 +873,18 @@ class ChameleonCMD:
         :return:
         """
         return self.device.send_cmd_sync(DATA_CMD_GET_MF1_ANTI_COLL_DATA, 0x00)
+
+    def get_ble_pairing_enable(self) -> bool:
+        """
+        Is ble pairing enable?
+        :return: True if pairing is enable, False if pairing disabled
+        """
+        resp = self.device.send_cmd_sync(DATA_CMD_GET_BLE_PAIRING_ENABLE, 0x00)
+        return resp.data[0] == 1
+    
+    @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
+    def set_ble_pairing_enable(self, enable: bool):
+        return self.device.send_cmd_sync(DATA_CMD_SET_BLE_PAIRING_ENABLE, 0x00, 1 if enable else 0)
 
 
 if __name__ == '__main__':
