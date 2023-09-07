@@ -13,10 +13,13 @@ softdevice_id=0x0100
 application_version=1
 bootloader_version=1
 
-declare -A device_type_to_hw_version=( ["ultra"]="0" ["lite"]="1" )
-
 device_type=${CURRENT_DEVICE_TYPE:-ultra}
-hw_version=${device_type_to_hw_version[$device_type]}
+case $device_type in
+  "ultra") hw_version=0 ;;
+  "lite")  hw_version=1 ;;
+  *)       echo "Unknown CURRENT_DEVICE_TYPE $CURRENT_DEVICE_TYPE, aborting."; exit 1 ;;
+esac
+
 echo "Building firmware for $device_type (hw_version=$hw_version)"
 
 set -xe
