@@ -675,7 +675,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             nfc_tag_14a_data_process(m_nfc_rx_buffer);
             // The above prompt tells us that when we do not need to reply to the card reader, we need to manually enable it
             if (!m_is_responded) {
-//                nfc_fdt_reset();
+                nfc_fdt_reset();
                 NRFX_NFCT_RX_BYTES
             }
             break;
