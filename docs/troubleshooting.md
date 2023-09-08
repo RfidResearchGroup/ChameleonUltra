@@ -28,17 +28,30 @@ Default BLE connect key(passkey) is `123456`
 
 # DFU
 
-## Communication issues between CLI and Chameleon
+## Error when attempting DFU upgrade with `nrfutil`
 
-For example, typical error when performing DFU upgrade:
 
 ```
 [00:00:00] ------   0% [id:9] Failed, [sdfu] [json.exception.type_error.302] type must be string, but is null
-Error: One or more program tasks failed
 ```
+or
+```
+[00:00:00] ------   0% [2/2 ...] Failed, [sdfu]
+```
+
+### Check permissions and ModemManager
 
 Check the serial port permissions and if under Linux, make sure ModemManager is not interfering with your Chameleon.
 The proposed [udev/rules.d file](../resource/driver/79-chameleon-usb-device-blacklist-dialout.rules) may help you (and add your user to the dialout group).
+
+### Check `hw_version` of your DFU package
+
+Another cause of this error is a mismatch between `hw_version` of the DFU package you want to use and your hardware. You can check it with the following command.
+
+```
+nrfutil nrf5sdk-tools pkg display my-dfu-file.zip |grep hw_version
+```
+`hw_version` must be equal to `0` for the Ultra and `1` for the Lite.
 
 # CLI tools compilation
 
