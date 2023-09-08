@@ -580,12 +580,12 @@ data_frame_tx_t *cmd_processor_set_mf1_emulator_block(uint16_t cmd, uint16_t sta
 }
 
 data_frame_tx_t *cmd_processor_get_mf1_emulator_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    if (length == 3) {
+    if (length == 2) {
         uint8_t block_index = data[0];
-        uint16_t block_count = data[1] | (data[2] << 8);
-        if (block_count == 0 || block_index + block_count > NFC_TAG_MF1_BLOCK_MAX) {
-            status = STATUS_PAR_ERR;
-        } else {
+        uint8_t block_count = data[1];
+
+        // block_count > 32 will overflow the maximum message size
+        if (block_count != 0 && block_count <= 32 && (uint16_t) block_index + block_count < NFC_TAG_MF1_BLOCK_MAX) {
             tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_MIFARE_4096);
             nfc_tag_mf1_information_t *info = (nfc_tag_mf1_information_t *)buffer->buffer;
             uint16_t result_length = block_count * NFC_TAG_MF1_DATA_SIZE;
@@ -597,11 +597,9 @@ data_frame_tx_t *cmd_processor_get_mf1_emulator_block(uint16_t cmd, uint16_t sta
 
             return data_frame_make(cmd, status, result_length, result_buffer);
         }
-    } else {
-        status = STATUS_PAR_ERR;
     }
 
-    return data_frame_make(cmd, status, 0, NULL);
+    return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
 }
 
 data_frame_tx_t *cmd_processor_set_mf1_anti_collision_res(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
