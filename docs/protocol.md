@@ -19,6 +19,9 @@ The communication with the application is not the easiest but is structured as f
 
 The total length of the packet is `LEN + 10` Bytes. For receiving, it is the exact same format.
 
+Note: LRC2 and LRC3 can be computed equally as covering either the frame from its first byte or from the byte following the previous LRC, because previous LRC nullifies previous bytes LRC computation.
+E.g. LRC3(DATA) == LRC3(whole frame)
+
 ## Packet payloads
 
 Each command and response have their own payload formats.
