@@ -2,6 +2,7 @@
 #define NFC_MF1_H
 
 #include "nfc_14a.h"
+#include "netdata.h"
 
 // Exchange space for time.
 // Fast simulate enable(Implement By ChameleonMini Repo)
@@ -121,22 +122,23 @@ typedef struct {
 // MF1 label verification history
 typedef struct {
     // Basic information of verification
-    struct {
-        uint8_t block;
-        uint8_t is_key_b: 1;
-        uint8_t is_nested: 1;
-        // Airspace, occupying positions
-        uint8_t : 6;
-    } cmd;
+    uint8_t block;
+    uint8_t is_key_b: 1;
+    uint8_t is_nested: 1;
+    // padding to full byte
+    uint8_t : 6;
     // MFKEY32 necessary parameters
     uint8_t uid[4];
     uint8_t nt[4];
     uint8_t nr[4];
     uint8_t ar[4];
-} nfc_tag_mf1_auth_log_t;
+    // uint32_t nt;
+    // uint32_t nr;
+    // uint32_t ar;
+} PACKED nfc_tag_mf1_auth_log_t;
 
 
-nfc_tag_mf1_auth_log_t *get_mf1_auth_log(uint32_t *count);
+nfc_tag_mf1_auth_log_t *mf1_get_auth_log(uint32_t *count);
 int nfc_tag_mf1_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 int nfc_tag_mf1_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 bool nfc_tag_mf1_data_factory(uint8_t slot, tag_specific_type_t tag_type);

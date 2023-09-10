@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <cmsis_gcc.h>
+#include "netdata.h"
 
 /*
 * rC522CommandWord
@@ -151,13 +152,14 @@
 #define U8ARR_BIT_LEN(src) ((sizeof(src)) * (8))
 
 // basicStructurePackagingOfLabelInformation
+// this struct is also used in the fw/cli protocol, therefore PACKED
 typedef struct {
     uint8_t uid[10];  // theByteArrayOfTheCardNumber,TheLongest10Byte
     uint8_t uid_len;  // theLengthOfTheCardNumber
     uint8_t cascade;  // theAntiCollisionLevelValueIs1Representation 4Byte,2Represents7Byte,3Means10Byte
     uint8_t sak;      // chooseToConfirm
     uint8_t atqa[2];  // requestResponse
-} picc_14a_tag_t;
+} PACKED picc_14a_tag_t;
 
 #ifdef __cplusplus
 extern "C" {

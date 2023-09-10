@@ -107,9 +107,6 @@ void hw_connect_init(void) {
 #if defined(PROJECT_CHAMELEON_ULTRA)
     if (m_hw_ver == 1) {
         LED_FIELD       = (NRF_GPIO_PIN_MAP(1, 1));
-        LED_R           = (NRF_GPIO_PIN_MAP(0, 24));
-        LED_G           = (NRF_GPIO_PIN_MAP(0, 22));
-        LED_B           = (NRF_GPIO_PIN_MAP(1, 0));
         LED_1           = (NRF_GPIO_PIN_MAP(0, 20));
         LED_2           = (NRF_GPIO_PIN_MAP(0, 17));
         LED_3           = (NRF_GPIO_PIN_MAP(0, 15));
@@ -118,14 +115,25 @@ void hw_connect_init(void) {
         LED_6           = (NRF_GPIO_PIN_MAP(1, 9));
         LED_7           = (NRF_GPIO_PIN_MAP(0, 8));
         LED_8           = (NRF_GPIO_PIN_MAP(0, 6));
+        LED_R           = (NRF_GPIO_PIN_MAP(0, 24));
+        LED_G           = (NRF_GPIO_PIN_MAP(0, 22));
+        LED_B           = (NRF_GPIO_PIN_MAP(1, 0));
         RGB_LIST_NUM    = 8;
         RGB_CTRL_NUM    = 3;
 
-        LF_ANT_DRIVER   = (NRF_GPIO_PIN_MAP(0, 31));
-        LF_OA_OUT       = (NRF_GPIO_PIN_MAP(0, 29));
         LF_MOD          = (NRF_GPIO_PIN_MAP(1, 13));
         LF_RSSI_PIN     = (NRF_GPIO_PIN_MAP(0, 2));
         LF_RSSI         = NRF_LPCOMP_INPUT_0;
+
+        BUTTON_1        = (NRF_GPIO_PIN_MAP(1, 2));
+        BUTTON_2        = (NRF_GPIO_PIN_MAP(0, 26));
+
+        BAT_SENSE_PIN   = (NRF_GPIO_PIN_MAP(0, 4));
+        BAT_SENSE       = NRF_SAADC_INPUT_AIN2;
+
+        // Ultra only
+        LF_ANT_DRIVER   = (NRF_GPIO_PIN_MAP(0, 31));
+        LF_OA_OUT       = (NRF_GPIO_PIN_MAP(0, 29));
 
         HF_SPI_SELECT   = (NRF_GPIO_PIN_MAP(1, 6));
         HF_SPI_MISO     = (NRF_GPIO_PIN_MAP(0, 11));
@@ -134,12 +142,6 @@ void hw_connect_init(void) {
         HF_ANT_SEL      = (NRF_GPIO_PIN_MAP(1, 10));
 
         READER_POWER    = (NRF_GPIO_PIN_MAP(1, 15));
-
-        BUTTON_2        = (NRF_GPIO_PIN_MAP(0, 26));
-        BUTTON_1        = (NRF_GPIO_PIN_MAP(1, 2));
-
-        BAT_SENSE_PIN   = (NRF_GPIO_PIN_MAP(0, 4));
-        BAT_SENSE       = NRF_SAADC_INPUT_AIN2;
     }
 #endif
 

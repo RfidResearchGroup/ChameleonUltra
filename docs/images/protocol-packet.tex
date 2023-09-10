@@ -1,0 +1,24 @@
+\documentclass[border=10pt,png]{standalone}
+\usepackage{bytefield}
+\usepackage{xcolor}
+
+\begin{document}
+
+    \definecolor{lightcyan}{rgb}{0.85,1,1}
+    \definecolor{lightgreen}{rgb}{0.85,1,0.85}
+    \definecolor{lightred}{rgb}{1,0.85,0.85}
+    \begin{bytefield}[bitwidth=1.1em]{32}
+        \bitbox{8}[bgcolor=lightcyan]{SOF} &
+        \bitbox{8}[bgcolor=lightcyan]{LRC1} &
+        \bitbox{16}[bgcolor=lightgreen]{CMD} \\
+        \bitbox{16}[bgcolor=lightgreen]{STATUS} &
+        \bitbox{16}[bgcolor=lightgreen]{LEN} \\
+        \bitbox{8}[bgcolor=lightgreen]{LRC2} &
+        \bitbox[tlr]{24}[bgcolor=lightred]{}  \\
+        \wordbox[lr]{1}[bgcolor=lightred]{DATA} \\
+        \wordbox[lr]{1}[bgcolor=lightred]{$\cdots$} \\
+        \bitbox[blr]{24}[bgcolor=lightred]{} &
+        \bitbox{8}[bgcolor=lightred]{LRC3}
+    \end{bytefield}
+
+\end{document}

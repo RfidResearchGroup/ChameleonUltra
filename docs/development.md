@@ -345,3 +345,7 @@ Limitations:
 
 * SWO pin is shared with... SWO so when e.g. reflashing the device, garbage may appear on the monitoring terminal.
 * SWO pin is also shared with the blue channel of the RGB slot LEDs, so faint blue may appear briefly when logs are sent and LED might not work properly when supposed to be blue.
+
+# Resources
+
+* [nRF52840 Objective Product Specification v0.5.1](https://infocenter.nordicsemi.com/pdf/nRF52840_OPS_v0.5.1.pdf)

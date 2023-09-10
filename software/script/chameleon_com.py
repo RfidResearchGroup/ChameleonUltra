@@ -29,7 +29,7 @@ class Response:
         Chameleon Response Data
     """
 
-    def __init__(self, cmd, status, data):
+    def __init__(self, cmd, status, data=b''):
         self.cmd = cmd
         self.status = status
         self.data: bytearray = data
@@ -153,37 +153,35 @@ class ChameleonCom:
             if len(data_bytes) > 0:
                 data_byte = data_bytes[0]
                 data_buffer.append(data_byte)
-                if data_position < 2:  # start of frame
+                if data_position < struct.calcsize('!BB'):  # start of frame + lrc1
                     if data_position == 0:
                         if data_buffer[data_position] != self.data_frame_sof:
                             print("Data frame no sof byte.")
                             data_position = 0
                             data_buffer.clear()
                             continue
-                    if data_position == 1:
-                        if data_buffer[data_position] != self.lrc_calc(data_buffer[0:1]):
+                    if data_position == struct.calcsize('!B'):
+                        if data_buffer[data_position] != self.lrc_calc(data_buffer[:data_position]):
                             data_position = 0
                             data_buffer.clear()
                             print("Data frame sof lrc error.")
                             continue
-                elif data_position == 8:  # frame head lrc
-                    if data_buffer[data_position] != self.lrc_calc(data_buffer[0:8]):
+                elif data_position == struct.calcsize('!BBHHH'):  # frame head lrc
+                    if data_buffer[data_position] != self.lrc_calc(data_buffer[:data_position]):
                         data_position = 0
                         data_buffer.clear()
                         print("Data frame head lrc error.")
                         continue
                     # frame head complete, cache info
-                    data_cmd = struct.unpack(">H", data_buffer[2:4])[0]
-                    data_status = struct.unpack(">H", data_buffer[4:6])[0]
-                    data_length = struct.unpack(">H", data_buffer[6:8])[0]
+                    _, _, data_cmd, data_status, data_length = struct.unpack("!BBHHH", data_buffer[:data_position])
                     if data_length > self.data_max_length:
                         data_position = 0
                         data_buffer.clear()
-                        print("Data frame data length too than of max.")
+                        print("Data frame data length larger than max.")
                         continue
-                elif data_position > 8:  # // frame data
-                    if data_position == (8 + data_length + 1):
-                        if data_buffer[data_position] == self.lrc_calc(data_buffer[0:-1]):
+                elif data_position > struct.calcsize('!BBHHH'):  # // frame data
+                    if data_position == (struct.calcsize(f'!BBHHHB{data_length}s')):
+                        if data_buffer[data_position] == self.lrc_calc(data_buffer[:data_position]):
                             # ok, lrc for data is correct.
                             # and we are receive completed
                             # print(f"Buffer data = {data_buffer.hex()}")
@@ -193,7 +191,8 @@ class ChameleonCom:
                                     fn_call = self.wait_response_map[data_cmd]['callback']
                                 else:
                                     fn_call = None
-                                data_response = data_buffer[9: 9 + data_length]
+                                data_response = data_buffer[struct.calcsize('!BBHHHB'):
+                                                            struct.calcsize(f'!BBHHHB{data_length}s')]
                                 if callable(fn_call):
                                     # delete wait task from map
                                     del self.wait_response_map[data_cmd]
@@ -204,7 +203,7 @@ class ChameleonCom:
                             else:
                                 print(f"No task wait process: ${data_cmd}")
                         else:
-                            print("Data frame finally lrc error.")
+                            print("Data frame global lrc error.")
                         data_position = 0
                         data_buffer.clear()
                         continue
@@ -265,36 +264,32 @@ class ChameleonCom:
                         self.wait_response_map[task_cmd]['is_timeout'] = True
             time.sleep(0.001)
 
-    def make_data_frame_bytes(self, cmd: int, status: int, data: bytearray = None) -> bytearray:
+    def make_data_frame_bytes(self, cmd: int, data: bytearray = None, status: int = 0) -> bytearray:
         """
             Make data frame
         :return: frame
         """
-        frame = bytearray()
-        # sof and sof lrc byte
-        frame.append(self.data_frame_sof)
-        frame.append(self.lrc_calc(frame[0:1]))
-        # head info
-        frame.extend(struct.pack('>H', cmd))
-        frame.extend(struct.pack('>H', status))
-        frame.extend(struct.pack('>H', len(data) if data is not None else 0))
-        frame.append(self.lrc_calc(frame[2:8]))
-        # data
-        if data is not None:
-            frame.extend(data)
-        # frame lrc
-        frame.append(self.lrc_calc(frame))
+        if data is None:
+            data = b''
+        frame = bytearray(struct.pack(f'!BBHHHB{len(data)}sB',
+                                      self.data_frame_sof, 0x00, cmd, status, len(data), 0x00, data, 0x00))
+        # lrc1
+        frame[struct.calcsize('!B')] = self.lrc_calc(frame[:struct.calcsize('!B')])
+        # lrc2
+        frame[struct.calcsize('!BBHHH')] = self.lrc_calc(frame[:struct.calcsize('!BBHHH')])
+        # lrc3
+        frame[struct.calcsize(f'!BBHHHB{len(data)}s')] = self.lrc_calc(frame[:struct.calcsize(f'!BBHHHB{len(data)}s')])
         return frame
 
-    def send_cmd_auto(self, cmd: int, status: int, data: bytearray = None, callback=None, timeout: int = 3,
+    def send_cmd_auto(self, cmd: int, data: bytearray = None, status: int = 0, callback=None, timeout: int = 3,
                       close: bool = False):
         """
             Send cmd to device
-        :param timeout: wait response timeout
         :param cmd: cmd
-        :param status: status(optional)
+        :param data: bytes data (optional)
+        :param status: status (optional)
         :param callback: call on response
-        :param data: bytes data
+        :param timeout: wait response timeout
         :param close: close connection after executing
         :return:
         """
@@ -303,20 +298,20 @@ class ChameleonCom:
         if cmd in self.wait_response_map:
             del self.wait_response_map[cmd]
         # make data frame
-        data_frame = self.make_data_frame_bytes(cmd, status, data)
+        data_frame = self.make_data_frame_bytes(cmd, data, status)
         task = {'cmd': cmd, 'frame': data_frame, 'timeout': timeout, 'close': close}
         if callable(callback):
             task['callback'] = callback
         self.send_data_queue.put(task)
         return self
 
-    def send_cmd_sync(self, cmd: int, status: int, data: bytearray or bytes or list or int = None,
+    def send_cmd_sync(self, cmd: int, data: bytearray or bytes or list or int = None, status: int = 0,
                       timeout: int = 3) -> Response:
         """
             Send cmd to device, and block receive data.
         :param cmd: cmd
-        :param status: status(optional)
-        :param data: bytes data
+        :param data: bytes data (optional)
+        :param status: status (optional)
         :param timeout: wait response timeout
         :return: response data
         """
@@ -327,9 +322,8 @@ class ChameleonCom:
             if cmd not in self.commands:
                 raise CMDInvalidException(f"This device doesn't declare that it can support this command: {cmd}.\nMake "
                                           f"sure firmware is up to date and matches client")
-                # return Response(cmd=cmd, status=0, data=b"\0" * 32)  # forge fake response to not break app
         # first to send cmd, no callback mode(sync)
-        self.send_cmd_auto(cmd, status, data, None, timeout)
+        self.send_cmd_auto(cmd, data, status, None, timeout)
         # wait cmd start process
         while cmd not in self.wait_response_map:
             time.sleep(0.01)
@@ -348,5 +342,5 @@ class ChameleonCom:
 
 if __name__ == '__main__':
     cml = ChameleonCom().open("com19")
-    resp = cml.send_cmd_sync(0x03E9, 0xBEEF, bytearray([0x01, 0x02]))
+    resp = cml.send_cmd_sync(0x03E9, bytearray([0x01, 0x02]), 0xBEEF)
     print(resp)

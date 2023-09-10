@@ -344,10 +344,11 @@ void append_mf1_auth_log_step1(bool isKeyB, bool isNested, uint8_t block, uint8_
     }
     // Determine whether this card slot enables the detection log record
     if (m_tag_information->config.detection_enable) {
-        m_auth_log.logs[m_auth_log.count].cmd.is_key_b = isKeyB;
-        m_auth_log.logs[m_auth_log.count].cmd.block = block;
-        m_auth_log.logs[m_auth_log.count].cmd.is_nested = isNested;
+        m_auth_log.logs[m_auth_log.count].is_key_b = isKeyB;
+        m_auth_log.logs[m_auth_log.count].block = block;
+        m_auth_log.logs[m_auth_log.count].is_nested = isNested;
         memcpy(m_auth_log.logs[m_auth_log.count].uid, UID_BY_CASCADE_LEVEL, 4);
+//        m_auth_log.logs[m_auth_log.count].nt = U32HTONL(*(uint32_t *)nonce);
         memcpy(m_auth_log.logs[m_auth_log.count].nt, nonce, 4);
     }
 }
@@ -363,6 +364,8 @@ void append_mf1_auth_log_step2(uint8_t *nr, uint8_t *ar) {
     }
     if (m_tag_information->config.detection_enable) {
         // Cache encryption information
+//        m_auth_log.logs[m_auth_log.count].nr = U32HTONL(*(uint32_t *)nr);
+//        m_auth_log.logs[m_auth_log.count].ar = U32HTONL(*(uint32_t *)ar);
         memcpy(m_auth_log.logs[m_auth_log.count].nr, nr, 4);
         memcpy(m_auth_log.logs[m_auth_log.count].ar, ar, 4);
     }
@@ -388,7 +391,7 @@ void append_mf1_auth_log_step3(bool is_auth_success) {
 /** @brief MF1 obtain verification log
  * @param count: The statistics of the verification log
  */
-nfc_tag_mf1_auth_log_t *get_mf1_auth_log(uint32_t *count) {
+nfc_tag_mf1_auth_log_t *mf1_get_auth_log(uint32_t *count) {
     // First pass the total number of logs verified by verified
     *count = m_auth_log.count;
     // Just return to the head pointer of the log number array

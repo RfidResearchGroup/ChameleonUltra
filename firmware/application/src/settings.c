@@ -44,7 +44,7 @@ void settings_init_button_long_press_config(void) {
 
 // add on version4
 void settings_init_ble_connect_key_config(void) {
-    uint8_t p_key_u8[] = DEFAULT_BLE_CONNECT_KEY;
+    uint8_t p_key_u8[] = DEFAULT_BLE_PAIRING_KEY;
     settings_set_ble_connect_key(p_key_u8);
 }
 
@@ -276,7 +276,7 @@ uint8_t *settings_get_ble_connect_key(void) {
  * @param key Ble connect key for your device
  */
 void settings_set_ble_connect_key(uint8_t *key) {
-    memcpy(config.ble_connect_key, key, BLE_CONNECT_KEY_LEN_MAX);
+    memcpy(config.ble_connect_key, key, BLE_PAIRING_KEY_LEN);
 }
 
 void settings_set_ble_pairing_enable(bool enable) {

@@ -16,17 +16,6 @@
 
 
 /////////////////////////////////////////////////////////////////////
-// MIFARE status
-/////////////////////////////////////////////////////////////////////
-#define     DARKSIDE_CANT_FIXED_NT                  (0x20)  // Darkside, the random number cannot be fixed, this situation may appear on the UID card
-#define     DARKSIDE_LUCK_AUTH_OK                   (0x21)  // Darkside, the direct verification is successful, maybe the key is just empty
-#define     DARKSIDE_NACK_NO_SEND                   (0x22)  // Darkside, the card does not respond to NACK, it may be a card that fixes Nack logic vulnerabilities
-#define     DARKSIDE_TAG_CHANGED                    (0x23)  // Darkside, card switching in the process of running DARKSIDE, May is the two cards quickly switched
-#define     NESTED_TAG_IS_STATIC                    (0x24)  // Nested, the random number of the card response is fixed
-#define     NESTED_TAG_IS_HARD                      (0x25)  // Nested, the random number of the card response is unpredictable
-
-
-/////////////////////////////////////////////////////////////////////
 // lf status
 /////////////////////////////////////////////////////////////////////
 #define     LF_TAG_OK                               (0x40)  // Some of the low -frequency cards are successful!

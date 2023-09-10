@@ -106,8 +106,8 @@ static ble_opt_t m_static_pin_option;
  * @details This function will set up the ble connect passkey.
  */
 void set_ble_connect_key(uint8_t *key) {
-    static uint8_t passkey[BLE_CONNECT_KEY_LEN_MAX];
-    memcpy(passkey, key, BLE_CONNECT_KEY_LEN_MAX);
+    static uint8_t passkey[BLE_PAIRING_KEY_LEN];
+    memcpy(passkey, key, BLE_PAIRING_KEY_LEN);
     m_static_pin_option.gap_opt.passkey.p_passkey = passkey;
     // NRF_LOG_RAW_HEXDUMP_INFO(passkey, 6);
     APP_ERROR_CHECK(sd_ble_opt_set(BLE_GAP_OPT_PASSKEY, &m_static_pin_option));
@@ -331,7 +331,7 @@ static void services_init(void) {
         bas_init_obj.bl_cccd_wr_sec   = SEC_OPEN;
         bas_init_obj.bl_report_rd_sec = SEC_OPEN;
     }
-    
+
     err_code = ble_bas_init(&m_bas, &bas_init_obj);
     APP_ERROR_CHECK(err_code);
 }

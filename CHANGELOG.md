@@ -3,7 +3,18 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
- - Added `hf settings blepair` command to get and set ble pairing enable state, and default disable ble pair. (@xianglin1998)
+ - Changed `hw detection decrypt` show progression and remove duplicate keys (@doegox)
+ - Changed dynamic cmd_map_init() by static cmd_map initialization (@doegox)
+ - Changed `hf slot list` to add clarity and colors (@doegox)
+ - Changed `hf mf sim` and `hf mf info` to support ATS (still to be used in actual emulation) (@doegox)
+ - Changed `hf mf eload` and `hf mf eread`: uploads/downloads are now 30x faster (@doegox)
+ - Changed CLI HF14AInfo logic merged inside HF14AScan for more consistent display of the results (@doegox)
+ - Added guessed type information for NXP tags, and reorganization of HF information part. (@FlUxIuS)
+ - Changed `hw raw` to detail status message (@doegox)
+ - Changed CLI to query capabilities on connect, not on every single command if device does not support get_device_capabilities (@doegox)
+ - Changed CLI to not instanciate ChameleonCMD on every single command (@doegox)
+ - Changed massively the protocol and its handlers for more consistency and easier maintenance and future dev (@doegox)
+ - Added `hf settings blepair` command to get and set ble pairing enable state, and default disable ble pair (@xianglin1998)
  - Added `hf mf info` command to get UID/SAK/ATQA from slot (@Foxushka)
  - Added `hw raw` to send raw command to Chameleon (@Foxushka)
  - Added command to fetch all available commands from Chameleon and test if Chameleon supports it (@Foxushka)
