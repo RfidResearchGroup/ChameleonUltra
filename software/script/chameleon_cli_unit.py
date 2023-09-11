@@ -18,6 +18,20 @@ from chameleon_utils import ArgumentParserNoExit, ArgsParserError, UnexpectedRes
 from chameleon_utils import CLITree
 
 
+# NXP IDs based on https://www.nxp.com/docs/en/application-note/AN10833.pdf
+type_id_SAK_dict = {    0x00 : "MIFARE Ultralight Classic/C/EV1/Nano | NTAG 2xx",
+                        0x08 : "MIFARE Classic 1K | Plus SE 1K | Plug S 2K | Plus X 2K",
+                        0x09 : "MIFARE Mini 0.3k",
+                        0x10 : "MIFARE Plus 2K",
+                        0x11 : "MIFARE Plus 4K",
+                        0x18 : "MIFARE Classic 4K | Plus S 4K | Plus X 4K",
+                        0x19 : "MIFARE Classic 2K",
+                        0x20 : "MIFARE Plus EV1/EV2 | DESFire EV1/EV2/EV3 | DESFire Light | NTAG 4xx | MIFARE Plus S 2/4K | MIFARE Plus X 2/4K | MIFARE Plus SE 1K",
+                        0x28 : "SmartMX with MIFARE Classic 1K",
+                        0x38 : "SmartMX with MIFARE Classic 4K",
+                    }
+
+
 class BaseCLIUnit:
 
     def __init__(self):
@@ -294,10 +308,10 @@ class HF14AScan(ReaderRequiredUnit):
             print(f"- UID  Hex : {info['uid_hex'].upper()}")
             print(f"- SAK  Hex : {info['sak_hex'].upper()}")
             print(f"- ATQA Hex : {info['atqa_hex'].upper()}")
-            return True
+            return info
         else:
             print("ISO14443-A Tag no found")
-            return False
+            return None
 
     def on_exec(self, args: argparse.Namespace):
         return self.scan()
@@ -308,7 +322,7 @@ class HF14AInfo(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
         pass
 
-    def info(self):
+    def check_mf1_nt(self):
         # detect mf1 support
         resp = self.cmd.detect_mf1_support()
         if resp.status == chameleon_status.Device.HF_TAG_OK:
@@ -324,13 +338,33 @@ class HF14AInfo(ReaderRequiredUnit):
             else:
                 prng_level = "Unknown"
             print(f"  # Prng attack: {prng_level}")
+            return True
+        return False
+
+    def deepdiveinfo(self):
+        checklist = [   self.check_mf1_nt, # Try checking for MIFARE Classic tags
+                    ]
+        for clitem in checklist:
+            res = clitem()
+            if res is True:
+                break
+
+    def info(self, info_dict):
+        # detect the technology in use based on SAK
+        b10_sak = int(info_dict['sak_hex'], base=16)
+        if b10_sak in type_id_SAK_dict:
+            print (f"Guessed type(s) from SAK: {type_id_SAK_dict[b10_sak]}")
+            self.deepdiveinfo()
+        else:
+            pass # Nothing there
 
     def on_exec(self, args: argparse.Namespace):
         # reused
         scan = HF14AScan()
         scan.device_com = self.device_com
-        if scan.scan():
-            self.info()
+        scan_res = scan.scan()
+        if scan_res is not None:
+            self.info(scan_res)
 
 
 @hf_mf.command('nested', 'Mifare Classic nested recover key')
