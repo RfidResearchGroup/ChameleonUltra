@@ -653,6 +653,7 @@ data_frame_tx_t *cmd_processor_set_slot_tag_nick_name(uint16_t cmd, uint16_t sta
 data_frame_tx_t *cmd_processor_get_slot_tag_nick_name(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length != 2) {
         status = STATUS_PAR_ERR;
+        return data_frame_make(cmd, status, 0, NULL);
     } else {
         uint8_t buffer[36];
         uint8_t slot = data[0];
@@ -670,8 +671,9 @@ data_frame_tx_t *cmd_processor_get_slot_tag_nick_name(uint16_t cmd, uint16_t sta
             length = 0;
             data = NULL;
         }
+        // must be called within stack allocation of buffer
+        return data_frame_make(cmd, status, length, data);
     }
-    return data_frame_make(cmd, status, length, data);
 }
 
 data_frame_tx_t *cmd_processor_get_mf1_info(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
