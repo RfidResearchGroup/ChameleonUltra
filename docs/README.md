@@ -26,6 +26,8 @@ This Guide is split up into multiple "subguides":
 
 - [Development](./development.md): For all developers. This covers how to build firmware from source and set up a development environment.
 
+- [SDKs](./sdk.md): SDKs for Chameleon, useful if you want to develop your own application to control Chameleon.
+
 - [Protocol](./protocol.md): The gory details of the communication protocol, useful if you want to develop your own client.
 
 ### Miscellaneous 
