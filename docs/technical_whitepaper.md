@@ -5,12 +5,12 @@
 # ChameleonUltra
 
 Why not keep using ATXMEGA128?
-First of all, it is difficult to buy chips because the lead time for the main chip is too long, and because the price has skyrocketed. Secondly, because the interaction speed of the ATXMEGA, simulation is slow, the decryption performance of the READER mode cannot meet the needs, and the LF support cannot be added, so we have been trying to upgrade it, such as using the latest ARM to replace the AVR framework, and the performance will definitely be greatly improved.
+First of all, it is difficult to buy chips because the lead time for the main chip is too long, and because the price has skyrocketed. Secondly, because the interaction speed of the ATXMEGA, emulation is slow, the decryption performance of the READER mode cannot meet the needs, and the LF support cannot be added, so we have been trying to upgrade it, such as using the latest ARM to replace the AVR framework, and the performance will definitely be greatly improved.
 
 # Why nRF52840?
 
-NRF52840 has a built-in NFC Tag-A module, but no one seems to care about it. After playing with HydraNFC's TRF7970A and FlipperZero's ST25R3916, the developers found that they can only simulate MIFARE Classic with a very high FDT.
-We accidentally tested the NFC of nRF52840, and found that it is not only surprisingly easy to simulate a complete MIFARE Classic card, but also has very good simulation performance, friendly data flow interaction, and very fast response, unlike the former which is limited by the SPI bus clock rate. We also found that it has ultra-low power consumption, ultra-small size, 256kb/1M large RAM and Flash, also has BLE5.0 and USB2.0 FS, super CortexM4F, most importantly, it is very cheap! This is undoubtedly a treasure discovery for us!
+NRF52840 has a built-in NFC Tag-A module, but no one seems to care about it. After playing with HydraNFC's TRF7970A and FlipperZero's ST25R3916, the developers found that they can only emulate MIFARE Classic with a very high FDT.
+We accidentally tested the NFC of nRF52840, and found that it is not only surprisingly easy to emulate a complete MIFARE Classic card, but also has very good emulation performance, friendly data flow interaction, and very fast response, unlike the former which is limited by the SPI bus clock rate. We also found that it has ultra-low power consumption, ultra-small size, 256kb/1M large RAM and Flash, also has BLE5.0 and USB2.0 FS, super CortexM4F, most importantly, it is very cheap! This is undoubtedly a treasure discovery for us!
 
 Below we will explain in detail how we exploited the performance of the NRF52840, and what seemingly impossible functions have been realized with it!
 
@@ -28,7 +28,7 @@ Below we will explain in detail how we exploited the performance of the NRF52840
 | HardNested   | MIFARE Classic |                       Support | Support                   |          Not yet implemented           |                      No |
 | Relay attack |   ISO14443A   |                       Support | Support                   |          Not yet implemented           |                      No |
 
-## High Frequency Simulation
+## High Frequency emulation
 
 | Card Type                     |    Encoding Type     | Whether the hardware supports | Does the software support | Whether the application layer supports |                                     Note |
 |-------------------------------|:--------------------:|------------------------------:|---------------------------|:--------------------------------------:|-----------------------------------------:|
@@ -65,7 +65,7 @@ Below we will explain in detail how we exploited the performance of the NRF52840
 | Sniffing           |  125KHz   |                       Support | Support                   |          Not yet implemented           |      |
 | Brute Force        | EM410x ID |                       Support | Support                   |          Not yet implemented           |      |
 
-## Low Frequency Simulation
+## Low Frequency emulation
 
 | Card Type                | Encoding Type | Whether the hardware supports | Does the software support | Whether the application layer supports |                                          Note |
 |--------------------------|:-------------:|------------------------------:|---------------------------|:--------------------------------------:|----------------------------------------------:|
@@ -136,9 +136,9 @@ We can easily and completely emulate all data and password verification of all s
 
 # Super compatibility with low-power locks using batteries
 
-The structure of the old Chameleon AVR is slow to start during simulation. Faced with a battery-powered low-power lock and an integrated lock on the door, it will be frequently interrupted, and the verification interaction cannot be completed completely, resulting in no response when swiping the card.
+The structure of the old Chameleon AVR is slow to start during emulation. Faced with a battery-powered low-power lock and an integrated lock on the door, it will be frequently interrupted, and the verification interaction cannot be completed completely, resulting in no response when swiping the card.
 
-In order to reduce power consumption, the battery lock will send out a field signal as short as possible when searching for a card, which is no problem for the original card, but it is fatal for the MCU emulated card. Cards or mobile smart bracelets simulated by the MCU cannot wake up and respond in such a short time, so many battery locks cannot open the door, which greatly reduces the user experience.
+In order to reduce power consumption, the battery lock will send out a field signal as short as possible when searching for a card, which is no problem for the original card, but it is fatal for the MCU emulated card. Cards or mobile smart bracelets emulated by the MCU cannot wake up and respond in such a short time, so many battery locks cannot open the door, which greatly reduces the user experience.
 
 This project specially optimizes the start-up and interaction logic and antenna for low-power reading heads. After testing a variety of common low-power reading heads, they can open the door perfectly by swiping the card.
 
