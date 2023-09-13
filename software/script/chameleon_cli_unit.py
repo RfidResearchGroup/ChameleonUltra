@@ -294,6 +294,9 @@ class HF14AScan(ReaderRequiredUnit):
             print(f"- UID  Hex : {info['uid_hex'].upper()}")
             print(f"- SAK  Hex : {info['sak_hex'].upper()}")
             print(f"- ATQA Hex : {info['atqa_hex'].upper()}")
+            if info['ats_size']:
+                print(f"- ATS  Size: {info['ats_size']}")
+                print(f"- ATS  Hex : {info['ats_hex'].upper()}")
             return True
         else:
             print("ISO14443-A Tag no found")

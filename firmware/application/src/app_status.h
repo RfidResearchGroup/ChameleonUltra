@@ -13,7 +13,7 @@
 #define     HF_ERR_BCC                              (0x05) // IC card BCC error
 #define     MF_ERR_AUTH                             (0x06) // MF card verification failed
 #define     HF_ERR_PARITY                           (0x07) // IC card parity error
-
+#define     HF_ERR_ATS                              (0x08) // ATS should be present but card NAKed
 
 /////////////////////////////////////////////////////////////////////
 // MIFARE status

@@ -648,11 +648,16 @@ static void btn_fn_copy_ic_uid(void) {
     status = pcd_14a_reader_scan_auto(&tag);
     if (status == HF_TAG_OK) {
         // copy uid
+        antres->size = tag.uid_len;
         memcpy(antres->uid, tag.uid, tag.uid_len);
         // copy atqa
         memcpy(antres->atqa, tag.atqa, 2);
         // copy sak
         antres->sak[0] = tag.sak;
+        // copy ats
+        antres->ats.length = tag.ats_len;
+        memcpy(antres->ats.data, tag.ats, tag.ats_len);
+
         NRF_LOG_INFO("Offline HF uid copied")
         offline_status_ok();
     } else {

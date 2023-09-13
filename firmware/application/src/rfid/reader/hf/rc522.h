@@ -157,6 +157,8 @@ typedef struct {
     uint8_t cascade;  // theAntiCollisionLevelValueIs1Representation 4Byte,2Represents7Byte,3Means10Byte
     uint8_t sak;      // chooseToConfirm
     uint8_t atqa[2];  // requestResponse
+    uint8_t ats[0xFF];// 14443-4 answer to select
+    uint8_t ats_len;  // 14443-4 answer to select size
 } picc_14a_tag_t;
 
 #ifdef __cplusplus

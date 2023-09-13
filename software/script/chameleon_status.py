@@ -22,6 +22,7 @@ class Device(metaclass=MetaDevice):
     HF_ERR_BCC = 0x05     # IC card BCC error
     MF_ERR_AUTH = 0x06    # MF card verification failed
     HF_ERR_PARITY = 0x07  # IC card parity error
+    HF_ERR_ATS = 0x08     # ATS should be present but card NAKed
 
     # Darkside, the random number cannot be fixed, this situation may appear on the UID card
     DARKSIDE_CANT_FIXED_NT = 0x20
@@ -63,6 +64,7 @@ message = {
     Device.HF_ERR_BCC: "HF tag uid bcc error",
     Device.MF_ERR_AUTH: "HF tag auth fail",
     Device.HF_ERR_PARITY: "HF tag data parity error",
+    Device.HF_ERR_ATS: "HF tag was supposed to send ATS but didn't",
 
     Device.DARKSIDE_CANT_FIXED_NT: "Darkside Can't select a nt(PRNG is unpredictable)",
     Device.DARKSIDE_LUCK_AUTH_OK: "Darkside try to recover a default key",

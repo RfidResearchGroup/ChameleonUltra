@@ -20,9 +20,11 @@ def parse_14a_scan_tag_result(data: bytearray):
     """
     return {
         'uid_size': data[10],
-        'uid_hex': data[0:data[10]].hex(),
+        'uid_hex': data[0:data[10]].hex(' '),
         'sak_hex': hex(data[12]).lstrip('0x').rjust(2, '0'),
-        'atqa_hex': data[13:15].hex().upper()
+        'atqa_hex': data[13:15].hex(' '),
+        'ats_size': data[270],
+        'ats_hex': data[15:15 + data[270]].hex(' '),
     }
 
 

@@ -491,6 +491,7 @@ uint8_t pcd_14a_reader_scan_once(picc_14a_tag_t *tag) {
     if (tag) {
         tag->uid_len = 0;
         memset(tag->uid, 0, 10);
+        tag->ats_len = 0;
     } else {
         return STATUS_PAR_ERR;  // Finding cards are not allowed to be transmitted to the label information structure
     }
@@ -578,6 +579,22 @@ uint8_t pcd_14a_reader_scan_once(picc_14a_tag_t *tag) {
         // Only 1 2 3 Three types, corresponding 4 7 10 Byte card number
         // Therefore + 1
         tag->cascade = cascade_level + 1;
+    }
+    if (tag->sak & 0x20) {
+        // Tag supports 14443-4, sending RATS
+        uint16_t ats_size;
+        status = pcd_14a_reader_ats_request(tag->ats, &ats_size, 0xFF*8);
+        ats_size -= 2;  // size returned by pcd_14a_reader_ats_request includes CRC
+        ASSERT(ats_size <= 0xFF);
+        if (tag->ats[0] != ats_size) {
+            NRF_LOG_INFO("Invalid ATS! First byte doesn't match received length\n");
+            return HF_ERR_ATS;
+        }
+        tag->ats_len = ats_size;
+        if (status != HF_TAG_OK) {
+            NRF_LOG_INFO("Tag SAK claimed to support ATS but tag NAKd RATS\n");
+            return HF_ERR_ATS;
+        }
     }
     return HF_TAG_OK;
 }
