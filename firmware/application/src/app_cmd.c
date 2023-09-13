@@ -491,13 +491,17 @@ data_frame_tx_t *cmd_processor_get_mf1_anti_coll_data(uint16_t cmd, uint16_t sta
     if (tag_type[0] == TAG_TYPE_UNKNOWN) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, data); // no data in slot, don't send garbage
     }
-    uint8_t responseData[16] = {};
+    picc_14a_tag_t taginfo;
     nfc_tag_14a_coll_res_reference_t *info = get_saved_mifare_coll_res();
-    memcpy(responseData, info->uid, *info->size);
-    responseData[10] = *info->size; // size is 2 byte len, but...
-    responseData[12] = info->sak[0];
-    memcpy(&responseData[13], info->atqa, 2);
-    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 16, responseData);
+    taginfo.uid_len = *info->size;
+    taginfo.cascade = (taginfo.uid_len + 2) / 4; //it's weird but it works for 4->1, 7->2, 10->3
+    taginfo.sak = *info->sak;
+    taginfo.ats_len = info->ats->length;
+    memcpy(taginfo.uid, info->uid, taginfo.uid_len);
+    memcpy(taginfo.atqa, info->atqa, 2);
+    memcpy(taginfo.ats, info->ats->data, taginfo.ats_len);
+
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, sizeof(taginfo), (uint8_t*) &taginfo);
 }
 
 data_frame_tx_t *cmd_processor_set_mf1_detection_enable(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
