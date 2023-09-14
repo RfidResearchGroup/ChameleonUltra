@@ -584,7 +584,7 @@ class BaseMFUCAuthOpera(ReaderRequiredUnit):
 
         return Param()
 
-     def on_exec(self, args: argparse.Namespace):
+    def on_exec(self, args: argparse.Namespace):
          raise NotImplementedError("Please implement this")
 
 
