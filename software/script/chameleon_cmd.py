@@ -68,6 +68,7 @@ DATA_CMD_MF1_NESTED_ACQUIRE = 2006
 DATA_CMD_MF1_CHECK_ONE_KEY_BLOCK = 2007
 DATA_CMD_MF1_READ_ONE_BLOCK = 2008
 DATA_CMD_MF1_WRITE_ONE_BLOCK = 2009
+DATA_CMD_MFUC_READ_ONE_PAGE = 2010
 
 DATA_CMD_SCAN_EM410X_TAG = 3000
 DATA_CMD_WRITE_EM410X_TO_T5577 = 3001
@@ -441,6 +442,19 @@ class ChameleonCMD:
         data.append(block)
         data.extend(key)
         return self.device.send_cmd_sync(DATA_CMD_MF1_READ_ONE_BLOCK, 0x00, data)
+
+    @expect_response(chameleon_status.Device.HF_TAG_OK)   
+    def read_mfuc_page(self, page, type_value=b'60'):
+        """
+        read one mfuc page
+        :param block:
+        :param type_value:
+        :return:
+        """
+        data = bytearray()
+        data.append(type_value)
+        data.append(page)
+        return self.device.send_cmd_sync(DATA_CMD_MFUC_READ_ONE_PAGE, 0x00, data)
 
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def write_mf1_block(self, block, type_value, key, block_data):

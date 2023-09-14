@@ -327,6 +327,29 @@ data_frame_tx_t *cmd_processor_mf1_read_one_block(uint16_t cmd, uint16_t status,
     return data_frame_make(cmd, status, length, block);
 }
 
+data_frame_tx_t *cmd_processor_mfuc_read_one_page(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t block[4] = { 0x00 };
+    // Re-find the card
+    picc_14a_tag_t taginfo;
+    status = pcd_14a_reader_scan_auto(&taginfo);
+    if (status == HF_TAG_OK) {
+        if (length == 2) {
+            status = pcd_14a_reader_mfuc_read(data[1], block);
+            if (status == HF_TAG_OK) {
+                length = 4;
+            } else {
+                length = 0;
+            }
+        } else {
+            length = 0;
+            status = STATUS_PAR_ERR;
+        }
+    } else {
+        status = STATUS_PAR_ERR;
+    }
+    return data_frame_make(cmd, status, length, block);
+}
+
 data_frame_tx_t *cmd_processor_mf1_write_one_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length == 24) {
         status = auth_key_use_522_hw(data[1], data[0], &data[2]);
@@ -920,7 +943,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
 
     {    DATA_CMD_SCAN_EM410X_TAG,              before_reader_run,           cmd_processor_em410x_scan,                   NULL                   },
     {    DATA_CMD_WRITE_EM410X_TO_T5577,        before_reader_run,           cmd_processor_write_em410x_2_t57,            NULL                   },
-
+    {    DATA_CMD_MFUC_READ_ONE_PAGE,           before_hf_reader_run,        cmd_processor_mfuc_read_one_page,            after_hf_reader_run    },
 #endif
 
     {    DATA_CMD_SET_SLOT_ACTIVATED,           NULL,                        cmd_processor_set_slot_activated,            NULL                   },

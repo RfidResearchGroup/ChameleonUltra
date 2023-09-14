@@ -220,6 +220,11 @@ void pcd_14a_reader_fast_halt_tag(void);
 uint8_t pcd_14a_reader_gen1a_unlock(void);
 uint8_t pcd_14a_reader_gen1a_uplock(void);
 
+// MFU tag operation
+// --- cardReadOperation
+uint8_t pcd_14a_reader_mfuc_read_by_cmd(uint8_t cmd, uint8_t addr, uint8_t *p);
+uint8_t pcd_14a_reader_mfuc_read(uint8_t addr, uint8_t *pData);
+
 // CRC calculate
 void pcd_14a_reader_calc_crc(uint8_t *pbtData, size_t szLen, uint8_t *pbtCrc);
 void crc_14a_calculate(uint8_t *pbtData, size_t szLen, uint8_t *pbtCrc);

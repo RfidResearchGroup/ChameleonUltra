@@ -772,6 +772,28 @@ void pcd_14a_reader_mf1_unauth(void) {
 }
 
 /**
+* @brief   : Read the data of the specified block address of the MFU classic card
+* @param  :cmd : Read instruction
+*           addr: block address
+*           p   : Read data, 4 bytes
+* @retval : Status value hf_tag_ok, success
+*/
+uint8_t pcd_14a_reader_mfuc_read_by_cmd(uint8_t cmd, uint8_t addr, uint8_t *p) {
+    uint8_t status;
+    uint16_t len;
+    uint8_t dat_buff[MAX_MIFARE_FRAME_SIZE] = { cmd, addr };
+
+    // Short data directly MCU calculate
+    crc_14a_append(dat_buff, 2);
+    // Then initiate communication
+    status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, dat_buff, 4, dat_buff, &len, U8ARR_BIT_LEN(dat_buff));
+    if (status == HF_TAG_OK) {
+       memcpy(p, dat_buff, 4);
+    }
+    return status;
+}
+
+/**
 * @brief   : Read the data of the specified block address of the m1 card
 * @param  :cmd : Read instruction
 *           addr: block address
@@ -807,6 +829,17 @@ uint8_t pcd_14a_reader_mf1_read_by_cmd(uint8_t cmd, uint8_t addr, uint8_t *p) {
         }
     }
     return status;
+}
+
+/**
+* @brief   : Read the data of the specified block address of the mfu classic card
+* @param  : Addr: block address
+*           p   : Read data, 4 bytes
+* @retval : Status value hf_tag_ok, success
+*/
+uint8_t pcd_14a_reader_mfuc_read(uint8_t addr, uint8_t *p) {
+    // Standard M1 Card Reading Card Reading
+    return pcd_14a_reader_mfuc_read_by_cmd(PICC_READ, addr, p);
 }
 
 /**

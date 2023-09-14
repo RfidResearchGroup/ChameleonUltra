@@ -182,6 +182,8 @@ hf_14a = hf.subgroup('14a', 'ISO14443-a tag read/write/info...')
 hf_mf = hf.subgroup('mf', 'Mifare Classic mini/1/2/4, attack/read/write')
 hf_mf_detection = hf.subgroup('detection', 'Mifare Classic detection log')
 
+hf_mfu = hf.subgroup('mfu', 'Mifare Ultralight, read (Classic one only for now)')
+
 lf = CLITree('lf', 'low frequency tag/reader')
 lf_em = lf.subgroup('em', 'EM410x read/write/emulator')
 lf_em_sim = lf_em.subgroup('sim', 'Manage EM410x emulation data for selected slot')
@@ -564,12 +566,43 @@ class BaseMF1AuthOpera(ReaderRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
+class BaseMFUCAuthOpera(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        type_choices = ['C', 'EV1']
+        parser = ArgumentParserNoExit()
+        parser.add_argument('-p', '--page', type=int, required=True, metavar="decimal",
+                            help="The page where the key will be used against")
+        parser.add_argument('-t', '--type', type=str, required=False, choices=type_choices,
+                            help="The key type of the tag") XXXTODO: manage all types C and EV1
+        return parser
+
+    def get_param(self, args):
+        class Param:
+            def __init__(self):
+                self.page = args.page
+                self.type = 0x60 if args.type == 'C' or args.type == 'EV1' else 0x61
+
+        return Param()
+
+     def on_exec(self, args: argparse.Namespace):
+         raise NotImplementedError("Please implement this")
+
+
 @hf_mf.command('rdbl', 'Mifare Classic read one block')
 class HFMFRDBL(BaseMF1AuthOpera):
     # hf mf rdbl -b 2 -t A -k FFFFFFFFFFFF
     def on_exec(self, args: argparse.Namespace):
         param = self.get_param(args)
         resp = self.cmd.read_mf1_block(param.block, param.type, param.key)
+        print(f" - Data: {resp.data.hex()}")
+
+
+@hf_mfu.command('rdpg', 'Mifare Ultralight read one page')
+class HFMFUCRDPG(BaseMFUCAuthOpera):
+    # hf mfu rdpg -p 2
+    def on_exec(self, args: argparse.Namespace):
+        param = self.get_param(args)
+        resp = self.cmd.read_mfuc_page(param.page, param.type)
         print(f" - Data: {resp.data.hex()}")
 
 
