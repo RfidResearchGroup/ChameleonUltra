@@ -118,7 +118,7 @@ class DeviceRequiredUnit(BaseCLIUnit):
         raise NotImplementedError("Please implement this")
 
     def before_exec(self, args: argparse.Namespace):
-        ret = self.device_com.isOpen()
+        ret = self.device_com.is_open()
         if ret:
             return True
         else:
@@ -179,7 +179,8 @@ root_commands: dict[str, CLITree] = {'hw': hw, 'hf': hf, 'lf': lf}
 class HWConnect(BaseCLIUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
-        parser.add_argument('-p', '--port', type=str, required=False)
+        parser.add_argument('-p', '--port', type=str, required=False, help='Serial port name/path')
+        parser.add_argument('-t', '--tcp', type=str, required=False, help='TCP server to connect to (host:port)')
         return parser
 
     def before_exec(self, args: argparse.Namespace):
@@ -187,7 +188,7 @@ class HWConnect(BaseCLIUnit):
 
     def on_exec(self, args: argparse.Namespace):
         try:
-            if args.port is None:  # Chameleon auto-detect if no port is supplied
+            if args.port is None and args.tcp is None:  # Chameleon auto-detect if no port is supplied
                 platform_name = uname().release
                 if 'Microsoft' in platform_name:
                     path = os.environ["PATH"].split(os.pathsep)
@@ -216,9 +217,13 @@ class HWConnect(BaseCLIUnit):
                             args.port = port.device
                             break
                 if args.port is None:  # If no chameleon was found, exit
-                    print("Chameleon not found, please connect the device or try connecting manually with the -p flag.")
+                    print("Chameleon not found, please connect the device or try connecting manually with the -p or -t flag.")
                     return
-            self.device_com.open(args.port)
+            
+            if args.tcp:
+                self.device_com.open(chameleon_com.ChameleonTCPTransport(args.tcp))
+            else:
+                self.device_com.open(chameleon_com.ChameleonSerialTransport(args.port))
             print(" { Chameleon connected } ")
         except Exception as e:
             print(f"Chameleon Connect fail: {str(e)}")
