@@ -332,7 +332,7 @@ data_frame_tx_t *cmd_processor_mfuc_read_one_page(uint16_t cmd, uint16_t status,
     // Re-find the card
     picc_14a_tag_t taginfo;
     status = pcd_14a_reader_scan_auto(&taginfo);
-    if (status == HF_TAG_OK) {
+    if (status == HF_TAG_OK) { // detect card's presence
         if (length == 2) {
             status = pcd_14a_reader_mfuc_read(data[1], block);
             if (status == HF_TAG_OK) {
@@ -345,7 +345,7 @@ data_frame_tx_t *cmd_processor_mfuc_read_one_page(uint16_t cmd, uint16_t status,
             status = STATUS_PAR_ERR;
         }
     } else {
-        status = STATUS_PAR_ERR;
+        status = HF_TAG_NO;
     }
     return data_frame_make(cmd, status, length, block);
 }
