@@ -52,6 +52,7 @@
 #include "ble_conn_state.h"
 #include "peer_manager_internal.h"
 #include "nrf_sdh_ble.h"
+#include "settings.h"
 
 #define NRF_LOG_MODULE_NAME peer_manager
 #if PM_LOG_ENABLED
@@ -348,9 +349,13 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
         return;
     }
 
-    im_ble_evt_handler(p_ble_evt);
-    sm_ble_evt_handler(p_ble_evt);
-    gcm_ble_evt_handler(p_ble_evt);
+    if (settings_get_ble_pairing_enable_first_load()) {
+        im_ble_evt_handler(p_ble_evt);
+        sm_ble_evt_handler(p_ble_evt);
+        gcm_ble_evt_handler(p_ble_evt);
+    } else {
+        NRF_LOG_INFO("Pairing is disable, ignore ble event for peer manager.");
+    }
 }
 
 NRF_SDH_BLE_OBSERVER(m_ble_evt_observer, PM_BLE_OBSERVER_PRIO, ble_evt_handler, NULL);

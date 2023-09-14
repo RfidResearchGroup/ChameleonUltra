@@ -783,9 +783,5 @@ void ble_slave_init(void) {
     services_init();                    // Initialization of service characteristics
     advertising_init();                 // Broadcast parameter initialization
     conn_params_init();                 // Connection parameter initialization
-
-    // Pairing enable?
-    if (settings_get_ble_pairing_enable_first_load()) {
-        peer_manager_init();                // Peer manager Initialization
-    }
+    peer_manager_init();                // Peer manager Initialization
 }
