@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Add MIFARE Ultralight reading feature. (@FlUxIuS)
  - Added guessed type information for NXP tags, and reorganization of HF information part. (@FlUxIuS)
  - Added `hf settings blepair` command to get and set ble pairing enable state, and default disable ble pair. (@xianglin1998)
  - Added `hf mf info` command to get UID/SAK/ATQA from slot (@Foxushka)
