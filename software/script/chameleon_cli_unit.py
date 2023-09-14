@@ -594,6 +594,8 @@ class BaseMFUCDUMP(ReaderRequiredUnit):
         parser = ArgumentParserNoExit()
         parser.add_argument('-m', '--maxpages', type=int, required=False, metavar="decimal", default=16,
                             help="Number of maximum page")
+        parser.add_argument('-o', '--outputbin', type=str, required=False, default="",
+                            help="Number of maximum page")
         parser.add_argument('-t', '--type', type=str, required=False, choices=type_choices,
                             help="The key type of the tag") #XXXTODO: manage all types C and EV1
 
@@ -603,6 +605,7 @@ class BaseMFUCDUMP(ReaderRequiredUnit):
         class Param:
             def __init__(self):
                 self.mpage = args.maxpages
+                self.outputbin = args.outputbin
                 self.type = 0x60 if args.type == 'BASIC' or args.type == 'C' or args.type == 'EV1' else 0x61
 
         return Param()
@@ -634,9 +637,19 @@ class HFMFUCDMPPG(BaseMFUCDUMP):
     # hf mfu rdpg -p 2
     def on_exec(self, args: argparse.Namespace):
         param = self.get_param(args)
+        fd = None
+        if param.outputbin != "":
+            fd =open(param.outputbin, 'wb+')
         for i in range(param.mpage):
             resp = self.cmd.read_mfuc_page(i, param.type)
+            if fd is not None:
+                fd.write(resp.data)
             print(f" - Page {i}: {resp.data.hex()}")
+        if fd is not None:
+            print(f" - {colorama.Fore.GREEN}Write done in {param.outputbin}.{colorama.Style.RESET_ALL}")
+            fd.close()
+
+
 
 
 @hf_mf.command('wrbl', 'Mifare Classic write one block')
