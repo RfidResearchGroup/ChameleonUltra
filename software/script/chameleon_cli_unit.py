@@ -10,6 +10,7 @@ import time
 import serial.tools.list_ports
 import threading
 import struct
+from pathlib import Path
 from platform import uname
 
 import chameleon_com
@@ -38,6 +39,12 @@ type_id_SAK_dict = {0x00: "MIFARE Ultralight Classic/C/EV1/Nano | NTAG 2xx",
                     0x38: "SmartMX with MIFARE Classic 4K",
                     }
 
+if getattr(sys, 'frozen', False):
+    # in pyinstaller
+    default_cwd = str(Path(sys._MEIPASS) / "bin")
+else:
+    # from source
+    default_cwd = str(Path(__file__).parent.parent / "bin")
 
 class BaseCLIUnit:
 
@@ -81,7 +88,7 @@ class BaseCLIUnit:
         raise NotImplementedError("Please implement this")
 
     @staticmethod
-    def sub_process(cmd, cwd=os.path.abspath("bin/")):
+    def sub_process(cmd, cwd=default_cwd):
         class ShadowProcess:
             def __init__(self):
                 self.output = ""
