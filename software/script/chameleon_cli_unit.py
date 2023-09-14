@@ -573,7 +573,7 @@ class BaseMFUCAuthOpera(ReaderRequiredUnit):
         parser.add_argument('-p', '--page', type=int, required=True, metavar="decimal",
                             help="The page where the key will be used against")
         parser.add_argument('-t', '--type', type=str, required=False, choices=type_choices,
-                            help="The key type of the tag") XXXTODO: manage all types C and EV1
+                            help="The key type of the tag") #XXXTODO: manage all types C and EV1
         return parser
 
     def get_param(self, args):
