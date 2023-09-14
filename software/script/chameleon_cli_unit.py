@@ -566,9 +566,9 @@ class BaseMF1AuthOpera(ReaderRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
-class BaseMFUCAuthOpera(ReaderRequiredUnit):
+class BaseMFUCROpera(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
-        type_choices = ['C', 'EV1']
+        type_choices = ['BASIC', 'C', 'EV1']
         parser = ArgumentParserNoExit()
         parser.add_argument('-p', '--page', type=int, required=True, metavar="decimal",
                             help="The page where the key will be used against")
@@ -580,7 +580,30 @@ class BaseMFUCAuthOpera(ReaderRequiredUnit):
         class Param:
             def __init__(self):
                 self.page = args.page
-                self.type = 0x60 if args.type == 'C' or args.type == 'EV1' else 0x61
+                self.type = 0x60 if args.type == 'BASIC' or args.type == 'C' or args.type == 'EV1' else 0x61
+
+        return Param()
+
+    def on_exec(self, args: argparse.Namespace):
+         raise NotImplementedError("Please implement this")
+
+
+class BaseMFUCDUMP(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        type_choices = ['BASIC', 'C', 'EV1']
+        parser = ArgumentParserNoExit()
+        parser.add_argument('-m', '--maxpages', type=int, required=False, metavar="decimal", default=16,
+                            help="Number of maximum page")
+        parser.add_argument('-t', '--type', type=str, required=False, choices=type_choices,
+                            help="The key type of the tag") #XXXTODO: manage all types C and EV1
+
+        return parser
+
+    def get_param(self, args):
+        class Param:
+            def __init__(self):
+                self.mpage = args.maxpages
+                self.type = 0x60 if args.type == 'BASIC' or args.type == 'C' or args.type == 'EV1' else 0x61
 
         return Param()
 
@@ -597,13 +620,23 @@ class HFMFRDBL(BaseMF1AuthOpera):
         print(f" - Data: {resp.data.hex()}")
 
 
-@hf_mfu.command('rdpg', 'Mifare Ultralight read one page')
-class HFMFUCRDPG(BaseMFUCAuthOpera):
+@hf_mfu.command('rdpg', 'MIFARE Ultralight read one page')
+class HFMFUCRDPG(BaseMFUCROpera):
     # hf mfu rdpg -p 2
     def on_exec(self, args: argparse.Namespace):
         param = self.get_param(args)
         resp = self.cmd.read_mfuc_page(param.page, param.type)
         print(f" - Data: {resp.data.hex()}")
+
+
+@hf_mfu.command('dump', 'MIFARE Ultralight dump pages')
+class HFMFUCDMPPG(BaseMFUCDUMP):
+    # hf mfu rdpg -p 2
+    def on_exec(self, args: argparse.Namespace):
+        param = self.get_param(args)
+        for i in range(param.mpage):
+            resp = self.cmd.read_mfuc_page(i, param.type)
+            print(f" - Page {i}: {resp.data.hex()}")
 
 
 @hf_mf.command('wrbl', 'Mifare Classic write one block')
