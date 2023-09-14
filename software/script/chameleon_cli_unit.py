@@ -634,7 +634,7 @@ class HFMFUCRDPG(BaseMFUCROpera):
 
 @hf_mfu.command('dump', 'MIFARE Ultralight dump pages')
 class HFMFUCDMPPG(BaseMFUCDUMP):
-    # hf mfu rdpg -p 2
+    # hf mfu dump [-m maxpages] [-o output bin]
     def on_exec(self, args: argparse.Namespace):
         param = self.get_param(args)
         fd = None
@@ -648,8 +648,6 @@ class HFMFUCDMPPG(BaseMFUCDUMP):
         if fd is not None:
             print(f" - {colorama.Fore.GREEN}Write done in {param.outputbin}.{colorama.Style.RESET_ALL}")
             fd.close()
-
-
 
 
 @hf_mf.command('wrbl', 'Mifare Classic write one block')
