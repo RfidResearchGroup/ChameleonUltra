@@ -579,25 +579,25 @@ uint8_t pcd_14a_reader_scan_once(picc_14a_tag_t *tag) {
         // Only 1 2 3 Three types, corresponding 4 7 10 Byte card number
         // Therefore + 1
         tag->cascade = cascade_level + 1;
-        if ((!do_cascade) && (tag->sak & 0x20)) {
-            // Tag supports 14443-4, sending RATS
-            uint16_t ats_size;
-            status = pcd_14a_reader_ats_request(tag->ats, &ats_size, 0xFF*8);
-            ats_size -= 2;  // size returned by pcd_14a_reader_ats_request includes CRC
-            if (ats_size > 254) {
-                NRF_LOG_INFO("Invalid ATS > 254!");
-                return HF_ERR_ATS;
-            }
-            tag->ats_len = ats_size;
-            // We do not validate ATS here as we want to report ATS as it is without breaking 14a scan
-            if (tag->ats[0] != ats_size - 1) {
-                NRF_LOG_INFO("Invalid ATS! First byte doesn't match received length");
-                // return HF_ERR_ATS;
-            }
-            if (status != HF_TAG_OK) {
-                NRF_LOG_INFO("Tag SAK claimed to support ATS but tag NAKd RATS");
-                // return HF_ERR_ATS;
-            }
+    }
+    if (tag->sak & 0x20) {
+        // Tag supports 14443-4, sending RATS
+        uint16_t ats_size;
+        status = pcd_14a_reader_ats_request(tag->ats, &ats_size, 0xFF*8);
+        ats_size -= 2;  // size returned by pcd_14a_reader_ats_request includes CRC
+        if (ats_size > 254) {
+            NRF_LOG_INFO("Invalid ATS > 254!");
+            return HF_ERR_ATS;
+        }
+        tag->ats_len = ats_size;
+        // We do not validate ATS here as we want to report ATS as it is without breaking 14a scan
+        if (tag->ats[0] != ats_size - 1) {
+            NRF_LOG_INFO("Invalid ATS! First byte doesn't match received length");
+            // return HF_ERR_ATS;
+        }
+        if (status != HF_TAG_OK) {
+            NRF_LOG_INFO("Tag SAK claimed to support ATS but tag NAKd RATS");
+            // return HF_ERR_ATS;
         }
     }
     return HF_TAG_OK;
