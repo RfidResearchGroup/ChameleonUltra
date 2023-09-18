@@ -232,7 +232,9 @@ static data_frame_tx_t *cmd_processor_hf14a_scan(uint16_t cmd, uint16_t status, 
     memcpy(&payload[offset], taginfo.atqa, sizeof(taginfo.atqa));
     offset += sizeof(taginfo.atqa);
     payload[offset++] = taginfo.sak;
-    payload[offset++] = 0; // TODO: no ATS support yet
+    payload[offset++] = taginfo.ats_len;
+    memcpy(&payload[offset], taginfo.ats, taginfo.ats_len);
+    offset += taginfo.ats_len;
     return data_frame_make(cmd, HF_TAG_OK, offset, payload);
 }
 

@@ -30,6 +30,7 @@ class Device(metaclass=MetaDevice):
     HF_ERR_BCC = 0x05     # IC card BCC error
     MF_ERR_AUTH = 0x06    # MF card verification failed
     HF_ERR_PARITY = 0x07  # IC card parity error
+    HF_ERR_ATS = 0x08     # ATS should be present but card NAKed, or ATS too large
 
     # Some operations with low frequency cards succeeded!
     LF_TAG_OK = 0x40
@@ -57,6 +58,7 @@ message = {
     Device.HF_ERR_BCC: "HF tag uid bcc error",
     Device.MF_ERR_AUTH: "HF tag auth fail",
     Device.HF_ERR_PARITY: "HF tag data parity error",
+    Device.HF_ERR_ATS: "HF tag was supposed to send ATS but didn't",
 
     Device.LF_TAG_OK: "LF tag operation succeeded",
     Device.EM410X_TAG_NO_FOUND: "EM410x tag no found",

@@ -335,7 +335,6 @@ class HF14AScan(ReaderRequiredUnit):
                 print(f"- ATQA : {data_tag['atqa'].hex().upper()}")
                 print(f"- SAK  : {data_tag['sak'].hex().upper()}")
                 if len(data_tag['ats']) > 0:
-                    print(data_tag['ats'])
                     print(f"- ATS  : {data_tag['ats'].hex().upper()}")
                 if deep:
                     self.sak_info(data_tag)
