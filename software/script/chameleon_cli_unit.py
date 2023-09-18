@@ -484,7 +484,7 @@ class HFMFDarkside(ReaderRequiredUnit):
         first_recover = True
         retry_count = 0
         while retry_count < 0xFF:
-            darkside_resp = self.cmd.mf1_darkside_acquire(block_target, type_target, first_recover, 15)
+            darkside_resp = self.cmd.mf1_darkside_acquire(block_target, type_target, first_recover, 30)
             first_recover = False  # not first run.
             if darkside_resp[0] != chameleon_cmd.MifareClassicDarksideStatus.OK:
                 print(f"Darkside error: {chameleon_cmd.MifareClassicDarksideStatus(darkside_resp[0])}")
@@ -500,7 +500,7 @@ class HFMFDarkside(ReaderRequiredUnit):
             else:
                 cmd_recover = f"./darkside {recover_params}"
             # subprocess.run(cmd_recover, cwd=os.path.abspath("../bin/"), shell=True)
-            # print(cmd_recover)
+            # print(f"   Executing {cmd_recover}")
             # start a decrypt process
             process = self.sub_process(cmd_recover)
             # wait end
@@ -520,8 +520,7 @@ class HFMFDarkside(ReaderRequiredUnit):
                 # auth key
                 for key in key_list:
                     key_bytes = bytearray.fromhex(key)
-                    auth_ret = self.cmd.mf1_auth_one_key_block(block_target, type_target, key_bytes)
-                    if auth_ret.status == chameleon_status.Device.HF_TAG_OK:
+                    if self.cmd.mf1_auth_one_key_block(block_target, type_target, key_bytes):
                         return key
         return None
 

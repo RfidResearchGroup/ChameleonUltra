@@ -512,10 +512,10 @@ class ChameleonCMD:
         :return:
         """
         data = struct.pack('!BBBB', type_target, block_target, first_recover, sync_max)
-        resp = self.device.send_cmd_sync(DATA_CMD_MF1_DARKSIDE_ACQUIRE, data, timeout=sync_max + 5)
+        resp = self.device.send_cmd_sync(DATA_CMD_MF1_DARKSIDE_ACQUIRE, data, timeout=sync_max * 10)
         if resp.status == chameleon_status.Device.HF_TAG_OK:
             if resp.data[0] == MifareClassicDarksideStatus.OK:
-                darkside_status, uid, nt1, par, ks1, nr, ar = struct.unpack('!BIIIIII', resp.data)
+                darkside_status, uid, nt1, par, ks1, nr, ar = struct.unpack('!BIIQQII', resp.data)
                 resp.data = (darkside_status, {'uid': uid, 'nt1': nt1, 'par': par, 'ks1': ks1, 'nr': nr, 'ar': ar})
             else:
                 resp.data = (resp.data[0],)

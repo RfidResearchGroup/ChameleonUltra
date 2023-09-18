@@ -9,10 +9,10 @@
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
-
+#include "bsp_wdt.h"
 
 // The default delay of the antenna reset
-static uint32_t g_ant_reset_delay = 8;
+static uint32_t g_ant_reset_delay = 100;
 
 // Label information used for global operations
 static picc_14a_tag_t m_tag_info;
@@ -269,6 +269,8 @@ static uint8_t darkside_select_nonces(picc_14a_tag_t *tag, uint8_t block, uint8_
 
     //Random number collection
     for (i = 0; i < NT_COUNT; i++) {
+        bsp_wdt_feed();
+        while(NRF_LOG_PROCESS());
         //When the antenna is reset, we must make sure
         // 1. The antenna is powered off for a long time to ensure that the card is completely powered off, otherwise the pseudo -random number generator of the card cannot be reset
         // 2. Moderate power -off time, don't be too long, it will affect efficiency, and don't be too short.
@@ -287,7 +289,7 @@ static uint8_t darkside_select_nonces(picc_14a_tag_t *tag, uint8_t block, uint8_
         // Converted to the type of U32 and cache
         nt_list[i] = bytes_to_num(tag_resp, 4);
         // The byte array of the conversion response is 10 in NT
-        // NRF_LOG_INFO("Get nt: %"PRIu32"\r\n", nt_list[i]);
+        // NRF_LOG_INFO("Get nt: %"PRIu32, nt_list[i]);
     }
 
     // Take the random number
@@ -405,9 +407,10 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
             return HF_TAG_OK;
         }
     }
-
     // Always collect different NACK under a large cycle
     do {
+        bsp_wdt_feed();
+        while(NRF_LOG_PROCESS());
         // Reset the receiving sign of NACK
         received_nack = 0;
 
@@ -432,7 +435,7 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
 
         //The byte array of the conversion response is 10 in NT
         nt_cur = bytes_to_num(dat_recv, 4);
-        // NRF_LOG_INFO("Get nt: %"PRIu32"\r\n", nt_cur);
+        //NRF_LOG_INFO("Get nt: %"PRIu32, nt_cur);
 
         //Determine the clock synchronization (fixing NT)
         if (nt_cur != nt_ori) {
@@ -440,7 +443,7 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
             // And the random number we chose was also successfully attacked
             // In other words, this error has no chance to correct the random number
             if (++resync_count == ntSyncMax) {
-                NRF_LOG_INFO("Can't fix nonce.\r\n");
+                NRF_LOG_INFO("Can't fix nonce.");
                 *darkside_status = DARKSIDE_CANT_FIX_NT;
                 return HF_TAG_OK;
             }
@@ -451,19 +454,20 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
             // NRF_LOG_INFO("Sync nt -> nt_fix: %"PRIu32", nt_new: %"PRIu32"\r\n", nt_ori, nt_cur);
             continue;
         }
-
         //Originally, we only need to send PAR, and use every bit of them as a school test.
         // But the sending function we implemented only supports one UINT8_T, that is, a byte as a bit
         // Therefore, we need to replace the communication writing of PM3 into our.
         // There are not many times here anyway, we directly expand the code for conversion
-        par_byte[0] = par >> 0 & 0x1;
-        par_byte[1] = par >> 1 & 0x1;
-        par_byte[2] = par >> 2 & 0x1;
-        par_byte[3] = par >> 3 & 0x1;
-        par_byte[4] = par >> 4 & 0x1;
-        par_byte[5] = par >> 5 & 0x1;
-        par_byte[6] = par >> 6 & 0x1;
-        par_byte[7] = par >> 7 & 0x1;
+        par_byte[0] = par >> 7 & 0x1;
+        par_byte[1] = par >> 6 & 0x1;
+        par_byte[2] = par >> 5 & 0x1;
+        par_byte[3] = par >> 4 & 0x1;
+        par_byte[4] = par >> 3 & 0x1;
+        par_byte[5] = par >> 2 & 0x1;
+        par_byte[6] = par >> 1 & 0x1;
+        par_byte[7] = par >> 0 & 0x1;
+
+        //NRF_LOG_INFO("DBG step%i par=%x", nt_diff, par);
 
         len = 0;
         pcd_14a_reader_bits_transfer(mf_nr_ar, 64, par_byte, dat_recv, par_byte, &len, U8ARR_BIT_LEN(dat_recv));
@@ -472,7 +476,7 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
         resync_count = 0;
 
         if (len == 4) {
-            // NRF_LOG_INFO("NACK get: 0x%x\r\n", receivedAnswer[0]);
+            NRF_LOG_INFO("NACK acquired (%i/8)", nt_diff+1);
             received_nack = 1;
         } else if (len == 32) {
             // did we get lucky and got our dummy key to be valid?
@@ -510,8 +514,11 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
                     return HF_TAG_OK;
                 }
             } else {
-                // Why this?
-                par = ((par & 0x1F) + 1) | par_low;
+                par = ((par + 1) & 0x1F) | par_low;
+                if (par == par_low) {    // tried all 32 possible parities without success. Got some NACK but not all 8...
+                    NRF_LOG_INFO("Card sent only %i/8 NACK.", nt_diff);
+                    return DARKSIDE_NO_NAK_SENT;
+                }
             }
         }
     } while (1);

@@ -6,6 +6,7 @@
 #include <rc522.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include "netdata.h"
 
 #define SETS_NR         2       // Using several sets of random number probes, at least two can ensure that there are two sets of random number combinations for intersection inquiries. The larger the value, the easier it is to succeed.
