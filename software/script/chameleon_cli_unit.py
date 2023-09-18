@@ -1471,7 +1471,7 @@ class HWSettingsBLEKey(DeviceRequiredUnit):
 
 
 @hw_settings.command('blepair', 'Check if BLE pairing is enabled, or set the enable switch for BLE pairing.')
-class HWRaw(DeviceRequiredUnit):
+class HWBlePair(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
@@ -1520,10 +1520,11 @@ class HWRaw(DeviceRequiredUnit):
         parser = ArgumentParserNoExit()
         parser.add_argument('-c', '--command', type=int, required=True, help="Command (Int) to send")
         parser.add_argument('-d', '--data', type=str, help="Data (HEX) to send", default="")
+        parser.add_argument('-t', '--timeout', type=int, help="Timeout in seconds", default=3)
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        response = self.cmd.device.send_cmd_sync(args.command, data=bytes.fromhex(args.data), status=0x0)
+        response = self.cmd.device.send_cmd_sync(args.command, data=bytes.fromhex(args.data), status=0x0, timeout=args.timeout)
         print(" - Received:")
         print(f"   Command: {response.cmd}")
         status_string = f"   Status:  {response.status:#02x}"

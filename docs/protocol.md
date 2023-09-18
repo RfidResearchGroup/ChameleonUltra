@@ -215,7 +215,6 @@ Notes:
 * Command: no data
 * Response: 1 byte, according to `mf1_darkside_status_t` enum
 * CLI: unused
-* **FIXME:** always `CANT_FIX_NT` or watchdog reset on static nonce cards
 ### 2004: MF1_DARKSIDE_ACQUIRE
 * Command: 4 bytes: `type_target|block_target|first_recover|sync_max`
 * Response: 1 byte if Darkside failed, according to `mf1_darkside_status_t` enum,
