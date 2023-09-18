@@ -10,6 +10,9 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 #include "bsp_wdt.h"
+#include "hw_connect.h"
+#include "nrf_gpio.h"
+#include "rgb_marquee.h"
 
 // The default delay of the antenna reset
 static uint32_t g_ant_reset_delay = 100;
@@ -368,7 +371,7 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
     uint8_t status                          = 0x00;  // This variable is responsible for saving card communication status
     uint16_t len                            = 0x00;  // This variable is responsible for saving the data of the card in the communication process to respond to the length of the card
     uint8_t nt_diff                         = 0x00;  // This variable is critical, don't initialize it, because the following is used directly
-
+    bool led_toggle                         = false;
     // We need to confirm the use of a certain card first
     if (pcd_14a_reader_scan_auto(p_tag_info) == HF_TAG_OK) {
         uid_cur = get_u32_tag_uid(p_tag_info);
@@ -378,6 +381,12 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
 
     // Verification instructions need to add CRC16
     crc_14a_append(tag_auth, 2);
+    rgb_marquee_stop();
+    set_slot_light_color(1);
+    uint32_t *led_pins = hw_get_led_array();
+    for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
+        nrf_gpio_pin_clear(led_pins[i]);
+    }
 
     // Initialize the static variable if it is the first attack
     if (firstRecover) {
@@ -411,6 +420,13 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
     do {
         bsp_wdt_feed();
         while(NRF_LOG_PROCESS());
+        // update LEDs
+        led_toggle ^= 1;
+        if (led_toggle) {
+            nrf_gpio_pin_set(led_pins[nt_diff]);
+        } else {
+            nrf_gpio_pin_clear(led_pins[nt_diff]);
+        }
         // Reset the receiving sign of NACK
         received_nack = 0;
 
@@ -488,6 +504,7 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
 
         // Receive answer. This will be a 4 Bit NACK when the 8 parity bits are OK after decoding
         if (received_nack) {
+            nrf_gpio_pin_set(led_pins[nt_diff]);
             if (nt_diff == 0) {
                 // there is no need to check all parities for other nt_diff. Parity Bits for mf_nr_ar[0..2] won't change
                 par_low = par & 0xE0;
