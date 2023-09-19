@@ -599,6 +599,10 @@ uint8_t pcd_14a_reader_scan_once(picc_14a_tag_t *tag) {
             NRF_LOG_INFO("Tag SAK claimed to support ATS but tag NAKd RATS");
             // return HF_ERR_ATS;
         }
+        /*
+        * FIXME: If there is an issue here, it will cause the label to lose its selected state. 
+        *   It is necessary to reselect the card after the issue occurs here.
+        */
     }
     return HF_TAG_OK;
 }
