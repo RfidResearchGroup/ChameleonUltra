@@ -309,25 +309,27 @@ static data_frame_tx_t *cmd_processor_mf1_detect_nt_dist(uint16_t cmd, uint16_t 
     return data_frame_make(cmd, HF_TAG_OK, sizeof(payload_resp), (uint8_t *)&payload_resp);
 }
 
+// We have a reusable payload structure.
+typedef struct {
+    uint8_t type_known;
+    uint8_t block_known;
+    uint8_t key_known[6];
+    uint8_t type_target;
+    uint8_t block_target;
+} PACKED nested_common_payload_t;
+
 static data_frame_tx_t *cmd_processor_mf1_nested_acquire(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    NestedCore_t ncs[SETS_NR];
-    typedef struct {
-        uint8_t type_known;
-        uint8_t block_known;
-        uint8_t key_known[6];
-        uint8_t type_target;
-        uint8_t block_target;
-    } PACKED payload_t;
-    if (length != sizeof(payload_t)) {
+    mf1_nested_core_t ncs[SETS_NR];
+    if (length != sizeof(nested_common_payload_t)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
-    payload_t *payload = (payload_t *)data;
+    nested_common_payload_t *payload = (nested_common_payload_t *)data;
     status = nested_recover_key(bytes_to_num(payload->key_known, 6), payload->block_known, payload->type_known, payload->block_target, payload->type_target, ncs);
     if (status != HF_TAG_OK) {
         return data_frame_make(cmd, status, 0, NULL);
     }
-    // NestedCore_t is PACKED and comprises only bytes so we can use it directly
+    // mf1_nested_core_t is PACKED and comprises only bytes so we can use it directly
     return data_frame_make(cmd, HF_TAG_OK, sizeof(ncs), (uint8_t *)(&ncs));
 }
 
@@ -388,6 +390,21 @@ static data_frame_tx_t *cmd_processor_mf1_write_one_block(uint16_t cmd, uint16_t
     }
     status = pcd_14a_reader_mf1_write(payload->block, payload->block_data);
     return data_frame_make(cmd, status, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_mf1_static_nested_acquire(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    mf1_static_nested_core_t sncs;
+    if (length != sizeof(nested_common_payload_t)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    nested_common_payload_t *payload = (nested_common_payload_t *)data;
+    status = static_nested_recover_key(bytes_to_num(payload->key_known, 6), payload->block_known, payload->type_known, payload->block_target, payload->type_target, &sncs);
+    if (status != HF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    // mf1_static_nested_core_t is PACKED and comprises only bytes so we can use it directly
+    return data_frame_make(cmd, HF_TAG_OK, sizeof(sncs), (uint8_t *)(&sncs));
 }
 
 static data_frame_tx_t *cmd_processor_em410x_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -930,6 +947,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_AUTH_ONE_KEY_BLOCK,       before_hf_reader_run,        cmd_processor_mf1_auth_one_key_block,        after_hf_reader_run    },
     {    DATA_CMD_MF1_READ_ONE_BLOCK,           before_hf_reader_run,        cmd_processor_mf1_read_one_block,            after_hf_reader_run    },
     {    DATA_CMD_MF1_WRITE_ONE_BLOCK,          before_hf_reader_run,        cmd_processor_mf1_write_one_block,           after_hf_reader_run    },
+    {    DATA_CMD_MF1_STATIC_NESTED_ACQUIRE,    before_hf_reader_run,        cmd_processor_mf1_static_nested_acquire,     after_hf_reader_run    },
 
     {    DATA_CMD_EM410X_SCAN,                  before_reader_run,           cmd_processor_em410x_scan,                   NULL                   },
     {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_em410x_write_to_t55XX,         NULL                   },

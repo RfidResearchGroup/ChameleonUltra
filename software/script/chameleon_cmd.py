@@ -69,6 +69,7 @@ DATA_CMD_MF1_NESTED_ACQUIRE = 2006
 DATA_CMD_MF1_AUTH_ONE_KEY_BLOCK = 2007
 DATA_CMD_MF1_READ_ONE_BLOCK = 2008
 DATA_CMD_MF1_WRITE_ONE_BLOCK = 2009
+DATA_CMD_MF1_STATIC_NESTED_ACQUIRE = 2010
 
 DATA_CMD_EM410X_SCAN = 3000
 DATA_CMD_EM410X_WRITE_TO_T55XX = 3001
@@ -445,7 +446,7 @@ class ChameleonCMD:
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def mf1_detect_support(self):
         """
-        Detect whether it is mifare classic label
+        Detect whether it is mifare classic tag
         :return:
         """
         resp = self.device.send_cmd_sync(DATA_CMD_MF1_DETECT_SUPPORT)
@@ -500,6 +501,7 @@ class ChameleonCMD:
             resp.data = [{'nt': nt, 'nt_enc': nt_enc, 'par': par}
                          for nt, nt_enc, par in struct.iter_unpack('!IIB', resp.data)]
         return resp
+
 
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def mf1_darkside_acquire(self, block_target, type_target, first_recover: int or bool, sync_max):
@@ -560,6 +562,26 @@ class ChameleonCMD:
         data = struct.pack('!BB6s16s', type_value, block, key, block_data)
         resp = self.device.send_cmd_sync(DATA_CMD_MF1_WRITE_ONE_BLOCK, data)
         resp.data = resp.status == chameleon_status.Device.HF_TAG_OK
+        return resp
+    
+    @expect_response(chameleon_status.Device.HF_TAG_OK)
+    def mf1_static_nested_acquire(self, block_known, type_known, key_known, block_target, type_target):
+        """
+        Collect the key NT parameters needed for StaticNested decryption
+        :return:
+        """
+        data = struct.pack('!BB6sBB', type_known, block_known, key_known, type_target, block_target)
+        resp = self.device.send_cmd_sync(DATA_CMD_MF1_STATIC_NESTED_ACQUIRE, data)
+        if resp.status == chameleon_status.Device.HF_TAG_OK:
+            resp.data = {
+                'uid': struct.unpack('!I', resp.data[0:4])[0],
+                'nts': [
+                    {
+                        'nt': nt, 
+                        'nt_enc': nt_enc
+                    } for nt, nt_enc in struct.iter_unpack('!II', resp.data[4:])
+                ]
+            }
         return resp
 
     @expect_response(chameleon_status.Device.LF_TAG_OK)

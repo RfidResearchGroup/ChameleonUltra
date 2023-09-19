@@ -29,14 +29,22 @@ typedef struct {            //Answer the random number parameters required for N
     uint8_t nt1[4];         //Unblocked explicitly random number
     uint8_t nt2[4];         //Random number of nested verification encryption
     uint8_t par;            //The puppet test of the communication process of nested verification encryption, only the "low 3 digits', that is, the right 3
-} NestedCore_t;
+} mf1_nested_core_t;
+
+typedef struct {
+	uint8_t uid[4];
+    struct {
+        uint8_t nt1[4];
+        uint8_t nt2[4];
+    } core[2];
+} mf1_static_nested_core_t;
 
 typedef enum {
     DARKSIDE_OK               = 0u, // normal process
     DARKSIDE_CANT_FIX_NT      = 1u, // the random number cannot be fixed, this situation may appear on some UID card
     DARKSIDE_LUCKY_AUTH_OK    = 2u, // the direct authentification is successful, maybe the key is just the default one
     DARKSIDE_NO_NAK_SENT      = 3u, // the card does not respond to NACK, it may be a card that fixes Nack logic vulnerabilities
-    DARKSIDE_TAG_CHANGED      = 4u, // card swap while running DARKSIDE
+    DARKSIDE_TAG_CHANGED      = 4u, // card change while running DARKSIDE
 } mf1_darkside_status_t;
 
 // this struct is also used in the fw/cli protocol, therefore PACKED
@@ -63,6 +71,7 @@ uint8_t darkside_recover_key(
     DarksideCore_t *dc,
     mf1_darkside_status_t *darkside_status
 );
+
 uint8_t nested_distance_detect(
     uint8_t block,
     uint8_t type,
@@ -70,14 +79,17 @@ uint8_t nested_distance_detect(
     uint8_t *uid,
     uint32_t *distance
 );
-uint8_t nested_recover_key(
-    uint64_t keyKnown,
-    uint8_t blkKnown,
-    uint8_t typKnown,
-    uint8_t targetBlock,
-    uint8_t targetType,
-    NestedCore_t ncs[SETS_NR]
-);
+
+#define NESTED_CORE_PARAM_DEF \
+    uint64_t keyKnown,        \
+    uint8_t blkKnown,         \
+    uint8_t typKnown,         \
+    uint8_t targetBlock,      \
+    uint8_t targetType        \
+
+uint8_t nested_recover_key(NESTED_CORE_PARAM_DEF, mf1_nested_core_t ncs[SETS_NR]);
+uint8_t static_nested_recover_key(NESTED_CORE_PARAM_DEF, mf1_static_nested_core_t* sncs);
+
 uint8_t check_darkside_support(mf1_darkside_status_t *darkside_status);
 uint8_t check_prng_type(mf1_prng_type_t *type);
 uint8_t check_std_mifare_nt_support(bool *support);

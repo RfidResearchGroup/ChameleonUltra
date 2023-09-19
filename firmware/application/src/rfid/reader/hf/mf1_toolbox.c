@@ -608,7 +608,7 @@ uint8_t check_tag_response_nt(picc_14a_tag_t *tag, uint32_t *nt) {
     // Send instructions and get NT return
     *nt = send_cmd(pcs, AUTH_FIRST, PICC_AUTHENT1A, 0x03, &status, dat_recv, par_recv, U8ARR_BIT_LEN(dat_recv));
     if (*nt != 32) {
-        // dbg_block_printf("No 32 data recv on send_cmd: %d\n", *nt);
+        // NRF_LOG_INFO("No 32 data recv on send_cmd: %d\n", *nt);
         return HF_ERR_STAT;
     }
     *nt = bytes_to_num(dat_recv, 4);
@@ -827,7 +827,7 @@ static uint8_t measure_distance(uint64_t u64Key, uint8_t block, uint8_t type, ui
         }
         // After the measurement is completed, store in the buffer
         distances[index++] = measure_nonces(nt1, nt2);
-        // dbg_block_printf("dist = %"PRIu32"\n\n", distances[index - 1]);
+        // NRF_LOG_INFO("dist = %"PRIu32"\n\n", distances[index - 1]);
     } while (index < DIST_NR);
 
 //The final calculation of the distance between the two NTs and spread it directly
@@ -847,7 +847,7 @@ static uint8_t measure_distance(uint64_t u64Key, uint8_t block, uint8_t type, ui
 * @retval   : Successfully return hf_tag_ok, verify the unsuccessful return of the non -hf_tag_ok value
 *
 */
-static uint8_t nested_recover_core(NestedCore_t *pnc, uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown, uint8_t targetBlock, uint8_t targetType) {
+static uint8_t nested_recover_core(mf1_nested_core_t *pnc, uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown, uint8_t targetBlock, uint8_t targetType) {
     struct Crypto1State mpcs = {0, 0};
     struct Crypto1State *pcs = &mpcs;
     uint8_t status;
@@ -884,16 +884,16 @@ static uint8_t nested_recover_core(NestedCore_t *pnc, uint64_t keyKnown, uint8_t
 
 /**
 * @brief    :NESTED is implemented by default to collect random numbers of the sets_nr group. This function is only responsible for collecting, not responsible for conversion and analysis as KS
-* @param    :ncs         : Nested core structure array, save related communication data
 * @param    :keyKnown    : The U64 value of the known secret key of the card
 * @param    :blkKnown    :The owner of the known secret key of the card
 * @param    :typKnown    : Types of the known secret key of the card, 0x60 (A secret) or 0x61 (B secret)
 * @param    :targetBlock : The target sector that requires a Nested attack
 * @param    :targetType  : The target key type requires the Nested attack
-* @retval   :The attack returns hf_tag_ok, the attack is unsuccessful to return the non -hf_tag_ok value
+* @param    :ncs         : Nested core structure array, save related communication data
+* @retval   :The attack success return HF_TAG_OK, else return the error code
 *
 */
-uint8_t nested_recover_key(uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown, uint8_t targetBlock, uint8_t targetType, NestedCore_t ncs[SETS_NR]) {
+uint8_t nested_recover_key(uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown, uint8_t targetBlock, uint8_t targetType, mf1_nested_core_t ncs[SETS_NR]) {
     uint8_t m, res;
     // all operations must be based on the card
     res = pcd_14a_reader_scan_auto(p_tag_info);
@@ -939,6 +939,83 @@ uint8_t nested_distance_detect(uint8_t block, uint8_t type, uint8_t *key, uint8_
     }
     // Get distance, prepare for the next attack
     return measure_distance(bytes_to_num(key, 6), block, type, distance);
+}
+
+/**
+* @brief 	: StaticNested core, used to collect NT. 
+*               This function is only responsible for collection and is not responsible for converting and parsing to KS.
+* @param 	:p_nt1 	  	 : NT1, non encrypted.
+* @param 	:p_nt2 	  	 : NT2, encrypted.
+* @param 	:keyKnown 	 : U64 value of the known key of the card 
+* @param 	:blkKnown 	 : The sector to which the card's known secret key belongs
+* @param 	:typKnown 	 : The known key type of the card, 0x60 (A key) or 0x61 (B key)
+* @param 	:targetBlock : Target sectors that require nested attacks
+* @param 	:targetType	 : Target key types that require nested attacks
+* @param 	:nestedAgain : StaticNested enhanced vulnerability, which can obtain two sets of encrypted random numbers based on nested verification of known keys
+* @retval	: Successfully collected and returned to HF_TAG_OK, otherwise an error code will be returned.
+*
+*/
+uint8_t static_nested_recover_core(uint8_t *p_nt1, uint8_t *p_nt2, uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown, uint8_t targetBlock, uint8_t targetType, uint8_t nestedAgain) {
+    struct Crypto1State mpcs = {0, 0};
+	struct Crypto1State *pcs = &mpcs;
+	uint8_t status, len;
+	uint8_t parity[4] = {0x00};
+	uint8_t answer[4] = {0x00};
+	uint32_t uid, nt1, nt2;
+	uid = get_u32_tag_uid(p_tag_info);
+	pcd_14a_reader_halt_tag();
+	if (pcd_14a_reader_scan_auto(p_tag_info) != HF_TAG_OK) {
+		return HF_TAG_NO;
+	}
+	status = authex(pcs, uid, blkKnown, typKnown, keyKnown, AUTH_FIRST, &nt1);
+	if (status != HF_TAG_OK) {
+		return MF_ERR_AUTH;
+	}
+	if (nestedAgain) {
+		status = authex(pcs, uid, blkKnown, typKnown, keyKnown, AUTH_NESTED, NULL);
+		if (status != HF_TAG_OK) {
+			return MF_ERR_AUTH;
+		}
+	}
+	len = send_cmd(pcs, AUTH_NESTED, targetType, targetBlock, &status, answer, parity, U8ARR_BIT_LEN(answer));
+	if (len != 32) {
+		NRF_LOG_INFO("No 32 data recv on sendcmd: %d\r\n", len);
+		return HF_ERR_STAT;
+	}
+	nt2 = bytes_to_num(answer, 4);
+	num_to_bytes(nt1, 4, p_nt1);
+	num_to_bytes(nt2, 4, p_nt2);
+	return HF_TAG_OK;
+}
+
+/**
+* @brief 	: StaticNested encapsulates and calls the functions implemented by the core to collect 2 sets of random numbers. 
+*               This function is only responsible for collection and is not responsible for converting and parsing to KS.
+* @param 	:keyKnown 	 : U64 value of the known key of the card 
+* @param 	:blkKnown 	 : The sector to which the card's known secret key belongs
+* @param 	:typKnown 	 : The known key type of the card, 0x60 (A key) or 0x61 (B key)
+* @param 	:targetBlock : Target sectors that require nested attacks
+* @param 	:targetType	 : Target key type that require nested attacks
+* @param 	:sncs 	  	 : StaticNested Decrypting Core Structure Array
+* @retval	: Successfully collected and returned to HF_TAG_OK, otherwise an error code will be returned.
+*
+*/
+uint8_t static_nested_recover_key(uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown, uint8_t targetBlock, uint8_t targetType, mf1_static_nested_core_t* sncs) {
+	uint8_t res;
+	res = pcd_14a_reader_scan_auto(p_tag_info);
+	if (res!= HF_TAG_OK) {
+		return res;
+	}
+	get_4byte_tag_uid(p_tag_info, sncs->uid);
+	res = static_nested_recover_core(sncs->core[0].nt1, sncs->core[0].nt2, keyKnown, blkKnown, typKnown, targetBlock, targetType, false);
+	if (res != HF_TAG_OK) {
+		return res;
+	}
+	res = static_nested_recover_core(sncs->core[1].nt1, sncs->core[1].nt2, keyKnown, blkKnown, typKnown, targetBlock, targetType, true);
+	if (res != HF_TAG_OK) {
+		return res;
+	}
+	return HF_TAG_OK;
 }
 
 /**

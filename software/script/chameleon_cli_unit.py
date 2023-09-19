@@ -8,6 +8,7 @@ import timeit
 import sys
 import time
 import serial.tools.list_ports
+import threading
 from platform import uname
 
 import chameleon_com
@@ -82,9 +83,17 @@ class BaseCLIUnit:
     def sub_process(cmd, cwd=os.path.abspath("bin/")):
         class ShadowProcess:
             def __init__(self):
+                self.output = ""
                 self.time_start = timeit.default_timer()
                 self._process = subprocess.Popen(cmd, cwd=cwd, shell=True, stderr=subprocess.PIPE,
                                                  stdout=subprocess.PIPE)
+                threading.Thread(target=self.thread_read_output).start()
+
+            def thread_read_output(self):
+                while self._process.poll() is None:
+                    data = self._process.stdout.read(1024)
+                    if len(data) > 0:
+                        self.output += data.decode(encoding="utf-8")
 
             def get_time_distance(self, ms=True):
                 if ms:
@@ -101,15 +110,8 @@ class BaseCLIUnit:
                     return True
                 return False
 
-            def get_output_sync(self, encoding='utf-8'):
-                buffer = bytearray()
-                while True:
-                    data = self._process.stdout.read(1024)
-                    if len(data) > 0:
-                        buffer.extend(data)
-                    else:
-                        break
-                return buffer.decode(encoding)
+            def get_output_sync(self):
+                return self.output
 
             def get_ret_code(self):
                 return self._process.poll()
@@ -380,6 +382,14 @@ class HFMFNested(ReaderRequiredUnit):
                             help="The type of the target block to recover")
         # hf mf nested -o --block-known 0 --type-known A --key FFFFFFFFFFFF --block-target 4 --type-target A
         return parser
+    
+    def from_nt_level_code_to_str(self, nt_level):
+        if nt_level == 0:
+            return 'StaticNested'
+        if nt_level == 1:
+            return 'Nested'
+        if nt_level == 2:
+            return 'HardNested'
 
     def recover_a_key(self, block_known, type_known, key_known, block_target, type_target) -> str or None:
         """
@@ -391,17 +401,35 @@ class HFMFNested(ReaderRequiredUnit):
         :param type_target:
         :return:
         """
+        # check nt level, we can run static or nested auto...
+        nt_level = self.cmd.mf1_detect_prng()
+        print(f" - NT vulnerable: {CY}{ self.from_nt_level_code_to_str(nt_level) }{C0}")
+        if nt_level == 2:
+            print(" [!] HardNested has not been implemented yet.")
+            return None
+
         # acquire
-        dist_obj = self.cmd.mf1_detect_nt_dist(block_known, type_known, key_known)
-        nt_obj = self.cmd.mf1_nested_acquire(block_known, type_known, key_known, block_target, type_target)
-        # create cmd
-        cmd_param = f"{dist_obj['uid']} {dist_obj['dist']}"
-        for nt_item in nt_obj:
-            cmd_param += f" {nt_item['nt']} {nt_item['nt_enc']} {nt_item['par']}"
-        if sys.platform == "win32":
-            cmd_recover = f"nested.exe {cmd_param}"
+        if nt_level == 0: # It's a staticnested tag?
+            nt_uid_obj = self.cmd.mf1_static_nested_acquire(block_known, type_known, key_known, block_target, type_target)
+            cmd_param = f"{nt_uid_obj['uid']} {str(type_target)}" 
+            for nt_item in nt_uid_obj['nts']:
+                cmd_param += f" {nt_item['nt']} {nt_item['nt_enc']}"
+            decryptor_name = "staticnested"
         else:
-            cmd_recover = f"./nested {cmd_param}"
+            dist_obj = self.cmd.mf1_detect_nt_dist(block_known, type_known, key_known)
+            nt_obj = self.cmd.mf1_nested_acquire(block_known, type_known, key_known, block_target, type_target)
+            # create cmd
+            cmd_param = f"{dist_obj['uid']} {dist_obj['dist']}" 
+            for nt_item in nt_obj:
+                cmd_param += f" {nt_item['nt']} {nt_item['nt_enc']} {nt_item['par']}"
+            decryptor_name = "nested"
+        
+        # Cross-platform compatibility
+        if sys.platform == "win32":
+            cmd_recover = f"{decryptor_name}.exe {cmd_param}"
+        else:
+            cmd_recover = f"./{decryptor_name} {cmd_param}"
+
         print(f"   Executing {cmd_recover}")
         # start a decrypt process
         process = self.sub_process(cmd_recover)
@@ -489,6 +517,10 @@ class HFMFDarkside(ReaderRequiredUnit):
                 print(f"Darkside error: {chameleon_cmd.MifareClassicDarksideStatus(darkside_resp[0])}")
                 break
             darkside_obj = darkside_resp[1]
+            
+            if darkside_obj['par'] != 0:  # NXP tag workaround.
+                self.darkside_list.clear()
+
             self.darkside_list.append(darkside_obj)
             recover_params = f"{darkside_obj['uid']}"
             for darkside_item in self.darkside_list:

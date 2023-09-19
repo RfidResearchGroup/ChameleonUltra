@@ -64,6 +64,7 @@
 #define DATA_CMD_MF1_AUTH_ONE_KEY_BLOCK         (2007)
 #define DATA_CMD_MF1_READ_ONE_BLOCK             (2008)
 #define DATA_CMD_MF1_WRITE_ONE_BLOCK            (2009)
+#define DATA_CMD_MF1_STATIC_NESTED_ACQUIRE      (2010)
 //
 // ******************************************************************
 
