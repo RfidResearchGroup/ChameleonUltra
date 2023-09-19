@@ -72,7 +72,7 @@ Below we will explain in detail how we exploited the performance of the NRF52840
 | Other than <125KHz/ASK/PSK/FSK> |      No       |                            No | No                        |                   No                   | Only 125 khz RF, Modulation ASK, FSK and PSK. |
 | EM410x                   |      ASK      |                       Support | Support                   |                Support                 |                   EM4100 is support(AD 64bit) |
 | T5577                    |      ASK      |                       Support | Support                   |          Not yet implemented           |                                               |
-| EM4306                    |      ASK      |                       Support | Support                   |          Not yet implemented           |                                               |
+| EM4305                   |      ASK      |                       Support | Support                   |          Not yet implemented           |                                               |
 | HID Prox                 |      FSK      |                       Support | Support                   |          Not yet implemented           |                                               |
 | Indala                   |      PSK      |                       Support | Support                   |          Not yet implemented           |                                               |
 | FDX-B                    |      ASK      |                       Support | Support                   |          Not yet implemented           |                                               |
