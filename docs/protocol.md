@@ -222,8 +222,8 @@ Notes:
   * `darkside_status`
   * `uid[4]` U32 (format expected by `darkside` tool)
   * `nt1[4]` U32
-  * `par[4]` U64
-  * `ks1[4]` U64
+  * `par[8]` U64
+  * `ks1[8]` U64
   * `nr[4]` U32
   * `ar[4]` U32
 * CLI: cf `hf mf darkside`
