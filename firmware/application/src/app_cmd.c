@@ -256,15 +256,6 @@ static data_frame_tx_t *cmd_processor_mf1_detect_prng(uint16_t cmd, uint16_t sta
     return data_frame_make(cmd, HF_TAG_OK, sizeof(type), &type);
 }
 
-static data_frame_tx_t *cmd_processor_mf1_detect_darkside(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t darkside_status;
-    status = check_darkside_support((mf1_darkside_status_t *)&darkside_status);
-    if (status != HF_TAG_OK) {
-        return data_frame_make(cmd, status, 0, NULL);
-    }
-    return data_frame_make(cmd, HF_TAG_OK, sizeof(darkside_status), &darkside_status);
-}
-
 static data_frame_tx_t *cmd_processor_mf1_darkside_acquire(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length != 4) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
@@ -938,8 +929,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_HF14A_SCAN,                   before_hf_reader_run,        cmd_processor_hf14a_scan,                    after_hf_reader_run    },
     {    DATA_CMD_MF1_DETECT_SUPPORT,           before_hf_reader_run,        cmd_processor_mf1_detect_support,            after_hf_reader_run    },
     {    DATA_CMD_MF1_DETECT_PRNG,              before_hf_reader_run,        cmd_processor_mf1_detect_prng,               after_hf_reader_run    },
-    {    DATA_CMD_MF1_DETECT_DARKSIDE,          before_hf_reader_run,        cmd_processor_mf1_detect_darkside,           after_hf_reader_run    },
-
+    {    DATA_CMD_MF1_STATIC_NESTED_ACQUIRE,    before_hf_reader_run,        cmd_processor_mf1_static_nested_acquire,     after_hf_reader_run    },
     {    DATA_CMD_MF1_DARKSIDE_ACQUIRE,         before_hf_reader_run,        cmd_processor_mf1_darkside_acquire,          after_hf_reader_run    },
     {    DATA_CMD_MF1_DETECT_NT_DIST,           before_hf_reader_run,        cmd_processor_mf1_detect_nt_dist,            after_hf_reader_run    },
     {    DATA_CMD_MF1_NESTED_ACQUIRE,           before_hf_reader_run,        cmd_processor_mf1_nested_acquire,            after_hf_reader_run    },
@@ -947,7 +937,6 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_AUTH_ONE_KEY_BLOCK,       before_hf_reader_run,        cmd_processor_mf1_auth_one_key_block,        after_hf_reader_run    },
     {    DATA_CMD_MF1_READ_ONE_BLOCK,           before_hf_reader_run,        cmd_processor_mf1_read_one_block,            after_hf_reader_run    },
     {    DATA_CMD_MF1_WRITE_ONE_BLOCK,          before_hf_reader_run,        cmd_processor_mf1_write_one_block,           after_hf_reader_run    },
-    {    DATA_CMD_MF1_STATIC_NESTED_ACQUIRE,    before_hf_reader_run,        cmd_processor_mf1_static_nested_acquire,     after_hf_reader_run    },
 
     {    DATA_CMD_EM410X_SCAN,                  before_reader_run,           cmd_processor_em410x_scan,                   NULL                   },
     {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_em410x_write_to_t55XX,         NULL                   },

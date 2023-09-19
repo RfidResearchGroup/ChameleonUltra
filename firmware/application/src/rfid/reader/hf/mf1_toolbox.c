@@ -570,20 +570,6 @@ void antenna_switch_delay(uint32_t delay_ms) {
 }
 
 /**
-* @brief    :Determine whether this card supports DARKSIDE attack
-* @retval   : If support, return hf_tag_ok and darkside_status = OK. If it is not supported,
-* Return to the results of abnormal results during the detection process in darkside_status
-*              Or other card -related communication errors, the most common is loss card HF_TAG_NO
-*
-*/
-uint8_t check_darkside_support(mf1_darkside_status_t *darkside_status) {
-    // Instantiated parameter
-    DarksideCore_t dc;
-    //Determine and return the result directly
-    return darkside_recover_key(0x03, PICC_AUTHENT1A, true, 0x15, &dc, darkside_status);
-}
-
-/**
 * @brief    : Determine whether this card supports M1 verification steps
 * @retval   : If support, it will return hf_tag_ok,
 *              If it is not supported, returns the corresponding error code

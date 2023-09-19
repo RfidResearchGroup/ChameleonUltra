@@ -57,14 +57,13 @@
 #define DATA_CMD_HF14A_SCAN                     (2000)
 #define DATA_CMD_MF1_DETECT_SUPPORT             (2001)
 #define DATA_CMD_MF1_DETECT_PRNG                (2002)
-#define DATA_CMD_MF1_DETECT_DARKSIDE            (2003)
+#define DATA_CMD_MF1_STATIC_NESTED_ACQUIRE      (2003)
 #define DATA_CMD_MF1_DARKSIDE_ACQUIRE           (2004)
 #define DATA_CMD_MF1_DETECT_NT_DIST             (2005)
 #define DATA_CMD_MF1_NESTED_ACQUIRE             (2006)
 #define DATA_CMD_MF1_AUTH_ONE_KEY_BLOCK         (2007)
 #define DATA_CMD_MF1_READ_ONE_BLOCK             (2008)
 #define DATA_CMD_MF1_WRITE_ONE_BLOCK            (2009)
-#define DATA_CMD_MF1_STATIC_NESTED_ACQUIRE      (2010)
 //
 // ******************************************************************
 

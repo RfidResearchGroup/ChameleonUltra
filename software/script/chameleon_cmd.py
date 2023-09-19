@@ -61,15 +61,13 @@ DATA_CMD_SET_BLE_PAIRING_ENABLE = 1037
 DATA_CMD_HF14A_SCAN = 2000
 DATA_CMD_MF1_DETECT_SUPPORT = 2001
 DATA_CMD_MF1_DETECT_PRNG = 2002
-# FIXME: implemented but unused in CLI commands
-DATA_CMD_MF1_DETECT_DARKSIDE = 2003
+DATA_CMD_MF1_STATIC_NESTED_ACQUIRE = 2003
 DATA_CMD_MF1_DARKSIDE_ACQUIRE = 2004
 DATA_CMD_MF1_DETECT_NT_DIST = 2005
 DATA_CMD_MF1_NESTED_ACQUIRE = 2006
 DATA_CMD_MF1_AUTH_ONE_KEY_BLOCK = 2007
 DATA_CMD_MF1_READ_ONE_BLOCK = 2008
 DATA_CMD_MF1_WRITE_ONE_BLOCK = 2009
-DATA_CMD_MF1_STATIC_NESTED_ACQUIRE = 2010
 
 DATA_CMD_EM410X_SCAN = 3000
 DATA_CMD_EM410X_WRITE_TO_T55XX = 3001
@@ -461,17 +459,6 @@ class ChameleonCMD:
         :return:
         """
         resp = self.device.send_cmd_sync(DATA_CMD_MF1_DETECT_PRNG)
-        if resp.status == chameleon_status.Device.HF_TAG_OK:
-            resp.data = resp.data[0]
-        return resp
-
-    @expect_response(chameleon_status.Device.HF_TAG_OK)
-    def mf1_detect_darkside_support(self):
-        """
-        Check if the card is vulnerable to mifare classic darkside attack
-        :return:
-        """
-        resp = self.device.send_cmd_sync(DATA_CMD_MF1_DETECT_DARKSIDE, timeout=20)
         if resp.status == chameleon_status.Device.HF_TAG_OK:
             resp.data = resp.data[0]
         return resp

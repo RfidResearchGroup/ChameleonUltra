@@ -211,10 +211,10 @@ Notes:
 * Command: no data
 * Response: 1 byte, according to `mf1_nested_type_t` enum
 * CLI: cf `hf 14a info`
-### 2003: MF1_DETECT_DARKSIDE
-* Command: no data
-* Response: 1 byte, according to `mf1_darkside_status_t` enum
-* CLI: unused
+### 2003: MF1_STATIC_NESTED_ACQUIRE
+* Command: 10 bytes: `type_known|block_known|key_known[6]|type_target|block_target`. Key as 6 bytes.
+* Response: 4+N*8 bytes: `uid[4]` followed by N tuples of `nt[4]|nt_enc[4]`. All values as U32.
+* CLI: cf `hf mf nested` on static nonce tag
 ### 2004: MF1_DARKSIDE_ACQUIRE
 * Command: 4 bytes: `type_target|block_target|first_recover|sync_max`
 * Response: 1 byte if Darkside failed, according to `mf1_darkside_status_t` enum,
