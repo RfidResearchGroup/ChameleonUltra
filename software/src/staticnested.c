@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
-
+#include "common.h"
 #include "nested_util.h"
 
 int main(int argc, char *const argv[]) {
