@@ -61,7 +61,7 @@ def expect_response(accepted_responses: Union[int, list[int]]):
                 else:
                     raise UnexpectedResponseError(
                         f"Unexpected response and unknown status {ret.status}")
-    
+
             return ret.data
 
         return error_throwing_func

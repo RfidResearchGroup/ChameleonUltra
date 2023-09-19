@@ -273,7 +273,7 @@ static uint8_t darkside_select_nonces(picc_14a_tag_t *tag, uint8_t block, uint8_
     //Random number collection
     for (i = 0; i < NT_COUNT; i++) {
         bsp_wdt_feed();
-        while(NRF_LOG_PROCESS());
+        while (NRF_LOG_PROCESS());
         //When the antenna is reset, we must make sure
         // 1. The antenna is powered off for a long time to ensure that the card is completely powered off, otherwise the pseudo -random number generator of the card cannot be reset
         // 2. Moderate power -off time, don't be too long, it will affect efficiency, and don't be too short.
@@ -419,7 +419,7 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
     // Always collect different NACK under a large cycle
     do {
         bsp_wdt_feed();
-        while(NRF_LOG_PROCESS());
+        while (NRF_LOG_PROCESS());
         // update LEDs
         led_toggle ^= 1;
         if (led_toggle) {
@@ -492,7 +492,7 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
         resync_count = 0;
 
         if (len == 4) {
-            NRF_LOG_INFO("NACK acquired (%i/8)", nt_diff+1);
+            NRF_LOG_INFO("NACK acquired (%i/8)", nt_diff + 1);
             received_nack = 1;
         } else if (len == 32) {
             // did we get lucky and got our dummy key to be valid?
@@ -928,80 +928,80 @@ uint8_t nested_distance_detect(uint8_t block, uint8_t type, uint8_t *key, uint8_
 }
 
 /**
-* @brief 	: StaticNested core, used to collect NT. 
+* @brief    : StaticNested core, used to collect NT.
 *               This function is only responsible for collection and is not responsible for converting and parsing to KS.
-* @param 	:p_nt1 	  	 : NT1, non encrypted.
-* @param 	:p_nt2 	  	 : NT2, encrypted.
-* @param 	:keyKnown 	 : U64 value of the known key of the card 
-* @param 	:blkKnown 	 : The sector to which the card's known secret key belongs
-* @param 	:typKnown 	 : The known key type of the card, 0x60 (A key) or 0x61 (B key)
-* @param 	:targetBlock : Target sectors that require nested attacks
-* @param 	:targetType	 : Target key types that require nested attacks
-* @param 	:nestedAgain : StaticNested enhanced vulnerability, which can obtain two sets of encrypted random numbers based on nested verification of known keys
-* @retval	: Successfully collected and returned to HF_TAG_OK, otherwise an error code will be returned.
+* @param    :p_nt1       : NT1, non encrypted.
+* @param    :p_nt2       : NT2, encrypted.
+* @param    :keyKnown    : U64 value of the known key of the card
+* @param    :blkKnown    : The sector to which the card's known secret key belongs
+* @param    :typKnown    : The known key type of the card, 0x60 (A key) or 0x61 (B key)
+* @param    :targetBlock : Target sectors that require nested attacks
+* @param    :targetType  : Target key types that require nested attacks
+* @param    :nestedAgain : StaticNested enhanced vulnerability, which can obtain two sets of encrypted random numbers based on nested verification of known keys
+* @retval   : Successfully collected and returned to HF_TAG_OK, otherwise an error code will be returned.
 *
 */
 uint8_t static_nested_recover_core(uint8_t *p_nt1, uint8_t *p_nt2, uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown, uint8_t targetBlock, uint8_t targetType, uint8_t nestedAgain) {
     struct Crypto1State mpcs = {0, 0};
-	struct Crypto1State *pcs = &mpcs;
-	uint8_t status, len;
-	uint8_t parity[4] = {0x00};
-	uint8_t answer[4] = {0x00};
-	uint32_t uid, nt1, nt2;
-	uid = get_u32_tag_uid(p_tag_info);
-	pcd_14a_reader_halt_tag();
-	if (pcd_14a_reader_scan_auto(p_tag_info) != HF_TAG_OK) {
-		return HF_TAG_NO;
-	}
-	status = authex(pcs, uid, blkKnown, typKnown, keyKnown, AUTH_FIRST, &nt1);
-	if (status != HF_TAG_OK) {
-		return MF_ERR_AUTH;
-	}
-	if (nestedAgain) {
-		status = authex(pcs, uid, blkKnown, typKnown, keyKnown, AUTH_NESTED, NULL);
-		if (status != HF_TAG_OK) {
-			return MF_ERR_AUTH;
-		}
-	}
-	len = send_cmd(pcs, AUTH_NESTED, targetType, targetBlock, &status, answer, parity, U8ARR_BIT_LEN(answer));
-	if (len != 32) {
-		NRF_LOG_INFO("No 32 data recv on sendcmd: %d\r\n", len);
-		return HF_ERR_STAT;
-	}
-	nt2 = bytes_to_num(answer, 4);
-	num_to_bytes(nt1, 4, p_nt1);
-	num_to_bytes(nt2, 4, p_nt2);
-	return HF_TAG_OK;
+    struct Crypto1State *pcs = &mpcs;
+    uint8_t status, len;
+    uint8_t parity[4] = {0x00};
+    uint8_t answer[4] = {0x00};
+    uint32_t uid, nt1, nt2;
+    uid = get_u32_tag_uid(p_tag_info);
+    pcd_14a_reader_halt_tag();
+    if (pcd_14a_reader_scan_auto(p_tag_info) != HF_TAG_OK) {
+        return HF_TAG_NO;
+    }
+    status = authex(pcs, uid, blkKnown, typKnown, keyKnown, AUTH_FIRST, &nt1);
+    if (status != HF_TAG_OK) {
+        return MF_ERR_AUTH;
+    }
+    if (nestedAgain) {
+        status = authex(pcs, uid, blkKnown, typKnown, keyKnown, AUTH_NESTED, NULL);
+        if (status != HF_TAG_OK) {
+            return MF_ERR_AUTH;
+        }
+    }
+    len = send_cmd(pcs, AUTH_NESTED, targetType, targetBlock, &status, answer, parity, U8ARR_BIT_LEN(answer));
+    if (len != 32) {
+        NRF_LOG_INFO("No 32 data recv on sendcmd: %d\r\n", len);
+        return HF_ERR_STAT;
+    }
+    nt2 = bytes_to_num(answer, 4);
+    num_to_bytes(nt1, 4, p_nt1);
+    num_to_bytes(nt2, 4, p_nt2);
+    return HF_TAG_OK;
 }
 
 /**
-* @brief 	: StaticNested encapsulates and calls the functions implemented by the core to collect 2 sets of random numbers. 
+* @brief    : StaticNested encapsulates and calls the functions implemented by the core to collect 2 sets of random numbers.
 *               This function is only responsible for collection and is not responsible for converting and parsing to KS.
-* @param 	:keyKnown 	 : U64 value of the known key of the card 
-* @param 	:blkKnown 	 : The sector to which the card's known secret key belongs
-* @param 	:typKnown 	 : The known key type of the card, 0x60 (A key) or 0x61 (B key)
-* @param 	:targetBlock : Target sectors that require nested attacks
-* @param 	:targetType	 : Target key type that require nested attacks
-* @param 	:sncs 	  	 : StaticNested Decrypting Core Structure Array
-* @retval	: Successfully collected and returned to HF_TAG_OK, otherwise an error code will be returned.
+* @param    :keyKnown    : U64 value of the known key of the card
+* @param    :blkKnown    : The sector to which the card's known secret key belongs
+* @param    :typKnown    : The known key type of the card, 0x60 (A key) or 0x61 (B key)
+* @param    :targetBlock : Target sectors that require nested attacks
+* @param    :targetType  : Target key type that require nested attacks
+* @param    :sncs        : StaticNested Decrypting Core Structure Array
+* @retval   : Successfully collected and returned to HF_TAG_OK, otherwise an error code will be returned.
 *
 */
-uint8_t static_nested_recover_key(uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown, uint8_t targetBlock, uint8_t targetType, mf1_static_nested_core_t* sncs) {
-	uint8_t res;
-	res = pcd_14a_reader_scan_auto(p_tag_info);
-	if (res!= HF_TAG_OK) {
-		return res;
-	}
-	get_4byte_tag_uid(p_tag_info, sncs->uid);
-	res = static_nested_recover_core(sncs->core[0].nt1, sncs->core[0].nt2, keyKnown, blkKnown, typKnown, targetBlock, targetType, false);
-	if (res != HF_TAG_OK) {
-		return res;
-	}
-	res = static_nested_recover_core(sncs->core[1].nt1, sncs->core[1].nt2, keyKnown, blkKnown, typKnown, targetBlock, targetType, true);
-	if (res != HF_TAG_OK) {
-		return res;
-	}
-	return HF_TAG_OK;
+uint8_t static_nested_recover_key(uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown, uint8_t targetBlock, uint8_t targetType, mf1_static_nested_core_t *sncs) {
+    uint8_t res;
+    res = pcd_14a_reader_scan_auto(p_tag_info);
+    if (res != HF_TAG_OK) {
+        return res;
+    }
+    get_4byte_tag_uid(p_tag_info, sncs->uid);
+    res = static_nested_recover_core(sncs->core[0].nt1, sncs->core[0].nt2, keyKnown, blkKnown, typKnown, targetBlock, targetType, false);
+    if (res != HF_TAG_OK) {
+        return res;
+    }
+    res = static_nested_recover_core(sncs->core[1].nt1, sncs->core[1].nt2, keyKnown, blkKnown, typKnown, targetBlock, targetType, true);
+    if (res != HF_TAG_OK) {
+        return res;
+    }
+    return HF_TAG_OK;
 }
 
 /**

@@ -489,7 +489,6 @@ class ChameleonCMD:
                          for nt, nt_enc, par in struct.iter_unpack('!IIB', resp.data)]
         return resp
 
-
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def mf1_darkside_acquire(self, block_target, type_target, first_recover: int or bool, sync_max):
         """
@@ -550,7 +549,7 @@ class ChameleonCMD:
         resp = self.device.send_cmd_sync(DATA_CMD_MF1_WRITE_ONE_BLOCK, data)
         resp.data = resp.status == chameleon_status.Device.HF_TAG_OK
         return resp
-    
+
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def mf1_static_nested_acquire(self, block_known, type_known, key_known, block_target, type_target):
         """
@@ -564,7 +563,7 @@ class ChameleonCMD:
                 'uid': struct.unpack('!I', resp.data[0:4])[0],
                 'nts': [
                     {
-                        'nt': nt, 
+                        'nt': nt,
                         'nt_enc': nt_enc
                     } for nt, nt_enc in struct.iter_unpack('!II', resp.data[4:])
                 ]
@@ -1047,20 +1046,20 @@ class ChameleonCMD:
         if resp.status == chameleon_status.Device.STATUS_DEVICE_SUCCESS:
             if resp.data[0] > CURRENT_VERSION_SETTINGS:
                 raise ValueError("Settings version in app older than Chameleon. "
-                                "Please upgrade client")
+                                 "Please upgrade client")
             if resp.data[0] < CURRENT_VERSION_SETTINGS:
                 raise ValueError("Settings version in app newer than Chameleon. "
-                                "Please upgrade Chameleon firmware")
+                                 "Please upgrade Chameleon firmware")
             settings_version, animation_mode, btn_press_A, btn_press_B, btn_long_press_A, btn_long_press_B, ble_pairing_enable, ble_pairing_key = struct.unpack(
                 '!BBBBBBB6s', resp.data)
             resp.data = {'settings_version': settings_version,
-                        'animation_mode': animation_mode,
-                        'btn_press_A': btn_press_A,
-                        'btn_press_B': btn_press_B,
-                        'btn_long_press_A': btn_long_press_A,
-                        'btn_long_press_B': btn_long_press_B,
-                        'ble_pairing_enable': ble_pairing_enable,
-                        'ble_pairing_key': ble_pairing_key}
+                         'animation_mode': animation_mode,
+                         'btn_press_A': btn_press_A,
+                         'btn_press_B': btn_press_B,
+                         'btn_long_press_A': btn_long_press_A,
+                         'btn_long_press_B': btn_long_press_B,
+                         'ble_pairing_enable': ble_pairing_enable,
+                         'ble_pairing_key': ble_pairing_key}
         return resp
 
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)

@@ -25,10 +25,10 @@ typedef struct {
 } countKeys;
 
 typedef struct {
-    NtpKs1* pNK;
+    NtpKs1 *pNK;
     uint32_t authuid;
 
-    uint64_t* keys;
+    uint64_t *keys;
     uint32_t keyCount;
 
     uint32_t startPos;
@@ -36,20 +36,20 @@ typedef struct {
 } RecPar;
 
 
-int compar_int(const void* a, const void* b) {
-    return (*(uint64_t*)b - *(uint64_t*)a);
+int compar_int(const void *a, const void *b) {
+    return (*(uint64_t *)b - * (uint64_t *)a);
 }
 
 // Compare countKeys structure
-int compar_special_int(const void* a, const void* b) {
-    return (((countKeys*)b)->count - ((countKeys*)a)->count);
+int compar_special_int(const void *a, const void *b) {
+    return (((countKeys *)b)->count - ((countKeys *)a)->count);
 }
 
 // keys qsort and unique.
-countKeys* uniqsort(uint64_t* possibleKeys, uint32_t size) {
+countKeys *uniqsort(uint64_t *possibleKeys, uint32_t size) {
     unsigned int i, j = 0;
     int count = 0;
-    countKeys* our_counts;
+    countKeys *our_counts;
 
     qsort(possibleKeys, size, sizeof(uint64_t), compar_int);
 
@@ -62,8 +62,7 @@ countKeys* uniqsort(uint64_t* possibleKeys, uint32_t size) {
     for (i = 0; i < size; i++) {
         if (possibleKeys[i + 1] == possibleKeys[i]) {
             count++;
-        }
-        else {
+        } else {
             our_counts[j].key = possibleKeys[i];
             our_counts[j].count = count;
             j++;
@@ -75,8 +74,8 @@ countKeys* uniqsort(uint64_t* possibleKeys, uint32_t size) {
 }
 
 // nested decrypt
-static void nested_revover(RecPar* rp) {
-    struct Crypto1State* revstate, * revstate_start = NULL;
+static void nested_revover(RecPar *rp) {
+    struct Crypto1State *revstate, * revstate_start = NULL;
     uint64_t lfsr = 0;
     uint32_t i, kcount = 0;
 
@@ -98,14 +97,14 @@ static void nested_revover(RecPar* rp) {
             if (((kcount % MEM_CHUNK) == 0) || (kcount >= rp->keyCount)) {
                 rp->keyCount += MEM_CHUNK;
                 // printf("New chunk by %d, sizeof %lu\n", kcount, key_count * sizeof(uint64_t));
-                void* tmp = realloc(rp->keys, rp->keyCount * sizeof(uint64_t));
+                void *tmp = realloc(rp->keys, rp->keyCount * sizeof(uint64_t));
                 if (tmp == NULL) {
                     printf("Memory allocation error for pk->possibleKeys");
                     // exit(EXIT_FAILURE);
                     rp->keyCount = 0;
                     return;
                 }
-                rp->keys = (uint64_t*)tmp;
+                rp->keys = (uint64_t *)tmp;
             }
             rp->keys[kcount] = lfsr;
             kcount++;
@@ -117,7 +116,7 @@ static void nested_revover(RecPar* rp) {
     // Truncate
     if (kcount != 0) {
         rp->keyCount = --kcount;
-        void* tmp = (uint64_t*)realloc(rp->keys, rp->keyCount * sizeof(uint64_t));
+        void *tmp = (uint64_t *)realloc(rp->keys, rp->keyCount * sizeof(uint64_t));
         if (tmp == NULL) {
             printf("Memory allocation error for pk->possibleKeys");
             // exit(EXIT_FAILURE);
@@ -131,11 +130,11 @@ static void nested_revover(RecPar* rp) {
     return;
 }
 
-uint64_t* nested(NtpKs1* pNK, uint32_t sizePNK, uint32_t authuid, uint32_t* keyCount) {
+uint64_t *nested(NtpKs1 *pNK, uint32_t sizePNK, uint32_t authuid, uint32_t *keyCount) {
     *keyCount = 0;
     uint32_t i;
 
-    RecPar* pRPs = malloc(sizeof(RecPar));
+    RecPar *pRPs = malloc(sizeof(RecPar));
     if (pRPs == NULL) {
         return NULL;
     }
@@ -149,7 +148,7 @@ uint64_t* nested(NtpKs1* pNK, uint32_t sizePNK, uint32_t authuid, uint32_t* keyC
     nested_revover(pRPs);
     *keyCount = pRPs->keyCount;
 
-    uint64_t* keys = NULL;
+    uint64_t *keys = NULL;
     if (*keyCount != 0) {
         keys = malloc(*keyCount * sizeof(uint64_t));
         if (keys != NULL) {
@@ -159,9 +158,9 @@ uint64_t* nested(NtpKs1* pNK, uint32_t sizePNK, uint32_t authuid, uint32_t* keyC
     }
     free(pRPs);
 
-    countKeys* ck = uniqsort(keys, *keyCount);
+    countKeys *ck = uniqsort(keys, *keyCount);
     free(keys);
-    keys = (uint64_t*)NULL;
+    keys = (uint64_t *)NULL;
     *keyCount = 0;
 
     if (ck != NULL) {
@@ -170,30 +169,28 @@ uint64_t* nested(NtpKs1* pNK, uint32_t sizePNK, uint32_t authuid, uint32_t* keyC
             // This key can be found here two or more times
             if (ck[i].count > 0) {
                 *keyCount += 1;
-                void* tmp = realloc(keys, sizeof(uint64_t) * (*keyCount));
+                void *tmp = realloc(keys, sizeof(uint64_t) * (*keyCount));
                 if (tmp != NULL) {
                     keys = tmp;
                     keys[*keyCount - 1] = ck[i].key;
-                }
-                else {
+                } else {
                     printf("Cannot allocate memory for keys on merge.");
                     free(keys);
                     break;
                 }
             }
         }
-    }
-    else {
+    } else {
         printf("Cannot allocate memory for ck on uniqsort.");
     }
     return keys;
 }
 
 // Return 1 if the nonce is invalid else return 0
-uint8_t valid_nonce(uint32_t Nt, uint32_t NtEnc, uint32_t Ks1, uint8_t* parity) {
+uint8_t valid_nonce(uint32_t Nt, uint32_t NtEnc, uint32_t Ks1, uint8_t *parity) {
     return (
-        (oddparity8((Nt >> 24) & 0xFF) == ((parity[0]) ^ oddparity8((NtEnc >> 24) & 0xFF) ^ BIT(Ks1, 16))) && \
-        (oddparity8((Nt >> 16) & 0xFF) == ((parity[1]) ^ oddparity8((NtEnc >> 16) & 0xFF) ^ BIT(Ks1, 8))) && \
-        (oddparity8((Nt >> 8) & 0xFF) == ((parity[2]) ^ oddparity8((NtEnc >> 8) & 0xFF) ^ BIT(Ks1, 0)))
-        ) ? 1 : 0;
+               (oddparity8((Nt >> 24) & 0xFF) == ((parity[0]) ^ oddparity8((NtEnc >> 24) & 0xFF) ^ BIT(Ks1, 16))) && \
+               (oddparity8((Nt >> 16) & 0xFF) == ((parity[1]) ^ oddparity8((NtEnc >> 16) & 0xFF) ^ BIT(Ks1, 8))) && \
+               (oddparity8((Nt >> 8) & 0xFF) == ((parity[2]) ^ oddparity8((NtEnc >> 8) & 0xFF) ^ BIT(Ks1, 0)))
+           ) ? 1 : 0;
 }

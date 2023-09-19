@@ -32,7 +32,7 @@ typedef struct {            //Answer the random number parameters required for N
 } mf1_nested_core_t;
 
 typedef struct {
-	uint8_t uid[4];
+    uint8_t uid[4];
     struct {
         uint8_t nt1[4];
         uint8_t nt2[4];
@@ -88,7 +88,7 @@ uint8_t nested_distance_detect(
     uint8_t targetType        \
 
 uint8_t nested_recover_key(NESTED_CORE_PARAM_DEF, mf1_nested_core_t ncs[SETS_NR]);
-uint8_t static_nested_recover_key(NESTED_CORE_PARAM_DEF, mf1_static_nested_core_t* sncs);
+uint8_t static_nested_recover_key(NESTED_CORE_PARAM_DEF, mf1_static_nested_core_t *sncs);
 
 uint8_t check_prng_type(mf1_prng_type_t *type);
 uint8_t check_std_mifare_nt_support(bool *support);

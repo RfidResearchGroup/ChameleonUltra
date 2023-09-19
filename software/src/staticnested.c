@@ -30,11 +30,9 @@ int main(int argc, char *const argv[]) {
                 // We found that the gen2 tag is vulnerable too but parameter must be adapted depending on the attacked key
                 if (type == 0x61) {
                     dist = 161;
-                }
-                else if (type == 0x60) {
+                } else if (type == 0x60) {
                     dist = 160;
-                }
-                else {
+                } else {
                     // can't be here!!!
                     goto error;
                 }
@@ -50,7 +48,7 @@ int main(int argc, char *const argv[]) {
         ++j;
         dist += 160;
 
-        void* tmp = realloc(pNK, sizeof(NtpKs1) * j);
+        void *tmp = realloc(pNK, sizeof(NtpKs1) * j);
         if (tmp == NULL) {
             goto error;
         }
