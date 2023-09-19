@@ -218,12 +218,12 @@ Notes:
 ### 2004: MF1_DARKSIDE_ACQUIRE
 * Command: 4 bytes: `type_target|block_target|first_recover|sync_max`
 * Response: 1 byte if Darkside failed, according to `mf1_darkside_status_t` enum,
-  else 25 bytes `darkside_status|uid[4]|nt1[4]|par[4]|ks1[4]|nr[4]|ar[4]`
+  else 33 bytes `darkside_status|uid[4]|nt1[4]|par[8]|ks1[8]|nr[4]|ar[4]`
   * `darkside_status`
   * `uid[4]` U32 (format expected by `darkside` tool)
   * `nt1[4]` U32
-  * `par[4]` U32
-  * `ks1[4]` U32
+  * `par[4]` U64
+  * `ks1[4]` U64
   * `nr[4]` U32
   * `ar[4]` U32
 * CLI: cf `hf mf darkside`

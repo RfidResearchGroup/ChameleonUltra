@@ -3,6 +3,8 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Removed MF1_DETECT_DARKSIDE (@doegox)
+ - Added MF1_STATIC_NESTED_ACQUIRE and its support in `hf mf nested` (@xianglin1998)
  - Changed `hf 14a scan`: Automatically send RATS to 14443-4a tags (@augustozanellato)
  - Changed Darkside: use LEDs for visual feedback of attack progression (@doegox)
  - Changed Darkside: longer RF field off for reset and longer CLI timeout (@doegox)
