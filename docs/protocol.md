@@ -34,9 +34,7 @@ Each command and response have their own payload formats.
 Standard response status is `STATUS_DEVICE_SUCCESS` for general commands, `HF_TAG_OK` for HF commands and `LF_TAG_OK` for LF commands.
 See [Guidelines](#new-data-payloads-guidelines-for-developers) for more info.
 
-* **TODO:** remap `tag_specific_type_t` enum. Maybe dissociate LF & HF types in 2 enums
 * **TODO:** num_to_bytes bytes_to_num
-* **TODO:** mf1_darkside_acquire /nested acquire deep PACKED struct...
 * **FIXME:** mf1_get_emulator_config with bits -> bytes (5) with 4 bools <> mf1_get_detection_log with bitfield (2)...
 
 Beware, slots in protocol count from 0 to 7 (and from 1 to 8 in the CLI...).
@@ -68,7 +66,7 @@ In the following list, "CLI" refers to one typical CLI command using the describ
 * Response: no data
 * CLI: cf `hw slot init`
 ### 1006: SET_SLOT_ENABLE
-* Command: 2 bytes. `slot_number|enable` with `slot_number` between 0 and 7 and `enable` = `0x01` to enable, `0x00` to disable
+* Command: 3 bytes. `slot_number|sense_type|enable` with `slot_number` between 0 and 7, `sense_type` according to `tag_sense_type_t` enum and `enable` = `0x01` to enable, `0x00` to disable
 * Response: no data
 * CLI: cf `hw slot enable`
 ### 1007: SET_SLOT_TAG_NICK
@@ -129,7 +127,7 @@ In the following list, "CLI" refers to one typical CLI command using the describ
 * CLI: cf `hw factory_reset`
 ### 1023: GET_ENABLED_SLOTS
 * Command: no data
-* Response: 8 bytes, 8 bool = `0x00` or `0x01`, for slots from 0 to 7
+* Response: 16 bytes, 8*2 bool = `0x00` or `0x01`, 2 bytes for each slot from 0 to 7, as `enabled_hf|enabled_lf`
 ### 1024: DELETE_SLOT_SENSE_TYPE
 * Command: 2 bytes. `slot_number|sense_type` with `slot_number` between 0 and 7 and `sense_type` according to `tag_sense_type_t` enum.
 * Response: no data
@@ -227,7 +225,6 @@ Notes:
   * `nr[4]` U32
   * `ar[4]` U32
 * CLI: cf `hf mf darkside`
-* **FIXME:** always `CANT_FIX_NT` or watchdog reset on static nonce cards
 ### 2005: MF1_DETECT_NT_DIST
 * Command: 8 bytes: `type_known|block_known|key_known[6]`. Key as 6 bytes.
 * Response: 8 bytes: `uid[4]|dist[4]`

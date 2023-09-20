@@ -570,8 +570,8 @@ static void btn_fn_copy_ic_uid(void) {
     uint8_t id_buffer[5] = { 0x00 };
     // get 14a tag res buffer;
     uint8_t slot_now = tag_emulation_get_slot();
-    tag_specific_type_t tag_type[2];
-    tag_emulation_get_specific_type_by_slot(slot_now, tag_type);
+    tag_slot_specific_type_t tag_types;
+    tag_emulation_get_specific_types_by_slot(slot_now, &tag_types);
 
     nfc_tag_14a_coll_res_entity_t *antres;
 
@@ -584,7 +584,7 @@ static void btn_fn_copy_ic_uid(void) {
         NRF_LOG_INFO("Start reader mode to offline copy.")
     }
 
-    switch (tag_type[1]) {
+    switch (tag_types.tag_lf) {
         case TAG_TYPE_EM410X:
             status = PcdScanEM410X(id_buffer);
 
@@ -599,7 +599,7 @@ static void btn_fn_copy_ic_uid(void) {
                 offline_status_error();
             }
             break;
-        case TAG_TYPE_UNKNOWN:
+        case TAG_TYPE_UNDEFINED:
             // empty LF slot, nothing to do, move on to HF
             break;
         default:
@@ -607,8 +607,8 @@ static void btn_fn_copy_ic_uid(void) {
             offline_status_error();
     }
 
-    tag_data_buffer_t *buffer = get_buffer_by_tag_type(tag_type[0]);
-    switch (tag_type[0]) {
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(tag_types.tag_hf);
+    switch (tag_types.tag_hf) {
         case TAG_TYPE_MIFARE_Mini:
         case TAG_TYPE_MIFARE_1024:
         case TAG_TYPE_MIFARE_2048:
@@ -626,7 +626,7 @@ static void btn_fn_copy_ic_uid(void) {
             break;
         }
 
-        case TAG_TYPE_UNKNOWN:
+        case TAG_TYPE_UNDEFINED:
             // empty HF slot, nothing to do
             goto exit;
 

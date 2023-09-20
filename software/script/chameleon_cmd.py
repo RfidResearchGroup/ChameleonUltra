@@ -149,29 +149,92 @@ class TagSenseType(enum.IntEnum):
 
 @enum.unique
 class TagSpecificType(enum.IntEnum):
-    # Empty slot
-    TAG_TYPE_UNKNOWN = 0
-    # 125 kHz (id) cards
-    TAG_TYPE_EM410X = 1
-    # Mifare Classic
-    TAG_TYPE_MIFARE_Mini = 2
-    TAG_TYPE_MIFARE_1024 = 3
-    TAG_TYPE_MIFARE_2048 = 4
-    TAG_TYPE_MIFARE_4096 = 5
-    # NTAG
-    TAG_TYPE_NTAG_213 = 6
-    TAG_TYPE_NTAG_215 = 7
-    TAG_TYPE_NTAG_216 = 8
+    TAG_TYPE_UNDEFINED = 0,
+
+    # old HL/LF common types, slots using these ones need to be migrated first
+    OLD_TAG_TYPE_EM410X = 1,
+    OLD_TAG_TYPE_MIFARE_Mini = 2,
+    OLD_TAG_TYPE_MIFARE_1024 = 3,
+    OLD_TAG_TYPE_MIFARE_2048 = 4,
+    OLD_TAG_TYPE_MIFARE_4096 = 5,
+    OLD_TAG_TYPE_NTAG_213 = 6,
+    OLD_TAG_TYPE_NTAG_215 = 7,
+    OLD_TAG_TYPE_NTAG_216 = 8,
+    OLD_TAG_TYPES_END = 9,
+
+    ###### LF ######
+
+    #### ASK Tag-Talk-First   100
+    # EM410x
+    TAG_TYPE_EM410X = 100,
+    # FDX-B
+    # securakey
+    # gallagher
+    # PAC/Stanley
+    # Presco
+    # Visa2000
+    # Viking
+    # Noralsy
+    # Jablotron
+
+    #### FSK Tag-Talk-First   200
+    # HID Prox
+    # ioProx
+    # AWID
+    # Paradox
+
+    #### PSK Tag-Talk-First   300
+    # Indala
+    # Keri
+    # NexWatch
+
+    #### Reader-Talk-First    400
+    # T5577
+    # EM4x05/4x69
+    # EM4x50/4x70
+    # Hitag series
+
+    TAG_TYPES_LF_END = 999,
+
+    ###### HF ######
+
+    # MIFARE Classic series     1000
+    TAG_TYPE_MIFARE_Mini = 1000,
+    TAG_TYPE_MIFARE_1024 = 1001,
+    TAG_TYPE_MIFARE_2048 = 1002,
+    TAG_TYPE_MIFARE_4096 = 1003,
+    # MFUL / NTAG series        1100
+    TAG_TYPE_NTAG_213 = 1100,
+    TAG_TYPE_NTAG_215 = 1101,
+    TAG_TYPE_NTAG_216 = 1102,
+    # MIFARE Plus series        1200
+    # DESFire series            1300
+
+    # ST25TA series             2000
+
+    # HF14A-4 series            3000
 
     @staticmethod
-    def list(exclude_unknown=True):
-        enum_list = list(map(int, TagSpecificType))
-        if exclude_unknown:
-            enum_list.remove(TagSpecificType.TAG_TYPE_UNKNOWN)
-        return enum_list
+    def list(exclude_meta=True):
+        return [t for t in TagSpecificType
+                if (t > TagSpecificType.OLD_TAG_TYPES_END and 
+                    t != TagSpecificType.TAG_TYPES_LF_END)
+                    or not exclude_meta]
+
+    @staticmethod
+    def list_hf():
+        return [t for t in TagSpecificType.list()
+                if (t > TagSpecificType.TAG_TYPES_LF_END)]
+
+    @staticmethod
+    def list_lf():
+        return [t for t in TagSpecificType.list()
+                if (TagSpecificType.TAG_TYPE_UNDEFINED < t < TagSpecificType.TAG_TYPES_LF_END)]
 
     def __str__(self):
-        if self == TagSpecificType.TAG_TYPE_EM410X:
+        if self == TagSpecificType.TAG_TYPE_UNDEFINED:
+            return "Undefined"
+        elif self == TagSpecificType.TAG_TYPE_EM410X:
             return "EM410X"
         elif self == TagSpecificType.TAG_TYPE_MIFARE_Mini:
             return "Mifare Mini"
@@ -187,7 +250,9 @@ class TagSpecificType(enum.IntEnum):
             return "NTAG 215"
         elif self == TagSpecificType.TAG_TYPE_NTAG_216:
             return "NTAG 216"
-        return "Undefined"
+        elif self < TagSpecificType.OLD_TAG_TYPES_END:
+            return "Old tag type, must be migrated! Upgrade fw!"
+        return "Invalid"
 
 
 @enum.unique
@@ -648,8 +713,8 @@ class ChameleonCMD:
         """
         resp = self.device.send_cmd_sync(DATA_CMD_GET_SLOT_INFO)
         if resp.status == chameleon_status.Device.STATUS_DEVICE_SUCCESS:
-            resp.data = [struct.unpack_from('!HH', resp.data, i)
-                         for i in range(0, len(resp.data), struct.calcsize('!HH'))]
+            resp.data = [{'hf': hf, 'lf': lf}
+                         for hf, lf in struct.iter_unpack('!HH', resp.data)]
         return resp
 
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
@@ -713,7 +778,7 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_DATA_DEFAULT, data)
 
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
-    def set_slot_enable(self, slot_index: SlotNumber, enabled: bool):
+    def set_slot_enable(self, slot_index: SlotNumber, sense_type: TagSenseType, enabled: bool):
         """
         Set whether the specified card slot is enabled
         :param slot_index: Card slot number
@@ -721,7 +786,7 @@ class ChameleonCMD:
         :return:
         """
         # SlotNumber() will raise error for us if slot_index not in slot range
-        data = struct.pack('!BB', SlotNumber.to_fw(slot_index), enabled)
+        data = struct.pack('!BBB', SlotNumber.to_fw(slot_index), sense_type, enabled)
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_ENABLE, data)
 
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
@@ -933,7 +998,10 @@ class ChameleonCMD:
         """
         Get enabled slots
         """
-        return self.device.send_cmd_sync(DATA_CMD_GET_ENABLED_SLOTS)
+        resp = self.device.send_cmd_sync(DATA_CMD_GET_ENABLED_SLOTS)
+        if resp.status == chameleon_status.Device.STATUS_DEVICE_SUCCESS:
+            resp.data = [{'hf': hf, 'lf': lf} for hf, lf in struct.iter_unpack('!BB', resp.data)]
+        return resp
 
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def set_animation_mode(self, value: int):

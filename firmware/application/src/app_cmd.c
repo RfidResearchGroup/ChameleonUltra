@@ -412,10 +412,10 @@ static data_frame_tx_t *cmd_processor_hf14a_raw(uint16_t cmd, uint16_t status, u
             uint8_t auto_select : 1;
             uint8_t bit_frame : 1;
             uint8_t append_crc : 1;
-            uint8_t wait_response : 1; 
+            uint8_t wait_response : 1;
             uint8_t open_rf_field : 1;
         } options;
-        
+
         // U16NTOHS
         uint16_t resp_timeout;
         uint16_t data_length;
@@ -435,16 +435,16 @@ static data_frame_tx_t *cmd_processor_hf14a_raw(uint16_t cmd, uint16_t status, u
     NRF_LOG_INFO("keep_rf_field      = %d", payload->options.keep_rf_field);
     NRF_LOG_INFO("check_response_crc = %d", payload->options.check_response_crc);
     NRF_LOG_INFO("reserved           = %d", payload->options.reserved);
-    
+
     status = pcd_14a_reader_raw_cmd(
         payload->options.open_rf_field,
-        payload->options.wait_response, 
-        payload->options.append_crc, 
-        payload->options.bit_frame, 
-        payload->options.auto_select, 
-        payload->options.keep_rf_field, 
-        payload->options.check_response_crc, 
-        
+        payload->options.wait_response,
+        payload->options.append_crc,
+        payload->options.bit_frame,
+        payload->options.auto_select,
+        payload->options.keep_rf_field,
+        payload->options.check_response_crc,
+
         U16NTOHS(payload->resp_timeout),
 
         U16NTOHS(payload->data_length),
@@ -504,7 +504,7 @@ static data_frame_tx_t *cmd_processor_set_slot_tag_type(uint16_t cmd, uint16_t s
 
     payload_t *payload = (payload_t *)data;
     tag_specific_type_t tag_type = U16NTOHS(payload->tag_type);
-    if (payload->num_slot >= TAG_MAX_SLOT_NUM || tag_type == TAG_TYPE_UNKNOWN) {
+    if (payload->num_slot >= TAG_MAX_SLOT_NUM || !is_tag_specific_type_valid(tag_type)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     tag_emulation_change_type(payload->num_slot, tag_type);
@@ -538,7 +538,7 @@ static data_frame_tx_t *cmd_processor_set_slot_data_default(uint16_t cmd, uint16
 
     payload_t *payload = (payload_t *)data;
     tag_specific_type_t tag_type = U16NTOHS(payload->tag_type);
-    if (payload->num_slot >= TAG_MAX_SLOT_NUM || tag_type == TAG_TYPE_UNKNOWN) {
+    if (payload->num_slot >= TAG_MAX_SLOT_NUM || !is_tag_specific_type_valid(tag_type)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     status = tag_emulation_factory_data(payload->num_slot, tag_type) ? STATUS_DEVICE_SUCCESS : STATUS_NOT_IMPLEMENTED;
@@ -548,20 +548,23 @@ static data_frame_tx_t *cmd_processor_set_slot_data_default(uint16_t cmd, uint16
 static data_frame_tx_t *cmd_processor_set_slot_enable(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     typedef struct {
         uint8_t slot_index;
+        uint8_t sense_type;
         uint8_t enabled;
     } PACKED payload_t;
 
     payload_t *payload = (payload_t *)data;
     if (length != sizeof(payload_t) ||
             payload->slot_index >= TAG_MAX_SLOT_NUM ||
+            (payload->sense_type != TAG_SENSE_HF && payload->sense_type != TAG_SENSE_LF) ||
             payload->enabled > 1) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
     uint8_t slot_now = payload->slot_index;
-    bool enable = payload->enabled;
-    tag_emulation_slot_set_enable(slot_now, enable);
-    if (!enable) {
+    tag_emulation_slot_set_enable(slot_now, payload->sense_type, payload->enabled);
+    if ((!payload->enabled) &&
+        (!tag_emulation_slot_is_enabled(slot_now, payload->sense_type == TAG_SENSE_HF ? TAG_SENSE_LF : TAG_SENSE_HF))) {
+        // HF and LF disabled, need to change slot
         uint8_t slot_prev = tag_emulation_slot_find_next(slot_now);
         NRF_LOG_INFO("slot_now = %d, slot_prev = %d", slot_now, slot_prev);
         if (slot_prev == slot_now) {
@@ -589,11 +592,11 @@ static data_frame_tx_t *cmd_processor_get_slot_info(uint16_t cmd, uint16_t statu
         uint16_t lf_tag_type;
     } PACKED payload[8];
 
-    tag_specific_type_t tag_type[2];
+    tag_slot_specific_type_t tag_types;
     for (uint8_t slot = 0; slot < 8; slot++) {
-        tag_emulation_get_specific_type_by_slot(slot, tag_type);
-        payload[slot].hf_tag_type = U16HTONS(tag_type[0]);
-        payload[slot].lf_tag_type = U16HTONS(tag_type[1]);
+        tag_emulation_get_specific_types_by_slot(slot, &tag_types);
+        payload[slot].hf_tag_type = U16HTONS(tag_types.tag_hf);
+        payload[slot].lf_tag_type = U16HTONS(tag_types.tag_lf);
     }
 
     return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, sizeof(payload), (uint8_t *)&payload);
@@ -617,9 +620,9 @@ static data_frame_tx_t *cmd_processor_em410x_set_emu_id(uint16_t cmd, uint16_t s
 }
 
 static data_frame_tx_t *cmd_processor_em410x_get_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    tag_specific_type_t tag_type[2];
-    tag_emulation_get_specific_type_by_slot(tag_emulation_get_slot(), tag_type);
-    if (tag_type[1] == TAG_TYPE_UNKNOWN) {
+    tag_slot_specific_type_t tag_types;
+    tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &tag_types);
+    if (tag_types.tag_lf != TAG_TYPE_EM410X) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, data); // no data in slot, don't send garbage
     }
     tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
@@ -629,9 +632,9 @@ static data_frame_tx_t *cmd_processor_em410x_get_emu_id(uint16_t cmd, uint16_t s
 }
 
 static data_frame_tx_t *cmd_processor_hf14a_get_anti_coll_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    tag_specific_type_t tag_type[2];
-    tag_emulation_get_specific_type_by_slot(tag_emulation_get_slot(), tag_type);
-    if (tag_type[0] == TAG_TYPE_UNKNOWN) {
+    tag_slot_specific_type_t tag_types;
+    tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &tag_types);
+    if (tag_types.tag_hf == TAG_TYPE_UNDEFINED) {
         return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 0, NULL); // no data in slot, don't send garbage
     }
     nfc_tag_14a_coll_res_reference_t *info = get_saved_mifare_coll_res();
@@ -792,7 +795,8 @@ static data_frame_tx_t *cmd_processor_get_slot_tag_nick(uint16_t cmd, uint16_t s
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     get_fds_map_by_slot_sense_type_for_nick(slot, sense_type, &map_info);
-    bool ret = fds_read_sync(map_info.id, map_info.key, sizeof(buffer), buffer);
+    uint16_t buffer_length = sizeof(buffer);
+    bool ret = fds_read_sync(map_info.id, map_info.key, &buffer_length, buffer);
     if (!ret) {
         return data_frame_make(cmd, STATUS_FLASH_READ_FAIL, 0, NULL);
     }
@@ -862,11 +866,15 @@ static data_frame_tx_t *cmd_processor_mf1_set_write_mode(uint16_t cmd, uint16_t 
 }
 
 static data_frame_tx_t *cmd_processor_get_enabled_slots(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t slot_info[8] = {};
+    struct {
+        uint8_t enabled_hf;
+        uint8_t enabled_lf;
+    } PACKED payload[8];
     for (uint8_t slot = 0; slot < 8; slot++) {
-        slot_info[slot] = tag_emulation_slot_is_enable(slot);
+        payload[slot].enabled_hf = tag_emulation_slot_is_enabled(slot, TAG_SENSE_HF);
+        payload[slot].enabled_lf = tag_emulation_slot_is_enabled(slot, TAG_SENSE_LF);
     }
-    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, sizeof(slot_info), slot_info);
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, sizeof(payload), (uint8_t*)&payload);
 }
 
 static data_frame_tx_t *cmd_processor_get_ble_connect_key(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {

@@ -94,11 +94,11 @@ device_mode_t get_device_mode(void) {
  * @return uint8_t Color 0R, 1G, 2B
  */
 uint8_t get_color_by_slot(uint8_t slot) {
-    tag_specific_type_t tag_type[2];
-    tag_emulation_get_specific_type_by_slot(slot, tag_type);
-    if (tag_type[0] != TAG_TYPE_UNKNOWN && tag_type[1] != TAG_TYPE_UNKNOWN) {
+    tag_slot_specific_type_t tag_types;
+    tag_emulation_get_specific_types_by_slot(slot, &tag_types);
+    if (tag_types.tag_hf != TAG_TYPE_UNDEFINED && tag_types.tag_lf != TAG_TYPE_UNDEFINED) {
         return 0;   // Dual -frequency card simulation, return R, indicate a dual -frequency card
-    } else if (tag_type[0] != TAG_TYPE_UNKNOWN) {   //High -frequency simulation, return G
+    } else if (tag_types.tag_hf != TAG_TYPE_UNDEFINED) {   //High -frequency simulation, return G
         return 1;
     } else {    // Low -frequency simulation, return B
         return 2;

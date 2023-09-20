@@ -214,7 +214,7 @@ static int get_information_size_by_tag_type(tag_specific_type_t type) {
  * @return to be saved, the length of the data that needs to be saved, it means not saved when 0
  */
 int nfc_tag_ntag_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
-    if (m_tag_type != TAG_TYPE_UNKNOWN) {
+    if (m_tag_type != TAG_TYPE_UNDEFINED) {
         // Save the corresponding size data according to the current label type
         return get_information_size_by_tag_type(type);
     } else {

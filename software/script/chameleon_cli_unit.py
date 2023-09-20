@@ -825,7 +825,7 @@ class HFMFERead(DeviceRequiredUnit):
 
         selected_slot = self.cmd.get_active_slot()
         slot_info = self.cmd.get_slot_info()
-        tag_type = chameleon_cmd.TagSpecificType(slot_info[selected_slot][0])
+        tag_type = chameleon_cmd.TagSpecificType(slot_info[selected_slot]['hf'])
         if tag_type == chameleon_cmd.TagSpecificType.TAG_TYPE_MIFARE_Mini:
             block_count = 20
         elif tag_type == chameleon_cmd.TagSpecificType.TAG_TYPE_MIFARE_1024:
@@ -1055,12 +1055,12 @@ class HWSlotList(DeviceRequiredUnit):
     def get_slot_name(self, slot, sense):
         try:
             name = self.cmd.get_slot_tag_nick(slot, sense).decode(encoding="utf8")
-            return len(name), len(CC+C0), f'{CC}{name}{C0}'
+            return {'baselen':len(name), 'metalen':len(CC+C0), 'name':f'{CC}{name}{C0}'}
         except UnexpectedResponseError:
-            return 0, 0, ''
+            return {'baselen':0, 'metalen':0, 'name':f''}
         except UnicodeDecodeError:
             name = "UTF8 Err"
-            return len(name), len(CR+C0), f'{CR}{name}{C0}'
+            return {'baselen':len(name), 'metalen':len(CC+C0), 'name':f'{CC}{name}{C0}'}
 
     # hw slot list
     def on_exec(self, args: argparse.Namespace):
@@ -1073,21 +1073,24 @@ class HWSlotList(DeviceRequiredUnit):
             for slot in chameleon_cmd.SlotNumber:
                 hfn = self.get_slot_name(slot, chameleon_cmd.TagSenseType.TAG_SENSE_HF)
                 lfn = self.get_slot_name(slot, chameleon_cmd.TagSenseType.TAG_SENSE_LF)
-                m = max(hfn[0], lfn[0])
+                m = max(hfn['baselen'], lfn['baselen'])
                 maxnamelength = m if m > maxnamelength else maxnamelength
-                slotnames.append((hfn, lfn))
+                slotnames.append({'hf':hfn, 'lf':lfn})
         for slot in chameleon_cmd.SlotNumber:
             fwslot = chameleon_cmd.SlotNumber.to_fw(slot)
-            hf_tag_type = chameleon_cmd.TagSpecificType(slotinfo[fwslot][0])
-            lf_tag_type = chameleon_cmd.TagSpecificType(slotinfo[fwslot][1])
+            hf_tag_type = chameleon_cmd.TagSpecificType(slotinfo[fwslot]['hf'])
+            lf_tag_type = chameleon_cmd.TagSpecificType(slotinfo[fwslot]['lf'])
             print(f' - {f"Slot {slot}:":{4+maxnamelength+1}}'
-                  f'{f"({CG}active{C0})" if slot == selected else ""}'
-                  f'{f"({CR}disabled{C0}) " if not enabled[fwslot] else ""}')
+                  f'{f"({CG}active{C0})" if slot == selected else ""}')
             print(f'   HF: '
-                  f'{(slotnames[fwslot][0][2] if args.extend else ""):{maxnamelength+slotnames[fwslot][0][1]+1 if args.extend else maxnamelength+1}}'
-                  f'{f"{CY if enabled[fwslot] else C0}{hf_tag_type}{C0}" if hf_tag_type != chameleon_cmd.TagSpecificType.TAG_TYPE_UNKNOWN else "undef"}')
+                  f'{(slotnames[fwslot]["hf"]["name"] if args.extend else ""):{maxnamelength+slotnames[fwslot]["hf"]["metalen"]+1 if args.extend else maxnamelength+1}}', end='')
+            print(f'{f"({CR}disabled{C0}) " if not enabled[fwslot]["hf"] else ""}', end='')
+            if hf_tag_type != chameleon_cmd.TagSpecificType.TAG_TYPE_UNDEFINED:
+                print(f"{CY if enabled[fwslot]['hf'] else C0}{hf_tag_type}{C0}")
+            else:
+                print("undef")
             if args.extend == 1 and \
-                    enabled[fwslot] and \
+                    enabled[fwslot]['hf'] and \
                     slot == selected and \
                     hf_tag_type in [
                         chameleon_cmd.TagSpecificType.TAG_TYPE_MIFARE_Mini,
@@ -1107,9 +1110,12 @@ class HWSlotList(DeviceRequiredUnit):
                     f'      {"Use anti-collision data from block 0:":40}{f"{CG}enabled{C0}" if config["block_anti_coll_mode"] else f"{CR}disabled{C0}"}')
                 print(f'      {"Write mode:":40}{CY}{chameleon_cmd.MifareClassicWriteMode(config["write_mode"])}{C0}')
             print(f'   LF: '
-                  f'{(slotnames[fwslot][1][2] if args.extend else ""):{maxnamelength+slotnames[fwslot][1][1]+1 if args.extend else maxnamelength+1}}'
-                  f'{f"{CY if enabled[fwslot] else C0}{lf_tag_type}{C0}" if lf_tag_type != chameleon_cmd.TagSpecificType.TAG_TYPE_UNKNOWN else "undef"}')
-
+                  f'{(slotnames[fwslot]["lf"]["name"] if args.extend else ""):{maxnamelength+slotnames[fwslot]["lf"]["metalen"]+1 if args.extend else maxnamelength+1}}', end='')
+            print(f'{f"({CR}disabled{C0}) " if not enabled[fwslot]["lf"] else ""}', end='')
+            if lf_tag_type != chameleon_cmd.TagSpecificType.TAG_TYPE_UNDEFINED:
+                print(f"{CY if enabled[fwslot]['lf'] else C0}{lf_tag_type}{C0}")
+            else:
+                print("undef")
 
 @hw_slot.command('change', 'Set emulation tag slot activated.')
 class HWSlotSet(SlotIndexRequireUnit):
@@ -1129,13 +1135,11 @@ class TagTypeRequiredUnit(DeviceRequiredUnit):
     def add_type_args(parser: ArgumentParserNoExit):
         type_choices = chameleon_cmd.TagSpecificType.list()
         help_str = ""
-        for t in chameleon_cmd.TagSpecificType:
-            if t == chameleon_cmd.TagSpecificType.TAG_TYPE_UNKNOWN:
-                continue
+        for t in type_choices:
             help_str += f"{t.value} = {t}, "
         help_str = help_str[:-2]
         parser.add_argument('-t', "--type", type=int, required=True, help=help_str, metavar="number",
-                            choices=type_choices)
+                            choices=[t.value for t in type_choices])
         return parser
 
     def args_parser(self) -> ArgumentParserNoExit or None:
@@ -1194,20 +1198,21 @@ class HWSlotDataDefault(TagTypeRequiredUnit, SlotIndexRequireUnit):
 
 
 @hw_slot.command('enable', 'Set emulation tag slot enable or disable')
-class HWSlotEnableSet(SlotIndexRequireUnit):
+class HWSlotEnableSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
         self.add_slot_args(parser)
+        self.add_sense_type_args(parser)
         parser.add_argument('-e', '--enable', type=int, required=True, help="1 is Enable or 0 Disable", choices=[0, 1])
         return parser
 
-    # hw slot enable -s 1 -e 0
+    # hw slot enable -s 1 -st 0 -e 0
     def on_exec(self, args: argparse.Namespace):
         slot_num = args.slot
+        sense_type = args.sense_type
         enable = args.enable
-        self.cmd.set_slot_enable(slot_num, enable)
-        print(f' - Set slot {slot_num} {"enable" if enable else "disable"} success.')
-
+        self.cmd.set_slot_enable(slot_num, sense_type, enable)
+        print(f' - Set slot {slot_num} {"LF" if sense_type==chameleon_cmd.TagSenseType.TAG_SENSE_LF else "HF"} {"enable" if enable else "disable"} success.')
 
 @lf_em_sim.command('set', 'Set simulated em410x card id')
 class LFEMSimSet(LFEMCardRequiredUnit):
@@ -1303,7 +1308,8 @@ class HWSlotOpenAll(DeviceRequiredUnit):
             self.cmd.set_slot_data_default(slot, hf_type)
             self.cmd.set_slot_data_default(slot, lf_type)
             # finally, we can enable this slot.
-            self.cmd.set_slot_enable(slot, True)
+            self.cmd.set_slot_enable(slot, chameleon_cmd.TagSenseType.TAG_SENSE_HF, True)
+            self.cmd.set_slot_enable(slot, chameleon_cmd.TagSenseType.TAG_SENSE_LF, True)
             print(f' Slot {slot} setting done.')
 
         # update config and save to flash

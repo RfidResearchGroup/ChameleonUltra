@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - slot_number|sense_type|enable
+Disruptive changes:
+ - Changed slot enabled logic: now we have separate enabled_hf and enabled_lf, changed GET_ENABLED_SLOTS and SET_SLOT_ENABLE (@doegox)
+ - Changed tag type enum to be ready for new types, changed stored slotConfig and GET_SLOT_INFO (@doegox)
  - Removed MF1_DETECT_DARKSIDE (@doegox)
  - Added MF1_STATIC_NESTED_ACQUIRE and its support in `hf mf nested` (@xianglin1998)
  - Changed `hf 14a scan`: Automatically send RATS to 14443-4a tags (@augustozanellato)

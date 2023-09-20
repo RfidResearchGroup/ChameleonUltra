@@ -1114,7 +1114,7 @@ static int get_information_size_by_tag_type(tag_specific_type_t type, bool auth_
  * @return The length of the data that needs to be saved is that it does not save when 0
  */
 int nfc_tag_mf1_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
-    if (m_tag_type != TAG_TYPE_UNKNOWN) {
+    if (m_tag_type != TAG_TYPE_UNDEFINED) {
         if (m_tag_information->config.mode_block_write == NFC_TAG_MF1_WRITE_SHADOW) {
             NRF_LOG_INFO("The mf1 is shadow write mode.");
             return 0;
