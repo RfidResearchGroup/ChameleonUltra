@@ -33,7 +33,7 @@ functions have been realized with it!
 | MFKEY32 V2   | MIFARE Classic |                       Support | Support                   |                Support                 | MIFARE Classic Detection |
 | Darkside     | MIFARE Classic |                       Support | Support                   |                Support                 |     Encrypted 4 bit NAck |
 | Nested       | MIFARE Classic |                       Support | Support                   |                Support                 |     PRNG(Distance guess) |
-| StaticNested | MIFARE Classic |                       Support | Support                   |          Not yet implemented           |   PRNG(2NT Fast Decrypt) |
+| StaticNested | MIFARE Classic |                       Support | Support                   |                Support                 |   PRNG(2NT Fast Decrypt) |
 | HardNested   | MIFARE Classic |                       Support | Support                   |          Not yet implemented           |                       No |
 | Relay attack |   ISO14443A    |                       Support | Support                   |          Not yet implemented           |                       No |
 
