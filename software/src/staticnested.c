@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
-
+#include "common.h"
 #include "nested_util.h"
 
 int main(int argc, char *const argv[]) {
@@ -14,36 +14,33 @@ int main(int argc, char *const argv[]) {
     uint8_t type = (uint8_t)atoui(argv[2]); // target key type
 
     // process all args.
-    bool check_st_level_at_sirst_run = false;
+    bool check_st_level_at_first_run = false;
     for (i = 3, j = 0; i < argc; i += 2) {
         // nt + par
         nt1 = atoui(argv[i]);
         nt2 = atoui(argv[i + 1]);
 
-        // Which generation of ST tags is detected.
-        if (!check_st_level_at_sirst_run) {
+        // Which generation of static tag is detected.
+        if (!check_st_level_at_first_run) {
             if (nt1 == 0x01200145) {
-                // 发现一代无漏洞，此标签全卡可用默认160的参数进行解密！
+                // There is no loophole in this generation.
+                // This tag can be decrypted with the default parameter value 160!
                 dist = 160; // st gen1
-            }
-            else if (nt1 == 0x009080A2) {   // st gen2
-                // 发现无漏洞二代，我们如果确认目前需要攻击的时B密钥，那么就需要更换攻击参数
+            } else if (nt1 == 0x009080A2) {   // st gen2
+                // We found that the gen2 tag is vulnerable too but parameter must be adapted depending on the attacked key
                 if (type == 0x61) {
                     dist = 161;
-                }
-                else if (type == 0x60) {
+                } else if (type == 0x60) {
                     dist = 160;
-                }
-                else {
-                    // can't to here!!!
+                } else {
+                    // can't be here!!!
                     goto error;
                 }
-            }
-            else {
-                // can't to here!!!
+            } else {
+                // can't be here!!!
                 goto error;
             }
-            check_st_level_at_sirst_run = true;
+            check_st_level_at_first_run = true;
         }
 
         nttest = prng_successor(nt1, dist);
@@ -51,7 +48,7 @@ int main(int argc, char *const argv[]) {
         ++j;
         dist += 160;
 
-        void* tmp = realloc(pNK, sizeof(NtpKs1) * j);
+        void *tmp = realloc(pNK, sizeof(NtpKs1) * j);
         if (tmp == NULL) {
             goto error;
         }

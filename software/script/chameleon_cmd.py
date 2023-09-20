@@ -61,15 +61,13 @@ DATA_CMD_SET_BLE_PAIRING_ENABLE = 1037
 DATA_CMD_HF14A_SCAN = 2000
 DATA_CMD_MF1_DETECT_SUPPORT = 2001
 DATA_CMD_MF1_DETECT_PRNG = 2002
-# FIXME: implemented but unused in CLI commands
-DATA_CMD_MF1_DETECT_DARKSIDE = 2003
+DATA_CMD_MF1_STATIC_NESTED_ACQUIRE = 2003
 DATA_CMD_MF1_DARKSIDE_ACQUIRE = 2004
 DATA_CMD_MF1_DETECT_NT_DIST = 2005
 DATA_CMD_MF1_NESTED_ACQUIRE = 2006
 DATA_CMD_MF1_AUTH_ONE_KEY_BLOCK = 2007
 DATA_CMD_MF1_READ_ONE_BLOCK = 2008
 DATA_CMD_MF1_WRITE_ONE_BLOCK = 2009
-DATA_CMD_MF1_STATIC_NESTED_ACQUIRE = 2010
 
 DATA_CMD_EM410X_SCAN = 3000
 DATA_CMD_EM410X_WRITE_TO_T55XX = 3001
@@ -466,17 +464,6 @@ class ChameleonCMD:
         return resp
 
     @expect_response(chameleon_status.Device.HF_TAG_OK)
-    def mf1_detect_darkside_support(self):
-        """
-        Check if the card is vulnerable to mifare classic darkside attack
-        :return:
-        """
-        resp = self.device.send_cmd_sync(DATA_CMD_MF1_DETECT_DARKSIDE, timeout=20)
-        if resp.status == chameleon_status.Device.HF_TAG_OK:
-            resp.data = resp.data[0]
-        return resp
-
-    @expect_response(chameleon_status.Device.HF_TAG_OK)
     def mf1_detect_nt_dist(self, block_known, type_known, key_known):
         """
         Detect the random number distance of the card
@@ -501,7 +488,6 @@ class ChameleonCMD:
             resp.data = [{'nt': nt, 'nt_enc': nt_enc, 'par': par}
                          for nt, nt_enc, par in struct.iter_unpack('!IIB', resp.data)]
         return resp
-
 
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def mf1_darkside_acquire(self, block_target, type_target, first_recover: int or bool, sync_max):
@@ -563,7 +549,7 @@ class ChameleonCMD:
         resp = self.device.send_cmd_sync(DATA_CMD_MF1_WRITE_ONE_BLOCK, data)
         resp.data = resp.status == chameleon_status.Device.HF_TAG_OK
         return resp
-    
+
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def mf1_static_nested_acquire(self, block_known, type_known, key_known, block_target, type_target):
         """
@@ -577,7 +563,7 @@ class ChameleonCMD:
                 'uid': struct.unpack('!I', resp.data[0:4])[0],
                 'nts': [
                     {
-                        'nt': nt, 
+                        'nt': nt,
                         'nt_enc': nt_enc
                     } for nt, nt_enc in struct.iter_unpack('!II', resp.data[4:])
                 ]
@@ -1060,20 +1046,20 @@ class ChameleonCMD:
         if resp.status == chameleon_status.Device.STATUS_DEVICE_SUCCESS:
             if resp.data[0] > CURRENT_VERSION_SETTINGS:
                 raise ValueError("Settings version in app older than Chameleon. "
-                                "Please upgrade client")
+                                 "Please upgrade client")
             if resp.data[0] < CURRENT_VERSION_SETTINGS:
                 raise ValueError("Settings version in app newer than Chameleon. "
-                                "Please upgrade Chameleon firmware")
+                                 "Please upgrade Chameleon firmware")
             settings_version, animation_mode, btn_press_A, btn_press_B, btn_long_press_A, btn_long_press_B, ble_pairing_enable, ble_pairing_key = struct.unpack(
                 '!BBBBBBB6s', resp.data)
             resp.data = {'settings_version': settings_version,
-                        'animation_mode': animation_mode,
-                        'btn_press_A': btn_press_A,
-                        'btn_press_B': btn_press_B,
-                        'btn_long_press_A': btn_long_press_A,
-                        'btn_long_press_B': btn_long_press_B,
-                        'ble_pairing_enable': ble_pairing_enable,
-                        'ble_pairing_key': ble_pairing_key}
+                         'animation_mode': animation_mode,
+                         'btn_press_A': btn_press_A,
+                         'btn_press_B': btn_press_B,
+                         'btn_long_press_A': btn_long_press_A,
+                         'btn_long_press_B': btn_long_press_B,
+                         'ble_pairing_enable': ble_pairing_enable,
+                         'ble_pairing_key': ble_pairing_key}
         return resp
 
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)

@@ -583,7 +583,7 @@ uint8_t pcd_14a_reader_scan_once(picc_14a_tag_t *tag) {
     if (tag->sak & 0x20) {
         // Tag supports 14443-4, sending RATS
         uint16_t ats_size;
-        status = pcd_14a_reader_ats_request(tag->ats, &ats_size, 0xFF*8);
+        status = pcd_14a_reader_ats_request(tag->ats, &ats_size, 0xFF * 8);
         ats_size -= 2;  // size returned by pcd_14a_reader_ats_request includes CRC
         if (ats_size > 254) {
             NRF_LOG_INFO("Invalid ATS > 254!");
@@ -600,7 +600,7 @@ uint8_t pcd_14a_reader_scan_once(picc_14a_tag_t *tag) {
             // return HF_ERR_ATS;
         }
         /*
-        * FIXME: If there is an issue here, it will cause the label to lose its selected state. 
+        * FIXME: If there is an issue here, it will cause the label to lose its selected state.
         *   It is necessary to reselect the card after the issue occurs here.
         */
     }

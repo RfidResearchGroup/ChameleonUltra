@@ -382,7 +382,7 @@ class HFMFNested(ReaderRequiredUnit):
                             help="The type of the target block to recover")
         # hf mf nested -o --block-known 0 --type-known A --key FFFFFFFFFFFF --block-target 4 --type-target A
         return parser
-    
+
     def from_nt_level_code_to_str(self, nt_level):
         if nt_level == 0:
             return 'StaticNested'
@@ -409,9 +409,10 @@ class HFMFNested(ReaderRequiredUnit):
             return None
 
         # acquire
-        if nt_level == 0: # It's a staticnested tag?
-            nt_uid_obj = self.cmd.mf1_static_nested_acquire(block_known, type_known, key_known, block_target, type_target)
-            cmd_param = f"{nt_uid_obj['uid']} {str(type_target)}" 
+        if nt_level == 0:  # It's a staticnested tag?
+            nt_uid_obj = self.cmd.mf1_static_nested_acquire(
+                block_known, type_known, key_known, block_target, type_target)
+            cmd_param = f"{nt_uid_obj['uid']} {str(type_target)}"
             for nt_item in nt_uid_obj['nts']:
                 cmd_param += f" {nt_item['nt']} {nt_item['nt_enc']}"
             decryptor_name = "staticnested"
@@ -419,11 +420,11 @@ class HFMFNested(ReaderRequiredUnit):
             dist_obj = self.cmd.mf1_detect_nt_dist(block_known, type_known, key_known)
             nt_obj = self.cmd.mf1_nested_acquire(block_known, type_known, key_known, block_target, type_target)
             # create cmd
-            cmd_param = f"{dist_obj['uid']} {dist_obj['dist']}" 
+            cmd_param = f"{dist_obj['uid']} {dist_obj['dist']}"
             for nt_item in nt_obj:
                 cmd_param += f" {nt_item['nt']} {nt_item['nt_enc']} {nt_item['par']}"
             decryptor_name = "nested"
-        
+
         # Cross-platform compatibility
         if sys.platform == "win32":
             cmd_recover = f"{decryptor_name}.exe {cmd_param}"
@@ -517,7 +518,7 @@ class HFMFDarkside(ReaderRequiredUnit):
                 print(f"Darkside error: {chameleon_cmd.MifareClassicDarksideStatus(darkside_resp[0])}")
                 break
             darkside_obj = darkside_resp[1]
-            
+
             if darkside_obj['par'] != 0:  # NXP tag workaround.
                 self.darkside_list.clear()
 
@@ -1054,12 +1055,12 @@ class HWSlotList(DeviceRequiredUnit):
     def get_slot_name(self, slot, sense):
         try:
             name = self.cmd.get_slot_tag_nick(slot, sense).decode(encoding="utf8")
-            return len(name),len(CC+C0),f'{CC}{name}{C0}'
+            return len(name), len(CC+C0), f'{CC}{name}{C0}'
         except UnexpectedResponseError:
-            return 0,0,''
+            return 0, 0, ''
         except UnicodeDecodeError:
             name = "UTF8 Err"
-            return len(name),len(CR+C0),f'{CR}{name}{C0}'
+            return len(name), len(CR+C0), f'{CR}{name}{C0}'
 
     # hw slot list
     def on_exec(self, args: argparse.Namespace):
@@ -1086,20 +1087,24 @@ class HWSlotList(DeviceRequiredUnit):
                   f'{(slotnames[fwslot][0][2] if args.extend else ""):{maxnamelength+slotnames[fwslot][0][1]+1 if args.extend else maxnamelength+1}}'
                   f'{f"{CY if enabled[fwslot] else C0}{hf_tag_type}{C0}" if hf_tag_type != chameleon_cmd.TagSpecificType.TAG_TYPE_UNKNOWN else "undef"}')
             if args.extend == 1 and \
-                enabled[fwslot] and \
-                slot == selected and \
-                hf_tag_type in [
-                    chameleon_cmd.TagSpecificType.TAG_TYPE_MIFARE_Mini,
-                    chameleon_cmd.TagSpecificType.TAG_TYPE_MIFARE_1024,
-                    chameleon_cmd.TagSpecificType.TAG_TYPE_MIFARE_2048,
-                    chameleon_cmd.TagSpecificType.TAG_TYPE_MIFARE_4096,
-                ]:
+                    enabled[fwslot] and \
+                    slot == selected and \
+                    hf_tag_type in [
+                        chameleon_cmd.TagSpecificType.TAG_TYPE_MIFARE_Mini,
+                        chameleon_cmd.TagSpecificType.TAG_TYPE_MIFARE_1024,
+                        chameleon_cmd.TagSpecificType.TAG_TYPE_MIFARE_2048,
+                        chameleon_cmd.TagSpecificType.TAG_TYPE_MIFARE_4096,
+                    ]:
                 config = self.cmd.mf1_get_emulator_config()
                 print('    - Mifare Classic emulator settings:')
-                print(f'      {"Detection (mfkey32) mode:":40}{f"{CG}enabled{C0}" if config["detection"] else f"{CR}disabled{C0}"}')
-                print(f'      {"Gen1A magic mode:":40}{f"{CG}enabled{C0}" if config["gen1a_mode"] else f"{CR}disabled{C0}"}')
-                print(f'      {"Gen2 magic mode:":40}{f"{CG}enabled{C0}" if config["gen2_mode"] else f"{CR}disabled{C0}"}')
-                print(f'      {"Use anti-collision data from block 0:":40}{f"{CG}enabled{C0}" if config["block_anti_coll_mode"] else f"{CR}disabled{C0}"}')
+                print(
+                    f'      {"Detection (mfkey32) mode:":40}{f"{CG}enabled{C0}" if config["detection"] else f"{CR}disabled{C0}"}')
+                print(
+                    f'      {"Gen1A magic mode:":40}{f"{CG}enabled{C0}" if config["gen1a_mode"] else f"{CR}disabled{C0}"}')
+                print(
+                    f'      {"Gen2 magic mode:":40}{f"{CG}enabled{C0}" if config["gen2_mode"] else f"{CR}disabled{C0}"}')
+                print(
+                    f'      {"Use anti-collision data from block 0:":40}{f"{CG}enabled{C0}" if config["block_anti_coll_mode"] else f"{CR}disabled{C0}"}')
                 print(f'      {"Write mode:":40}{CY}{chameleon_cmd.MifareClassicWriteMode(config["write_mode"])}{C0}')
             print(f'   LF: '
                   f'{(slotnames[fwslot][1][2] if args.extend else ""):{maxnamelength+slotnames[fwslot][1][1]+1 if args.extend else maxnamelength+1}}'
@@ -1555,7 +1560,8 @@ class HWRaw(DeviceRequiredUnit):
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        response = self.cmd.device.send_cmd_sync(args.command, data=bytes.fromhex(args.data), status=0x0, timeout=args.timeout)
+        response = self.cmd.device.send_cmd_sync(
+            args.command, data=bytes.fromhex(args.data), status=0x0, timeout=args.timeout)
         print(" - Received:")
         print(f"   Command: {response.cmd}")
         status_string = f"   Status:  {response.status:#02x}"

@@ -1,7 +1,7 @@
 #include <stdint.h>
 
 
-uint64_t atoui(const char* str) {
+uint64_t atoui(const char *str) {
 
     uint64_t result = 0;
     for (int i = 0; str[i] != '\0'; ++i) {
@@ -12,7 +12,7 @@ uint64_t atoui(const char* str) {
     return result;
 }
 
-void num_to_bytes(uint64_t n, uint32_t len, uint8_t* dest) {
+void num_to_bytes(uint64_t n, uint32_t len, uint8_t *dest) {
     while (len--) {
         dest[len] = (uint8_t)n;
         n >>= 8;
