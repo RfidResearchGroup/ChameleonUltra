@@ -256,6 +256,30 @@ static data_frame_tx_t *cmd_processor_mf1_detect_prng(uint16_t cmd, uint16_t sta
     return data_frame_make(cmd, HF_TAG_OK, sizeof(type), &type);
 }
 
+// We have a reusable payload structure.
+typedef struct {
+    uint8_t type_known;
+    uint8_t block_known;
+    uint8_t key_known[6];
+    uint8_t type_target;
+    uint8_t block_target;
+} PACKED nested_common_payload_t;
+
+static data_frame_tx_t *cmd_processor_mf1_static_nested_acquire(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    mf1_static_nested_core_t sncs;
+    if (length != sizeof(nested_common_payload_t)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    nested_common_payload_t *payload = (nested_common_payload_t *)data;
+    status = static_nested_recover_key(bytes_to_num(payload->key_known, 6), payload->block_known, payload->type_known, payload->block_target, payload->type_target, &sncs);
+    if (status != HF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    // mf1_static_nested_core_t is PACKED and comprises only bytes so we can use it directly
+    return data_frame_make(cmd, HF_TAG_OK, sizeof(sncs), (uint8_t *)(&sncs));
+}
+
 static data_frame_tx_t *cmd_processor_mf1_darkside_acquire(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length != 4) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
@@ -299,15 +323,6 @@ static data_frame_tx_t *cmd_processor_mf1_detect_nt_dist(uint16_t cmd, uint16_t 
     payload_resp.distance = U32HTONL(distance);
     return data_frame_make(cmd, HF_TAG_OK, sizeof(payload_resp), (uint8_t *)&payload_resp);
 }
-
-// We have a reusable payload structure.
-typedef struct {
-    uint8_t type_known;
-    uint8_t block_known;
-    uint8_t key_known[6];
-    uint8_t type_target;
-    uint8_t block_target;
-} PACKED nested_common_payload_t;
 
 static data_frame_tx_t *cmd_processor_mf1_nested_acquire(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     mf1_nested_core_t ncs[SETS_NR];
@@ -383,19 +398,64 @@ static data_frame_tx_t *cmd_processor_mf1_write_one_block(uint16_t cmd, uint16_t
     return data_frame_make(cmd, status, 0, NULL);
 }
 
-static data_frame_tx_t *cmd_processor_mf1_static_nested_acquire(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    mf1_static_nested_core_t sncs;
-    if (length != sizeof(nested_common_payload_t)) {
+static data_frame_tx_t *cmd_processor_hf14a_raw(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    // Response Buffer
+	uint8_t resp[DEF_FIFO_LENGTH] = { 0x00 };
+    uint16_t resp_length = 0;
+
+    typedef struct {
+        struct { // MSB -> LSB
+            uint8_t reserved : 1;
+
+            uint8_t check_response_crc : 1;
+            uint8_t keep_rf_field : 1;
+            uint8_t auto_select : 1;
+            uint8_t bit_frame : 1;
+            uint8_t append_crc : 1;
+            uint8_t wait_response : 1; 
+            uint8_t open_rf_field : 1;
+        } options;
+        
+        // U16NTOHS
+        uint16_t resp_timeout;
+        uint16_t data_length;
+
+        uint8_t data_buffer[0]; // We can have a lot of data or no data. struct just to compute offsets with min options.
+    } PACKED payload_t;
+    payload_t *payload = (payload_t *)data;
+    if (length < sizeof(payload_t)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
-    nested_common_payload_t *payload = (nested_common_payload_t *)data;
-    status = static_nested_recover_key(bytes_to_num(payload->key_known, 6), payload->block_known, payload->type_known, payload->block_target, payload->type_target, &sncs);
-    if (status != HF_TAG_OK) {
-        return data_frame_make(cmd, status, 0, NULL);
-    }
-    // mf1_static_nested_core_t is PACKED and comprises only bytes so we can use it directly
-    return data_frame_make(cmd, HF_TAG_OK, sizeof(sncs), (uint8_t *)(&sncs));
+    NRF_LOG_INFO("open_rf_field      = %d", payload->options.open_rf_field);
+    NRF_LOG_INFO("wait_response      = %d", payload->options.wait_response);
+    NRF_LOG_INFO("append_crc         = %d", payload->options.append_crc);
+    NRF_LOG_INFO("bit_frame          = %d", payload->options.bit_frame);
+    NRF_LOG_INFO("auto_select        = %d", payload->options.auto_select);
+    NRF_LOG_INFO("keep_rf_field      = %d", payload->options.keep_rf_field);
+    NRF_LOG_INFO("check_response_crc = %d", payload->options.check_response_crc);
+    NRF_LOG_INFO("reserved           = %d", payload->options.reserved);
+    
+    status = pcd_14a_reader_raw_cmd(
+        payload->options.open_rf_field,
+        payload->options.wait_response, 
+        payload->options.append_crc, 
+        payload->options.bit_frame, 
+        payload->options.auto_select, 
+        payload->options.keep_rf_field, 
+        payload->options.check_response_crc, 
+        
+        U16NTOHS(payload->resp_timeout),
+
+        U16NTOHS(payload->data_length),
+        payload->data_buffer,
+
+        resp,
+        &resp_length,
+        U8ARR_BIT_LEN(resp)
+    );
+
+    return data_frame_make(cmd, status, resp_length, resp);
 }
 
 static data_frame_tx_t *cmd_processor_em410x_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -937,6 +997,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_AUTH_ONE_KEY_BLOCK,       before_hf_reader_run,        cmd_processor_mf1_auth_one_key_block,        after_hf_reader_run    },
     {    DATA_CMD_MF1_READ_ONE_BLOCK,           before_hf_reader_run,        cmd_processor_mf1_read_one_block,            after_hf_reader_run    },
     {    DATA_CMD_MF1_WRITE_ONE_BLOCK,          before_hf_reader_run,        cmd_processor_mf1_write_one_block,           after_hf_reader_run    },
+    {    DATA_CMD_HF14A_RAW,                    before_reader_run,           cmd_processor_hf14a_raw,                     NULL                   },
 
     {    DATA_CMD_EM410X_SCAN,                  before_reader_run,           cmd_processor_em410x_scan,                   NULL                   },
     {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_em410x_write_to_t55XX,         NULL                   },

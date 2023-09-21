@@ -1,5 +1,6 @@
 import enum
 import struct
+import ctypes
 
 import chameleon_com
 import chameleon_status
@@ -68,6 +69,7 @@ DATA_CMD_MF1_NESTED_ACQUIRE = 2006
 DATA_CMD_MF1_AUTH_ONE_KEY_BLOCK = 2007
 DATA_CMD_MF1_READ_ONE_BLOCK = 2008
 DATA_CMD_MF1_WRITE_ONE_BLOCK = 2009
+DATA_CMD_HF14A_RAW = 2010
 
 DATA_CMD_EM410X_SCAN = 3000
 DATA_CMD_EM410X_WRITE_TO_T55XX = 3001
@@ -549,6 +551,52 @@ class ChameleonCMD:
         resp = self.device.send_cmd_sync(DATA_CMD_MF1_WRITE_ONE_BLOCK, data)
         resp.data = resp.status == chameleon_status.Device.HF_TAG_OK
         return resp
+
+    def hf14a_raw(self, options, resp_timeout_ms=100, data=[], bit_owned_by_the_last_byte=None):
+        """
+        Send raw cmd to 14a tag
+        :param options:
+        :param resp_timeout_ms:
+        :param data:
+        :param bit_owned_by_the_last_byte:
+        :return:
+        """
+        
+        class CStruct(ctypes.BigEndianStructure):
+            _fields_ = [
+                ("open_rf_field", ctypes.c_uint8, 1),
+                ("wait_response", ctypes.c_uint8, 1),
+                ("append_crc", ctypes.c_uint8, 1),
+                ("bit_frame", ctypes.c_uint8, 1),
+                ("auto_select", ctypes.c_uint8, 1),
+                ("keep_rf_field", ctypes.c_uint8, 1),
+                ("check_response_crc", ctypes.c_uint8, 1),
+                ("reserved", ctypes.c_uint8, 1),
+            ]
+
+        cs = CStruct()
+        cs.open_rf_field = options['open_rf_field']
+        cs.wait_response = options['wait_response']
+        cs.append_crc = options['append_crc']
+        cs.bit_frame = options['bit_frame']
+        cs.auto_select = options['auto_select']
+        cs.keep_rf_field = options['keep_rf_field']
+        cs.check_response_crc = options['check_response_crc']
+
+        if options['bit_frame'] == 1:
+            bits_or_bytes = len(data) * 8 # bits = bytes * 8(bit)
+            if bit_owned_by_the_last_byte is not None and bit_owned_by_the_last_byte != 8:
+                bits_or_bytes = bits_or_bytes - (8 - bit_owned_by_the_last_byte)
+        else:
+            bits_or_bytes = len(data) # bytes length
+
+        if len(data) > 0:
+            data = struct.pack(f'!BHH{len(data)}s', bytes(cs)[0], resp_timeout_ms, bits_or_bytes, bytearray(data))
+        else:
+            data = struct.pack(f'!BHH', bytes(cs)[0], resp_timeout_ms, 0)
+
+        return self.device.send_cmd_sync(DATA_CMD_HF14A_RAW, data, timeout=(resp_timeout_ms / 1000) + 1)
+
 
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def mf1_static_nested_acquire(self, block_known, type_known, key_known, block_target, type_target):
@@ -1098,7 +1146,7 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(DATA_CMD_SET_BLE_PAIRING_ENABLE, data)
 
 
-if __name__ == '__main__':
+def test_fn():
     # connect to chameleon
     dev = chameleon_com.ChameleonCom()
     dev.open("com19")
@@ -1108,9 +1156,58 @@ if __name__ == '__main__':
     chip = cml.get_device_chip_id()
     print(f"Device chip id: {chip}")
 
+    # change to reader mode
+    cml.set_device_reader_mode()
+
+    options = {
+        'open_rf_field': 1,
+        'wait_response': 1,
+        'append_crc': 0,
+        'bit_frame': 1,
+        'auto_select': 0,
+        'keep_rf_field': 1,
+        'check_response_crc': 0,
+    }
+
+    # unlock 1
+    resp = cml.hf14a_raw(options=options, resp_timeout_ms=1000, data=[0x40], bit_owned_by_the_last_byte=7)
+
+    if resp.status == 0x00 and resp.data[0] == 0x0a:
+        print("Gen1A unlock 1 success")
+        # unlock 2
+        options['bit_frame'] = 0
+        resp = cml.hf14a_raw(options=options, resp_timeout_ms=1000, data=[0x43])
+        if resp.status == 0x00 and resp.data[0] == 0x0a:
+            print("Gen1A unlock 2 success")
+            print("Start dump gen1a memeory...")
+            block = 0
+            while block < 64:
+                # Tag read block cmd
+                cmd_read_gen1a_block = [0x30, block]
+                
+                # Transfer with crc
+                options['append_crc'] = 1
+                options['check_response_crc'] = 1
+                resp = cml.hf14a_raw(options=options, resp_timeout_ms=100, data=cmd_read_gen1a_block)
+                
+                print(f"Block {block} : {resp.data.hex()}")
+                block += 1
+
+            # Close rf field
+            options['keep_rf_field'] = 0
+            resp = cml.hf14a_raw(options=options)
+        else:
+            print("Gen1A unlock 2 fail")
+    else:
+        print("Gen1A unlock 1 fail")
+
     # disconnect
     dev.close()
 
     # never exit
     while True:
         pass
+
+
+if __name__ == '__main__':
+    test_fn()

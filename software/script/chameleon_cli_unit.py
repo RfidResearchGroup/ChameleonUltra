@@ -1573,3 +1573,62 @@ class HWRaw(DeviceRequiredUnit):
         else:
             print(f"   Status: {response.status:#02x}")
         print(f"   Data (HEX): {response.data.hex()}")
+
+
+@hf_14a.command('raw', 'Send raw command')
+class HF14ARaw(ReaderRequiredUnit):
+
+    def bool_to_bit(self, value):
+        return 1 if value else 0 
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        parser = ArgumentParserNoExit()
+        parser.add_argument('-r', '--response', help="do not read response", action='store_true', default=False,)
+        parser.add_argument('-c', '--crc', help="calculate and append CRC", action='store_true', default=False,)
+        parser.add_argument('-cc', '--crc-clear', help="Verify and clear CRC of received data", action='store_true', default=False,)
+        parser.add_argument('-k', '--keep-rf', help="keep signal field ON after receive", action='store_true', default=False,)
+        parser.add_argument('-o', '--open-rf', help="active signal field ON", action='store_true', default=False,)
+        parser.add_argument('-s', '--select-tag', help="Select the tag before executing the command", action='store_true', default=False,)
+        parser.add_argument('-b', '--bits', type=int, help="number of bits to send. Useful for send partial byte")
+        parser.add_argument('-t', '--timeout', type=int, help="timeout in ms", default=100)
+        parser.add_argument('-d', '--data', type=str, help="Data to be sent")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        options = {
+            'open_rf_field': self.bool_to_bit(args.open_rf),
+            'wait_response': self.bool_to_bit(args.response == False),
+            'append_crc': self.bool_to_bit(args.crc),
+            'bit_frame': self.bool_to_bit(args.bits is not None),
+            'auto_select': self.bool_to_bit(args.select_tag),
+            'keep_rf_field': self.bool_to_bit(args.keep_rf),
+            'check_response_crc': self.bool_to_bit(args.crc_clear),
+        }
+        data: str = args.data
+        if data is not None:
+            data = data.replace(' ', '')
+            if re.match(r'^[0-9a-fA-F]+$', data):
+                if len(data) % 2 != 0:
+                    print(f" [!] {CR}The length of the data must be an integer multiple of 2.{C0}")
+                    return
+                else:
+                    data_bytes = bytes.fromhex(data)
+            else:
+                print(f" [!] {CR}The data must be a HEX string{C0}")
+                return
+        else:
+            data_bytes = []
+        # Exec 14a raw cmd.
+        resp = self.cmd.hf14a_raw(options, args.timeout, data_bytes, args.bits)
+        if resp.status == chameleon_status.Device.HF_TAG_OK:
+            if len(resp.data) > 0:
+                print(
+                    # print head
+                    " - " + 
+                    # print data
+                    ' '.join([ hex(byte).replace('0x', '').rjust(2, '0') for byte in resp.data ])
+                )
+            else:
+                print(F" [*] {CY}No data response{C0}")
+        else:
+            print(f" [!] {CR}{chameleon_status.message[resp.status]}{C0} ")
