@@ -196,9 +196,11 @@ void pcd_14a_reader_reset(void) {
         write_register_single(CommandReg, PCD_IDLE);
         write_register_single(CommandReg, PCD_RESET);
 
-        // Switch antenna
-        clear_register_mask(TxControlReg, 0x03);
-        set_register_mask(TxControlReg, 0x03);
+        bsp_delay_ms(10);
+
+        // Then default does not allow the antenna
+        // Please don't continue to make high -frequency antennas
+        pcd_14a_reader_antenna_off();
 
         // Disable the timer of 522, use the MCU timer timeout time
         write_register_single(TModeReg, 0x00);
@@ -208,9 +210,7 @@ void pcd_14a_reader_reset(void) {
         // Define common mode and receive common mode and receiveMiFare cartoon communication, CRC initial value 0x6363
         write_register_single(ModeReg, 0x3D);
 
-        // Then default does not allow the antenna
-        // Please don't continue to make high -frequency antennas
-        pcd_14a_reader_antenna_off();
+        bsp_delay_ms(10);
     }
 }
 
@@ -1121,4 +1121,139 @@ inline void crc_14a_append(uint8_t *pbtData, size_t szLen) {
  */
 inline void pcd_14a_reader_crc_computer(uint8_t use522CalcCRC) {
     m_crc_computer = use522CalcCRC;
+}
+
+/**
+* @brief 	: The hf 14a raw command implementation function can be used to send the 14A command with the specified configuration parameters.
+* @param	:waitResp  			: Wait for tag response
+* @param 	:appendCrc  		: Do you want to add CRC before sending
+* @param 	:bitsFrame  		: Is it necessary to send bit frames, which are mutually exclusive with the appendCrc parameter.
+* @param	:autoSelect 		: Automatically select card before sending data
+* @param	:keepField  		: Do you want to keep the RF field on after sending
+* @param	:checkCrc  			: Is CRC verified after receiving data? If CRC verification is enabled, CRC bytes will be automatically removed after verification is completed.
+* @param	:waitRespTimeout	: If waitResp is enabled, this parameter will be the timeout value to wait for the tag to respond
+* @param	:szDataSend  		: The number of bytes or bits of data to be sent
+* @param	:pDataSend  		: Pointer to the buffer of the data to be sent
+*
+* @retval 	: Execution Status
+*
+*/
+uint8_t pcd_14a_reader_raw_cmd(bool openRFField,  bool waitResp, bool appendCrc, bool bitsFrame, bool autoSelect, bool keepField, bool checkCrc, uint16_t waitRespTimeout, 
+                               uint16_t szDataSend, uint8_t *pDataSend, uint8_t *pDataRecv, uint16_t *pszDataRecv, uint16_t szDataRecvBitMax) {
+	// Status code, default is OK.
+	uint8_t status = HF_TAG_OK;
+	// Reset recv length.
+	*pszDataRecv = 0;
+	// Old response timeout.
+	uint16_t oldWaitRespTimeout;
+
+    if (openRFField) { // Open rf filed?
+        pcd_14a_reader_antenna_on();
+        bsp_delay_ms(8);
+    }
+
+    // Is there any data that needs to be sent
+    if (szDataSend > 0) {
+        // If additional CRC is required, first add the CRC to the tail.
+        if (appendCrc) {
+            // Note: Adding CRC requires at least two bytes of free space. If the transmitted data is already greater than or equal to 64, an error needs to be returned
+            if (szDataSend > (DEF_FIFO_LENGTH - DEF_CRC_LENGTH)) {
+                NRF_LOG_INFO("Adding CRC requires data length less than or equal to 62.");
+                status = STATUS_PAR_ERR;
+            } else {
+                // Calculate and append CRC byte data to the buffer
+                crc_14a_append(pDataSend, szDataSend);
+                // CRC is also sent as part of the data, so the total length needs to be added to the CRC length here
+                szDataSend += DEF_CRC_LENGTH;
+            }
+        }
+        
+        // Ensure that the previous operation is normal
+        if (status == HF_TAG_OK) {
+            // Determine if card selection is necessary first based on needs
+            if (autoSelect) {
+                picc_14a_tag_t ti;
+                status = pcd_14a_reader_scan_once(&ti);
+                // Determine whether the card search was successful
+                if (status != HF_TAG_OK) {
+                    return status;
+                }
+            }
+            
+            // If there is no need to receive data, the data receiving cache needs to be empty, otherwise a specified timeout value needs to be set
+            if (waitResp) {
+                // Caching old timeout values
+                oldWaitRespTimeout = g_com_timeout_ms;
+                // Then set the new values in
+                g_com_timeout_ms = waitRespTimeout;
+            } else {
+                pDataRecv = NULL;
+            }
+            
+            // Ensure that the previous operation is normal
+            if (status == HF_TAG_OK) {
+                if (bitsFrame) {
+                    status = pcd_14a_reader_bits_transfer(
+                        pDataSend,
+                        szDataSend,
+                        NULL,
+                        pDataRecv,
+                        NULL,
+                        pszDataRecv,
+                        szDataRecvBitMax
+                    );
+                } else {
+                    status = pcd_14a_reader_bytes_transfer(
+                        PCD_TRANSCEIVE,
+                        pDataSend,
+                        szDataSend,
+                        pDataRecv,
+                        pszDataRecv,
+                        szDataRecvBitMax
+                    );
+                }
+            }
+            
+            // If we need to receive data, we need to perform further operations on the data based on the remaining configuration after receiving it
+            if (waitResp) {
+                // Number of bits to bytes
+                uint8_t finalRecvBytes = (*pszDataRecv / 8) + (*pszDataRecv % 8 > 0 ? 1 : 0);
+                // If CRC verification is required, we need to perform CRC calculation
+                if (checkCrc) {
+                    if (finalRecvBytes >= 3) {	// Ensure at least three bytes (one byte of data+two bytes of CRC)
+                        // Calculate and store CRC
+                        uint8_t crc_buff[DEF_CRC_LENGTH] = { 0x00 };
+                        crc_14a_calculate(pDataRecv, finalRecvBytes - DEF_CRC_LENGTH, crc_buff);
+                        // Verify CRC
+                        if (pDataRecv[finalRecvBytes - 2] != crc_buff[0] ||  pDataRecv[finalRecvBytes - 1] != crc_buff[1]) {
+                            // We have found an error in CRC verification and need to inform the upper computer!
+                            *pszDataRecv = 0;
+                            status = HF_ERR_CRC;
+                        } else {
+                            // If the CRC needs to be verified by the device and the device determines that the CRC is normal, 
+                            // we will return the data without CRC
+                            *pszDataRecv = finalRecvBytes - DEF_CRC_LENGTH;
+                        }
+                    } else {
+                        // The data is insufficient to support the length of the CRC, so it is returned as is
+                        *pszDataRecv = 0;
+                    }
+                } else {
+                    // Do not verify CRC, all data is returned as is
+                    *pszDataRecv = finalRecvBytes;
+                }
+                // We need to recover the timeout value
+                g_com_timeout_ms = oldWaitRespTimeout;
+            } else {
+                *pszDataRecv = 0;
+            }
+        }
+    }
+		
+	// Finally, keep the field open as needed
+	if (!keepField) {
+		pcd_14a_reader_antenna_off();
+	}
+
+	return status;
 }

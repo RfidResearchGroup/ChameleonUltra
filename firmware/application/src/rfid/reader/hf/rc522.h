@@ -220,6 +220,9 @@ uint8_t pcd_14a_reader_mf1_read(uint8_t addr, uint8_t *pData);
 uint8_t pcd_14a_reader_halt_tag(void);
 void pcd_14a_reader_fast_halt_tag(void);
 
+uint8_t pcd_14a_reader_raw_cmd(bool openRFField, bool waitResp, bool appendCrc, bool bitsFrame, bool autoSelect, bool keepField, bool checkCrc, uint16_t waitRespTimeout, 
+                               uint16_t szDataSend, uint8_t* pDataSend, uint8_t* pDataRecv, uint16_t* pszDataRecv, uint16_t szDataRecvBitMax);
+
 // UID & UFUID tag operation
 uint8_t pcd_14a_reader_gen1a_unlock(void);
 uint8_t pcd_14a_reader_gen1a_uplock(void);
