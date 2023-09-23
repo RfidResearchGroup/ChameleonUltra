@@ -24,6 +24,7 @@ NRF_LOG_MODULE_REGISTER();
 #define RC522_DOSEL nrf_gpio_pin_clear(HF_SPI_SELECT)
 #define RC522_UNSEL nrf_gpio_pin_set(HF_SPI_SELECT)
 
+bool g_is_reader_antenna_on = false;
 
 //CRC 14A calculator, when the MCU performance is too weak, or when the MCU is busy, you can use 522 to calculate CRC
 static uint8_t m_crc_computer = 0;
@@ -971,6 +972,8 @@ void pcd_14a_reader_calc_crc(uint8_t *pbtData, size_t szLen, uint8_t *pbtCrc) {
 */
 inline void pcd_14a_reader_antenna_on(void) {
     set_register_mask(TxControlReg, 0x03);
+    g_is_reader_antenna_on = true;
+    TAG_FIELD_LED_ON();
 }
 
 /**
@@ -978,6 +981,8 @@ inline void pcd_14a_reader_antenna_on(void) {
 */
 inline void pcd_14a_reader_antenna_off(void) {
     clear_register_mask(TxControlReg, 0x03);
+    g_is_reader_antenna_on = false;
+    TAG_FIELD_LED_OFF();
 }
 
 /**
