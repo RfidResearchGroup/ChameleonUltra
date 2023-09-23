@@ -617,7 +617,7 @@ class ChameleonCMD:
         resp.data = resp.status == chameleon_status.Device.HF_TAG_OK
         return resp
 
-    def hf14a_raw(self, options, resp_timeout_ms=100, data=[], bit_owned_by_the_last_byte=None):
+    def hf14a_raw(self, options, resp_timeout_ms=100, data=[], bitlen=None):
         """
         Send raw cmd to 14a tag
         :param options:
@@ -629,39 +629,34 @@ class ChameleonCMD:
         
         class CStruct(ctypes.BigEndianStructure):
             _fields_ = [
-                ("open_rf_field", ctypes.c_uint8, 1),
+                ("activate_rf_field", ctypes.c_uint8, 1),
                 ("wait_response", ctypes.c_uint8, 1),
                 ("append_crc", ctypes.c_uint8, 1),
-                ("bit_frame", ctypes.c_uint8, 1),
                 ("auto_select", ctypes.c_uint8, 1),
                 ("keep_rf_field", ctypes.c_uint8, 1),
                 ("check_response_crc", ctypes.c_uint8, 1),
-                ("reserved", ctypes.c_uint8, 1),
+                ("reserved", ctypes.c_uint8, 2),
             ]
 
         cs = CStruct()
-        cs.open_rf_field = options['open_rf_field']
+        cs.activate_rf_field = options['activate_rf_field']
         cs.wait_response = options['wait_response']
         cs.append_crc = options['append_crc']
-        cs.bit_frame = options['bit_frame']
         cs.auto_select = options['auto_select']
         cs.keep_rf_field = options['keep_rf_field']
         cs.check_response_crc = options['check_response_crc']
 
-        if options['bit_frame'] == 1:
-            bits_or_bytes = len(data) * 8 # bits = bytes * 8(bit)
-            if bit_owned_by_the_last_byte is not None and bit_owned_by_the_last_byte != 8:
-                bits_or_bytes = bits_or_bytes - (8 - bit_owned_by_the_last_byte)
+        if bitlen is None:
+            bitlen = len(data) * 8  # bits = bytes * 8(bit)
         else:
-            bits_or_bytes = len(data) # bytes length
+            if len(data) == 0:
+                raise ValueError(f'bitlen={bitlen} but missing data')
+            if not ((len(data) - 1) * 8 < bitlen <= len(data) * 8):
+                raise ValueError(f'bitlen={bitlen} incompatible with provided data ({len(data)} bytes), '
+                                 f'must be between {((len(data) - 1) * 8 )+1} and {len(data) * 8} included')
 
-        if len(data) > 0:
-            data = struct.pack(f'!BHH{len(data)}s', bytes(cs)[0], resp_timeout_ms, bits_or_bytes, bytearray(data))
-        else:
-            data = struct.pack(f'!BHH', bytes(cs)[0], resp_timeout_ms, 0)
-
+        data = bytes(cs)+struct.pack(f'!HH{len(data)}s', resp_timeout_ms, bitlen, bytearray(data))
         return self.device.send_cmd_sync(DATA_CMD_HF14A_RAW, data, timeout=(resp_timeout_ms / 1000) + 1)
-
 
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def mf1_static_nested_acquire(self, block_known, type_known, key_known, block_target, type_target):
@@ -1228,26 +1223,24 @@ def test_fn():
     cml.set_device_reader_mode()
 
     options = {
-        'open_rf_field': 1,
+        'activate_rf_field': 1,
         'wait_response': 1,
         'append_crc': 0,
-        'bit_frame': 1,
         'auto_select': 0,
         'keep_rf_field': 1,
         'check_response_crc': 0,
     }
 
     # unlock 1
-    resp = cml.hf14a_raw(options=options, resp_timeout_ms=1000, data=[0x40], bit_owned_by_the_last_byte=7)
+    resp = cml.hf14a_raw(options=options, resp_timeout_ms=1000, data=[0x40], bitlen=7)
 
     if resp.status == 0x00 and resp.data[0] == 0x0a:
         print("Gen1A unlock 1 success")
         # unlock 2
-        options['bit_frame'] = 0
         resp = cml.hf14a_raw(options=options, resp_timeout_ms=1000, data=[0x43])
         if resp.status == 0x00 and resp.data[0] == 0x0a:
             print("Gen1A unlock 2 success")
-            print("Start dump gen1a memeory...")
+            print("Start dump gen1a memory...")
             block = 0
             while block < 64:
                 # Tag read block cmd

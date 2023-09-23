@@ -1589,26 +1589,34 @@ class HF14ARaw(ReaderRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
-        parser.add_argument('-r', '--response', help="do not read response", action='store_true', default=False,)
-        parser.add_argument('-c', '--crc', help="calculate and append CRC", action='store_true', default=False,)
-        parser.add_argument('-cc', '--crc-clear', help="Verify and clear CRC of received data", action='store_true', default=False,)
-        parser.add_argument('-k', '--keep-rf', help="keep signal field ON after receive", action='store_true', default=False,)
-        parser.add_argument('-o', '--open-rf', help="active signal field ON", action='store_true', default=False,)
-        parser.add_argument('-s', '--select-tag', help="Select the tag before executing the command", action='store_true', default=False,)
-        parser.add_argument('-b', '--bits', type=int, help="number of bits to send. Useful for send partial byte")
-        parser.add_argument('-t', '--timeout', type=int, help="timeout in ms", default=100)
+        parser.add_argument('-a', '--activate-rf', help="Active signal field ON without select", action='store_true', default=False,)
+        parser.add_argument('-s', '--select-tag', help="Active signal field ON with select", action='store_true', default=False,)
+        # TODO: parser.add_argument('-3', '--type3-select-tag', help="Active signal field ON with ISO14443-3 select (no RATS)", action='store_true', default=False,)
         parser.add_argument('-d', '--data', type=str, help="Data to be sent")
+        parser.add_argument('-b', '--bits', type=int, help="Number of bits to send. Useful for send partial byte")
+        parser.add_argument('-c', '--crc', help="Calculate and append CRC", action='store_true', default=False,)
+        parser.add_argument('-r', '--response', help="Do not read response", action='store_true', default=False,)
+        parser.add_argument('-cc', '--crc-clear', help="Verify and clear CRC of received data", action='store_true', default=False,)
+        parser.add_argument('-k', '--keep-rf', help="Keep signal field ON after receive", action='store_true', default=False,)
+        parser.add_argument('-t', '--timeout', type=int, help="Timeout in ms", default=100)
+        # TODO: need support for carriage returns in parser, why are they mangled?
+        # parser.description = 'Examples:\n' \
+        #                      '  hf 14a raw -b 7 -d 40 -k\n' \
+        #                      '  hf 14a raw -d 43 -k\n' \
+        #                      '  hf 14a raw -d 3000 -c\n' \
+        #                      '  hf 14a raw -sc -d 6000\n'
         return parser
+
 
     def on_exec(self, args: argparse.Namespace):
         options = {
-            'open_rf_field': self.bool_to_bit(args.open_rf),
-            'wait_response': self.bool_to_bit(args.response == False),
+            'activate_rf_field': self.bool_to_bit(args.activate_rf),
+            'wait_response': self.bool_to_bit(not args.response),
             'append_crc': self.bool_to_bit(args.crc),
-            'bit_frame': self.bool_to_bit(args.bits is not None),
             'auto_select': self.bool_to_bit(args.select_tag),
             'keep_rf_field': self.bool_to_bit(args.keep_rf),
             'check_response_crc': self.bool_to_bit(args.crc_clear),
+            #'auto_type3_select': self.bool_to_bit(args.type3-select-tag),
         }
         data: str = args.data
         if data is not None:
@@ -1624,6 +1632,10 @@ class HF14ARaw(ReaderRequiredUnit):
                 return
         else:
             data_bytes = []
+        if args.bits is not None and args.crc:
+            print(f" [!] {CR}--bits and --crc are mutually exclusive{C0}")
+            return
+
         # Exec 14a raw cmd.
         resp = self.cmd.hf14a_raw(options, args.timeout, data_bytes, args.bits)
         if resp.status == chameleon_status.Device.HF_TAG_OK:
@@ -1632,9 +1644,9 @@ class HF14ARaw(ReaderRequiredUnit):
                     # print head
                     " - " + 
                     # print data
-                    ' '.join([ hex(byte).replace('0x', '').rjust(2, '0') for byte in resp.data ])
+                    ' '.join([hex(byte).replace('0x', '').rjust(2, '0') for byte in resp.data])
                 )
             else:
-                print(F" [*] {CY}No data response{C0}")
+                print(F" [*] {CY}No response{C0}")
         else:
             print(f" [!] {CR}{chameleon_status.message[resp.status]}{C0} ")

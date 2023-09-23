@@ -251,6 +251,17 @@ Notes:
 * Command: 24 bytes: `type|block|key[6]|block_data[16]`. Key as 6 bytes.
 * Response: no data
 * CLI: cf `hf mf wrbl`
+### 2010: HF14A_RAW
+* Command: : 5+N bytes: `options|resp_timeout_ms[2]|bitlen[2]` followed by data to be transmitted, with `options` a 1-byte BigEndian bitfield, so starting from MSB:
+  * `activate_rf_field`:1
+  * `wait_response`:1
+  * `append_crc`:1
+  * `auto_select`:1
+  * `keep_rf_field`:1
+  * `check_response_crc`:1
+  * `reserved`:2
+* Response: data sent by the card
+* CLI: cf `hf 14a raw`
 ### 3000: EM410X_SCAN
 * Command: no data
 * Response: 5 bytes. `id[5]`. ID as 5 bytes.
@@ -356,6 +367,7 @@ Be verbose, explicit and reuse conventions, in order to enhance code maintainabi
 ### Guideline: Structs
 - Define C `struct` for cmd/resp data greater than a single byte, use and abuse of `struct.pack`/`struct.unpack` in Python. So one can understand the payload format at a simple glimpse. Exceptions to `C` struct are when the formats are of variable length (but Python `struct` is still flexible enough to cope with such formats!)
 - Avoid hardcoding offsets, use `sizeof()`, `offsetof(struct, field)` in C and `struct.calcsize()` in Python
+- For complex bitfield structs, exceptionally you can use ctypes in Python. Beware ctypes.BigEndianStructure bitfield will be parsed in the firmware in the reverse order, from LSB to MSB.
 ### Guideline: Status
 If single byte of data to return, still use a 1-byte `data`, not `status`. Standard response status is `STATUS_DEVICE_SUCCESS` for general commands, `HF_TAG_OK` for HF commands and `LF_TAG_OK` for LF commands. If the response status is different than those, the response data is empty. Response status are generic and cover things like tag disappearance or tag non-conformities with the ISO standard. If a command needs more specific response status, it is added in the first byte of the data, to avoid cluttering the 1-byte general status enum with command-specific statuses. See e.g. [MF1_DARKSIDE_ACQUIRE](#2004-mf1_darkside_acquire).
 ### Guideline: unambiguous types

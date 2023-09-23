@@ -404,21 +404,20 @@ static data_frame_tx_t *cmd_processor_hf14a_raw(uint16_t cmd, uint16_t status, u
     uint16_t resp_length = 0;
 
     typedef struct {
-        struct { // MSB -> LSB
-            uint8_t reserved : 1;
+        struct { // LSB -> MSB
+            uint8_t reserved : 2;
 
             uint8_t check_response_crc : 1;
             uint8_t keep_rf_field : 1;
             uint8_t auto_select : 1;
-            uint8_t bit_frame : 1;
             uint8_t append_crc : 1;
             uint8_t wait_response : 1;
-            uint8_t open_rf_field : 1;
+            uint8_t activate_rf_field : 1;
         } options;
 
         // U16NTOHS
         uint16_t resp_timeout;
-        uint16_t data_length;
+        uint16_t data_bitlength;
 
         uint8_t data_buffer[0]; // We can have a lot of data or no data. struct just to compute offsets with min options.
     } PACKED payload_t;
@@ -427,27 +426,25 @@ static data_frame_tx_t *cmd_processor_hf14a_raw(uint16_t cmd, uint16_t status, u
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
-    NRF_LOG_INFO("open_rf_field      = %d", payload->options.open_rf_field);
+    NRF_LOG_INFO("activate_rf_field  = %d", payload->options.activate_rf_field);
     NRF_LOG_INFO("wait_response      = %d", payload->options.wait_response);
     NRF_LOG_INFO("append_crc         = %d", payload->options.append_crc);
-    NRF_LOG_INFO("bit_frame          = %d", payload->options.bit_frame);
     NRF_LOG_INFO("auto_select        = %d", payload->options.auto_select);
     NRF_LOG_INFO("keep_rf_field      = %d", payload->options.keep_rf_field);
     NRF_LOG_INFO("check_response_crc = %d", payload->options.check_response_crc);
     NRF_LOG_INFO("reserved           = %d", payload->options.reserved);
 
     status = pcd_14a_reader_raw_cmd(
-        payload->options.open_rf_field,
+        payload->options.activate_rf_field,
         payload->options.wait_response,
         payload->options.append_crc,
-        payload->options.bit_frame,
         payload->options.auto_select,
         payload->options.keep_rf_field,
         payload->options.check_response_crc,
 
         U16NTOHS(payload->resp_timeout),
 
-        U16NTOHS(payload->data_length),
+        U16NTOHS(payload->data_bitlength),
         payload->data_buffer,
 
         resp,
