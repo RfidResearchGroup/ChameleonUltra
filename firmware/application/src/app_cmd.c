@@ -49,11 +49,7 @@ static data_frame_tx_t *cmd_processor_get_git_version(uint16_t cmd, uint16_t sta
 
 
 static data_frame_tx_t *cmd_processor_get_device_model(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-#if defined(PROJECT_CHAMELEON_ULTRA)
-    uint8_t resp_data = 1;
-#else
-    uint8_t resp_data = 0;
-#endif
+    uint8_t resp_data = hw_get_device_type();
     return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, sizeof(resp_data), &resp_data);
 }
 

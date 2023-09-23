@@ -166,7 +166,7 @@ In the following list, "CLI" refers to one typical CLI command using the describ
 * CLI: cf `hw ble bonds clear`
 ### 1033: GET_DEVICE_MODEL
 * Command: no data
-* Response: 1 byte. `hw_version` aka `NRF_DFU_HW_VERSION` (0=Ultra, 1=Lite)
+* Response: 1 byte. `hw_version` aka `NRF_DFU_HW_VERSION` according to `chameleon_device_type_t` enum (0=Ultra, 1=Lite)
 * CLI: cf `hw version`
 ### 1034: GET_DEVICE_SETTINGS
 * Command: no data

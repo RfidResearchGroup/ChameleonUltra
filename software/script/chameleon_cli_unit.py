@@ -244,7 +244,7 @@ class HWConnect(BaseCLIUnit):
             self.device_com.open(args.port)
             self.device_com.commands = self.cmd.get_device_capabilities()
             major, minor = self.cmd.get_app_version()
-            model = 'Ultra' if self.cmd.get_device_model() else 'Lite'
+            model = ['Ultra', 'Lite'][self.cmd.get_device_model()]
             print(f" {{ Chameleon {model} connected: v{major}.{minor} }}")
 
         except Exception as e:
@@ -306,7 +306,7 @@ class HWVersion(DeviceRequiredUnit):
         fw_version_tuple = self.cmd.get_app_version()
         fw_version = f'v{fw_version_tuple[0]}.{fw_version_tuple[1]}'
         git_version = self.cmd.get_git_version()
-        model = 'Ultra' if self.cmd.get_device_model() else 'Lite'
+        model = ['Ultra', 'Lite'][self.cmd.get_device_model()]
         print(f' - Chameleon {model}, Version: {fw_version} ({git_version})')
 
 
