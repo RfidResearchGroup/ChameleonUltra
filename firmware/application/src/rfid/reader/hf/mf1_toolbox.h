@@ -91,7 +91,7 @@ uint8_t nested_recover_key(NESTED_CORE_PARAM_DEF, mf1_nested_core_t ncs[SETS_NR]
 uint8_t static_nested_recover_key(NESTED_CORE_PARAM_DEF, mf1_static_nested_core_t *sncs);
 
 uint8_t check_prng_type(mf1_prng_type_t *type);
-uint8_t check_std_mifare_nt_support(bool *support);
+uint8_t check_std_mifare_nt_support();
 void antenna_switch_delay(uint32_t delay_ms);
 uint8_t auth_key_use_522_hw(uint8_t block, uint8_t type, uint8_t *key);
 

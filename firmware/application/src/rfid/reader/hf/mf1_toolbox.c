@@ -609,7 +609,7 @@ uint8_t check_tag_response_nt(picc_14a_tag_t *tag, uint32_t *nt) {
 * Lost card hf_tag_no and wrong status hf_errstat
 *
 */
-uint8_t check_std_mifare_nt_support(bool *support) {
+uint8_t check_std_mifare_nt_support(void) {
     uint32_t nt1 = 0;
 
     // Find card, search on the field
@@ -617,13 +617,8 @@ uint8_t check_std_mifare_nt_support(bool *support) {
         return HF_TAG_NO;
     }
 
-    // Get NT
-    uint8_t status = check_tag_response_nt(p_tag_info, &nt1);
-    if (status == HF_TAG_NO) {
-        return HF_TAG_NO;
-    }
-    *support = status == HF_TAG_OK;
-    return HF_TAG_OK;
+    // Get NT and return status
+    return check_tag_response_nt(p_tag_info, &nt1);
 }
 
 /**

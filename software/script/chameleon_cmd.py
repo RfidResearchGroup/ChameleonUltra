@@ -508,16 +508,13 @@ class ChameleonCMD:
             resp.data = data
         return resp
 
-    @expect_response(chameleon_status.Device.HF_TAG_OK)
     def mf1_detect_support(self):
         """
         Detect whether it is mifare classic tag
         :return:
         """
         resp = self.device.send_cmd_sync(DATA_CMD_MF1_DETECT_SUPPORT)
-        if resp.status == chameleon_status.Device.HF_TAG_OK:
-            resp.data, = struct.unpack('!?', resp.data)
-        return resp
+        return resp.status == chameleon_status.Device.HF_TAG_OK
 
     @expect_response(chameleon_status.Device.HF_TAG_OK)
     def mf1_detect_prng(self):
