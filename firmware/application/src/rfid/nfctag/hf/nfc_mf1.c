@@ -1119,6 +1119,10 @@ int nfc_tag_mf1_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer)
             NRF_LOG_INFO("The mf1 is shadow write mode.");
             return 0;
         }
+        if (m_tag_information->config.mode_block_write == NFC_TAG_MF1_WRITE_SHADOW_REQ) {
+            NRF_LOG_INFO("The mf1 will be set to shadow write mode.");
+            m_tag_information->config.mode_block_write = NFC_TAG_MF1_WRITE_SHADOW;
+        }
         // Save the corresponding size data according to the current label type
         return get_information_size_by_tag_type(type, false);
     } else {
@@ -1259,6 +1263,9 @@ bool nfc_tag_mf1_is_use_mf1_coll_res(void) {
 
 // Set write mode
 void nfc_tag_mf1_set_write_mode(nfc_tag_mf1_write_mode_t write_mode) {
+    if (write_mode == NFC_TAG_MF1_WRITE_SHADOW) {
+        write_mode = NFC_TAG_MF1_WRITE_SHADOW_REQ;
+    }
     m_tag_information->config.mode_block_write = write_mode;
 }
 

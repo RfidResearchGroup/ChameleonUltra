@@ -265,6 +265,8 @@ class MifareClassicWriteMode(enum.IntEnum):
     DECEIVE = 2
     # Store data to RAM, but not to ROM
     SHADOW = 3
+    # Shadow requested, will be changed to SHADOW and stored to ROM
+    SHADOW_REQ = 4
 
     @staticmethod
     def list():
@@ -279,6 +281,8 @@ class MifareClassicWriteMode(enum.IntEnum):
             return "Deceive"
         elif self == MifareClassicWriteMode.SHADOW:
             return "Shadow"
+        elif self == MifareClassicWriteMode.SHADOW_REQ:
+            return "Shadow requested"
         return "None"
 
 

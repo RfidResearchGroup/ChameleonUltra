@@ -15,10 +15,11 @@
 
 //MF1 label writing mode
 typedef enum {
-    NFC_TAG_MF1_WRITE_NORMAL    = 0u,
-    NFC_TAG_MF1_WRITE_DENIED    = 1u,
-    NFC_TAG_MF1_WRITE_DECEIVE   = 2u,
-    NFC_TAG_MF1_WRITE_SHADOW    = 3u,
+    NFC_TAG_MF1_WRITE_NORMAL     =   0u,
+    NFC_TAG_MF1_WRITE_DENIED     =   1u,
+    NFC_TAG_MF1_WRITE_DECEIVE    =   2u,
+    NFC_TAG_MF1_WRITE_SHADOW     =   3u,
+    NFC_TAG_MF1_WRITE_SHADOW_REQ =   4u,
 } nfc_tag_mf1_write_mode_t;
 
 // MF1 tag Gen1a mode state machine
