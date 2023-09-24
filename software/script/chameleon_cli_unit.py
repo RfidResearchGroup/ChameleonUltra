@@ -9,6 +9,7 @@ import sys
 import time
 import serial.tools.list_ports
 import threading
+import struct
 from platform import uname
 
 import chameleon_com
@@ -190,6 +191,7 @@ hf = CLITree('hf', 'high frequency tag/reader')
 hf_14a = hf.subgroup('14a', 'ISO14443-a tag read/write/info...')
 hf_mf = hf.subgroup('mf', 'Mifare Classic mini/1/2/4, attack/read/write')
 hf_mf_detection = hf.subgroup('detection', 'Mifare Classic detection log')
+hf_mfu = hf.subgroup('mfu', 'Mifare Ultralight, read/write')
 
 lf = CLITree('lf', 'low frequency tag/reader')
 lf_em = lf.subgroup('em', 'EM410x read/write/emulator')
@@ -592,6 +594,24 @@ class BaseMF1AuthOpera(ReaderRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
+class BaseMFUAuthOpera(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        parser = ArgumentParserNoExit()
+        # TODO:
+        #     -k, --key <hex>                Authentication key (UL-C 16 bytes, EV1/NTAG 4 bytes)
+        #     -l                             Swap entered key's endianness
+        return parser
+
+    def get_param(self, args):
+        class Param:
+            def __init__(self):
+                pass
+        return Param()
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError("Please implement this")
+
+
 @hf_mf.command('rdbl', 'Mifare Classic read one block')
 class HFMFRDBL(BaseMF1AuthOpera):
     # hf mf rdbl -b 2 -t A -k FFFFFFFFFFFF
@@ -954,6 +974,91 @@ class HFMFInfo(DeviceRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         return self.scan()
+
+@hf_mfu.command('rdpg', 'MIFARE Ultralight read one page')
+class HFMFURDPG(BaseMFUAuthOpera):
+    # hf mfu rdpg -p 2
+
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        parser = super(HFMFURDPG, self).args_parser()
+        parser.add_argument('-p', '--page', type=int, required=True, metavar="decimal",
+                            help="The page where the key will be used against")
+        return parser
+
+    def get_param(self, args):
+        class Param:
+            def __init__(self):
+                self.page = args.page
+        return Param()
+
+    def on_exec(self, args: argparse.Namespace):
+        param = self.get_param(args)
+
+        options = {
+            'activate_rf_field': 0,
+            'wait_response': 1,
+            'append_crc': 1,
+            'auto_select': 1,
+            'keep_rf_field': 0,
+            'check_response_crc': 1,
+        }
+        # TODO: auth first if a key is given
+        resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x30, param.page))
+        print(f" - Data: {resp[:4].hex()}")
+
+@hf_mfu.command('dump', 'MIFARE Ultralight dump pages')
+class HFMFUDUMP(BaseMFUAuthOpera):
+    # hf mfu dump [-p start_page] [-q number_pages] [-f output_file]
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        parser = super(HFMFUDUMP, self).args_parser()
+        parser.add_argument('-p', '--page', type=int, required=False, metavar="decimal", default=0,
+                            help="Manually set number of pages to dump")
+        parser.add_argument('-q', '--qty', type=int, required=False, metavar="decimal", default=16,
+                            help="Manually set number of pages to dump")
+        parser.add_argument('-f', '--file', type=str, required=False, default="",
+                            help="Specify a filename for dump file")
+        return parser
+
+    def get_param(self, args):
+        class Param:
+            def __init__(self):
+                self.start_page = args.page
+                self.stop_page = args.page + args.qty
+                self.output_file = args.file
+        return Param()
+
+    def on_exec(self, args: argparse.Namespace):
+        param = self.get_param(args)
+        fd = None
+        save_as_eml = False
+        if param.output_file != "":
+            if param.output_file.endswith('.eml'):
+                fd = open(param.output_file, 'w+')
+                save_as_eml = True
+            else:
+                fd = open(param.output_file, 'wb+')
+        # TODO: auth first if a key is given
+        options = {
+            'activate_rf_field': 0,
+            'wait_response': 1,
+            'append_crc': 1,
+            'auto_select': 1,
+            'keep_rf_field': 0,
+            'check_response_crc': 1,
+        }
+        for i in range(param.start_page, param.stop_page):
+            resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x30, i))
+            # TODO: can be optimized as we get 4 pages at once but beware of wrapping in case of end of memory or LOCK on ULC and no key provided
+            data = resp[:4]
+            print(f" - Page {i:2}: {data.hex()}")
+            if fd is not None:
+                if save_as_eml:
+                    fd.write(data.hex()+'\n')
+                else:
+                    fd.write(data)
+        if fd is not None:
+            print(f" - {colorama.Fore.GREEN}Dump written in {param.output_file}.{colorama.Style.RESET_ALL}")
+            fd.close()
 
 
 @lf_em.command('read', 'Scan em410x tag and print id')

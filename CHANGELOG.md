@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Added MIFARE Ultralight reading features (@FlUxIuS & @doegox)
  - Fixed MF1 write mode SHADOW was not preserved properly (@doegox)
  - Changed slot enabled logic: now we have separate enabled_hf and enabled_lf, changed GET_ENABLED_SLOTS and SET_SLOT_ENABLE (@doegox)
  - Changed tag type enum to be ready for new types, changed stored slotConfig and GET_SLOT_INFO (@doegox)
