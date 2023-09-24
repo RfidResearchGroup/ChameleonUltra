@@ -1638,15 +1638,12 @@ class HF14ARaw(ReaderRequiredUnit):
 
         # Exec 14a raw cmd.
         resp = self.cmd.hf14a_raw(options, args.timeout, data_bytes, args.bits)
-        if resp.status == chameleon_status.Device.HF_TAG_OK:
-            if len(resp.data) > 0:
-                print(
-                    # print head
-                    " - " + 
-                    # print data
-                    ' '.join([hex(byte).replace('0x', '').rjust(2, '0') for byte in resp.data])
-                )
-            else:
-                print(F" [*] {CY}No response{C0}")
+        if len(resp) > 0:
+            print(
+                # print head
+                " - " +
+                # print data
+                ' '.join([hex(byte).replace('0x', '').rjust(2, '0') for byte in resp])
+            )
         else:
-            print(f" [!] {CR}{chameleon_status.message[resp.status]}{C0} ")
+            print(F" [*] {CY}No response{C0}")

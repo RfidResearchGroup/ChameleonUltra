@@ -618,6 +618,7 @@ class ChameleonCMD:
         resp.data = resp.status == chameleon_status.Device.HF_TAG_OK
         return resp
 
+    @expect_response(chameleon_status.Device.HF_TAG_OK)
     def hf14a_raw(self, options, resp_timeout_ms=100, data=[], bitlen=None):
         """
         Send raw cmd to 14a tag
@@ -1213,7 +1214,11 @@ class ChameleonCMD:
 def test_fn():
     # connect to chameleon
     dev = chameleon_com.ChameleonCom()
-    dev.open("com19")
+    try:
+        dev.open('com19')
+    except chameleon_com.OpenFailException:
+        dev.open('/dev/ttyACM0')
+
     cml = ChameleonCMD(dev)
     ver = cml.get_app_version()
     print(f"Firmware number of application: {ver[0]}.{ver[1]}")
@@ -1232,44 +1237,42 @@ def test_fn():
         'check_response_crc': 0,
     }
 
-    # unlock 1
-    resp = cml.hf14a_raw(options=options, resp_timeout_ms=1000, data=[0x40], bitlen=7)
+    try:
+        # unlock 1
+        resp = cml.hf14a_raw(options=options, resp_timeout_ms=1000, data=[0x40], bitlen=7)
 
-    if resp.status == 0x00 and resp.data[0] == 0x0a:
-        print("Gen1A unlock 1 success")
-        # unlock 2
-        resp = cml.hf14a_raw(options=options, resp_timeout_ms=1000, data=[0x43])
-        if resp.status == 0x00 and resp.data[0] == 0x0a:
-            print("Gen1A unlock 2 success")
-            print("Start dump gen1a memory...")
-            block = 0
-            while block < 64:
-                # Tag read block cmd
-                cmd_read_gen1a_block = [0x30, block]
-                
+        if resp[0] == 0x0a:
+            print("Gen1A unlock 1 success")
+            # unlock 2
+            resp = cml.hf14a_raw(options=options, resp_timeout_ms=1000, data=[0x43])
+            if resp[0] == 0x0a:
+                print("Gen1A unlock 2 success")
+                print("Start dump gen1a memory...")
                 # Transfer with crc
                 options['append_crc'] = 1
                 options['check_response_crc'] = 1
-                resp = cml.hf14a_raw(options=options, resp_timeout_ms=100, data=cmd_read_gen1a_block)
-                
-                print(f"Block {block} : {resp.data.hex()}")
-                block += 1
+                block = 0
+                while block < 64:
+                    # Tag read block cmd
+                    cmd_read_gen1a_block = [0x30, block]
+                    if block == 63:
+                        options['keep_rf_field'] = 0
+                    resp = cml.hf14a_raw(options=options, resp_timeout_ms=100, data=cmd_read_gen1a_block)
 
-            # Close rf field
-            options['keep_rf_field'] = 0
-            resp = cml.hf14a_raw(options=options)
+                    print(f"Block {block} : {resp.hex()}")
+                    block += 1
+
+            else:
+                print("Gen1A unlock 2 fail")
         else:
-            print("Gen1A unlock 2 fail")
-    else:
-        print("Gen1A unlock 1 fail")
+            print("Gen1A unlock 1 fail")
+    except:
+        options['keep_rf_field'] = 0
+        options['wait_response'] = 0
+        cml.hf14a_raw(options=options)
 
     # disconnect
     dev.close()
-
-    # never exit
-    while True:
-        pass
-
 
 if __name__ == '__main__':
     test_fn()

@@ -341,6 +341,11 @@ class ChameleonCom:
 
 
 if __name__ == '__main__':
-    cml = ChameleonCom().open("com19")
-    resp = cml.send_cmd_sync(0x03E9, bytearray([0x01, 0x02]), 0xBEEF)
-    print(resp)
+    try:
+        cml = ChameleonCom().open('com19')
+    except OpenFailException:
+        cml = ChameleonCom().open('/dev/ttyACM0')
+    resp = cml.send_cmd_sync(0x03E8, None, 0)
+    print(resp.status)
+    print(resp.data)
+    cml.close()
