@@ -382,7 +382,7 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
     // Verification instructions need to add CRC16
     crc_14a_append(tag_auth, 2);
     rgb_marquee_stop();
-    set_slot_light_color(1);
+    set_slot_light_color(RGB_GREEN);
     uint32_t *led_pins = hw_get_led_array();
     for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
         nrf_gpio_pin_clear(led_pins[i]);

@@ -299,7 +299,7 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
         g_usb_led_marquee_enable = false;
 
         // LED status update
-        set_slot_light_color(2);
+        set_slot_light_color(RGB_BLUE);
         TAG_FIELD_LED_ON()
 
         //In any case, every time the state finds changes, you need to reset the BIT location of the sending

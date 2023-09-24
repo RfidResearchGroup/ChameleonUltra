@@ -238,20 +238,36 @@ void init_leds(void) {
  * @brief Function for enter tag emulation mode
  * @param color: 0 means r, 1 means g, 2 means b
  */
-void set_slot_light_color(uint8_t color) {
+void set_slot_light_color(chameleon_rgb_type_t color) {
     nrf_gpio_pin_set(LED_R);
     nrf_gpio_pin_set(LED_G);
     nrf_gpio_pin_set(LED_B);
     switch (color) {
-        case 0:
+        case RGB_RED:
             nrf_gpio_pin_clear(LED_R);
             break;
-        case 1:
+        case RGB_GREEN:
             nrf_gpio_pin_clear(LED_G);
             break;
-        case 2:
+        case RGB_BLUE:
+            nrf_gpio_pin_clear(LED_B);
+            break;
+        case RGB_MAGENTA:
+            nrf_gpio_pin_clear(LED_B);
+            nrf_gpio_pin_clear(LED_R);
+            break;
+        case RGB_YELLOW:
+            nrf_gpio_pin_clear(LED_R);
+            nrf_gpio_pin_clear(LED_G);
+            break;
+        case RGB_CYAN:
+            nrf_gpio_pin_clear(LED_G);
+            nrf_gpio_pin_clear(LED_B);
+            break;
+        case RGB_WHITE:
+            nrf_gpio_pin_clear(LED_R);
+            nrf_gpio_pin_clear(LED_G);
             nrf_gpio_pin_clear(LED_B);
             break;
     }
-
 }

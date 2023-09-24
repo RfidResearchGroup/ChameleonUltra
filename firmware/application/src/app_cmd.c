@@ -28,7 +28,7 @@ static void change_slot_auto(uint8_t slot) {
     device_mode_t mode = get_device_mode();
     tag_emulation_change_slot(slot, mode != DEVICE_MODE_READER);
     light_up_by_slot();
-    set_slot_light_color(0);
+    set_slot_light_color(RGB_RED);
 }
 
 
@@ -557,7 +557,7 @@ static data_frame_tx_t *cmd_processor_set_slot_enable(uint16_t cmd, uint16_t sta
         uint8_t slot_prev = tag_emulation_slot_find_next(slot_now);
         NRF_LOG_INFO("slot_now = %d, slot_prev = %d", slot_now, slot_prev);
         if (slot_prev == slot_now) {
-            set_slot_light_color(3);
+            set_slot_light_color(RGB_MAGENTA);
         } else {
             change_slot_auto(slot_prev);
         }

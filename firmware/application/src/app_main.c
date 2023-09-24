@@ -250,7 +250,7 @@ static void system_off_enter(void) {
     if (g_is_low_battery_shutdown) {
         // Don't create too complex animations, just blink LED1 three times.
         rgb_marquee_stop();
-        set_slot_light_color(0);
+        set_slot_light_color(RGB_RED);
         for (uint8_t i = 0; i <= 3; i++) {
             nrf_gpio_pin_set(LED_1);
             bsp_delay_ms(100);
