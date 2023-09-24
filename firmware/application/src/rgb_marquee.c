@@ -479,8 +479,8 @@ void ledblink6(void) {
         } else {
             ledblink6_step = 0;
             //if (++ledblink6_color == RGB_WHITE) ledblink6_color = RGB_RED;
-            uint8_t new_color=rand()%6;
-            for (; new_color == ledblink6_color; new_color=rand()%6);
+            uint8_t new_color = rand() % 6;
+            for (; new_color == ledblink6_color; new_color = rand() % 6);
             ledblink6_color = new_color;
         }
     }

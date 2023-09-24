@@ -164,7 +164,7 @@ class TagSpecificType(enum.IntEnum):
 
     ###### LF ######
 
-    #### ASK Tag-Talk-First   100
+    #### ASK Tag-Talk-First      100 ####
     # EM410x
     TAG_TYPE_EM410X = 100,
     # FDX-B
@@ -177,18 +177,18 @@ class TagSpecificType(enum.IntEnum):
     # Noralsy
     # Jablotron
 
-    #### FSK Tag-Talk-First   200
+    #### FSK Tag-Talk-First      200 ####
     # HID Prox
     # ioProx
     # AWID
     # Paradox
 
-    #### PSK Tag-Talk-First   300
+    #### PSK Tag-Talk-First      300 ####
     # Indala
     # Keri
     # NexWatch
 
-    #### Reader-Talk-First    400
+    #### Reader-Talk-First       400 ####
     # T5577
     # EM4x05/4x69
     # EM4x50/4x70
@@ -198,28 +198,28 @@ class TagSpecificType(enum.IntEnum):
 
     ###### HF ######
 
-    # MIFARE Classic series     1000
+    #### MIFARE Classic series  1000 ####
     TAG_TYPE_MIFARE_Mini = 1000,
     TAG_TYPE_MIFARE_1024 = 1001,
     TAG_TYPE_MIFARE_2048 = 1002,
     TAG_TYPE_MIFARE_4096 = 1003,
-    # MFUL / NTAG series        1100
+    #### MFUL / NTAG series     1100 ####
     TAG_TYPE_NTAG_213 = 1100,
     TAG_TYPE_NTAG_215 = 1101,
     TAG_TYPE_NTAG_216 = 1102,
-    # MIFARE Plus series        1200
-    # DESFire series            1300
+    #### MIFARE Plus series     1200 ####
+    #### DESFire series         1300 ####
 
-    # ST25TA series             2000
+    #### ST25TA series          2000 ####
 
-    # HF14A-4 series            3000
+    #### HF14A-4 series         3000 ####
 
     @staticmethod
     def list(exclude_meta=True):
         return [t for t in TagSpecificType
-                if (t > TagSpecificType.OLD_TAG_TYPES_END and 
+                if (t > TagSpecificType.OLD_TAG_TYPES_END and
                     t != TagSpecificType.TAG_TYPES_LF_END)
-                    or not exclude_meta]
+                or not exclude_meta]
 
     @staticmethod
     def list_hf():
@@ -628,7 +628,7 @@ class ChameleonCMD:
         :param bit_owned_by_the_last_byte:
         :return:
         """
-        
+
         class CStruct(ctypes.BigEndianStructure):
             _fields_ = [
                 ("activate_rf_field", ctypes.c_uint8, 1),
@@ -1273,6 +1273,7 @@ def test_fn():
 
     # disconnect
     dev.close()
+
 
 if __name__ == '__main__':
     test_fn()

@@ -109,8 +109,8 @@ typedef enum {
     TAG_TYPE_NTAG_216
 
 typedef struct {
-        tag_specific_type_t tag_hf;
-        tag_specific_type_t tag_lf;
+    tag_specific_type_t tag_hf;
+    tag_specific_type_t tag_lf;
 } tag_slot_specific_type_t;
 
 

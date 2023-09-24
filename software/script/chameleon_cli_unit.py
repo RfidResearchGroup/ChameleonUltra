@@ -975,6 +975,7 @@ class HFMFInfo(DeviceRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         return self.scan()
 
+
 @hf_mfu.command('rdpg', 'MIFARE Ultralight read one page')
 class HFMFURDPG(BaseMFUAuthOpera):
     # hf mfu rdpg -p 2
@@ -1005,6 +1006,7 @@ class HFMFURDPG(BaseMFUAuthOpera):
         # TODO: auth first if a key is given
         resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x30, param.page))
         print(f" - Data: {resp[:4].hex()}")
+
 
 @hf_mfu.command('dump', 'MIFARE Ultralight dump pages')
 class HFMFUDUMP(BaseMFUAuthOpera):
@@ -1160,12 +1162,12 @@ class HWSlotList(DeviceRequiredUnit):
     def get_slot_name(self, slot, sense):
         try:
             name = self.cmd.get_slot_tag_nick(slot, sense).decode(encoding="utf8")
-            return {'baselen':len(name), 'metalen':len(CC+C0), 'name':f'{CC}{name}{C0}'}
+            return {'baselen': len(name), 'metalen': len(CC+C0), 'name': f'{CC}{name}{C0}'}
         except UnexpectedResponseError:
-            return {'baselen':0, 'metalen':0, 'name':f''}
+            return {'baselen': 0, 'metalen': 0, 'name': f''}
         except UnicodeDecodeError:
             name = "UTF8 Err"
-            return {'baselen':len(name), 'metalen':len(CC+C0), 'name':f'{CC}{name}{C0}'}
+            return {'baselen': len(name), 'metalen': len(CC+C0), 'name': f'{CC}{name}{C0}'}
 
     # hw slot list
     def on_exec(self, args: argparse.Namespace):
@@ -1180,7 +1182,7 @@ class HWSlotList(DeviceRequiredUnit):
                 lfn = self.get_slot_name(slot, chameleon_cmd.TagSenseType.TAG_SENSE_LF)
                 m = max(hfn['baselen'], lfn['baselen'])
                 maxnamelength = m if m > maxnamelength else maxnamelength
-                slotnames.append({'hf':hfn, 'lf':lfn})
+                slotnames.append({'hf': hfn, 'lf': lfn})
         for slot in chameleon_cmd.SlotNumber:
             fwslot = chameleon_cmd.SlotNumber.to_fw(slot)
             hf_tag_type = chameleon_cmd.TagSpecificType(slotinfo[fwslot]['hf'])
@@ -1221,6 +1223,7 @@ class HWSlotList(DeviceRequiredUnit):
                 print(f"{CY if enabled[fwslot]['lf'] else C0}{lf_tag_type}{C0}")
             else:
                 print("undef")
+
 
 @hw_slot.command('change', 'Set emulation tag slot activated.')
 class HWSlotSet(SlotIndexRequireUnit):
@@ -1318,6 +1321,7 @@ class HWSlotEnableSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
         enable = args.enable
         self.cmd.set_slot_enable(slot_num, sense_type, enable)
         print(f' - Set slot {slot_num} {"LF" if sense_type==chameleon_cmd.TagSenseType.TAG_SENSE_LF else "HF"} {"enable" if enable else "disable"} success.')
+
 
 @lf_em_sim.command('set', 'Set simulated em410x card id')
 class LFEMSimSet(LFEMCardRequiredUnit):
@@ -1690,19 +1694,23 @@ class HWRaw(DeviceRequiredUnit):
 class HF14ARaw(ReaderRequiredUnit):
 
     def bool_to_bit(self, value):
-        return 1 if value else 0 
+        return 1 if value else 0
 
     def args_parser(self) -> ArgumentParserNoExit or None:
         parser = ArgumentParserNoExit()
-        parser.add_argument('-a', '--activate-rf', help="Active signal field ON without select", action='store_true', default=False,)
-        parser.add_argument('-s', '--select-tag', help="Active signal field ON with select", action='store_true', default=False,)
+        parser.add_argument('-a', '--activate-rf', help="Active signal field ON without select",
+                            action='store_true', default=False,)
+        parser.add_argument('-s', '--select-tag', help="Active signal field ON with select",
+                            action='store_true', default=False,)
         # TODO: parser.add_argument('-3', '--type3-select-tag', help="Active signal field ON with ISO14443-3 select (no RATS)", action='store_true', default=False,)
         parser.add_argument('-d', '--data', type=str, help="Data to be sent")
         parser.add_argument('-b', '--bits', type=int, help="Number of bits to send. Useful for send partial byte")
         parser.add_argument('-c', '--crc', help="Calculate and append CRC", action='store_true', default=False,)
         parser.add_argument('-r', '--response', help="Do not read response", action='store_true', default=False,)
-        parser.add_argument('-cc', '--crc-clear', help="Verify and clear CRC of received data", action='store_true', default=False,)
-        parser.add_argument('-k', '--keep-rf', help="Keep signal field ON after receive", action='store_true', default=False,)
+        parser.add_argument('-cc', '--crc-clear', help="Verify and clear CRC of received data",
+                            action='store_true', default=False,)
+        parser.add_argument('-k', '--keep-rf', help="Keep signal field ON after receive",
+                            action='store_true', default=False,)
         parser.add_argument('-t', '--timeout', type=int, help="Timeout in ms", default=100)
         # TODO: need support for carriage returns in parser, why are they mangled?
         # parser.description = 'Examples:\n' \
@@ -1712,7 +1720,6 @@ class HF14ARaw(ReaderRequiredUnit):
         #                      '  hf 14a raw -sc -d 6000\n'
         return parser
 
-
     def on_exec(self, args: argparse.Namespace):
         options = {
             'activate_rf_field': self.bool_to_bit(args.activate_rf),
@@ -1721,7 +1728,7 @@ class HF14ARaw(ReaderRequiredUnit):
             'auto_select': self.bool_to_bit(args.select_tag),
             'keep_rf_field': self.bool_to_bit(args.keep_rf),
             'check_response_crc': self.bool_to_bit(args.crc_clear),
-            #'auto_type3_select': self.bool_to_bit(args.type3-select-tag),
+            # 'auto_type3_select': self.bool_to_bit(args.type3-select-tag),
         }
         data: str = args.data
         if data is not None:

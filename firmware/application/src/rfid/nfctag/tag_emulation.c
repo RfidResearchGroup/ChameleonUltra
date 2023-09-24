@@ -39,10 +39,10 @@ static tag_specific_type_t tag_specific_type_hf_values[] = { TAG_SPECIFIC_TYPE_H
 
 bool is_tag_specific_type_valid(tag_specific_type_t tag_type) {
     bool valid = false;
-    for (uint16_t i=0; i < ARRAYLEN(tag_specific_type_lf_values); i++) {
+    for (uint16_t i = 0; i < ARRAYLEN(tag_specific_type_lf_values); i++) {
         valid |= (tag_type == tag_specific_type_lf_values[i]);
     }
-    for (uint16_t i=0; i < ARRAYLEN(tag_specific_type_hf_values); i++) {
+    for (uint16_t i = 0; i < ARRAYLEN(tag_specific_type_hf_values); i++) {
         valid |= (tag_type == tag_specific_type_hf_values[i]);
     }
     return valid;
@@ -398,7 +398,7 @@ void tag_emulation_sense_switch(tag_sense_type_t type, bool enable) {
             break;
         case TAG_SENSE_HF:
             if (enable && (slotConfig.slots[slot].enabled_hf) &&
-                (slotConfig.slots[slot].tag_hf != TAG_TYPE_UNDEFINED)) {
+                    (slotConfig.slots[slot].tag_hf != TAG_TYPE_UNDEFINED)) {
                 nfc_tag_14a_sense_switch(true);
             } else {
                 nfc_tag_14a_sense_switch(false);
@@ -406,7 +406,7 @@ void tag_emulation_sense_switch(tag_sense_type_t type, bool enable) {
             break;
         case TAG_SENSE_LF:
             if (enable && (slotConfig.slots[slot].enabled_lf) &&
-                (slotConfig.slots[slot].tag_lf != TAG_TYPE_UNDEFINED)) {
+                    (slotConfig.slots[slot].tag_lf != TAG_TYPE_UNDEFINED)) {
                 lf_tag_125khz_sense_switch(true);
             } else {
                 lf_tag_125khz_sense_switch(false);
@@ -425,32 +425,32 @@ static void tag_emulation_migrate_slot_config_v0_to_v8(void) {
     // Populate new slotConfig struct
     slotConfig.version = TAG_SLOT_CONFIG_CURRENT_VERSION;
     slotConfig.active_slot = tmpbuf[0];
-    for (uint8_t i = 0; i<  ARRAYLEN(slotConfig.slots); i++) {
-        bool enabled = tmpbuf[4+(i*4)] & 1;
+    for (uint8_t i = 0; i <  ARRAYLEN(slotConfig.slots); i++) {
+        bool enabled = tmpbuf[4 + (i * 4)] & 1;
 
-        slotConfig.slots[i].tag_hf = tmpbuf[4+(i*4)+2];
-        for (uint8_t j=0; j < ARRAYLEN(tag_specific_type_old2new_hf_values); j++) {
+        slotConfig.slots[i].tag_hf = tmpbuf[4 + (i * 4) + 2];
+        for (uint8_t j = 0; j < ARRAYLEN(tag_specific_type_old2new_hf_values); j++) {
             if (slotConfig.slots[i].tag_hf == tag_specific_type_old2new_hf_values[j][0]) {
                 slotConfig.slots[i].tag_hf = tag_specific_type_old2new_hf_values[j][1];
             }
         }
         slotConfig.slots[i].enabled_hf = slotConfig.slots[i].tag_hf != TAG_TYPE_UNDEFINED ? enabled : false;
-        NRF_LOG_INFO("Slot %i HF: %02X->%04X enabled:%i", i, tmpbuf[4+(i*4)+2], slotConfig.slots[i].tag_hf, slotConfig.slots[i].enabled_hf);
+        NRF_LOG_INFO("Slot %i HF: %02X->%04X enabled:%i", i, tmpbuf[4 + (i * 4) + 2], slotConfig.slots[i].tag_hf, slotConfig.slots[i].enabled_hf);
 
-        slotConfig.slots[i].tag_lf = tmpbuf[4+(i*4)+3];
-        for (uint8_t j=0; j < ARRAYLEN(tag_specific_type_old2new_lf_values); j++) {
+        slotConfig.slots[i].tag_lf = tmpbuf[4 + (i * 4) + 3];
+        for (uint8_t j = 0; j < ARRAYLEN(tag_specific_type_old2new_lf_values); j++) {
             if (slotConfig.slots[i].tag_lf == tag_specific_type_old2new_lf_values[j][0]) {
                 slotConfig.slots[i].tag_lf = tag_specific_type_old2new_lf_values[j][1];
             }
         }
         slotConfig.slots[i].enabled_lf = slotConfig.slots[i].tag_lf != TAG_TYPE_UNDEFINED ? enabled : false;
-        NRF_LOG_INFO("Slot %i LF: %02X->%04X enabled:%i", i, tmpbuf[4+(i*4)+3], slotConfig.slots[i].tag_lf, slotConfig.slots[i].enabled_lf);
+        NRF_LOG_INFO("Slot %i LF: %02X->%04X enabled:%i", i, tmpbuf[4 + (i * 4) + 3], slotConfig.slots[i].tag_lf, slotConfig.slots[i].enabled_lf);
     }
 }
 
 
 static void tag_emulation_migrate_slot_config(void) {
-    switch(slotConfig.version) {
+    switch (slotConfig.version) {
         case 0:
         case 1:
         case 2:
@@ -627,7 +627,7 @@ uint8_t tag_emulation_slot_find_next(uint8_t slot_now) {
     uint8_t start_slot = (slot_now + 1 == TAG_MAX_SLOT_NUM) ? 0 : slot_now + 1;
     for (uint8_t i = start_slot;;) {
         if (i == slot_now) return slot_now;         // No other activated card slots were found after a loop
-        if (slotConfig.slots[i].enabled_hf || slotConfig.slots[i].enabled_lf ) return i;   // Check whether the card slot that is currently traversed is enabled, so that the capacity determines that the current card slot is the card slot that can effectively enable capacity
+        if (slotConfig.slots[i].enabled_hf || slotConfig.slots[i].enabled_lf) return i;    // Check whether the card slot that is currently traversed is enabled, so that the capacity determines that the current card slot is the card slot that can effectively enable capacity
         i++;
         if (i == TAG_MAX_SLOT_NUM) {            // Continue the next cycle
             i = 0;
@@ -686,7 +686,7 @@ void tag_emulation_change_type(uint8_t slot, tag_specific_type_t tag_type) {
 void tag_emulation_factory_init(void) {
     fds_slot_record_map_t map_info;
 
-   // Initialized a dual -frequency card in the card slot, if there is no historical record, it is a new state of factory.
+    // Initialized a dual -frequency card in the card slot, if there is no historical record, it is a new state of factory.
     if (slotConfig.slots[0].enabled_hf && slotConfig.slots[0].tag_hf == TAG_TYPE_MIFARE_1024) {
         // Initialize a high -frequency M1 card in the card slot 1, if it does not exist.
         get_fds_map_by_slot_sense_type_for_dump(0, TAG_SENSE_HF, &map_info);

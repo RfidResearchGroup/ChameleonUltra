@@ -1129,20 +1129,20 @@ inline void pcd_14a_reader_crc_computer(uint8_t use522CalcCRC) {
 }
 
 /**
-* @brief 	: The hf 14a raw command implementation function can be used to send the 14A command with the specified configuration parameters.
-* @param	:waitResp  			: Wait for tag response
-* @param 	:appendCrc  		: Do you want to add CRC before sending
-* @param	:autoSelect 		: Automatically select card before sending data
-* @param	:keepField  		: Do you want to keep the RF field on after sending
-* @param	:checkCrc  			: Is CRC verified after receiving data? If CRC verification is enabled, CRC bytes will be automatically removed after verification is completed.
-* @param	:waitRespTimeout	: If waitResp is enabled, this parameter will be the timeout value to wait for the tag to respond
-* @param	:szDataSend  		: The number of bytes or bits of data to be sent
-* @param	:pDataSend  		: Pointer to the buffer of the data to be sent
+* @brief    : The hf 14a raw command implementation function can be used to send the 14A command with the specified configuration parameters.
+* @param    :waitResp           : Wait for tag response
+* @param    :appendCrc          : Do you want to add CRC before sending
+* @param    :autoSelect         : Automatically select card before sending data
+* @param    :keepField          : Do you want to keep the RF field on after sending
+* @param    :checkCrc           : Is CRC verified after receiving data? If CRC verification is enabled, CRC bytes will be automatically removed after verification is completed.
+* @param    :waitRespTimeout    : If waitResp is enabled, this parameter will be the timeout value to wait for the tag to respond
+* @param    :szDataSend         : The number of bytes or bits of data to be sent
+* @param    :pDataSend          : Pointer to the buffer of the data to be sent
 *
-* @retval 	: Execution Status
+* @retval   : Execution Status
 *
 */
-uint8_t pcd_14a_reader_raw_cmd(bool openRFField,  bool waitResp, bool appendCrc, bool autoSelect, bool keepField, bool checkCrc, uint16_t waitRespTimeout, 
+uint8_t pcd_14a_reader_raw_cmd(bool openRFField,  bool waitResp, bool appendCrc, bool autoSelect, bool keepField, bool checkCrc, uint16_t waitRespTimeout,
                                uint16_t szDataSendBits, uint8_t *pDataSend, uint8_t *pDataRecv, uint16_t *pszDataRecv, uint16_t szDataRecvBitMax) {
     // Status code, default is OK.
     uint8_t status = HF_TAG_OK;
@@ -1203,32 +1203,32 @@ uint8_t pcd_14a_reader_raw_cmd(bool openRFField,  bool waitResp, bool appendCrc,
         }
         if (szDataSendBits % 8) {
             status = pcd_14a_reader_bits_transfer(
-                pDataSend,
-                szDataSendBits,
-                NULL,
-                pDataRecv,
-                NULL,
-                pszDataRecv,
-                szDataRecvBitMax
-            );
+                         pDataSend,
+                         szDataSendBits,
+                         NULL,
+                         pDataRecv,
+                         NULL,
+                         pszDataRecv,
+                         szDataRecvBitMax
+                     );
         } else {
             status = pcd_14a_reader_bytes_transfer(
-                PCD_TRANSCEIVE,
-                pDataSend,
-                szDataSendBits / 8,
-                pDataRecv,
-                pszDataRecv,
-                szDataRecvBitMax
-            );
+                         PCD_TRANSCEIVE,
+                         pDataSend,
+                         szDataSendBits / 8,
+                         pDataRecv,
+                         pszDataRecv,
+                         szDataRecvBitMax
+                     );
         }
-        
+
         // If we need to receive data, we need to perform further operations on the data based on the remaining configuration after receiving it
         if (waitResp) {
             // Number of bits to bytes
             uint8_t finalRecvBytes = (*pszDataRecv / 8) + (*pszDataRecv % 8 > 0 ? 1 : 0);
             // If CRC verification is required, we need to perform CRC calculation
             if (checkCrc) {
-                if (finalRecvBytes >= 3) {	// Ensure at least three bytes (one byte of data+two bytes of CRC)
+                if (finalRecvBytes >= 3) {  // Ensure at least three bytes (one byte of data+two bytes of CRC)
                     // Calculate and store CRC
                     uint8_t crc_buff[DEF_CRC_LENGTH] = { 0x00 };
                     crc_14a_calculate(pDataRecv, finalRecvBytes - DEF_CRC_LENGTH, crc_buff);
@@ -1238,7 +1238,7 @@ uint8_t pcd_14a_reader_raw_cmd(bool openRFField,  bool waitResp, bool appendCrc,
                         *pszDataRecv = 0;
                         status = HF_ERR_CRC;
                     } else {
-                        // If the CRC needs to be verified by the device and the device determines that the CRC is normal, 
+                        // If the CRC needs to be verified by the device and the device determines that the CRC is normal,
                         // we will return the data without CRC
                         *pszDataRecv = finalRecvBytes - DEF_CRC_LENGTH;
                     }
