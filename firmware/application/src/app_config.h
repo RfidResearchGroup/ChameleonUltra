@@ -2,7 +2,7 @@
 
 
 // version code, 1byte, max = 0 -> 255
-#define APP_FW_VER_MAJOR   1
+#define APP_FW_VER_MAJOR   2
 #define APP_FW_VER_MINOR   0
 
 // Merge major and minor version code to U16 value.
