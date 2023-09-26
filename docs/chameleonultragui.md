@@ -13,3 +13,12 @@
 - enable mfkey32 for that slot (toggle in slot settings)
 - select slot and present ultra repeatedly to the reader in order to collect nonces
 - after collecting some nonces, go back into slot settings and click recover keys
+
+## Troubleshooting
+
+### Font scaling issues on HiDPI screens
+
+If you have font scaling issues (tiny fonts) with the Linux desktop app and a HiDPI screen, you can solve it by running the app as
+```
+GDK_SCALE=2 GDK_DPI_SCALE=0.5 /usr/local/lib/chameleonultragui/chameleonultragui
+```
