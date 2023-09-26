@@ -129,7 +129,8 @@ In the following list, "CLI" refers to one typical CLI command using the describ
 * Command: no data
 * Response: n bytes, a UTF-8 encoded string, no null terminator.
 * CLI: cf `hw version`
-Note: the returned string is the output of `git describe --abbrev=7 --dirty --always --tags` so, depending on the status of the repo it can be
+
+Notes: the returned string is the output of `git describe --abbrev=7 --dirty --always --tags` so, depending on the status of the repo it can be
 * a short tag, e.g. `v2.0.0` if the firmware is built from the tagged commit
 * a longer tag indicating how far it is from the latest tag and 7 nibbles of its commit hash, prepended with `g`, e.g. 5 commits away from v2.0.0: `v2.0.0-5-g617d6d0`
 * a long tag finishing with `-dirty` if the local repo contains changes not yet committed, e.g. `v2.0.0-5-g617d6d0-dirty`
@@ -156,6 +157,8 @@ Note: the returned string is the output of `git describe --abbrev=7 --dirty --al
 * Command: no data
 * Response: 3 bytes, `voltage[2]|percentage`. Voltage: U16  in Network byte order.
 * CLI: cf `hw battery`
+
+Notes: wait about 5 seconds after wake-up, before querying the battery status, else the device won't be able to give a proper measure and will return zeroes.
 ### 1026: GET_BUTTON_PRESS_CONFIG
 * Command: 1 byte. Char `A` or `B` (`a`/`b` tolerated too)
 * Response: 1 byte, `button_function` according to `settings_button_function_t` enum.
