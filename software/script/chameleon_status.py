@@ -12,6 +12,14 @@ class MetaDevice(type):
                     return True
         return False
 
+    def __getitem__(self, item):
+        for field in self.__dict__:
+            val = self.__dict__[field]
+            if isinstance(val, int):
+                if val == item:
+                    return field
+        return False
+
 
 class Device(metaclass=MetaDevice):
     HF_TAG_OK = 0x00     # IC card operation is successful
@@ -22,20 +30,7 @@ class Device(metaclass=MetaDevice):
     HF_ERR_BCC = 0x05     # IC card BCC error
     MF_ERR_AUTH = 0x06    # MF card verification failed
     HF_ERR_PARITY = 0x07  # IC card parity error
-
-    # Darkside, the random number cannot be fixed, this situation may appear on the UID card
-    DARKSIDE_CANT_FIXED_NT = 0x20
-    # Darkside, the direct verification is successful, maybe the key is empty
-    DARKSIDE_LUCK_AUTH_OK = 0x21
-    # Darkside, the card doesn't respond to nack, probably a card that fixes the nack logic bug
-    DARKSIDE_NACK_NO_SEND = 0x22
-    # Darkside, there is a card switching during the running of darkside,
-    # maybe there is a signal problem, or the two cards really switched quickly
-    DARKSIDE_TAG_CHANGED = 0x23
-    # Nested, it is detected that the random number of the card response is fixed
-    NESTED_TAG_IS_STATIC = 0x24
-    # Nested, detected nonce for card response is unpredictable
-    NESTED_TAG_IS_HARD = 0x25
+    HF_ERR_ATS = 0x08     # ATS should be present but card NAKed, or ATS too large
 
     # Some operations with low frequency cards succeeded!
     LF_TAG_OK = 0x40
@@ -63,13 +58,7 @@ message = {
     Device.HF_ERR_BCC: "HF tag uid bcc error",
     Device.MF_ERR_AUTH: "HF tag auth fail",
     Device.HF_ERR_PARITY: "HF tag data parity error",
-
-    Device.DARKSIDE_CANT_FIXED_NT: "Darkside Can't select a nt(PRNG is unpredictable)",
-    Device.DARKSIDE_LUCK_AUTH_OK: "Darkside try to recover a default key",
-    Device.DARKSIDE_NACK_NO_SEND: "Darkside can't make tag response nack(enc)",
-    Device.DARKSIDE_TAG_CHANGED: "Darkside running, can't change tag",
-    Device.NESTED_TAG_IS_STATIC: "StaticNested tag, not weak nested",
-    Device.NESTED_TAG_IS_HARD: "HardNested tag, not weak nested",
+    Device.HF_ERR_ATS: "HF tag was supposed to send ATS but didn't",
 
     Device.LF_TAG_OK: "LF tag operation succeeded",
     Device.EM410X_TAG_NO_FOUND: "EM410x tag no found",

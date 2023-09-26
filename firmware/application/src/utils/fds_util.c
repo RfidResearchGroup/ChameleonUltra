@@ -49,26 +49,30 @@ bool fds_is_exists(uint16_t id, uint16_t key) {
 
 /**
  *Read record
+ * Length: set it to max length (size of buffer)
+ * After execution, length is updated to the real flash record size
  */
-bool fds_read_sync(uint16_t id, uint16_t key, uint16_t max_length, uint8_t *buffer) {
+bool fds_read_sync(uint16_t id, uint16_t key, uint16_t *length, uint8_t *buffer) {
     ret_code_t          err_code;       //The results of the operation
     fds_flash_record_t  flash_record;   // Pointing to the actual information in Flash
     fds_record_desc_t   record_desc;    // Recorded handle
     if (fds_find_record(id, key, &record_desc)) {
         err_code = fds_record_open(&record_desc, &flash_record);            //Open the record so that it is marked as the open state
         APP_ERROR_CHECK(err_code);
-        if (flash_record.p_header->length_words * 4 <= max_length) {        // Read the data in Flash here to the given RAM
+        if (flash_record.p_header->length_words * 4 <= *length) {        // Read the data in Flash here to the given RAM
             // Make sure that the buffer will not overflow, read this record
             memcpy(buffer, flash_record.p_data, flash_record.p_header->length_words * 4);
             NRF_LOG_INFO("FDS read success.");
+            *length = flash_record.p_header->length_words * 4;
             return true;
         } else {
-            NRF_LOG_INFO("FDS buffer too small, can't run memcpy, fds size = %d, buffer size = %d", flash_record.p_header->length_words * 4, max_length);
+            NRF_LOG_INFO("FDS buffer too small, can't run memcpy, fds size = %d, buffer size = %d", flash_record.p_header->length_words * 4, *length);
         }
         err_code = fds_record_close(&record_desc);                          // Close the file after the operation is completed
         APP_ERROR_CHECK(err_code);
     }
     //If the correct data is not loaded, this record may not exist
+    *length = 0;
     return false;
 }
 

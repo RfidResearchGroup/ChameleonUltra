@@ -24,6 +24,7 @@ NRF_LOG_MODULE_REGISTER();
 #define RC522_DOSEL nrf_gpio_pin_clear(HF_SPI_SELECT)
 #define RC522_UNSEL nrf_gpio_pin_set(HF_SPI_SELECT)
 
+bool g_is_reader_antenna_on = false;
 
 //CRC 14A calculator, when the MCU performance is too weak, or when the MCU is busy, you can use 522 to calculate CRC
 static uint8_t m_crc_computer = 0;
@@ -196,9 +197,11 @@ void pcd_14a_reader_reset(void) {
         write_register_single(CommandReg, PCD_IDLE);
         write_register_single(CommandReg, PCD_RESET);
 
-        // Switch antenna
-        clear_register_mask(TxControlReg, 0x03);
-        set_register_mask(TxControlReg, 0x03);
+        bsp_delay_ms(10);
+
+        // Then default does not allow the antenna
+        // Please don't continue to make high -frequency antennas
+        pcd_14a_reader_antenna_off();
 
         // Disable the timer of 522, use the MCU timer timeout time
         write_register_single(TModeReg, 0x00);
@@ -208,9 +211,7 @@ void pcd_14a_reader_reset(void) {
         // Define common mode and receive common mode and receiveMiFare cartoon communication, CRC initial value 0x6363
         write_register_single(ModeReg, 0x3D);
 
-        // Then default does not allow the antenna
-        // Please don't continue to make high -frequency antennas
-        pcd_14a_reader_antenna_off();
+        bsp_delay_ms(10);
     }
 }
 
@@ -491,6 +492,7 @@ uint8_t pcd_14a_reader_scan_once(picc_14a_tag_t *tag) {
     if (tag) {
         tag->uid_len = 0;
         memset(tag->uid, 0, 10);
+        tag->ats_len = 0;
     } else {
         return STATUS_PAR_ERR;  // Finding cards are not allowed to be transmitted to the label information structure
     }
@@ -579,6 +581,30 @@ uint8_t pcd_14a_reader_scan_once(picc_14a_tag_t *tag) {
         // Therefore + 1
         tag->cascade = cascade_level + 1;
     }
+    if (tag->sak & 0x20) {
+        // Tag supports 14443-4, sending RATS
+        uint16_t ats_size;
+        status = pcd_14a_reader_ats_request(tag->ats, &ats_size, 0xFF * 8);
+        ats_size -= 2;  // size returned by pcd_14a_reader_ats_request includes CRC
+        if (ats_size > 254) {
+            NRF_LOG_INFO("Invalid ATS > 254!");
+            return HF_ERR_ATS;
+        }
+        tag->ats_len = ats_size;
+        // We do not validate ATS here as we want to report ATS as it is without breaking 14a scan
+        if (tag->ats[0] != ats_size - 1) {
+            NRF_LOG_INFO("Invalid ATS! First byte doesn't match received length");
+            // return HF_ERR_ATS;
+        }
+        if (status != HF_TAG_OK) {
+            NRF_LOG_INFO("Tag SAK claimed to support ATS but tag NAKd RATS");
+            // return HF_ERR_ATS;
+        }
+        /*
+        * FIXME: If there is an issue here, it will cause the label to lose its selected state.
+        *   It is necessary to reselect the card after the issue occurs here.
+        */
+    }
     return HF_TAG_OK;
 }
 
@@ -619,6 +645,7 @@ uint8_t pcd_14a_reader_ats_request(uint8_t *pAts, uint16_t *szAts, uint16_t szAt
     status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, rats, sizeof(rats), pAts, szAts, szAtsBitMax);
 
     if (status != HF_TAG_OK) {
+        *szAts = 0;
         NRF_LOG_INFO("Err at ats receive.\n");
         return status;
     }
@@ -945,6 +972,8 @@ void pcd_14a_reader_calc_crc(uint8_t *pbtData, size_t szLen, uint8_t *pbtCrc) {
 */
 inline void pcd_14a_reader_antenna_on(void) {
     set_register_mask(TxControlReg, 0x03);
+    g_is_reader_antenna_on = true;
+    TAG_FIELD_LED_ON();
 }
 
 /**
@@ -952,6 +981,8 @@ inline void pcd_14a_reader_antenna_on(void) {
 */
 inline void pcd_14a_reader_antenna_off(void) {
     clear_register_mask(TxControlReg, 0x03);
+    g_is_reader_antenna_on = false;
+    TAG_FIELD_LED_OFF();
 }
 
 /**
@@ -1095,4 +1126,141 @@ inline void crc_14a_append(uint8_t *pbtData, size_t szLen) {
  */
 inline void pcd_14a_reader_crc_computer(uint8_t use522CalcCRC) {
     m_crc_computer = use522CalcCRC;
+}
+
+/**
+* @brief    : The hf 14a raw command implementation function can be used to send the 14A command with the specified configuration parameters.
+* @param    :waitResp           : Wait for tag response
+* @param    :appendCrc          : Do you want to add CRC before sending
+* @param    :autoSelect         : Automatically select card before sending data
+* @param    :keepField          : Do you want to keep the RF field on after sending
+* @param    :checkCrc           : Is CRC verified after receiving data? If CRC verification is enabled, CRC bytes will be automatically removed after verification is completed.
+* @param    :waitRespTimeout    : If waitResp is enabled, this parameter will be the timeout value to wait for the tag to respond
+* @param    :szDataSend         : The number of bytes or bits of data to be sent
+* @param    :pDataSend          : Pointer to the buffer of the data to be sent
+*
+* @retval   : Execution Status
+*
+*/
+uint8_t pcd_14a_reader_raw_cmd(bool openRFField,  bool waitResp, bool appendCrc, bool autoSelect, bool keepField, bool checkCrc, uint16_t waitRespTimeout,
+                               uint16_t szDataSendBits, uint8_t *pDataSend, uint8_t *pDataRecv, uint16_t *pszDataRecv, uint16_t szDataRecvBitMax) {
+    // Status code, default is OK.
+    uint8_t status = HF_TAG_OK;
+    // Reset recv length.
+    *pszDataRecv = 0;
+
+    // If additional CRC is required, first add the CRC to the tail.
+    if (appendCrc) {
+        if (szDataSendBits == 0) {
+            NRF_LOG_INFO("Adding CRC but missing data");
+            return STATUS_PAR_ERR;
+        }
+        if (szDataSendBits % 8) {
+            NRF_LOG_INFO("Adding CRC incompatible with partial bytes");
+            return STATUS_PAR_ERR;
+        }
+        if (szDataSendBits > ((DEF_FIFO_LENGTH - DEF_CRC_LENGTH) * 8)) {
+            // Note: Adding CRC requires at least two bytes of free space. If the transmitted data is already greater than or equal to 64, an error needs to be returned
+            NRF_LOG_INFO("Adding CRC requires data length less than or equal to 62.");
+            return STATUS_PAR_ERR;
+        }
+        // Calculate and append CRC byte data to the buffer
+        crc_14a_append(pDataSend, szDataSendBits / 8);
+        // CRC is also sent as part of the data, so the total length needs to be added to the CRC length here
+        szDataSendBits += DEF_CRC_LENGTH * 8;
+    }
+
+    if (autoSelect || szDataSendBits) {
+        // override openRFField if we need to select or to send data
+        openRFField = true;
+    }
+    if (openRFField && ! g_is_reader_antenna_on) { // Open rf field?
+        pcd_14a_reader_reset();
+        pcd_14a_reader_antenna_on();
+        bsp_delay_ms(8);
+    }
+
+    if (autoSelect) {
+        picc_14a_tag_t ti;
+        status = pcd_14a_reader_scan_once(&ti);
+        // Determine whether the card search was successful
+        if (status != HF_TAG_OK) {
+            pcd_14a_reader_antenna_off();
+            return status;
+        }
+    }
+
+    // Is there any data that needs to be sent
+    if (szDataSendBits) {
+        // If there is no need to receive data, the data receiving cache needs to be empty, otherwise a specified timeout value needs to be set
+        // Caching old timeout values
+        uint16_t oldWaitRespTimeout = g_com_timeout_ms;
+        if (waitResp) {
+            // Then set the new values in
+            g_com_timeout_ms = waitRespTimeout;
+        } else {
+            pDataRecv = NULL;
+        }
+        if (szDataSendBits % 8) {
+            status = pcd_14a_reader_bits_transfer(
+                         pDataSend,
+                         szDataSendBits,
+                         NULL,
+                         pDataRecv,
+                         NULL,
+                         pszDataRecv,
+                         szDataRecvBitMax
+                     );
+        } else {
+            status = pcd_14a_reader_bytes_transfer(
+                         PCD_TRANSCEIVE,
+                         pDataSend,
+                         szDataSendBits / 8,
+                         pDataRecv,
+                         pszDataRecv,
+                         szDataRecvBitMax
+                     );
+        }
+
+        // If we need to receive data, we need to perform further operations on the data based on the remaining configuration after receiving it
+        if (waitResp) {
+            // Number of bits to bytes
+            uint8_t finalRecvBytes = (*pszDataRecv / 8) + (*pszDataRecv % 8 > 0 ? 1 : 0);
+            // If CRC verification is required, we need to perform CRC calculation
+            if (checkCrc) {
+                if (finalRecvBytes >= 3) {  // Ensure at least three bytes (one byte of data+two bytes of CRC)
+                    // Calculate and store CRC
+                    uint8_t crc_buff[DEF_CRC_LENGTH] = { 0x00 };
+                    crc_14a_calculate(pDataRecv, finalRecvBytes - DEF_CRC_LENGTH, crc_buff);
+                    // Verify CRC
+                    if (pDataRecv[finalRecvBytes - 2] != crc_buff[0] ||  pDataRecv[finalRecvBytes - 1] != crc_buff[1]) {
+                        // We have found an error in CRC verification and need to inform the upper computer!
+                        *pszDataRecv = 0;
+                        status = HF_ERR_CRC;
+                    } else {
+                        // If the CRC needs to be verified by the device and the device determines that the CRC is normal,
+                        // we will return the data without CRC
+                        *pszDataRecv = finalRecvBytes - DEF_CRC_LENGTH;
+                    }
+                } else {
+                    // The data is insufficient to support the length of the CRC, so it is returned as is
+                    *pszDataRecv = 0;
+                }
+            } else {
+                // Do not verify CRC, all data is returned as is
+                *pszDataRecv = finalRecvBytes;
+            }
+            // We need to recover the timeout value
+            g_com_timeout_ms = oldWaitRespTimeout;
+        } else {
+            *pszDataRecv = 0;
+        }
+    }
+
+    // Finally, keep the field open as needed
+    if (!keepField) {
+        pcd_14a_reader_antenna_off();
+    }
+
+    return status;
 }

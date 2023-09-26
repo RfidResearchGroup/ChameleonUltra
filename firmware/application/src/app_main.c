@@ -250,7 +250,7 @@ static void system_off_enter(void) {
     if (g_is_low_battery_shutdown) {
         // Don't create too complex animations, just blink LED1 three times.
         rgb_marquee_stop();
-        set_slot_light_color(0);
+        set_slot_light_color(RGB_RED);
         for (uint8_t i = 0; i <= 3; i++) {
             nrf_gpio_pin_set(LED_1);
             bsp_delay_ms(100);
@@ -570,8 +570,8 @@ static void btn_fn_copy_ic_uid(void) {
     uint8_t id_buffer[5] = { 0x00 };
     // get 14a tag res buffer;
     uint8_t slot_now = tag_emulation_get_slot();
-    tag_specific_type_t tag_type[2];
-    tag_emulation_get_specific_type_by_slot(slot_now, tag_type);
+    tag_slot_specific_type_t tag_types;
+    tag_emulation_get_specific_types_by_slot(slot_now, &tag_types);
 
     nfc_tag_14a_coll_res_entity_t *antres;
 
@@ -584,7 +584,7 @@ static void btn_fn_copy_ic_uid(void) {
         NRF_LOG_INFO("Start reader mode to offline copy.")
     }
 
-    switch (tag_type[1]) {
+    switch (tag_types.tag_lf) {
         case TAG_TYPE_EM410X:
             status = PcdScanEM410X(id_buffer);
 
@@ -599,7 +599,7 @@ static void btn_fn_copy_ic_uid(void) {
                 offline_status_error();
             }
             break;
-        case TAG_TYPE_UNKNOWN:
+        case TAG_TYPE_UNDEFINED:
             // empty LF slot, nothing to do, move on to HF
             break;
         default:
@@ -607,8 +607,8 @@ static void btn_fn_copy_ic_uid(void) {
             offline_status_error();
     }
 
-    tag_data_buffer_t *buffer = get_buffer_by_tag_type(tag_type[0]);
-    switch (tag_type[0]) {
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(tag_types.tag_hf);
+    switch (tag_types.tag_hf) {
         case TAG_TYPE_MIFARE_Mini:
         case TAG_TYPE_MIFARE_1024:
         case TAG_TYPE_MIFARE_2048:
@@ -626,7 +626,7 @@ static void btn_fn_copy_ic_uid(void) {
             break;
         }
 
-        case TAG_TYPE_UNKNOWN:
+        case TAG_TYPE_UNDEFINED:
             // empty HF slot, nothing to do
             goto exit;
 
@@ -648,11 +648,15 @@ static void btn_fn_copy_ic_uid(void) {
     status = pcd_14a_reader_scan_auto(&tag);
     if (status == HF_TAG_OK) {
         // copy uid
+        antres->size = tag.uid_len;
         memcpy(antres->uid, tag.uid, tag.uid_len);
         // copy atqa
         memcpy(antres->atqa, tag.atqa, 2);
         // copy sak
         antres->sak[0] = tag.sak;
+        // copy ats
+        antres->ats.length = tag.ats_len;
+        memcpy(antres->ats.data, tag.ats, tag.ats_len);
         NRF_LOG_INFO("Offline HF uid copied")
         offline_status_ok();
     } else {
@@ -771,7 +775,6 @@ static void ble_passkey_init(void) {
  */
 int main(void) {
     hw_connect_init();        // Remember to initialize the pins first
-    cmd_map_init();           // Set function in CMD map for DATA_CMD_GET_DEVICE_CAPABILITIES
 
     fds_util_init();          // Initialize fds tool
     settings_load_config();   // Load settings from flash

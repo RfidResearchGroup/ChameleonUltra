@@ -344,10 +344,11 @@ void append_mf1_auth_log_step1(bool isKeyB, bool isNested, uint8_t block, uint8_
     }
     // Determine whether this card slot enables the detection log record
     if (m_tag_information->config.detection_enable) {
-        m_auth_log.logs[m_auth_log.count].cmd.is_key_b = isKeyB;
-        m_auth_log.logs[m_auth_log.count].cmd.block = block;
-        m_auth_log.logs[m_auth_log.count].cmd.is_nested = isNested;
+        m_auth_log.logs[m_auth_log.count].is_key_b = isKeyB;
+        m_auth_log.logs[m_auth_log.count].block = block;
+        m_auth_log.logs[m_auth_log.count].is_nested = isNested;
         memcpy(m_auth_log.logs[m_auth_log.count].uid, UID_BY_CASCADE_LEVEL, 4);
+//        m_auth_log.logs[m_auth_log.count].nt = U32HTONL(*(uint32_t *)nonce);
         memcpy(m_auth_log.logs[m_auth_log.count].nt, nonce, 4);
     }
 }
@@ -363,6 +364,8 @@ void append_mf1_auth_log_step2(uint8_t *nr, uint8_t *ar) {
     }
     if (m_tag_information->config.detection_enable) {
         // Cache encryption information
+//        m_auth_log.logs[m_auth_log.count].nr = U32HTONL(*(uint32_t *)nr);
+//        m_auth_log.logs[m_auth_log.count].ar = U32HTONL(*(uint32_t *)ar);
         memcpy(m_auth_log.logs[m_auth_log.count].nr, nr, 4);
         memcpy(m_auth_log.logs[m_auth_log.count].ar, ar, 4);
     }
@@ -388,7 +391,7 @@ void append_mf1_auth_log_step3(bool is_auth_success) {
 /** @brief MF1 obtain verification log
  * @param count: The statistics of the verification log
  */
-nfc_tag_mf1_auth_log_t *get_mf1_auth_log(uint32_t *count) {
+nfc_tag_mf1_auth_log_t *mf1_get_auth_log(uint32_t *count) {
     // First pass the total number of logs verified by verified
     *count = m_auth_log.count;
     // Just return to the head pointer of the log number array
@@ -1111,10 +1114,14 @@ static int get_information_size_by_tag_type(tag_specific_type_t type, bool auth_
  * @return The length of the data that needs to be saved is that it does not save when 0
  */
 int nfc_tag_mf1_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
-    if (m_tag_type != TAG_TYPE_UNKNOWN) {
+    if (m_tag_type != TAG_TYPE_UNDEFINED) {
         if (m_tag_information->config.mode_block_write == NFC_TAG_MF1_WRITE_SHADOW) {
             NRF_LOG_INFO("The mf1 is shadow write mode.");
             return 0;
+        }
+        if (m_tag_information->config.mode_block_write == NFC_TAG_MF1_WRITE_SHADOW_REQ) {
+            NRF_LOG_INFO("The mf1 will be set to shadow write mode.");
+            m_tag_information->config.mode_block_write = NFC_TAG_MF1_WRITE_SHADOW;
         }
         // Save the corresponding size data according to the current label type
         return get_information_size_by_tag_type(type, false);
@@ -1256,6 +1263,9 @@ bool nfc_tag_mf1_is_use_mf1_coll_res(void) {
 
 // Set write mode
 void nfc_tag_mf1_set_write_mode(nfc_tag_mf1_write_mode_t write_mode) {
+    if (write_mode == NFC_TAG_MF1_WRITE_SHADOW) {
+        write_mode = NFC_TAG_MF1_WRITE_SHADOW_REQ;
+    }
     m_tag_information->config.mode_block_write = write_mode;
 }
 

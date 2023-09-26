@@ -15,6 +15,5 @@ typedef struct {
 } cmd_data_map_t;
 
 void on_data_frame_received(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data);
-void cmd_map_init();
 
 #endif

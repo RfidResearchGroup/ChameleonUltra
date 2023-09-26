@@ -6,8 +6,8 @@
 #include "utils.h"
 
 #define SETTINGS_CURRENT_VERSION 5
-#define BLE_CONNECT_KEY_LEN_MAX 6
-#define DEFAULT_BLE_CONNECT_KEY "123456"  // length must == 6
+#define BLE_PAIRING_KEY_LEN 6
+#define DEFAULT_BLE_PAIRING_KEY "123456"  // length must == 6
 
 typedef enum {
     SettingsAnimationModeFull = 0U,

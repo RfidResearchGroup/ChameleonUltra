@@ -13,7 +13,7 @@ jobs:
   client_pipeline:
     name: Build Firmware
     uses: ./.github/workflows/build_client.yml
-  create_release:
+  create_dev_release:
     permissions:
       contents: write
     name: Create dev pre-release with artifacts
@@ -49,3 +49,32 @@ jobs:
         run: |
           git tag -f dev
           git push --tags -f
+  create_release:
+    permissions:
+      contents: write
+    name: Create tagged release with artifacts
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - firmware_pipeline
+      - client_pipeline
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+      - name: Download release artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: release-artifacts
+          path: release-artifacts
+      - name: Upload to tagged release
+        uses: softprops/action-gh-release@v1
+        with:
+          body: |
+            Auto-Generated DFU packages for Release ${{ github.ref_name }}
+            Built from commit ${{ github.sha }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          append_body: true
+          files: release-artifacts/*

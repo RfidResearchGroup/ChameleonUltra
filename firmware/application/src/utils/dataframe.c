@@ -1,6 +1,5 @@
 #include "dataframe.h"
-#include "hex_utils.h"
-
+#include "netdata.h"
 
 #define NRF_LOG_MODULE_NAME data_frame
 #include "nrf_log.h"
@@ -8,40 +7,26 @@
 #include "nrf_log_default_backends.h"
 NRF_LOG_MODULE_REGISTER();
 
-
-/*
- * *********************************************************************************************************************************
- *                          Variable length data frame format
- *                                  Designed by proxgrind
- *                                  Date: 20221205
- *
- *      0           1           2 3         45               6 7                    8                8 + n           8 + n + 1
- *  SOF(1byte)  LRC(1byte)  CMD(2byte)  Status(2byte)  Data Length(2byte)  Frame Head LRC(1byte)  Data(length)  Frame All LRC(1byte)
- *     0x11       0xEF        cmd(u16)    status(u16)      length(u16)              lrc(u8)          data(u8*)       lrc(u8)
- *
- *  The data length max is 512, frame length max is 1 + 1 + 2 + 2 + 2 + 1 + n + 1 = (10 + n)
- *  So, one frame will than 10 byte.
- * *********************************************************************************************************************************
- */
-
-#define DATA_PACK_TRANSMISSION_ON   0x11
-#define DATA_LRC_CUT(val)   ((uint8_t)(0x100 - val))
-
-
-static uint8_t m_data_rx_buffer[DATA_PACK_MAX_DATA_LENGTH + DATA_PACK_BASE_LENGTH];
-static uint8_t m_data_tx_buffer[DATA_PACK_MAX_DATA_LENGTH + DATA_PACK_BASE_LENGTH];
+static netdata_frame_raw_t m_netdata_frame_rx_buf;
+static netdata_frame_raw_t m_netdata_frame_tx_buf;
+static data_frame_tx_t m_frame_tx_buf_info = {
+    .buffer = (uint8_t *) &m_netdata_frame_tx_buf,  // default buffer
+};
 static uint16_t m_data_rx_position = 0;
-static uint8_t m_data_rx_lrc = 0;
 static uint16_t m_data_cmd;
 static uint16_t m_data_status;
 static uint16_t m_data_len;
 static uint8_t *m_data_buffer;
 static volatile bool m_data_completed = false;
 static data_frame_cbk_t m_frame_process_cbk = NULL;
-static data_frame_tx_t m_frame_tx_buf_info = {
-    .buffer = m_data_tx_buffer,    // default buffer
-};
 
+static uint8_t compute_lrc(uint8_t *buf, uint16_t bufsize) {
+    uint8_t lrc = 0x00;
+    for (uint16_t i = 0; i < bufsize; i++) {
+        lrc += buf[i];
+    }
+    return 0x100 - lrc;
+}
 
 /**
  * @brief: create a packet, put the created data packet into the buffer, and wait for the post to set up a non busy state
@@ -50,38 +35,41 @@ static data_frame_tx_t m_frame_tx_buf_info = {
  * @param length: answerDataLength
  * @param data: answerData
  */
-data_frame_tx_t *data_frame_make(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t lrc_tx = 0x00;
-    uint16_t i, j;
-    // sof
-    m_frame_tx_buf_info.buffer[0] = DATA_PACK_TRANSMISSION_ON;
-    // sof lrc
-    lrc_tx += m_frame_tx_buf_info.buffer[0];
-    m_frame_tx_buf_info.buffer[1] = DATA_LRC_CUT(lrc_tx);
-    lrc_tx += m_frame_tx_buf_info.buffer[1];
-    // cmd
-    num_to_bytes(cmd, 2, &m_frame_tx_buf_info.buffer[2]);
-    // status
-    num_to_bytes(status, 2, &m_frame_tx_buf_info.buffer[4]);
-    // length
-    num_to_bytes(length, 2, &m_frame_tx_buf_info.buffer[6]);
-    // head lrc
-    for (i = 2; i < 8; i++) {
-        lrc_tx += m_frame_tx_buf_info.buffer[i];
+data_frame_tx_t *data_frame_make(uint16_t cmd, uint16_t status, uint16_t data_length, uint8_t *data) {
+    if (data_length > 0 && data == NULL) {
+        NRF_LOG_ERROR("data_frame_make error, null pointer.");
+        return NULL;
     }
-    m_frame_tx_buf_info.buffer[8] = DATA_LRC_CUT(lrc_tx);
-    lrc_tx += m_frame_tx_buf_info.buffer[8];
+    if (data_length > 512) {
+        NRF_LOG_ERROR("data_frame_make error, too much data.");
+        return NULL;
+    }
+    NRF_LOG_INFO("TX Data frame: cmd = 0x%04x (%i), status = 0x%04x, length = %d%s", cmd, cmd, status, data_length, data_length > 0 ? ", data =" : "");
+    if (data_length > 0) {
+        NRF_LOG_HEXDUMP_INFO(data, data_length);
+    }
+
+    netdata_frame_postamble_t *tx_post = (netdata_frame_postamble_t *)((uint8_t *)&m_netdata_frame_tx_buf + sizeof(netdata_frame_preamble_t) + data_length);
+    // sof
+    m_netdata_frame_tx_buf.pre.sof = NETDATA_FRAME_SOF;
+    // sof lrc
+    m_netdata_frame_tx_buf.pre.lrc1 = compute_lrc((uint8_t *)&m_netdata_frame_tx_buf.pre, offsetof(netdata_frame_preamble_t, lrc1));
+    // cmd
+    m_netdata_frame_tx_buf.pre.cmd = U16HTONS(cmd);
+    // status
+    m_netdata_frame_tx_buf.pre.status = U16HTONS(status);
+    // data_length
+    m_netdata_frame_tx_buf.pre.len = U16HTONS(data_length);
+    // head lrc
+    m_netdata_frame_tx_buf.pre.lrc2 = compute_lrc((uint8_t *)&m_netdata_frame_tx_buf.pre, offsetof(netdata_frame_preamble_t, lrc2));
     // data
-    if (length > 0 && data != NULL) {
-        for (i = 9, j = 0; j < length; i++, j++) {
-            m_frame_tx_buf_info.buffer[i] = data[j];
-            lrc_tx += m_frame_tx_buf_info.buffer[i];
-        }
+    if (data_length > 0) {
+        memcpy(&m_netdata_frame_tx_buf.data, data, data_length);
     }
     // length out.
-    m_frame_tx_buf_info.length = (length + DATA_PACK_BASE_LENGTH);
+    m_frame_tx_buf_info.length = (sizeof(netdata_frame_preamble_t) + data_length + sizeof(netdata_frame_postamble_t));
     // data all lrc
-    m_data_tx_buffer[m_frame_tx_buf_info.length - 1] = DATA_LRC_CUT(lrc_tx);;
+    tx_post->lrc3 = compute_lrc((uint8_t *)&m_netdata_frame_tx_buf.data, data_length);
     return (&m_frame_tx_buf_info);
 }
 
@@ -90,7 +78,6 @@ data_frame_tx_t *data_frame_make(uint16_t cmd, uint16_t status, uint16_t length,
  */
 void data_frame_reset(void) {
     m_data_rx_position = 0;
-    m_data_rx_lrc = 0;
 }
 
 /**
@@ -105,7 +92,7 @@ void data_frame_receive(uint8_t *data, uint16_t length) {
         return;
     }
     // buffer overflow
-    if (m_data_rx_position + length >= sizeof(m_data_rx_buffer)) {
+    if (m_data_rx_position + length >= sizeof(m_netdata_frame_rx_buf)) {
         NRF_LOG_ERROR("Data frame wait overflow.");
         data_frame_reset();
         return;
@@ -113,50 +100,52 @@ void data_frame_receive(uint8_t *data, uint16_t length) {
     // frame process
     for (int i = 0; i < length; i++) {
         // copy to buffer
-        m_data_rx_buffer[m_data_rx_position] = data[i];
-        if (m_data_rx_position < 2) {   // start of frame
-            if (m_data_rx_position == 0) {
-                if (m_data_rx_buffer[m_data_rx_position] != DATA_PACK_TRANSMISSION_ON) {
-                    // not sof byte
-                    NRF_LOG_ERROR("Data frame no sof byte.");
-                    data_frame_reset();
-                    return;
-                }
+        ((uint8_t *)(&m_netdata_frame_rx_buf))[m_data_rx_position] = data[i];
+        if (m_data_rx_position == offsetof(netdata_frame_preamble_t, sof)) {
+            if (m_netdata_frame_rx_buf.pre.sof != NETDATA_FRAME_SOF) {
+                // not sof byte
+                NRF_LOG_ERROR("Data frame no sof byte.");
+                data_frame_reset();
+                return;
             }
-            if (m_data_rx_position == 1) {
-                if (m_data_rx_buffer[m_data_rx_position] != DATA_LRC_CUT(m_data_rx_lrc)) {
-                    // not sof lrc byte
-                    NRF_LOG_ERROR("Data frame sof lrc error.");
-                    data_frame_reset();
-                    return;
-                }
+        } else if (m_data_rx_position == offsetof(netdata_frame_preamble_t, lrc1)) {
+            if (m_netdata_frame_rx_buf.pre.lrc1 != compute_lrc((uint8_t *)&m_netdata_frame_rx_buf.pre, offsetof(netdata_frame_preamble_t, lrc1))) {
+                // not sof lrc byte
+                NRF_LOG_ERROR("Data frame sof lrc error.");
+                data_frame_reset();
+                return;
             }
-        } else if (m_data_rx_position == 8) {  // frame head lrc
-            if (m_data_rx_buffer[m_data_rx_position] != DATA_LRC_CUT(m_data_rx_lrc)) {
+        } else if (m_data_rx_position == offsetof(netdata_frame_preamble_t, lrc2)) {  // frame head lrc
+            if (m_netdata_frame_rx_buf.pre.lrc2 != compute_lrc((uint8_t *)&m_netdata_frame_rx_buf.pre, offsetof(netdata_frame_preamble_t, lrc2))) {
                 // frame head lrc error
                 NRF_LOG_ERROR("Data frame head lrc error.");
                 data_frame_reset();
                 return;
             }
             // frame head complete, cache info
-            m_data_cmd = bytes_to_num(&m_data_rx_buffer[2], 2);
-            m_data_status = bytes_to_num(&m_data_rx_buffer[4], 2);
-            m_data_len = bytes_to_num(&m_data_rx_buffer[6], 2);
+            m_data_cmd = U16NTOHS(m_netdata_frame_rx_buf.pre.cmd);
+            m_data_status = U16NTOHS(m_netdata_frame_rx_buf.pre.status);
+            m_data_len = U16NTOHS(m_netdata_frame_rx_buf.pre.len);
             NRF_LOG_INFO("Data frame data length %d.", m_data_len);
             // check data length
-            if (m_data_len > DATA_PACK_MAX_DATA_LENGTH) {
-                NRF_LOG_ERROR("Data frame data length too than of max.");
+            if (m_data_len > NETDATA_MAX_DATA_LENGTH) {
+                NRF_LOG_ERROR("Data frame data length larger than max.");
                 data_frame_reset();
                 return;
             }
-        } else if (m_data_rx_position > 8) {   // frame data
+        } else if (m_data_rx_position >= offsetof(netdata_frame_raw_t, data)) {   // frame data
             // check all data ready.
-            if (m_data_rx_position == (8 + m_data_len + 1)) {
-                if (m_data_rx_buffer[m_data_rx_position] == DATA_LRC_CUT(m_data_rx_lrc)) {
+            if (m_data_rx_position == (sizeof(netdata_frame_preamble_t) + m_data_len)) {
+                netdata_frame_postamble_t *rx_post = (netdata_frame_postamble_t *)((uint8_t *)&m_netdata_frame_rx_buf + sizeof(netdata_frame_preamble_t) + m_data_len);
+                if (rx_post->lrc3 == compute_lrc((uint8_t *)&m_netdata_frame_rx_buf.data, m_data_len)) {
                     // ok, lrc for data is check success.
                     // and we are receive completed
-                    m_data_buffer = m_data_len > 0 ? &m_data_rx_buffer[9] : NULL;
+                    m_data_buffer = m_data_len > 0 ? (uint8_t *)&m_netdata_frame_rx_buf.data : NULL;
                     m_data_completed = true;
+                    NRF_LOG_INFO("RX Data frame: cmd = 0x%04x (%i), status = 0x%04x, length = %d%s", m_data_cmd, m_data_cmd, m_data_status, m_data_len, m_data_len > 0 ? ", data =" : "");
+                    if (m_data_len > 0) {
+                        NRF_LOG_HEXDUMP_INFO(m_data_buffer, m_data_len);
+                    }
                 } else {
                     // data frame lrc error
                     NRF_LOG_ERROR("Data frame finally lrc error.");
@@ -165,8 +154,6 @@ void data_frame_receive(uint8_t *data, uint16_t length) {
                 return;
             }
         }
-        // calculate lrc
-        m_data_rx_lrc += data[i];
         // index update
         m_data_rx_position++;
     }

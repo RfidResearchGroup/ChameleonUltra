@@ -54,7 +54,6 @@ def expect_response(accepted_responses: Union[int, list[int]]):
         @wraps(func)
         def error_throwing_func(*args, **kwargs):
             ret = func(*args, **kwargs)
-
             if ret.status not in accepted_responses:
                 if ret.status in chameleon_status.Device and ret.status in chameleon_status.message:
                     raise UnexpectedResponseError(
@@ -63,7 +62,7 @@ def expect_response(accepted_responses: Union[int, list[int]]):
                     raise UnexpectedResponseError(
                         f"Unexpected response and unknown status {ret.status}")
 
-            return ret
+            return ret.data
 
         return error_throwing_func
 

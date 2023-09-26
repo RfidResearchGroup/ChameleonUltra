@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <cmsis_gcc.h>
+#include "netdata.h"
 
 /*
 * rC522CommandWord
@@ -151,13 +152,16 @@
 #define U8ARR_BIT_LEN(src) ((sizeof(src)) * (8))
 
 // basicStructurePackagingOfLabelInformation
+// this struct is also used in the fw/cli protocol, therefore PACKED
 typedef struct {
     uint8_t uid[10];  // theByteArrayOfTheCardNumber,TheLongest10Byte
     uint8_t uid_len;  // theLengthOfTheCardNumber
     uint8_t cascade;  // theAntiCollisionLevelValueIs1Representation 4Byte,2Represents7Byte,3Means10Byte
     uint8_t sak;      // chooseToConfirm
     uint8_t atqa[2];  // requestResponse
-} picc_14a_tag_t;
+    uint8_t ats[0xFF];// 14443-4 answer to select
+    uint8_t ats_len;  // 14443-4 answer to select size
+} PACKED picc_14a_tag_t;
 
 #ifdef __cplusplus
 extern "C" {
@@ -215,6 +219,9 @@ uint8_t pcd_14a_reader_mf1_read(uint8_t addr, uint8_t *pData);
 // Formation card operation
 uint8_t pcd_14a_reader_halt_tag(void);
 void pcd_14a_reader_fast_halt_tag(void);
+
+uint8_t pcd_14a_reader_raw_cmd(bool openRFField, bool waitResp, bool appendCrc, bool autoSelect, bool keepField, bool checkCrc, uint16_t waitRespTimeout,
+                               uint16_t szDataSendBits, uint8_t *pDataSend, uint8_t *pDataRecv, uint16_t *pszDataRecv, uint16_t szDataRecvBitMax);
 
 // UID & UFUID tag operation
 uint8_t pcd_14a_reader_gen1a_unlock(void);

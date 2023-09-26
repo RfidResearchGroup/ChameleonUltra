@@ -44,7 +44,7 @@ void settings_init_button_long_press_config(void) {
 
 // add on version4
 void settings_init_ble_connect_key_config(void) {
-    uint8_t p_key_u8[] = DEFAULT_BLE_CONNECT_KEY;
+    uint8_t p_key_u8[] = DEFAULT_BLE_PAIRING_KEY;
     settings_set_ble_connect_key(p_key_u8);
 }
 
@@ -95,7 +95,8 @@ void settings_migrate(void) {
 }
 
 void settings_load_config(void) {
-    bool ret = fds_read_sync(FDS_SETTINGS_FILE_ID, FDS_SETTINGS_RECORD_KEY, sizeof(config), (uint8_t *)&config);
+    uint16_t length = sizeof(config);
+    bool ret = fds_read_sync(FDS_SETTINGS_FILE_ID, FDS_SETTINGS_RECORD_KEY, &length, (uint8_t *)&config);
     if (ret) {
         NRF_LOG_INFO("Load config done.");
         // After the reading is complete, we first save a copy of the current CRC, which can be used as a reference for comparison of changes when saving later
@@ -276,7 +277,7 @@ uint8_t *settings_get_ble_connect_key(void) {
  * @param key Ble connect key for your device
  */
 void settings_set_ble_connect_key(uint8_t *key) {
-    memcpy(config.ble_connect_key, key, BLE_CONNECT_KEY_LEN_MAX);
+    memcpy(config.ble_connect_key, key, BLE_PAIRING_KEY_LEN);
 }
 
 void settings_set_ble_pairing_enable(bool enable) {

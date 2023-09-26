@@ -13,6 +13,16 @@ typedef enum {
     CHAMELEON_LITE,
 } chameleon_device_type_t;
 
+typedef enum {
+    RGB_RED,
+    RGB_GREEN,
+    RGB_BLUE,
+    RGB_MAGENTA,
+    RGB_YELLOW,
+    RGB_CYAN,
+    RGB_WHITE
+} chameleon_rgb_type_t;
+
 
 #define MAX_LED_NUM 8
 #define MAX_RGB_NUM 3
@@ -97,7 +107,7 @@ uint32_t *hw_get_led_reversal_array(void);
 uint32_t *hw_get_rgb_array(void);
 chameleon_device_type_t hw_get_device_type(void);
 uint8_t hw_get_version_code(void);
-void set_slot_light_color(uint8_t color);
+void set_slot_light_color(chameleon_rgb_type_t color);
 
 
 #endif

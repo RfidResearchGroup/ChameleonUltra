@@ -33,6 +33,7 @@ nrf_drv_pwm_config_t pwm_config = {//PWM configuration structure
 };
 static autotimer *timer;
 static uint8_t ledblink6_step = 0;
+static uint8_t ledblink6_color = RGB_RED;
 static uint8_t ledblink1_step = 0;
 extern bool g_usb_led_marquee_enable;
 
@@ -392,7 +393,7 @@ void ledblink6(void) {
     }
 
     if (ledblink6_step == 0) {
-        set_slot_light_color(0);
+        set_slot_light_color(ledblink6_color);
         for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
             nrf_gpio_pin_clear(led_array[i]);
         }
@@ -420,7 +421,7 @@ void ledblink6(void) {
                 pwm_sequ_val.channel_2 = pwm_sequ_val.channel_0;
                 pwm_sequ_val.channel_3 = pwm_sequ_val.channel_0;
                 nrfx_pwm_uninit(&pwm0_ins); //Close PWM output
-                set_slot_light_color(1);
+                set_slot_light_color(ledblink6_color);
                 nrf_drv_pwm_init(&pwm0_ins, &pwm_config, ledblink6_pwm_callback);
                 nrf_drv_pwm_simple_playback(&pwm0_ins, &seq, 1, NRF_DRV_PWM_FLAG_LOOP);
                 ledblink6_step = 3;
@@ -457,7 +458,7 @@ void ledblink6(void) {
                 pwm_sequ_val.channel_2 = pwm_sequ_val.channel_0;
                 pwm_sequ_val.channel_3 = pwm_sequ_val.channel_0;
                 nrfx_pwm_uninit(&pwm0_ins); //Close PWM output
-                set_slot_light_color(1);
+                set_slot_light_color(ledblink6_color);
                 nrf_drv_pwm_init(&pwm0_ins, &pwm_config, ledblink6_pwm_callback);
                 nrf_drv_pwm_simple_playback(&pwm0_ins, &seq, 1, NRF_DRV_PWM_FLAG_LOOP);
                 ledblink6_step = 7;
@@ -477,6 +478,10 @@ void ledblink6(void) {
             }
         } else {
             ledblink6_step = 0;
+            //if (++ledblink6_color == RGB_WHITE) ledblink6_color = RGB_RED;
+            uint8_t new_color = rand() % 6;
+            for (; new_color == ledblink6_color; new_color = rand() % 6);
+            ledblink6_color = new_color;
         }
     }
 }
