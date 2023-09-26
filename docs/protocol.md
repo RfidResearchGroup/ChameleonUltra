@@ -1,7 +1,26 @@
 # Protocol description
 
-**WIP**
+## Versioning
 
+Global firmware+CLI versions are following the [semantic versioning](https://semver.org/) logic mostly regarding the protocol version, so third party clients (GUIs, mobile apps, SDKs) can rely on firmware version to know their level of compatibility.
+
+Given a version number MAJOR.MINOR.PATCH, we will increment the:
+* MAJOR version when we are breaking the existing protocol format
+* MINOR version when we are extending the protocol format in a backward compatible manner (new commands,...)
+* PATCH version when we are releasing bugfixes not affecting the protocol description
+
+Besides compatibility with a given firmware version, third party clients may choose to offer to the users the possibility to follow a stable release channel (installing only tagged releases) or the development channel (installing latest commits).
+
+For the stable channel, a client compatible with versions X.y.z can accept any version > X.y'.z' but should refuse to work with a version X'>X.
+
+For the development channel, a client compatible with versions X.y.z can accept any latest commit unless a tag X'.0.0 with X'>X is present in the repo, indicating that the corresponding commit and all the commits above are incompatible with the client version. There is still a non negligible risk that breaking changes are pushed while forgetting about putting a new tag, or artefacts being built before the tag being pushed. Here be dragons... It's always a good practice for the client to validate whatever data is transmitted by the firmware, and fail gracefully in case of hiccups.
+
+Cf [GET_APP_VERSION](#1000-get_app_version) and [GET_GIT_VERSION](#1017-get_git_version).
+
+When `GET_GIT_VERSION` returns only a tag and no commit hash info (on a release tag), one can query the corresponding hash with the GitHub API, e.g.
+```
+"4747d3884d21e0df8549e3029a920ea390e0b00a"
+```
 ## Frame format
 
 The communication between the firmware and the client is made of frames structured as follows:
@@ -33,9 +52,6 @@ Each command and response have their own payload formats.
 
 Standard response status is `STATUS_DEVICE_SUCCESS` for general commands, `HF_TAG_OK` for HF commands and `LF_TAG_OK` for LF commands.
 See [Guidelines](#new-data-payloads-guidelines-for-developers) for more info.
-
-* **TODO:** num_to_bytes bytes_to_num
-* **FIXME:** mf1_get_emulator_config with bits -> bytes (5) with 4 bools <> mf1_get_detection_log with bitfield (2)...
 
 Beware, slots in protocol count from 0 to 7 (and from 1 to 8 in the CLI...).
 
@@ -113,6 +129,10 @@ In the following list, "CLI" refers to one typical CLI command using the describ
 * Command: no data
 * Response: n bytes, a UTF-8 encoded string, no null terminator.
 * CLI: cf `hw version`
+Note: the returned string is the output of `git describe --abbrev=7 --dirty --always --tags` so, depending on the status of the repo it can be
+* a short tag, e.g. `v2.0.0` if the firmware is built from the tagged commit
+* a longer tag indicating how far it is from the latest tag and 7 nibbles of its commit hash, prepended with `g`, e.g. 5 commits away from v2.0.0: `v2.0.0-5-g617d6d0`
+* a long tag finishing with `-dirty` if the local repo contains changes not yet committed, e.g. `v2.0.0-5-g617d6d0-dirty`
 ### 1018: GET_ACTIVE_SLOT
 * Command: no data
 * Response: 1 byte
@@ -386,3 +406,9 @@ If single byte of data to return, still use a 1-byte `data`, not `status`. Stand
 ### Guideline: Validate status and data
 - Validate response status in client before parsing data.
 - Validate data before using it.
+
+## Room for improvement
+
+* some `num_to_bytes` `bytes_to_num` could use `hton*`, `ntoh*` instead, to make endianess explicit
+* some commands are using bitfields (e.g. mf1_get_detection_log (sending directly the flash stored format) and hf14a_raw) while some commands are spreading bits into 0x00/0x01 bytes (e.g. mf1_get_emulator_config)
+* describe flash storage formats
