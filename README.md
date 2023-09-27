@@ -20,7 +20,9 @@ Read the [available documentation](docs/README.md).
 
 # Software Roadmap
 
-
+1)
+2)
+3)
 
 # Videos
 
