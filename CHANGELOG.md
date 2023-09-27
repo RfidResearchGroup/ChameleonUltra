@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Add PyInstaller support for CLI client (@augustozanellato)
 
 ## [v2.0.0][2023-09-26]
  - Changed APP_FW_VER now deduced from git tag vx.y.z (@doegox)
