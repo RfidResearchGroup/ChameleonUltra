@@ -37,6 +37,8 @@ DATA_CMD_GET_SLOT_INFO = 1019
 
 DATA_CMD_WIPE_FDS = 1020
 
+DATA_CMD_DELETE_SLOT_TAG_NICK = 1021
+
 DATA_CMD_GET_ENABLED_SLOTS = 1023
 DATA_CMD_DELETE_SLOT_SENSE_TYPE = 1024
 
@@ -911,6 +913,18 @@ class ChameleonCMD:
         # SlotNumber() will raise error for us if slot not in slot range
         data = struct.pack('!BB', SlotNumber.to_fw(slot), sense_type)
         return self.device.send_cmd_sync(DATA_CMD_GET_SLOT_TAG_NICK, data)
+
+    @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
+    def delete_slot_tag_nick(self, slot: SlotNumber, sense_type: TagSenseType):
+        """
+        Delete the nick name of the slot
+        :param slot:  Card slot number
+        :param sense_type:  field type
+        :return:
+        """
+        # SlotNumber() will raise error for us if slot not in slot range
+        data = struct.pack('!BB', SlotNumber.to_fw(slot), sense_type)
+        return self.device.send_cmd_sync(DATA_CMD_DELETE_SLOT_TAG_NICK, data)
 
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
     def mf1_get_emulator_config(self):

@@ -792,6 +792,25 @@ static data_frame_tx_t *cmd_processor_get_slot_tag_nick(uint16_t cmd, uint16_t s
     return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, buffer[0], &buffer[1]);
 }
 
+static data_frame_tx_t *cmd_processor_delete_slot_tag_nick(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 2) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    uint8_t slot = data[0];
+    uint8_t sense_type = data[1];
+    fds_slot_record_map_t map_info;
+
+    if (slot >= TAG_MAX_SLOT_NUM || (sense_type != TAG_SENSE_HF && sense_type != TAG_SENSE_LF)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    get_fds_map_by_slot_sense_type_for_nick(slot, sense_type, &map_info);
+    bool ret = fds_delete_sync(map_info.id, map_info.key);
+    if (!ret) {
+        return data_frame_make(cmd, STATUS_FLASH_WRITE_FAIL, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 0, NULL);
+}
+
 static data_frame_tx_t *cmd_processor_mf1_get_emulator_config(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t mf1_info[5] = {};
     mf1_info[0] = nfc_tag_mf1_is_detection_enable();
@@ -965,6 +984,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_ACTIVE_SLOT,              NULL,                        cmd_processor_get_active_slot,               NULL                   },
     {    DATA_CMD_GET_SLOT_INFO,                NULL,                        cmd_processor_get_slot_info,                 NULL                   },
     {    DATA_CMD_WIPE_FDS,                     NULL,                        cmd_processor_wipe_fds,                      NULL                   },
+    {    DATA_CMD_DELETE_SLOT_TAG_NICK,         NULL,                        cmd_processor_delete_slot_tag_nick,          NULL                   },
     {    DATA_CMD_GET_ENABLED_SLOTS,            NULL,                        cmd_processor_get_enabled_slots,             NULL                   },
     {    DATA_CMD_DELETE_SLOT_SENSE_TYPE,       NULL,                        cmd_processor_delete_slot_sense_type,        NULL                   },
     {    DATA_CMD_GET_BATTERY_INFO,             NULL,                        cmd_processor_get_battery_info,              NULL                   },

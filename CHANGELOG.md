@@ -6,6 +6,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Add PyInstaller support for CLI client (@augustozanellato)
 
 ## [v2.0.0][2023-09-26]
+ - Added `hw slot nick delete` and DELETE_SLOT_TAG_NICK (@doegox)
  - Changed APP_FW_VER now deduced from git tag vx.y.z (@doegox)
  - Changed initial button wakeup from 4 to 8 seconds (@aramova)
  - Added MIFARE Ultralight reading features (@FlUxIuS & @doegox)

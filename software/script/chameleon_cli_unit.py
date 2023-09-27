@@ -1392,6 +1392,22 @@ class HWSlotNickGet(SlotIndexRequireUnit, SenseTypeRequireUnit):
         print(f' - Get tag nick name for slot {slot_num}: {res.decode(encoding="utf8")}')
 
 
+@hw_slot_nick.command('delete', 'Delete tag nick name for slot')
+class HWSlotNickGet(SlotIndexRequireUnit, SenseTypeRequireUnit):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        parser = ArgumentParserNoExit()
+        self.add_slot_args(parser)
+        self.add_sense_type_args(parser)
+        return parser
+
+    # hw slot nick delete -s 1 -st 1
+    def on_exec(self, args: argparse.Namespace):
+        slot_num = args.slot
+        sense_type = args.sense_type
+        res = self.cmd.delete_slot_tag_nick(slot_num, sense_type)
+        print(f' - Delete tag nick name for slot {slot_num}: {res.decode(encoding="utf8")}')
+
+
 @hw_slot.command('update', 'Update config & data to device flash')
 class HWSlotUpdate(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit or None:
