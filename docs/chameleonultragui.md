@@ -22,3 +22,8 @@ If you have font scaling issues (tiny fonts) with the Linux desktop app and a Hi
 ```
 GDK_SCALE=2 GDK_DPI_SCALE=0.5 /usr/local/lib/chameleonultragui/chameleonultragui
 ```
+
+### Key rocvery from this card is not yet supported
+This error may occur when the card you are trying to recovery keys from is requiring a not yet supported recovery technology. You can not tell the required recovery method from the outside.
+
+You may be able to solve this issue by dumping the card with a Proxmark3 or Mifare Classic Tool (Mobile App) and then importing a bin file.
