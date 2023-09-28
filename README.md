@@ -14,6 +14,10 @@ Anywhere else: [Sneaktechnology](https://sneaktechnology.com) / [Aliexpress by R
 
 Read the [available documentation](docs/README.md).
 
+# Public Roadmap with reference to [Here](https://github.com/RfidResearchGroup/ChameleonUltra/wiki/Public-Roadmap)
+
+
+
 # Compatible applications
 
 * [ChameleonUltraGUI](https://github.com/GameTec-live/ChameleonUltraGUI)
