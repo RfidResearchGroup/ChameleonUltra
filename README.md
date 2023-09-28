@@ -18,15 +18,6 @@ Read the [available documentation](docs/README.md).
 
 * [ChameleonUltraGUI](https://github.com/GameTec-live/ChameleonUltraGUI)
 
-# Software Roadmap
-
-|No.|Functionality to achieve| Date | Achieved ? | Contributors |
-|:--------------:|:--------------:|:--------:|:------------:|:------------:|
-|1| :--------------:|:--------------:|:--------------:|:--------------:|
-|2| :--------------:|:--------------:|:--------------:|:--------------:|
-|3| :--------------:|:--------------:|:--------------:|:--------------:|
-
-
 # Videos
 
 *Beware some of the instructions might have changed since recording, check the current documentation when in doubt!*
