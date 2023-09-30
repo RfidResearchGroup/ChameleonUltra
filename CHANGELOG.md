@@ -3,7 +3,8 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
- - Add PyInstaller support for CLI client (@augustozanellato)
+ - Fixed watchdog trigger during `hw factory_reset` (@doegox)
+ - Added PyInstaller support for CLI client (@augustozanellato)
 
 ## [v2.0.0][2023-09-26]
  - Added `hw slot nick delete` and DELETE_SLOT_TAG_NICK (@doegox)
