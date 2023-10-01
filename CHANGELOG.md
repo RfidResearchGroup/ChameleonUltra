@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Changed CLI threads polling into blocking reads, to reduce CPU usage (@doegox)
  - Added support for timestamped comments in CLI via `rem`, `;`, `%` or `#` (@doegox)
  - Fixed watchdog trigger during `hw factory_reset` (@doegox)
  - Added PyInstaller support for CLI client (@augustozanellato)

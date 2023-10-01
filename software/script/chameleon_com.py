@@ -5,6 +5,8 @@ import time
 import serial
 import chameleon_status
 
+# each thread is waiting for its data for 100 ms before looping again
+THREAD_BLOCKING_TIMEOUT = 0.1
 
 class NotOpenException(Exception):
     """
@@ -82,7 +84,7 @@ class ChameleonCom:
             except Exception:
                 # not all serial support dtr, e.g. virtual serial over BLE
                 pass
-            self.serial_instance.timeout = 0  # do not block
+            self.serial_instance.timeout = THREAD_BLOCKING_TIMEOUT
             # clear variable
             self.send_data_queue.queue.clear()
             self.wait_response_map.clear()
@@ -208,8 +210,6 @@ class ChameleonCom:
                         data_buffer.clear()
                         continue
                 data_position += 1
-            else:
-                time.sleep(0.001)
 
     def thread_data_transfer(self):
         """
@@ -218,10 +218,10 @@ class ChameleonCom:
         """
         while self.isOpen():
             # get a task from queue(if exists)
-            if self.send_data_queue.empty():
-                time.sleep(0.001)
+            try:
+                task = self.send_data_queue.get(block=True, timeout=THREAD_BLOCKING_TIMEOUT)
+            except queue.Empty:
                 continue
-            task = self.send_data_queue.get()
             task_cmd = task['cmd']
             task_timeout = task['timeout']
             task_close = task['close']
@@ -262,7 +262,7 @@ class ChameleonCom:
                     else:
                         # sync mode, set timeout flag
                         self.wait_response_map[task_cmd]['is_timeout'] = True
-            time.sleep(0.001)
+            time.sleep(THREAD_BLOCKING_TIMEOUT)
 
     def make_data_frame_bytes(self, cmd: int, data: bytearray = None, status: int = 0) -> bytearray:
         """
