@@ -28,6 +28,7 @@
 #define DATA_CMD_GET_ACTIVE_SLOT                (1018)
 #define DATA_CMD_GET_SLOT_INFO                  (1019)
 #define DATA_CMD_WIPE_FDS                       (1020)
+#define DATA_CMD_DELETE_SLOT_TAG_NICK           (1021)
 
 #define DATA_CMD_GET_ENABLED_SLOTS              (1023)
 #define DATA_CMD_DELETE_SLOT_SENSE_TYPE         (1024)

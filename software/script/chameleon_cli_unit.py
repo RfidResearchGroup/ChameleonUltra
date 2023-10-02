@@ -10,6 +10,7 @@ import time
 import serial.tools.list_ports
 import threading
 import struct
+from pathlib import Path
 from platform import uname
 
 import chameleon_com
@@ -38,6 +39,12 @@ type_id_SAK_dict = {0x00: "MIFARE Ultralight Classic/C/EV1/Nano | NTAG 2xx",
                     0x38: "SmartMX with MIFARE Classic 4K",
                     }
 
+if getattr(sys, 'frozen', False):
+    # in pyinstaller
+    default_cwd = str(Path(sys._MEIPASS) / "bin")
+else:
+    # from source
+    default_cwd = str(Path(__file__).parent.parent / "bin")
 
 class BaseCLIUnit:
 
@@ -81,7 +88,7 @@ class BaseCLIUnit:
         raise NotImplementedError("Please implement this")
 
     @staticmethod
-    def sub_process(cmd, cwd=os.path.abspath("bin/")):
+    def sub_process(cmd, cwd=default_cwd):
         class ShadowProcess:
             def __init__(self):
                 self.output = ""
@@ -1383,6 +1390,22 @@ class HWSlotNickGet(SlotIndexRequireUnit, SenseTypeRequireUnit):
         sense_type = args.sense_type
         res = self.cmd.get_slot_tag_nick(slot_num, sense_type)
         print(f' - Get tag nick name for slot {slot_num}: {res.decode(encoding="utf8")}')
+
+
+@hw_slot_nick.command('delete', 'Delete tag nick name for slot')
+class HWSlotNickGet(SlotIndexRequireUnit, SenseTypeRequireUnit):
+    def args_parser(self) -> ArgumentParserNoExit or None:
+        parser = ArgumentParserNoExit()
+        self.add_slot_args(parser)
+        self.add_sense_type_args(parser)
+        return parser
+
+    # hw slot nick delete -s 1 -st 1
+    def on_exec(self, args: argparse.Namespace):
+        slot_num = args.slot
+        sense_type = args.sense_type
+        res = self.cmd.delete_slot_tag_nick(slot_num, sense_type)
+        print(f' - Delete tag nick name for slot {slot_num}: {res.decode(encoding="utf8")}')
 
 
 @hw_slot.command('update', 'Update config & data to device flash')

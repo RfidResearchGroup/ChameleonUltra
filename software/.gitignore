@@ -6,3 +6,6 @@ script/__pycache__
 src/out
 # Ignore the compiled scripts
 script/*.pyc
+# Ignore pyinstaller folders
+build/
+dist/

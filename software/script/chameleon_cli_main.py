@@ -9,6 +9,7 @@ import chameleon_utils
 import os
 import pathlib
 import prompt_toolkit
+from datetime import datetime
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.history import FileHistory
 
@@ -127,6 +128,18 @@ class ChameleonCLI:
             # parse cmd
             argv = cmd_str.split()
             root_cmd = argv[0]
+            # look for comments
+            if root_cmd == "rem" or root_cmd[0] in ";#%":
+                # precision: second
+                # iso_timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+                # precision: nanosecond (note that the comment will take some time too, ~75ns, check your system)
+                iso_timestamp = datetime.utcnow().isoformat() + 'Z'
+                if root_cmd[0] in ";#%":
+                    comment = ' '.join([root_cmd[1:]]+argv[1:]).strip()
+                else:
+                    comment = ' '.join(argv[1:]).strip()
+                print(f"{iso_timestamp} remark: {comment}")
+                continue
             if root_cmd not in chameleon_cli_unit.root_commands:
                 # No matching command group
                 print("".ljust(18, "-") + "".ljust(10) + "".ljust(30, "-"))

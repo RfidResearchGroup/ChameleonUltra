@@ -13,6 +13,7 @@
 #include "crapto1.h"
 
 // MIFARE
+extern int compare_uint64(const void *a, const void *b);
 int inline compare_uint64(const void *a, const void *b) {
     if (*(uint64_t *)b == *(uint64_t *)a) return 0;
     if (*(uint64_t *)b < * (uint64_t *)a) return 1;

@@ -3,9 +3,14 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
-- Added GUI Page docs (@GameTec-live)
+ - Added GUI Page docs (@GameTec-live)
+ - Changed CLI threads polling into blocking reads, to reduce CPU usage (@doegox)
+ - Added support for timestamped comments in CLI via `rem`, `;`, `%` or `#` (@doegox)
+ - Fixed watchdog trigger during `hw factory_reset` (@doegox)
+ - Added PyInstaller support for CLI client (@augustozanellato)
 
 ## [v2.0.0][2023-09-26]
+ - Added `hw slot nick delete` and DELETE_SLOT_TAG_NICK (@doegox)
  - Changed APP_FW_VER now deduced from git tag vx.y.z (@doegox)
  - Changed initial button wakeup from 4 to 8 seconds (@aramova)
  - Added MIFARE Ultralight reading features (@FlUxIuS & @doegox)

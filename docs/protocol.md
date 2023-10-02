@@ -146,6 +146,10 @@ Notes: the returned string is the output of `git describe --abbrev=7 --dirty --a
 * Command: no data
 * Response: no data. Status is `STATUS_DEVICE_SUCCESS` or `STATUS_FLASH_WRITE_FAIL`. The device will reboot shortly after this command.
 * CLI: cf `hw factory_reset`
+### 1021: DELETE_SLOT_TAG_NICK
+* Command: 2 bytes. `slot_number|sense_type` with `slot_number` between 0 and 7 and `sense_type` according to `tag_sense_type_t` enum.
+* Response: no data
+* CLI: cf `hw slot nick delete`
 ### 1023: GET_ENABLED_SLOTS
 * Command: no data
 * Response: 16 bytes, 8*2 bool = `0x00` or `0x01`, 2 bytes for each slot from 0 to 7, as `enabled_hf|enabled_lf`

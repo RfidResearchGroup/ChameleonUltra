@@ -1,5 +1,5 @@
 #include "fds_util.h"
-
+#include "bsp_wdt.h"
 
 #define NRF_LOG_MODULE_NAME fds_sync
 #include "nrf_log.h"
@@ -306,7 +306,9 @@ static bool fds_next_record_delete_sync() {
 
 bool fds_wipe(void) {
     NRF_LOG_INFO("Full fds wipe requested");
-    while (fds_next_record_delete_sync()) {}
+    while (fds_next_record_delete_sync()) {
+        bsp_wdt_feed();
+    }
     fds_gc_sync();
     return true;
 }
