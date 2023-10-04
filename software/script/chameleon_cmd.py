@@ -377,6 +377,7 @@ class ButtonPressFunction(enum.IntEnum):
     SettingsButtonCycleSlot = 1
     SettingsButtonCycleSlotDec = 2
     SettingsButtonCloneIcUid = 3
+    SettingsButtonShowBattery = 4
 
     @staticmethod
     def list():
@@ -391,6 +392,8 @@ class ButtonPressFunction(enum.IntEnum):
             return "Cycle Slot Dec"
         elif self == ButtonPressFunction.SettingsButtonCloneIcUid:
             return "Quickly Copy Ic Uid"
+        elif self == ButtonPressFunction.SettingsButtonShowBattery:
+            return "Show Battery Level"
         return "None"
 
     @staticmethod
@@ -408,6 +411,8 @@ class ButtonPressFunction(enum.IntEnum):
         elif self == ButtonPressFunction.SettingsButtonCloneIcUid:
             return ("Read the UID card number immediately after pressing, continue searching," +
                     "and simulate immediately after reading the card")
+        elif self == ButtonPressFunction.SettingsButtonShowBattery:
+            return ("Lights up slot LEDs according to battery level")
         return "Unknown"
 
 

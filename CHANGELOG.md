@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Added button action to show battery level (@doegox)
  - Added GUI Page docs (@GameTec-live)
  - Changed CLI threads polling into blocking reads, to reduce CPU usage (@doegox)
  - Added support for timestamped comments in CLI via `rem`, `;`, `%` or `#` (@doegox)

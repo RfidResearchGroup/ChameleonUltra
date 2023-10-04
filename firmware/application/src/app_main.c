@@ -532,6 +532,35 @@ static void cycle_slot(bool dec) {
     set_slot_light_color(color_new);
 }
 
+static void show_battery(void) {
+    uint32_t *led_pins = hw_get_led_array();
+    // if still in the first 4s after boot, blink red while waiting for battery info
+    while (percentage_batt_lvl == 0) {
+        for (int i = 0; i < RGB_LIST_NUM; i++) {
+            nrf_gpio_pin_clear(led_pins[i]);
+        }
+        bsp_delay_ms(100);
+        set_slot_light_color(RGB_RED);
+        for (int i = 0; i < RGB_LIST_NUM; i++) {
+            nrf_gpio_pin_set(led_pins[i]);
+        }
+        bsp_delay_ms(100);
+    }
+    // ok we have data, show level with cyan LEDs
+    for (int i = 0; i < RGB_LIST_NUM; i++) {
+        nrf_gpio_pin_clear(led_pins[i]);
+    }
+    set_slot_light_color(RGB_CYAN);
+    uint8_t nleds = (percentage_batt_lvl * 2) / 25; // 0->7 (8 for 100% but this is ignored)
+    for (int i = 0; i < RGB_LIST_NUM; i++) {
+        if (i <= nleds) {
+            nrf_gpio_pin_set(led_pins[i]);
+            bsp_delay_ms(50);
+        }
+    }
+    // nothing special to finish, we wait for sleep or slot change
+}
+
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
 static void offline_status_blink_color(uint8_t blink_color) {
@@ -688,6 +717,9 @@ static void run_button_function_by_settings(settings_button_function_t sbf) {
             btn_fn_copy_ic_uid();
             break;
 #endif
+
+        case SettingsButtonShowBattery:
+            show_battery();
 
         default:
             NRF_LOG_ERROR("Unsupported button function")

@@ -25,6 +25,7 @@ typedef enum {
     SettingsButtonCycleSlotDec = 2U,
     // Read the UID card number immediately after pressing, continue searching, and simulate immediately after reading the card
     SettingsButtonCloneIcUid = 3U,
+    SettingsButtonShowBattery = 4U,
 } settings_button_function_t;
 
 typedef struct ALIGN_U32 {
