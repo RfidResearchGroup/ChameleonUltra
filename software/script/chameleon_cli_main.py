@@ -13,6 +13,12 @@ from datetime import datetime
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.history import FileHistory
 
+# Colorama shorthands
+CR = colorama.Fore.RED
+CG = colorama.Fore.GREEN
+CC = colorama.Fore.CYAN
+CY = colorama.Fore.YELLOW
+C0 = colorama.Style.RESET_ALL
 
 ULTRA = r"""
                                                                 ╦ ╦╦ ╔╦╗╦═╗╔═╗
@@ -39,7 +45,7 @@ BANNER = """
 
 def dump_help(cmd_node, depth=0, dump_cmd_groups=False, dump_description=False):
     if cmd_node.cls:
-        cmd_title = f"{colorama.Fore.GREEN}{cmd_node.fullname}{colorama.Style.RESET_ALL}"
+        cmd_title = f"{CG}{cmd_node.fullname}{C0}"
         if dump_description:
             print(f" {cmd_title}".ljust(37) + f"{cmd_node.help_text}")
         else:
@@ -51,13 +57,13 @@ def dump_help(cmd_node, depth=0, dump_cmd_groups=False, dump_description=False):
         if usage != "[-h]":
             usage = usage.removeprefix("[-h] ")
             if dump_description:
-                print(f"{colorama.Fore.GREEN}{colorama.Style.RESET_ALL}".ljust(37), end="")
-            print(f"{colorama.Fore.YELLOW}{usage}{colorama.Style.RESET_ALL}")
+                print(f"{CG}{C0}".ljust(37), end="")
+            print(f"{CY}{usage}{C0}")
         else:
             print("")
     else:
         if dump_cmd_groups:
-            cmd_title = f"{colorama.Fore.YELLOW}{cmd_node.fullname}{colorama.Style.RESET_ALL}"
+            cmd_title = f"{CY}{cmd_node.fullname}{C0}"
             if dump_description:
                 print(f" {cmd_title}".ljust(37) + f"{{ {cmd_node.help_text}... }}")
             else:
@@ -104,9 +110,9 @@ class ChameleonCLI:
 
         :return: current cmd prompt
         """
-        device_string = f"{colorama.Fore.GREEN}USB" if self.device_com.isOpen(
-        ) else f"{colorama.Fore.RED}Offline"
-        status = f"[{device_string}{colorama.Style.RESET_ALL}] chameleon --> "
+        device_string = f"{CG}USB" if self.device_com.isOpen(
+        ) else f"{CR}Offline"
+        status = f"[{device_string}{C0}] chameleon --> "
         return status
 
     @staticmethod
@@ -115,7 +121,7 @@ class ChameleonCLI:
             print chameleon ascii banner
         :return:
         """
-        print(colorama.Fore.YELLOW + BANNER)
+        print(f"{CY}{BANNER}{C0}")
 
     def startCLI(self):
         """
@@ -177,16 +183,10 @@ class ChameleonCLI:
                 # No matching command group
                 print("".ljust(18, "-") + "".ljust(10) + "".ljust(30, "-"))
                 for cmd_name, cmd_node in chameleon_cli_unit.root_commands.items():
-                    cmd_title = f"{colorama.Fore.GREEN}{cmd_name}{colorama.Style.RESET_ALL}"
-                    help_line = (f" - {cmd_title}".ljust(37)
-                                 ) + f"{{ {cmd_node.help_text}... }}"
-                    print(help_line)
-                print(f" - {colorama.Fore.GREEN}clear{colorama.Style.RESET_ALL}".ljust(37) +
-                      "Clear screen")
-                print(f" - {colorama.Fore.GREEN}exit{colorama.Style.RESET_ALL}".ljust(37) +
-                      "Exit program")
-                print(f" - {colorama.Fore.GREEN}rem ...{colorama.Style.RESET_ALL}".ljust(37) +
-                      "Display a comment with a timestamp")
+                    print(f" - {CG}{cmd_name}{C0}".ljust(37) + f"{{ {cmd_node.help_text}... }}")
+                print(f" - {CG}clear{C0}".ljust(37) + "Clear screen")
+                print(f" - {CG}exit{C0}".ljust(37) + "Exit program")
+                print(f" - {CG}rem ...{C0}".ljust(37) + "Display a comment with a timestamp")
                 continue
 
             tree_node, arg_list = self.get_cmd_node(
@@ -196,7 +196,7 @@ class ChameleonCLI:
                 # Found tree node is a group without an implementation, print children
                 print("".ljust(18, "-") + "".ljust(10) + "".ljust(30, "-"))
                 for child in tree_node.children:
-                    cmd_title = f"{colorama.Fore.GREEN}{child.name}{colorama.Style.RESET_ALL}"
+                    cmd_title = f"{CG}{child.name}{C0}"
                     if not child.cls:
                         help_line = (f" - {cmd_title}".ljust(37)
                                      ) + f"{{ {child.help_text}... }}"
@@ -230,10 +230,10 @@ class ChameleonCLI:
                 # start process cmd
                 unit.on_exec(args_parse_result)
             except (chameleon_utils.UnexpectedResponseError, chameleon_utils.ArgsParserError) as e:
-                print(f"{colorama.Fore.RED}{str(e)}{colorama.Style.RESET_ALL}")
+                print(f"{CR}{str(e)}{C0}")
             except Exception:
                 print(
-                    f"CLI exception: {colorama.Fore.RED}{traceback.format_exc()}{colorama.Style.RESET_ALL}")
+                    f"CLI exception: {CR}{traceback.format_exc()}{C0}")
 
 
 if __name__ == '__main__':
