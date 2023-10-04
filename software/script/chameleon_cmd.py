@@ -353,13 +353,13 @@ class ButtonType(enum.IntEnum):
 
     @staticmethod
     def list_str():
-        return list(map(chr, ButtonType))
+        return [chr(x) for x in ButtonType]+[chr(x).lower() for x in ButtonType]
 
     @staticmethod
     def from_str(val):
-        if ButtonType.ButtonA == ord(val):
+        if ButtonType.ButtonA == ord(val.upper()):
             return ButtonType.ButtonA
-        elif ButtonType.ButtonB == ord(val):
+        elif ButtonType.ButtonB == ord(val.upper()):
             return ButtonType.ButtonB
         return None
 
