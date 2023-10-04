@@ -66,7 +66,7 @@ class BaseCLIUnit:
     def cmd(self) -> chameleon_cmd.ChameleonCMD:
         return self._device_cmd
 
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         """
             CMD unit args
         :return:
@@ -145,7 +145,7 @@ class DeviceRequiredUnit(BaseCLIUnit):
         Make sure of device online
     """
 
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         raise NotImplementedError("Please implement this")
 
     def before_exec(self, args: argparse.Namespace):
@@ -165,11 +165,11 @@ class ReaderRequiredUnit(DeviceRequiredUnit):
         Make sure of device enter to reader mode.
     """
 
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         raise NotImplementedError("Please implement this")
 
     def before_exec(self, args: argparse.Namespace):
-        if super(ReaderRequiredUnit, self).before_exec(args):
+        if super().before_exec(args):
             ret = self.cmd.is_device_reader_mode()
             if ret:
                 return True
@@ -207,10 +207,11 @@ lf_em_sim = lf_em.subgroup('sim', 'Manage EM410x emulation data for selected slo
 root_commands: dict[str, CLITree] = {'hw': hw, 'hf': hf, 'lf': lf}
 
 
-@hw.command('connect', 'Connect to chameleon by serial port')
+@hw.command('connect')
 class HWConnect(BaseCLIUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Connect to chameleon by serial port'
         parser.add_argument('-p', '--port', type=str, required=False)
         return parser
 
@@ -261,10 +262,11 @@ class HWConnect(BaseCLIUnit):
             self.device_com.close()
 
 
-@hw_mode.command('set', 'Change device mode to tag reader or tag emulator')
+@hw_mode.command('set')
 class HWModeSet(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Change device mode to tag reader or tag emulator'
         help_str = "reader or r = reader mode, emulator or e = tag emulator mode."
         parser.add_argument('-m', '--mode', type=str, required=True, choices=['reader', 'r', 'emulator', 'e'],
                             help=help_str)
@@ -279,37 +281,45 @@ class HWModeSet(DeviceRequiredUnit):
             print("Switch to { Tag Emulator } mode successfully.")
 
 
-@hw_mode.command('get', 'Get current device mode')
+@hw_mode.command('get')
 class HWModeGet(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        pass
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Get current device mode'
+        return parser
 
     def on_exec(self, args: argparse.Namespace):
         print(f"- Device Mode ( Tag {'Reader' if self.cmd.is_device_reader_mode() else 'Emulator'} )")
 
 
-@hw_chipid.command('get', 'Get device chipset ID')
+@hw_chipid.command('get')
 class HWChipIdGet(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        return None
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Get device chipset ID'
+        return parser
 
     def on_exec(self, args: argparse.Namespace):
         print(' - Device chip ID: ' + self.cmd.get_device_chip_id())
 
 
-@hw_address.command('get', 'Get device address (used with Bluetooth)')
+@hw_address.command('get')
 class HWAddressGet(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        return None
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Get device address (used with Bluetooth)'
+        return parser
 
     def on_exec(self, args: argparse.Namespace):
         print(' - Device address: ' + self.cmd.get_device_address())
 
 
-@hw.command('version', 'Get current device firmware version')
+@hw.command('version')
 class HWVersion(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        return None
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Get current device firmware version'
+        return parser
 
     def on_exec(self, args: argparse.Namespace):
         fw_version_tuple = self.cmd.get_app_version()
@@ -319,10 +329,12 @@ class HWVersion(DeviceRequiredUnit):
         print(f' - Chameleon {model}, Version: {fw_version} ({git_version})')
 
 
-@hf_14a.command('scan', 'Scan 14a tag, and print basic information')
+@hf_14a.command('scan')
 class HF14AScan(ReaderRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        pass
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Scan 14a tag, and print basic information'
+        return parser
 
     def check_mf1_nt(self):
         # detect mf1 support
@@ -362,10 +374,12 @@ class HF14AScan(ReaderRequiredUnit):
         self.scan()
 
 
-@hf_14a.command('info', 'Scan 14a tag, and print detail information')
+@hf_14a.command('info')
 class HF14AInfo(ReaderRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        pass
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Scan 14a tag, and print detail information'
+        return parser
 
     def on_exec(self, args: argparse.Namespace):
         scan = HF14AScan()
@@ -373,11 +387,12 @@ class HF14AInfo(ReaderRequiredUnit):
         scan.scan(deep=1)
 
 
-@hf_mf.command('nested', 'Mifare Classic nested recover key')
+@hf_mf.command('nested')
 class HFMFNested(ReaderRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         type_choices = ['A', 'B', 'a', 'b']
         parser = ArgumentParserNoExit()
+        parser.description = 'Mifare Classic nested recover key'
         parser.add_argument('-o', '--one', action='store_true', default=False,
                             help="one sector key recovery. Use block 0 Key A to find block 4 Key A")
         parser.add_argument('--block-known', type=int, required=True, metavar="decimal",
@@ -502,14 +517,16 @@ class HFMFNested(ReaderRequiredUnit):
         return
 
 
-@hf_mf.command('darkside', 'Mifare Classic darkside recover key')
+@hf_mf.command('darkside')
 class HFMFDarkside(ReaderRequiredUnit):
     def __init__(self):
         super().__init__()
         self.darkside_list = []
 
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        return None
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Mifare Classic darkside recover key'
+        return parser
 
     def recover_key(self, block_target, type_target):
         """
@@ -575,7 +592,7 @@ class HFMFDarkside(ReaderRequiredUnit):
 
 
 class BaseMF1AuthOpera(ReaderRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         type_choices = ['A', 'B', 'a', 'b']
         parser = ArgumentParserNoExit()
         parser.add_argument('-b', '--block', type=int, required=True, metavar="decimal",
@@ -602,7 +619,7 @@ class BaseMF1AuthOpera(ReaderRequiredUnit):
 
 
 class BaseMFUAuthOpera(ReaderRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         # TODO:
         #     -k, --key <hex>                Authentication key (UL-C 16 bytes, EV1/NTAG 4 bytes)
@@ -619,8 +636,13 @@ class BaseMFUAuthOpera(ReaderRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
-@hf_mf.command('rdbl', 'Mifare Classic read one block')
+@hf_mf.command('rdbl')
 class HFMFRDBL(BaseMF1AuthOpera):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = super().args_parser()
+        parser.description = 'Mifare Classic read one block'
+        return parser
+
     # hf mf rdbl -b 2 -t A -k FFFFFFFFFFFF
     def on_exec(self, args: argparse.Namespace):
         param = self.get_param(args)
@@ -628,10 +650,11 @@ class HFMFRDBL(BaseMF1AuthOpera):
         print(f" - Data: {resp.hex()}")
 
 
-@hf_mf.command('wrbl', 'Mifare Classic write one block')
+@hf_mf.command('wrbl')
 class HFMFWRBL(BaseMF1AuthOpera):
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        parser = super(HFMFWRBL, self).args_parser()
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = super().args_parser()
+        parser.description = 'Mifare Classic write one block'
         parser.add_argument('-d', '--data', type=str, required=True, metavar="Your block data",
                             help="Your block data, a hex string.")
         return parser
@@ -649,10 +672,11 @@ class HFMFWRBL(BaseMF1AuthOpera):
             print(f" - {CR}Write fail.{C0}")
 
 
-@hf_mf_detection.command('enable', 'Detection enable')
+@hf_mf_detection.command('enable')
 class HFMFDetectionEnable(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'MF1 Detection enable'
         parser.add_argument('-e', '--enable', type=int, required=True, choices=[1, 0], help="1 = enable, 0 = disable")
         return parser
 
@@ -663,10 +687,12 @@ class HFMFDetectionEnable(DeviceRequiredUnit):
         print(f" - Set mf1 detection {'enable' if enable else 'disable'}.")
 
 
-@hf_mf_detection.command('count', 'Detection log count')
+@hf_mf_detection.command('count')
 class HFMFDetectionLogCount(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        return None
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'MF1 Detection log count'
+        return parser
 
     # hf mf detection count
     def on_exec(self, args: argparse.Namespace):
@@ -674,12 +700,14 @@ class HFMFDetectionLogCount(DeviceRequiredUnit):
         print(f" - MF1 detection log count = {count}")
 
 
-@hf_mf_detection.command('decrypt', 'Download log and decrypt keys')
+@hf_mf_detection.command('decrypt')
 class HFMFDetectionDecrypt(DeviceRequiredUnit):
     detection_log_size = 18
 
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        return None
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'MF1 Download log and decrypt keys'
+        return parser
 
     def decrypt_by_list(self, rs: list):
         """
@@ -781,10 +809,11 @@ class HFMFDetectionDecrypt(DeviceRequiredUnit):
         return
 
 
-@hf_mf.command('eload', 'Load data to emulator memory')
+@hf_mf.command('eload')
 class HFMFELoad(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Load data to emulator memory'
         parser.add_argument('-f', '--file', type=str, required=True, help="file path")
         parser.add_argument('-t', '--type', type=str, required=False, help="content type", choices=['bin', 'hex'])
         return parser
@@ -830,10 +859,11 @@ class HFMFELoad(DeviceRequiredUnit):
         print("\n - Load success")
 
 
-@hf_mf.command('eread', 'Read data from emulator memory')
+@hf_mf.command('eread')
 class HFMFERead(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Read data from emulator memory'
         parser.add_argument('-f', '--file', type=str, required=True, help="file path")
         parser.add_argument('-t', '--type', type=str, required=False, help="content type", choices=['bin', 'hex'])
         return parser
@@ -883,10 +913,11 @@ class HFMFERead(DeviceRequiredUnit):
         print("\n - Read success")
 
 
-@hf_mf.command('settings', 'Settings of Mifare Classic emulator')
+@hf_mf.command('settings')
 class HFMFSettings(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Settings of Mifare Classic emulator'
 
         help_str = ""
         for s in chameleon_cmd.MifareClassicWriteMode:
@@ -921,10 +952,11 @@ class HFMFSettings(DeviceRequiredUnit):
         print(' - Emulator settings updated')
 
 
-@hf_mf.command('sim', 'Simulate a Mifare Classic card')
+@hf_mf.command('sim')
 class HFMFSim(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Simulate a Mifare Classic card'
         parser.add_argument('--uid', type=str, required=True, help="Unique ID(hex)", metavar="hex")
         parser.add_argument('--atqa', type=str, required=True, help="Answer To Request(hex)", metavar="hex")
         parser.add_argument('--sak', type=str, required=True, help="Select AcKnowledge(hex)", metavar="hex")
@@ -966,10 +998,12 @@ class HFMFSim(DeviceRequiredUnit):
         print(" - Set anti-collision resources success")
 
 
-@hf_mf.command('info', 'Get information about current slot (UID/SAK/ATQA)')
+@hf_mf.command('info')
 class HFMFInfo(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        pass
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Get information about current slot (UID/SAK/ATQA)'
+        return parser
 
     def scan(self):
         resp = self.cmd.hf14a_get_anti_coll_data()
@@ -983,12 +1017,13 @@ class HFMFInfo(DeviceRequiredUnit):
         return self.scan()
 
 
-@hf_mfu.command('rdpg', 'MIFARE Ultralight read one page')
+@hf_mfu.command('rdpg')
 class HFMFURDPG(BaseMFUAuthOpera):
     # hf mfu rdpg -p 2
 
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        parser = super(HFMFURDPG, self).args_parser()
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = super().args_parser()
+        parser.description = 'MIFARE Ultralight read one page'
         parser.add_argument('-p', '--page', type=int, required=True, metavar="decimal",
                             help="The page where the key will be used against")
         return parser
@@ -1015,11 +1050,12 @@ class HFMFURDPG(BaseMFUAuthOpera):
         print(f" - Data: {resp[:4].hex()}")
 
 
-@hf_mfu.command('dump', 'MIFARE Ultralight dump pages')
+@hf_mfu.command('dump')
 class HFMFUDUMP(BaseMFUAuthOpera):
     # hf mfu dump [-p start_page] [-q number_pages] [-f output_file]
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        parser = super(HFMFUDUMP, self).args_parser()
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = super().args_parser()
+        parser.description = 'MIFARE Ultralight dump pages'
         parser.add_argument('-p', '--page', type=int, required=False, metavar="decimal", default=0,
                             help="Manually set number of pages to dump")
         parser.add_argument('-q', '--qty', type=int, required=False, metavar="decimal", default=16,
@@ -1070,10 +1106,12 @@ class HFMFUDUMP(BaseMFUAuthOpera):
             fd.close()
 
 
-@lf_em.command('read', 'Scan em410x tag and print id')
+@lf_em.command('read')
 class LFEMRead(ReaderRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        return None
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Scan em410x tag and print id'
+        return parser
 
     def on_exec(self, args: argparse.Namespace):
         id = self.cmd.em410x_scan()
@@ -1087,23 +1125,24 @@ class LFEMCardRequiredUnit(DeviceRequiredUnit):
         return parser
 
     def before_exec(self, args: argparse.Namespace):
-        if super(LFEMCardRequiredUnit, self).before_exec(args):
+        if super().before_exec(args):
             if not re.match(r"^[a-fA-F0-9]{10}$", args.id):
                 raise ArgsParserError("ID must include 10 HEX symbols")
             return True
         return False
 
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         raise NotImplementedError("Please implement this")
 
     def on_exec(self, args: argparse.Namespace):
         raise NotImplementedError("Please implement this")
 
 
-@lf_em.command('write', 'Write em410x id to t55xx')
+@lf_em.command('write')
 class LFEMWriteT55xx(LFEMCardRequiredUnit, ReaderRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Write em410x id to t55xx'
         return self.add_card_arg(parser)
 
     def before_exec(self, args: argparse.Namespace):
@@ -1120,7 +1159,7 @@ class LFEMWriteT55xx(LFEMCardRequiredUnit, ReaderRequiredUnit):
 
 
 class SlotIndexRequireUnit(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         raise NotImplementedError()
 
     def on_exec(self, args: argparse.Namespace):
@@ -1137,7 +1176,7 @@ class SlotIndexRequireUnit(DeviceRequiredUnit):
 
 
 class SenseTypeRequireUnit(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         raise NotImplementedError()
 
     def on_exec(self, args: argparse.Namespace):
@@ -1158,10 +1197,11 @@ class SenseTypeRequireUnit(DeviceRequiredUnit):
         return parser
 
 
-@hw_slot.command('list', 'Get information about slots')
+@hw_slot.command('list')
 class HWSlotList(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Get information about slots'
         parser.add_argument('-e', '--extend', type=int, required=False,
                             help="Show slot nicknames and Mifare Classic emulator settings. 0 - skip, 1 - show (default)", choices=[0, 1], default=1)
         return parser
@@ -1232,10 +1272,11 @@ class HWSlotList(DeviceRequiredUnit):
                 print("undef")
 
 
-@hw_slot.command('change', 'Set emulation tag slot activated.')
+@hw_slot.command('change')
 class HWSlotSet(SlotIndexRequireUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Set emulation tag slot activated'
         return self.add_slot_args(parser)
 
     # hw slot change -s 1
@@ -1257,17 +1298,18 @@ class TagTypeRequiredUnit(DeviceRequiredUnit):
                             choices=[t.value for t in type_choices])
         return parser
 
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         raise NotImplementedError()
 
     def on_exec(self, args: argparse.Namespace):
         raise NotImplementedError()
 
 
-@hw_slot.command('type', 'Set emulation tag type')
+@hw_slot.command('type')
 class HWSlotTagType(TagTypeRequiredUnit, SlotIndexRequireUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Set emulation tag type'
         self.add_type_args(parser)
         self.add_slot_args(parser)
         return parser
@@ -1280,11 +1322,11 @@ class HWSlotTagType(TagTypeRequiredUnit, SlotIndexRequireUnit):
         print(' - Set slot tag type success.')
 
 
-@hw_slot.command('delete', 'Delete sense type data for slot')
+@hw_slot.command('delete')
 class HWDeleteSlotSense(SlotIndexRequireUnit, SenseTypeRequireUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = "Delete sense type data for a specific slot."
+        parser.description = 'Delete sense type data for a specific slot'
         self.add_slot_args(parser)
         self.add_sense_type_args(parser)
         return parser
@@ -1295,10 +1337,11 @@ class HWDeleteSlotSense(SlotIndexRequireUnit, SenseTypeRequireUnit):
         self.cmd.delete_slot_sense_type(slot, sense_type)
 
 
-@hw_slot.command('init', 'Set emulation tag data to default')
+@hw_slot.command('init')
 class HWSlotDataDefault(TagTypeRequiredUnit, SlotIndexRequireUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Set emulation tag data to default'
         self.add_type_args(parser)
         self.add_slot_args(parser)
         return parser
@@ -1312,10 +1355,11 @@ class HWSlotDataDefault(TagTypeRequiredUnit, SlotIndexRequireUnit):
         print(' - Set slot tag data init success.')
 
 
-@hw_slot.command('enable', 'Set emulation tag slot enable or disable')
+@hw_slot.command('enable')
 class HWSlotEnableSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Set emulation tag slot enable or disable'
         self.add_slot_args(parser)
         self.add_sense_type_args(parser)
         parser.add_argument('-e', '--enable', type=int, required=True, help="1 is Enable or 0 Disable", choices=[0, 1])
@@ -1330,10 +1374,11 @@ class HWSlotEnableSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
         print(f' - Set slot {slot_num} {"LF" if sense_type==chameleon_cmd.TagSenseType.TAG_SENSE_LF else "HF"} {"enable" if enable else "disable"} success.')
 
 
-@lf_em_sim.command('set', 'Set simulated em410x card id')
+@lf_em_sim.command('set')
 class LFEMSimSet(LFEMCardRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Set simulated em410x card id'
         return self.add_card_arg(parser)
 
     # lf em sim set --id 4545454545
@@ -1343,10 +1388,12 @@ class LFEMSimSet(LFEMCardRequiredUnit):
         print(' - Set em410x tag id success.')
 
 
-@lf_em_sim.command('get', 'Get simulated em410x card id')
+@lf_em_sim.command('get')
 class LFEMSimGet(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        return None
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Get simulated em410x card id'
+        return parser
 
     # lf em sim get
     def on_exec(self, args: argparse.Namespace):
@@ -1355,10 +1402,11 @@ class LFEMSimGet(DeviceRequiredUnit):
         print(f'ID: {response.hex()}')
 
 
-@hw_slot_nick.command('set', 'Set tag nick name for slot')
+@hw_slot_nick.command('set')
 class HWSlotNickSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Set tag nick name for slot'
         self.add_slot_args(parser)
         self.add_sense_type_args(parser)
         parser.add_argument('-n', '--name', type=str, required=True, help="Your tag nick name for slot")
@@ -1376,10 +1424,11 @@ class HWSlotNickSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
         print(f' - Set tag nick name for slot {slot_num} success.')
 
 
-@hw_slot_nick.command('get', 'Get tag nick name for slot')
+@hw_slot_nick.command('get')
 class HWSlotNickGet(SlotIndexRequireUnit, SenseTypeRequireUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Get tag nick name for slot'
         self.add_slot_args(parser)
         self.add_sense_type_args(parser)
         return parser
@@ -1392,10 +1441,11 @@ class HWSlotNickGet(SlotIndexRequireUnit, SenseTypeRequireUnit):
         print(f' - Get tag nick name for slot {slot_num}: {res.decode(encoding="utf8")}')
 
 
-@hw_slot_nick.command('delete', 'Delete tag nick name for slot')
+@hw_slot_nick.command('delete')
 class HWSlotNickGet(SlotIndexRequireUnit, SenseTypeRequireUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Delete tag nick name for slot'
         self.add_slot_args(parser)
         self.add_sense_type_args(parser)
         return parser
@@ -1408,10 +1458,12 @@ class HWSlotNickGet(SlotIndexRequireUnit, SenseTypeRequireUnit):
         print(f' - Delete tag nick name for slot {slot_num}: {res.decode(encoding="utf8")}')
 
 
-@hw_slot.command('update', 'Update config & data to device flash')
+@hw_slot.command('update')
 class HWSlotUpdate(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        return None
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Update config & data to device flash'
+        return parser
 
     # hw slot update
     def on_exec(self, args: argparse.Namespace):
@@ -1419,10 +1471,12 @@ class HWSlotUpdate(DeviceRequiredUnit):
         print(' - Update config and data from device memory to flash success.')
 
 
-@hw_slot.command('openall', 'Open all slot and set to default data')
+@hw_slot.command('openall')
 class HWSlotOpenAll(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        return None
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Open all slot and set to default data'
+        return parser
 
     # hw slot openall
     def on_exec(self, args: argparse.Namespace):
@@ -1449,10 +1503,12 @@ class HWSlotOpenAll(DeviceRequiredUnit):
         print(' - Succeeded opening all slots and setting data to default.')
 
 
-@hw.command('dfu', 'Restart application to bootloader mode(Not yet implement dfu).')
+@hw.command('dfu')
 class HWDFU(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        return None
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Restart application to bootloader/DFU mode'
+        return parser
 
     # hw dfu
     def on_exec(self, args: argparse.Namespace):
@@ -1468,10 +1524,12 @@ class HWDFU(DeviceRequiredUnit):
         time.sleep(0.1)
 
 
-@hw_settings_animation.command('get', 'Get current animation mode value')
+@hw_settings_animation.command('get')
 class HWSettingsAnimationGet(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        return None
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Get current animation mode value'
+        return parser
 
     def on_exec(self, args: argparse.Namespace):
         resp = self.cmd.get_animation_mode()
@@ -1485,10 +1543,11 @@ class HWSettingsAnimationGet(DeviceRequiredUnit):
             print("Unknown setting value, something failed.")
 
 
-@hw_settings_animation.command('set', 'Change chameleon animation mode')
+@hw_settings_animation.command('set')
 class HWSettingsAnimationSet(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Change chameleon animation mode'
         parser.add_argument('-m', '--mode', type=int, required=True,
                             help="0 is full (default), 1 is minimal (only single pass on button wakeup), 2 is none",
                             choices=[0, 1, 2])
@@ -1500,10 +1559,12 @@ class HWSettingsAnimationSet(DeviceRequiredUnit):
         print("Animation mode change success. Do not forget to store your settings in flash!")
 
 
-@hw_settings.command('store', 'Store current settings to flash')
+@hw_settings.command('store')
 class HWSettingsStore(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        return None
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Store current settings to flash'
+        return parser
 
     def on_exec(self, args: argparse.Namespace):
         print("Storing settings...")
@@ -1513,10 +1574,12 @@ class HWSettingsStore(DeviceRequiredUnit):
             print(" - Store failed")
 
 
-@hw_settings.command('reset', 'Reset settings to default values')
+@hw_settings.command('reset')
 class HWSettingsReset(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        return None
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Reset settings to default values'
+        return parser
 
     def on_exec(self, args: argparse.Namespace):
         print("Initializing settings...")
@@ -1526,13 +1589,11 @@ class HWSettingsReset(DeviceRequiredUnit):
             print(" - Reset failed")
 
 
-@hw.command('factory_reset', 'Wipe all data and return to factory settings')
+@hw.command('factory_reset')
 class HWFactoryReset(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = "Permanently wipes Chameleon to factory settings. " \
-                             "This will delete all your slot data and custom settings. " \
-                             "There's no going back."
+        parser.description = 'Wipe all slot data and custom settings and return to factory settings'
         parser.add_argument("--i-know-what-im-doing", default=False, action="store_true", help="Just to be sure :)")
         return parser
 
@@ -1548,13 +1609,15 @@ class HWFactoryReset(DeviceRequiredUnit):
             print(" - Reset failed!")
 
 
-@hw.command('battery', 'Get battery information, voltage and level.')
+@hw.command('battery')
 class HWBatteryInfo(DeviceRequiredUnit):
     # How much remaining battery is considered low?
     BATTERY_LOW_LEVEL = 30
 
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        return None
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Get battery information, voltage and level'
+        return parser
 
     def on_exec(self, args: argparse.Namespace):
         voltage, percentage = self.cmd.get_battery_info()
@@ -1565,11 +1628,13 @@ class HWBatteryInfo(DeviceRequiredUnit):
             print(f"{CR}[!] Low battery, please charge.{C0}")
 
 
-@hw_settings_button_press.command('get', 'Get button press function of Button A and Button B.')
+@hw_settings_button_press.command('get')
 class HWButtonSettingsGet(DeviceRequiredUnit):
 
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        return None
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Get button press function of Button A and Button B'
+        return parser
 
     def on_exec(self, args: argparse.Namespace):
         # all button in here.
@@ -1590,11 +1655,12 @@ class HWButtonSettingsGet(DeviceRequiredUnit):
         print(" - Successfully get button function from settings")
 
 
-@hw_settings_button_press.command('set', 'Set button press function of Button A and Button B.')
+@hw_settings_button_press.command('set')
 class HWButtonSettingsSet(DeviceRequiredUnit):
 
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Set button press function of Button A and Button B'
         parser.add_argument('-l', '--long', action='store_true', default=False, help="set keybinding for long-press")
         parser.add_argument('-b', type=str, required=True, help="Change the function of the pressed button(?).",
                             choices=chameleon_cmd.ButtonType.list_str())
@@ -1616,11 +1682,12 @@ class HWButtonSettingsSet(DeviceRequiredUnit):
         print(" - Successfully set button function to settings")
 
 
-@hw_settings.command('blekey', 'Get or set the ble connect key')
+@hw_settings.command('blekey')
 class HWSettingsBLEKey(DeviceRequiredUnit):
 
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Get or set the ble connect key'
         parser.add_argument('-k', '--key', required=False, help="Ble connect key for your device")
         return parser
 
@@ -1644,11 +1711,12 @@ class HWSettingsBLEKey(DeviceRequiredUnit):
                 print(f" - {CR}Only 6 ASCII characters from 0 to 9 are supported.{C0}")
 
 
-@hw_settings.command('blepair', 'Check if BLE pairing is enabled, or set the enable switch for BLE pairing.')
+@hw_settings.command('blepair')
 class HWBlePair(DeviceRequiredUnit):
 
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Check if BLE pairing is enabled, or set the enable switch for BLE pairing'
         parser.add_argument('-e', '--enable', type=int, required=False, help="Enable = 1 or Disable = 0")
         return parser
 
@@ -1676,22 +1744,25 @@ class HWBlePair(DeviceRequiredUnit):
                   "state.")
 
 
-@hw_ble_bonds.command('clear', 'Clear all bindings')
+@hw_ble_bonds.command('clear')
 class HWBLEBondsClear(DeviceRequiredUnit):
 
-    def args_parser(self) -> ArgumentParserNoExit or None:
-        return None
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Clear all bindings'
+        return parser
 
     def on_exec(self, args: argparse.Namespace):
         self.cmd.delete_ble_all_bonds()
         print(" - Successfully clear all bonds")
 
 
-@hw.command('raw', 'Send raw command')
+@hw.command('raw')
 class HWRaw(DeviceRequiredUnit):
 
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Send raw command'
         parser.add_argument('-c', '--command', type=int, required=True, help="Command (Int) to send")
         parser.add_argument('-d', '--data', type=str, help="Data (HEX) to send", default="")
         parser.add_argument('-t', '--timeout', type=int, help="Timeout in seconds", default=3)
@@ -1713,14 +1784,15 @@ class HWRaw(DeviceRequiredUnit):
         print(f"   Data (HEX): {response.data.hex()}")
 
 
-@hf_14a.command('raw', 'Send raw command')
+@hf_14a.command('raw')
 class HF14ARaw(ReaderRequiredUnit):
 
     def bool_to_bit(self, value):
         return 1 if value else 0
 
-    def args_parser(self) -> ArgumentParserNoExit or None:
+    def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Send raw command'
         parser.add_argument('-a', '--activate-rf', help="Active signal field ON without select",
                             action='store_true', default=False,)
         parser.add_argument('-s', '--select-tag', help="Active signal field ON with select",
@@ -1735,12 +1807,11 @@ class HF14ARaw(ReaderRequiredUnit):
         parser.add_argument('-k', '--keep-rf', help="Keep signal field ON after receive",
                             action='store_true', default=False,)
         parser.add_argument('-t', '--timeout', type=int, help="Timeout in ms", default=100)
-        # TODO: need support for carriage returns in parser, why are they mangled?
-        # parser.description = 'Examples:\n' \
-        #                      '  hf 14a raw -b 7 -d 40 -k\n' \
-        #                      '  hf 14a raw -d 43 -k\n' \
-        #                      '  hf 14a raw -d 3000 -c\n' \
-        #                      '  hf 14a raw -sc -d 6000\n'
+        # 'Examples:\n' \
+        # '  hf 14a raw -b 7 -d 40 -k\n' \
+        # '  hf 14a raw -d 43 -k\n' \
+        # '  hf 14a raw -d 3000 -c\n' \
+        # '  hf 14a raw -sc -d 6000\n'
         return parser
 
     def on_exec(self, args: argparse.Namespace):
