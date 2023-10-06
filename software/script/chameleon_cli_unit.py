@@ -1157,7 +1157,7 @@ class SlotIndexRequireUnit(DeviceRequiredUnit):
     @staticmethod
     def add_slot_args(parser: ArgumentParserNoExit):
         slot_choices = [x.value for x in chameleon_cmd.SlotNumber]
-        help_str = f"Slot Indexes: {slot_choices}"
+        help_str = f"Slot Index: {slot_choices} Default: active slot"
 
         parser.add_argument('-s', "--slot", type=int, required=False, help=help_str, metavar="number",
                             choices=slot_choices)
