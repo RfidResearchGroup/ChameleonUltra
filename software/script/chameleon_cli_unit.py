@@ -183,9 +183,6 @@ class ReaderRequiredUnit(DeviceRequiredUnit):
 
 
 hw = CLITree('hw', 'hardware controller')
-hw_chipid = hw.subgroup('chipid', 'Device chipset ID get')
-hw_address = hw.subgroup('address', 'Device address get')
-hw_mode = hw.subgroup('mode', 'Device mode get/set')
 hw_slot = hw.subgroup('slot', 'Emulation tag slot.')
 hw_slot_nick = hw_slot.subgroup('nick', 'Get/Set tag nick name for slot')
 hw_ble = hw.subgroup('ble', 'Bluetooth low energy')
@@ -262,38 +259,32 @@ class HWConnect(BaseCLIUnit):
             self.device_com.close()
 
 
-@hw_mode.command('set')
-class HWModeSet(DeviceRequiredUnit):
+@hw.command('mode')
+class HWMode(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = 'Change device mode to tag reader or tag emulator'
+        parser.description = 'Get or change device mode: tag reader or tag emulator'
         help_str = "reader or r = reader mode, emulator or e = tag emulator mode."
-        parser.add_argument('-m', '--mode', type=str, required=True, choices=['reader', 'r', 'emulator', 'e'],
-                            help=help_str)
+        mode_group = parser.add_mutually_exclusive_group()
+        mode_group.add_argument('-r', '--reader', action='store_true',
+                            help="Set reader mode")
+        mode_group.add_argument('-e', '--emulator', action='store_true',
+                            help="Set emulator mode")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        if args.mode == 'reader' or args.mode == 'r':
+        if args.reader:
             self.cmd.set_device_reader_mode(True)
             print("Switch to {  Tag Reader  } mode successfully.")
-        else:
+        elif args.emulator:
             self.cmd.set_device_reader_mode(False)
             print("Switch to { Tag Emulator } mode successfully.")
+        else:
+            print(f"- Device Mode ( Tag {'Reader' if self.cmd.is_device_reader_mode() else 'Emulator'} )")
 
 
-@hw_mode.command('get')
-class HWModeGet(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit:
-        parser = ArgumentParserNoExit()
-        parser.description = 'Get current device mode'
-        return parser
-
-    def on_exec(self, args: argparse.Namespace):
-        print(f"- Device Mode ( Tag {'Reader' if self.cmd.is_device_reader_mode() else 'Emulator'} )")
-
-
-@hw_chipid.command('get')
-class HWChipIdGet(DeviceRequiredUnit):
+@hw.command('chipid')
+class HWChipId(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Get device chipset ID'
@@ -303,8 +294,8 @@ class HWChipIdGet(DeviceRequiredUnit):
         print(' - Device chip ID: ' + self.cmd.get_device_chip_id())
 
 
-@hw_address.command('get')
-class HWAddressGet(DeviceRequiredUnit):
+@hw.command('address')
+class HWAddress(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Get device address (used with Bluetooth)'
