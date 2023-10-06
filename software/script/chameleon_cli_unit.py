@@ -1310,8 +1310,8 @@ class HWSlotTagType(TagTypeRequiredUnit, SlotIndexRequireUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Set emulation tag type'
-        self.add_type_args(parser)
         self.add_slot_args(parser)
+        self.add_type_args(parser)
         return parser
 
     # hw slot tagtype -t 2
@@ -1342,8 +1342,8 @@ class HWSlotDataDefault(TagTypeRequiredUnit, SlotIndexRequireUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Set emulation tag data to default'
-        self.add_type_args(parser)
         self.add_slot_args(parser)
+        self.add_type_args(parser)
         return parser
 
     # m1 1k card emulation hw slot init -s 1 -t 3
