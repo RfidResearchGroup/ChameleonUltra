@@ -184,7 +184,6 @@ class ReaderRequiredUnit(DeviceRequiredUnit):
 
 hw = CLITree('hw', 'hardware controller')
 hw_slot = hw.subgroup('slot', 'Emulation tag slot.')
-hw_slot_nick = hw_slot.subgroup('nick', 'Get/Set tag nick name for slot')
 hw_ble = hw.subgroup('ble', 'Bluetooth low energy')
 hw_ble_bonds = hw_ble.subgroup('bonds', 'All devices bound by chameleons.')
 hw_settings = hw.subgroup('settings', 'Chameleon settings management')
@@ -264,7 +263,6 @@ class HWMode(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Get or change device mode: tag reader or tag emulator'
-        help_str = "reader or r = reader mode, emulator or e = tag emulator mode."
         mode_group = parser.add_mutually_exclusive_group()
         mode_group.add_argument('-r', '--reader', action='store_true',
                             help="Set reader mode")
@@ -1161,7 +1159,7 @@ class SlotIndexRequireUnit(DeviceRequiredUnit):
         slot_choices = [x.value for x in chameleon_cmd.SlotNumber]
         help_str = f"Slot Indexes: {slot_choices}"
 
-        parser.add_argument('-s', "--slot", type=int, required=True, help=help_str, metavar="number",
+        parser.add_argument('-s', "--slot", type=int, required=False, help=help_str, metavar="number",
                             choices=slot_choices)
         return parser
 
@@ -1324,7 +1322,7 @@ class HWDeleteSlotSense(SlotIndexRequireUnit, SenseTypeRequireUnit):
 
     def on_exec(self, args: argparse.Namespace):
         slot = args.slot
-        sense_type = args.sense_type
+        sense_type = chameleon_cmd.TagSenseType(args.sense_type)
         self.cmd.delete_slot_sense_type(slot, sense_type)
 
 
@@ -1359,10 +1357,10 @@ class HWSlotEnableSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
     # hw slot enable -s 1 -st 0 -e 0
     def on_exec(self, args: argparse.Namespace):
         slot_num = args.slot
-        sense_type = args.sense_type
+        sense_type = chameleon_cmd.TagSenseType(args.sense_type)
         enable = args.enable
         self.cmd.set_slot_enable(slot_num, sense_type, enable)
-        print(f' - Set slot {slot_num} {"LF" if sense_type==chameleon_cmd.TagSenseType.TAG_SENSE_LF else "HF"} {"enable" if enable else "disable"} success.')
+        print(f' - Set slot {slot_num} {sense_type} {"enable" if enable else "disable"} success.')
 
 
 @lf_em_sim.command('set')
@@ -1393,61 +1391,38 @@ class LFEMSimGet(DeviceRequiredUnit):
         print(f'ID: {response.hex()}')
 
 
-@hw_slot_nick.command('set')
-class HWSlotNickSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
+@hw_slot.command('nick')
+class HWSlotNick(SlotIndexRequireUnit, SenseTypeRequireUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = 'Set tag nick name for slot'
+        parser.description = 'Get/Set/Delete tag nick name for slot'
         self.add_slot_args(parser)
         self.add_sense_type_args(parser)
-        parser.add_argument('-n', '--name', type=str, required=True, help="Your tag nick name for slot")
+        action_group = parser.add_mutually_exclusive_group()
+        action_group.add_argument('-n', '--name', type=str, required=False, help="Set tag nick name for slot")
+        action_group.add_argument('-d', '--delete', action='store_true', help="Delete tag nick name for slot")
         return parser
 
-    # hw slot nick set -s 1 -st 1 -n Save the test name
     def on_exec(self, args: argparse.Namespace):
-        slot_num = args.slot
-        sense_type = args.sense_type
-        name: str = args.name
-        encoded_name = name.encode(encoding="utf8")
-        if len(encoded_name) > 32:
-            raise ValueError("Your tag nick name too long.")
-        self.cmd.set_slot_tag_nick(slot_num, sense_type, encoded_name)
-        print(f' - Set tag nick name for slot {slot_num} success.')
-
-
-@hw_slot_nick.command('get')
-class HWSlotNickGet(SlotIndexRequireUnit, SenseTypeRequireUnit):
-    def args_parser(self) -> ArgumentParserNoExit:
-        parser = ArgumentParserNoExit()
-        parser.description = 'Get tag nick name for slot'
-        self.add_slot_args(parser)
-        self.add_sense_type_args(parser)
-        return parser
-
-    # hw slot nick get -s 1 -st 1
-    def on_exec(self, args: argparse.Namespace):
-        slot_num = args.slot
-        sense_type = args.sense_type
-        res = self.cmd.get_slot_tag_nick(slot_num, sense_type)
-        print(f' - Get tag nick name for slot {slot_num}: {res.decode(encoding="utf8")}')
-
-
-@hw_slot_nick.command('delete')
-class HWSlotNickGet(SlotIndexRequireUnit, SenseTypeRequireUnit):
-    def args_parser(self) -> ArgumentParserNoExit:
-        parser = ArgumentParserNoExit()
-        parser.description = 'Delete tag nick name for slot'
-        self.add_slot_args(parser)
-        self.add_sense_type_args(parser)
-        return parser
-
-    # hw slot nick delete -s 1 -st 1
-    def on_exec(self, args: argparse.Namespace):
-        slot_num = args.slot
-        sense_type = args.sense_type
-        res = self.cmd.delete_slot_tag_nick(slot_num, sense_type)
-        print(f' - Delete tag nick name for slot {slot_num}: {res.decode(encoding="utf8")}')
-
+        if args.slot is not None:
+            slot_num = args.slot
+        else:
+            slot_num = chameleon_cmd.SlotNumber.from_fw(self.cmd.get_active_slot())
+        sense_type = chameleon_cmd.TagSenseType(args.sense_type)
+        if args.name is not None:
+            name: str = args.name
+            encoded_name = name.encode(encoding="utf8")
+            if len(encoded_name) > 32:
+                raise ValueError("Your tag nick name too long.")
+            self.cmd.set_slot_tag_nick(slot_num, sense_type, encoded_name)
+            print(f' - Set tag nick name for slot {slot_num} {sense_type}: {name}')
+        elif args.delete:
+            self.cmd.delete_slot_tag_nick(slot_num, sense_type)
+            print(f' - Delete tag nick name for slot {slot_num} {sense_type}')
+        else:
+            res = self.cmd.get_slot_tag_nick(slot_num, sense_type)
+            print(f' - Get tag nick name for slot {slot_num} {sense_type}'
+                  f': {res.decode(encoding="utf8")}')
 
 @hw_slot.command('update')
 class HWSlotUpdate(DeviceRequiredUnit):
