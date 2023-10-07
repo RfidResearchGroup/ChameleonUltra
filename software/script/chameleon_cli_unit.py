@@ -175,8 +175,9 @@ class ReaderRequiredUnit(DeviceRequiredUnit):
             if ret:
                 return True
             else:
-                print("Please switch chameleon to reader mode(use 'hw mode').")
-                return False
+                self.cmd.set_device_reader_mode(True)
+                print("Switch to {  Tag Reader  } mode successfully.")
+                return True
         return False
 
     def on_exec(self, args: argparse.Namespace):
