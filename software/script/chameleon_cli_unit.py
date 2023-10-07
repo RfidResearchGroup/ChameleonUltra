@@ -1155,11 +1155,11 @@ class SlotIndexRequireUnit(DeviceRequiredUnit):
         raise NotImplementedError()
 
     @staticmethod
-    def add_slot_args(parser: ArgumentParserNoExit):
+    def add_slot_args(parser: ArgumentParserNoExit, mandatory=False):
         slot_choices = [x.value for x in chameleon_cmd.SlotNumber]
         help_str = f"Slot Index: {slot_choices} Default: active slot"
 
-        parser.add_argument('-s', "--slot", type=int, required=False, help=help_str, metavar="number",
+        parser.add_argument('-s', "--slot", type=int, required=mandatory, help=help_str, metavar="number",
                             choices=slot_choices)
         return parser
 
@@ -1173,16 +1173,9 @@ class SenseTypeRequireUnit(DeviceRequiredUnit):
 
     @staticmethod
     def add_sense_type_args(parser: ArgumentParserNoExit):
-        sense_choices = chameleon_cmd.TagSenseType.list()
-
-        help_str = ""
-        for s in chameleon_cmd.TagSenseType:
-            if s == chameleon_cmd.TagSenseType.TAG_SENSE_NO:
-                continue
-            help_str += f"{s.value} = {s}, "
-
-        parser.add_argument('-st', "--sense_type", type=int, required=True, help=help_str, metavar="number",
-                            choices=sense_choices)
+        sense_group = parser.add_mutually_exclusive_group(required=True)
+        sense_group.add_argument('--hf', action='store_true', help="HF type")
+        sense_group.add_argument('--lf', action='store_true', help="LF type")
         return parser
 
 
@@ -1266,7 +1259,7 @@ class HWSlotSet(SlotIndexRequireUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Set emulation tag slot activated'
-        return self.add_slot_args(parser)
+        return self.add_slot_args(parser, mandatory=True)
 
     # hw slot change -s 1
     def on_exec(self, args: argparse.Namespace):
@@ -1295,7 +1288,7 @@ class TagTypeRequiredUnit(DeviceRequiredUnit):
 
 
 @hw_slot.command('type')
-class HWSlotTagType(TagTypeRequiredUnit, SlotIndexRequireUnit):
+class HWSlotType(TagTypeRequiredUnit, SlotIndexRequireUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Set emulation tag type'
@@ -1303,12 +1296,15 @@ class HWSlotTagType(TagTypeRequiredUnit, SlotIndexRequireUnit):
         self.add_type_args(parser)
         return parser
 
-    # hw slot tagtype -t 2
+    # hw slot type -t 2
     def on_exec(self, args: argparse.Namespace):
         tag_type = args.type
-        slot_index = args.slot
-        self.cmd.set_slot_tag_type(slot_index, tag_type)
-        print(' - Set slot tag type success.')
+        if args.slot is not None:
+            slot_num = args.slot
+        else:
+            slot_num = chameleon_cmd.SlotNumber.from_fw(self.cmd.get_active_slot())
+        self.cmd.set_slot_tag_type(slot_num, tag_type)
+        print(f' - Set slot {slot_num} tag type success.')
 
 
 @hw_slot.command('delete')
@@ -1321,13 +1317,20 @@ class HWDeleteSlotSense(SlotIndexRequireUnit, SenseTypeRequireUnit):
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        slot = args.slot
-        sense_type = chameleon_cmd.TagSenseType(args.sense_type)
-        self.cmd.delete_slot_sense_type(slot, sense_type)
+        if args.slot is not None:
+            slot_num = args.slot
+        else:
+            slot_num = chameleon_cmd.SlotNumber.from_fw(self.cmd.get_active_slot())
+        if args.lf:
+            sense_type = chameleon_cmd.TagSenseType.TAG_SENSE_LF
+        else:
+            sense_type = chameleon_cmd.TagSenseType.TAG_SENSE_HF
+        self.cmd.delete_slot_sense_type(slot_num, sense_type)
+        print(f' - Delete slot {slot_num} {sense_type} tag type success.')
 
 
 @hw_slot.command('init')
-class HWSlotDataDefault(TagTypeRequiredUnit, SlotIndexRequireUnit):
+class HWSlotInit(TagTypeRequiredUnit, SlotIndexRequireUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Set emulation tag data to default'
@@ -1339,7 +1342,10 @@ class HWSlotDataDefault(TagTypeRequiredUnit, SlotIndexRequireUnit):
     # em id card simulation hw slot init -s 1 -t 1
     def on_exec(self, args: argparse.Namespace):
         tag_type = args.type
-        slot_num = args.slot
+        if args.slot is not None:
+            slot_num = args.slot
+        else:
+            slot_num = chameleon_cmd.SlotNumber.from_fw(self.cmd.get_active_slot())
         self.cmd.set_slot_data_default(slot_num, tag_type)
         print(' - Set slot tag data init success.')
 
@@ -1357,7 +1363,10 @@ class HWSlotEnableSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
     # hw slot enable -s 1 -st 0 -e 0
     def on_exec(self, args: argparse.Namespace):
         slot_num = args.slot
-        sense_type = chameleon_cmd.TagSenseType(args.sense_type)
+        if args.lf:
+            sense_type = chameleon_cmd.TagSenseType.TAG_SENSE_LF
+        else:
+            sense_type = chameleon_cmd.TagSenseType.TAG_SENSE_HF
         enable = args.enable
         self.cmd.set_slot_enable(slot_num, sense_type, enable)
         print(f' - Set slot {slot_num} {sense_type} {"enable" if enable else "disable"} success.')
@@ -1408,7 +1417,10 @@ class HWSlotNick(SlotIndexRequireUnit, SenseTypeRequireUnit):
             slot_num = args.slot
         else:
             slot_num = chameleon_cmd.SlotNumber.from_fw(self.cmd.get_active_slot())
-        sense_type = chameleon_cmd.TagSenseType(args.sense_type)
+        if args.lf:
+            sense_type = chameleon_cmd.TagSenseType.TAG_SENSE_LF
+        else:
+            sense_type = chameleon_cmd.TagSenseType.TAG_SENSE_HF
         if args.name is not None:
             name: str = args.name
             encoded_name = name.encode(encoding="utf8")
