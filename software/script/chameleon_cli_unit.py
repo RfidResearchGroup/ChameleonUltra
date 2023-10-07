@@ -1351,22 +1351,38 @@ class HWSlotInit(TagTypeRequiredUnit, SlotIndexRequireUnit):
 class HWSlotEnableSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = 'Set emulation tag slot enable or disable'
+        parser.description = 'Enable tag slot'
         self.add_slot_args(parser)
         self.add_sense_type_args(parser)
-        parser.add_argument('-e', '--enable', type=int, required=True, help="1 is Enable or 0 Disable", choices=[0, 1])
         return parser
 
-    # hw slot enable -s 1 -st 0 -e 0
     def on_exec(self, args: argparse.Namespace):
         slot_num = args.slot
         if args.lf:
             sense_type = chameleon_cmd.TagSenseType.LF
         else:
             sense_type = chameleon_cmd.TagSenseType.HF
-        enable = args.enable
-        self.cmd.set_slot_enable(slot_num, sense_type, enable)
-        print(f' - Set slot {slot_num} {sense_type.name} {"enable" if enable else "disable"} success.')
+        self.cmd.set_slot_enable(slot_num, sense_type, True)
+        print(f' - Enable slot {slot_num} {sense_type.name} success.')
+
+
+@hw_slot.command('disable')
+class HWSlotEnableSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Disable tag slot'
+        self.add_slot_args(parser)
+        self.add_sense_type_args(parser)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        slot_num = args.slot
+        if args.lf:
+            sense_type = chameleon_cmd.TagSenseType.LF
+        else:
+            sense_type = chameleon_cmd.TagSenseType.HF
+        self.cmd.set_slot_enable(slot_num, sense_type, False)
+        print(f' - Disable slot {slot_num} {sense_type.name} success.')
 
 
 @lf_em_sim.command('set')
@@ -1433,17 +1449,16 @@ class HWSlotNick(SlotIndexRequireUnit, SenseTypeRequireUnit):
             print(f' - Get tag nick name for slot {slot_num} {sense_type.name}'
                   f': {res.decode(encoding="utf8")}')
 
-@hw_slot.command('update')
+@hw_slot.command('store')
 class HWSlotUpdate(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = 'Update config & data to device flash'
+        parser.description = 'Store slots config & data to device flash'
         return parser
 
-    # hw slot update
     def on_exec(self, args: argparse.Namespace):
         self.cmd.slot_data_config_save()
-        print(' - Update config and data from device memory to flash success.')
+        print(' - Store slots config and data from device memory to flash success.')
 
 
 @hw_slot.command('openall')
