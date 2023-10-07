@@ -128,47 +128,40 @@ class SlotNumber(enum.IntEnum):
 @enum.unique
 class TagSenseType(enum.IntEnum):
     # Unknown
-    TAG_SENSE_NO = 0
+    UNDEFINED = 0
     # 125 kHz
-    TAG_SENSE_LF = 1
+    LF = 1
     # 13.56 MHz
-    TAG_SENSE_HF = 2
+    HF = 2
 
     @staticmethod
     def list(exclude_unknown=True):
         enum_list = list(map(int, TagSenseType))
         if exclude_unknown:
-            enum_list.remove(TagSenseType.TAG_SENSE_NO)
+            enum_list.remove(TagSenseType.NO)
         return enum_list
-
-    def __str__(self):
-        if self == TagSenseType.TAG_SENSE_LF:
-            return "LF"
-        elif self == TagSenseType.TAG_SENSE_HF:
-            return "HF"
-        return "None"
 
 
 @enum.unique
 class TagSpecificType(enum.IntEnum):
-    TAG_TYPE_UNDEFINED = 0,
+    UNDEFINED = 0,
 
     # old HL/LF common types, slots using these ones need to be migrated first
-    OLD_TAG_TYPE_EM410X = 1,
-    OLD_TAG_TYPE_MIFARE_Mini = 2,
-    OLD_TAG_TYPE_MIFARE_1024 = 3,
-    OLD_TAG_TYPE_MIFARE_2048 = 4,
-    OLD_TAG_TYPE_MIFARE_4096 = 5,
-    OLD_TAG_TYPE_NTAG_213 = 6,
-    OLD_TAG_TYPE_NTAG_215 = 7,
-    OLD_TAG_TYPE_NTAG_216 = 8,
+    OLD_EM410X = 1,
+    OLD_MIFARE_Mini = 2,
+    OLD_MIFARE_1024 = 3,
+    OLD_MIFARE_2048 = 4,
+    OLD_MIFARE_4096 = 5,
+    OLD_NTAG_213 = 6,
+    OLD_NTAG_215 = 7,
+    OLD_NTAG_216 = 8,
     OLD_TAG_TYPES_END = 9,
 
     ###### LF ######
 
     #### ASK Tag-Talk-First      100 ####
     # EM410x
-    TAG_TYPE_EM410X = 100,
+    EM410X = 100,
     # FDX-B
     # securakey
     # gallagher
@@ -201,14 +194,14 @@ class TagSpecificType(enum.IntEnum):
     ###### HF ######
 
     #### MIFARE Classic series  1000 ####
-    TAG_TYPE_MIFARE_Mini = 1000,
-    TAG_TYPE_MIFARE_1024 = 1001,
-    TAG_TYPE_MIFARE_2048 = 1002,
-    TAG_TYPE_MIFARE_4096 = 1003,
+    MIFARE_Mini = 1000,
+    MIFARE_1024 = 1001,
+    MIFARE_2048 = 1002,
+    MIFARE_4096 = 1003,
     #### MFUL / NTAG series     1100 ####
-    TAG_TYPE_NTAG_213 = 1100,
-    TAG_TYPE_NTAG_215 = 1101,
-    TAG_TYPE_NTAG_216 = 1102,
+    NTAG_213 = 1100,
+    NTAG_215 = 1101,
+    NTAG_216 = 1102,
     #### MIFARE Plus series     1200 ####
     #### DESFire series         1300 ####
 
@@ -231,26 +224,26 @@ class TagSpecificType(enum.IntEnum):
     @staticmethod
     def list_lf():
         return [t for t in TagSpecificType.list()
-                if (TagSpecificType.TAG_TYPE_UNDEFINED < t < TagSpecificType.TAG_TYPES_LF_END)]
+                if (TagSpecificType.UNDEFINED < t < TagSpecificType.TAG_TYPES_LF_END)]
 
     def __str__(self):
-        if self == TagSpecificType.TAG_TYPE_UNDEFINED:
+        if self == TagSpecificType.UNDEFINED:
             return "Undefined"
-        elif self == TagSpecificType.TAG_TYPE_EM410X:
+        elif self == TagSpecificType.EM410X:
             return "EM410X"
-        elif self == TagSpecificType.TAG_TYPE_MIFARE_Mini:
+        elif self == TagSpecificType.MIFARE_Mini:
             return "Mifare Mini"
-        elif self == TagSpecificType.TAG_TYPE_MIFARE_1024:
+        elif self == TagSpecificType.MIFARE_1024:
             return "Mifare Classic 1k"
-        elif self == TagSpecificType.TAG_TYPE_MIFARE_2048:
+        elif self == TagSpecificType.MIFARE_2048:
             return "Mifare Classic 2k"
-        elif self == TagSpecificType.TAG_TYPE_MIFARE_4096:
+        elif self == TagSpecificType.MIFARE_4096:
             return "Mifare Classic 4k"
-        elif self == TagSpecificType.TAG_TYPE_NTAG_213:
+        elif self == TagSpecificType.NTAG_213:
             return "NTAG 213"
-        elif self == TagSpecificType.TAG_TYPE_NTAG_215:
+        elif self == TagSpecificType.NTAG_215:
             return "NTAG 215"
-        elif self == TagSpecificType.TAG_TYPE_NTAG_216:
+        elif self == TagSpecificType.NTAG_216:
             return "NTAG 216"
         elif self < TagSpecificType.OLD_TAG_TYPES_END:
             return "Old tag type, must be migrated! Upgrade fw!"
@@ -373,26 +366,26 @@ class ButtonType(enum.IntEnum):
 
 @enum.unique
 class ButtonPressFunction(enum.IntEnum):
-    SettingsButtonDisable = 0
-    SettingsButtonCycleSlot = 1
-    SettingsButtonCycleSlotDec = 2
-    SettingsButtonCloneIcUid = 3
-    SettingsButtonShowBattery = 4
+    Disable = 0
+    CycleSlot = 1
+    CycleSlotDec = 2
+    CloneIcUid = 3
+    ShowBattery = 4
 
     @staticmethod
     def list():
         return list(map(int, ButtonPressFunction))
 
     def __str__(self):
-        if self == ButtonPressFunction.SettingsButtonDisable:
+        if self == ButtonPressFunction.Disable:
             return "No Function"
-        elif self == ButtonPressFunction.SettingsButtonCycleSlot:
+        elif self == ButtonPressFunction.CycleSlot:
             return "Cycle Slot"
-        elif self == ButtonPressFunction.SettingsButtonCycleSlotDec:
+        elif self == ButtonPressFunction.CycleSlotDec:
             return "Cycle Slot Dec"
-        elif self == ButtonPressFunction.SettingsButtonCloneIcUid:
+        elif self == ButtonPressFunction.CloneIcUid:
             return "Quickly Copy Ic Uid"
-        elif self == ButtonPressFunction.SettingsButtonShowBattery:
+        elif self == ButtonPressFunction.ShowBattery:
             return "Show Battery Level"
         return "None"
 
@@ -402,16 +395,16 @@ class ButtonPressFunction(enum.IntEnum):
 
     # get usage for button function
     def usage(self):
-        if self == ButtonPressFunction.SettingsButtonDisable:
+        if self == ButtonPressFunction.Disable:
             return "This button have no function"
-        elif self == ButtonPressFunction.SettingsButtonCycleSlot:
+        elif self == ButtonPressFunction.CycleSlot:
             return "Card slot number sequence will increase after pressing"
-        elif self == ButtonPressFunction.SettingsButtonCycleSlotDec:
+        elif self == ButtonPressFunction.CycleSlotDec:
             return "Card slot number sequence decreases after pressing"
-        elif self == ButtonPressFunction.SettingsButtonCloneIcUid:
+        elif self == ButtonPressFunction.CloneIcUid:
             return ("Read the UID card number immediately after pressing, continue searching," +
                     "and simulate immediately after reading the card")
-        elif self == ButtonPressFunction.SettingsButtonShowBattery:
+        elif self == ButtonPressFunction.ShowBattery:
             return ("Lights up slot LEDs according to battery level")
         return "Unknown"
 
