@@ -351,47 +351,28 @@ class ButtonType(enum.IntEnum):
 
 @enum.unique
 class ButtonPressFunction(enum.IntEnum):
-    Disable = 0
-    CycleSlot = 1
-    CycleSlotDec = 2
-    CloneIcUid = 3
-    ShowBattery = 4
-
-    @staticmethod
-    def list():
-        return list(map(int, ButtonPressFunction))
+    NONE = 0
+    NEXTSLOT = 1
+    PREVSLOT = 2
+    CLONE = 3
+    BATTERY = 4
 
     def __str__(self):
-        if self == ButtonPressFunction.Disable:
+        if self == ButtonPressFunction.NONE:
             return "No Function"
-        elif self == ButtonPressFunction.CycleSlot:
-            return "Cycle Slot"
-        elif self == ButtonPressFunction.CycleSlotDec:
-            return "Cycle Slot Dec"
-        elif self == ButtonPressFunction.CloneIcUid:
-            return "Quickly Copy Ic Uid"
-        elif self == ButtonPressFunction.ShowBattery:
+        elif self == ButtonPressFunction.NEXTSLOT:
+            return "Select next slot"
+        elif self == ButtonPressFunction.PREVSLOT:
+            return "Select previous slot"
+        elif self == ButtonPressFunction.CLONE:
+            return "Read then simulate the ID/UID card number"
+        elif self == ButtonPressFunction.BATTERY:
             return "Show Battery Level"
         return "None"
 
     @staticmethod
     def from_int(val):
         return ButtonPressFunction(val)
-
-    # get usage for button function
-    def usage(self):
-        if self == ButtonPressFunction.Disable:
-            return "This button have no function"
-        elif self == ButtonPressFunction.CycleSlot:
-            return "Card slot number sequence will increase after pressing"
-        elif self == ButtonPressFunction.CycleSlotDec:
-            return "Card slot number sequence decreases after pressing"
-        elif self == ButtonPressFunction.CloneIcUid:
-            return ("Read the UID card number immediately after pressing, continue searching," +
-                    "and simulate immediately after reading the card")
-        elif self == ButtonPressFunction.ShowBattery:
-            return ("Lights up slot LEDs according to battery level")
-        return "Unknown"
 
 
 class ChameleonCMD:

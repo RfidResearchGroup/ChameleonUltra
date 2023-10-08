@@ -1641,24 +1641,23 @@ class HWButtonSettingsGet(DeviceRequiredUnit):
         duration_group = parser.add_mutually_exclusive_group()
         duration_group.add_argument('-s', '--short', action='store_true', help="Short-press (default)")
         duration_group.add_argument('-l', '--long', action='store_true', help="Long-press")
-        function_usage = ""
-        for fun in chameleon_cmd.ButtonPressFunction:
-            function_usage += f"{int(fun)} = {fun.usage()}, "
-        function_usage = function_usage.rstrip(' ').rstrip(',')
-        parser.add_argument('-f', '--function', type=int, required=False, help=function_usage,
-                            choices=chameleon_cmd.ButtonPressFunction.list())
+        function_names = [f.name for f in list(chameleon_cmd.ButtonPressFunction)]
+        function_descs = [f"{f.name} ({f})" for f in list(chameleon_cmd.ButtonPressFunction)]
+        help_str = "Function: " + ", ".join(function_descs)
+        parser.add_argument('-f', '--function', type=str, required=False,
+                            help=help_str, metavar="FUNCTION", choices=function_names)
         return parser
 
     def on_exec(self, args: argparse.Namespace):
         if args.function is not None:
-            if args.a is None and args.b is None:
-                print("{CR}You must specify which button you want to change{C0}")
+            function = chameleon_cmd.ButtonPressFunction[args.function]
+            if not args.a and not args.b:
+                print(f"{CR}You must specify which button you want to change{C0}")
                 return
             if args.a:
                 button = chameleon_cmd.ButtonType.A
             else:
                 button = chameleon_cmd.ButtonType.B
-            function = chameleon_cmd.ButtonPressFunction.from_int(args.function)
             if args.long:
                 self.cmd.set_long_button_press_config(button, function)
             else:
@@ -1676,14 +1675,12 @@ class HWButtonSettingsGet(DeviceRequiredUnit):
             for button in button_list:
                 if not args.long:
                     resp = self.cmd.get_button_press_config(button)
-                    button_fn = chameleon_cmd.ButtonPressFunction.from_int(resp)
+                    button_fn = chameleon_cmd.ButtonPressFunction(resp)
                     print(f" - {CG}{button.name} short{C0}: {button_fn}")
-                    print(f"      usage: {button_fn.usage()}")
                 if not args.short:
                     resp_long = self.cmd.get_long_button_press_config(button)
-                    button_long_fn = chameleon_cmd.ButtonPressFunction.from_int(resp_long)
+                    button_long_fn = chameleon_cmd.ButtonPressFunction(resp_long)
                     print(f" - {CG}{button.name} long {C0}: {button_long_fn}")
-                    print(f"      usage: {button_long_fn.usage()}")
                 print("")
 
 
