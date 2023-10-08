@@ -1734,7 +1734,7 @@ class HWBlePair(DeviceRequiredUnit):
             self.cmd.set_ble_pairing_enable(True)
             print(f" - Successfully change ble pairing to {CG}Enabled{C0}.")
             print(f"{CY}Do not forget to store your settings in flash!{C0}")
-        elif args.disabled:
+        elif args.disable:
             if not is_pairing_enable:
                 print(f"{CY} BLE pairing is already disabled.{C0}")
                 return
