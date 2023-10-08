@@ -1356,7 +1356,10 @@ class HWSlotEnableSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        slot_num = args.slot
+        if args.slot is not None:
+            slot_num = args.slot
+        else:
+            slot_num = chameleon_cmd.SlotNumber.from_fw(self.cmd.get_active_slot())
         if args.lf:
             sense_type = chameleon_cmd.TagSenseType.LF
         else:
