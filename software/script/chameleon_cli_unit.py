@@ -1635,8 +1635,9 @@ class HWButtonSettingsGet(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Get or set button press function of Button A and Button B'
-        parser.add_argument('-b', '--button', type=str, required=False, help="Which button",
-                            choices=chameleon_cmd.ButtonType.list_str())
+        button_group = parser.add_mutually_exclusive_group()
+        button_group.add_argument('-a', '-A', action='store_true', help="Button A")
+        button_group.add_argument('-b', '-B', action='store_true', help="Button B")
         duration_group = parser.add_mutually_exclusive_group()
         duration_group.add_argument('-s', '--short', action='store_true', help="Short-press (default)")
         duration_group.add_argument('-l', '--long', action='store_true', help="Long-press")
@@ -1650,33 +1651,38 @@ class HWButtonSettingsGet(DeviceRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         if args.function is not None:
-            if args.button is None:
+            if args.a is None and args.b is None:
                 print("{CR}You must specify which button you want to change{C0}")
                 return
-            button = chameleon_cmd.ButtonType.from_str(args.button)
+            if args.a:
+                button = chameleon_cmd.ButtonType.A
+            else:
+                button = chameleon_cmd.ButtonType.B
             function = chameleon_cmd.ButtonPressFunction.from_int(args.function)
             if args.long:
                 self.cmd.set_long_button_press_config(button, function)
             else:
                 self.cmd.set_button_press_config(button, function)
             print(f" - Successfully set function '{function}'"
-                  f" to {button} {'long-press' if args.long else 'short-press'}")
+                  f" to Button {button.name} {'long-press' if args.long else 'short-press'}")
             print(f"{CY}Do not forget to store your settings in flash!{C0}")
         else:
-            if args.button is not None:
-                button_list = [chameleon_cmd.ButtonType.from_str(args.button)]
+            if args.a:
+                button_list = [chameleon_cmd.ButtonType.A]
+            elif args.b:
+                button_list = [chameleon_cmd.ButtonType.B]
             else:
                 button_list = list(chameleon_cmd.ButtonType)
             for button in button_list:
                 if not args.long:
                     resp = self.cmd.get_button_press_config(button)
                     button_fn = chameleon_cmd.ButtonPressFunction.from_int(resp)
-                    print(f" - {CG}{button} {CY}short{C0}: {button_fn}")
+                    print(f" - {CG}{button.name} short{C0}: {button_fn}")
                     print(f"      usage: {button_fn.usage()}")
                 if not args.short:
                     resp_long = self.cmd.get_long_button_press_config(button)
                     button_long_fn = chameleon_cmd.ButtonPressFunction.from_int(resp_long)
-                    print(f" - {CG}{button} {CY}long {C0}: {button_long_fn}")
+                    print(f" - {CG}{button.name} long {C0}: {button_long_fn}")
                     print(f"      usage: {button_long_fn.usage()}")
                 print("")
 

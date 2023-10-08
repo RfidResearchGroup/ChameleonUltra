@@ -345,31 +345,8 @@ class AnimationMode(enum.IntEnum):
 @enum.unique
 class ButtonType(enum.IntEnum):
     # what, you need the doc for button type? maybe chatgpt known... LOL
-    ButtonA = ord('A')
-    ButtonB = ord('B')
-
-    @staticmethod
-    def list():
-        return list(map(int, ButtonType))
-
-    @staticmethod
-    def list_str():
-        return [chr(x) for x in ButtonType]+[chr(x).lower() for x in ButtonType]
-
-    @staticmethod
-    def from_str(val):
-        if ButtonType.ButtonA == ord(val.upper()):
-            return ButtonType.ButtonA
-        elif ButtonType.ButtonB == ord(val.upper()):
-            return ButtonType.ButtonB
-        return None
-
-    def __str__(self):
-        if self == ButtonType.ButtonA:
-            return "Button A"
-        elif self == ButtonType.ButtonB:
-            return "Button B"
-        return "None"
+    A = ord('A')
+    B = ord('B')
 
 
 @enum.unique
