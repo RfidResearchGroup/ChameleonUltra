@@ -328,7 +328,6 @@ hw_settings = hw.subgroup('settings', 'Chameleon settings commands')
 hf = CLITree('hf', 'High Frequency commands')
 hf_14a = hf.subgroup('14a', 'ISO14443-a commands')
 hf_mf = hf.subgroup('mf', 'MIFARE Classic commands')
-hf_mf_detection = hf.subgroup('detection', 'Mifare Classic detection log')
 hf_mfu = hf.subgroup('mfu', 'MIFARE Ultralight / NTAG commands')
 
 lf = CLITree('lf', 'Low Frequency commands')
@@ -742,7 +741,7 @@ class HFMFWRBL(BaseMF1AuthOpera):
             print(f" - {CR}Write fail.{C0}")
 
 
-@hf_mf_detection.command('enable')
+@hf_mf.command('econfig_detection')
 class HFMFDetectionEnable(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
@@ -757,26 +756,13 @@ class HFMFDetectionEnable(DeviceRequiredUnit):
         print(f" - Set mf1 detection {'enable' if enable else 'disable'}.")
 
 
-@hf_mf_detection.command('count')
-class HFMFDetectionLogCount(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit:
-        parser = ArgumentParserNoExit()
-        parser.description = 'MF1 Detection log count'
-        return parser
-
-    # hf mf detection count
-    def on_exec(self, args: argparse.Namespace):
-        count = self.cmd.mf1_get_detection_count()
-        print(f" - MF1 detection log count = {count}")
-
-
-@hf_mf_detection.command('decrypt')
-class HFMFDetectionDecrypt(DeviceRequiredUnit):
+@hf_mf.command('elog')
+class HFMFELog(DeviceRequiredUnit):
     detection_log_size = 18
-
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = 'MF1 Download log and decrypt keys'
+        parser.description = 'MF1 Detection log count/decrypt'
+        parser.add_argument('--decrypt', action='store_true', help="Decrypt key from MF1 log list")
         return parser
 
     def decrypt_by_list(self, rs: list):
@@ -819,8 +805,11 @@ class HFMFDetectionDecrypt(DeviceRequiredUnit):
         print()
         return keys
 
-    # hf mf detection decrypt
     def on_exec(self, args: argparse.Namespace):
+        if not args.decrypt:
+            count = self.cmd.mf1_get_detection_count()
+            print(f" - MF1 detection log count = {count}")
+            return
         index = 0
         count = self.cmd.mf1_get_detection_count()
         if count == 0:
@@ -985,7 +974,7 @@ class HFMFESave(SlotIndexRequireAndGoUnit, DeviceRequiredUnit):
         print("\n - Read success")
 
 
-@hf_mf.command('settings')
+@hf_mf.command('econfig_settings')
 class HFMFSettings(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
@@ -1024,7 +1013,7 @@ class HFMFSettings(DeviceRequiredUnit):
         print(' - Emulator settings updated')
 
 
-@hf_mf.command('sim')
+@hf_mf.command('econfig_sim')
 class HFMFSim(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
@@ -1070,7 +1059,7 @@ class HFMFSim(DeviceRequiredUnit):
         print(" - Set anti-collision resources success")
 
 
-@hf_mf.command('info')
+@hf_mf.command('econfig_info')
 class HFMFInfo(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
