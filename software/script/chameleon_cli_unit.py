@@ -184,20 +184,20 @@ class ReaderRequiredUnit(DeviceRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
-hw = CLITree('hw', 'hardware controller')
-hw_slot = hw.subgroup('slot', 'Emulation tag slot.')
-hw_ble = hw.subgroup('ble', 'Bluetooth low energy')
-hw_settings = hw.subgroup('settings', 'Chameleon settings management')
+hw = CLITree('hw', 'Hardware-related commands')
+hw_slot = hw.subgroup('slot', 'Emulation slots commands')
+hw_ble = hw.subgroup('ble', 'Bluetooth low energy commands')
+hw_settings = hw.subgroup('settings', 'Chameleon settings commands')
 
-hf = CLITree('hf', 'high frequency tag/reader')
-hf_14a = hf.subgroup('14a', 'ISO14443-a tag read/write/info...')
-hf_mf = hf.subgroup('mf', 'Mifare Classic mini/1/2/4, attack/read/write')
+hf = CLITree('hf', 'High Frequency commands')
+hf_14a = hf.subgroup('14a', 'ISO14443-a commands')
+hf_mf = hf.subgroup('mf', 'MIFARE Classic commands')
 hf_mf_detection = hf.subgroup('detection', 'Mifare Classic detection log')
-hf_mfu = hf.subgroup('mfu', 'Mifare Ultralight, read/write')
+hf_mfu = hf.subgroup('mfu', 'MIFARE Ultralight / NTAG commands')
 
-lf = CLITree('lf', 'low frequency tag/reader')
-lf_em = lf.subgroup('em', 'EM410x read/write/emulator')
-lf_em_sim = lf_em.subgroup('sim', 'Manage EM410x emulation data for selected slot')
+lf = CLITree('lf', 'Low Frequency commands')
+lf_em = lf.subgroup('em', 'EM commands')
+lf_em_410x = lf_em.subgroup('410x', 'EM410x commands')
 
 root_commands: dict[str, CLITree] = {'hw': hw, 'hf': hf, 'lf': lf}
 
@@ -1085,7 +1085,7 @@ class HFMFUDUMP(BaseMFUAuthOpera):
             fd.close()
 
 
-@lf_em.command('read')
+@lf_em_410x.command('read')
 class LFEMRead(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
@@ -1099,14 +1099,15 @@ class LFEMRead(ReaderRequiredUnit):
 
 class LFEMCardRequiredUnit(DeviceRequiredUnit):
     @staticmethod
-    def add_card_arg(parser: ArgumentParserNoExit):
-        parser.add_argument("--id", type=str, required=True, help="EM410x tag id", metavar="<hex>")
+    def add_card_arg(parser: ArgumentParserNoExit, required=False):
+        parser.add_argument("--id", type=str, required=required, help="EM410x tag id", metavar="<hex>")
         return parser
 
     def before_exec(self, args: argparse.Namespace):
         if super().before_exec(args):
-            if not re.match(r"^[a-fA-F0-9]{10}$", args.id):
-                raise ArgsParserError("ID must include 10 HEX symbols")
+            if args.id is not None:
+                if not re.match(r"^[a-fA-F0-9]{10}$", args.id):
+                    raise ArgsParserError("ID must include 10 HEX symbols")
             return True
         return False
 
@@ -1117,12 +1118,12 @@ class LFEMCardRequiredUnit(DeviceRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
-@lf_em.command('write')
-class LFEMWriteT55xx(LFEMCardRequiredUnit, ReaderRequiredUnit):
+@lf_em_410x.command('write')
+class LFEM410xWriteT55xx(LFEMCardRequiredUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Write em410x id to t55xx'
-        return self.add_card_arg(parser)
+        return self.add_card_arg(parser, required=True)
 
     def before_exec(self, args: argparse.Namespace):
         b1 = super(LFEMCardRequiredUnit, self).before_exec(args)
@@ -1380,33 +1381,36 @@ class HWSlotEnableSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
         print(f' - Disable slot {slot_num} {sense_type.name} success.')
 
 
-@lf_em_sim.command('set')
-class LFEMSimSet(LFEMCardRequiredUnit):
+@lf_em_410x.command('econfig')
+class LFEM410xEconfig(SlotIndexRequireUnit, LFEMCardRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Set simulated em410x card id'
-        return self.add_card_arg(parser)
-
-    # lf em sim set --id 4545454545
-    def on_exec(self, args: argparse.Namespace):
-        id_hex = args.id
-        self.cmd.em410x_set_emu_id(bytes.fromhex(id_hex))
-        print(' - Set em410x tag id success.')
-
-
-@lf_em_sim.command('get')
-class LFEMSimGet(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit:
-        parser = ArgumentParserNoExit()
-        parser.description = 'Get simulated em410x card id'
+        self.add_slot_args(parser)
+        self.add_card_arg(parser)
         return parser
 
-    # lf em sim get
     def on_exec(self, args: argparse.Namespace):
-        response = self.cmd.em410x_get_emu_id()
-        print(' - Get em410x tag id success.')
-        print(f'ID: {response.hex()}')
-
+        if args.slot is not None:
+            tmp_slot_num = args.slot
+            cur_slot_num = chameleon_cmd.SlotNumber.from_fw(self.cmd.get_active_slot())
+            if tmp_slot_num != cur_slot_num:
+                self.cmd.set_active_slot(tmp_slot_num)
+        error = None
+        try:
+            if args.id is not None:
+                self.cmd.em410x_set_emu_id(bytes.fromhex(args.id))
+                print(' - Set em410x tag id success.')
+            else:
+                response = self.cmd.em410x_get_emu_id()
+                print(' - Get em410x tag id success.')
+                print(f'ID: {response.hex()}')
+        except UnexpectedResponseError as errmsg:
+            error = errmsg
+        if args.slot is not None:
+            self.cmd.set_active_slot(cur_slot_num)
+        if error is not None:
+            raise error
 
 @hw_slot.command('nick')
 class HWSlotNick(SlotIndexRequireUnit, SenseTypeRequireUnit):
