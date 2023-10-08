@@ -134,13 +134,6 @@ class TagSenseType(enum.IntEnum):
     # 13.56 MHz
     HF = 2
 
-    @staticmethod
-    def list(exclude_unknown=True):
-        enum_list = list(map(int, TagSenseType))
-        if exclude_unknown:
-            enum_list.remove(TagSenseType.NO)
-        return enum_list
-
 
 @enum.unique
 class TagSpecificType(enum.IntEnum):
