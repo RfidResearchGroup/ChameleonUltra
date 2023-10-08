@@ -335,6 +335,21 @@ class MifareClassicDarksideStatus(enum.IntEnum):
 
 
 @enum.unique
+class AnimationMode(enum.IntEnum):
+    FULL = 0
+    MINIMAL = 1
+    NONE = 2
+
+    def __str__(self):
+        if self == AnimationMode.FULL:
+            return "Full animation"
+        elif self == AnimationMode.MINIMAL:
+            return "Minimal animation"
+        elif self == AnimationMode.NONE:
+            return "No animation"
+
+
+@enum.unique
 class ButtonType(enum.IntEnum):
     # what, you need the doc for button type? maybe chatgpt known... LOL
     ButtonA = ord('A')
@@ -1118,7 +1133,7 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(DATA_CMD_GET_BLE_PAIRING_KEY)
 
     @expect_response(chameleon_status.Device.STATUS_DEVICE_SUCCESS)
-    def delete_ble_all_bonds(self):
+    def delete_all_ble_bonds(self):
         """
         From peer manager delete all bonds.
         """

@@ -187,9 +187,7 @@ class ReaderRequiredUnit(DeviceRequiredUnit):
 hw = CLITree('hw', 'hardware controller')
 hw_slot = hw.subgroup('slot', 'Emulation tag slot.')
 hw_ble = hw.subgroup('ble', 'Bluetooth low energy')
-hw_ble_bonds = hw_ble.subgroup('bonds', 'All devices bound by chameleons.')
 hw_settings = hw.subgroup('settings', 'Chameleon settings management')
-hw_settings_animation = hw_settings.subgroup('animation', 'Manage wake-up and sleep animation modes')
 hw_settings_button_press = hw_settings.subgroup('btnpress', 'Manage button press function')
 
 hf = CLITree('hf', 'high frequency tag/reader')
@@ -1515,39 +1513,41 @@ class HWDFU(DeviceRequiredUnit):
         time.sleep(0.1)
 
 
-@hw_settings_animation.command('get')
-class HWSettingsAnimationGet(DeviceRequiredUnit):
+@hw_settings.command('animation')
+class HWSettingsAnimation(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = 'Get current animation mode value'
+        parser.description = 'Get or change current animation mode value'
+        mode_names = [m.name for m in list(chameleon_cmd.AnimationMode)]
+        help_str = "Mode: " + ", ".join(mode_names)
+        parser.add_argument('-m', '--mode', type=str, required=False,
+                            help=help_str, metavar="MODE", choices=mode_names)
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        resp = self.cmd.get_animation_mode()
-        if resp == 0:
-            print("Full animation")
-        elif resp == 1:
-            print("Minimal animation")
-        elif resp == 2:
-            print("No animation")
+        if args.mode is not None:
+            mode = chameleon_cmd.AnimationMode[args.mode]
+            self.cmd.set_animation_mode(mode)
+            print("Animation mode change success. Do not forget to store your settings in flash!")
         else:
-            print("Unknown setting value, something failed.")
+            print(chameleon_cmd.AnimationMode(self.cmd.get_animation_mode()))
 
 
-@hw_settings_animation.command('set')
-class HWSettingsAnimationSet(DeviceRequiredUnit):
+@hw_settings.command('bleclearbonds')
+class HWSettingsBleClearBonds(DeviceRequiredUnit):
+
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = 'Change chameleon animation mode'
-        parser.add_argument('-m', '--mode', type=int, required=True,
-                            help="0 is full (default), 1 is minimal (only single pass on button wakeup), 2 is none",
-                            choices=[0, 1, 2])
+        parser.description = 'Clear all BLE bindings. Warning: effect is immediate!'
+        parser.add_argument("--force", default=False, action="store_true", help="Just to be sure")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        mode = args.mode
-        self.cmd.set_animation_mode(mode)
-        print("Animation mode change success. Do not forget to store your settings in flash!")
+        if not args.force:
+            print("If you are you really sure, read the command documentation to see how to proceed.")
+            return
+        self.cmd.delete_all_ble_bonds()
+        print(" - Successfully clear all bonds")
 
 
 @hw_settings.command('store')
@@ -1585,12 +1585,12 @@ class HWFactoryReset(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Wipe all slot data and custom settings and return to factory settings'
-        parser.add_argument("--i-know-what-im-doing", default=False, action="store_true", help="Just to be sure :)")
+        parser.add_argument("--force", default=False, action="store_true", help="Just to be sure")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        if not args.i_know_what_im_doing:
-            print("This time your data's safe. Read the command documentation next time.")
+        if not args.force:
+            print("If you are you really sure, read the command documentation to see how to proceed.")
             return
         if self.cmd.wipe_fds():
             print(" - Reset successful! Please reconnect.")
@@ -1733,19 +1733,6 @@ class HWBlePair(DeviceRequiredUnit):
                   f"{ 'Enable' if args.enable else 'Disable' } "
                   f"{C0}"
                   "state.")
-
-
-@hw_ble_bonds.command('clear')
-class HWBLEBondsClear(DeviceRequiredUnit):
-
-    def args_parser(self) -> ArgumentParserNoExit:
-        parser = ArgumentParserNoExit()
-        parser.description = 'Clear all bindings'
-        return parser
-
-    def on_exec(self, args: argparse.Namespace):
-        self.cmd.delete_ble_all_bonds()
-        print(" - Successfully clear all bonds")
 
 
 @hw.command('raw')
