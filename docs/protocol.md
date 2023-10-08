@@ -241,7 +241,7 @@ Notes:
 * Response: 4+N*8 bytes: `uid[4]` followed by N tuples of `nt[4]|nt_enc[4]`. All values as U32.
 * CLI: cf `hf mf nested` on static nonce tag
 ### 2004: MF1_DARKSIDE_ACQUIRE
-* Command: 4 bytes: `type_target|block_target|first_recover|sync_max`
+* Command: 4 bytes: `type_target|block_target|first_recover|sync_max`. Type=0x60 for key A, 0x61 for key B.
 * Response: 1 byte if Darkside failed, according to `mf1_darkside_status_t` enum,
   else 33 bytes `darkside_status|uid[4]|nt1[4]|par[8]|ks1[8]|nr[4]|ar[4]`
   * `darkside_status`
@@ -253,29 +253,29 @@ Notes:
   * `ar[4]` U32
 * CLI: cf `hf mf darkside`
 ### 2005: MF1_DETECT_NT_DIST
-* Command: 8 bytes: `type_known|block_known|key_known[6]`. Key as 6 bytes.
+* Command: 8 bytes: `type_known|block_known|key_known[6]`. Key as 6 bytes. Type=0x60 for key A, 0x61 for key B.
 * Response: 8 bytes: `uid[4]|dist[4]`
   * `uid[4]` U32 (format expected by `nested` tool)
   * `dist[4]` U32
 * CLI: cf `hf mf nested`
 ### 2006: MF1_NESTED_ACQUIRE
-* Command: 10 bytes: `type_known|block_known|key_known[6]|type_target|block_target`. Key as 6 bytes.
+* Command: 10 bytes: `type_known|block_known|key_known[6]|type_target|block_target`. Key as 6 bytes. Type=0x60 for key A, 0x61 for key B.
 * Response: N*9 bytes: N tuples of `nt[4]|nt_enc[4]|par`
   * `nt[4]` U32
   * `nt_enc[4]` U32
   * `par`
 * CLI: cf `hf mf nested`
 ### 2007: MF1_AUTH_ONE_KEY_BLOCK
-* Command: 8 bytes: `type|block|key[6]`. Key as 6 bytes.
+* Command: 8 bytes: `type|block|key[6]`. Key as 6 bytes. Type=0x60 for key A, 0x61 for key B.
 * Response: no data
 * Status will be `HF_TAG_OK` if auth succeeded, else `MF_ERR_AUTH`
 * CLI: cf `hf mf nested`
 ### 2008: MF1_READ_ONE_BLOCK
-* Command: 8 bytes: `type|block|key[6]`. Key as 6 bytes.
+* Command: 8 bytes: `type|block|key[6]`. Key as 6 bytes. Type=0x60 for key A, 0x61 for key B.
 * Response: 16 bytes: `block_data[16]`
 * CLI: cf `hf mf rdbl`
 ### 2009: MF1_WRITE_ONE_BLOCK
-* Command: 24 bytes: `type|block|key[6]|block_data[16]`. Key as 6 bytes.
+* Command: 24 bytes: `type|block|key[6]|block_data[16]`. Key as 6 bytes. Type=0x60 for key A, 0x61 for key B.
 * Response: no data
 * CLI: cf `hf mf wrbl`
 ### 2010: HF14A_RAW

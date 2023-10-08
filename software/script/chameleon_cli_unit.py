@@ -378,21 +378,19 @@ class HF14AInfo(ReaderRequiredUnit):
 @hf_mf.command('nested')
 class HFMFNested(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
-        type_choices = ['A', 'B', 'a', 'b']
         parser = ArgumentParserNoExit()
         parser.description = 'Mifare Classic nested recover key'
-        parser.add_argument('-o', '--one', action='store_true', default=False,
-                            help="one sector key recovery. Use block 0 Key A to find block 4 Key A")
-        parser.add_argument('--block-known', type=int, required=True, metavar="<dec>",
-                            help="The block where the key of the card is known")
-        parser.add_argument('--type-known', type=str, required=True, choices=type_choices,
-                            help="The key type of the tag")
-        parser.add_argument('--key-known', type=str, required=True, metavar="<hex>", help="tag sector key")
-        parser.add_argument('--block-target', type=int, metavar="<dec>",
-                            help="The key of the target block to recover")
-        parser.add_argument('--type-target', type=str, choices=type_choices,
-                            help="The type of the target block to recover")
-        # hf mf nested -o --block-known 0 --type-known A --key FFFFFFFFFFFF --block-target 4 --type-target A
+        parser.add_argument('--blk', '--known-block', type=int, required=True, metavar="<dec>",
+                            help="Known key block number")
+        srctype_group = parser.add_mutually_exclusive_group()
+        srctype_group.add_argument('-a', '-A', action='store_true', help="Known key is A key (default)")
+        srctype_group.add_argument('-b', '-B', action='store_true', help="Known key is B key")
+        parser.add_argument('-k', '--key', type=str, required=True, metavar="<hex>", help="Known key")
+        # tblk required because only single block mode is supported for now
+        parser.add_argument('--tblk', '--target-block', type=int, required=True, metavar="<dec>", help="Target key block number")
+        dsttype_group = parser.add_mutually_exclusive_group()
+        dsttype_group.add_argument('--ta', '--tA', action='store_true', help="Target A key (default)")
+        dsttype_group.add_argument('--tb', '--tB', action='store_true', help="Target B key")
         return parser
 
     def from_nt_level_code_to_str(self, nt_level):
@@ -474,34 +472,27 @@ class HFMFNested(ReaderRequiredUnit):
             return None
 
     def on_exec(self, args: argparse.Namespace):
-        block_known = args.block_known
+        block_known = args.blk
+        # default to A
+        type_known = 0x61 if args.b else 0x60
 
-        type_known = args.type_known
-        type_known = 0x60 if type_known == 'A' or type_known == 'a' else 0x61
-
-        key_known: str = args.key_known
+        key_known: str = args.key
         if not re.match(r"^[a-fA-F0-9]{12}$", key_known):
             print("key must include 12 HEX symbols")
             return
         key_known: bytearray = bytearray.fromhex(key_known)
-
-        if args.one:
-            block_target = args.block_target
-            type_target = args.type_target
-            if block_target is not None and type_target is not None:
-                type_target = 0x60 if type_target == 'A' or type_target == 'a' else 0x61
-                print(f" - {C0}Nested recover one key running...{C0}")
-                key = self.recover_a_key(block_known, type_known, key_known, block_target, type_target)
-                if key is None:
-                    print("No keys found, you can retry recover.")
-                else:
-                    print(f" - Key Found: {key}")
-            else:
-                print("Please input block_target and type_target")
-                self.args_parser().print_help()
+        block_target = args.tblk
+        # default to A
+        type_target = 0x61 if args.tb else 0x60
+        if block_known == block_target and type_known == type_target:
+            print(f"{CR}Target key already known{C0}")
+            return
+        print(f" - {C0}Nested recover one key running...{C0}")
+        key = self.recover_a_key(block_known, type_known, key_known, block_target, type_target)
+        if key is None:
+            print(f"{CY}No key found, you can retry.{C0}")
         else:
-            raise NotImplementedError("hf mf nested recover all key not implement.")
-
+            print(f" - Block {block_target} Type {'A' if type_target == 0x60 else 'B'} Key Found: {CG}{key}{C0}")
         return
 
 
