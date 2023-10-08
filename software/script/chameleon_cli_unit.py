@@ -1754,16 +1754,29 @@ class HWRaw(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Send raw command'
-        parser.add_argument('-c', '--command', type=int, required=True, help="Command (Int) to send")
-        parser.add_argument('-d', '--data', type=str, help="Data (HEX) to send", default="")
-        parser.add_argument('-t', '--timeout', type=int, help="Timeout in seconds", default=3)
+        cmd_names = sorted([c.name for c in list(chameleon_cmd.Command)])
+        help_str = "Command: " + ", ".join(cmd_names)
+        command_group = parser.add_mutually_exclusive_group(required=True)
+        command_group.add_argument('-c', '--command', type=str, metavar="COMMAND", help=help_str, choices=cmd_names)
+        command_group.add_argument('-n', '--num_command', type=int, metavar="<dec>", help="Numeric command ID: <dec>")
+        parser.add_argument('-d', '--data', type=str, help="Data to send", default="", metavar="<hex>")
+        parser.add_argument('-t', '--timeout', type=int, help="Timeout in seconds", default=3, metavar="<dec>")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
+        if args.command is not None:
+            command = chameleon_cmd.Command[args.command]
+        else:
+            # We accept not-yet-known command ids as "hw raw" is meant for debugging
+            command = args.num_command
         response = self.cmd.device.send_cmd_sync(
-            args.command, data=bytes.fromhex(args.data), status=0x0, timeout=args.timeout)
+            command, data=bytes.fromhex(args.data), status=0x0, timeout=args.timeout)
         print(" - Received:")
-        print(f"   Command: {response.cmd}")
+        try:
+            command = chameleon_cmd.Command(response.cmd)
+            print(f"   Command: {response.cmd} {command.name}")
+        except ValueError:
+            print(f"   Command: {response.cmd} (unknown)")
         status_string = f"   Status:  {response.status:#02x}"
         if response.status in chameleon_status.Device:
             status_string += f" {chameleon_status.Device[response.status]}"
