@@ -227,8 +227,16 @@ class ChameleonCLI:
                 if not unit.before_exec(args_parse_result):
                     continue
 
-                # start process cmd
-                unit.on_exec(args_parse_result)
+                # start process cmd, delay error to call after_exec firstly
+                error = None
+                try:
+                    unit.on_exec(args_parse_result)
+                except Exception as e:
+                    error = e
+                unit.after_exec(args_parse_result)
+                if error is not None:
+                    raise error
+
             except (chameleon_utils.UnexpectedResponseError, chameleon_utils.ArgsParserError) as e:
                 print(f"{CR}{str(e)}{C0}")
             except Exception:

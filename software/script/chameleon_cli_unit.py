@@ -88,6 +88,13 @@ class BaseCLIUnit:
         """
         raise NotImplementedError("Please implement this")
 
+    def after_exec(self, args: argparse.Namespace):
+        """
+            Call a function after exec cmd.
+        :return: function references
+        """
+        return True
+
     @staticmethod
     def sub_process(cmd, cwd=default_cwd):
         class ShadowProcess:
@@ -1381,8 +1388,24 @@ class HWSlotEnableSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
         print(f' - Disable slot {slot_num} {sense_type.name} success.')
 
 
+class SlotIndexRequireAndGoUnit(SlotIndexRequireUnit):
+    def before_exec(self, args: argparse.Namespace):
+        if super().before_exec(args):
+            if args.slot is not None:
+                self.tmp_slot_num = args.slot
+                self.cur_slot_num = chameleon_cmd.SlotNumber.from_fw(self.cmd.get_active_slot())
+                if self.tmp_slot_num != self.cur_slot_num:
+                    self.cmd.set_active_slot(self.tmp_slot_num)
+            return True
+        return False
+
+    def after_exec(self, args: argparse.Namespace):
+        if args.slot is not None:
+            self.cmd.set_active_slot(self.cur_slot_num)
+
+
 @lf_em_410x.command('econfig')
-class LFEM410xEconfig(SlotIndexRequireUnit, LFEMCardRequiredUnit):
+class LFEM410xEconfig(SlotIndexRequireAndGoUnit, LFEMCardRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Set simulated em410x card id'
@@ -1391,26 +1414,13 @@ class LFEM410xEconfig(SlotIndexRequireUnit, LFEMCardRequiredUnit):
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        if args.slot is not None:
-            tmp_slot_num = args.slot
-            cur_slot_num = chameleon_cmd.SlotNumber.from_fw(self.cmd.get_active_slot())
-            if tmp_slot_num != cur_slot_num:
-                self.cmd.set_active_slot(tmp_slot_num)
-        error = None
-        try:
-            if args.id is not None:
-                self.cmd.em410x_set_emu_id(bytes.fromhex(args.id))
-                print(' - Set em410x tag id success.')
-            else:
-                response = self.cmd.em410x_get_emu_id()
-                print(' - Get em410x tag id success.')
-                print(f'ID: {response.hex()}')
-        except UnexpectedResponseError as errmsg:
-            error = errmsg
-        if args.slot is not None:
-            self.cmd.set_active_slot(cur_slot_num)
-        if error is not None:
-            raise error
+        if args.id is not None:
+            self.cmd.em410x_set_emu_id(bytes.fromhex(args.id))
+            print(' - Set em410x tag id success.')
+        else:
+            response = self.cmd.em410x_get_emu_id()
+            print(' - Get em410x tag id success.')
+            print(f'ID: {response.hex()}')
 
 @hw_slot.command('nick')
 class HWSlotNick(SlotIndexRequireUnit, SenseTypeRequireUnit):
