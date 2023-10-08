@@ -191,6 +191,135 @@ class ReaderRequiredUnit(DeviceRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
+class SlotIndexRequireUnit(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        raise NotImplementedError()
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError()
+
+    @staticmethod
+    def add_slot_args(parser: ArgumentParserNoExit, mandatory=False):
+        slot_choices = [x.value for x in chameleon_cmd.SlotNumber]
+        help_str = f"Slot Index: {slot_choices} Default: active slot"
+
+        parser.add_argument('-s', "--slot", type=int, required=mandatory, help=help_str, metavar="<1-8>",
+                            choices=slot_choices)
+        return parser
+
+
+class SlotIndexRequireAndGoUnit(SlotIndexRequireUnit):
+    def before_exec(self, args: argparse.Namespace):
+        if super().before_exec(args):
+            if args.slot is not None:
+                self.tmp_slot_num = args.slot
+                self.cur_slot_num = chameleon_cmd.SlotNumber.from_fw(self.cmd.get_active_slot())
+                if self.tmp_slot_num != self.cur_slot_num:
+                    self.cmd.set_active_slot(self.tmp_slot_num)
+            return True
+        return False
+
+    def after_exec(self, args: argparse.Namespace):
+        if args.slot is not None:
+            self.cmd.set_active_slot(self.cur_slot_num)
+
+
+class SenseTypeRequireUnit(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        raise NotImplementedError()
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError()
+
+    @staticmethod
+    def add_sense_type_args(parser: ArgumentParserNoExit):
+        sense_group = parser.add_mutually_exclusive_group(required=True)
+        sense_group.add_argument('--hf', action='store_true', help="HF type")
+        sense_group.add_argument('--lf', action='store_true', help="LF type")
+        return parser
+
+
+class BaseMF1AuthOpera(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.add_argument('--blk', '--block', type=int, required=True, metavar="<dec>",
+                            help="The block where the key of the card is known")
+        type_group = parser.add_mutually_exclusive_group()
+        type_group.add_argument('-a', '-A', action='store_true', help="Known key is A key (default)")
+        type_group.add_argument('-b', '-B', action='store_true', help="Known key is B key")
+        parser.add_argument('-k', '--key', type=str, required=True, metavar="<hex>", help="tag sector key")
+        return parser
+
+    def get_param(self, args):
+        class Param:
+            def __init__(self):
+                self.block = args.blk
+                self.type = chameleon_cmd.MfcKeyType.B if args.b else chameleon_cmd.MfcKeyType.A
+                key: str = args.key
+                if not re.match(r"^[a-fA-F0-9]{12}$", key):
+                    raise ArgsParserError("key must include 12 HEX symbols")
+                self.key: bytearray = bytearray.fromhex(key)
+
+        return Param()
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError("Please implement this")
+
+
+class BaseMFUAuthOpera(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        # TODO:
+        #     -k, --key <hex>                Authentication key (UL-C 16 bytes, EV1/NTAG 4 bytes)
+        #     -l                             Swap entered key's endianness
+        return parser
+
+    def get_param(self, args):
+        class Param:
+            def __init__(self):
+                pass
+        return Param()
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError("Please implement this")
+
+
+class LFEMCardRequiredUnit(DeviceRequiredUnit):
+    @staticmethod
+    def add_card_arg(parser: ArgumentParserNoExit, required=False):
+        parser.add_argument("--id", type=str, required=required, help="EM410x tag id", metavar="<hex>")
+        return parser
+
+    def before_exec(self, args: argparse.Namespace):
+        if super().before_exec(args):
+            if args.id is not None:
+                if not re.match(r"^[a-fA-F0-9]{10}$", args.id):
+                    raise ArgsParserError("ID must include 10 HEX symbols")
+            return True
+        return False
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        raise NotImplementedError("Please implement this")
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError("Please implement this")
+
+
+class TagTypeRequiredUnit(DeviceRequiredUnit):
+    @staticmethod
+    def add_type_args(parser: ArgumentParserNoExit):
+        type_names = [t.name for t in chameleon_cmd.TagSpecificType.list()]
+        help_str = "Tag Type: " + ", ".join(type_names)
+        parser.add_argument('-t', "--type", type=str, required=True, help=help_str, metavar="TAG_TYPE", choices=type_names)
+        return parser
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        raise NotImplementedError()
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError()
+
+
 hw = CLITree('hw', 'Hardware-related commands')
 hw_slot = hw.subgroup('slot', 'Emulation slots commands')
 hw_ble = hw.subgroup('ble', 'Bluetooth low energy commands')
@@ -577,51 +706,6 @@ class HFMFDarkside(ReaderRequiredUnit):
         return
 
 
-class BaseMF1AuthOpera(ReaderRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit:
-        parser = ArgumentParserNoExit()
-        parser.add_argument('--blk', '--block', type=int, required=True, metavar="<dec>",
-                            help="The block where the key of the card is known")
-        type_group = parser.add_mutually_exclusive_group()
-        type_group.add_argument('-a', '-A', action='store_true', help="Known key is A key (default)")
-        type_group.add_argument('-b', '-B', action='store_true', help="Known key is B key")
-        parser.add_argument('-k', '--key', type=str, required=True, metavar="<hex>", help="tag sector key")
-        return parser
-
-    def get_param(self, args):
-        class Param:
-            def __init__(self):
-                self.block = args.blk
-                self.type = chameleon_cmd.MfcKeyType.B if args.b else chameleon_cmd.MfcKeyType.A
-                key: str = args.key
-                if not re.match(r"^[a-fA-F0-9]{12}$", key):
-                    raise ArgsParserError("key must include 12 HEX symbols")
-                self.key: bytearray = bytearray.fromhex(key)
-
-        return Param()
-
-    def on_exec(self, args: argparse.Namespace):
-        raise NotImplementedError("Please implement this")
-
-
-class BaseMFUAuthOpera(ReaderRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit:
-        parser = ArgumentParserNoExit()
-        # TODO:
-        #     -k, --key <hex>                Authentication key (UL-C 16 bytes, EV1/NTAG 4 bytes)
-        #     -l                             Swap entered key's endianness
-        return parser
-
-    def get_param(self, args):
-        class Param:
-            def __init__(self):
-                pass
-        return Param()
-
-    def on_exec(self, args: argparse.Namespace):
-        raise NotImplementedError("Please implement this")
-
-
 @hf_mf.command('rdbl')
 class HFMFRDBL(BaseMF1AuthOpera):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -796,10 +880,11 @@ class HFMFDetectionDecrypt(DeviceRequiredUnit):
 
 
 @hf_mf.command('eload')
-class HFMFELoad(DeviceRequiredUnit):
+class HFMFELoad(SlotIndexRequireAndGoUnit, DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Load data to emulator memory'
+        self.add_slot_args(parser)
         parser.add_argument('-f', '--file', type=str, required=True, help="file path")
         parser.add_argument('-t', '--type', type=str, required=False, help="content type", choices=['bin', 'hex'])
         return parser
@@ -845,11 +930,12 @@ class HFMFELoad(DeviceRequiredUnit):
         print("\n - Load success")
 
 
-@hf_mf.command('eread')
-class HFMFERead(DeviceRequiredUnit):
+@hf_mf.command('esave')
+class HFMFESave(SlotIndexRequireAndGoUnit, DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Read data from emulator memory'
+        self.add_slot_args(parser)
         parser.add_argument('-f', '--file', type=str, required=True, help="file path")
         parser.add_argument('-t', '--type', type=str, required=False, help="content type", choices=['bin', 'hex'])
         return parser
@@ -1104,27 +1190,6 @@ class LFEMRead(ReaderRequiredUnit):
         print(f" - EM410x ID(10H): {CG}{id.hex()}{C0}")
 
 
-class LFEMCardRequiredUnit(DeviceRequiredUnit):
-    @staticmethod
-    def add_card_arg(parser: ArgumentParserNoExit, required=False):
-        parser.add_argument("--id", type=str, required=required, help="EM410x tag id", metavar="<hex>")
-        return parser
-
-    def before_exec(self, args: argparse.Namespace):
-        if super().before_exec(args):
-            if args.id is not None:
-                if not re.match(r"^[a-fA-F0-9]{10}$", args.id):
-                    raise ArgsParserError("ID must include 10 HEX symbols")
-            return True
-        return False
-
-    def args_parser(self) -> ArgumentParserNoExit:
-        raise NotImplementedError("Please implement this")
-
-    def on_exec(self, args: argparse.Namespace):
-        raise NotImplementedError("Please implement this")
-
-
 @lf_em_410x.command('write')
 class LFEM410xWriteT55xx(LFEMCardRequiredUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -1143,38 +1208,6 @@ class LFEM410xWriteT55xx(LFEMCardRequiredUnit, ReaderRequiredUnit):
         id_bytes = bytes.fromhex(id_hex)
         self.cmd.em410x_write_to_t55xx(id_bytes)
         print(f" - EM410x ID(10H): {id_hex} write done.")
-
-
-class SlotIndexRequireUnit(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit:
-        raise NotImplementedError()
-
-    def on_exec(self, args: argparse.Namespace):
-        raise NotImplementedError()
-
-    @staticmethod
-    def add_slot_args(parser: ArgumentParserNoExit, mandatory=False):
-        slot_choices = [x.value for x in chameleon_cmd.SlotNumber]
-        help_str = f"Slot Index: {slot_choices} Default: active slot"
-
-        parser.add_argument('-s', "--slot", type=int, required=mandatory, help=help_str, metavar="<1-8>",
-                            choices=slot_choices)
-        return parser
-
-
-class SenseTypeRequireUnit(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit:
-        raise NotImplementedError()
-
-    def on_exec(self, args: argparse.Namespace):
-        raise NotImplementedError()
-
-    @staticmethod
-    def add_sense_type_args(parser: ArgumentParserNoExit):
-        sense_group = parser.add_mutually_exclusive_group(required=True)
-        sense_group.add_argument('--hf', action='store_true', help="HF type")
-        sense_group.add_argument('--lf', action='store_true', help="LF type")
-        return parser
 
 
 @hw_slot.command('list')
@@ -1267,21 +1300,6 @@ class HWSlotSet(SlotIndexRequireUnit):
         slot_index = args.slot
         self.cmd.set_active_slot(slot_index)
         print(f" - Set slot {slot_index} activated success.")
-
-
-class TagTypeRequiredUnit(DeviceRequiredUnit):
-    @staticmethod
-    def add_type_args(parser: ArgumentParserNoExit):
-        type_names = [t.name for t in chameleon_cmd.TagSpecificType.list()]
-        help_str = "Tag Type: " + ", ".join(type_names)
-        parser.add_argument('-t', "--type", type=str, required=True, help=help_str, metavar="TAG_TYPE", choices=type_names)
-        return parser
-
-    def args_parser(self) -> ArgumentParserNoExit:
-        raise NotImplementedError()
-
-    def on_exec(self, args: argparse.Namespace):
-        raise NotImplementedError()
 
 
 @hw_slot.command('type')
@@ -1386,22 +1404,6 @@ class HWSlotEnableSet(SlotIndexRequireUnit, SenseTypeRequireUnit):
             sense_type = chameleon_cmd.TagSenseType.HF
         self.cmd.set_slot_enable(slot_num, sense_type, False)
         print(f' - Disable slot {slot_num} {sense_type.name} success.')
-
-
-class SlotIndexRequireAndGoUnit(SlotIndexRequireUnit):
-    def before_exec(self, args: argparse.Namespace):
-        if super().before_exec(args):
-            if args.slot is not None:
-                self.tmp_slot_num = args.slot
-                self.cur_slot_num = chameleon_cmd.SlotNumber.from_fw(self.cmd.get_active_slot())
-                if self.tmp_slot_num != self.cur_slot_num:
-                    self.cmd.set_active_slot(self.tmp_slot_num)
-            return True
-        return False
-
-    def after_exec(self, args: argparse.Namespace):
-        if args.slot is not None:
-            self.cmd.set_active_slot(self.cur_slot_num)
 
 
 @lf_em_410x.command('econfig')
