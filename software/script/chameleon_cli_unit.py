@@ -1802,15 +1802,15 @@ class HF14ARaw(ReaderRequiredUnit):
         parser.add_argument('-s', '--select-tag', help="Active signal field ON with select",
                             action='store_true', default=False,)
         # TODO: parser.add_argument('-3', '--type3-select-tag', help="Active signal field ON with ISO14443-3 select (no RATS)", action='store_true', default=False,)
-        parser.add_argument('-d', '--data', type=str, help="Data to be sent")
-        parser.add_argument('-b', '--bits', type=int, help="Number of bits to send. Useful for send partial byte")
+        parser.add_argument('-d', '--data', type=str, metavar="<hex>", help="Data to be sent")
+        parser.add_argument('-b', '--bits', type=int, metavar="<dec>", help="Number of bits to send. Useful for send partial byte")
         parser.add_argument('-c', '--crc', help="Calculate and append CRC", action='store_true', default=False,)
-        parser.add_argument('-r', '--response', help="Do not read response", action='store_true', default=False,)
+        parser.add_argument('-r', '--no-response', help="Do not read response", action='store_true', default=False,)
         parser.add_argument('-cc', '--crc-clear', help="Verify and clear CRC of received data",
                             action='store_true', default=False,)
         parser.add_argument('-k', '--keep-rf', help="Keep signal field ON after receive",
                             action='store_true', default=False,)
-        parser.add_argument('-t', '--timeout', type=int, help="Timeout in ms", default=100)
+        parser.add_argument('-t', '--timeout', type=int, metavar="<dec>", help="Timeout in ms", default=100)
         # 'Examples:\n' \
         # '  hf 14a raw -b 7 -d 40 -k\n' \
         # '  hf 14a raw -d 43 -k\n' \
