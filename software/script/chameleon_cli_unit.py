@@ -1528,7 +1528,8 @@ class HWSettingsAnimation(DeviceRequiredUnit):
         if args.mode is not None:
             mode = chameleon_cmd.AnimationMode[args.mode]
             self.cmd.set_animation_mode(mode)
-            print("Animation mode change success. Do not forget to store your settings in flash!")
+            print("Animation mode change success.")
+            print(f"{CY}Do not forget to store your settings in flash!{C0}")
         else:
             print(chameleon_cmd.AnimationMode(self.cmd.get_animation_mode()))
 
@@ -1570,9 +1571,13 @@ class HWSettingsReset(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Reset settings to default values'
+        parser.add_argument("--force", default=False, action="store_true", help="Just to be sure")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
+        if not args.force:
+            print("If you are you really sure, read the command documentation to see how to proceed.")
+            return
         print("Initializing settings...")
         if self.cmd.reset_settings():
             print(" - Reset success @.@~")
@@ -1671,6 +1676,7 @@ class HWButtonSettingsSet(DeviceRequiredUnit):
         else:
             self.cmd.set_button_press_config(button, function)
         print(" - Successfully set button function to settings")
+        print(f"{CY}Do not forget to store your settings in flash!{C0}")
 
 
 @hw_settings.command('blekey')
@@ -1698,6 +1704,7 @@ class HWSettingsBLEKey(DeviceRequiredUnit):
                       f" { args.key }"
                       f"{C0}"
                       )
+                print(f"{CY}Do not forget to store your settings in flash!{C0}")
             else:
                 print(f" - {CR}Only 6 ASCII characters from 0 to 9 are supported.{C0}")
 
@@ -1707,32 +1714,33 @@ class HWBlePair(DeviceRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = 'Check if BLE pairing is enabled, or set the enable switch for BLE pairing'
-        parser.add_argument('-e', '--enable', type=int, required=False, help="Enable = 1 or Disable = 0")
+        parser.description = 'Show or configure BLE pairing'
+        set_group = parser.add_mutually_exclusive_group()
+        set_group.add_argument('-e', '--enable', action='store_true', help="Enable BLE pairing")
+        set_group.add_argument('-d', '--disable', action='store_true', help="Disable BLE pairing")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
         is_pairing_enable = self.cmd.get_ble_pairing_enable()
-        print(f" - Is ble pairing enable: ", end='')
-        color = CG if is_pairing_enable else CR
-        print(
-            f"{color}"
-            f"{ 'Yes' if is_pairing_enable else 'No' }"
-            f"{C0}"
-        )
-        if args.enable is not None:
-            if args.enable == 1 and is_pairing_enable:
-                print(f"{CY} It is already in an enabled state.{C0}")
+        if not args.enable and not args.disable:
+            if is_pairing_enable:
+                print(f" - BLE pairing: {CG} Enabled{C0}")
+            else:
+                print(f" - BLE pairing: {CR} Disabled{C0}")
+        elif args.enable:
+            if is_pairing_enable:
+                print(f"{CY} BLE pairing is already enabled.{C0}")
                 return
-            if args.enable == 0 and not is_pairing_enable:
-                print(f"{CY} It is already in a non enabled state.{C0}")
+            self.cmd.set_ble_pairing_enable(True)
+            print(f" - Successfully change ble pairing to {CG}Enabled{C0}.")
+            print(f"{CY}Do not forget to store your settings in flash!{C0}")
+        elif args.disabled:
+            if not is_pairing_enable:
+                print(f"{CY} BLE pairing is already disabled.{C0}")
                 return
-            self.cmd.set_ble_pairing_enable(args.enable)
-            print(f" - Successfully change ble pairing to "
-                  f"{CG if args.enable else CR}"
-                  f"{ 'Enable' if args.enable else 'Disable' } "
-                  f"{C0}"
-                  "state.")
+            self.cmd.set_ble_pairing_enable(False)
+            print(f" - Successfully change ble pairing to {CR}Disabled{C0}.")
+            print(f"{CY}Do not forget to store your settings in flash!{C0}")
 
 
 @hw.command('raw')
