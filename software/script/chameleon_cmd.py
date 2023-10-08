@@ -352,6 +352,13 @@ class ButtonType(enum.IntEnum):
 
 
 @enum.unique
+class MfcKeyType(enum.IntEnum):
+    # what, you need the doc for button type? maybe chatgpt known... LOL
+    A = 0x60,
+    B = 0x61
+
+
+@enum.unique
 class ButtonPressFunction(enum.IntEnum):
     NONE = 0
     NEXTSLOT = 1

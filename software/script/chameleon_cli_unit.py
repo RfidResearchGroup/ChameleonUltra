@@ -474,7 +474,7 @@ class HFMFNested(ReaderRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         block_known = args.blk
         # default to A
-        type_known = 0x61 if args.b else 0x60
+        type_known = chameleon_cmd.MfcKeyType.B if args.b else chameleon_cmd.MfcKeyType.A
 
         key_known: str = args.key
         if not re.match(r"^[a-fA-F0-9]{12}$", key_known):
@@ -483,7 +483,7 @@ class HFMFNested(ReaderRequiredUnit):
         key_known: bytearray = bytearray.fromhex(key_known)
         block_target = args.tblk
         # default to A
-        type_target = 0x61 if args.tb else 0x60
+        type_target = chameleon_cmd.MfcKeyType.B if args.b else chameleon_cmd.MfcKeyType.A
         if block_known == block_target and type_known == type_target:
             print(f"{CR}Target key already known{C0}")
             return
@@ -492,7 +492,7 @@ class HFMFNested(ReaderRequiredUnit):
         if key is None:
             print(f"{CY}No key found, you can retry.{C0}")
         else:
-            print(f" - Block {block_target} Type {'A' if type_target == 0x60 else 'B'} Key Found: {CG}{key}{C0}")
+            print(f" - Block {block_target} Type {type_target.name} Key Found: {CG}{key}{C0}")
         return
 
 
@@ -562,7 +562,7 @@ class HFMFDarkside(ReaderRequiredUnit):
         return None
 
     def on_exec(self, args: argparse.Namespace):
-        key = self.recover_key(0x03, 0x60)
+        key = self.recover_key(0x03, chameleon_cmd.MfcKeyType.A)
         if key is not None:
             print(f" - Key Found: {key}")
         else:
@@ -572,20 +572,20 @@ class HFMFDarkside(ReaderRequiredUnit):
 
 class BaseMF1AuthOpera(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
-        type_choices = ['A', 'B', 'a', 'b']
         parser = ArgumentParserNoExit()
-        parser.add_argument('-b', '--block', type=int, required=True, metavar="<dec>",
+        parser.add_argument('--blk', '--block', type=int, required=True, metavar="<dec>",
                             help="The block where the key of the card is known")
-        parser.add_argument('-t', '--type', type=str, required=True, choices=type_choices,
-                            help="The key type of the tag")
+        type_group = parser.add_mutually_exclusive_group()
+        type_group.add_argument('-a', '-A', action='store_true', help="Known key is A key (default)")
+        type_group.add_argument('-b', '-B', action='store_true', help="Known key is B key")
         parser.add_argument('-k', '--key', type=str, required=True, metavar="<hex>", help="tag sector key")
         return parser
 
     def get_param(self, args):
         class Param:
             def __init__(self):
-                self.block = args.block
-                self.type = 0x60 if args.type == 'A' or args.type == 'a' else 0x61
+                self.block = args.blk
+                self.type = chameleon_cmd.MfcKeyType.B if args.b else chameleon_cmd.MfcKeyType.A
                 key: str = args.key
                 if not re.match(r"^[a-fA-F0-9]{12}$", key):
                     raise ArgsParserError("key must include 12 HEX symbols")
