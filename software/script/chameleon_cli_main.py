@@ -155,8 +155,8 @@ class ChameleonCLI:
             try:
                 args_parse_result = args.parse_args(arg_list)
             except chameleon_utils.ArgsParserError as e:
-                args.print_usage()
-                print(str(e).strip(), end="\n\n")
+                args.print_help()
+                print(f'{CY}'+str(e).strip()+f'{C0}', end="\n\n")
                 continue
             except chameleon_utils.ParserExitIntercept:
                 # don't exit process.

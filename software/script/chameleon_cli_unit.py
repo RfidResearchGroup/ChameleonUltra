@@ -440,26 +440,24 @@ class RootDumpHelp(BaseCLIUnit):
         visual_col1_width = 28
         col1_width = visual_col1_width + len(f"{CG}{C0}")
         if cmd_node.cls:
-            cmd_title = f"{CG}{cmd_node.fullname}{C0}"
-            print(f"{cmd_title}".ljust(col1_width), end="")
             p = cmd_node.cls().args_parser()
             assert p is not None
-            p.prog = " " * (visual_col1_width - len("usage: ") - 1)
-            usage = p.format_usage().removeprefix("usage: ").strip()
-            print(f"{CY}{usage}{C0}")
             if dump_description:
-                help = p.format_help().splitlines()
-                # Remove usage as we already printed it
-                while (help[0] != ''):
-                    help.pop(0)
-                print('\n'.join(help))
-                print()
+                p.print_help()
+            else:
+                cmd_title = f"{CG}{cmd_node.fullname}{C0}"
+                print(f"{cmd_title}".ljust(col1_width), end="")
+                p.prog = " " * (visual_col1_width - len("usage: ") - 1)
+                usage = p.format_usage().removeprefix("usage: ").strip()
+                print(f"{CY}{usage}{C0}")
         else:
             if dump_cmd_groups and not cmd_node.root:
-                cmd_title = f"{CB}== {cmd_node.fullname} =={C0}"
-                print(f"{cmd_title}")
                 if dump_description:
-                    print(f"\n{cmd_node.help_text}\n")
+                    print("=" * 80)
+                    print(f"{CR}{cmd_node.fullname}{C0}\n")
+                    print(f"{CC}{cmd_node.help_text}{C0}\n")
+                else:
+                    print(f"{CB}== {cmd_node.fullname} =={C0}")
             for child in cmd_node.children:
                 RootDumpHelp.dump_help(child, depth + 1, dump_cmd_groups, dump_description)
 
@@ -2009,6 +2007,7 @@ class HF14ARaw(ReaderRequiredUnit):
 
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.formatter_class = argparse.RawDescriptionHelpFormatter
         parser.description = 'Send raw command'
         parser.add_argument('-a', '--activate-rf', help="Active signal field ON without select",
                             action='store_true', default=False,)
@@ -2026,11 +2025,13 @@ class HF14ARaw(ReaderRequiredUnit):
         parser.add_argument('-k', '--keep-rf', help="Keep signal field ON after receive",
                             action='store_true', default=False,)
         parser.add_argument('-t', '--timeout', type=int, metavar="<dec>", help="Timeout in ms", default=100)
-        # 'Examples:\n' \
-        # '  hf 14a raw -b 7 -d 40 -k\n' \
-        # '  hf 14a raw -d 43 -k\n' \
-        # '  hf 14a raw -d 3000 -c\n' \
-        # '  hf 14a raw -sc -d 6000\n'
+        parser.epilog = """
+examples/notes:
+  hf 14a raw -b 7 -d 40 -k
+  hf 14a raw -d 43 -k
+  hf 14a raw -d 3000 -c
+  hf 14a raw -sc -d 6000
+"""
         return parser
 
     def on_exec(self, args: argparse.Namespace):
