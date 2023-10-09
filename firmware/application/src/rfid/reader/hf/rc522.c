@@ -483,6 +483,66 @@ uint8_t pcd_14a_reader_bits_transfer(uint8_t *pTx, uint16_t  szTxBits, uint8_t *
 }
 
 /**
+* @brief  : ISO14443-A Fast Select
+* @param  ：tag：tag info buffer
+* @retval ：if return HF_TAG_OK，the tag is selected.
+*/
+uint8_t pcd_14a_reader_fast_select(picc_14a_tag_t *tag) { 
+	uint8_t resp[5] = {0}; // theoretically. A usual RATS will be much smaller
+	uint8_t uid_resp[4] = {0};
+    uint8_t sak = 0x04; // cascade uid
+	uint8_t status = HF_TAG_OK;
+	uint8_t cascade_level = 0;
+	uint16_t len;
+		
+	// Wakeup
+    if (pcd_14a_reader_atqa_request(resp, NULL, U8ARR_BIT_LEN(resp)) != HF_TAG_OK) {
+		return HF_TAG_NO;
+	}
+
+    // OK we will select at least at cascade 1, lets see if first byte of UID was 0x88 in
+    // which case we need to make a cascade 2 request and select - this is a long UID
+    // While the UID is not complete, the 3nd bit (from the right) is set in the SAK.
+    for (; sak & 0x04; cascade_level++) {
+        // uint8_t sel_all[]    = { PICC_ANTICOLL1, 0x20 };
+        uint8_t sel_uid[]    = { PICC_ANTICOLL1, 0x70, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+        // SELECT_* (L1: 0x93, L2: 0x95, L3: 0x97)
+        sel_uid[0] = /*sel_all[0] = */ 0x93 + cascade_level * 2;
+
+        if (cascade_level < tag->cascade - 1) {
+            uid_resp[0] = 0x88;
+            memcpy(uid_resp + 1, tag->uid + cascade_level * 3, 3);
+        } else {
+            memcpy(uid_resp, tag->uid + cascade_level * 3, 4);
+        }
+
+        // Construct SELECT UID command
+        //sel_uid[1] = 0x70;                                            // transmitting a full UID (1 Byte cmd, 1 Byte NVB, 4 Byte UID, 1 Byte BCC, 2 Bytes CRC)
+        memcpy(sel_uid + 2, uid_resp, 4);                               // the UID received during anticollision, or the provided UID
+        sel_uid[6] = sel_uid[2] ^ sel_uid[3] ^ sel_uid[4] ^ sel_uid[5]; // calculate and add BCC
+        crc_14a_append(sel_uid, 7);                               			// calculate and add CRC
+		status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, sel_uid, sizeof(sel_uid), resp, &len, U8ARR_BIT_LEN(resp));
+        // Receive the SAK
+        if (status != HF_TAG_OK || !len) {
+			// printf("SAK Err: %d, %d\r\n", status, recv_len);
+			return HF_TAG_NO;
+		}
+	
+        sak = resp[0];
+
+        // Test if more parts of the uid are coming
+        if ((sak & 0x04) /* && uid_resp[0] == 0x88 */) {
+            // Remove first byte, 0x88 is not an UID byte, it CT, see page 3 of:
+            // http://www.nxp.com/documents/application_note/AN10927.pdf
+            uid_resp[0] = uid_resp[1];
+            uid_resp[1] = uid_resp[2];
+            uid_resp[2] = uid_resp[3];
+        }
+    }
+    return HF_TAG_OK;
+}
+
+/**
 * @brief  : ISO14443-A Find a card, only execute once!
 * @param  :tag: Buffer that stores card information
 * @retval : Status value hf_tag_ok, success
