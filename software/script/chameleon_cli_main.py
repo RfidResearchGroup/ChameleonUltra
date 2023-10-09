@@ -6,18 +6,18 @@ import chameleon_com
 import colorama
 import chameleon_cli_unit
 import chameleon_utils
-import os
 import pathlib
 import prompt_toolkit
-from datetime import datetime
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.history import FileHistory
 
 # Colorama shorthands
 CR = colorama.Fore.RED
 CG = colorama.Fore.GREEN
+CB = colorama.Fore.BLUE
 CC = colorama.Fore.CYAN
 CY = colorama.Fore.YELLOW
+CM = colorama.Fore.MAGENTA
 C0 = colorama.Style.RESET_ALL
 
 ULTRA = r"""
@@ -43,45 +43,13 @@ BANNER = """
 """
 
 
-def dump_help(cmd_node, depth=0, dump_cmd_groups=False, dump_description=False):
-    visual_col1_width = 28
-    col1_width = visual_col1_width + len(f"{CG}{C0}")
-    if cmd_node.cls:
-        cmd_title = f"{CG}{cmd_node.fullname}{C0}"
-        if dump_description:
-            print(f" {cmd_title}".ljust(col1_width) + f"{cmd_node.help_text}")
-        else:
-            print(f" {cmd_title}".ljust(col1_width), end="")
-        p = cmd_node.cls().args_parser()
-        assert p is not None
-        p.prog = " " * (visual_col1_width - len("usage: ") - 1)
-        usage = p.format_usage().removeprefix("usage: ").strip()
-        if usage != "[-h]":
-            usage = usage.removeprefix("[-h] ")
-            if dump_description:
-                print(f"{CG}{C0}".ljust(col1_width), end="")
-            print(f"{CY}{usage}{C0}")
-        else:
-            print("")
-    else:
-        if dump_cmd_groups:
-            cmd_title = f"{CY}{cmd_node.fullname}{C0}"
-            if dump_description:
-                print(f" {cmd_title}".ljust(col1_width) + f"{{ {cmd_node.help_text}... }}")
-            else:
-                print(f" {cmd_title}")
-        for child in cmd_node.children:
-            dump_help(child, depth + 1, dump_cmd_groups, dump_description)
-
-
 class ChameleonCLI:
     """
         CLI for chameleon
     """
 
     def __init__(self):
-        self.completer = chameleon_utils.CustomNestedCompleter.from_nested_dict(
-            chameleon_cli_unit.root_commands)
+        self.completer = chameleon_utils.CustomNestedCompleter.from_clitree(chameleon_cli_unit.root)
         self.session = prompt_toolkit.PromptSession(completer=self.completer,
                                                     history=FileHistory(pathlib.Path.home() / ".chameleon_history"))
 
@@ -152,59 +120,31 @@ class ChameleonCLI:
                 except KeyboardInterrupt:
                     closing = True
 
-            if closing or cmd_str in ["exit", "quit", "q", "e"]:
-                print("Bye, thank you.  ^.^ ")
-                self.device_com.close()
-                sys.exit(996)
-            elif cmd_str == "clear":
-                os.system('clear' if os.name == 'posix' else 'cls')
+            # look for alternate exit
+            if closing or cmd_str in ["quit", "q", "e"]:
+                cmd_str = 'exit'
+
+            # empty line
+            if cmd_str == "":
                 continue
-            elif cmd_str == "dumphelp":
-                for _, cmd_node in chameleon_cli_unit.root_commands.items():
-                    dump_help(cmd_node)
-                continue
-            elif cmd_str == "":
-                continue
+
+            # look for alternate comments
+            if cmd_str[0] in ";#%":
+                cmd_str = 'rem ' + cmd_str[1:].lstrip()
 
             # parse cmd
             argv = cmd_str.split()
-            root_cmd = argv[0]
-            # look for comments
-            if root_cmd == "rem" or root_cmd[0] in ";#%":
-                # precision: second
-                # iso_timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-                # precision: nanosecond (note that the comment will take some time too, ~75ns, check your system)
-                iso_timestamp = datetime.utcnow().isoformat() + 'Z'
-                if root_cmd[0] in ";#%":
-                    comment = ' '.join([root_cmd[1:]]+argv[1:]).strip()
-                else:
-                    comment = ' '.join(argv[1:]).strip()
-                print(f"{iso_timestamp} remark: {comment}")
-                continue
-            if root_cmd not in chameleon_cli_unit.root_commands:
-                # No matching command group
-                print("".ljust(18, "-") + "".ljust(10) + "".ljust(30, "-"))
-                for cmd_name, cmd_node in chameleon_cli_unit.root_commands.items():
-                    print(f" - {CG}{cmd_name}{C0}".ljust(37) + f"{{ {cmd_node.help_text}... }}")
-                print(f" - {CG}clear{C0}".ljust(37) + "Clear screen")
-                print(f" - {CG}exit{C0}".ljust(37) + "Exit program")
-                print(f" - {CG}rem ...{C0}".ljust(37) + "Display a comment with a timestamp")
-                continue
 
-            tree_node, arg_list = self.get_cmd_node(
-                chameleon_cli_unit.root_commands[root_cmd], argv[1:])
-
+            tree_node, arg_list = self.get_cmd_node(chameleon_cli_unit.root, argv)
             if not tree_node.cls:
                 # Found tree node is a group without an implementation, print children
                 print("".ljust(18, "-") + "".ljust(10) + "".ljust(30, "-"))
                 for child in tree_node.children:
                     cmd_title = f"{CG}{child.name}{C0}"
                     if not child.cls:
-                        help_line = (f" - {cmd_title}".ljust(37)
-                                     ) + f"{{ {child.help_text}... }}"
+                        help_line = (f" - {cmd_title}".ljust(37)) + f"{{ {child.help_text}... }}"
                     else:
-                        help_line = (f" - {cmd_title}".ljust(37)
-                                     ) + f"{child.help_text}"
+                        help_line = (f" - {cmd_title}".ljust(37)) + f"{child.help_text}"
                     print(help_line)
                 continue
 

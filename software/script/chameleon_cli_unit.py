@@ -7,6 +7,7 @@ import colorama
 import timeit
 import sys
 import time
+from datetime import datetime
 import serial.tools.list_ports
 import threading
 import struct
@@ -22,8 +23,10 @@ from chameleon_utils import CLITree
 # Colorama shorthands
 CR = colorama.Fore.RED
 CG = colorama.Fore.GREEN
+CB = colorama.Fore.BLUE
 CC = colorama.Fore.CYAN
 CY = colorama.Fore.YELLOW
+CM = colorama.Fore.MAGENTA
 C0 = colorama.Style.RESET_ALL
 
 # NXP IDs based on https://www.nxp.com/docs/en/application-note/AN10833.pdf
@@ -79,7 +82,7 @@ class BaseCLIUnit:
             Call a function before exec cmd.
         :return: function references
         """
-        raise NotImplementedError("Please implement this")
+        return True
 
     def on_exec(self, args: argparse.Namespace):
         """
@@ -368,21 +371,100 @@ class TagTypeArgsUnit(DeviceRequiredUnit):
         raise NotImplementedError()
 
 
-hw = CLITree('hw', 'Hardware-related commands')
+root = CLITree(root=True)
+hw = root.subgroup('hw', 'Hardware-related commands')
 hw_slot = hw.subgroup('slot', 'Emulation slots commands')
-hw_ble = hw.subgroup('ble', 'Bluetooth low energy commands')
 hw_settings = hw.subgroup('settings', 'Chameleon settings commands')
 
-hf = CLITree('hf', 'High Frequency commands')
+hf = root.subgroup('hf', 'High Frequency commands')
 hf_14a = hf.subgroup('14a', 'ISO14443-a commands')
 hf_mf = hf.subgroup('mf', 'MIFARE Classic commands')
 hf_mfu = hf.subgroup('mfu', 'MIFARE Ultralight / NTAG commands')
 
-lf = CLITree('lf', 'Low Frequency commands')
+lf = root.subgroup('lf', 'Low Frequency commands')
 lf_em = lf.subgroup('em', 'EM commands')
 lf_em_410x = lf_em.subgroup('410x', 'EM410x commands')
 
-root_commands: dict[str, CLITree] = {'hw': hw, 'hf': hf, 'lf': lf}
+@root.command('clear')
+class RootClear(BaseCLIUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Clear screen'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        os.system('clear' if os.name == 'posix' else 'cls')
+
+
+@root.command('rem')
+class RootRem(BaseCLIUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Timestamped comment'
+        parser.add_argument('comment', nargs='*', help='Your comment')
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        # precision: second
+        # iso_timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+        # precision: nanosecond (note that the comment will take some time too, ~75ns, check your system)
+        iso_timestamp = datetime.utcnow().isoformat() + 'Z'
+        comment = ' '.join(args.comment)
+        print(f"{iso_timestamp} remark: {comment}")
+
+
+@root.command('exit')
+class RootExit(BaseCLIUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Exit client'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        print("Bye, thank you.  ^.^ ")
+        self.device_com.close()
+        sys.exit(996)
+
+
+@root.command('dump_help')
+class RootDumpHelp(BaseCLIUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Dump available commands'
+        parser.add_argument('-d', '--show-desc', action='store_true', help="Dump full command description")
+        parser.add_argument('-g', '--show-groups', action='store_true', help="Dump command groups as well")
+        return parser
+
+    @staticmethod
+    def dump_help(cmd_node, depth=0, dump_cmd_groups=False, dump_description=False):
+        visual_col1_width = 28
+        col1_width = visual_col1_width + len(f"{CG}{C0}")
+        if cmd_node.cls:
+            cmd_title = f"{CG}{cmd_node.fullname}{C0}"
+            print(f"{cmd_title}".ljust(col1_width), end="")
+            p = cmd_node.cls().args_parser()
+            assert p is not None
+            p.prog = " " * (visual_col1_width - len("usage: ") - 1)
+            usage = p.format_usage().removeprefix("usage: ").strip()
+            print(f"{CY}{usage}{C0}")
+            if dump_description:
+                help = p.format_help().splitlines()
+                # Remove usage as we already printed it
+                while (help[0] != ''):
+                    help.pop(0)
+                print('\n'.join(help))
+                print()
+        else:
+            if dump_cmd_groups and not cmd_node.root:
+                cmd_title = f"{CB}== {cmd_node.fullname} =={C0}"
+                print(f"{cmd_title}")
+                if dump_description:
+                    print(f"\n{cmd_node.help_text}\n")
+            for child in cmd_node.children:
+                RootDumpHelp.dump_help(child, depth + 1, dump_cmd_groups, dump_description)
+
+    def on_exec(self, args: argparse.Namespace):
+        self.dump_help(root, dump_cmd_groups=args.show_groups, dump_description=args.show_desc)
 
 
 @hw.command('connect')
@@ -392,9 +474,6 @@ class HWConnect(BaseCLIUnit):
         parser.description = 'Connect to chameleon by serial port'
         parser.add_argument('-p', '--port', type=str, required=False)
         return parser
-
-    def before_exec(self, args: argparse.Namespace):
-        return True
 
     def on_exec(self, args: argparse.Namespace):
         try:

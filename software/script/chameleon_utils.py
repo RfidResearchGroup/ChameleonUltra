@@ -79,13 +79,14 @@ class CLITree:
     :param cls: A BaseCLIUnit instance handling the command
     """
 
-    def __init__(self, name=None, help_text=None, fullname=None, children=None, cls=None) -> None:
+    def __init__(self, name=None, help_text=None, fullname=None, children=None, cls=None, root=False) -> None:
         self.name: str = name
         self.help_text: str = help_text
         self.fullname: str = fullname if fullname else name
         self.children: list[CLITree] = children if children else list()
         self.cls = cls
-        if self.help_text is None:
+        self.root = root
+        if self.help_text is None and not root:
             assert self.cls is not None
             parser = self.cls().args_parser()
             assert parser is not None
@@ -99,7 +100,9 @@ class CLITree:
         :param help_text: Hint displayed for the group
         """
         child = CLITree(
-            name=name, fullname=f'{self.fullname} {name}', help_text=help_text)
+            name=name,
+            fullname=f'{self.fullname} {name}' if not self.root else f'{name}',
+            help_text=help_text)
         self.children.append(child)
         return child
 
@@ -110,8 +113,10 @@ class CLITree:
         :param name: Name of the command
         """
         def decorator(cls):
-            self.children.append(
-                CLITree(name=name, fullname=f'{self.fullname} {name}', cls=cls))
+            self.children.append(CLITree(
+                name=name,
+                fullname=f'{self.fullname} {name}' if not self.root else f'{name}',
+                cls=cls))
             return cls
         return decorator
 
@@ -131,32 +136,6 @@ class CustomNestedCompleter(NestedCompleter):
 
     def __repr__(self) -> str:
         return f"CustomNestedCompleter({self.options!r}, ignore_case={self.ignore_case!r})"
-
-    @classmethod
-    def from_nested_dict(cls, data):
-        options = {}
-        meta_dict = {}
-        for key, value in data.items():
-            if isinstance(value, Completer):
-                options[key] = value
-            elif isinstance(value, dict):
-                options[key] = cls.from_nested_dict(value)
-            elif isinstance(value, set):
-                options[key] = cls.from_nested_dict(
-                    {item: None for item in value})
-            elif isinstance(value, CLITree):
-                if value.cls:
-                    # CLITree is a standalone command
-                    options[key] = ArgparseCompleter(value.cls().args_parser())
-                else:
-                    # CLITree is a command group
-                    options[key] = cls.from_clitree(value)
-                    meta_dict[key] = value.help_text
-            else:
-                assert value is None
-                options[key] = None
-
-        return cls(options, meta_dict=meta_dict)
 
     @classmethod
     def from_clitree(cls, node):
