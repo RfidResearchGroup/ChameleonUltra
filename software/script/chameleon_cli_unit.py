@@ -49,7 +49,6 @@ else:
 
 
 class BaseCLIUnit:
-
     def __init__(self):
         # new a device command transfer and receiver instance(Send cmd and receive response)
         self._device_com: chameleon_com.ChameleonCom | None = None
@@ -154,9 +153,6 @@ class DeviceRequiredUnit(BaseCLIUnit):
         Make sure of device online
     """
 
-    def args_parser(self) -> ArgumentParserNoExit:
-        raise NotImplementedError("Please implement this")
-
     def before_exec(self, args: argparse.Namespace):
         ret = self.device_com.isOpen()
         if ret:
@@ -165,17 +161,11 @@ class DeviceRequiredUnit(BaseCLIUnit):
             print("Please connect to chameleon device first(use 'hw connect').")
             return False
 
-    def on_exec(self, args: argparse.Namespace):
-        raise NotImplementedError("Please implement this")
-
 
 class ReaderRequiredUnit(DeviceRequiredUnit):
     """
         Make sure of device enter to reader mode.
     """
-
-    def args_parser(self) -> ArgumentParserNoExit:
-        raise NotImplementedError("Please implement this")
 
     def before_exec(self, args: argparse.Namespace):
         if super().before_exec(args):
@@ -188,17 +178,8 @@ class ReaderRequiredUnit(DeviceRequiredUnit):
                 return True
         return False
 
-    def on_exec(self, args: argparse.Namespace):
-        raise NotImplementedError("Please implement this")
 
-
-class SlotIndexRequireUnit(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit:
-        raise NotImplementedError()
-
-    def on_exec(self, args: argparse.Namespace):
-        raise NotImplementedError()
-
+class SlotIndexArgsUnit(DeviceRequiredUnit):
     @staticmethod
     def add_slot_args(parser: ArgumentParserNoExit, mandatory=False):
         slot_choices = [x.value for x in chameleon_cmd.SlotNumber]
@@ -209,7 +190,7 @@ class SlotIndexRequireUnit(DeviceRequiredUnit):
         return parser
 
 
-class SlotIndexRequireAndGoUnit(SlotIndexRequireUnit):
+class SlotIndexArgsAndGoUnit(SlotIndexArgsUnit):
     def before_exec(self, args: argparse.Namespace):
         if super().before_exec(args):
             self.prev_slot_num = chameleon_cmd.SlotNumber.from_fw(self.cmd.get_active_slot())
@@ -227,13 +208,7 @@ class SlotIndexRequireAndGoUnit(SlotIndexRequireUnit):
             self.cmd.set_active_slot(self.prev_slot_num)
 
 
-class SenseTypeRequireUnit(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit:
-        raise NotImplementedError()
-
-    def on_exec(self, args: argparse.Namespace):
-        raise NotImplementedError()
-
+class SenseTypeArgsUnit(DeviceRequiredUnit):
     @staticmethod
     def add_sense_type_args(parser: ArgumentParserNoExit):
         sense_group = parser.add_mutually_exclusive_group(required=True)
@@ -242,7 +217,7 @@ class SenseTypeRequireUnit(DeviceRequiredUnit):
         return parser
 
 
-class BaseMF1AuthOpera(ReaderRequiredUnit):
+class MF1AuthArgsUnit(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.add_argument('--blk', '--block', type=int, required=True, metavar="<dec>",
@@ -264,9 +239,6 @@ class BaseMF1AuthOpera(ReaderRequiredUnit):
                 self.key: bytearray = bytearray.fromhex(key)
 
         return Param()
-
-    def on_exec(self, args: argparse.Namespace):
-        raise NotImplementedError("Please implement this")
 
 
 class HF14AAntiCollArgsUnit(DeviceRequiredUnit):
@@ -341,7 +313,7 @@ class HF14AAntiCollArgsUnit(DeviceRequiredUnit):
         return change_requested, anti_coll_data_changed, uid, atqa, sak, ats
 
 
-class BaseMFUAuthOpera(ReaderRequiredUnit):
+class MFUAuthArgsUnit(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         # TODO:
@@ -359,7 +331,7 @@ class BaseMFUAuthOpera(ReaderRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
-class LFEMCardRequiredUnit(DeviceRequiredUnit):
+class LFEMIdArgsUnit(DeviceRequiredUnit):
     @staticmethod
     def add_card_arg(parser: ArgumentParserNoExit, required=False):
         parser.add_argument("--id", type=str, required=required, help="EM410x tag id", metavar="<hex>")
@@ -380,7 +352,7 @@ class LFEMCardRequiredUnit(DeviceRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
-class TagTypeRequiredUnit(DeviceRequiredUnit):
+class TagTypeArgsUnit(DeviceRequiredUnit):
     @staticmethod
     def add_type_args(parser: ArgumentParserNoExit):
         type_names = [t.name for t in chameleon_cmd.TagSpecificType.list()]
@@ -782,7 +754,7 @@ class HFMFDarkside(ReaderRequiredUnit):
 
 
 @hf_mf.command('rdbl')
-class HFMFRDBL(BaseMF1AuthOpera):
+class HFMFRDBL(MF1AuthArgsUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = super().args_parser()
         parser.description = 'Mifare Classic read one block'
@@ -796,7 +768,7 @@ class HFMFRDBL(BaseMF1AuthOpera):
 
 
 @hf_mf.command('wrbl')
-class HFMFWRBL(BaseMF1AuthOpera):
+class HFMFWRBL(MF1AuthArgsUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = super().args_parser()
         parser.description = 'Mifare Classic write one block'
@@ -931,7 +903,7 @@ class HFMFELog(DeviceRequiredUnit):
 
 
 @hf_mf.command('eload')
-class HFMFELoad(SlotIndexRequireAndGoUnit, DeviceRequiredUnit):
+class HFMFELoad(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Load data to emulator memory'
@@ -982,7 +954,7 @@ class HFMFELoad(SlotIndexRequireAndGoUnit, DeviceRequiredUnit):
 
 
 @hf_mf.command('esave')
-class HFMFESave(SlotIndexRequireAndGoUnit, DeviceRequiredUnit):
+class HFMFESave(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Read data from emulator memory'
@@ -1037,7 +1009,7 @@ class HFMFESave(SlotIndexRequireAndGoUnit, DeviceRequiredUnit):
 
 
 @hf_mf.command('econfig')
-class HFMFEConfig(SlotIndexRequireAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredUnit):
+class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Settings of Mifare Classic emulator'
@@ -1188,7 +1160,7 @@ class HFMFEConfig(SlotIndexRequireAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequir
 
 
 @hf_mfu.command('rdpg')
-class HFMFURDPG(BaseMFUAuthOpera):
+class HFMFURDPG(MFUAuthArgsUnit):
     # hf mfu rdpg -p 2
 
     def args_parser(self) -> ArgumentParserNoExit:
@@ -1221,7 +1193,7 @@ class HFMFURDPG(BaseMFUAuthOpera):
 
 
 @hf_mfu.command('dump')
-class HFMFUDUMP(BaseMFUAuthOpera):
+class HFMFUDUMP(MFUAuthArgsUnit):
     # hf mfu dump [-p start_page] [-q number_pages] [-f output_file]
     def args_parser(self) -> ArgumentParserNoExit:
         parser = super().args_parser()
@@ -1278,7 +1250,7 @@ class HFMFUDUMP(BaseMFUAuthOpera):
 
 
 @hf_mfu.command('econfig')
-class HFMFUEConfig(SlotIndexRequireAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredUnit):
+class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Settings of Mifare Classic emulator'
@@ -1331,14 +1303,14 @@ class LFEMRead(ReaderRequiredUnit):
 
 
 @lf_em_410x.command('write')
-class LFEM410xWriteT55xx(LFEMCardRequiredUnit, ReaderRequiredUnit):
+class LFEM410xWriteT55xx(LFEMIdArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Write em410x id to t55xx'
         return self.add_card_arg(parser, required=True)
 
     def before_exec(self, args: argparse.Namespace):
-        b1 = super(LFEMCardRequiredUnit, self).before_exec(args)
+        b1 = super(LFEMIdArgsUnit, self).before_exec(args)
         b2 = super(ReaderRequiredUnit, self).before_exec(args)
         return b1 and b2
 
@@ -1442,7 +1414,7 @@ class HWSlotList(DeviceRequiredUnit):
 
 
 @hw_slot.command('change')
-class HWSlotSet(SlotIndexRequireUnit):
+class HWSlotSet(SlotIndexArgsUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Set emulation tag slot activated'
@@ -1456,7 +1428,7 @@ class HWSlotSet(SlotIndexRequireUnit):
 
 
 @hw_slot.command('type')
-class HWSlotType(TagTypeRequiredUnit, SlotIndexRequireUnit):
+class HWSlotType(TagTypeArgsUnit, SlotIndexArgsUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Set emulation tag type'
@@ -1476,7 +1448,7 @@ class HWSlotType(TagTypeRequiredUnit, SlotIndexRequireUnit):
 
 
 @hw_slot.command('delete')
-class HWDeleteSlotSense(SlotIndexRequireUnit, SenseTypeRequireUnit):
+class HWDeleteSlotSense(SlotIndexArgsUnit, SenseTypeArgsUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Delete sense type data for a specific slot'
@@ -1498,7 +1470,7 @@ class HWDeleteSlotSense(SlotIndexRequireUnit, SenseTypeRequireUnit):
 
 
 @hw_slot.command('init')
-class HWSlotInit(TagTypeRequiredUnit, SlotIndexRequireUnit):
+class HWSlotInit(TagTypeArgsUnit, SlotIndexArgsUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Set emulation tag data to default'
@@ -1519,7 +1491,7 @@ class HWSlotInit(TagTypeRequiredUnit, SlotIndexRequireUnit):
 
 
 @hw_slot.command('enable')
-class HWSlotEnable(SlotIndexRequireUnit, SenseTypeRequireUnit):
+class HWSlotEnable(SlotIndexArgsUnit, SenseTypeArgsUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Enable tag slot'
@@ -1541,7 +1513,7 @@ class HWSlotEnable(SlotIndexRequireUnit, SenseTypeRequireUnit):
 
 
 @hw_slot.command('disable')
-class HWSlotDisable(SlotIndexRequireUnit, SenseTypeRequireUnit):
+class HWSlotDisable(SlotIndexArgsUnit, SenseTypeArgsUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Disable tag slot'
@@ -1560,7 +1532,7 @@ class HWSlotDisable(SlotIndexRequireUnit, SenseTypeRequireUnit):
 
 
 @lf_em_410x.command('econfig')
-class LFEM410xEconfig(SlotIndexRequireAndGoUnit, LFEMCardRequiredUnit):
+class LFEM410xEconfig(SlotIndexArgsAndGoUnit, LFEMIdArgsUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Set simulated em410x card id'
@@ -1579,7 +1551,7 @@ class LFEM410xEconfig(SlotIndexRequireAndGoUnit, LFEMCardRequiredUnit):
 
 
 @hw_slot.command('nick')
-class HWSlotNick(SlotIndexRequireUnit, SenseTypeRequireUnit):
+class HWSlotNick(SlotIndexArgsUnit, SenseTypeArgsUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Get/Set/Delete tag nick name for slot'
