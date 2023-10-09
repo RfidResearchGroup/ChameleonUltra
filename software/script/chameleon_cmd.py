@@ -259,8 +259,10 @@ class MifareClassicWriteMode(enum.IntEnum):
     SHADOW_REQ = 4
 
     @staticmethod
-    def list():
-        return list(map(int, MifareClassicWriteMode))
+    def list(exclude_meta=True):
+        return [m for m in MifareClassicWriteMode
+                if m != MifareClassicWriteMode.SHADOW_REQ
+                or not exclude_meta]
 
     def __str__(self):
         if self == MifareClassicWriteMode.NORMAL:
@@ -285,10 +287,6 @@ class MifareClassicPrngType(enum.IntEnum):
     # the random number of the card response is unpredictable
     HARD = 2
 
-    @staticmethod
-    def list():
-        return list(map(int, MifareClassicPrngType))
-
     def __str__(self):
         if self == MifareClassicPrngType.STATIC:
             return "Static"
@@ -310,10 +308,6 @@ class MifareClassicDarksideStatus(enum.IntEnum):
     NO_NAK_SENT = 3
     # Darkside running, can't change tag
     TAG_CHANGED = 4
-
-    @staticmethod
-    def list():
-        return list(map(int, MifareClassicDarksideStatus))
 
     def __str__(self):
         if self == MifareClassicDarksideStatus.OK:
@@ -376,10 +370,6 @@ class ButtonPressFunction(enum.IntEnum):
         elif self == ButtonPressFunction.BATTERY:
             return "Show Battery Level"
         return "None"
-
-    @staticmethod
-    def from_int(val):
-        return ButtonPressFunction(val)
 
 
 class ChameleonCMD:

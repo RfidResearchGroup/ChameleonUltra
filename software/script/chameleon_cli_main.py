@@ -44,20 +44,22 @@ BANNER = """
 
 
 def dump_help(cmd_node, depth=0, dump_cmd_groups=False, dump_description=False):
+    visual_col1_width = 28
+    col1_width = visual_col1_width + len(f"{CG}{C0}")
     if cmd_node.cls:
         cmd_title = f"{CG}{cmd_node.fullname}{C0}"
         if dump_description:
-            print(f" {cmd_title}".ljust(37) + f"{cmd_node.help_text}")
+            print(f" {cmd_title}".ljust(col1_width) + f"{cmd_node.help_text}")
         else:
-            print(f" {cmd_title}".ljust(37), end="")
+            print(f" {cmd_title}".ljust(col1_width), end="")
         p = cmd_node.cls().args_parser()
         assert p is not None
-        p.prog = ""
-        usage = p.format_usage().removeprefix("usage: ").rstrip()
+        p.prog = " " * (visual_col1_width - len("usage: ") - 1)
+        usage = p.format_usage().removeprefix("usage: ").strip()
         if usage != "[-h]":
             usage = usage.removeprefix("[-h] ")
             if dump_description:
-                print(f"{CG}{C0}".ljust(37), end="")
+                print(f"{CG}{C0}".ljust(col1_width), end="")
             print(f"{CY}{usage}{C0}")
         else:
             print("")
@@ -65,7 +67,7 @@ def dump_help(cmd_node, depth=0, dump_cmd_groups=False, dump_description=False):
         if dump_cmd_groups:
             cmd_title = f"{CY}{cmd_node.fullname}{C0}"
             if dump_description:
-                print(f" {cmd_title}".ljust(37) + f"{{ {cmd_node.help_text}... }}")
+                print(f" {cmd_title}".ljust(col1_width) + f"{{ {cmd_node.help_text}... }}")
             else:
                 print(f" {cmd_title}")
         for child in cmd_node.children:
