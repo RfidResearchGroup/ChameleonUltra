@@ -102,7 +102,6 @@ class ChameleonCLI:
             raise Exception("This script requires at least Python 3.9")
 
         self.print_banner()
-        closing = False
         cmd_strs = []
         while True:
             if cmd_strs:
@@ -115,18 +114,16 @@ class ChameleonCLI:
                     cmd_strs = cmd_str.replace(
                         "\r\n", "\n").replace("\r", "\n").split("\n")
                     cmd_str = cmd_strs.pop(0)
+                    if cmd_str == "":
+                        continue
                 except EOFError:
-                    closing = True
+                    cmd_str = 'exit'
                 except KeyboardInterrupt:
-                    closing = True
+                    cmd_str = 'exit'
 
             # look for alternate exit
-            if closing or cmd_str in ["quit", "q", "e"]:
+            if cmd_str in ["quit", "q", "e"]:
                 cmd_str = 'exit'
-
-            # empty line
-            if cmd_str == "":
-                continue
 
             # look for alternate comments
             if cmd_str[0] in ";#%":
