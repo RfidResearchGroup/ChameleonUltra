@@ -279,7 +279,7 @@ static uint8_t darkside_select_nonces(picc_14a_tag_t *tag, uint8_t block, uint8_
         // 2. Moderate power -off time, don't be too long, it will affect efficiency, and don't be too short.
         reset_radio_field_with_delay();
         // After the power is completely disconnected, we will select the card quickly and compress the verification time as much as possible.
-        if (pcd_14a_reader_scan_auto(tag) != HF_TAG_OK) {
+        if (pcd_14a_reader_fast_select(tag) != HF_TAG_OK) {
             NRF_LOG_INFO("Tag can't select!\n");
             return HF_TAG_NO;
         }
@@ -372,6 +372,7 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
     uint16_t len                            = 0x00;  // This variable is responsible for saving the data of the card in the communication process to respond to the length of the card
     uint8_t nt_diff                         = 0x00;  // This variable is critical, don't initialize it, because the following is used directly
     bool led_toggle                         = false;
+
     // We need to confirm the use of a certain card first
     if (pcd_14a_reader_scan_auto(p_tag_info) == HF_TAG_OK) {
         uid_cur = get_u32_tag_uid(p_tag_info);
@@ -436,7 +437,7 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
         reset_radio_field_with_delay();
 
         //After the power is completely disconnected, we will select the card quickly and compress the verification time as much as possible.
-        if (pcd_14a_reader_scan_auto(p_tag_info) != HF_TAG_OK) {
+        if (pcd_14a_reader_fast_select(p_tag_info) != HF_TAG_OK) {
             NRF_LOG_INFO("Tag can't select!\n");
             return HF_TAG_NO;
         }
@@ -586,7 +587,7 @@ uint8_t check_tag_response_nt(picc_14a_tag_t *tag, uint32_t *nt) {
     pcd_14a_reader_halt_tag();
 
     // We will choose a fast card, and we will be compressed to verify as much as possible
-    if (pcd_14a_reader_scan_auto(tag) != HF_TAG_OK) {
+    if (pcd_14a_reader_fast_select(tag) != HF_TAG_OK) {
         NRF_LOG_INFO("Tag can't select\r\n");
         return HF_TAG_NO;
     }
@@ -784,7 +785,7 @@ static uint8_t measure_distance(uint64_t u64Key, uint8_t block, uint8_t type, ui
         // Reset card communication
         pcd_14a_reader_halt_tag();
         // We will choose a fast card, and we will be compressed to verify as much as possible
-        if (pcd_14a_reader_scan_auto(p_tag_info) != HF_TAG_OK) {
+        if (pcd_14a_reader_fast_select(p_tag_info) != HF_TAG_OK) {
             NRF_LOG_INFO("Tag can't select\r\n");
             return HF_TAG_NO;
         }
@@ -945,7 +946,7 @@ uint8_t static_nested_recover_core(uint8_t *p_nt1, uint8_t *p_nt2, uint64_t keyK
     uint32_t uid, nt1, nt2;
     uid = get_u32_tag_uid(p_tag_info);
     pcd_14a_reader_halt_tag();
-    if (pcd_14a_reader_scan_auto(p_tag_info) != HF_TAG_OK) {
+    if (pcd_14a_reader_fast_select(p_tag_info) != HF_TAG_OK) {
         return HF_TAG_NO;
     }
     status = authex(pcs, uid, blkKnown, typKnown, keyKnown, AUTH_FIRST, &nt1);
