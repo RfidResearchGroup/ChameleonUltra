@@ -533,6 +533,7 @@ static void cycle_slot(bool dec) {
 }
 
 static void show_battery(void) {
+    rgb_marquee_stop();
     uint32_t *led_pins = hw_get_led_array();
     // if still in the first 4s after boot, blink red while waiting for battery info
     while (percentage_batt_lvl == 0) {

@@ -39,7 +39,7 @@ void settings_init_button_press_config(void) {
 // add on version3
 void settings_init_button_long_press_config(void) {
     config.button_a_long_press = SettingsButtonCloneIcUid;
-    config.button_b_long_press = SettingsButtonCloneIcUid;
+    config.button_b_long_press = SettingsButtonShowBattery;
 }
 
 // add on version4
