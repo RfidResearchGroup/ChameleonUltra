@@ -32,7 +32,7 @@ APP_FW_VER_MAJOR := $(word 1,$(subst ., ,$(APP_FW_SEMVER)))
 APP_FW_VER_MINOR := $(word 2,$(subst ., ,$(APP_FW_SEMVER)))
 
 # Enable NRF_LOG on SWO pin as UART TX
-NRF_LOG_UART_ON_SWO_ENABLED := 1
+NRF_LOG_UART_ON_SWO_ENABLED := 0
 
 # Enable SDK validation checks
 SDK_VALIDATION := 0
