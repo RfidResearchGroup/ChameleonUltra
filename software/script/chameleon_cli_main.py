@@ -114,12 +114,12 @@ class ChameleonCLI:
                     cmd_strs = cmd_str.replace(
                         "\r\n", "\n").replace("\r", "\n").split("\n")
                     cmd_str = cmd_strs.pop(0)
-                    if cmd_str == "":
-                        continue
                 except EOFError:
                     cmd_str = 'exit'
                 except KeyboardInterrupt:
                     cmd_str = 'exit'
+            if cmd_str == '':
+                continue
 
             # look for alternate exit
             if cmd_str in ["quit", "q", "e"]:
