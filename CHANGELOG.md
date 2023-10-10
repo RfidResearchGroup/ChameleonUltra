@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Changed `hw slot list` to display LF ID & HF anticol data, and names in the --short version too (@doegox)
  - Added colors to CLI help (@doegox)
  - Changed massively CLI, cf https://github.com/RfidResearchGroup/ChameleonUltra/issues/164#issue-1930580576 (@doegox)
  - Changed CLI help: lists display and now all commands support `-h` (@doegox)

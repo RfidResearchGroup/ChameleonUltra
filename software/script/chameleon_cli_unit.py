@@ -1424,70 +1424,82 @@ class HWSlotList(DeviceRequiredUnit):
         selected = chameleon_cmd.SlotNumber.from_fw(self.cmd.get_active_slot())
         enabled = self.cmd.get_enabled_slots()
         maxnamelength = 0
-        if not args.short:
-            slotnames = []
-            for slot in chameleon_cmd.SlotNumber:
-                hfn = self.get_slot_name(slot, chameleon_cmd.TagSenseType.HF)
-                lfn = self.get_slot_name(slot, chameleon_cmd.TagSenseType.LF)
-                m = max(hfn['baselen'], lfn['baselen'])
-                maxnamelength = m if m > maxnamelength else maxnamelength
-                slotnames.append({'hf': hfn, 'lf': lfn})
+        slotnames = []
         for slot in chameleon_cmd.SlotNumber:
+            hfn = self.get_slot_name(slot, chameleon_cmd.TagSenseType.HF)
+            lfn = self.get_slot_name(slot, chameleon_cmd.TagSenseType.LF)
+            m = max(hfn['baselen'], lfn['baselen'])
+            maxnamelength = m if m > maxnamelength else maxnamelength
+            slotnames.append({'hf': hfn, 'lf': lfn})
+        for slot in chameleon_cmd.SlotNumber:
+            self.cmd.set_active_slot(slot)
             fwslot = chameleon_cmd.SlotNumber.to_fw(slot)
             hf_tag_type = chameleon_cmd.TagSpecificType(slotinfo[fwslot]['hf'])
             lf_tag_type = chameleon_cmd.TagSpecificType(slotinfo[fwslot]['lf'])
             print(f' - {f"Slot {slot}:":{4+maxnamelength+1}}'
                   f'{f"({CG}active{C0})" if slot == selected else ""}')
-            if args.short:
-                field_length = maxnamelength+1
-            else:
-                field_length = maxnamelength+slotnames[fwslot]["hf"]["metalen"]+1
+
+            ### HF ###
+            field_length = maxnamelength+slotnames[fwslot]["hf"]["metalen"]+1
             print(f'   HF: '
-                  f'{("" if args.short else slotnames[fwslot]["hf"]["name"]):{field_length}}', end='')
+                  f'{slotnames[fwslot]["hf"]["name"]:{field_length}}', end='')
             print(f'{f"({CR}disabled{C0}) " if not enabled[fwslot]["hf"] else ""}', end='')
             if hf_tag_type != chameleon_cmd.TagSpecificType.UNDEFINED:
                 print(f"{CY if enabled[fwslot]['hf'] else C0}{hf_tag_type}{C0}")
             else:
                 print("undef")
-            if (not args.short) and \
-                    enabled[fwslot]['hf'] and \
-                    slot == selected and \
-                    hf_tag_type in [
+            if (not args.short) and enabled[fwslot]['hf']:
+                anti_coll_data = self.cmd.hf14a_get_anti_coll_data()
+                uid = anti_coll_data['uid']
+                atqa = anti_coll_data['atqa']
+                sak = anti_coll_data['sak']
+                ats = anti_coll_data['ats']
+                # print('    - ISO14443A emulator settings:')
+                print(f'      {"UID:":40}{CY}{uid.hex().upper()}{C0}')
+                print(f'      {"ATQA:":40}{CY}{atqa.hex().upper()}{C0}')
+                print(f'      {"SAK:":40}{CY}{sak.hex().upper()}{C0}')
+                if len(ats) > 0:
+                    print(f'      {"ATS:":40}{CY}{ats.hex().upper()}{C0}')
+                if hf_tag_type in [
                         chameleon_cmd.TagSpecificType.MIFARE_Mini,
                         chameleon_cmd.TagSpecificType.MIFARE_1024,
                         chameleon_cmd.TagSpecificType.MIFARE_2048,
                         chameleon_cmd.TagSpecificType.MIFARE_4096,
                     ]:
-                config = self.cmd.mf1_get_emulator_config()
-                print('    - Mifare Classic emulator settings:')
-                print(
-                    f'      {"Gen1A magic mode:":40}'
-                    f'{f"{CG}enabled{C0}" if config["gen1a_mode"] else f"{CR}disabled{C0}"}')
-                print(
-                    f'      {"Gen2 magic mode:":40}'
-                    f'{f"{CG}enabled{C0}" if config["gen2_mode"] else f"{CR}disabled{C0}"}')
-                print(
-                    f'      {"Use anti-collision data from block 0:":40}'
-                    f'{f"{CG}enabled{C0}" if config["block_anti_coll_mode"] else f"{CR}disabled{C0}"}')
-                try:
-                    print(f'      {"Write mode:":40}{CY}'
-                          f'{chameleon_cmd.MifareClassicWriteMode(config["write_mode"])}{C0}')
-                except ValueError:
-                    print(f'      {"Write mode:":40}{CR}invalid value!{C0}')
-                print(
-                    f'      {"Log (mfkey32) mode:":40}'
-                    f'{f"{CG}enabled{C0}" if config["detection"] else f"{CR}disabled{C0}"}')
-            if args.short:
-                field_length = maxnamelength+1
-            else:
-                field_length = maxnamelength+slotnames[fwslot]["lf"]["metalen"]+1
+                    config = self.cmd.mf1_get_emulator_config()
+                    # print('    - Mifare Classic emulator settings:')
+                    print(
+                        f'      {"Gen1A magic mode:":40}'
+                        f'{f"{CG}enabled{C0}" if config["gen1a_mode"] else f"{CR}disabled{C0}"}')
+                    print(
+                        f'      {"Gen2 magic mode:":40}'
+                        f'{f"{CG}enabled{C0}" if config["gen2_mode"] else f"{CR}disabled{C0}"}')
+                    print(
+                        f'      {"Use anti-collision data from block 0:":40}'
+                        f'{f"{CG}enabled{C0}" if config["block_anti_coll_mode"] else f"{CR}disabled{C0}"}')
+                    try:
+                        print(f'      {"Write mode:":40}{CY}'
+                            f'{chameleon_cmd.MifareClassicWriteMode(config["write_mode"])}{C0}')
+                    except ValueError:
+                        print(f'      {"Write mode:":40}{CR}invalid value!{C0}')
+                    print(
+                        f'      {"Log (mfkey32) mode:":40}'
+                        f'{f"{CG}enabled{C0}" if config["detection"] else f"{CR}disabled{C0}"}')
+
+            ### LF ###
+            field_length = maxnamelength+slotnames[fwslot]["lf"]["metalen"]+1
             print(f'   LF: '
-                  f'{("" if args.short else slotnames[fwslot]["lf"]["name"]):{field_length}}', end='')
+                  f'{slotnames[fwslot]["lf"]["name"]:{field_length}}', end='')
             print(f'{f"({CR}disabled{C0}) " if not enabled[fwslot]["lf"] else ""}', end='')
             if lf_tag_type != chameleon_cmd.TagSpecificType.UNDEFINED:
                 print(f"{CY if enabled[fwslot]['lf'] else C0}{lf_tag_type}{C0}")
             else:
                 print("undef")
+            if (not args.short) and enabled[fwslot]['lf']:
+                id = self.cmd.em410x_get_emu_id()
+                # print('    - EM 410X emulator settings:')
+                print(f'      {"ID:":40}{CY}{id.hex().upper()}{C0}')
+        self.cmd.set_active_slot(selected)
 
 
 @hw_slot.command('change')
