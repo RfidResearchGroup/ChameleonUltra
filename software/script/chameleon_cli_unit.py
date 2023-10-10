@@ -1558,7 +1558,7 @@ class HWSlotInit(TagTypeArgsUnit, SlotIndexArgsUnit):
     # m1 1k card emulation hw slot init -s 1 -t 3
     # em id card simulation hw slot init -s 1 -t 1
     def on_exec(self, args: argparse.Namespace):
-        tag_type = args.type
+        tag_type = chameleon_cmd.TagSpecificType[args.type]
         if args.slot is not None:
             slot_num = args.slot
         else:
