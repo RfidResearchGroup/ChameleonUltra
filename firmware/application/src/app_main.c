@@ -672,13 +672,14 @@ static void btn_fn_copy_ic_uid(void) {
         if (!is_reader_mode_now) {
             // finish HF reader initialization
             pcd_14a_reader_reset();
-            pcd_14a_reader_antenna_on();
-            bsp_delay_ms(8);
         }
+        pcd_14a_reader_antenna_on();
+        bsp_delay_ms(8);
         // select a tag
         picc_14a_tag_t tag;
 
         status = pcd_14a_reader_scan_auto(&tag);
+        pcd_14a_reader_antenna_off();
         if (status == HF_TAG_OK) {
             // copy uid
             antres->size = tag.uid_len;
