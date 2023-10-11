@@ -51,6 +51,7 @@ void tag_mode_enter(void) {
 
         nrf_gpio_cfg_output(READER_POWER);
         nrf_gpio_pin_clear(READER_POWER);   // reader power disable
+        TAG_FIELD_LED_OFF();
 
         nrf_gpio_cfg_output(HF_ANT_SEL);
         nrf_gpio_pin_set(HF_ANT_SEL);       // hf ant switch to emulation mode
