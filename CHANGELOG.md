@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Changed fds_write_sync to take length in bytes instead of next multiple of 4 (@doegox)
  - Fixed field LED when LF reading and HF cloning (@doegox)
  - Added renaming of slot into "cloned" when having cloned an ID/UID with a button (@doegox)
  - Fixed spurious LED in battery level, assigned battery level to long press B (@doegox)

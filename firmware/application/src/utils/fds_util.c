@@ -107,7 +107,7 @@ static ret_code_t fds_write_record_nogc(uint16_t id, uint16_t key, uint16_t data
 /**
  * Write record
  */
-bool fds_write_sync(uint16_t id, uint16_t key, uint16_t data_length_words, void *buffer) {
+bool fds_write_sync(uint16_t id, uint16_t key, uint16_t length, void *buffer) {
     // Make only one task running
     APP_ERROR_CHECK_BOOL(!fds_operation_info.waiting);
     // write result
@@ -117,6 +117,11 @@ bool fds_write_sync(uint16_t id, uint16_t key, uint16_t data_length_words, void 
     fds_operation_info.key = key;
     fds_operation_info.success = false;
     fds_operation_info.waiting = true;
+    // compute needed words
+    if (length == 0) {
+        return ret;
+    }
+    uint16_t data_length_words = ((length - 1) / 4) + 1;
 
     // CCall the write implementation function without automatic GC
     ret_code_t err_code = fds_write_record_nogc(id, key, data_length_words, buffer);

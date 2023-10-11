@@ -702,17 +702,16 @@ static void btn_fn_copy_ic_uid(void) {
     if (lf_copy_succeeded || hf_copy_succeeded) {
         fds_slot_record_map_t map_info;
         char *nick = "cloned";
-        uint8_t buffer[((((1+strlen(nick))-1)/4)+1)*4];
+        uint8_t buffer[36];
         buffer[0] = strlen(nick);
         memcpy(buffer + 1, nick, buffer[0]);
-        // ASSERT(sizeof(buffer) % 4 == 0);
         if (lf_copy_succeeded) {
             get_fds_map_by_slot_sense_type_for_nick(slot_now, TAG_SENSE_LF, &map_info);
-            fds_write_sync(map_info.id, map_info.key, sizeof(buffer) / 4, buffer);
+            fds_write_sync(map_info.id, map_info.key, sizeof(buffer), buffer);
         }
         if (hf_copy_succeeded) {
             get_fds_map_by_slot_sense_type_for_nick(slot_now, TAG_SENSE_HF, &map_info);
-            fds_write_sync(map_info.id, map_info.key, sizeof(buffer) / 4, buffer);
+            fds_write_sync(map_info.id, map_info.key, sizeof(buffer), buffer);
         }
     }
     // keep reader mode or exit reader mode.

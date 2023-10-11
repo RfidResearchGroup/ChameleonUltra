@@ -764,7 +764,7 @@ static data_frame_tx_t *cmd_processor_set_slot_tag_nick(uint16_t cmd, uint16_t s
     buffer[0] = length - 2;
     memcpy(buffer + 1, data + 2, buffer[0]);
 
-    bool ret = fds_write_sync(map_info.id, map_info.key, sizeof(buffer) / 4, buffer);
+    bool ret = fds_write_sync(map_info.id, map_info.key, sizeof(buffer), buffer);
     if (!ret) {
         return data_frame_make(cmd, STATUS_FLASH_WRITE_FAIL, 0, NULL);
     }
