@@ -65,7 +65,7 @@ The Chameleon can be awaken:
 
 The white LED labeled RF lights up when it detects a field, again only if the active slot supports it.
 
-In some situations, it can be cumbersome to wait for the boot-up animation. This is configurable, cf e.g. the CLI command `hw settings animation set -h`.
+In some situations, it can be cumbersome to wait for the boot-up animation. This is configurable, cf e.g. the CLI command `hw settings animation -h`.
 
 On a new Chameleon (or after a factory reset), 3 slots are defined, slot 1 holding both a HF and a LF:
 
@@ -116,5 +116,5 @@ We are using the [SoftDevice S140](https://infocenter.nordicsemi.com/index.jsp?t
 
 ## The User Data
 
-The Chameleon has a reserved space of memory and flash where it stores application settings, active slot and slots configurations and data. This will not be overwritten by DFU updates and the data will only be reset by either issuing `hw factory_reset --i-know-what-im-doing` in the CLI or clicking `Factory reset` in a GUI.
+The Chameleon has a reserved space of memory and flash where it stores application settings, active slot and slots configurations and data. This will not be overwritten by DFU updates and the data will only be reset by either issuing `hw factory_reset --force` in the CLI or clicking `Factory reset` in a GUI.
 *Warning:* Settings and/or data might be reset to defaults if you downgrade the firmware version up to a version not supporting the newer format.

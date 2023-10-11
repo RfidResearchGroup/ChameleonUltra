@@ -15,7 +15,8 @@ Starting from the top left, you find
 
 - the *Device Name*: `Chameleon Ultra` or `Chameleon Lite` depending on the device connected ;
 - the *Disconnect* button: pressing this icon cleanly disconnects the Chameleon. It is recommended to use this button whenever possible ;
-- the *Connected Port*: it tells you where and how the chameleon is connected, followed by how it is connected (*Connection Method*), which displays a USB or Bluetooth icon. Last in that row is the *Battery Charge* display ;
+- the *Connected Port*: it tells you where and how the chameleon is connected, followed by how it is connected (*Connection Method*), which displays a USB or Bluetooth icon ;
+- the *Battery Charge* icon: you can press it long to get more details. Note that it is refreshed only when reopening the Homepage ;
 - the *Used Slots*: it displays how many out of the 8 slots are used ;
 - the *Slot Changer*: the currently selected slot is highlighted with a red circle, while enabled slots are filled in. Everything else is a hollow circle. The arrows left and right allow you to change the currently selected slot ;
 - the *Firmware version*: the version is pulled from the device displayed, as well as git commit information ;

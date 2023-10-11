@@ -128,19 +128,20 @@ Make sure to be in the `software/` directory and run the Python CLI from there.
 
 - Connect to the CLI: `hw connect`
 - Check which slot can be used: `hw slot list`
-- Change the slot type, here using slot 8 for a MFC 1k emulation: `hw slot type -s8 -t3`
-- Init the slot content: `hw slot init -s8 -t3`
-  - or load an existing dump and set UID and anticollision data, cf `hf mf eload -h` and `hf mf sim -h`
-- Enable the slot: `hw slot enable -s8 -e1`
-- Change to the new slot: `hw slot change -s8`
-- Activate the detection: `hf detection enable -e1`
+- Change the slot type, here using slot 8 for a MFC 1k emulation: `hw slot type -s 8 -t MIFARE_1024`
+- Init the slot content: `hw slot init -s 8 -t MIFARE_1024`
+  - or load an existing dump and set UID and anticollision data, cf `hf mf eload -h` and `hf mf econfig -h`
+- Enable the slot: `hw slot enable -s 8 --hf`
+- Change to the new slot: `hw slot change -s 8`
+- Activate the authentication logs: `hf mf econfig --enable-log`
 
 Now disconnect, go to a reader and swipe it a few times
 
 - Come back and connect to the CLI: `hw connect`
-- See if nonces were collected: `hf detection count`
+- See if nonces were collected: `hf mf elog`
   - We need 2 nonces per key to recover
-- Recover the key(s) based on the collected nonces: `hf detection decrypt`. Output example:
+- Recover the key(s) based on the collected nonces: `hf mf elog --decrypt`.
+  Output example:
 ```
  - MF1 detection log count = 6, start download.
  - Download done (144bytes), start parse and decrypt
@@ -153,7 +154,7 @@ Now disconnect, go to a reader and swipe it a few times
 
 ```
 
-- To clean the logged detection nonces: `hf detection enable -e0` then `hf detection enable -e1`
+- To clean the logged detection nonces: `hf mf econfig --disable-log` then `hf mf econfig --enable-log`
 
 
 

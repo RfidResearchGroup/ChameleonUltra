@@ -130,7 +130,7 @@ class CLITree:
 
     :param name: Name of the command (e.g. "set")
     :param help_text: Hint displayed for the command
-    :param fullname: Full name of the command that includes previous commands (e.g. "hw mode set")
+    :param fullname: Full name of the command that includes previous commands (e.g. "hw settings animation")
     :param cls: A BaseCLIUnit instance handling the command
     """
 

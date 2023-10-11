@@ -837,7 +837,6 @@ class HFMFRDBL(MF1AuthArgsUnit):
         parser.description = 'Mifare Classic read one block'
         return parser
 
-    # hf mf rdbl -b 2 -t A -k FFFFFFFFFFFF
     def on_exec(self, args: argparse.Namespace):
         param = self.get_param(args)
         resp = self.cmd.mf1_read_one_block(param.block, param.type, param.key)
@@ -853,7 +852,6 @@ class HFMFWRBL(MF1AuthArgsUnit):
                             help="Your block data, as hex string.")
         return parser
 
-    # hf mf wrbl -b 2 -t A -k FFFFFFFFFFFF -d 00000000000000000000000000000122
     def on_exec(self, args: argparse.Namespace):
         param = self.get_param(args)
         if not re.match(r"^[a-fA-F0-9]{32}$", args.data):
@@ -989,8 +987,6 @@ class HFMFELoad(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
         parser.add_argument('-t', '--type', type=str, required=False, help="content type", choices=['bin', 'hex'])
         return parser
 
-    # hf mf eload -f test.bin -t bin
-    # hf mf eload -f test.eml -t hex
     def on_exec(self, args: argparse.Namespace):
         file = args.file
         if args.type is None:
@@ -1238,8 +1234,6 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
 
 @hf_mfu.command('rdpg')
 class HFMFURDPG(MFUAuthArgsUnit):
-    # hf mfu rdpg -p 2
-
     def args_parser(self) -> ArgumentParserNoExit:
         parser = super().args_parser()
         parser.description = 'MIFARE Ultralight read one page'
@@ -1271,7 +1265,6 @@ class HFMFURDPG(MFUAuthArgsUnit):
 
 @hf_mfu.command('dump')
 class HFMFUDUMP(MFUAuthArgsUnit):
-    # hf mfu dump [-p start_page] [-q number_pages] [-f output_file]
     def args_parser(self) -> ArgumentParserNoExit:
         parser = super().args_parser()
         parser.description = 'MIFARE Ultralight dump pages'
@@ -1391,7 +1384,6 @@ class LFEM410xWriteT55xx(LFEMIdArgsUnit, ReaderRequiredUnit):
         b2 = super(ReaderRequiredUnit, self).before_exec(args)
         return b1 and b2
 
-    # lf em write --id 4400999559
     def on_exec(self, args: argparse.Namespace):
         id_hex = args.id
         id_bytes = bytes.fromhex(id_hex)
@@ -1418,7 +1410,6 @@ class HWSlotList(DeviceRequiredUnit):
             name = "UTF8 Err"
             return {'baselen': len(name), 'metalen': len(CC+C0), 'name': f'{CC}{name}{C0}'}
 
-    # hw slot list
     def on_exec(self, args: argparse.Namespace):
         slotinfo = self.cmd.get_slot_info()
         selected = chameleon_cmd.SlotNumber.from_fw(self.cmd.get_active_slot())
@@ -1509,7 +1500,6 @@ class HWSlotSet(SlotIndexArgsUnit):
         parser.description = 'Set emulation tag slot activated'
         return self.add_slot_args(parser, mandatory=True)
 
-    # hw slot change -s 1
     def on_exec(self, args: argparse.Namespace):
         slot_index = args.slot
         self.cmd.set_active_slot(slot_index)
@@ -1525,7 +1515,6 @@ class HWSlotType(TagTypeArgsUnit, SlotIndexArgsUnit):
         self.add_type_args(parser)
         return parser
 
-    # hw slot type -t 2
     def on_exec(self, args: argparse.Namespace):
         tag_type = chameleon_cmd.TagSpecificType[args.type]
         if args.slot is not None:
@@ -1567,8 +1556,6 @@ class HWSlotInit(TagTypeArgsUnit, SlotIndexArgsUnit):
         self.add_type_args(parser)
         return parser
 
-    # m1 1k card emulation hw slot init -s 1 -t 3
-    # em id card simulation hw slot init -s 1 -t 1
     def on_exec(self, args: argparse.Namespace):
         tag_type = chameleon_cmd.TagSpecificType[args.type]
         if args.slot is not None:
@@ -1695,7 +1682,6 @@ class HWSlotOpenAll(DeviceRequiredUnit):
         parser.description = 'Open all slot and set to default data'
         return parser
 
-    # hw slot openall
     def on_exec(self, args: argparse.Namespace):
         # what type you need set to default?
         hf_type = chameleon_cmd.TagSpecificType.MIFARE_1024
@@ -1727,7 +1713,6 @@ class HWDFU(DeviceRequiredUnit):
         parser.description = 'Restart application to bootloader/DFU mode'
         return parser
 
-    # hw dfu
     def on_exec(self, args: argparse.Namespace):
         print("Application restarting...")
         self.cmd.enter_bootloader()
