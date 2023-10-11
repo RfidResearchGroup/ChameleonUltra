@@ -38,7 +38,7 @@ NRF_LOG_MODULE_REGISTER();
 #include "tag_emulation.h"
 #include "usb_main.h"
 #include "rgb_marquee.h"
-
+#include "tag_persistence.h"
 #include "settings.h"
 
 // Defining soft timers
@@ -596,6 +596,8 @@ static void offline_status_ok(void) {
 
 // fast detect a 14a tag uid to sim
 static void btn_fn_copy_ic_uid(void) {
+    bool lf_copy_succeeded = false;
+    bool hf_copy_succeeded = false;
     uint8_t status;
     uint8_t id_buffer[5] = { 0x00 };
     // get 14a tag res buffer;
@@ -603,7 +605,7 @@ static void btn_fn_copy_ic_uid(void) {
     tag_slot_specific_type_t tag_types;
     tag_emulation_get_specific_types_by_slot(slot_now, &tag_types);
 
-    nfc_tag_14a_coll_res_entity_t *antres;
+    nfc_tag_14a_coll_res_entity_t *antres = NULL;
 
     bool is_reader_mode_now = get_device_mode() == DEVICE_MODE_READER;
     // first, we need switch to reader mode.
@@ -623,6 +625,7 @@ static void btn_fn_copy_ic_uid(void) {
                 memcpy(buffer->buffer, id_buffer, LF_EM410X_TAG_ID_SIZE);
                 tag_emulation_load_by_buffer(TAG_TYPE_EM410X, false);
                 NRF_LOG_INFO("Offline LF uid copied")
+                lf_copy_succeeded = true;
                 offline_status_ok();
             } else {
                 NRF_LOG_INFO("No LF tag found");
@@ -658,42 +661,59 @@ static void btn_fn_copy_ic_uid(void) {
 
         case TAG_TYPE_UNDEFINED:
             // empty HF slot, nothing to do
-            goto exit;
+            break;
 
         default:
             NRF_LOG_ERROR("Unsupported HF tag type")
             offline_status_error();
-            goto exit;
+            break;
     }
+    if (antres != NULL) {
+        if (!is_reader_mode_now) {
+            // finish HF reader initialization
+            pcd_14a_reader_reset();
+            pcd_14a_reader_antenna_on();
+            bsp_delay_ms(8);
+        }
+        // select a tag
+        picc_14a_tag_t tag;
 
-    if (!is_reader_mode_now) {
-        // finish HF reader initialization
-        pcd_14a_reader_reset();
-        pcd_14a_reader_antenna_on();
-        bsp_delay_ms(8);
+        status = pcd_14a_reader_scan_auto(&tag);
+        if (status == HF_TAG_OK) {
+            // copy uid
+            antres->size = tag.uid_len;
+            memcpy(antres->uid, tag.uid, tag.uid_len);
+            // copy atqa
+            memcpy(antres->atqa, tag.atqa, 2);
+            // copy sak
+            antres->sak[0] = tag.sak;
+            // copy ats
+            antres->ats.length = tag.ats_len;
+            memcpy(antres->ats.data, tag.ats, tag.ats_len);
+            NRF_LOG_INFO("Offline HF uid copied")
+            hf_copy_succeeded = true;
+            offline_status_ok();
+        } else {
+            NRF_LOG_INFO("No HF tag found");
+            offline_status_error();
+        }
     }
-    // select a tag
-    picc_14a_tag_t tag;
-
-    status = pcd_14a_reader_scan_auto(&tag);
-    if (status == HF_TAG_OK) {
-        // copy uid
-        antres->size = tag.uid_len;
-        memcpy(antres->uid, tag.uid, tag.uid_len);
-        // copy atqa
-        memcpy(antres->atqa, tag.atqa, 2);
-        // copy sak
-        antres->sak[0] = tag.sak;
-        // copy ats
-        antres->ats.length = tag.ats_len;
-        memcpy(antres->ats.data, tag.ats, tag.ats_len);
-        NRF_LOG_INFO("Offline HF uid copied")
-        offline_status_ok();
-    } else {
-        NRF_LOG_INFO("No HF tag found");
-        offline_status_error();
+    if (lf_copy_succeeded || hf_copy_succeeded) {
+        fds_slot_record_map_t map_info;
+        char *nick = "cloned";
+        uint8_t buffer[((((1+strlen(nick))-1)/4)+1)*4];
+        buffer[0] = strlen(nick);
+        memcpy(buffer + 1, nick, buffer[0]);
+        // ASSERT(sizeof(buffer) % 4 == 0);
+        if (lf_copy_succeeded) {
+            get_fds_map_by_slot_sense_type_for_nick(slot_now, TAG_SENSE_LF, &map_info);
+            fds_write_sync(map_info.id, map_info.key, sizeof(buffer) / 4, buffer);
+        }
+        if (hf_copy_succeeded) {
+            get_fds_map_by_slot_sense_type_for_nick(slot_now, TAG_SENSE_HF, &map_info);
+            fds_write_sync(map_info.id, map_info.key, sizeof(buffer) / 4, buffer);
+        }
     }
-exit:
     // keep reader mode or exit reader mode.
     if (!is_reader_mode_now) {
         tag_mode_enter();

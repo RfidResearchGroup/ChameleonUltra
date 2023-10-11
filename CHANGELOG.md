@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Added renaming of slot into "cloned" when having cloned an ID/UID with a button (@doegox)
  - Fixed spurious LED in battery level, assigned battery level to long press B (@doegox)
  - Changed `hw slot list` to display LF ID & HF anticol data, and names in the --short version too (@doegox)
  - Added colors to CLI help (@doegox)
