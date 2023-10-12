@@ -602,7 +602,8 @@ class HF14AScan(ReaderRequiredUnit):
         if resp is not None:
             for data_tag in resp:
                 print(f"- UID  : {data_tag['uid'].hex().upper()}")
-                print(f"- ATQA : {data_tag['atqa'].hex().upper()}")
+                print(f"- ATQA : {data_tag['atqa'].hex().upper()} "
+                      f"(0x{int.from_bytes(data_tag['atqa'], byteorder='little'):04x})")
                 print(f"- SAK  : {data_tag['sak'].hex().upper()}")
                 if len(data_tag['ats']) > 0:
                     print(f"- ATS  : {data_tag['ats'].hex().upper()}")
@@ -1213,7 +1214,8 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
         if not change_requested:
             print(f'- {"Type:":40}{CY}{hf_tag_type}{C0}')
             print(f'- {"UID:":40}{CY}{uid.hex().upper()}{C0}')
-            print(f'- {"ATQA:":40}{CY}{atqa.hex().upper()}{C0}')
+            print(f'- {"ATQA:":40}{CY}{atqa.hex().upper()} '
+                  f'(0x{int.from_bytes(atqa, byteorder="little"):04x}){C0}')
             print(f'- {"SAK:":40}{CY}{sak.hex().upper()}{C0}')
             if len(ats) > 0:
                 print(f'- {"ATS:":40}{CY}{ats.hex().upper()}{C0}')
@@ -1354,7 +1356,8 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
         if not change_requested:
             print(f'- {"Type:":40}{CY}{hf_tag_type}{C0}')
             print(f'- {"UID:":40}{CY}{uid.hex().upper()}{C0}')
-            print(f'- {"ATQA:":40}{CY}{atqa.hex().upper()}{C0}')
+            print(f'- {"ATQA:":40}{CY}{atqa.hex().upper()} '
+                  f'(0x{int.from_bytes(atqa, byteorder="little"):04x}){C0}')
             print(f'- {"SAK:":40}{CY}{sak.hex().upper()}{C0}')
             if len(ats) > 0:
                 print(f'- {"ATS:":40}{CY}{ats.hex().upper()}{C0}')
@@ -1447,7 +1450,8 @@ class HWSlotList(DeviceRequiredUnit):
                 ats = anti_coll_data['ats']
                 # print('    - ISO14443A emulator settings:')
                 print(f'      {"UID:":40}{CY}{uid.hex().upper()}{C0}')
-                print(f'      {"ATQA:":40}{CY}{atqa.hex().upper()}{C0}')
+                print(f'      {"ATQA:":40}{CY}{atqa.hex().upper()} '
+                      f'(0x{int.from_bytes(atqa, byteorder="little"):04x}){C0}')
                 print(f'      {"SAK:":40}{CY}{sak.hex().upper()}{C0}')
                 if len(ats) > 0:
                     print(f'      {"ATS:":40}{CY}{ats.hex().upper()}{C0}')
