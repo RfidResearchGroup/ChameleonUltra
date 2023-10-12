@@ -15,6 +15,7 @@ static struct {
     uint16_t key;       // file key
     bool success;       // task is success
     bool waiting;       // task waiting done.
+    bool ignore_pm;     // ignore peer manager records, defaults to true, set to false by fds_wipe
 } fds_operation_info;
 
 
@@ -192,10 +193,12 @@ static bool is_peer_manager_record(uint16_t id_or_key) {
  */
 static void fds_evt_handler(fds_evt_t const *p_evt) {
     // Skip peermanager event
-    if (is_peer_manager_record(p_evt->write.record_key)
+    if (fds_operation_info.ignore_pm && (
+            is_peer_manager_record(p_evt->write.record_key)
             || is_peer_manager_record(p_evt->write.file_id)
             || is_peer_manager_record(p_evt->del.record_key)
             || is_peer_manager_record(p_evt->del.file_id)
+        )
        ) {
         return;
     }
@@ -264,6 +267,7 @@ static void fds_evt_handler(fds_evt_t const *p_evt) {
  *Initialize the FDS library of NRF52
  */
 void fds_util_init() {
+    fds_operation_info.ignore_pm = true;
     // reset waiting flag
     fds_operation_info.waiting = false;
     //Register the incident first
@@ -311,6 +315,7 @@ static bool fds_next_record_delete_sync() {
 
 bool fds_wipe(void) {
     NRF_LOG_INFO("Full fds wipe requested");
+    fds_operation_info.ignore_pm = false;  // wipe should also delete peer manager files.
     while (fds_next_record_delete_sync()) {
         bsp_wdt_feed();
     }
