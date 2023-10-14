@@ -10,15 +10,7 @@ import pathlib
 import prompt_toolkit
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.history import FileHistory
-
-# Colorama shorthands
-CR = colorama.Fore.RED
-CG = colorama.Fore.GREEN
-CB = colorama.Fore.BLUE
-CC = colorama.Fore.CYAN
-CY = colorama.Fore.YELLOW
-CM = colorama.Fore.MAGENTA
-C0 = colorama.Style.RESET_ALL
+from chameleon_utils import CR, CG, CB, CC, CY, CM, C0
 
 ULTRA = r"""
                                                                 ╦ ╦╦ ╔╦╗╦═╗╔═╗

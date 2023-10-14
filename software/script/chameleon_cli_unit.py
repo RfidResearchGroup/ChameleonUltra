@@ -3,7 +3,6 @@ import os
 import re
 import subprocess
 import argparse
-import colorama
 import timeit
 import sys
 import time
@@ -19,15 +18,8 @@ import chameleon_cmd
 import chameleon_status
 from chameleon_utils import ArgumentParserNoExit, ArgsParserError, UnexpectedResponseError
 from chameleon_utils import CLITree
+from chameleon_utils import CR, CG, CB, CC, CY, CM, C0
 
-# Colorama shorthands
-CR = colorama.Fore.RED
-CG = colorama.Fore.GREEN
-CB = colorama.Fore.BLUE
-CC = colorama.Fore.CYAN
-CY = colorama.Fore.YELLOW
-CM = colorama.Fore.MAGENTA
-C0 = colorama.Style.RESET_ALL
 
 # NXP IDs based on https://www.nxp.com/docs/en/application-note/AN10833.pdf
 type_id_SAK_dict = {0x00: "MIFARE Ultralight Classic/C/EV1/Nano | NTAG 2xx",
