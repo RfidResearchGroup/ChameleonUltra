@@ -1408,6 +1408,7 @@ class HWSlotList(DeviceRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         slotinfo = self.cmd.get_slot_info()
         selected = chameleon_cmd.SlotNumber.from_fw(self.cmd.get_active_slot())
+        current = selected
         enabled = self.cmd.get_enabled_slots()
         maxnamelength = 0
         slotnames = []
@@ -1418,7 +1419,6 @@ class HWSlotList(DeviceRequiredUnit):
             maxnamelength = m if m > maxnamelength else maxnamelength
             slotnames.append({'hf': hfn, 'lf': lfn})
         for slot in chameleon_cmd.SlotNumber:
-            self.cmd.set_active_slot(slot)
             fwslot = chameleon_cmd.SlotNumber.to_fw(slot)
             hf_tag_type = chameleon_cmd.TagSpecificType(slotinfo[fwslot]['hf'])
             lf_tag_type = chameleon_cmd.TagSpecificType(slotinfo[fwslot]['lf'])
@@ -1435,6 +1435,9 @@ class HWSlotList(DeviceRequiredUnit):
             else:
                 print("undef")
             if (not args.short) and enabled[fwslot]['hf']:
+                if current != slot:
+                    self.cmd.set_active_slot(slot)
+                    current = slot
                 anti_coll_data = self.cmd.hf14a_get_anti_coll_data()
                 uid = anti_coll_data['uid']
                 atqa = anti_coll_data['atqa']
@@ -1483,10 +1486,14 @@ class HWSlotList(DeviceRequiredUnit):
             else:
                 print("undef")
             if (not args.short) and enabled[fwslot]['lf']:
+                if current != slot:
+                    self.cmd.set_active_slot(slot)
+                    current = slot
                 id = self.cmd.em410x_get_emu_id()
                 # print('    - EM 410X emulator settings:')
                 print(f'      {"ID:":40}{CY}{id.hex().upper()}{C0}')
-        self.cmd.set_active_slot(selected)
+        if current != selected:
+            self.cmd.set_active_slot(selected)
 
 
 @hw_slot.command('change')
@@ -1986,9 +1993,7 @@ class HWRaw(DeviceRequiredUnit):
             status_string += f" {chameleon_status.Device[response.status]}"
             if response.status in chameleon_status.message:
                 status_string += f": {chameleon_status.message[response.status]}"
-                print(status_string)
-        else:
-            print(f"   Status: {response.status:#02x}")
+        print(status_string)
         print(f"   Data (HEX): {response.data.hex()}")
 
 
