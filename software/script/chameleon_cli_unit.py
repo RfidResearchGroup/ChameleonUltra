@@ -486,7 +486,7 @@ class HWConnect(BaseCLIUnit):
                                                     " where {$_.DeviceID -like '*VID_6868&PID_8686*'} |"
                                                     " Select-Object -First 1 FriendlyName |"
                                                     " % FriendlyName |"
-                                                    " select-string COM\d+ |"
+                                                    " select-string COM\\d+ |"
                                                     "% { $_.matches.value }"], stdout=subprocess.PIPE)
                         res = process.communicate()[0]
                         _comport = res.decode('utf-8').strip()
