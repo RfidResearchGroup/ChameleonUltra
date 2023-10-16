@@ -40,13 +40,11 @@ Using ProxSpace to build the CLI is the easiest and most comfortable way to get 
 
 12. And the binaries with `cmake --build .`
 
-13. Copy the binaries by running `cp -r ~/ChameleonUltra/software/bin/* ~/ChameleonUltra/software/script/`
+13. Go into the script folder with `cd ~/ChameleonUltra/software/script/`
 
-14. Go into the script folder with `cd ~/ChameleonUltra/software/script/`
+14. Install python requirements with `pip install -r requirements.txt`
 
-15. Install python requirements with `pip install -r requirements.txt`
-
-16. Finally run the CLI with `python chameleon_cli_main.py`
+15. Finally run the CLI with `python chameleon_cli_main.py`
 
 To use after installing, just do the following:
 
@@ -106,7 +104,33 @@ To run again after installing, just do the following:
 
 ### Linux
 
-*Coming Soon*
+1. Install the dependencies
+    - Ubuntu / Debian: `sudo apt install cmake make python3 python3-pip git ninja-build python3-venv build-essential`
+    - Arch: `sudo pacman -S cmake make python3-pip git ninja base-devel`
+
+2. Clone the Repository by typing `git clone https://github.com/RfidResearchGroup/ChameleonUltra.git`
+
+3. Now go into the newly created folder with `cd ChameleonUltra/software/src`
+
+4. Build the required config by running `cmake .`
+
+5. And the binaries with `cmake --build .`
+
+6. Go into the script folder with `cd ../script/`
+
+7. Create a virtual enviroment with `python3 -m venv venv`
+
+8. Activate it with `source venv/bin/activate`
+
+9. Install python requirements with `pip3 install -r requirements.txt`
+
+10. Finally run the CLI with `python3 chameleon_cli_main.py`
+
+To run again after installing, just do the following:
+
+1. Activate venv by running `source venv/bin/activate`
+
+2. Run the CLI with `python3 chameleon_cli_main.py`
 
 ### MacOS
 
