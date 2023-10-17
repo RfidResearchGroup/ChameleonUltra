@@ -46,6 +46,7 @@ int main(int argc, char *const argv[]) {
             nttest = prng_successor(nttest, 1);
         }
     }
+
     uint32_t keyCount = 0;
     uint64_t *keys = nested(pNK, j, authuid, &keyCount);
 

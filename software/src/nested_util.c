@@ -12,6 +12,7 @@
 #include "unistd.h"
 #endif
 
+#include "pthread.h"
 #include "nested_util.h"
 
 
@@ -74,115 +75,180 @@ countKeys *uniqsort(uint64_t *possibleKeys, uint32_t size) {
 }
 
 // nested decrypt
-static void nested_revover(RecPar *rp) {
+static void* nested_revover(void *args) {
     struct Crypto1State *revstate, * revstate_start = NULL;
     uint64_t lfsr = 0;
     uint32_t i, kcount = 0;
+    bool is_ok = true;
+
+    RecPar* rp = (RecPar*)args;
 
     rp->keyCount = 0;
     rp->keys = NULL;
 
+    //printf("Start pos is %d, End pos is %d\r\n", rp->startPos, rp->endPos);
+
     for (i = rp->startPos; i < rp->endPos; i++) {
-        uint32_t nt_probe = rp->pNK[i].ntp;
+        uint32_t nt_probe = rp->pNK[i].ntp ^ rp->authuid;
         uint32_t ks1 = rp->pNK[i].ks1;
+
+        /*
+        printf("     ntp = %"PRIu32"\r\n", nt_probe);
+        printf("     ks1 = %"PRIu32"\r\n", ks1);
+        printf("\r\n");
+        */
+
         // And finally recover the first 32 bits of the key
-        revstate = lfsr_recovery32(ks1, nt_probe ^ rp->authuid);
+        revstate = lfsr_recovery32(ks1, nt_probe);
         if (revstate_start == NULL) {
             revstate_start = revstate;
         }
+
         while ((revstate->odd != 0x0) || (revstate->even != 0x0)) {
-            lfsr_rollback_word(revstate, nt_probe ^ rp->authuid, 0);
+            lfsr_rollback_word(revstate, nt_probe, 0);
             crypto1_get_lfsr(revstate, &lfsr);
-            // Allocate a new space for keys
             if (((kcount % MEM_CHUNK) == 0) || (kcount >= rp->keyCount)) {
                 rp->keyCount += MEM_CHUNK;
-                // printf("New chunk by %d, sizeof %lu\n", kcount, key_count * sizeof(uint64_t));
-                void *tmp = realloc(rp->keys, rp->keyCount * sizeof(uint64_t));
+                // printf("New chunk by %d, sizeof %lu\n", kcount, rp->keyCount * sizeof(uint64_t));
+                void* tmp = realloc(rp->keys, rp->keyCount * sizeof(uint64_t));
                 if (tmp == NULL) {
                     printf("Memory allocation error for pk->possibleKeys");
-                    // exit(EXIT_FAILURE);
                     rp->keyCount = 0;
-                    return;
+                    is_ok = false;
+                    break;
                 }
-                rp->keys = (uint64_t *)tmp;
+                rp->keys = (uint64_t*)tmp;
             }
             rp->keys[kcount] = lfsr;
             kcount++;
             revstate++;
         }
+        --kcount;
         free(revstate_start);
         revstate_start = NULL;
-    }
-    // Truncate
-    if (kcount != 0) {
-        rp->keyCount = --kcount;
-        void *tmp = (uint64_t *)realloc(rp->keys, rp->keyCount * sizeof(uint64_t));
-        if (tmp == NULL) {
-            printf("Memory allocation error for pk->possibleKeys");
-            // exit(EXIT_FAILURE);
-            rp->keyCount = 0;
-            return;
+        if (!is_ok) {
+            break;
         }
-        rp->keys = tmp;
-        return;
     }
-    rp->keyCount = 0;
-    return;
+    if (is_ok) {
+        if (kcount != 0) {
+            rp->keyCount = kcount;
+            void* tmp = (uint64_t*)realloc(rp->keys, rp->keyCount * sizeof(uint64_t));
+            if (tmp == NULL) {
+                printf("Memory allocation error for pk->possibleKeys");
+                rp->keyCount = 0;
+                free(rp->keys);
+            }
+            else {
+                rp->keys = tmp;
+            }
+        }
+    }
+    else {
+        rp->keyCount = 0;
+        free(rp->keys);
+    }
+    return NULL;
 }
 
 uint64_t *nested(NtpKs1 *pNK, uint32_t sizePNK, uint32_t authuid, uint32_t *keyCount) {
-    *keyCount = 0;
-    uint32_t i;
+#define THREAD_MAX 4
 
-    RecPar *pRPs = malloc(sizeof(RecPar));
+    *keyCount = 0;
+    uint32_t i, j, manyThread;
+    uint64_t* keys = (uint64_t*)NULL;
+
+    manyThread = THREAD_MAX;
+    if (manyThread > sizePNK) {
+        manyThread = sizePNK;
+    }
+
+    // pthread handle
+    pthread_t* threads = calloc(sizePNK, sizeof(pthread_t));
+    if (threads == NULL)  return NULL;
+
+    // Param
+    RecPar* pRPs = calloc(sizePNK, sizeof(RecPar));
     if (pRPs == NULL) {
+        free(threads);
         return NULL;
     }
 
-    pRPs->pNK = pNK;
-    pRPs->authuid = authuid;
-    pRPs->startPos = 0;
-    pRPs->endPos = sizePNK;
+    uint32_t average = sizePNK / manyThread;
+    uint32_t modules = sizePNK % manyThread;
 
-    // start recover
-    nested_revover(pRPs);
-    *keyCount = pRPs->keyCount;
+    // Assign tasks
+    for (i = 0, j = 0; i < manyThread; i++, j += average) {
+        pRPs[i].pNK = pNK;
+        pRPs[i].authuid = authuid;
+        pRPs[i].startPos = j;
+        pRPs[i].endPos = j + average;
+        pRPs[i].keys = NULL;
+        // last thread can decrypt more pNK
+        if (i == (manyThread - 1) && modules > 0) {
+            (pRPs[i].endPos) += modules;
+        }
+        pthread_create(&threads[i], NULL, nested_revover, &(pRPs[i]));
+    }
 
-    uint64_t *keys = NULL;
+    for (i = 0; i < manyThread; i++) {
+        // wait thread exit...
+        pthread_join(threads[i], NULL);
+        *keyCount += pRPs[i].keyCount;
+    }
+    free(threads);
+
     if (*keyCount != 0) {
-        keys = malloc(*keyCount * sizeof(uint64_t));
+        keys = malloc((*keyCount) * sizeof(uint64_t));
         if (keys != NULL) {
-            memcpy(keys, pRPs->keys, pRPs->keyCount * sizeof(uint64_t));
-            free(pRPs->keys);
+            for (i = 0, j = 0; i < manyThread; i++) {
+                if (pRPs[i].keyCount > 0) {
+                    // printf("The thread %d recover %d keys.\r\n", i, pRPs[i].keyCount);
+                    if (pRPs[i].keys != NULL) {
+                        memcpy(
+                            keys + j,
+                            pRPs[i].keys,
+                            pRPs[i].keyCount * sizeof(uint64_t)
+                        );
+                        j += pRPs[i].keyCount;
+                        free(pRPs[i].keys);
+                    }
+                }
+            }
+
+            countKeys* ck = uniqsort(keys, *keyCount);
+            free(keys);
+            keys = (uint64_t*)NULL;
+            *keyCount = 0;
+
+            if (ck != NULL) {
+                for (i = 0; i < TRY_KEYS; i++) {
+                    // We don't known this key, try to break it
+                    // This key can be found here two or more times
+                    if (ck[i].count > 0) {
+                        *keyCount += 1;
+                        void* tmp = realloc(keys, sizeof(uint64_t) * (*keyCount));
+                        if (tmp != NULL) {
+                            keys = tmp;
+                            keys[*keyCount - 1] = ck[i].key;
+                        }
+                        else {
+                            printf("Cannot allocate memory for keys on merge.");
+                            free(keys);
+                            break;
+                        }
+                    }
+                }
+            }
+            else {
+                printf("Cannot allocate memory for ck on uniqsort.");
+            }
+        }
+        else {
+            printf("Cannot allocate memory to merge keys.\r\n");
         }
     }
     free(pRPs);
-
-    countKeys *ck = uniqsort(keys, *keyCount);
-    free(keys);
-    keys = (uint64_t *)NULL;
-    *keyCount = 0;
-
-    if (ck != NULL) {
-        for (i = 0; i < TRY_KEYS; i++) {
-            // We don't known this key, try to break it
-            // This key can be found here two or more times
-            if (ck[i].count > 0) {
-                *keyCount += 1;
-                void *tmp = realloc(keys, sizeof(uint64_t) * (*keyCount));
-                if (tmp != NULL) {
-                    keys = tmp;
-                    keys[*keyCount - 1] = ck[i].key;
-                } else {
-                    printf("Cannot allocate memory for keys on merge.");
-                    free(keys);
-                    break;
-                }
-            }
-        }
-    } else {
-        printf("Cannot allocate memory for ck on uniqsort.");
-    }
     return keys;
 }
 
