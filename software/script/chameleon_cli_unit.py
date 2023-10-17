@@ -2046,7 +2046,7 @@ examples/notes:
     def on_exec(self, args: argparse.Namespace):
         options = {
             'activate_rf_field': self.bool_to_bit(args.activate_rf),
-            'wait_response': self.bool_to_bit(not args.response),
+            'wait_response': self.bool_to_bit(not args.no_response),
             'append_crc': self.bool_to_bit(args.crc),
             'auto_select': self.bool_to_bit(args.select_tag),
             'keep_rf_field': self.bool_to_bit(args.keep_rf),
