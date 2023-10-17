@@ -50,7 +50,7 @@ E.g. LRC3(DATA) == LRC3(whole frame)
 
 Each command and response have their own payload formats.
 
-Standard response status is `STATUS_DEVICE_SUCCESS` for general commands, `HF_TAG_OK` for HF commands and `LF_TAG_OK` for LF commands.
+Standard response status is `STATUS_SUCCESS` for general commands, `STATUS_HF_TAG_OK` for HF commands and `STATUS_LF_TAG_OK` for LF commands.
 See [Guidelines](#new-data-payloads-guidelines-for-developers) for more info.
 
 Beware, slots in protocol count from 0 to 7 (and from 1 to 8 in the CLI...).
@@ -144,7 +144,7 @@ Notes: the returned string is the output of `git describe --abbrev=7 --dirty --a
 * CLI: cf `hw slot list`
 ### 1020: WIPE_FDS
 * Command: no data
-* Response: no data. Status is `STATUS_DEVICE_SUCCESS` or `STATUS_FLASH_WRITE_FAIL`. The device will reboot shortly after this command.
+* Response: no data. Status is `STATUS_SUCCESS` or `STATUS_FLASH_WRITE_FAIL`. The device will reboot shortly after this command.
 * CLI: cf `hw factory_reset`
 ### 1021: DELETE_SLOT_TAG_NICK
 * Command: 2 bytes. `slot_number|sense_type` with `slot_number` between 0 and 7 and `sense_type` according to `tag_sense_type_t` enum.
@@ -226,7 +226,7 @@ Notes: wait about 5 seconds after wake-up, before querying the battery status, e
 * CLI: cf `hf 14a scan`
 
 Notes:
-* remind that if no tag is present, status will be `HF_TAG_NO` and Response empty.
+* remind that if no tag is present, status will be `STATUS_HF_TAG_NO` and Response empty.
 * at the moment, the firmware supports only one tag, but get your client ready for more!
 * `atslen` must not be confused with `ats[0]`==`TL`. So `atslen|ats` = `00` means no ATS while `0100` would be an empty ATS.
 ### 2001: MF1_DETECT_SUPPORT
@@ -269,7 +269,7 @@ Notes:
 ### 2007: MF1_AUTH_ONE_KEY_BLOCK
 * Command: 8 bytes: `type|block|key[6]`. Key as 6 bytes. Type=0x60 for key A, 0x61 for key B.
 * Response: no data
-* Status will be `HF_TAG_OK` if auth succeeded, else `MF_ERR_AUTH`
+* Status will be `STATUS_HF_TAG_OK` if auth succeeded, else `STATUS_MF_ERR_AUTH`
 * CLI: cf `hf mf nested`
 ### 2008: MF1_READ_ONE_BLOCK
 * Command: 8 bytes: `type|block|key[6]`. Key as 6 bytes. Type=0x60 for key A, 0x61 for key B.
@@ -397,7 +397,7 @@ Be verbose, explicit and reuse conventions, in order to enhance code maintainabi
 - Avoid hardcoding offsets, use `sizeof()`, `offsetof(struct, field)` in C and `struct.calcsize()` in Python
 - For complex bitfield structs, exceptionally you can use ctypes in Python. Beware ctypes.BigEndianStructure bitfield will be parsed in the firmware in the reverse order, from LSB to MSB.
 ### Guideline: Status
-If single byte of data to return, still use a 1-byte `data`, not `status`. Standard response status is `STATUS_DEVICE_SUCCESS` for general commands, `HF_TAG_OK` for HF commands and `LF_TAG_OK` for LF commands. If the response status is different than those, the response data is empty. Response status are generic and cover things like tag disappearance or tag non-conformities with the ISO standard. If a command needs more specific response status, it is added in the first byte of the data, to avoid cluttering the 1-byte general status enum with command-specific statuses. See e.g. [MF1_DARKSIDE_ACQUIRE](#2004-mf1_darkside_acquire).
+If single byte of data to return, still use a 1-byte `data`, not `status`. Standard response status is `STATUS_SUCCESS` for general commands, `STATUS_HF_TAG_OK` for HF commands and `STATUS_LF_TAG_OK` for LF commands. If the response status is different than those, the response data is empty. Response status are generic and cover things like tag disappearance or tag non-conformities with the ISO standard. If a command needs more specific response status, it is added in the first byte of the data, to avoid cluttering the 1-byte general status enum with command-specific statuses. See e.g. [MF1_DARKSIDE_ACQUIRE](#2004-mf1_darkside_acquire).
 ### Guideline: unambiguous types
 - Use unambiguous types such as `uint16_t`, not `int` or `enum`. Cast explicitly `int` and `enum` to `uint_t` of proper size
 - Use Network byte order for 16b and 32b integers

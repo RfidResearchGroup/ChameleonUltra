@@ -98,6 +98,74 @@ class Command(enum.IntEnum):
 
 
 @enum.unique
+class Status(enum.IntEnum):
+    HF_TAG_OK = 0x00     # IC card operation is successful
+    HF_TAG_NO = 0x01     # IC card not found
+    HF_ERR_STAT = 0x02    # Abnormal IC card communication
+    HF_ERR_CRC = 0x03     # IC card communication verification abnormal
+    HF_COLLISION = 0x04  # IC card conflict
+    HF_ERR_BCC = 0x05     # IC card BCC error
+    MF_ERR_AUTH = 0x06    # MF card verification failed
+    HF_ERR_PARITY = 0x07  # IC card parity error
+    HF_ERR_ATS = 0x08     # ATS should be present but card NAKed, or ATS too large
+
+    # Some operations with low frequency cards succeeded!
+    LF_TAG_OK = 0x40
+    # Unable to search for a valid EM410X label
+    EM410X_TAG_NO_FOUND = 0x41
+
+    # The parameters passed by the BLE instruction are wrong, or the parameters passed
+    # by calling some functions are wrong
+    PAR_ERR = 0x60
+    # The mode of the current device is wrong, and the corresponding API cannot be called
+    DEVICE_MODE_ERROR = 0x66
+    INVALID_CMD = 0x67
+    SUCCESS = 0x68
+    NOT_IMPLEMENTED = 0x69
+    FLASH_WRITE_FAIL = 0x70
+    FLASH_READ_FAIL = 0x71
+
+    def __str__(self):
+        if self == Status.HF_TAG_OK:
+            return "HF tag operation succeeded"
+        elif self == Status.HF_TAG_NO:
+            return "HF tag no found or lost"
+        elif self == Status.HF_ERR_STAT:
+            return "HF tag status error"
+        elif self == Status.HF_ERR_CRC:
+            return "HF tag data crc error"
+        elif self == Status.HF_COLLISION:
+            return "HF tag collision"
+        elif self == Status.HF_ERR_BCC:
+            return "HF tag uid bcc error"
+        elif self == Status.MF_ERR_AUTH:
+            return "HF tag auth fail"
+        elif self == Status.HF_ERR_PARITY:
+            return "HF tag data parity error"
+        elif self == Status.HF_ERR_ATS:
+            return "HF tag was supposed to send ATS but didn't"
+        elif self == Status.LF_TAG_OK:
+            return "LF tag operation succeeded"
+        elif self == Status.EM410X_TAG_NO_FOUND:
+            return "EM410x tag no found"
+        elif self == Status.PAR_ERR:
+            return "API request fail, param error"
+        elif self == Status.DEVICE_MODE_ERROR:
+            return "API request fail, device mode error"
+        elif self == Status.INVALID_CMD:
+            return "API request fail, cmd invalid"
+        elif self == Status.SUCCESS:
+            return "Device operation succeeded"
+        elif self == Status.NOT_IMPLEMENTED:
+            return "Some api not implemented"
+        elif self == Status.FLASH_WRITE_FAIL:
+            return "Flash write failed"
+        elif self == Status.FLASH_READ_FAIL:
+            return "Flash read failed"
+        return "Invalid status"
+
+
+@enum.unique
 class SlotNumber(enum.IntEnum):
     SLOT_1 = 1
     SLOT_2 = 2

@@ -620,7 +620,7 @@ static void btn_fn_copy_ic_uid(void) {
         case TAG_TYPE_EM410X:
             status = PcdScanEM410X(id_buffer);
 
-            if (status == LF_TAG_OK) {
+            if (status == STATUS_LF_TAG_OK) {
                 tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
                 memcpy(buffer->buffer, id_buffer, LF_EM410X_TAG_ID_SIZE);
                 tag_emulation_load_by_buffer(TAG_TYPE_EM410X, false);
@@ -680,7 +680,7 @@ static void btn_fn_copy_ic_uid(void) {
 
         status = pcd_14a_reader_scan_auto(&tag);
         pcd_14a_reader_antenna_off();
-        if (status == HF_TAG_OK) {
+        if (status == STATUS_HF_TAG_OK) {
             // copy uid
             antres->size = tag.uid_len;
             memcpy(antres->uid, tag.uid, tag.uid_len);

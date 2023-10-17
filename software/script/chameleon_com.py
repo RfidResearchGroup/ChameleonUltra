@@ -3,9 +3,8 @@ import struct
 import threading
 import time
 import serial
-import chameleon_status
 from chameleon_utils import CR, CG, CB, CC, CY, CM, C0
-from chameleon_enum import Command
+from chameleon_enum import Command, Status
 
 # each thread is waiting for its data for 100 ms before looping again
 THREAD_BLOCKING_TIMEOUT = 0.1
@@ -201,13 +200,13 @@ class ChameleonCom:
                                     command_string = f"{data_cmd} {command.name}"
                                 except ValueError:
                                     command_string = f"{data_cmd} (unknown)"
-                                if data_status in chameleon_status.Device:
-                                    status_string = chameleon_status.Device[data_status]
-                                    if data_status == chameleon_status.Device.STATUS_DEVICE_SUCCESS:
+                                try:
+                                    status_string = str(Status(data_status))
+                                    if data_status == Status.SUCCESS:
                                         status_string = f'{CG}{status_string:30}{C0}'
                                     else:
                                         status_string = f'{CR}{status_string:30}{C0}'
-                                else:
+                                except ValueError:
                                     status_string = f"{CR}{data_status:30x}{C0}"
                                 print(f'<= {CC}{command_string:40}{C0}{status_string}'
                                       f'{CY}{data_response.hex() if data_response is not None else ""}{C0}')
@@ -321,7 +320,12 @@ class ChameleonCom:
             del self.wait_response_map[cmd]
         # make data frame
         if DEBUG:
-            cmd_string = f'{cmd:4} {cmd.name}{f"[{status:04x}]" if status != 0 else ""}'
+            try:
+                command = Command(cmd)
+                command_name = f"{command.name}"
+            except ValueError:
+                command_name = "(UNKNOWN)"
+            cmd_string = f'{cmd:4} {command_name}{f"[{status:04x}]" if status != 0 else ""}'
             print(f'=> {CC}{cmd_string:40}{C0}'
                   f'{CY}{data.hex() if data is not None else ""}{C0}')
         data_frame = self.make_data_frame_bytes(cmd, data, status)
@@ -361,7 +365,7 @@ class ChameleonCom:
         # ok, data received.
         data_response = self.wait_response_map[cmd]['response']
         del self.wait_response_map[cmd]
-        if data_response.status == chameleon_status.Device.STATUS_INVALID_CMD:
+        if data_response.status == Status.INVALID_CMD:
             raise CMDInvalidException(f"Device unsupported cmd: {cmd}")
         return data_response
 

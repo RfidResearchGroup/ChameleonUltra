@@ -137,7 +137,7 @@ uint8_t settings_save_config(void) {
         NRF_LOG_INFO("Config did not change.");
     }
 
-    return STATUS_DEVICE_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 uint8_t settings_get_animation_config() {
