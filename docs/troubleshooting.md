@@ -22,7 +22,7 @@ On Android make sure your location is turned, as that allows for scanning of blu
 After BLE pairing, both the phone and ChameleonUltra will save a secret key for encrypted communication. If either party deletes the pairing record, it will result in communication failure. If Bluetooth cannot be connected, clearing the pairing information on the other side can solve the problem:
 
 * Find the Bluetooth settings in the phone's system settings and cancel pairing with the ChameleonUltra.
-* In the CLI of ChameleonUltra, execute the `hw ble bonds clear` command to clear all pairing records.
+* In the CLI of ChameleonUltra, execute the `hw settings bleclearbonds` command to clear all pairing records.
 
 Default BLE connect key(passkey) is `123456`
 

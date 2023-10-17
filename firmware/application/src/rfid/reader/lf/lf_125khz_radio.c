@@ -117,6 +117,7 @@ void lf_125khz_radio_uninit(void) {
  */
 void start_lf_125khz_radio(void) {
     nrf_drv_pwm_simple_playback(&m_pwm, &m_lf_125khz_pwm_seq_obj, 1, NRF_DRV_PWM_FLAG_LOOP);
+    TAG_FIELD_LED_ON();
 }
 
 /**
@@ -124,4 +125,5 @@ void start_lf_125khz_radio(void) {
  */
 void stop_lf_125khz_radio(void) {
     nrf_drv_pwm_stop(&m_pwm, true);
+    TAG_FIELD_LED_OFF();
 }

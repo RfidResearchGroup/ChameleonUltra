@@ -20,7 +20,6 @@ uint32_t g_timeout_readem_ms = 500;
 */
 uint8_t PcdScanEM410X(uint8_t *uid) {
     uint8_t ret = EM410X_TAG_NO_FOUND;
-    init_em410x_hw();
     if (em410x_read(uid, g_timeout_readem_ms) == 1) {
         ret = LF_TAG_OK;
     }

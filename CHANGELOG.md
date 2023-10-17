@@ -3,6 +3,14 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Fixed factory reset hanging (@augustozanellato)
+ - Changed fds_write_sync to take length in bytes instead of next multiple of 4 (@doegox)
+ - Fixed field LED when LF reading and HF cloning (@doegox)
+ - Added renaming of slot into "cloned" when having cloned an ID/UID with a button (@doegox)
+ - Fixed spurious LED in battery level, assigned battery level to long press B (@doegox)
+ - Changed `hw slot list` to display LF ID & HF anticol data, and names in the --short version too (@doegox)
+ - Added colors to CLI help (@doegox)
+ - Changed massively CLI, cf https://github.com/RfidResearchGroup/ChameleonUltra/issues/164#issue-1930580576 (@doegox)
  - Changed CLI help: lists display and now all commands support `-h` (@doegox)
  - Added button action to show battery level (@doegox)
  - Added GUI Page docs (@GameTec-live)

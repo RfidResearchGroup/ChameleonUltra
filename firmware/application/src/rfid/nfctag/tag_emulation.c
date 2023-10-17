@@ -264,10 +264,8 @@ static void save_data_by_tag_type(uint8_t slot, tag_specific_type_t tag_type) {
     // Get the special card slot FDS record information
     fds_slot_record_map_t map_info;
     get_fds_map_by_slot_sense_type_for_dump(slot, sense_type, &map_info);
-    // Calculate the length of the data to be saved (automatically fill in the whole word)
-    int data_word_length = (data_byte_length / 4) + (data_byte_length % 4 > 0 ? 1 : 0);
     // Call the blocked FDS to write the function, and write the data of the specified field type of the card slot into the Flash
-    bool ret = fds_write_sync(map_info.id, map_info.key, data_word_length, buffer->buffer);
+    bool ret = fds_write_sync(map_info.id, map_info.key, data_byte_length, buffer->buffer);
     if (ret) {
         NRF_LOG_INFO("Save tag slot data success.");
     } else {
@@ -505,7 +503,7 @@ static void tag_emulation_save_config(void) {
     calc_14a_crc_lut((uint8_t *)&slotConfig, sizeof(slotConfig), (uint8_t *)&new_calc_crc);
     if (new_calc_crc != m_slot_config_crc) {    // Before saving, make sure that the card slot configuration has changed
         NRF_LOG_INFO("Save tag slot config start.");
-        bool ret = fds_write_sync(FDS_EMULATION_CONFIG_FILE_ID, FDS_EMULATION_CONFIG_RECORD_KEY, sizeof(slotConfig) / 4, (uint8_t *)&slotConfig);
+        bool ret = fds_write_sync(FDS_EMULATION_CONFIG_FILE_ID, FDS_EMULATION_CONFIG_RECORD_KEY, sizeof(slotConfig), (uint8_t *)&slotConfig);
         if (ret) {
             NRF_LOG_INFO("Save tag slot config success.");
             m_slot_config_crc = new_calc_crc;

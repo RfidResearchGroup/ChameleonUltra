@@ -40,13 +40,11 @@ Using ProxSpace to build the CLI is the easiest and most comfortable way to get 
 
 12. And the binaries with `cmake --build .`
 
-13. Copy the binaries by running `cp -r ~/ChameleonUltra/software/bin/* ~/ChameleonUltra/software/script/`
+13. Go into the script folder with `cd ~/ChameleonUltra/software/script/`
 
-14. Go into the script folder with `cd ~/ChameleonUltra/software/script/`
+14. Install python requirements with `pip install -r requirements.txt`
 
-15. Install python requirements with `pip install -r requirements.txt`
-
-16. Finally run the CLI with `python chameleon_cli_main.py`
+15. Finally run the CLI with `python chameleon_cli_main.py`
 
 To use after installing, just do the following:
 
@@ -106,7 +104,33 @@ To run again after installing, just do the following:
 
 ### Linux
 
-*Coming Soon*
+1. Install the dependencies
+    - Ubuntu / Debian: `sudo apt install cmake make python3 python3-pip git ninja-build python3-venv build-essential`
+    - Arch: `sudo pacman -S cmake make python3-pip git ninja base-devel`
+
+2. Clone the Repository by typing `git clone https://github.com/RfidResearchGroup/ChameleonUltra.git`
+
+3. Now go into the newly created folder with `cd ChameleonUltra/software/src`
+
+4. Build the required config by running `cmake .`
+
+5. And the binaries with `cmake --build .`
+
+6. Go into the script folder with `cd ../script/`
+
+7. Create a virtual enviroment with `python3 -m venv venv`
+
+8. Activate it with `source venv/bin/activate`
+
+9. Install python requirements with `pip3 install -r requirements.txt`
+
+10. Finally run the CLI with `python3 chameleon_cli_main.py`
+
+To run again after installing, just do the following:
+
+1. Activate venv by running `source venv/bin/activate`
+
+2. Run the CLI with `python3 chameleon_cli_main.py`
 
 ### MacOS
 
@@ -128,19 +152,20 @@ Make sure to be in the `software/` directory and run the Python CLI from there.
 
 - Connect to the CLI: `hw connect`
 - Check which slot can be used: `hw slot list`
-- Change the slot type, here using slot 8 for a MFC 1k emulation: `hw slot type -s8 -t3`
-- Init the slot content: `hw slot init -s8 -t3`
-  - or load an existing dump and set UID and anticollision data, cf `hf mf eload -h` and `hf mf sim -h`
-- Enable the slot: `hw slot enable -s8 -e1`
-- Change to the new slot: `hw slot change -s8`
-- Activate the detection: `hf detection enable -e1`
+- Change the slot type, here using slot 8 for a MFC 1k emulation: `hw slot type -s 8 -t MIFARE_1024`
+- Init the slot content: `hw slot init -s 8 -t MIFARE_1024`
+  - or load an existing dump and set UID and anticollision data, cf `hf mf eload -h` and `hf mf econfig -h`
+- Enable the slot: `hw slot enable -s 8 --hf`
+- Change to the new slot: `hw slot change -s 8`
+- Activate the authentication logs: `hf mf econfig --enable-log`
 
 Now disconnect, go to a reader and swipe it a few times
 
 - Come back and connect to the CLI: `hw connect`
-- See if nonces were collected: `hf detection count`
+- See if nonces were collected: `hf mf elog`
   - We need 2 nonces per key to recover
-- Recover the key(s) based on the collected nonces: `hf detection decrypt`. Output example:
+- Recover the key(s) based on the collected nonces: `hf mf elog --decrypt`.
+  Output example:
 ```
  - MF1 detection log count = 6, start download.
  - Download done (144bytes), start parse and decrypt
@@ -153,7 +178,7 @@ Now disconnect, go to a reader and swipe it a few times
 
 ```
 
-- To clean the logged detection nonces: `hf detection enable -e0` then `hf detection enable -e1`
+- To clean the logged detection nonces: `hf mf econfig --disable-log` then `hf mf econfig --enable-log`
 
 
 

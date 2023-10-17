@@ -135,10 +135,10 @@ functions have been realized with it!
 # Ultra-low power consumption
 
 It integrates a high-performance and low-power NFC module inside. When the NFC unit is turned on, the total current of
-the chip is only 5mA@3.3V.
+the chip is only 5mA @3.3V.
 The underlying interaction is done independently by the NFC unit and does not occupy the CPU.
 In addition, the nRF52840 itself is a high-performance low-power BLE chip, and the encryption and calculation process is
-only 7mA@3.3V. It can greatly reduce the battery volume and prolong the working time. That is to say, the 35mAh 10mm*
+only 7mA @3.3V. It can greatly reduce the battery volume and prolong the working time. That is to say, the 35mAh 10mm*
 40mm button lithium battery can guarantee to be charged once every half a year under the working condition of swiping
 the card 8 times a day for 3 seconds each time. Full potential for everyday use.
 

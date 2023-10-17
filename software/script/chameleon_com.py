@@ -4,9 +4,15 @@ import threading
 import time
 import serial
 import chameleon_status
+from chameleon_utils import CR, CG, CB, CC, CY, CM, C0
+from chameleon_enum import Command
 
 # each thread is waiting for its data for 100 ms before looping again
 THREAD_BLOCKING_TIMEOUT = 0.1
+
+# TODO: client settings
+DEBUG = False
+
 
 class NotOpenException(Exception):
     """
@@ -187,14 +193,30 @@ class ChameleonCom:
                             # ok, lrc for data is correct.
                             # and we are receive completed
                             # print(f"Buffer data = {data_buffer.hex()}")
+                            data_response = data_buffer[struct.calcsize('!BBHHHB'):
+                                                        struct.calcsize(f'!BBHHHB{data_length}s')]
+                            if DEBUG:
+                                try:
+                                    command = Command(data_cmd)
+                                    command_string = f"{data_cmd} {command.name}"
+                                except ValueError:
+                                    command_string = f"{data_cmd} (unknown)"
+                                if data_status in chameleon_status.Device:
+                                    status_string = chameleon_status.Device[data_status]
+                                    if data_status == chameleon_status.Device.STATUS_DEVICE_SUCCESS:
+                                        status_string = f'{CG}{status_string:30}{C0}'
+                                    else:
+                                        status_string = f'{CR}{status_string:30}{C0}'
+                                else:
+                                    status_string = f"{CR}{data_status:30x}{C0}"
+                                print(f'<= {CC}{command_string:40}{C0}{status_string}'
+                                      f'{CY}{data_response.hex() if data_response is not None else ""}{C0}')
                             if data_cmd in self.wait_response_map:
                                 # call processor
                                 if 'callback' in self.wait_response_map[data_cmd]:
                                     fn_call = self.wait_response_map[data_cmd]['callback']
                                 else:
                                     fn_call = None
-                                data_response = data_buffer[struct.calcsize('!BBHHHB'):
-                                                            struct.calcsize(f'!BBHHHB{data_length}s')]
                                 if callable(fn_call):
                                     # delete wait task from map
                                     del self.wait_response_map[data_cmd]
@@ -298,6 +320,10 @@ class ChameleonCom:
         if cmd in self.wait_response_map:
             del self.wait_response_map[cmd]
         # make data frame
+        if DEBUG:
+            cmd_string = f'{cmd:4} {cmd.name}{f"[{status:04x}]" if status != 0 else ""}'
+            print(f'=> {CC}{cmd_string:40}{C0}'
+                  f'{CY}{data.hex() if data is not None else ""}{C0}')
         data_frame = self.make_data_frame_bytes(cmd, data, status)
         task = {'cmd': cmd, 'frame': data_frame, 'timeout': timeout, 'close': close}
         if callable(callback):

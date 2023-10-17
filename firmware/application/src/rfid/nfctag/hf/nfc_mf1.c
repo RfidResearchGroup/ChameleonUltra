@@ -1102,10 +1102,8 @@ void nfc_tag_mf1_reset_handler() {
  * @return Suppose type == tag_type_mifare_1024,
  * The length of the information should be the anti -collision information plus the configuration information plus the length of the sector
  */
-static int get_information_size_by_tag_type(tag_specific_type_t type, bool auth_align) {
-    int size_raw = sizeof(nfc_tag_14a_coll_res_entity_t) + sizeof(nfc_tag_mf1_configure_t) + (get_block_max_by_tag_type(type) * NFC_TAG_MF1_DATA_SIZE);
-    int size_align = size_raw + (size_raw % 4);
-    return auth_align ? size_align : size_raw;
+static int get_information_size_by_tag_type(tag_specific_type_t type) {
+    return sizeof(nfc_tag_14a_coll_res_entity_t) + sizeof(nfc_tag_mf1_configure_t) + (get_block_max_by_tag_type(type) * NFC_TAG_MF1_DATA_SIZE);
 }
 
 /** @brief MF1's callback before saving data
@@ -1124,7 +1122,7 @@ int nfc_tag_mf1_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer)
             m_tag_information->config.mode_block_write = NFC_TAG_MF1_WRITE_SHADOW;
         }
         // Save the corresponding size data according to the current label type
-        return get_information_size_by_tag_type(type, false);
+        return get_information_size_by_tag_type(type);
     } else {
         return 0;
     }
@@ -1136,7 +1134,7 @@ int nfc_tag_mf1_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer)
  */
 int nfc_tag_mf1_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     // Make sure that external capacity is enough to convert to an information structure
-    int info_size = get_information_size_by_tag_type(type, false);
+    int info_size = get_information_size_by_tag_type(type);
     if (buffer->length >= info_size) {
         //Convert the data buffer to MF1 structure type
         m_tag_information = (nfc_tag_mf1_information_t *)buffer->buffer;
@@ -1200,9 +1198,9 @@ bool nfc_tag_mf1_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     tag_sense_type_t sense_type = get_sense_type_from_tag_type(tag_type);
     fds_slot_record_map_t map_info;
     get_fds_map_by_slot_sense_type_for_dump(slot, sense_type, &map_info);
-    int info_size = get_information_size_by_tag_type(tag_type, true);   // auto 4 byte align.
+    int info_size = get_information_size_by_tag_type(tag_type);
     NRF_LOG_INFO("MF1 info size: %d", info_size);
-    bool ret = fds_write_sync(map_info.id, map_info.key, info_size / 4, p_mf1_information);
+    bool ret = fds_write_sync(map_info.id, map_info.key, info_size, p_mf1_information);
     if (ret) {
         NRF_LOG_INFO("Factory slot data success.");
     } else {

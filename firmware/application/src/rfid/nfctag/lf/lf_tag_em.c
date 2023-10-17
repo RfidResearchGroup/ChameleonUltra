@@ -411,13 +411,13 @@ int lf_tag_em410x_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffe
  */
 bool lf_tag_em410x_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     // default id, must to align(4), more word...
-    uint8_t tag_id[8] = { 0xDE, 0xAD, 0xBE, 0xEF, 0x88 };
+    uint8_t tag_id[5] = { 0xDE, 0xAD, 0xBE, 0xEF, 0x88 };
     // Write the data in Flash
     tag_sense_type_t sense_type = get_sense_type_from_tag_type(tag_type);
     fds_slot_record_map_t map_info; // Get the special card slot FDS record information
     get_fds_map_by_slot_sense_type_for_dump(slot, sense_type, &map_info);
     //Call the blocked FDS to write the function, and write the data of the specified field type of the card slot into the Flash
-    bool ret = fds_write_sync(map_info.id, map_info.key, sizeof(tag_id) / 4, (uint8_t *)tag_id);
+    bool ret = fds_write_sync(map_info.id, map_info.key, sizeof(tag_id), (uint8_t *)tag_id);
     if (ret) {
         NRF_LOG_INFO("Factory slot data success.");
     } else {
