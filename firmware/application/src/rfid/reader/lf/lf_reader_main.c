@@ -19,9 +19,9 @@ uint32_t g_timeout_readem_ms = 500;
 * Search EM410X tag
 */
 uint8_t PcdScanEM410X(uint8_t *uid) {
-    uint8_t ret = EM410X_TAG_NO_FOUND;
+    uint8_t ret = STATUS_EM410X_TAG_NO_FOUND;
     if (em410x_read(uid, g_timeout_readem_ms) == 1) {
-        ret = LF_TAG_OK;
+        ret = STATUS_LF_TAG_OK;
     }
     return ret;
 }
@@ -32,8 +32,8 @@ uint8_t PcdScanEM410X(uint8_t *uid) {
 uint8_t check_write_ok(uint8_t *uid, uint8_t *newuid, uint8_t on_uid_diff_return) {
     // After the card is written, we need to read it once,
     // If the data I read is incorrect, it means that the writing fails
-    if (PcdScanEM410X(newuid) != LF_TAG_OK) {
-        return EM410X_TAG_NO_FOUND;
+    if (PcdScanEM410X(newuid) != STATUS_LF_TAG_OK) {
+        return STATUS_EM410X_TAG_NO_FOUND;
     }
     // If you read the card number the same
     // Explanation is successful (maybe)
@@ -43,7 +43,7 @@ uint8_t check_write_ok(uint8_t *uid, uint8_t *newuid, uint8_t on_uid_diff_return
         uid[2] == newuid[2] &&
         uid[3] == newuid[3] &&
         uid[4] == newuid[4]) {
-        return LF_TAG_OK;
+        return STATUS_LF_TAG_OK;
     }
     // If you find the card, the card number is wrong,
     // Then we will return the abnormal value of the inlet
@@ -102,7 +102,7 @@ uint8_t PcdWriteT55XX(uint8_t *uid, uint8_t *newkey, uint8_t *old_keys, uint8_t 
 
     // Read the verification and return the results of the card writing
     // Do not read it here, you can check it by the upper machine
-    return LF_TAG_OK;
+    return STATUS_LF_TAG_OK;
 }
 
 /**

@@ -15,11 +15,10 @@ from platform import uname
 
 import chameleon_com
 import chameleon_cmd
-import chameleon_status
 from chameleon_utils import ArgumentParserNoExit, ArgsParserError, UnexpectedResponseError
 from chameleon_utils import CLITree
 from chameleon_utils import CR, CG, CB, CC, CY, CM, C0
-from chameleon_enum import Command, SlotNumber, TagSenseType, TagSpecificType
+from chameleon_enum import Command, Status, SlotNumber, TagSenseType, TagSpecificType
 from chameleon_enum import MifareClassicWriteMode, MifareClassicPrngType, MifareClassicDarksideStatus, MfcKeyType
 from chameleon_enum import AnimationMode, ButtonType, ButtonPressFunction
 
@@ -51,7 +50,8 @@ def check_tools():
         tools = [x+'.exe' for x in tools]
     missing_tools = [tool for tool in tools if not (default_cwd / tool).exists()]
     if len(missing_tools) > 0:
-        print(f'{CR}Warning, tools {", ".join(missing_tools)} not found. Corresponding commands will not work as intended.{C0}')
+        print(f'{CR}Warning, tools {", ".join(missing_tools)} not found. '
+              f'Corresponding commands will not work as intended.{C0}')
 
 
 class BaseCLIUnit:
@@ -1999,11 +1999,14 @@ class HWRaw(DeviceRequiredUnit):
             print(f"   Command: {response.cmd} {command.name}")
         except ValueError:
             print(f"   Command: {response.cmd} (unknown)")
+
         status_string = f"   Status:  {response.status:#02x}"
-        if response.status in chameleon_status.Device:
-            status_string += f" {chameleon_status.Device[response.status]}"
-            if response.status in chameleon_status.message:
-                status_string += f": {chameleon_status.message[response.status]}"
+        try:
+            status = Status(response.status)
+            status_string += f" {status.name}"
+            status_string += f": {str(status)}"
+        except ValueError:
+            pass
         print(status_string)
         print(f"   Data (HEX): {response.data.hex()}")
 
