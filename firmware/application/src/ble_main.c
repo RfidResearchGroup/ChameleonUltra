@@ -226,44 +226,25 @@ __INLINE uint32_t map(uint32_t x, uint32_t in_min, uint32_t in_max, uint32_t out
 
 //Battery voltage to percentage calculation
 uint32_t BATVOL2PERCENT(uint16_t VOL) {
-    //100%  4.20V   1
-    //90 %  4.06V       80%-100%    white
-    //80 %  3.98V   1
-    //70 %  3.92V       60%-80%     white
-    //60 %  3.87V   1
-    //50 %  3.82V       40%-60%     white
-    //40 %  3.79V   1
-    //30 %  3.77V       20%-40%     white
-    //20 %  3.74V   1
-    //10 %  3.68V       5%-20%      red
-    //5 %   3.45V   1               Turn off
-    //0 %   3.00V
-    //#define P100VOL   4200
-    //#define P80VOL    3980
-    //#define P60VOL    3870
-    //#define P40VOL    3790
-    //#define P20VOL    3740
-    //#define P5VOL 3450
+    // Based on https://github.com/RfidResearchGroup/ChameleonUltra/issues/167#issuecomment-1766908799
 
-    //100%  4.20V   1
-    //90 %  4.00V       80%-100%    white
-    //80 %  3.89V   1
-    //70 %  3.79V       60%-80%     white
-    //60 %  3.70V   1
-    //50 %  3.62V       40%-60%     white
-    //40 %  3.57V   1
-    //30 %  3.53V       20%-40%     white
-    //20 %  3.51V   1
-    //10 %  3.46V       5%-20%      red
-    //5 %   3.43V   1               Turn off
-    //0 %   3.00V
+#if defined(PROJECT_CHAMELEON_ULTRA)
+// Ultra
 #define P100VOL 4200
-#define P80VOL  3890
-#define P60VOL  3700
-#define P40VOL  3570
-#define P20VOL  3510
-#define P5VOL   3230
-
+#define P80VOL  4034
+#define P60VOL  3904
+#define P40VOL  3824
+#define P20VOL  3754
+#define P5VOL   3644
+#else
+// Lite
+#define P100VOL 4200
+#define P80VOL  3934
+#define P60VOL  3844
+#define P40VOL  3784
+#define P20VOL  3744
+#define P5VOL   3644
+#endif
 
     if (VOL > P80VOL) {
         //80-100

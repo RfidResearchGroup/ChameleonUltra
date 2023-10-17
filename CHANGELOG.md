@@ -3,7 +3,8 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
- - Nested and StaticNested multithreaded decryption.
+ - Changed battery level curves based on experimental measures (@spp2000)
+ - Added multithreading on Nested and StaticNested (@xianglin1998)
  - Fixed factory reset hanging (@augustozanellato)
  - Changed fds_write_sync to take length in bytes instead of next multiple of 4 (@doegox)
  - Fixed field LED when LF reading and HF cloning (@doegox)
