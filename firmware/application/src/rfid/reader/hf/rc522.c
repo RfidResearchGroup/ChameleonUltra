@@ -649,7 +649,7 @@ uint8_t pcd_14a_reader_scan_once(picc_14a_tag_t *tag) {
         if (status != STATUS_HF_TAG_OK) {
             NRF_LOG_INFO("Tag SAK claimed to support ATS but tag NAKd RATS");
             tag->ats_len = 0;
-            // return HF_ERR_ATS;
+            // return STATUS_HF_ERR_ATS;
         } else {
             ats_size -= 2;  // size returned by pcd_14a_reader_ats_request includes CRC
             if (ats_size > 254) {
@@ -660,7 +660,7 @@ uint8_t pcd_14a_reader_scan_once(picc_14a_tag_t *tag) {
             // We do not validate ATS here as we want to report ATS as it is without breaking 14a scan
             if (tag->ats[0] != ats_size - 1) {
                 NRF_LOG_INFO("Invalid ATS! First byte doesn't match received length");
-                // return HF_ERR_ATS;
+                // return STATUS_HF_ERR_ATS;
             }
         }
         /*
@@ -713,7 +713,7 @@ uint8_t pcd_14a_reader_ats_request(uint8_t *pAts, uint16_t *szAts, uint16_t szAt
         return status;
     } else if (*szAts == 7 && pAts[0] == 0x4) { // tag replied with NAK
         *szAts = 0;
-        return HF_ERR_ATS;
+        return STATUS_HF_ERR_ATS;
     }
 
     NRF_LOG_INFO("Received ATS length: %d\n", *szAts);
