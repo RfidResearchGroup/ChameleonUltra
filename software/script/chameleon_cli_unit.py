@@ -15,11 +15,10 @@ from platform import uname
 
 import chameleon_com
 import chameleon_cmd
-import chameleon_status
 from chameleon_utils import ArgumentParserNoExit, ArgsParserError, UnexpectedResponseError
 from chameleon_utils import CLITree
 from chameleon_utils import CR, CG, CB, CC, CY, CM, C0
-from chameleon_enum import Command, SlotNumber, TagSenseType, TagSpecificType
+from chameleon_enum import Command, Status, SlotNumber, TagSenseType, TagSpecificType
 from chameleon_enum import MifareClassicWriteMode, MifareClassicPrngType, MifareClassicDarksideStatus, MfcKeyType
 from chameleon_enum import AnimationMode, ButtonType, ButtonPressFunction
 
@@ -37,12 +36,22 @@ type_id_SAK_dict = {0x00: "MIFARE Ultralight Classic/C/EV1/Nano | NTAG 2xx",
                     0x38: "SmartMX with MIFARE Classic 4K",
                     }
 
-if getattr(sys, 'frozen', False):
+if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
     # in pyinstaller
-    default_cwd = str(Path(sys._MEIPASS) / "bin")
+    default_cwd = Path.cwd() / Path(sys._MEIPASS) / "bin"
 else:
     # from source
-    default_cwd = str(Path(__file__).parent.parent / "bin")
+    default_cwd = Path.cwd() / Path(__file__).parent.parent / "bin"
+
+
+def check_tools():
+    tools = ['staticnested', 'nested', 'darkside', 'mfkey32v2']
+    if sys.platform == "win32":
+        tools = [x+'.exe' for x in tools]
+    missing_tools = [tool for tool in tools if not (default_cwd / tool).exists()]
+    if len(missing_tools) > 0:
+        print(f'{CR}Warning, tools {", ".join(missing_tools)} not found. '
+              f'Corresponding commands will not work as intended.{C0}')
 
 
 class BaseCLIUnit:
@@ -1990,11 +1999,14 @@ class HWRaw(DeviceRequiredUnit):
             print(f"   Command: {response.cmd} {command.name}")
         except ValueError:
             print(f"   Command: {response.cmd} (unknown)")
+
         status_string = f"   Status:  {response.status:#02x}"
-        if response.status in chameleon_status.Device:
-            status_string += f" {chameleon_status.Device[response.status]}"
-            if response.status in chameleon_status.message:
-                status_string += f": {chameleon_status.message[response.status]}"
+        try:
+            status = Status(response.status)
+            status_string += f" {status.name}"
+            status_string += f": {str(status)}"
+        except ValueError:
+            pass
         print(status_string)
         print(f"   Data (HEX): {response.data.hex()}")
 
@@ -2037,7 +2049,7 @@ examples/notes:
     def on_exec(self, args: argparse.Namespace):
         options = {
             'activate_rf_field': self.bool_to_bit(args.activate_rf),
-            'wait_response': self.bool_to_bit(not args.response),
+            'wait_response': self.bool_to_bit(not args.no_response),
             'append_crc': self.bool_to_bit(args.crc),
             'auto_select': self.bool_to_bit(args.select_tag),
             'keep_rf_field': self.bool_to_bit(args.keep_rf),

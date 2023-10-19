@@ -6,7 +6,7 @@ from prompt_toolkit.completion import Completer, NestedCompleter, WordCompleter
 from prompt_toolkit.completion.base import Completion
 from prompt_toolkit.document import Document
 
-import chameleon_status
+from chameleon_enum import Status
 
 # Colorama shorthands
 CR = colorama.Fore.RED
@@ -110,12 +110,11 @@ def expect_response(accepted_responses: Union[int, list[int]]):
         def error_throwing_func(*args, **kwargs):
             ret = func(*args, **kwargs)
             if ret.status not in accepted_responses:
-                if ret.status in chameleon_status.Device and ret.status in chameleon_status.message:
-                    raise UnexpectedResponseError(
-                        chameleon_status.message[ret.status])
-                else:
-                    raise UnexpectedResponseError(
-                        f"Unexpected response and unknown status {ret.status}")
+                try:
+                    status_string = str(Status(ret.status))
+                except ValueError:
+                    status_string = f"Unexpected response and unknown status {ret.status}"
+                raise UnexpectedResponseError(status_string)
 
             return ret.data
 

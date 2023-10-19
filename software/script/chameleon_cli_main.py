@@ -94,6 +94,7 @@ class ChameleonCLI:
             raise Exception("This script requires at least Python 3.9")
 
         self.print_banner()
+        chameleon_cli_unit.check_tools()
         cmd_strs = []
         while True:
             if cmd_strs:

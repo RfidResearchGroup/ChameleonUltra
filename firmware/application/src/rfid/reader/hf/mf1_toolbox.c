@@ -138,7 +138,7 @@ static uint8_t send_cmd(struct Crypto1State *pcs, uint8_t encrypted, uint8_t cmd
     }
 
     // There is a problem with communication, do not continue the next task
-    if (*status != HF_TAG_OK) {
+    if (*status != STATUS_HF_TAG_OK) {
         return len;
     }
 
@@ -184,7 +184,7 @@ int authex(struct Crypto1State *pcs, uint32_t uid, uint8_t blockNo, uint8_t keyT
     len = send_cmd(pcs, isNested, keyType, blockNo, &status, answer, parity, U8ARR_BIT_LEN(answer));
     if (len != 32) {
         NRF_LOG_INFO("No 32 data recv on send_cmd: %d\r\n", len);
-        return HF_ERR_STAT;
+        return STATUS_HF_ERR_STAT;
     }
 
     // Save the tag nonce (nt)
@@ -232,15 +232,15 @@ int authex(struct Crypto1State *pcs, uint32_t uid, uint8_t blockNo, uint8_t keyT
         ntpp = prng_successor(nt, 32) ^ crypto1_word(pcs, 0, 0);
         if (ntpp == BYTES4_TO_U32(answer)) {
             // Successful verification!
-            return HF_TAG_OK;
+            return STATUS_HF_TAG_OK;
         } else {
             // fail
-            return MF_ERR_AUTH;
+            return STATUS_MF_ERR_AUTH;
         }
     }
 
     // fail!
-    return MF_ERR_AUTH;
+    return STATUS_MF_ERR_AUTH;
 }
 
 /**
@@ -279,15 +279,15 @@ static uint8_t darkside_select_nonces(picc_14a_tag_t *tag, uint8_t block, uint8_
         // 2. Moderate power -off time, don't be too long, it will affect efficiency, and don't be too short.
         reset_radio_field_with_delay();
         // After the power is completely disconnected, we will select the card quickly and compress the verification time as much as possible.
-        if (pcd_14a_reader_fast_select(tag) != HF_TAG_OK) {
+        if (pcd_14a_reader_fast_select(tag) != STATUS_HF_TAG_OK) {
             NRF_LOG_INFO("Tag can't select!\n");
-            return HF_TAG_NO;
+            return STATUS_HF_TAG_NO;
         }
         status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, tag_auth, 4, tag_resp, &len, U8ARR_BIT_LEN(tag_resp));
         // After finding the card, start collecting random numbers
-        if (status != HF_TAG_OK || len != 32) {
+        if (status != STATUS_HF_TAG_OK || len != 32) {
             NRF_LOG_INFO("Get nt failed.\n");
-            return HF_ERR_STAT;
+            return STATUS_HF_ERR_STAT;
         }
         // Converted to the type of U32 and cache
         nt_list[i] = bytes_to_num(tag_resp, 4);
@@ -321,14 +321,14 @@ static uint8_t darkside_select_nonces(picc_14a_tag_t *tag, uint8_t block, uint8_
     if (max == 0) {
         NRF_LOG_INFO("Can't sync nt.\n");
         *darkside_status = DARKSIDE_CANT_FIX_NT;
-        return HF_TAG_OK;
+        return STATUS_HF_TAG_OK;
     }
 
     // NT is fixed successfully, the one with the highest number of times we take out
     // NRF_LOG_INFO("Sync nt: %"PRIu32", max = %d\n", nt_list[m], max);
     if (nt) *nt = nt_list[m];  // Only when the caller needs to get NT
     *darkside_status = DARKSIDE_OK;
-    return HF_TAG_OK;
+    return STATUS_HF_TAG_OK;
 }
 
 /**
@@ -374,10 +374,10 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
     bool led_toggle                         = false;
 
     // We need to confirm the use of a certain card first
-    if (pcd_14a_reader_scan_auto(p_tag_info) == HF_TAG_OK) {
+    if (pcd_14a_reader_scan_auto(p_tag_info) == STATUS_HF_TAG_OK) {
         uid_cur = get_u32_tag_uid(p_tag_info);
     } else {
-        return HF_TAG_NO;
+        return STATUS_HF_TAG_NO;
     }
 
     // Verification instructions need to add CRC16
@@ -401,7 +401,7 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
 
         // Then you need to fix a random number that may appear
         status = darkside_select_nonces(p_tag_info, targetBlk, targetTyp, &nt_ori, darkside_status);
-        if ((status != HF_TAG_OK) || (*darkside_status != DARKSIDE_OK)) {
+        if ((status != STATUS_HF_TAG_OK) || (*darkside_status != DARKSIDE_OK)) {
             //The fixed random number failed, and the next step cannot be performed
             return status;
         }
@@ -414,7 +414,7 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
 
         if (uid_ori != uid_cur) {
             *darkside_status = DARKSIDE_TAG_CHANGED;
-            return HF_TAG_OK;
+            return STATUS_HF_TAG_OK;
         }
     }
     // Always collect different NACK under a large cycle
@@ -437,17 +437,17 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
         reset_radio_field_with_delay();
 
         //After the power is completely disconnected, we will select the card quickly and compress the verification time as much as possible.
-        if (pcd_14a_reader_fast_select(p_tag_info) != HF_TAG_OK) {
+        if (pcd_14a_reader_fast_select(p_tag_info) != STATUS_HF_TAG_OK) {
             NRF_LOG_INFO("Tag can't select!\n");
-            return HF_TAG_NO;
+            return STATUS_HF_TAG_NO;
         }
 
         status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, tag_auth, 4, dat_recv, &len, U8ARR_BIT_LEN(dat_recv));
 
         // After finding the card, start collecting random numbers
-        if (status != HF_TAG_OK || len != 32) {
+        if (status != STATUS_HF_TAG_OK || len != 32) {
             NRF_LOG_INFO("Get nt failed.\n");
-            return HF_ERR_STAT;
+            return STATUS_HF_ERR_STAT;
         }
 
         //The byte array of the conversion response is 10 in NT
@@ -462,7 +462,7 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
             if (++resync_count == ntSyncMax) {
                 NRF_LOG_INFO("Can't fix nonce.");
                 *darkside_status = DARKSIDE_CANT_FIX_NT;
-                return HF_TAG_OK;
+                return STATUS_HF_TAG_OK;
             }
 
             // When the clock is not synchronized, the following operation is meaningless
@@ -500,7 +500,7 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
             // however we dont feed key w uid it the prng..
             NRF_LOG_INFO("Auth Ok, you are so lucky!\n");
             *darkside_status = DARKSIDE_LUCKY_AUTH_OK;
-            return HF_TAG_OK;
+            return STATUS_HF_TAG_OK;
         }
 
         // Receive answer. This will be a 4 Bit NACK when the 8 parity bits are OK after decoding
@@ -529,7 +529,7 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
                 if (par == 0) {    // tried all 256 possible parities without success. Card doesn't send NACK.
                     NRF_LOG_INFO("Card doesn't send NACK.\r\n");
                     *darkside_status = DARKSIDE_NO_NAK_SENT;
-                    return HF_TAG_OK;
+                    return STATUS_HF_TAG_OK;
                 }
             } else {
                 par = ((par + 1) & 0x1F) | par_low;
@@ -555,7 +555,7 @@ uint8_t darkside_recover_key(uint8_t targetBlk, uint8_t targetTyp,
 
     // NRF_LOG_INFO("Darkside done!\n");
     *darkside_status = DARKSIDE_OK;
-    return HF_TAG_OK;
+    return STATUS_HF_TAG_OK;
 }
 
 /**
@@ -587,19 +587,19 @@ uint8_t check_tag_response_nt(picc_14a_tag_t *tag, uint32_t *nt) {
     pcd_14a_reader_halt_tag();
 
     // We will choose a fast card, and we will be compressed to verify as much as possible
-    if (pcd_14a_reader_fast_select(tag) != HF_TAG_OK) {
+    if (pcd_14a_reader_fast_select(tag) != STATUS_HF_TAG_OK) {
         NRF_LOG_INFO("Tag can't select\r\n");
-        return HF_TAG_NO;
+        return STATUS_HF_TAG_NO;
     }
 
     // Send instructions and get NT return
     *nt = send_cmd(pcs, AUTH_FIRST, PICC_AUTHENT1A, 0x03, &status, dat_recv, par_recv, U8ARR_BIT_LEN(dat_recv));
     if (*nt != 32) {
         // NRF_LOG_INFO("No 32 data recv on send_cmd: %d\n", *nt);
-        return HF_ERR_STAT;
+        return STATUS_HF_ERR_STAT;
     }
     *nt = bytes_to_num(dat_recv, 4);
-    return HF_TAG_OK;
+    return STATUS_HF_TAG_OK;
 }
 
 /**
@@ -614,8 +614,8 @@ uint8_t check_std_mifare_nt_support(void) {
     uint32_t nt1 = 0;
 
     // Find card, search on the field
-    if (pcd_14a_reader_scan_auto(p_tag_info) != HF_TAG_OK) {
-        return HF_TAG_NO;
+    if (pcd_14a_reader_scan_auto(p_tag_info) != STATUS_HF_TAG_OK) {
+        return STATUS_HF_TAG_NO;
     }
 
     // Get NT and return status
@@ -633,13 +633,13 @@ uint8_t check_static_prng(bool *is_static) {
     uint8_t status;
 
     // Find card, search on the field
-    if (pcd_14a_reader_scan_auto(p_tag_info) != HF_TAG_OK) {
-        return HF_TAG_NO;
+    if (pcd_14a_reader_scan_auto(p_tag_info) != STATUS_HF_TAG_OK) {
+        return STATUS_HF_TAG_NO;
     }
 
     // Get NT in the first wave
     status = check_tag_response_nt(p_tag_info, &nt1);
-    if (status != HF_TAG_OK) {
+    if (status != STATUS_HF_TAG_OK) {
         return status;
     }
 
@@ -650,13 +650,13 @@ uint8_t check_static_prng(bool *is_static) {
 
     // Get NT in the second wave
     status = check_tag_response_nt(p_tag_info, &nt2);
-    if (status != HF_TAG_OK) {
+    if (status != STATUS_HF_TAG_OK) {
         return status;
     }
 
     // Detect whether the random number is static
     *is_static = (nt1 == nt2);
-    return HF_TAG_OK;
+    return STATUS_HF_TAG_OK;
 }
 
 /**
@@ -673,12 +673,12 @@ uint8_t check_prng_type(mf1_prng_type_t *prng_type) {
 
     // If the judgment process is found, it is found that the StaticNested detection cannot be completed
     // Then return the state directly, no need to perform the following judgment logic.
-    if (status != HF_TAG_OK) {
+    if (status != STATUS_HF_TAG_OK) {
         return status;
     }
     if (is_static) {
         *prng_type = PRNG_STATIC;
-        return HF_TAG_OK;
+        return STATUS_HF_TAG_OK;
     }
 
     // Non -Static card, you can continue to run down logic
@@ -689,13 +689,13 @@ uint8_t check_prng_type(mf1_prng_type_t *prng_type) {
     pcd_14a_reader_halt_tag();
 
     // Card search operation
-    if (pcd_14a_reader_scan_auto(p_tag_info) != HF_TAG_OK) {
-        return HF_TAG_NO;
+    if (pcd_14a_reader_scan_auto(p_tag_info) != STATUS_HF_TAG_OK) {
+        return STATUS_HF_TAG_NO;
     }
 
     //Get NT, just get it once
     status = check_tag_response_nt(p_tag_info, &nt1);
-    if (status != HF_TAG_OK) {
+    if (status != STATUS_HF_TAG_OK) {
         return status;
     }
 
@@ -712,7 +712,7 @@ uint8_t check_prng_type(mf1_prng_type_t *prng_type) {
     // ------------------------------------
     // end
 
-    return HF_TAG_OK;
+    return STATUS_HF_TAG_OK;
 }
 
 /**
@@ -785,19 +785,19 @@ static uint8_t measure_distance(uint64_t u64Key, uint8_t block, uint8_t type, ui
         // Reset card communication
         pcd_14a_reader_halt_tag();
         // We will choose a fast card, and we will be compressed to verify as much as possible
-        if (pcd_14a_reader_fast_select(p_tag_info) != HF_TAG_OK) {
+        if (pcd_14a_reader_fast_select(p_tag_info) != STATUS_HF_TAG_OK) {
             NRF_LOG_INFO("Tag can't select\r\n");
-            return HF_TAG_NO;
+            return STATUS_HF_TAG_NO;
         }
         // Perform the first verification in order to obtain the unblocked NT1
-        if (authex(pcs, uid, block, type, u64Key, AUTH_FIRST, &nt1) != HF_TAG_OK) {
+        if (authex(pcs, uid, block, type, u64Key, AUTH_FIRST, &nt1) != STATUS_HF_TAG_OK) {
             NRF_LOG_INFO("Auth failed 1\r\n");
-            return MF_ERR_AUTH;
+            return STATUS_MF_ERR_AUTH;
         }
         // Met the nested verification to obtain the encrypted NT2_ENC
-        if (authex(pcs, uid, block, type, u64Key, AUTH_NESTED, &nt2) != HF_TAG_OK) {
+        if (authex(pcs, uid, block, type, u64Key, AUTH_NESTED, &nt2) != STATUS_HF_TAG_OK) {
             NRF_LOG_INFO("Auth failed 2\r\n");
-            return MF_ERR_AUTH;
+            return STATUS_MF_ERR_AUTH;
         }
         // Determine whether the two random numbers are the same, under normal circumstances,
         // We can't bring the same random number, because PRNG is updating chip at any time
@@ -805,7 +805,7 @@ static uint8_t measure_distance(uint64_t u64Key, uint8_t block, uint8_t type, ui
         if (nt1 == nt2) {
             NRF_LOG_INFO("StaticNested: %08x vs %08x\n", nt1, nt2);
             *distance = 0;
-            return HF_TAG_OK;
+            return STATUS_HF_TAG_OK;
         }
         // After the measurement is completed, store in the buffer
         distances[index++] = measure_nonces(nt1, nt2);
@@ -815,7 +815,7 @@ static uint8_t measure_distance(uint64_t u64Key, uint8_t block, uint8_t type, ui
 //The final calculation of the distance between the two NTs and spread it directly
     *distance =  measure_median(distances, DIST_NR);
 // You need to return the OK value to successfully log in
-    return HF_TAG_OK;
+    return STATUS_HF_TAG_OK;
 }
 
 /**
@@ -841,16 +841,16 @@ static uint8_t nested_recover_core(mf1_nested_core_t *pnc, uint64_t keyKnown, ui
     // Reset card communication
     pcd_14a_reader_halt_tag();
     // Quickly select the card to complete the verification steps to collect NT1 and NT2_ENC
-    if (pcd_14a_reader_scan_auto(p_tag_info) != HF_TAG_OK) {
-        return HF_TAG_NO;
+    if (pcd_14a_reader_scan_auto(p_tag_info) != STATUS_HF_TAG_OK) {
+        return STATUS_HF_TAG_NO;
     }
     //The first step verification, basic verification does not require nested and encrypted
-    if (authex(pcs, uid, blkKnown, typKnown, keyKnown, AUTH_FIRST, &nt1) != HF_TAG_OK) {
-        return MF_ERR_AUTH;
+    if (authex(pcs, uid, blkKnown, typKnown, keyKnown, AUTH_FIRST, &nt1) != STATUS_HF_TAG_OK) {
+        return STATUS_MF_ERR_AUTH;
     }
     // Then there is nested verification
     if (send_cmd(pcs, AUTH_NESTED, targetType, targetBlock, &status, answer, parity, U8ARR_BIT_LEN(answer)) != 32) {
-        return HF_ERR_STAT;
+        return STATUS_HF_ERR_STAT;
     };
     // The first verified explicitly random number
     num_to_bytes(nt1, 4, pnc->nt1);
@@ -861,7 +861,7 @@ static uint8_t nested_recover_core(mf1_nested_core_t *pnc, uint64_t keyKnown, ui
     pnc->par |= ((oddparity8(answer[0]) != parity[0]) << 0);
     pnc->par |= ((oddparity8(answer[1]) != parity[1]) << 1);
     pnc->par |= ((oddparity8(answer[2]) != parity[2]) << 2);
-    return HF_TAG_OK;
+    return STATUS_HF_TAG_OK;
 }
 
 /**
@@ -872,14 +872,14 @@ static uint8_t nested_recover_core(mf1_nested_core_t *pnc, uint64_t keyKnown, ui
 * @param    :targetBlock : The target sector that requires a Nested attack
 * @param    :targetType  : The target key type requires the Nested attack
 * @param    :ncs         : Nested core structure array, save related communication data
-* @retval   :The attack success return HF_TAG_OK, else return the error code
+* @retval   :The attack success return STATUS_HF_TAG_OK, else return the error code
 *
 */
 uint8_t nested_recover_key(uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown, uint8_t targetBlock, uint8_t targetType, mf1_nested_core_t ncs[SETS_NR]) {
     uint8_t m, res;
     // all operations must be based on the card
     res = pcd_14a_reader_scan_auto(p_tag_info);
-    if (res != HF_TAG_OK) {
+    if (res != STATUS_HF_TAG_OK) {
         return res;
     }
     //Then collect the specified number of random array
@@ -892,11 +892,11 @@ uint8_t nested_recover_key(uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown
                   targetBlock,
                   targetType
               );
-        if (res != HF_TAG_OK) {
+        if (res != STATUS_HF_TAG_OK) {
             return res;
         }
     }
-    return HF_TAG_OK;
+    return STATUS_HF_TAG_OK;
 }
 
 /**
@@ -909,11 +909,11 @@ uint8_t nested_recover_key(uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown
 *
 */
 uint8_t nested_distance_detect(uint8_t block, uint8_t type, uint8_t *key, uint8_t *uid, uint32_t *distance) {
-    uint8_t status      = HF_TAG_OK;
+    uint8_t status      = STATUS_HF_TAG_OK;
     *distance   = 0;
     //Must ensure that there is a card on the court
     status = pcd_14a_reader_scan_auto(p_tag_info);
-    if (status != HF_TAG_OK) {
+    if (status != STATUS_HF_TAG_OK) {
         return status;
     } else {
         // At least the card exists, you can copy the UID to the buffer first
@@ -934,7 +934,7 @@ uint8_t nested_distance_detect(uint8_t block, uint8_t type, uint8_t *key, uint8_
 * @param    :targetBlock : Target sectors that require nested attacks
 * @param    :targetType  : Target key types that require nested attacks
 * @param    :nestedAgain : StaticNested enhanced vulnerability, which can obtain two sets of encrypted random numbers based on nested verification of known keys
-* @retval   : Successfully collected and returned to HF_TAG_OK, otherwise an error code will be returned.
+* @retval   : Successfully collected and returned to STATUS_HF_TAG_OK, otherwise an error code will be returned.
 *
 */
 uint8_t static_nested_recover_core(uint8_t *p_nt1, uint8_t *p_nt2, uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown, uint8_t targetBlock, uint8_t targetType, uint8_t nestedAgain) {
@@ -946,28 +946,28 @@ uint8_t static_nested_recover_core(uint8_t *p_nt1, uint8_t *p_nt2, uint64_t keyK
     uint32_t uid, nt1, nt2;
     uid = get_u32_tag_uid(p_tag_info);
     pcd_14a_reader_halt_tag();
-    if (pcd_14a_reader_fast_select(p_tag_info) != HF_TAG_OK) {
-        return HF_TAG_NO;
+    if (pcd_14a_reader_fast_select(p_tag_info) != STATUS_HF_TAG_OK) {
+        return STATUS_HF_TAG_NO;
     }
     status = authex(pcs, uid, blkKnown, typKnown, keyKnown, AUTH_FIRST, &nt1);
-    if (status != HF_TAG_OK) {
-        return MF_ERR_AUTH;
+    if (status != STATUS_HF_TAG_OK) {
+        return STATUS_MF_ERR_AUTH;
     }
     if (nestedAgain) {
         status = authex(pcs, uid, blkKnown, typKnown, keyKnown, AUTH_NESTED, NULL);
-        if (status != HF_TAG_OK) {
-            return MF_ERR_AUTH;
+        if (status != STATUS_HF_TAG_OK) {
+            return STATUS_MF_ERR_AUTH;
         }
     }
     len = send_cmd(pcs, AUTH_NESTED, targetType, targetBlock, &status, answer, parity, U8ARR_BIT_LEN(answer));
     if (len != 32) {
         NRF_LOG_INFO("No 32 data recv on sendcmd: %d\r\n", len);
-        return HF_ERR_STAT;
+        return STATUS_HF_ERR_STAT;
     }
     nt2 = bytes_to_num(answer, 4);
     num_to_bytes(nt1, 4, p_nt1);
     num_to_bytes(nt2, 4, p_nt2);
-    return HF_TAG_OK;
+    return STATUS_HF_TAG_OK;
 }
 
 /**
@@ -979,25 +979,25 @@ uint8_t static_nested_recover_core(uint8_t *p_nt1, uint8_t *p_nt2, uint64_t keyK
 * @param    :targetBlock : Target sectors that require nested attacks
 * @param    :targetType  : Target key type that require nested attacks
 * @param    :sncs        : StaticNested Decrypting Core Structure Array
-* @retval   : Successfully collected and returned to HF_TAG_OK, otherwise an error code will be returned.
+* @retval   : Successfully collected and returned to STATUS_HF_TAG_OK, otherwise an error code will be returned.
 *
 */
 uint8_t static_nested_recover_key(uint64_t keyKnown, uint8_t blkKnown, uint8_t typKnown, uint8_t targetBlock, uint8_t targetType, mf1_static_nested_core_t *sncs) {
     uint8_t res;
     res = pcd_14a_reader_scan_auto(p_tag_info);
-    if (res != HF_TAG_OK) {
+    if (res != STATUS_HF_TAG_OK) {
         return res;
     }
     get_4byte_tag_uid(p_tag_info, sncs->uid);
     res = static_nested_recover_core(sncs->core[0].nt1, sncs->core[0].nt2, keyKnown, blkKnown, typKnown, targetBlock, targetType, false);
-    if (res != HF_TAG_OK) {
+    if (res != STATUS_HF_TAG_OK) {
         return res;
     }
     res = static_nested_recover_core(sncs->core[1].nt1, sncs->core[1].nt2, keyKnown, blkKnown, typKnown, targetBlock, targetType, true);
-    if (res != HF_TAG_OK) {
+    if (res != STATUS_HF_TAG_OK) {
         return res;
     }
-    return HF_TAG_OK;
+    return STATUS_HF_TAG_OK;
 }
 
 /**
@@ -1007,8 +1007,8 @@ uint8_t static_nested_recover_key(uint64_t keyKnown, uint8_t blkKnown, uint8_t t
 */
 uint8_t auth_key_use_522_hw(uint8_t block, uint8_t type, uint8_t *key) {
     // Each verification of a block must re -find a card
-    if (pcd_14a_reader_scan_auto(p_tag_info) != HF_TAG_OK) {
-        return HF_TAG_NO;
+    if (pcd_14a_reader_scan_auto(p_tag_info) != STATUS_HF_TAG_OK) {
+        return STATUS_HF_TAG_NO;
     }
     // After finding the card, we start to verify!
     return pcd_14a_reader_mf1_auth(p_tag_info, type, block, key);
