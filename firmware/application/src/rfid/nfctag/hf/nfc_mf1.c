@@ -431,6 +431,14 @@ void mf1_prng_by_bytes(uint8_t *nonces, uint32_t n) {
 }
 #endif
 
+void mf1_response_4bit_auto_encrypt(uint8_t value) {
+#ifdef NFC_MF1_FAST_SIM
+    nfc_tag_14a_tx_nbit(value ^ Crypto1Nibble(), 4);
+#else
+    nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, value), 4);
+#endif
+}
+
 /** @brief MF1 status machine
  * @param data      From reading head data
  * @param szBits    length of data
@@ -445,7 +453,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                 // The first step back door card verification
                 // NRF_LOG_INFO("MIFARE_MAGICWUPC1 received.\n");
                 m_gen1a_state = GEN1A_STATE_UNLOCKING;
-                nfc_tag_14a_tx_nbit_delay_window(ACK_VALUE, 4);
+                nfc_tag_14a_tx_nbit(ACK_VALUE, 4);
             } else if (szDataBits == 8 && p_data[0] == CMD_CHINESE_UNLOCK_RW) {
                 // The second back door card verification
                 if (m_gen1a_state == GEN1A_STATE_UNLOCKING) {
@@ -453,7 +461,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                     nfc_tag_14a_set_state(NFC_TAG_STATE_14A_ACTIVE);    //Update the status machine of the external 14A
                     m_gen1a_state = GEN1A_STATE_UNLOCKED_RW_WAIT;       // Update the Gen1A status machine
                     m_mf1_state = MF1_STATE_UNAUTHENTICATED;                     // Update MF1 status machine
-                    nfc_tag_14a_tx_nbit_delay_window(ACK_VALUE, 4);     //Reply to the card reader Gen1a label unlock the back door success
+                    nfc_tag_14a_tx_nbit(ACK_VALUE, 4);     //Reply to the card reader Gen1a label unlock the back door success
 #ifndef NFC_MF1_FAST_SIM
                     crypto1_deinit(pcs);                                // Reset crypto1 handler
 #endif
@@ -569,7 +577,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                                 memcpy(m_tag_tx_buffer.tx_raw_buffer, m_tag_information->memory[CurrentAddress], NFC_TAG_MF1_DATA_SIZE);
                                 nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_raw_buffer, NFC_TAG_MF1_DATA_SIZE, true);
                             } else {
-                                nfc_tag_14a_tx_nbit_delay_window(NAK_INVALID_OPERATION_TBIV, 4);
+                                nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
                             }
                             break;
                         }
@@ -580,22 +588,22 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                                 CurrentAddress = p_data[1];
                                 m_gen1a_state = GEN1A_STATE_WRITING;
                                 // Responsive ACK, let the read head continue the next step data to come over
-                                nfc_tag_14a_tx_nbit_delay_window(ACK_VALUE, 4);
+                                nfc_tag_14a_tx_nbit(ACK_VALUE, 4);
                             } else {
-                                nfc_tag_14a_tx_nbit_delay_window(NAK_INVALID_OPERATION_TBIV, 4);
+                                nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
                             }
                             break;
                         }
                         default: {
                             // When the state is not verified, read and write cards directly when the back door mode is turned on
                             // In addition to initiating verification instructions, the others can do nothing
-                            nfc_tag_14a_tx_nbit_delay_window(NAK_INVALID_OPERATION_TBIV, 4);
+                            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
                             break;
                         }
                     }
                 } else {
                     // CRC verification abnormal
-                    nfc_tag_14a_tx_nbit_delay_window(NAK_CRC_PARITY_ERROR_TBIV, 4);
+                    nfc_tag_14a_tx_nbit(NAK_CRC_PARITY_ERROR_TBIV, 4);
                     return;
                 }
             } else {
@@ -607,10 +615,10 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                         // Restore the Gen1A special state machine for waiting operation status
                         m_gen1a_state = GEN1A_STATE_UNLOCKED_RW_WAIT;
                         // Reply to read head ACK, complete the writing operation
-                        nfc_tag_14a_tx_nbit_delay_window(ACK_VALUE, 4);
+                        nfc_tag_14a_tx_nbit(ACK_VALUE, 4);
                     } else {
                         // The transmitted CRC verification is abnormal, and you cannot continue writing
-                        nfc_tag_14a_tx_nbit_delay_window(NAK_CRC_PARITY_ERROR_TBIV, 4);
+                        nfc_tag_14a_tx_nbit(NAK_CRC_PARITY_ERROR_TBIV, 4);
                     }
                 } else {
                     // If you wait for the instruction status to the non -4BYTE instruction, it is considered abnormal
@@ -731,21 +739,13 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                                 // Reset the 14A state machine directly, let the label sleep
                                 nfc_tag_14a_set_state(NFC_TAG_STATE_14A_HALTED);
                                 // Tell me to read the head. This operation is not allowed to be allowed
-#ifdef NFC_MF1_FAST_SIM
-                                nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV ^ Crypto1Nibble(), 4);
-#else
-                                nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, NAK_INVALID_OPERATION_TBIV), 4);
-#endif
+                                mf1_response_4bit_auto_encrypt(NAK_INVALID_OPERATION_TBIV);
                             } else {
                                 // Normally write command.Store the address and prepare to receive the upcoming data.
                                 CurrentAddress = p_data[1];
                                 m_mf1_state = MF1_STATE_WRITE;
                                 // Take ACK response, inform the reading head we are ready
-#ifdef NFC_MF1_FAST_SIM
-                                nfc_tag_14a_tx_nbit(ACK_VALUE ^ Crypto1Nibble(), 4);
-#else
-                                nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, ACK_VALUE), 4);
-#endif
+                                mf1_response_4bit_auto_encrypt(ACK_VALUE);
                             }
                             return;
                         }
@@ -753,31 +753,19 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                         case CMD_DECREMENT: {
                             CurrentAddress = p_data[1];
                             m_mf1_state = MF1_STATE_DECREMENT;
-#ifdef NFC_MF1_FAST_SIM
-                            nfc_tag_14a_tx_nbit(ACK_VALUE ^ Crypto1Nibble(), 4);
-#else
-                            nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, ACK_VALUE), 4);
-#endif
+                            mf1_response_4bit_auto_encrypt(ACK_VALUE);
                             break;
                         }
                         case CMD_INCREMENT: {
                             CurrentAddress = p_data[1];
                             m_mf1_state = MF1_STATE_INCREMENT;
-#ifdef NFC_MF1_FAST_SIM
-                            nfc_tag_14a_tx_nbit(ACK_VALUE ^ Crypto1Nibble(), 4);
-#else
-                            nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, ACK_VALUE), 4);
-#endif
+                            mf1_response_4bit_auto_encrypt(ACK_VALUE);
                             break;
                         }
                         case CMD_RESTORE: {
                             CurrentAddress = p_data[1];
                             m_mf1_state = MF1_STATE_RESTORE;
-#ifdef NFC_MF1_FAST_SIM
-                            nfc_tag_14a_tx_nbit(ACK_VALUE ^ Crypto1Nibble(), 4);
-#else
-                            nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, ACK_VALUE), 4);
-#endif
+                            mf1_response_4bit_auto_encrypt(ACK_VALUE);
                             break;
                         }
                         case CMD_TRANSFER: {
@@ -794,11 +782,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                                 memcpy(m_tag_information->memory[p_data[1]], m_data_block_buffer, MEM_BYTES_PER_BLOCK);
                                 status = ACK_VALUE;
                             }
-#ifdef NFC_MF1_FAST_SIM
-                            nfc_tag_14a_tx_nbit(status ^ Crypto1Nibble(), 4);
-#else
-                            nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, status), 4);
-#endif
+                            mf1_response_4bit_auto_encrypt(status);
                             break;
                         }
                         case CMD_AUTH_A:
@@ -906,11 +890,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                                 // If everything is normal, then we should make the card directly to sleep, and cannot respond to any message to the read head
                                 nfc_tag_14a_set_state(NFC_TAG_STATE_14A_HALTED);
                             } else {
-#ifdef NFC_MF1_FAST_SIM
-                                nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV ^ Crypto1Nibble(), 4);
-#else
-                                nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, NAK_INVALID_OPERATION_TBIV), 4);
-#endif
+                                mf1_response_4bit_auto_encrypt(NAK_INVALID_OPERATION_TBIV);
                             }
                             break;
                         }
@@ -918,21 +898,13 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                             // If you read your hair, you don't know what ghost instructions, we can't handle it,
                             // Therefore, the task is abnormal, and the status needs to be reset, and the response to the reading head will not support this instruction
                             nfc_tag_14a_set_state(NFC_TAG_STATE_14A_IDLE);
-#ifdef NFC_MF1_FAST_SIM
-                            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV ^ Crypto1Nibble(), 4);
-#else
-                            nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, NAK_INVALID_OPERATION_TBIV), 4);
-#endif
+                            mf1_response_4bit_auto_encrypt(NAK_INVALID_OPERATION_TBIV);
                             break;
                         }
                     }
                 } else {
                     // CRC is wrong, return the error code notification
-#ifdef NFC_MF1_FAST_SIM
-                    nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV ^ Crypto1Nibble(), 4);
-#else
-                    nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, NAK_INVALID_OPERATION_TBIV), 4);
-#endif
+                    mf1_response_4bit_auto_encrypt(NAK_INVALID_OPERATION_TBIV);
                     break;
                 }
             } else {
@@ -975,11 +947,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
             }
             // In any case, after the operation, the label will be allowed to return to the verification idle state
             m_mf1_state = MF1_STATE_AUTHENTICATED;
-#ifdef NFC_MF1_FAST_SIM
-            nfc_tag_14a_tx_nbit(status ^ Crypto1Nibble(), 4);
-#else
-            nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, status), 4);
-#endif
+            mf1_response_4bit_auto_encrypt(status);
             break;
         }
 
@@ -1016,8 +984,8 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                         }
                         // Convert the value to Block data
                         ValueToBlock(m_data_block_buffer, value_block);
-                        // The second step of these three operations is that this step does not need to respond to the reading header
-                        // Therefore, when the program is executed to this step, you can return to the state where the verified instruction can be waited.
+                        // No ACK response on value commands part 2
+                        m_mf1_state = MF1_STATE_AUTHENTICATED;
                         break;
                     } else {
                         // The answers here may be wrong, or maybe no answer is required at all
@@ -1032,11 +1000,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                 status = NAK_CRC_PARITY_ERROR_TBIV;
             }
             m_mf1_state = MF1_STATE_AUTHENTICATED;
-#ifdef NFC_MF1_FAST_SIM
-            nfc_tag_14a_tx_nbit(status ^ Crypto1Nibble(), 4);
-#else
-            nfc_tag_14a_tx_nbit(mf_crypto1_encrypt4bit(pcs, status), 4);
-#endif
+            mf1_response_4bit_auto_encrypt(status);
             break;
         }
 
