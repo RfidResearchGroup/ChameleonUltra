@@ -125,7 +125,7 @@ inline void nfc_tag_14a_append_bcc(uint8_t *pbtData, size_t szLen) {
  *
  */
 inline void nfc_tag_14a_append_crc(uint8_t *pbtData, size_t szLen) {
-    calc_14a_crc_lut(pbtData, szLen, pbtData + szLen);
+    calc_14a_crc_lut(pbtData, szLen, &pbtData[szLen]);
 }
 
 /**
@@ -134,10 +134,10 @@ inline void nfc_tag_14a_append_crc(uint8_t *pbtData, size_t szLen) {
  */
 bool nfc_tag_14a_checks_crc(uint8_t *pbtData, size_t szLen) {
     //if (szLen < 3) return false;
-    uint8_t c1 = pbtData[szLen - 2];
-    uint8_t c2 = pbtData[szLen - 1];
-    nfc_tag_14a_append_crc(pbtData, szLen - 2);
-    return pbtData[szLen - 2] == c1 && pbtData[szLen - 1] == c2;
+    uint8_t crc_calc[2];
+    calc_14a_crc_lut(pbtData, szLen - 2, crc_calc);
+    // NRF_LOG_INFO("%02x%02x ,  %02x%02x", pbtData[szLen - 2], pbtData[szLen - 1], crc_calc[0], crc_calc[1]);
+    return pbtData[szLen - 2] == crc_calc[0] && pbtData[szLen - 1] == crc_calc[1];
 }
 
 /**
@@ -298,16 +298,6 @@ void nfc_tag_14a_tx_bytes(uint8_t *data, uint32_t bytes, bool appendCrc) {
     NFC_14A_TX_BYTE_CORE(data, bytes, appendCrc, NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
 }
 
-/**@brief The function of sending the byte flow, this implementation automatically sends SOF
- *
- * @param[in]   data        The byte flow data to be sent
- * @param[in]   bytes       The length of the byte flow to be sent
- * @param[in]   appendCrc   Whether to send the byte flow, automatically send the CRC16 verification automatically
- */
-void nfc_tag_14a_tx_bytes_delay_freerun(uint8_t *data, uint32_t bytes, bool appendCrc) {
-    NFC_14A_TX_BYTE_CORE(data, bytes, appendCrc, NRF_NFCT_FRAME_DELAY_MODE_FREERUN);
-}
-
 /**
  * @brief: Function for response reader core implemented
  * @param[in]   bits   Send bits length
@@ -344,18 +334,7 @@ void nfc_tag_14a_tx_bits(uint8_t *data, uint32_t bits) {
 void nfc_tag_14a_tx_nbit(uint8_t data, uint32_t bits) {
     m_is_responded = true;
     m_nfc_tx_buffer[0] = data;
-    NFC_14A_TX_BITS_CORE(bits, NRF_NFCT_FRAME_DELAY_MODE_FREERUN);
-}
-
-/**@brief The function of sending n bits is implemented, and this implementation is automatically sent SOF
- *
- * @param[in]   data   BIT data to be sent
- * @param[in]   bits   To send a few bites
- */
-void nfc_tag_14a_tx_nbit_delay_window(uint8_t data, uint32_t bits) {
-    m_is_responded = true;
-    m_nfc_tx_buffer[0] = data;
-    NFC_14A_TX_BITS_CORE(bits, NRF_NFCT_FRAME_DELAY_MODE_WINDOW);
+    NFC_14A_TX_BITS_CORE(bits, NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
 }
 
 /**
@@ -564,7 +543,7 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
                         // Back to ATS data according to FSD, FSD is the largest frame size supported by PCD. After removing CRC, it is the actual data frame size support
                         nfc_tag_14a_tx_bytes(auto_coll_res->ats->data, len, true);
                     } else {
-                        nfc_tag_14a_tx_nbit_delay_window(NAK_INVALID_OPERATION_TBIV, 4);
+                        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
                     }
                     // After handling the explicitly sending RATS instructions outside the outside, wait directly for the next round of communication
                     return;
@@ -577,23 +556,6 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
             }
         }
     }
-}
-
-static inline void nfc_core_reset(void) {
-    uint32_t int_enabled = nrf_nfct_int_enable_get();
-
-    // Reset the NFCT peripheral.
-    *(volatile uint32_t *)0x40005FFC = 0;
-    *(volatile uint32_t *)0x40005FFC;
-    *(volatile uint32_t *)0x40005FFC = 1;
-
-    // Restore parameter settings after the reset of the NFCT peripheral.
-    nrf_nfct_frame_delay_max_set(0x00001000UL);
-    // Use Window Grid frame delay mode.
-    nrf_nfct_frame_delay_mode_set(NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
-
-    // Restore interrupts.
-    nrf_nfct_int_enable(int_enabled);
 }
 
 static inline void nfc_fdt_reset(void) {
@@ -643,8 +605,6 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
 
             TAG_FIELD_LED_OFF()
             m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
-
-            // nfc_core_reset();
 
             NRF_LOG_INFO("HF FIELD LOST");
             break;
