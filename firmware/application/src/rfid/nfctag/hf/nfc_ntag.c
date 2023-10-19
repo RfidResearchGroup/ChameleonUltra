@@ -140,13 +140,13 @@ void nfc_tag_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                 }
                 nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, BYTES_PER_READ, true);
             } else {
-                nfc_tag_14a_tx_nbit_delay_window(NAK_INVALID_OPERATION_TBIV, 4);
+                nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
             }
             break;
         case CMD_FAST_READ: {
             uint8_t end_block_num = p_data[2];
             if ((block_num > end_block_num) || (block_num >= get_block_max_by_tag_type(m_tag_type)) || (end_block_num >= get_block_max_by_tag_type(m_tag_type))) {
-                nfc_tag_14a_tx_nbit_delay_window(NAK_INVALID_OPERATION_TBV, 4);
+                nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
                 break;
             }
             for (int block = block_num; block <= end_block_num; block++) {
@@ -157,7 +157,7 @@ void nfc_tag_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits) {
         }
         case CMD_WRITE:
             // TODO
-            nfc_tag_14a_tx_nbit_delay_window(ACK_VALUE, 4);
+            nfc_tag_14a_tx_nbit(ACK_VALUE, 4);
             break;
         case CMD_COMPAT_WRITE:
             // TODO
@@ -167,7 +167,7 @@ void nfc_tag_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits) {
             uint8_t Password[4];
             memcpy(Password, m_tag_information->memory[get_block_cfg_by_tag_type(m_tag_type) + CONF_PASSWORD_OFFSET], 4);
             if (Password[0] != p_data[1] || Password[1] != p_data[2] || Password[2] != p_data[3] || Password[3] != p_data[4]) {
-                nfc_tag_14a_tx_nbit_delay_window(NAK_INVALID_OPERATION_TBIV, 4);
+                nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
                 break;
             }
             /* Authenticate the user */
