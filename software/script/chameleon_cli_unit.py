@@ -70,7 +70,8 @@ class BaseCLIUnit:
 
     def args_parser(self) -> ArgumentParserNoExit:
         """
-            CMD unit args
+            CMD unit args.
+
         :return:
         """
         raise NotImplementedError("Please implement this")
@@ -78,13 +79,15 @@ class BaseCLIUnit:
     def before_exec(self, args: argparse.Namespace):
         """
             Call a function before exec cmd.
+
         :return: function references
         """
         return True
 
     def on_exec(self, args: argparse.Namespace):
         """
-            Call a function on cmd match
+            Call a function on cmd match.
+
         :return: function references
         """
         raise NotImplementedError("Please implement this")
@@ -92,6 +95,7 @@ class BaseCLIUnit:
     def after_exec(self, args: argparse.Namespace):
         """
             Call a function after exec cmd.
+
         :return: function references
         """
         return True
@@ -663,7 +667,8 @@ class HFMFNested(ReaderRequiredUnit):
 
     def recover_a_key(self, block_known, type_known, key_known, block_target, type_target) -> str or None:
         """
-            recover a key from key known
+            recover a key from key known.
+
         :param block_known:
         :param type_known:
         :param key_known:
@@ -769,7 +774,8 @@ class HFMFDarkside(ReaderRequiredUnit):
 
     def recover_key(self, block_target, type_target):
         """
-            Execute darkside acquisition and decryption
+            Execute darkside acquisition and decryption.
+
         :param block_target:
         :param type_target:
         :return:
@@ -877,6 +883,7 @@ class HFMFELog(DeviceRequiredUnit):
     def decrypt_by_list(self, rs: list):
         """
             Decrypt key from reconnaissance log list
+
         :param rs:
         :return:
         """

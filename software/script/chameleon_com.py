@@ -63,6 +63,7 @@ class ChameleonCom:
     def isOpen(self):
         """
             Chameleon is connected and init.
+
         :return:
         """
         return self.serial_instance is not None and self.serial_instance.isOpen()
@@ -71,6 +72,7 @@ class ChameleonCom:
         """
             Open chameleon port to communication
             And init some variables
+
         :param port: com port, comXXX or ttyXXX
         :return:
         """
@@ -111,7 +113,8 @@ class ChameleonCom:
     @staticmethod
     def lrc_calc(array):
         """
-            calc lrc and auto cut byte
+            Calc lrc and auto cut byte.
+
         :param array: value array
         :return: u8 result
         """
@@ -124,7 +127,8 @@ class ChameleonCom:
 
     def close(self):
         """
-            Close chameleon and clear variable
+            Close chameleon and clear variable.
+
         :return:
         """
         self.event_closing.set()
@@ -139,7 +143,8 @@ class ChameleonCom:
 
     def thread_data_receive(self):
         """
-            SubThread to receive data from chameleon device
+            Sub thread to receive data from chameleon device.
+
         :return:
         """
         data_buffer = bytearray()
@@ -234,7 +239,8 @@ class ChameleonCom:
 
     def thread_data_transfer(self):
         """
-            SubThread to transfer data to chameleon device
+            Sub thread to transfer data to chameleon device.
+
         :return:
         """
         while self.isOpen():
@@ -271,7 +277,8 @@ class ChameleonCom:
 
     def thread_check_timeout(self):
         """
-            Check task timeout
+            Check task timeout.
+
         :return:
         """
         while self.isOpen():
@@ -288,6 +295,7 @@ class ChameleonCom:
     def make_data_frame_bytes(self, cmd: int, data: bytearray = None, status: int = 0) -> bytearray:
         """
             Make data frame
+
         :return: frame
         """
         if data is None:
@@ -306,6 +314,7 @@ class ChameleonCom:
                       close: bool = False):
         """
             Send cmd to device
+
         :param cmd: cmd
         :param data: bytes data (optional)
         :param status: status (optional)
@@ -339,6 +348,7 @@ class ChameleonCom:
                       timeout: int = 3) -> Response:
         """
             Send cmd to device, and block receive data.
+
         :param cmd: cmd
         :param data: bytes data (optional)
         :param status: status (optional)

@@ -80,7 +80,8 @@ class ChameleonCLI:
     @staticmethod
     def print_banner():
         """
-            print chameleon ascii banner
+            print chameleon ascii banner.
+
         :return:
         """
         print(f"{CY}{BANNER}{C0}")
@@ -88,6 +89,7 @@ class ChameleonCLI:
     def startCLI(self):
         """
             start listen input.
+
         :return:
         """
         if sys.version_info < (3, 9):
