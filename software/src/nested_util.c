@@ -75,13 +75,13 @@ countKeys *uniqsort(uint64_t *possibleKeys, uint32_t size) {
 }
 
 // nested decrypt
-static void* nested_revover(void *args) {
+static void *nested_revover(void *args) {
     struct Crypto1State *revstate, * revstate_start = NULL;
     uint64_t lfsr = 0;
     uint32_t i, kcount = 0;
     bool is_ok = true;
 
-    RecPar* rp = (RecPar*)args;
+    RecPar *rp = (RecPar *)args;
 
     rp->keyCount = 0;
     rp->keys = NULL;
@@ -110,14 +110,14 @@ static void* nested_revover(void *args) {
             if (((kcount % MEM_CHUNK) == 0) || (kcount >= rp->keyCount)) {
                 rp->keyCount += MEM_CHUNK;
                 // printf("New chunk by %d, sizeof %lu\n", kcount, rp->keyCount * sizeof(uint64_t));
-                void* tmp = realloc(rp->keys, rp->keyCount * sizeof(uint64_t));
+                void *tmp = realloc(rp->keys, rp->keyCount * sizeof(uint64_t));
                 if (tmp == NULL) {
                     printf("Memory allocation error for pk->possibleKeys");
                     rp->keyCount = 0;
                     is_ok = false;
                     break;
                 }
-                rp->keys = (uint64_t*)tmp;
+                rp->keys = (uint64_t *)tmp;
             }
             rp->keys[kcount] = lfsr;
             kcount++;
@@ -133,18 +133,16 @@ static void* nested_revover(void *args) {
     if (is_ok) {
         if (kcount != 0) {
             rp->keyCount = kcount;
-            void* tmp = (uint64_t*)realloc(rp->keys, rp->keyCount * sizeof(uint64_t));
+            void *tmp = (uint64_t *)realloc(rp->keys, rp->keyCount * sizeof(uint64_t));
             if (tmp == NULL) {
                 printf("Memory allocation error for pk->possibleKeys");
                 rp->keyCount = 0;
                 free(rp->keys);
-            }
-            else {
+            } else {
                 rp->keys = tmp;
             }
         }
-    }
-    else {
+    } else {
         rp->keyCount = 0;
         free(rp->keys);
     }
@@ -156,7 +154,7 @@ uint64_t *nested(NtpKs1 *pNK, uint32_t sizePNK, uint32_t authuid, uint32_t *keyC
 
     *keyCount = 0;
     uint32_t i, j, manyThread;
-    uint64_t* keys = (uint64_t*)NULL;
+    uint64_t *keys = (uint64_t *)NULL;
 
     manyThread = THREAD_MAX;
     if (manyThread > sizePNK) {
@@ -164,11 +162,11 @@ uint64_t *nested(NtpKs1 *pNK, uint32_t sizePNK, uint32_t authuid, uint32_t *keyC
     }
 
     // pthread handle
-    pthread_t* threads = calloc(sizePNK, sizeof(pthread_t));
+    pthread_t *threads = calloc(sizePNK, sizeof(pthread_t));
     if (threads == NULL)  return NULL;
 
     // Param
-    RecPar* pRPs = calloc(sizePNK, sizeof(RecPar));
+    RecPar *pRPs = calloc(sizePNK, sizeof(RecPar));
     if (pRPs == NULL) {
         free(threads);
         return NULL;
@@ -216,9 +214,9 @@ uint64_t *nested(NtpKs1 *pNK, uint32_t sizePNK, uint32_t authuid, uint32_t *keyC
                 }
             }
 
-            countKeys* ck = uniqsort(keys, *keyCount);
+            countKeys *ck = uniqsort(keys, *keyCount);
             free(keys);
-            keys = (uint64_t*)NULL;
+            keys = (uint64_t *)NULL;
             *keyCount = 0;
 
             if (ck != NULL) {
@@ -227,24 +225,21 @@ uint64_t *nested(NtpKs1 *pNK, uint32_t sizePNK, uint32_t authuid, uint32_t *keyC
                     // This key can be found here two or more times
                     if (ck[i].count > 0) {
                         *keyCount += 1;
-                        void* tmp = realloc(keys, sizeof(uint64_t) * (*keyCount));
+                        void *tmp = realloc(keys, sizeof(uint64_t) * (*keyCount));
                         if (tmp != NULL) {
                             keys = tmp;
                             keys[*keyCount - 1] = ck[i].key;
-                        }
-                        else {
+                        } else {
                             printf("Cannot allocate memory for keys on merge.");
                             free(keys);
                             break;
                         }
                     }
                 }
-            }
-            else {
+            } else {
                 printf("Cannot allocate memory for ck on uniqsort.");
             }
-        }
-        else {
+        } else {
             printf("Cannot allocate memory to merge keys.\r\n");
         }
     }

@@ -487,18 +487,18 @@ uint8_t pcd_14a_reader_bits_transfer(uint8_t *pTx, uint16_t  szTxBits, uint8_t *
 * @param  :tag: tag info buffer
 * @retval : if return STATUS_HF_TAG_OK, the tag is selected.
 */
-uint8_t pcd_14a_reader_fast_select(picc_14a_tag_t *tag) { 
-	uint8_t resp[5] = {0}; // theoretically. A usual RATS will be much smaller
-	uint8_t uid_resp[4] = {0};
+uint8_t pcd_14a_reader_fast_select(picc_14a_tag_t *tag) {
+    uint8_t resp[5] = {0}; // theoretically. A usual RATS will be much smaller
+    uint8_t uid_resp[4] = {0};
     uint8_t sak = 0x04; // cascade uid
-	uint8_t status = STATUS_HF_TAG_OK;
-	uint8_t cascade_level = 0;
-	uint16_t len;
-		
-	// Wakeup
+    uint8_t status = STATUS_HF_TAG_OK;
+    uint8_t cascade_level = 0;
+    uint16_t len;
+
+    // Wakeup
     if (pcd_14a_reader_atqa_request(resp, NULL, U8ARR_BIT_LEN(resp)) != STATUS_HF_TAG_OK) {
-		return STATUS_HF_TAG_NO;
-	}
+        return STATUS_HF_TAG_NO;
+    }
 
     // OK we will select at least at cascade 1, lets see if first byte of UID was 0x88 in
     // which case we need to make a cascade 2 request and select - this is a long UID
@@ -520,14 +520,14 @@ uint8_t pcd_14a_reader_fast_select(picc_14a_tag_t *tag) {
         //sel_uid[1] = 0x70;                                            // transmitting a full UID (1 Byte cmd, 1 Byte NVB, 4 Byte UID, 1 Byte BCC, 2 Bytes CRC)
         memcpy(sel_uid + 2, uid_resp, 4);                               // the UID received during anticollision, or the provided UID
         sel_uid[6] = sel_uid[2] ^ sel_uid[3] ^ sel_uid[4] ^ sel_uid[5]; // calculate and add BCC
-        crc_14a_append(sel_uid, 7);                               			// calculate and add CRC
-		status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, sel_uid, sizeof(sel_uid), resp, &len, U8ARR_BIT_LEN(resp));
+        crc_14a_append(sel_uid, 7);                                         // calculate and add CRC
+        status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, sel_uid, sizeof(sel_uid), resp, &len, U8ARR_BIT_LEN(resp));
         // Receive the SAK
         if (status != STATUS_HF_TAG_OK || !len) {
-			// printf("SAK Err: %d, %d\r\n", status, recv_len);
-			return STATUS_HF_TAG_NO;
-		}
-	
+            // printf("SAK Err: %d, %d\r\n", status, recv_len);
+            return STATUS_HF_TAG_NO;
+        }
+
         sak = resp[0];
 
         // Test if more parts of the uid are coming

@@ -388,6 +388,7 @@ lf = root.subgroup('lf', 'Low Frequency commands')
 lf_em = lf.subgroup('em', 'EM commands')
 lf_em_410x = lf_em.subgroup('410x', 'EM410x commands')
 
+
 @root.command('clear')
 class RootClear(BaseCLIUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -1124,11 +1125,11 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
         fwslot = SlotNumber.to_fw(self.slot_num)
         hf_tag_type = TagSpecificType(slotinfo[fwslot]['hf'])
         if hf_tag_type not in [
-                    TagSpecificType.MIFARE_Mini,
-                    TagSpecificType.MIFARE_1024,
-                    TagSpecificType.MIFARE_2048,
-                    TagSpecificType.MIFARE_4096,
-                ]:
+            TagSpecificType.MIFARE_Mini,
+            TagSpecificType.MIFARE_1024,
+            TagSpecificType.MIFARE_2048,
+            TagSpecificType.MIFARE_4096,
+        ]:
             print(f"{CR}Slot {self.slot_num} not configured as MIFARE Classic{C0}")
             return
         mfc_config = self.cmd.mf1_get_emulator_config()
@@ -1310,7 +1311,7 @@ class HFMFUDUMP(MFUAuthArgsUnit):
         }
         for i in range(param.start_page, param.stop_page):
             resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x30, i))
-            # TODO: can be optimized as we get 4 pages at once but beware of wrapping 
+            # TODO: can be optimized as we get 4 pages at once but beware of wrapping
             # in case of end of memory or LOCK on ULC and no key provided
             data = resp[:4]
             print(f" - Page {i:2}: {data.hex()}")
@@ -1347,10 +1348,10 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
         fwslot = SlotNumber.to_fw(self.slot_num)
         hf_tag_type = TagSpecificType(slotinfo[fwslot]['hf'])
         if hf_tag_type not in [
-                    TagSpecificType.NTAG_213,
-                    TagSpecificType.NTAG_215,
-                    TagSpecificType.NTAG_216,
-                ]:
+            TagSpecificType.NTAG_213,
+            TagSpecificType.NTAG_215,
+            TagSpecificType.NTAG_216,
+        ]:
             print(f"{CR}Slot {self.slot_num} not configured as MIFARE Ultralight / NTAG{C0}")
             return
         change_requested, change_done, uid, atqa, sak, ats = self.update_hf14a_anticoll(args, uid, atqa, sak, ats)
@@ -1462,11 +1463,11 @@ class HWSlotList(DeviceRequiredUnit):
                 if len(ats) > 0:
                     print(f'      {"ATS:":40}{CY}{ats.hex().upper()}{C0}')
                 if hf_tag_type in [
-                        TagSpecificType.MIFARE_Mini,
-                        TagSpecificType.MIFARE_1024,
-                        TagSpecificType.MIFARE_2048,
-                        TagSpecificType.MIFARE_4096,
-                    ]:
+                    TagSpecificType.MIFARE_Mini,
+                    TagSpecificType.MIFARE_1024,
+                    TagSpecificType.MIFARE_2048,
+                    TagSpecificType.MIFARE_4096,
+                ]:
                     config = self.cmd.mf1_get_emulator_config()
                     # print('    - Mifare Classic emulator settings:')
                     print(
@@ -1480,7 +1481,7 @@ class HWSlotList(DeviceRequiredUnit):
                         f'{f"{CG}enabled{C0}" if config["block_anti_coll_mode"] else f"{CR}disabled{C0}"}')
                     try:
                         print(f'      {"Write mode:":40}{CY}'
-                            f'{MifareClassicWriteMode(config["write_mode"])}{C0}')
+                              f'{MifareClassicWriteMode(config["write_mode"])}{C0}')
                     except ValueError:
                         print(f'      {"Write mode:":40}{CR}invalid value!{C0}')
                     print(

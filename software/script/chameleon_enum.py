@@ -1,5 +1,6 @@
 import enum
 
+
 @enum.unique
 class Command(enum.IntEnum):
     GET_APP_VERSION = 1000
@@ -430,5 +431,3 @@ class ButtonPressFunction(enum.IntEnum):
         elif self == ButtonPressFunction.BATTERY:
             return "Show Battery Level"
         return "None"
-
-
