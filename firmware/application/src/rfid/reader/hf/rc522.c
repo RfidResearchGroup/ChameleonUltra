@@ -484,8 +484,8 @@ uint8_t pcd_14a_reader_bits_transfer(uint8_t *pTx, uint16_t  szTxBits, uint8_t *
 
 /**
 * @brief  : ISO14443-A Fast Select
-* @param  ：tag：tag info buffer
-* @retval ：if return STATUS_HF_TAG_OK，the tag is selected.
+* @param  :tag: tag info buffer
+* @retval : if return STATUS_HF_TAG_OK, the tag is selected.
 */
 uint8_t pcd_14a_reader_fast_select(picc_14a_tag_t *tag) { 
 	uint8_t resp[5] = {0}; // theoretically. A usual RATS will be much smaller
