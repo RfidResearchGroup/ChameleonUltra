@@ -66,6 +66,7 @@
 #define DATA_CMD_MF1_READ_ONE_BLOCK             (2008)
 #define DATA_CMD_MF1_WRITE_ONE_BLOCK            (2009)
 #define DATA_CMD_HF14A_RAW                      (2010)
+#define DATA_CMD_MF1_MANIPULATE_VALUE_BLOCK     (2011)
 
 //
 // ******************************************************************

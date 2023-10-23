@@ -19,6 +19,11 @@
 #define PCD_RESET             0x0F               //Restoration
 #define PCD_CALCCRC           0x03               //CRC calculation
 
+/**
+* flags for pcd_14a_reader_bytes_transfer_flags
+*/
+#define PCD_TRANSMIT_FLAG_NO_RESET_MF_CRYPTO1_ON 0x01 // do not clear MFCrypto1On when status != STATUS_HF_TAG_OK
+
 /*
 * isO14443ACommandWord
 */
@@ -190,6 +195,13 @@ uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command,
                                       uint8_t *pOut,
                                       uint16_t *pOutLenBit,
                                       uint16_t maxOutLenBit);
+uint8_t pcd_14a_reader_bytes_transfer_flags(uint8_t Command,
+                                            uint8_t *pIn,
+                                            uint8_t  InLenByte,
+                                            uint8_t *pOut,
+                                            uint16_t *pOutLenBit,
+                                            uint16_t maxOutLenBit,
+                                            uint32_t flags);
 uint8_t pcd_14a_reader_bits_transfer(uint8_t *pTx,
                                      uint16_t  szTxBits,
                                      uint8_t *pTxPar,
@@ -217,6 +229,9 @@ uint8_t pcd_14a_reader_mf1_write(uint8_t addr, uint8_t *pData);
 // cardReadingOperation
 uint8_t pcd_14a_reader_mf1_read_by_cmd(uint8_t cmd, uint8_t addr, uint8_t *p);
 uint8_t pcd_14a_reader_mf1_read(uint8_t addr, uint8_t *pData);
+// value block operation
+uint8_t pcd_14a_reader_mf1_manipulate_value_block(uint8_t operator, uint8_t addr, int32_t operand);
+uint8_t pcd_14a_reader_mf1_transfer_value_block(uint8_t addr);
 // Formation card operation
 uint8_t pcd_14a_reader_halt_tag(void);
 void pcd_14a_reader_fast_halt_tag(void);

@@ -290,6 +290,10 @@ Notes:
   * `reserved`:2
 * Response: data sent by the card
 * CLI: cf `hf 14a raw`
+### 2011: MF1_MANIPULATE_VALUE_BLOCK
+* Command: 21 bytes: `src_type|src_block|src_key[6]|operator|operand[4]|dst_type|dst_block|dst_key[6]`. Key as 6 bytes. Type=`0x60` for key A, `0x61` for key B. Operator=`0xC0` for decrement, `0xC1` for increment, `0xC2` for restore. Operand as I32 in Network byte order.
+* Response: no data
+* CLI: cf `hf mf value`
 ### 3000: EM410X_SCAN
 * Command: no data
 * Response: 5 bytes. `id[5]`. ID as 5 bytes.
