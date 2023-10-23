@@ -685,7 +685,7 @@ class HFMFNested(ReaderRequiredUnit):
             cmd_param = f"{nt_uid_obj['uid']} {str(type_target)}"
             for nt_item in nt_uid_obj['nts']:
                 cmd_param += f" {nt_item['nt']} {nt_item['nt_enc']}"
-            decryptor_name = "staticnested"
+            tool_name = "staticnested"
         else:
             dist_obj = self.cmd.mf1_detect_nt_dist(block_known, type_known, key_known)
             nt_obj = self.cmd.mf1_nested_acquire(block_known, type_known, key_known, block_target, type_target)
@@ -693,13 +693,13 @@ class HFMFNested(ReaderRequiredUnit):
             cmd_param = f"{dist_obj['uid']} {dist_obj['dist']}"
             for nt_item in nt_obj:
                 cmd_param += f" {nt_item['nt']} {nt_item['nt_enc']} {nt_item['par']}"
-            decryptor_name = "nested"
+            tool_name = "nested"
 
         # Cross-platform compatibility
         if sys.platform == "win32":
-            cmd_recover = f"{decryptor_name}.exe {cmd_param}"
+            cmd_recover = f"{tool_name}.exe {cmd_param}"
         else:
-            cmd_recover = f"./{decryptor_name} {cmd_param}"
+            cmd_recover = f"./{tool_name} {cmd_param}"
 
         print(f"   Executing {cmd_recover}")
         # start a decrypt process
@@ -1316,7 +1316,7 @@ class HFMFUDUMP(MFUAuthArgsUnit):
                 else:
                     fd.write(data)
         if fd is not None:
-            print(f" - {colorama.Fore.GREEN}Dump written in {param.output_file}.{colorama.Style.RESET_ALL}")
+            print(f" - {CG}Dump written in {param.output_file}.{C0}")
             fd.close()
 
 
@@ -1432,7 +1432,7 @@ class HWSlotList(DeviceRequiredUnit):
             print(f' - {f"Slot {slot}:":{4+maxnamelength+1}}'
                   f'{f"({CG}active{C0})" if slot == selected else ""}')
 
-            ### HF ###
+            # HF
             field_length = maxnamelength+slotnames[fwslot]["hf"]["metalen"]+1
             print(f'   HF: '
                   f'{slotnames[fwslot]["hf"]["name"]:{field_length}}', end='')
@@ -1483,7 +1483,7 @@ class HWSlotList(DeviceRequiredUnit):
                         f'      {"Log (mfkey32) mode:":40}'
                         f'{f"{CG}enabled{C0}" if config["detection"] else f"{CR}disabled{C0}"}')
 
-            ### LF ###
+            # LF
             field_length = maxnamelength+slotnames[fwslot]["lf"]["metalen"]+1
             print(f'   LF: '
                   f'{slotnames[fwslot]["lf"]["name"]:{field_length}}', end='')

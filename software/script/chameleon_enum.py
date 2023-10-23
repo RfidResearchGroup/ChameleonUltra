@@ -213,9 +213,9 @@ class TagSpecificType(enum.IntEnum):
     OLD_NTAG_216 = 8
     OLD_TAG_TYPES_END = 9
 
-    ###### LF ######
+    # LF
 
-    #### ASK Tag-Talk-First      100 ####
+    # ASK Tag-Talk-First      100
     # EM410x
     EM410X = 100
     # FDX-B
@@ -228,18 +228,18 @@ class TagSpecificType(enum.IntEnum):
     # Noralsy
     # Jablotron
 
-    #### FSK Tag-Talk-First      200 ####
+    # FSK Tag-Talk-First      200
     # HID Prox
     # ioProx
     # AWID
     # Paradox
 
-    #### PSK Tag-Talk-First      300 ####
+    # PSK Tag-Talk-First      300
     # Indala
     # Keri
     # NexWatch
 
-    #### Reader-Talk-First       400 ####
+    # Reader-Talk-First       400
     # T5577
     # EM4x05/4x69
     # EM4x50/4x70
@@ -247,23 +247,23 @@ class TagSpecificType(enum.IntEnum):
 
     TAG_TYPES_LF_END = 999
 
-    ###### HF ######
+    # HF
 
-    #### MIFARE Classic series  1000 ####
+    # MIFARE Classic series  1000
     MIFARE_Mini = 1000
     MIFARE_1024 = 1001
     MIFARE_2048 = 1002
     MIFARE_4096 = 1003
-    #### MFUL / NTAG series     1100 ####
+    # MFUL / NTAG series     1100
     NTAG_213 = 1100
     NTAG_215 = 1101
     NTAG_216 = 1102
-    #### MIFARE Plus series     1200 ####
-    #### DESFire series         1300 ####
+    # MIFARE Plus series     1200
+    # DESFire series         1300
 
-    #### ST25TA series          2000 ####
+    # ST25TA series          2000
 
-    #### HF14A-4 series         3000 ####
+    # HF14A-4 series         3000
 
     @staticmethod
     def list(exclude_meta=True):

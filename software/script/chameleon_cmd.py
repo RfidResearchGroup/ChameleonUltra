@@ -776,8 +776,9 @@ class ChameleonCMD:
             if resp.data[0] < CURRENT_VERSION_SETTINGS:
                 raise ValueError("Settings version in app newer than Chameleon. "
                                  "Please upgrade Chameleon firmware")
-            settings_version, animation_mode, btn_press_A, btn_press_B, btn_long_press_A, btn_long_press_B, ble_pairing_enable, ble_pairing_key = struct.unpack(
-                '!BBBBBBB6s', resp.data)
+            settings_version, animation_mode, btn_press_A, btn_press_B, btn_long_press_A, \
+                btn_long_press_B, ble_pairing_enable, ble_pairing_key = \
+                struct.unpack('!BBBBBBB6s', resp.data)
             resp.data = {'settings_version': settings_version,
                          'animation_mode': animation_mode,
                          'btn_press_A': btn_press_A,
@@ -877,9 +878,11 @@ def test_fn():
 
             else:
                 print("Gen1A unlock 2 fail")
+                raise
         else:
             print("Gen1A unlock 1 fail")
-    except:
+            raise
+    except Exception:
         options['keep_rf_field'] = 0
         options['wait_response'] = 0
         cml.hf14a_raw(options=options)
