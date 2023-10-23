@@ -8,7 +8,7 @@ a = Analysis(
     ['script/chameleon_cli_main.py'],
     pathex=[],
     binaries=[
-        ("bin/*", "bin/"),
+        ("script/bin/*", "bin/"),
     ],
     datas=[],
     hiddenimports=[],

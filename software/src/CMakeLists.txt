@@ -2,7 +2,7 @@ cmake_minimum_required (VERSION 3.1)
 
 project (mifare C)
 
-set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../bin)
+set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../script/bin)
 set(SRC_DIR ./)
 
 set(COMMON_FILES

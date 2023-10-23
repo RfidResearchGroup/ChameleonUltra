@@ -36,12 +36,7 @@ type_id_SAK_dict = {0x00: "MIFARE Ultralight Classic/C/EV1/Nano | NTAG 2xx",
                     0x38: "SmartMX with MIFARE Classic 4K",
                     }
 
-if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
-    # in pyinstaller
-    default_cwd = Path.cwd() / Path(sys._MEIPASS) / "bin"
-else:
-    # from source
-    default_cwd = Path.cwd() / Path(__file__).parent.parent / "bin"
+default_cwd = Path.cwd() / Path(__file__).with_name("bin")
 
 
 def check_tools():
