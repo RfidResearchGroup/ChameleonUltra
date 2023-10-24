@@ -10,7 +10,7 @@ import pathlib
 import prompt_toolkit
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.history import FileHistory
-from chameleon_utils import CR, CG, CB, CC, CY, CM, C0
+from chameleon_utils import CR, CG, CY, C0
 
 ULTRA = r"""
                                                                 ╦ ╦╦ ╔╦╗╦═╗╔═╗
@@ -43,7 +43,8 @@ class ChameleonCLI:
     def __init__(self):
         self.completer = chameleon_utils.CustomNestedCompleter.from_clitree(chameleon_cli_unit.root)
         self.session = prompt_toolkit.PromptSession(completer=self.completer,
-                                                    history=FileHistory(pathlib.Path.home() / ".chameleon_history"))
+                                                    history=FileHistory(str(pathlib.Path.home() /
+                                                                            ".chameleon_history")))
 
         # new a device communication instance(only communication)
         self.device_com = chameleon_com.ChameleonCom()

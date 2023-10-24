@@ -1,7 +1,8 @@
 import argparse
 import colorama
 from functools import wraps
-from typing import Union
+# once Python3.10 is mainstream, we can replace Union[str, None] by str | None
+from typing import Union, Callable, Any
 from prompt_toolkit.completion import Completer, NestedCompleter, WordCompleter
 from prompt_toolkit.completion.base import Completion
 from prompt_toolkit.document import Document
@@ -38,12 +39,12 @@ class ArgumentParserNoExit(argparse.ArgumentParser):
         we must raise exception to stop parse
     """
 
-    def __init__(self, **args):
-        super().__init__(*args)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.add_help = False
         self.description = "Please enter correct parameters"
 
-    def exit(self, status: int = ..., message: str or None = ...):
+    def exit(self, status: int = 0, message: Union[str, None] = None):
         if message:
             raise ParserExitIntercept(message)
 
@@ -97,7 +98,7 @@ class ArgumentParserNoExit(argparse.ArgumentParser):
             print('\n'.join(lines))
 
 
-def expect_response(accepted_responses: Union[int, list[int]]):
+def expect_response(accepted_responses: Union[int, list[int]]) -> Callable[..., Any]:
     """
     Decorator for wrapping a Chameleon CMD function to check its response
     for expected return codes and throwing an exception otherwise
@@ -116,7 +117,7 @@ def expect_response(accepted_responses: Union[int, list[int]]):
                     status_string = f"Unexpected response and unknown status {ret.status}"
                 raise UnexpectedResponseError(status_string)
 
-            return ret.data
+            return ret.parsed
 
         return error_throwing_func
 
@@ -133,11 +134,12 @@ class CLITree:
     :param cls: A BaseCLIUnit instance handling the command
     """
 
-    def __init__(self, name=None, help_text=None, fullname=None, children=None, cls=None, root=False) -> None:
-        self.name: str = name
-        self.help_text: str = help_text
-        self.fullname: str = fullname if fullname else name
-        self.children: list[CLITree] = children if children else list()
+    def __init__(self, name: str = "", help_text: Union[str, None] = None, fullname: Union[str, None] = None,
+                 children: Union[list["CLITree"], None] = None, cls=None, root=False) -> None:
+        self.name = name
+        self.help_text = help_text
+        self.fullname = fullname if fullname else name
+        self.children = children if children else list()
         self.cls = cls
         self.root = root
         if self.help_text is None and not root:

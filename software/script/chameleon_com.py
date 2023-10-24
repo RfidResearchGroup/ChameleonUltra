@@ -3,7 +3,8 @@ import struct
 import threading
 import time
 import serial
-from chameleon_utils import CR, CG, CB, CC, CY, CM, C0
+from typing import Union
+from chameleon_utils import CR, CG, CC, CY, C0
 from chameleon_enum import Command, Status
 
 # each thread is waiting for its data for 100 ms before looping again
@@ -36,10 +37,11 @@ class Response:
         Chameleon Response Data
     """
 
-    def __init__(self, cmd, status, data=b''):
+    def __init__(self, cmd, status, data=b'', parsed=None):
         self.cmd = cmd
         self.status = status
-        self.data: bytearray = data
+        self.data: bytes = data
+        self.parsed = parsed
 
 
 class ChameleonCom:
@@ -55,20 +57,20 @@ class ChameleonCom:
         """
             Create a chameleon device instance
         """
-        self.serial_instance: serial.Serial | None = None
+        self.serial_instance: Union[serial.Serial, None] = None
         self.send_data_queue = queue.Queue()
         self.wait_response_map = {}
         self.event_closing = threading.Event()
 
-    def isOpen(self):
+    def isOpen(self) -> bool:
         """
             Chameleon is connected and init.
 
         :return:
         """
-        return self.serial_instance is not None and self.serial_instance.isOpen()
+        return self.serial_instance is not None and self.serial_instance.is_open
 
-    def open(self, port):
+    def open(self, port) -> "ChameleonCom":
         """
             Open chameleon port to communication
             And init some variables
@@ -86,8 +88,9 @@ class ChameleonCom:
             finally:
                 if error is not None:
                     raise OpenFailException(error)
+            assert self.serial_instance is not None
             try:
-                self.serial_instance.dtr = 1  # must make dtr enable
+                self.serial_instance.dtr = True  # must make dtr enable
             except Exception:
                 # not all serial support dtr, e.g. virtual serial over BLE
                 pass
@@ -102,7 +105,7 @@ class ChameleonCom:
             threading.Thread(target=self.thread_check_timeout).start()
         return self
 
-    def check_open(self):
+    def check_open(self) -> None:
         """
 
         :return:
@@ -111,7 +114,7 @@ class ChameleonCom:
             raise NotOpenException("Please call open() function to start device.")
 
     @staticmethod
-    def lrc_calc(array):
+    def lrc_calc(array: Union[bytearray, bytes]) -> int:
         """
             Calc lrc and auto cut byte.
 
@@ -133,6 +136,7 @@ class ChameleonCom:
         """
         self.event_closing.set()
         try:
+            assert self.serial_instance is not None
             self.serial_instance.close()
         except Exception:
             pass
@@ -156,6 +160,7 @@ class ChameleonCom:
         while self.isOpen():
             # receive
             try:
+                assert self.serial_instance is not None
                 data_bytes = self.serial_instance.read()
             except Exception as e:
                 if not self.event_closing.is_set():
@@ -197,8 +202,8 @@ class ChameleonCom:
                             # ok, lrc for data is correct.
                             # and we are receive completed
                             # print(f"Buffer data = {data_buffer.hex()}")
-                            data_response = data_buffer[struct.calcsize('!BBHHHB'):
-                                                        struct.calcsize(f'!BBHHHB{data_length}s')]
+                            data_response = bytes(data_buffer[struct.calcsize('!BBHHHB'):
+                                                              struct.calcsize(f'!BBHHHB{data_length}s')])
                             if DEBUG:
                                 try:
                                     command = Command(data_cmd)
@@ -263,6 +268,7 @@ class ChameleonCom:
             self.wait_response_map[task_cmd]['end_time'] = start_time + task_timeout
             self.wait_response_map[task_cmd]['is_timeout'] = False
             try:
+                assert self.serial_instance is not None
                 # send to device
                 self.serial_instance.write(task['frame'])
             except Exception as e:
@@ -292,7 +298,7 @@ class ChameleonCom:
                         self.wait_response_map[task_cmd]['is_timeout'] = True
             time.sleep(THREAD_BLOCKING_TIMEOUT)
 
-    def make_data_frame_bytes(self, cmd: int, data: bytearray = None, status: int = 0) -> bytearray:
+    def make_data_frame_bytes(self, cmd: int, data: Union[bytes, None] = None, status: int = 0) -> bytes:
         """
             Make data frame
 
@@ -308,9 +314,9 @@ class ChameleonCom:
         frame[struct.calcsize('!BBHHH')] = self.lrc_calc(frame[:struct.calcsize('!BBHHH')])
         # lrc3
         frame[struct.calcsize(f'!BBHHHB{len(data)}s')] = self.lrc_calc(frame[:struct.calcsize(f'!BBHHHB{len(data)}s')])
-        return frame
+        return bytes(frame)
 
-    def send_cmd_auto(self, cmd: int, data: bytearray = None, status: int = 0, callback=None, timeout: int = 3,
+    def send_cmd_auto(self, cmd: int, data: Union[bytes, None] = None, status: int = 0, callback=None, timeout: int = 3,
                       close: bool = False):
         """
             Send cmd to device
@@ -342,9 +348,8 @@ class ChameleonCom:
         if callable(callback):
             task['callback'] = callback
         self.send_data_queue.put(task)
-        return self
 
-    def send_cmd_sync(self, cmd: int, data: bytearray or bytes or list or int = None, status: int = 0,
+    def send_cmd_sync(self, cmd: int, data: Union[bytes, None] = None, status: int = 0,
                       timeout: int = 3) -> Response:
         """
             Send cmd to device, and block receive data.
@@ -355,13 +360,11 @@ class ChameleonCom:
         :param timeout: wait response timeout
         :return: response data
         """
-        if isinstance(data, int):
-            data = [data]  # warp array.
         if len(self.commands):
             # check if chameleon can understand this command
             if cmd not in self.commands:
-                raise CMDInvalidException(f"This device doesn't declare that it can support this command: {cmd}.\nMake "
-                                          f"sure firmware is up to date and matches client")
+                raise CMDInvalidException(f"This device doesn't declare that it can support this command: {cmd}.\n"
+                                          f"Make sure firmware is up to date and matches client")
         # first to send cmd, no callback mode(sync)
         self.send_cmd_auto(cmd, data, status, None, timeout)
         # wait cmd start process

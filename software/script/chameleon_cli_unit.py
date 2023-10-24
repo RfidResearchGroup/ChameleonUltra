@@ -10,6 +10,7 @@ from datetime import datetime
 import serial.tools.list_ports
 import threading
 import struct
+from typing import Union
 from pathlib import Path
 from platform import uname
 
@@ -17,7 +18,7 @@ import chameleon_com
 import chameleon_cmd
 from chameleon_utils import ArgumentParserNoExit, ArgsParserError, UnexpectedResponseError
 from chameleon_utils import CLITree
-from chameleon_utils import CR, CG, CB, CC, CY, CM, C0
+from chameleon_utils import CR, CG, CB, CC, CY, C0
 from chameleon_enum import Command, Status, SlotNumber, TagSenseType, TagSpecificType
 from chameleon_enum import MifareClassicWriteMode, MifareClassicPrngType, MifareClassicDarksideStatus, MfcKeyType
 from chameleon_enum import AnimationMode, ButtonType, ButtonPressFunction
@@ -52,11 +53,12 @@ def check_tools():
 class BaseCLIUnit:
     def __init__(self):
         # new a device command transfer and receiver instance(Send cmd and receive response)
-        self._device_com: chameleon_com.ChameleonCom | None = None
-        self._device_cmd: chameleon_cmd.ChameleonCMD = chameleon_cmd.ChameleonCMD(self._device_com)
+        self._device_com: Union[chameleon_com.ChameleonCom, None] = None
+        self._device_cmd: Union[chameleon_cmd.ChameleonCMD, None] = None
 
     @property
     def device_com(self) -> chameleon_com.ChameleonCom:
+        assert self._device_com is not None
         return self._device_com
 
     @device_com.setter
@@ -66,6 +68,7 @@ class BaseCLIUnit:
 
     @property
     def cmd(self) -> chameleon_cmd.ChameleonCMD:
+        assert self._device_cmd is not None
         return self._device_cmd
 
     def args_parser(self) -> ArgumentParserNoExit:
@@ -112,6 +115,7 @@ class BaseCLIUnit:
 
             def thread_read_output(self):
                 while self._process.poll() is None:
+                    assert self._process.stdout is not None
                     data = self._process.stdout.read(1024)
                     if len(data) > 0:
                         self.output += data.decode(encoding="utf-8")
@@ -635,7 +639,7 @@ class HF14AInfo(ReaderRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         scan = HF14AScan()
         scan.device_com = self.device_com
-        scan.scan(deep=1)
+        scan.scan(deep=True)
 
 
 @hf_mf.command('nested')
@@ -665,7 +669,7 @@ class HFMFNested(ReaderRequiredUnit):
         if nt_level == 2:
             return 'HardNested'
 
-    def recover_a_key(self, block_known, type_known, key_known, block_target, type_target) -> str or None:
+    def recover_a_key(self, block_known, type_known, key_known, block_target, type_target) -> Union[str, None]:
         """
             recover a key from key known.
 
@@ -740,12 +744,11 @@ class HFMFNested(ReaderRequiredUnit):
         block_known = args.blk
         # default to A
         type_known = MfcKeyType.B if args.b else MfcKeyType.A
-
         key_known: str = args.key
         if not re.match(r"^[a-fA-F0-9]{12}$", key_known):
             print("key must include 12 HEX symbols")
             return
-        key_known: bytearray = bytearray.fromhex(key_known)
+        key_known_bytes = bytes.fromhex(key_known)
         block_target = args.tblk
         # default to A
         type_target = MfcKeyType.B if args.b else MfcKeyType.A
@@ -753,7 +756,7 @@ class HFMFNested(ReaderRequiredUnit):
             print(f"{CR}Target key already known{C0}")
             return
         print(f" - {C0}Nested recover one key running...{C0}")
-        key = self.recover_a_key(block_known, type_known, key_known, block_target, type_target)
+        key = self.recover_a_key(block_known, type_known, key_known_bytes, block_target, type_target)
         if key is None:
             print(f"{CY}No key found, you can retry.{C0}")
         else:
@@ -862,8 +865,8 @@ class HFMFWRBL(MF1AuthArgsUnit):
         param = self.get_param(args)
         if not re.match(r"^[a-fA-F0-9]{32}$", args.data):
             raise ArgsParserError("Data must include 32 HEX symbols")
-        param.data = bytearray.fromhex(args.data)
-        resp = self.cmd.mf1_write_one_block(param.block, param.type, param.key, param.data)
+        data = bytearray.fromhex(args.data)
+        resp = self.cmd.mf1_write_one_block(param.block, param.type, param.key, data)
         if resp:
             print(f" - {CG}Write done.{C0}")
         else:
@@ -1411,7 +1414,7 @@ class HWSlotList(DeviceRequiredUnit):
 
     def get_slot_name(self, slot, sense):
         try:
-            name = self.cmd.get_slot_tag_nick(slot, sense).decode(encoding="utf8")
+            name = self.cmd.get_slot_tag_nick(slot, sense)
             return {'baselen': len(name), 'metalen': len(CC+C0), 'name': f'{CC}{name}{C0}'}
         except UnexpectedResponseError:
             return {'baselen': 0, 'metalen': 0, 'name': ''}
@@ -1666,10 +1669,7 @@ class HWSlotNick(SlotIndexArgsUnit, SenseTypeArgsUnit):
             sense_type = TagSenseType.HF
         if args.name is not None:
             name: str = args.name
-            encoded_name = name.encode(encoding="utf8")
-            if len(encoded_name) > 32:
-                raise ValueError("Your tag nick name too long.")
-            self.cmd.set_slot_tag_nick(slot_num, sense_type, encoded_name)
+            self.cmd.set_slot_tag_nick(slot_num, sense_type, name)
             print(f' - Set tag nick name for slot {slot_num} {sense_type.name}: {name}')
         elif args.delete:
             self.cmd.delete_slot_tag_nick(slot_num, sense_type)
@@ -1677,7 +1677,7 @@ class HWSlotNick(SlotIndexArgsUnit, SenseTypeArgsUnit):
         else:
             res = self.cmd.get_slot_tag_nick(slot_num, sense_type)
             print(f' - Get tag nick name for slot {slot_num} {sense_type.name}'
-                  f': {res.decode(encoding="utf8")}')
+                  f': {res}')
 
 
 @hw_slot.command('store')
@@ -1919,9 +1919,9 @@ class HWSettingsBLEKey(DeviceRequiredUnit):
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        resp = self.cmd.get_ble_pairing_key()
+        key = self.cmd.get_ble_pairing_key()
         print(" - The current key of the device(ascii): "
-              f"{CG}{resp.decode(encoding='ascii')}{C0}")
+              f"{CG}{key}{C0}")
 
         if args.key is not None:
             if len(args.key) != 6:
