@@ -525,6 +525,17 @@ class HWConnect(BaseCLIUnit):
             self.device_com.close()
 
 
+@hw.command('disconnect')
+class HWDisconnect(BaseCLIUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Disconnect chameleon'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        self.device_com.close()
+
+
 @hw.command('mode')
 class HWMode(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
