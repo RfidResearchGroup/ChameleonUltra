@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Added regression tests (@doegox)
  - Changed git version to version tag instead of dev tag (@taichunmin)
  - Fixed 14A emulate bug and MF1 emulate bug (@spp2000 and @xianglin1998)
  - Fixed `hf 14a raw` command raising `AttributeError` (@augustozanellato)
