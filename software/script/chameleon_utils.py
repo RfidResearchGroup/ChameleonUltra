@@ -88,8 +88,10 @@ class ArgumentParserNoExit(argparse.ArgumentParser):
                 options = lines
                 lines = []
         if len(options) > 0:
-            assert options[0].strip() == 'options:'
+            # 2 variants depending on Python version(?)
+            assert options[0].strip() in ['options:', 'optional arguments:']
             options[0] = options[0].replace('options:', f'{CG}options:{C0}')
+            options[0] = options[0].replace('optional arguments:', f'{CG}optional arguments:{C0}')
             if len(options) > 1:
                 options.append('')
             print('\n'.join(options))
