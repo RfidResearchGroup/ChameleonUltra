@@ -67,6 +67,7 @@ class Command(enum.IntEnum):
     MF1_READ_ONE_BLOCK = 2008
     MF1_WRITE_ONE_BLOCK = 2009
     HF14A_RAW = 2010
+    MF1_MANIPULATE_VALUE_BLOCK = 2011
 
     EM410X_SCAN = 3000
     EM410X_WRITE_TO_T55XX = 3001
@@ -431,3 +432,9 @@ class ButtonPressFunction(enum.IntEnum):
         elif self == ButtonPressFunction.BATTERY:
             return "Show Battery Level"
         return "None"
+
+@enum.unique
+class MfcValueBlockOperator(enum.IntEnum):
+    DECREMENT = 0xC0
+    INCREMENT = 0xC1
+    RESTORE = 0xC2

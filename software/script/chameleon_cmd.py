@@ -4,9 +4,9 @@ from typing import Union
 
 import chameleon_com
 from chameleon_utils import expect_response
-from chameleon_enum import Command, Status, SlotNumber, TagSenseType, TagSpecificType
-from chameleon_enum import MifareClassicDarksideStatus
-from chameleon_enum import ButtonType, ButtonPressFunction
+from chameleon_enum import Command, SlotNumber, Status, TagSenseType, TagSpecificType
+from chameleon_enum import ButtonPressFunction, ButtonType, MifareClassicDarksideStatus
+from chameleon_enum import MfcKeyType, MfcValueBlockOperator
 
 CURRENT_VERSION_SETTINGS = 5
 
@@ -187,7 +187,7 @@ class ChameleonCMD:
         return resp
 
     @expect_response([Status.HF_TAG_OK, Status.MF_ERR_AUTH])
-    def mf1_auth_one_key_block(self, block, type_value, key):
+    def mf1_auth_one_key_block(self, block, type_value: MfcKeyType, key):
         """
         Verify the mf1 key, only verify the specified type of key for a single sector.
 
@@ -202,7 +202,7 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.HF_TAG_OK)
-    def mf1_read_one_block(self, block, type_value, key):
+    def mf1_read_one_block(self, block, type_value: MfcKeyType, key):
         """
         Read one mf1 block.
 
@@ -217,7 +217,7 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.HF_TAG_OK)
-    def mf1_write_one_block(self, block, type_value, key, block_data):
+    def mf1_write_one_block(self, block, type_value: MfcKeyType, key, block_data):
         """
         Write mf1 single block.
 
@@ -275,6 +275,29 @@ class ChameleonCMD:
         data = bytes(cs)+struct.pack(f'!HH{len(data)}s', resp_timeout_ms, bitlen, bytearray(data))
         resp = self.device.send_cmd_sync(Command.HF14A_RAW, data, timeout=(resp_timeout_ms // 1000) + 1)
         resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.HF_TAG_OK)
+    def mf1_manipulate_value_block(self, src_block, src_type: MfcKeyType, src_key, operator: MfcValueBlockOperator, operand, dst_block, dst_type: MfcKeyType, dst_key):
+        """
+        1. Increment: increments value from source block and write to dest block
+        2. Decrement: decrements value from source block and write to dest block
+        3. Restore: copy value from source block and write to dest block
+
+
+        :param src_block:
+        :param src_type:
+        :param src_key:
+        :param operator:
+        :param operand:
+        :param dst_block:
+        :param dst_type:
+        :param dst_key:
+        :return:
+        """
+        data = struct.pack('!BB6sBiBB6s', src_type, src_block, src_key, operator, operand, dst_type, dst_block, dst_key)
+        resp = self.device.send_cmd_sync(Command.MF1_MANIPULATE_VALUE_BLOCK, data)
+        resp.parsed = resp.status == Status.HF_TAG_OK
         return resp
 
     @expect_response(Status.HF_TAG_OK)

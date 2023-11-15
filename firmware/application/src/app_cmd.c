@@ -447,6 +447,58 @@ static data_frame_tx_t *cmd_processor_hf14a_raw(uint16_t cmd, uint16_t status, u
     return data_frame_make(cmd, status, resp_length, resp);
 }
 
+static data_frame_tx_t *cmd_processor_mf1_manipulate_value_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t src_type;
+        uint8_t src_block;
+        uint8_t src_key[6];
+        uint8_t operator;
+        uint32_t operand;
+        uint8_t dst_type;
+        uint8_t dst_block;
+        uint8_t dst_key[6];
+    } PACKED payload_t;
+    if (length != sizeof(payload_t)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    payload_t *payload = (payload_t *)data;
+
+    // scan tag
+    picc_14a_tag_t taginfo;
+    if (pcd_14a_reader_scan_auto(&taginfo) != STATUS_HF_TAG_OK) {
+        return data_frame_make(cmd, STATUS_HF_TAG_NO, 0, NULL);
+    }
+
+    // auth src
+    status = pcd_14a_reader_mf1_auth(&taginfo, payload->src_type, payload->src_block, payload->src_key);
+    if (status != STATUS_HF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+
+    // value block operation
+    status = pcd_14a_reader_mf1_manipulate_value_block(payload->operator, payload->src_block, (int32_t) U32NTOHL(payload->operand));
+    if (status != STATUS_HF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+
+    // auth dst if needed
+    if (payload->src_block != payload->dst_block || payload->src_type != payload->dst_type) {
+        status = pcd_14a_reader_mf1_auth(&taginfo, payload->dst_type, payload->dst_block, payload->dst_key);
+        if (status != STATUS_HF_TAG_OK) {
+            return data_frame_make(cmd, status, 0, NULL);
+        }
+    }
+
+    // transfer value block
+    status = pcd_14a_reader_mf1_transfer_value_block(payload->dst_block);
+    if (status != STATUS_HF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
 static data_frame_tx_t *cmd_processor_em410x_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t id_buffer[5] = { 0x00 };
     status = PcdScanEM410X(id_buffer);
@@ -1015,6 +1067,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_READ_ONE_BLOCK,           before_hf_reader_run,        cmd_processor_mf1_read_one_block,            after_hf_reader_run    },
     {    DATA_CMD_MF1_WRITE_ONE_BLOCK,          before_hf_reader_run,        cmd_processor_mf1_write_one_block,           after_hf_reader_run    },
     {    DATA_CMD_HF14A_RAW,                    before_reader_run,           cmd_processor_hf14a_raw,                     NULL                   },
+    {    DATA_CMD_MF1_MANIPULATE_VALUE_BLOCK,   before_hf_reader_run,        cmd_processor_mf1_manipulate_value_block,    after_hf_reader_run    },
 
     {    DATA_CMD_EM410X_SCAN,                  before_reader_run,           cmd_processor_em410x_scan,                   NULL                   },
     {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_em410x_write_to_t55XX,         NULL                   },

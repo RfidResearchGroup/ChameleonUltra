@@ -43,6 +43,7 @@ class ArgumentParserNoExit(argparse.ArgumentParser):
         super().__init__(*args, **kwargs)
         self.add_help = False
         self.description = "Please enter correct parameters"
+        self.help_requested = False
 
     def exit(self, status: int = 0, message: Union[str, None] = None):
         if message:
@@ -88,14 +89,18 @@ class ArgumentParserNoExit(argparse.ArgumentParser):
                 options = lines
                 lines = []
         if len(options) > 0:
-            assert options[0].strip() == 'options:'
+            # 2 variants depending on Python version(?)
+            assert options[0].strip() in ['options:', 'optional arguments:']
             options[0] = options[0].replace('options:', f'{CG}options:{C0}')
+            options[0] = options[0].replace('optional arguments:', f'{CG}optional arguments:{C0}')
             if len(options) > 1:
                 options.append('')
             print('\n'.join(options))
         if len(lines) > 0:
             lines[0] = f'{CG}{lines[0]}{C0}'
             print('\n'.join(lines))
+        print('')
+        self.help_requested = True
 
 
 def expect_response(accepted_responses: Union[int, list[int]]) -> Callable[..., Any]:
