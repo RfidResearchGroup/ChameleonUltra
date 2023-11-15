@@ -143,3 +143,8 @@ GDK_SCALE=2 GDK_DPI_SCALE=0.5 /usr/local/lib/chameleonultragui/chameleonultragui
 This error may occur when the card you are trying to recovery keys from is requiring a not yet supported recovery technology. You cannot tell the required recovery method from the outside.
 
 You may be able to solve this issue by dumping the card with a Proxmark3 or Mifare Classic Tool (Mobile App) and then importing a bin file.
+
+### Error: Invalid data length
+This error may occur on windows devices and seems to be a deeper bug in the serial library.
+
+Reconnecting the device may solve it, also make sure that the App and Firmware are up to date.
