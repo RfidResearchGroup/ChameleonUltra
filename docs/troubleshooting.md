@@ -82,6 +82,39 @@ pacman -R ninja --noconfirm
 pacman -S mingw-w64-x86_64-ninja --noconfirm
 ```
 
+## cmake: Undefined reference to "pthread_create"
+
+It has been reported that on some Linux systems cmake doesnt find pthread.
+
+Make sure to have libpthread installed, the package may be named differently on your distro.
+
+On ubuntu and same based systems it is the following command:
+```
+sudo apt install libpthread-stubs0-dev
+```
+
+If this doesnt fix it, you may need to set pthread in the LDFLAGS enviroment variable, this can be done by running the command with the enviroment variable at the beginning:
+
+```
+LDFLAGS=-pthread cmake ..
+```
+
+If the error still persists you may also need to provide a specific compiler version, you do that by adding the -DCMAKE_C_COMPILER argument:
+
+```
+LDFLAGS=-pthread cmake -DCMAKE_C_COMPILER=gcc-11 ..
+```
+
+The compiler needs to be installed too ofcourse, the package name may be differently on your distro.
+
+On ubuntu and same based systems its the following command:
+
+```
+sudo apt install gcc-11 g++-11
+```
+
+The following ```cmake --build . --config Release``` should work again without modification.
+
 # CLI usage
 
 ## InvalidException: Device unsupported cmd

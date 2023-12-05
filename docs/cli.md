@@ -74,7 +74,7 @@ Building natively is a bit more advanced and not recommended for beginners
 
 4. Download and install [cmake](https://cmake.org/download/). Again, when asked, add to your path
 
-5. Download and install [python](https://www.python.org/downloads/). When asked, add to your path (small checkbox in the bottom left)
+5. Download and install [python](https://www.python.org/downloads/). When asked, add to your path (small checkbox in the bottom left). Python 3.9 or above is required.
 
 6. Choose a suitable location and open a terminal. Clone the repository with `git clone https://github.com/RfidResearchGroup/ChameleonUltra.git`
 
@@ -109,6 +109,8 @@ Install the dependencies
   `sudo apt install git cmake build-essential python3-venv`
   - Arch:  
   `sudo pacman -S  git cmake base-devel python3`
+
+Python 3.9 or above is required.
 
 Run the following script to clone the Repository, compile the tools and install Python dependencies in a virtual environment.
 
