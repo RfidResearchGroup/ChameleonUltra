@@ -284,7 +284,6 @@ bool nfc_tag_ntag_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     // default ntag config
     p_ntag_information->config.mode_uid_magic = true;
     p_ntag_information->config.detection_enable = false;
-    p_ntag_information->config.mode_fuzzing = false;
 
     // save data to flash
     tag_sense_type_t sense_type = get_sense_type_from_tag_type(tag_type);
