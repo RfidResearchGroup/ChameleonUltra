@@ -1263,6 +1263,8 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
         log_group = parser.add_mutually_exclusive_group()
         log_group.add_argument('--enable-log', action='store_true', help="Enable logging of MFC authentication data")
         log_group.add_argument('--disable-log', action='store_true', help="Disable logging of MFC authentication data")
+        log_group.add_argument('--enable-fuzzing', action='store_true', help="Enable fuzzing mode for slot (i.e. changing data at each read)")
+        log_group.add_argument('--disable-fuzzing', action='store_true', help="Disable fuzzing mode for slot (i.e. changing data at each read)")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
@@ -1292,6 +1294,7 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
         block_anti_coll_mode = mfc_config["block_anti_coll_mode"]
         write_mode = MifareClassicWriteMode(mfc_config["write_mode"])
         detection = mfc_config["detection"]
+        fuzzing = mfc_config["fuzzing"]
         change_requested, change_done, uid, atqa, sak, ats = self.update_hf14a_anticoll(args, uid, atqa, sak, ats)
         if args.enable_gen1a:
             change_requested = True
@@ -1366,6 +1369,22 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 change_done = True
             else:
                 print(f'{CY}Requested logging of MFC authentication data already disabled{C0}')
+        if args.enable_fuzzing:
+            change_requested = True
+            if not fuzzing:
+                fuzzing = True
+                self.cmd.mf1_set_mode_fuzzing(fuzzing)
+                change_done = True
+            else:
+                print(f'{CY}Requested fuzzing mode of MFC authentication data already enabled{C0}')
+        elif args.disable_fuzzing:
+            change_requested = True
+            if fuzzing:
+                fuzzing = False
+                self.cmd.mf1_set_mode_fuzzing(fuzzing)
+                change_done = True
+            else:
+                print(f'{CY}Requested logging of MFC authentication data already disabled{C0}')
 
         if change_done:
             print(' - MF1 Emulator settings updated')
@@ -1390,6 +1409,8 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 print(f'- {"Write mode:":40}{CR}invalid value!{C0}')
             print(
                 f'- {"Log (mfkey32) mode:":40}{f"{CG}enabled{C0}" if detection else f"{CR}disabled{C0}"}')
+            print(
+                f'- {"Fuzzing mode:":40}{f"{CG}enabled{C0}" if fuzzing else f"{CR}disabled{C0}"}')
 
 
 @hf_mfu.command('rdpg')
@@ -1641,6 +1662,8 @@ class HWSlotList(DeviceRequiredUnit):
                     print(
                         f'      {"Log (mfkey32) mode:":40}'
                         f'{f"{CG}enabled{C0}" if config["detection"] else f"{CR}disabled{C0}"}')
+                    print(
+                        f'      {"Fuzzing mode:":40}{f"{CG}enabled{C0}" if config["fuzzing"] else f"{CR}disabled{C0}"}')
 
             # LF
             field_length = maxnamelength+slotnames[fwslot]["lf"]["metalen"]+1

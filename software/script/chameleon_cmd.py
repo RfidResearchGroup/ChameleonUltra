@@ -512,6 +512,17 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
+    def mf1_set_mode_fuzzing(self, fuzzing: bool):
+        """
+        Set whether to enable the detection of the current card slot.
+
+        :param enable: Whether to enable
+        :return:
+        """
+        data = struct.pack('!B', fuzzing)
+        return self.device.send_cmd_sync(Command.MF1_SET_MODE_FUZZING, data)
+
+    @expect_response(Status.SUCCESS)
     def mf1_write_emu_block_data(self, block_start: int, block_data: bytes):
         """
         Set the block data of the analog card of MF1.
@@ -602,17 +613,19 @@ class ChameleonCMD:
             [2] - mf1_is_gen2_magic_mode
             [3] - mf1_is_use_mf1_coll_res (use UID/BCC/SAK/ATQA from 0 block)
             [4] - mf1_get_write_mode
+            [5] - mf1_is_mode_fuzzing
 
         :return:
         """
         resp = self.device.send_cmd_sync(Command.MF1_GET_EMULATOR_CONFIG)
         if resp.status == Status.SUCCESS:
-            b1, b2, b3, b4, b5 = struct.unpack('!????B', resp.data)
+            b1, b2, b3, b4, b5, b6 = struct.unpack('!?????B', resp.data)
             resp.parsed = {'detection': b1,
                            'gen1a_mode': b2,
                            'gen2_mode': b3,
                            'block_anti_coll_mode': b4,
-                           'write_mode': b5}
+                           'write_mode': b5,
+                           'fuzzing': b6}
         return resp
 
     @expect_response(Status.SUCCESS)
