@@ -105,6 +105,8 @@
 #define DATA_CMD_MF1_GET_WRITE_MODE             (4016)
 #define DATA_CMD_MF1_SET_WRITE_MODE             (4017)
 #define DATA_CMD_HF14A_GET_ANTI_COLL_DATA       (4018)
+#define DATA_CMD_MF1_SET_MODE_FUZZING           (4019)
+#define DATA_CMD_MF1_GET_MODE_FUZZING           (4020)
 //
 // ******************************************************************
 
