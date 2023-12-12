@@ -850,6 +850,45 @@ class HFMFDarkside(ReaderRequiredUnit):
         return
 
 
+@hf_mf.command('fuzz')
+class HFMFFuzz(ReaderRequiredUnit):
+
+    def args_parse_key(self, arg):
+        key_re = re.compile(r"^(?P<idx>([0-9]|1[0-5])):(?P<ab>(A|B)):(?P<key>([0-9A-Fa-f]{12}))$")
+        m = key_re.match(arg)
+        if not m:
+            raise argparse.ArgumentTypeError("Expected format: 0-15:A-B:<key>")
+        return (int(m.group('idx')), m.group('ab'), bytes.fromhex(m.group('key')))
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Mifare Classic fuzzer tag'
+        parser.add_argument('-k', '--key', type=self.args_parse_key, required=False, action="extend", nargs="*",
+                            help="Key to use for a given block")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        keys = []
+        for i in range(16):
+            keys.append({
+                    'a': bytes.fromhex("FFFFFFFFFFFF"),
+                    'b': bytes.fromhex("000000000000"),
+                })
+        for keyarg in args.key:
+            keys[keyarg[0]][keyarg[1].lower()] = keyarg[2]
+        # generate and write blocks to emulate
+        for block_idx in range(64):
+            # key block
+            if block_idx % 4 == 3:
+                data = keys[block_idx // 4]['a'] + b'\xff' * 4 + keys[block_idx // 4]['b']
+            else:
+                data = b'\x00' * 16
+            self.cmd.mf1_write_emu_block_data(block_idx, data)
+        # set fuzzer mode
+        self.cmd.mf1_set_mode_fuzzing(True)
+        return
+
+
 @hf_mf.command('rdbl')
 class HFMFRDBL(MF1AuthArgsUnit):
     def args_parser(self) -> ArgumentParserNoExit:
