@@ -1029,7 +1029,7 @@ _KEY = re.compile("[a-fA-F0-9]{12}", flags=re.MULTILINE)
 def _run_mfkey32v2(items):
     output_str = subprocess.run(
         [
-            "mfkey32v2.exe" if sys.platform == "win32" else "./mfkey32v2",
+            default_cwd / ("mfkey32v2.exe" if sys.platform == "win32" else "mfkey32v2"),
             items[0]["uid"],
             items[0]["nt"],
             items[0]["nr"],
@@ -1038,7 +1038,6 @@ def _run_mfkey32v2(items):
             items[1]["nr"],
             items[1]["ar"],
         ],
-        cwd=default_cwd,
         capture_output=True,
         check=True,
         encoding="ascii",
