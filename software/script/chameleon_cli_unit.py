@@ -10,6 +10,7 @@ from datetime import datetime
 import serial.tools.list_ports
 import threading
 import struct
+from multiprocessing import Pool, cpu_count
 from typing import Union
 from pathlib import Path
 from platform import uname
@@ -1022,6 +1023,31 @@ class HFMFVALUE(ReaderRequiredUnit):
             print(f" - {CR}Restore fail.{C0}")
 
 
+_KEY = re.compile("[a-fA-F0-9]{12}", flags=re.MULTILINE)
+
+
+def _run_mfkey32v2(items):
+    output_str = subprocess.run(
+        [
+            default_cwd / ("mfkey32v2.exe" if sys.platform == "win32" else "mfkey32v2"),
+            items[0]["uid"],
+            items[0]["nt"],
+            items[0]["nr"],
+            items[0]["ar"],
+            items[1]["nt"],
+            items[1]["nr"],
+            items[1]["ar"],
+        ],
+        capture_output=True,
+        check=True,
+        encoding="ascii",
+    ).stdout
+    sea_obj = _KEY.search(output_str)
+    if sea_obj is not None:
+        return sea_obj[0]
+    return None
+
+
 @hf_mf.command('elog')
 class HFMFELog(DeviceRequiredUnit):
     detection_log_size = 18
@@ -1044,30 +1070,19 @@ class HFMFELog(DeviceRequiredUnit):
         msg3 = " key(s) found"
         n = 1
         keys = set()
-        for i in range(len(rs)):
-            item0 = rs[i]
-            for j in range(i + 1, len(rs)):
-                item1 = rs[j]
+        with Pool(cpu_count()) as pool:
+            for key in pool.imap(
+                _run_mfkey32v2,
+                (
+                    (item0, rs[j])
+                    for i, item0 in enumerate(rs)
+                    for j in range(i + 1, len(rs))
+                ),
+            ):
                 # TODO: if some keys already recovered, test them on item before running mfkey32 on item
                 # TODO: if some keys already recovered, remove corresponding items
-                cmd_base = f"{item0['uid']} {item0['nt']} {item0['nr']} {item0['ar']}"
-                cmd_base += f" {item1['nt']} {item1['nr']} {item1['ar']}"
-                if sys.platform == "win32":
-                    cmd_recover = f"mfkey32v2.exe {cmd_base}"
-                else:
-                    cmd_recover = f"./mfkey32v2 {cmd_base}"
-                # print(cmd_recover)
-                # Found Key: [e899c526c5cd]
-                # subprocess.run(cmd_final, cwd=os.path.abspath("../bin/"), shell=True)
-                process = self.sub_process(cmd_recover)
-                # wait end
-                process.wait_process()
-                # get output
-                output_str = process.get_output_sync()
-                # print(output_str)
-                sea_obj = re.search(r"([a-fA-F0-9]{12})", output_str, flags=re.MULTILINE)
-                if sea_obj is not None:
-                    keys.add(sea_obj[1])
+                if key is not None:
+                    keys.add(key)
                 print(f"{msg1}{n}{msg2}{len(keys)}{msg3}\r", end="")
                 n += 1
         print()
