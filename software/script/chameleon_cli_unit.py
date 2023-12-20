@@ -1044,8 +1044,55 @@ def _run_mfkey32v2(items):
     ).stdout
     sea_obj = _KEY.search(output_str)
     if sea_obj is not None:
-        return sea_obj[0]
+        return sea_obj[0], items
     return None
+
+
+class ItemGenerator:
+    def __init__(self, rs, i=0, j=1):
+        self.rs = rs
+        self.i = 0
+        self.j = 1
+        self.found = set()
+        self.keys = set()
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        try:
+            item_i = self.rs[self.i]
+        except IndexError:
+            raise StopIteration
+        if self.key_from_item(item_i) in self.found:
+            self.i += 1
+            self.j = self.i + 1
+            return next(self)
+        try:
+            item_j = self.rs[self.j]
+        except IndexError:
+            self.i += 1
+            self.j = self.i + 1
+            return next(self)
+        self.j += 1
+        if self.key_from_item(item_j) in self.found:
+            return next(self)
+        return item_i, item_j
+
+    @staticmethod
+    def key_from_item(item):
+        return "{uid}-{nt}-{nr}-{ar}".format(**item)
+
+    def key_found(self, key, items):
+        self.keys.add(key)
+        for item in items:
+            try:
+                if item == self.rs[self.i]:
+                    self.i += 1
+                    self.j = self.i + 1
+            except IndexError:
+                break
+        self.found.update(self.key_from_item(item) for item in items)
 
 
 @hf_mf.command('elog')
@@ -1069,24 +1116,16 @@ class HFMFELog(DeviceRequiredUnit):
         msg2 = f"/{(len(rs)*(len(rs)-1))//2} combinations. "
         msg3 = " key(s) found"
         n = 1
-        keys = set()
+        gen = ItemGenerator(rs)
         with Pool(cpu_count()) as pool:
-            for key in pool.imap(
-                _run_mfkey32v2,
-                (
-                    (item0, rs[j])
-                    for i, item0 in enumerate(rs)
-                    for j in range(i + 1, len(rs))
-                ),
-            ):
+            for result in pool.imap(_run_mfkey32v2, gen):
                 # TODO: if some keys already recovered, test them on item before running mfkey32 on item
-                # TODO: if some keys already recovered, remove corresponding items
-                if key is not None:
-                    keys.add(key)
-                print(f"{msg1}{n}{msg2}{len(keys)}{msg3}\r", end="")
+                if result is not None:
+                    gen.key_found(*result)
+                print(f"{msg1}{n}{msg2}{len(gen.keys)}{msg3}\r", end="")
                 n += 1
         print()
-        return keys
+        return gen.keys
 
     def on_exec(self, args: argparse.Namespace):
         if not args.decrypt:
