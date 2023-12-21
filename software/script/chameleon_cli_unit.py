@@ -1358,44 +1358,27 @@ class HFMFELog(DeviceRequiredUnit):
         # classify
         result_maps = {}
         for item in result_list:
-            uid = item['uid']
-            if uid not in result_maps:
-                result_maps[uid] = {}
-            block = item['block']
-            if block not in result_maps[uid]:
-                result_maps[uid][block] = {}
-            type = item['type']
-            if type not in result_maps[uid][block]:
-                result_maps[uid][block][type] = []
+            (
+                result_maps.setdefault(item["uid"], {})
+                .setdefault(item["block"], {})
+                .setdefault(item["type"], [])
+                .append(item)
+            )
 
-            result_maps[uid][block][type].append(item)
-
-        for uid in result_maps.keys():
+        for uid, result_maps_for_uid in result_maps.items():
             print(f" - Detection log for uid [{uid.upper()}]")
-            result_maps_for_uid = result_maps[uid]
-            for block in result_maps_for_uid:
+            for block, result_for_block in result_maps_for_uid.items():
                 print(f"  > Block {block} detect log decrypting...")
-                if 'A' in result_maps_for_uid[block]:
-                    # print(f" - A record: { result_maps[block]['A'] }")
-                    records = result_maps_for_uid[block]['A']
+                for type_, records in result_for_block.items():
+                    # print(f" - {type_} record: { records }")
                     if len(records) > 1:
-                        result_maps[uid][block]['A'] = self.decrypt_by_list(records)
-                    else:
-                        print(f"  > {len(records)} record")
-                if 'B' in result_maps_for_uid[block]:
-                    # print(f" - B record: { result_maps[block]['B'] }")
-                    records = result_maps_for_uid[block]['B']
-                    if len(records) > 1:
-                        result_maps[uid][block]['B'] = self.decrypt_by_list(records)
+                        result_for_block[type_] = self.decrypt_by_list(records)
                     else:
                         print(f"  > {len(records)} record")
             print("  > Result ---------------------------")
-            for block in result_maps_for_uid.keys():
-                if 'A' in result_maps_for_uid[block]:
-                    print(f"  > Block {block}, A key result: {result_maps_for_uid[block]['A']}")
-                if 'B' in result_maps_for_uid[block]:
-                    print(f"  > Block {block}, B key result: {result_maps_for_uid[block]['B']}")
-        return
+            for block, result_for_block in result_maps_for_uid.items():
+                for type_, results in result_for_block.items():
+                    print(f"  > Block {block}, {type_} key result: {results}")
 
 
 @hf_mf.command('eload')
