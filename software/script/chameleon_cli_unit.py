@@ -1217,26 +1217,39 @@ class HFMFVALUE(ReaderRequiredUnit):
 _KEY = re.compile("[a-fA-F0-9]{12}", flags=re.MULTILINE)
 
 
+class Mfkey32v2Runner:
+
+    def __init__(self):
+        self.proc = subprocess.Popen(
+            [default_cwd / (f"mfkey32v2{'.exe' if sys.platform == 'win32' else ''}"), "--server"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            bufsize=1,
+            encoding="ascii",
+        )
+
+    def close(self):
+        self.proc.stdin.close()
+        self.proc.wait()
+
+    def check(self, items):
+        if not items:
+            self.close()
+            return None
+        self.proc.stdin.write(f"{items[0]['uid']} {items[0]['nt']} {items[0]['nr']} {items[0]['ar']} {items[1]['nt']} {items[1]['nr']} {items[1]['ar']}\n")
+        answer = self.proc.stdout.readline().strip()
+        if answer:
+            return answer, items
+        return None
+
+
+def _init_mfkey32v2_run():
+    global _MFKEY32V2_RUNNER
+    _MFKEY32V2_RUNNER = Mfkey32v2Runner()
+
+
 def _run_mfkey32v2(items):
-    output_str = subprocess.run(
-        [
-            default_cwd / ("mfkey32v2.exe" if sys.platform == "win32" else "mfkey32v2"),
-            items[0]["uid"],
-            items[0]["nt"],
-            items[0]["nr"],
-            items[0]["ar"],
-            items[1]["nt"],
-            items[1]["nr"],
-            items[1]["ar"],
-        ],
-        capture_output=True,
-        check=True,
-        encoding="ascii",
-    ).stdout
-    sea_obj = _KEY.search(output_str)
-    if sea_obj is not None:
-        return sea_obj[0], items
-    return None
+    return _MFKEY32V2_RUNNER.check(items)
 
 
 class ItemGenerator:
@@ -1308,13 +1321,17 @@ class HFMFELog(DeviceRequiredUnit):
         msg3 = " key(s) found"
         n = 1
         gen = ItemGenerator(rs)
-        with Pool(cpu_count()) as pool:
+        with Pool(
+            processes=cpu_count(),
+            initializer=_init_mfkey32v2_run,
+        ) as pool:
             for result in pool.imap(_run_mfkey32v2, gen):
                 # TODO: if some keys already recovered, test them on item before running mfkey32 on item
                 if result is not None:
                     gen.key_found(*result)
                 print(f"{msg1}{n}{msg2}{len(gen.keys)}{msg3}\r", end="")
                 n += 1
+            pool.imap(_run_mfkey32v2, [[]] * cpu_count())
         print()
         return gen.keys
 
