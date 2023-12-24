@@ -10,6 +10,7 @@ from datetime import datetime
 import serial.tools.list_ports
 import threading
 import struct
+from multiprocessing import Pool, cpu_count
 from typing import Union
 from pathlib import Path
 from platform import uname
@@ -1061,6 +1062,78 @@ class HFMFVALUE(ReaderRequiredUnit):
             print(f" - {CR}Restore fail.{C0}")
 
 
+_KEY = re.compile("[a-fA-F0-9]{12}", flags=re.MULTILINE)
+
+
+def _run_mfkey32v2(items):
+    output_str = subprocess.run(
+        [
+            default_cwd / ("mfkey32v2.exe" if sys.platform == "win32" else "mfkey32v2"),
+            items[0]["uid"],
+            items[0]["nt"],
+            items[0]["nr"],
+            items[0]["ar"],
+            items[1]["nt"],
+            items[1]["nr"],
+            items[1]["ar"],
+        ],
+        capture_output=True,
+        check=True,
+        encoding="ascii",
+    ).stdout
+    sea_obj = _KEY.search(output_str)
+    if sea_obj is not None:
+        return sea_obj[0], items
+    return None
+
+
+class ItemGenerator:
+    def __init__(self, rs, i=0, j=1):
+        self.rs = rs
+        self.i = 0
+        self.j = 1
+        self.found = set()
+        self.keys = set()
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        try:
+            item_i = self.rs[self.i]
+        except IndexError:
+            raise StopIteration
+        if self.key_from_item(item_i) in self.found:
+            self.i += 1
+            self.j = self.i + 1
+            return next(self)
+        try:
+            item_j = self.rs[self.j]
+        except IndexError:
+            self.i += 1
+            self.j = self.i + 1
+            return next(self)
+        self.j += 1
+        if self.key_from_item(item_j) in self.found:
+            return next(self)
+        return item_i, item_j
+
+    @staticmethod
+    def key_from_item(item):
+        return "{uid}-{nt}-{nr}-{ar}".format(**item)
+
+    def key_found(self, key, items):
+        self.keys.add(key)
+        for item in items:
+            try:
+                if item == self.rs[self.i]:
+                    self.i += 1
+                    self.j = self.i + 1
+            except IndexError:
+                break
+        self.found.update(self.key_from_item(item) for item in items)
+
+
 @hf_mf.command('elog')
 class HFMFELog(DeviceRequiredUnit):
     detection_log_size = 18
@@ -1082,35 +1155,16 @@ class HFMFELog(DeviceRequiredUnit):
         msg2 = f"/{(len(rs)*(len(rs)-1))//2} combinations. "
         msg3 = " key(s) found"
         n = 1
-        keys = set()
-        for i in range(len(rs)):
-            item0 = rs[i]
-            for j in range(i + 1, len(rs)):
-                item1 = rs[j]
+        gen = ItemGenerator(rs)
+        with Pool(cpu_count()) as pool:
+            for result in pool.imap(_run_mfkey32v2, gen):
                 # TODO: if some keys already recovered, test them on item before running mfkey32 on item
-                # TODO: if some keys already recovered, remove corresponding items
-                cmd_base = f"{item0['uid']} {item0['nt']} {item0['nr']} {item0['ar']}"
-                cmd_base += f" {item1['nt']} {item1['nr']} {item1['ar']}"
-                if sys.platform == "win32":
-                    cmd_recover = f"mfkey32v2.exe {cmd_base}"
-                else:
-                    cmd_recover = f"./mfkey32v2 {cmd_base}"
-                # print(cmd_recover)
-                # Found Key: [e899c526c5cd]
-                # subprocess.run(cmd_final, cwd=os.path.abspath("../bin/"), shell=True)
-                process = self.sub_process(cmd_recover)
-                # wait end
-                process.wait_process()
-                # get output
-                output_str = process.get_output_sync()
-                # print(output_str)
-                sea_obj = re.search(r"([a-fA-F0-9]{12})", output_str, flags=re.MULTILINE)
-                if sea_obj is not None:
-                    keys.add(sea_obj[1])
-                print(f"{msg1}{n}{msg2}{len(keys)}{msg3}\r", end="")
+                if result is not None:
+                    gen.key_found(*result)
+                print(f"{msg1}{n}{msg2}{len(gen.keys)}{msg3}\r", end="")
                 n += 1
         print()
-        return keys
+        return gen.keys
 
     def on_exec(self, args: argparse.Namespace):
         if not args.decrypt:
