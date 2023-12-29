@@ -858,14 +858,14 @@ class HFMFFuzz(ReaderRequiredUnit):
         key_re = re.compile(r"^(?P<idx>([0-9]|1[0-5])):(?P<ab>(A|B)):(?P<key>([0-9A-Fa-f]{12}))$")
         m = key_re.match(arg)
         if not m:
-            raise argparse.ArgumentTypeError("Expected format: 0-15:A-B:<key>")
+            raise argparse.ArgumentTypeError("Expected format: <sector>:<A|B>:<key> where <sector> is between 0-15 and <key> is 6 bytes long")
         return (int(m.group('idx')), m.group('ab'), bytes.fromhex(m.group('key')))
 
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Mifare Classic fuzzer tag'
-        parser.add_argument('-k', '--key', type=self.args_parse_key, required=False, action="extend", nargs="*",
-                            help="Key to use for a given block")
+        parser.add_argument('-k', '--key', type=self.args_parse_key, required=False, action="extend", nargs="+",
+                            help="Key to use for a given sector")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
