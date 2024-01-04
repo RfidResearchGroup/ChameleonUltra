@@ -1335,6 +1335,10 @@ class HFMFELog(DeviceRequiredUnit):
         print()
         return gen.keys
 
+    @staticmethod
+    def disp_key(key: str):
+        return f"{key} [{''.join(chr(c) if 31 < c < 127 else '.' for c in bytes.fromhex(key))}]"
+
     def on_exec(self, args: argparse.Namespace):
         if not args.decrypt:
             count = self.cmd.mf1_get_detection_count()
@@ -1378,7 +1382,9 @@ class HFMFELog(DeviceRequiredUnit):
             print("  > Result ---------------------------")
             for block, result_for_block in result_maps_for_uid.items():
                 for type_, results in result_for_block.items():
-                    print(f"  > Block {block}, {type_} key result: {results}")
+                    print(f"  > Block {block}, {type_} key result:")
+                    for key in sorted(results):
+                        print(f"    - {self.disp_key(key)}")
 
 
 @hf_mf.command('eload')
