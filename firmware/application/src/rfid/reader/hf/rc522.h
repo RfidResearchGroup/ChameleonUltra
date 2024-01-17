@@ -221,14 +221,14 @@ uint8_t pcd_14a_reader_ats_request(uint8_t *pAts, uint16_t *szAts, uint16_t szAt
 uint8_t pcd_14a_reader_atqa_request(uint8_t *resp, uint8_t *resp_par, uint16_t resp_max_bit);
 
 // M1 tag operation
-uint8_t pcd_14a_reader_mf1_auth(picc_14a_tag_t *tag, uint8_t type, uint8_t addr, uint8_t *pKey);
+uint16_t pcd_14a_reader_mf1_auth(picc_14a_tag_t *tag, uint8_t type, uint8_t addr, uint8_t *pKey);
 void pcd_14a_reader_mf1_unauth(void);
 // writeCardOperation
 uint8_t pcd_14a_reader_mf1_write_by_cmd(uint8_t cmd, uint8_t addr, uint8_t *p);
 uint8_t pcd_14a_reader_mf1_write(uint8_t addr, uint8_t *pData);
 // cardReadingOperation
-uint8_t pcd_14a_reader_mf1_read_by_cmd(uint8_t cmd, uint8_t addr, uint8_t *p);
-uint8_t pcd_14a_reader_mf1_read(uint8_t addr, uint8_t *pData);
+uint16_t pcd_14a_reader_mf1_read_by_cmd(uint8_t cmd, uint8_t addr, uint8_t *p);
+uint16_t pcd_14a_reader_mf1_read(uint8_t addr, uint8_t *pData);
 // value block operation
 uint8_t pcd_14a_reader_mf1_manipulate_value_block(uint8_t operator, uint8_t addr, int32_t operand);
 uint8_t pcd_14a_reader_mf1_transfer_value_block(uint8_t addr);
