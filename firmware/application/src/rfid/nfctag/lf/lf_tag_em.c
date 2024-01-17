@@ -207,7 +207,6 @@ bool lf_is_field_exists(void) {
 }
 
 void timer_ce_handler(nrf_timer_event_t event_type, void *p_context) {
-    bool mod;
     switch (event_type) {
         // Because we are configured using the CC channel 2, the event recovers
         // Detect nrf_timer_event_compare0 event in the function
@@ -216,30 +215,30 @@ void timer_ce_handler(nrf_timer_event_t event_type, void *p_context) {
                 if (GETBIT(m_id_bit_data, m_bit_send_position)) {
                     // The first edge of the send 1
                     ANT_TO_MOD();
-                    mod = true;
                 } else {
                     // The first edge of the send 0
                     ANT_NO_MOD();
-                    mod = false;
                 }
                 m_is_send_first_edge = false;   //The second edge is sent next time
             } else {
                 if (GETBIT(m_id_bit_data, m_bit_send_position)) {
                     // Send the second edge of 1
                     ANT_NO_MOD();
-                    mod = false;
                 } else {
                     //The second edge of the send 0
                     ANT_TO_MOD();
-                    mod = true;
                 }
                 m_is_send_first_edge = true;    //The first edge of the next sends next time
+                if (++m_bit_send_position >= LF_125KHZ_EM410X_BIT_SIZE) {
+                    m_bit_send_position = 0;
+                    ++m_send_id_count;
+                }
             }
 
             // measure field only during no-mod half of last bit of last broadcast
-            if ((! mod) &&
-                    (m_bit_send_position + 1 >= LF_125KHZ_EM410X_BIT_SIZE) &&
-                    (m_send_id_count + 1 >= LF_125KHZ_BROADCAST_MAX)) {
+            if (m_send_id_count >= LF_125KHZ_BROADCAST_MAX) {
+                m_send_id_count = 0;
+                ANT_NO_MOD();
                 nrfx_timer_disable(&m_timer_send_id);                       // Close the timer of the broadcast venue
                 // We don't need any events, but only need to detect the state of the field
                 NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
@@ -257,15 +256,7 @@ void timer_ce_handler(nrf_timer_event_t event_type, void *p_context) {
                     NRF_LOG_INFO("LF FIELD LOST");
                 }
             }
-
-            if (m_is_send_first_edge == true) { // The first edge of the next sends next time
-                if (++m_bit_send_position >= LF_125KHZ_EM410X_BIT_SIZE) {
-                    m_bit_send_position = 0;    // The broadcast is successful once, and the BIT position is zero
-                    if (++m_send_id_count >= LF_125KHZ_BROADCAST_MAX) {
-                        m_send_id_count = 0;                                        //The number of broadcasts reaches the upper limit, re -identifies the status of the field and re -statistically count the number of broadcast times
-                    }
-                }
-            }
+            
             break;
         }
         default: {
@@ -302,12 +293,11 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
         set_slot_light_color(RGB_BLUE);
         TAG_FIELD_LED_ON()
 
-        //In any case, every time the state finds changes, you need to reset the BIT location of the sending
+        // In any case, every time the state finds changes, you need to reset the BIT location of the sending
         m_send_id_count = 0;
         m_bit_send_position = 0;
         m_is_send_first_edge = true;
 
-        // openThePreciseHardwareTimerToTheBroadcastCardNumber
         nrfx_timer_enable(&m_timer_send_id);
 
         NRF_LOG_INFO("LF FIELD DETECTED");
@@ -338,9 +328,9 @@ static void lf_sense_enable(void) {
 }
 
 static void lf_sense_disable(void) {
-    nrfx_timer_uninit(&m_timer_send_id);    //counterInitializationTimer
-    nrfx_lpcomp_uninit();                   //antiInitializationComparator
-    m_is_lf_emulating = false;              //setAsNonSimulatedState
+    nrfx_timer_uninit(&m_timer_send_id);
+    nrfx_lpcomp_uninit();
+    m_is_lf_emulating = false;
 }
 
 static enum  {
@@ -353,18 +343,14 @@ static enum  {
  * @brief switchLfFieldInductionToEnableTheState
  */
 void lf_tag_125khz_sense_switch(bool enable) {
-    // initializationModulationFootIsOutput
     nrf_gpio_cfg_output(LF_MOD);
-    //theDefaultIsNotShortCircuitAntenna (shortCircuitWillCauseRssiToBeUnableToJudge)
     ANT_NO_MOD();
-
-    //forTheFirstTimeOrDisabled,OnlyInitializationIsAllowed
     if (m_lf_sense_state == LF_SENSE_STATE_NONE || m_lf_sense_state == LF_SENSE_STATE_DISABLE) {
         if (enable) {
             m_lf_sense_state = LF_SENSE_STATE_ENABLE;
             lf_sense_enable();
         }
-    } else {    // inOtherCases,OnlyAntiInitializationIsAllowed
+    } else {
         if (!enable) {
             m_lf_sense_state = LF_SENSE_STATE_DISABLE;
             lf_sense_disable();
