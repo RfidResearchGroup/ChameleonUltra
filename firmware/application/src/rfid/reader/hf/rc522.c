@@ -958,7 +958,7 @@ uint8_t pcd_14a_reader_gen1a_uplock(void) {
 *           PSNR: Card serial number, 4 bytes
 * @retval : The status value STATUS_HF_TAG_OK is successful, tag_errauth fails, and other returns indicate some abnormalities related to communication errors!
 */
-uint8_t pcd_14a_reader_mf1_auth(picc_14a_tag_t *tag, uint8_t type, uint8_t addr, uint8_t *pKey) {
+uint16_t pcd_14a_reader_mf1_auth(picc_14a_tag_t *tag, uint8_t type, uint8_t addr, uint8_t *pKey) {
     uint8_t dat_buff[12] = { type, addr };
     uint16_t data_len = 0;
 
@@ -991,7 +991,7 @@ void pcd_14a_reader_mf1_unauth(void) {
 *           p   : Read data, 16 bytes
 * @retval : Status value hf_tag_ok, success
 */
-uint8_t pcd_14a_reader_mf1_read_by_cmd(uint8_t cmd, uint8_t addr, uint8_t *p) {
+uint16_t pcd_14a_reader_mf1_read_by_cmd(uint8_t cmd, uint8_t addr, uint8_t *p) {
     uint8_t status;
     uint16_t len;
     uint8_t dat_buff[MAX_MIFARE_FRAME_SIZE] = { cmd, addr };
@@ -1028,7 +1028,7 @@ uint8_t pcd_14a_reader_mf1_read_by_cmd(uint8_t cmd, uint8_t addr, uint8_t *p) {
 *           p   : Read data, 16 bytes
 * @retval : Status value hf_tag_ok, success
 */
-uint8_t pcd_14a_reader_mf1_read(uint8_t addr, uint8_t *p) {
+uint16_t pcd_14a_reader_mf1_read(uint8_t addr, uint8_t *p) {
     // Standard M1 Card Reading Card Reading
     return pcd_14a_reader_mf1_read_by_cmd(PICC_READ, addr, p);
 }
@@ -1261,14 +1261,14 @@ inline void pcd_14a_reader_antenna_off(void) {
 }
 
 /**
-* @brief  : Qi Dian school inspection enabled
+* @brief  : Enable the parity bit check.
 */
 inline void pcd_14a_reader_parity_on(void) {
     clear_register_mask(MfRxReg, 0x10);
 }
 
 /**
-* @brief  : Qi Tong school inspection position closed
+* @brief  : Disable the parity bit check.
 */
 inline void pcd_14a_reader_parity_off(void) {
     set_register_mask(MfRxReg, 0x10);
