@@ -740,6 +740,19 @@ static data_frame_tx_t *cmd_processor_mf1_get_detection_log(uint16_t cmd, uint16
     return data_frame_make(cmd, STATUS_SUCCESS, length, resp);
 }
 
+static data_frame_tx_t *cmd_processor_mf1_set_mode_fuzzing(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 1 || data[0] > 1) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    nfc_tag_mf1_set_mode_fuzzing(data[0]);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_mf1_get_mode_fuzzing(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t is_fuzzing = nfc_tag_mf1_is_mode_fuzzing();
+    return data_frame_make(cmd, STATUS_SUCCESS, 1, (uint8_t *)(&is_fuzzing));
+}
+
 static data_frame_tx_t *cmd_processor_mf1_write_emu_block_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length == 0 || (((length - 1) % NFC_TAG_MF1_DATA_SIZE) != 0)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
@@ -864,13 +877,14 @@ static data_frame_tx_t *cmd_processor_delete_slot_tag_nick(uint16_t cmd, uint16_
 }
 
 static data_frame_tx_t *cmd_processor_mf1_get_emulator_config(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t mf1_info[5] = {};
+    uint8_t mf1_info[6] = {};
     mf1_info[0] = nfc_tag_mf1_is_detection_enable();
     mf1_info[1] = nfc_tag_mf1_is_gen1a_magic_mode();
     mf1_info[2] = nfc_tag_mf1_is_gen2_magic_mode();
     mf1_info[3] = nfc_tag_mf1_is_use_mf1_coll_res();
     mf1_info[4] = nfc_tag_mf1_get_write_mode();
-    return data_frame_make(cmd, STATUS_SUCCESS, 5, mf1_info);
+    mf1_info[5] = nfc_tag_mf1_is_mode_fuzzing();
+    return data_frame_make(cmd, STATUS_SUCCESS, 6, mf1_info);
 }
 
 static data_frame_tx_t *cmd_processor_mf1_get_gen1a_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -1092,6 +1106,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_GET_WRITE_MODE,           NULL,                        cmd_processor_mf1_get_write_mode,            NULL                   },
     {    DATA_CMD_MF1_SET_WRITE_MODE,           NULL,                        cmd_processor_mf1_set_write_mode,            NULL                   },
     {    DATA_CMD_HF14A_GET_ANTI_COLL_DATA,     NULL,                        cmd_processor_hf14a_get_anti_coll_data,      NULL                   },
+    {    DATA_CMD_MF1_SET_MODE_FUZZING,         NULL,                        cmd_processor_mf1_set_mode_fuzzing,          NULL                   },
+    {    DATA_CMD_MF1_GET_MODE_FUZZING,         NULL,                        cmd_processor_mf1_get_mode_fuzzing,          NULL                   },
 
     {    DATA_CMD_EM410X_SET_EMU_ID,            NULL,                        cmd_processor_em410x_set_emu_id,             NULL                   },
     {    DATA_CMD_EM410X_GET_EMU_ID,            NULL,                        cmd_processor_em410x_get_emu_id,             NULL                   },
