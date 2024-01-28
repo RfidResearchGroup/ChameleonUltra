@@ -854,9 +854,10 @@ class HFMFDarkside(ReaderRequiredUnit):
 @hf_mf.command('fuzz')
 class HFMFFuzz(ReaderRequiredUnit):
 
+    key_re = re.compile(r"^(?P<idx>([0-9]|1[0-5])):(?P<ab>(A|B)):(?P<key>([0-9A-Fa-f]{12}))$")
+
     def args_parse_key(self, arg):
-        key_re = re.compile(r"^(?P<idx>([0-9]|1[0-5])):(?P<ab>(A|B)):(?P<key>([0-9A-Fa-f]{12}))$")
-        m = key_re.match(arg)
+        m = cls.key_re.match(arg)
         if not m:
             raise argparse.ArgumentTypeError("Expected format: <sector>:<A|B>:<key> where <sector> is between 0-15 and <key> is 6 bytes long")
         return (int(m.group('idx')), m.group('ab'), bytes.fromhex(m.group('key')))
