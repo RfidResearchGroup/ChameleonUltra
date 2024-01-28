@@ -1005,6 +1005,62 @@ class HFMFWRBL(MF1AuthArgsUnit):
         else:
             print(f" - {CR}Write fail.{C0}")
 
+@hf_mf.command('dump')
+class HFMFDump(MF1AuthArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Mifare Classic dump tag'
+        parser.add_argument('-t', '--dump-file-type', type=str, required=False, help="Dump file content type", choices=['bin', 'hex'])
+        parser.add_argument('-f', '--dump-file', type=argparse.FileType("wb"), required=True,
+                            help="Dump file to write data from tag")
+        parser.add_argument('-k', '--key-file', type=argparse.FileType("r"), required=True,
+                            help="File containing keys of tag to write (exported with fchk --export)")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        # check dump type
+        if args.dump_file_type is None:
+            if args.dump_file.name.endswith('.bin'):
+                content_type = 'bin'
+            elif args.dump_file.name.endswith('.eml'):
+                content_type = 'hex'
+            else:
+                raise Exception("Unknown file format, Specify content type with -t option")
+        else:
+            content_type = args.type
+
+        # read keys from file
+        keys = list()
+        for line in args.key_file.readlines():
+            a, b = [bytes.fromhex(h) for h in line[:-1].split(":")]
+            keys.append((a, b))
+
+        # data to write from dump file
+        buffer = bytearray()
+
+        # iterate over sectors
+        for s in range(16):
+            # iterate over blocks
+            for b in range(4):
+                resp = None
+                try:
+                    # first try with key B
+                    resp = self.cmd.mf1_read_one_block(4*s + b, MfcKeyType.B, keys[s][1])
+                except UnexpectedResponseError:
+                    # ignore read errors at this stage as we want to try key A
+                    pass
+                if not resp:
+                    # try with key A if B was unsuccessful
+                    # this will raise an exception if key A fails too
+                    resp = self.cmd.mf1_read_one_block(4*s + b, MfcKeyType.A, keys[s][0])
+                # add data to buffer
+                if content_type == 'bin':
+                    buffer.extend(resp)
+                elif content_type == 'hex':
+                    buffer.extend(resp.hex())
+        # write buffer to file
+        args.dump_file.write(buffer)
+
 
 @hf_mf.command('value')
 class HFMFVALUE(ReaderRequiredUnit):
