@@ -865,6 +865,7 @@ class HFMFFCHK(ReaderRequiredUnit):
 
         parser.add_argument(dest='keys', help='Key (in hex[12] format)', metavar='<hex>', type=str, nargs='*')
         parser.add_argument('-f', '--file', type=argparse.FileType('rb'), help='Read keys from file')
+        parser.add_argument('-e', '--export-file', type=argparse.FileType('w'), help='Export found keys to file', default=None)
 
         file_type_group = parser.add_mutually_exclusive_group()
         file_type_group.add_argument('--hex', action='store_const', dest='fileType', const='hex', help='Type of keys file is dictionary (in hex[12] format) (default)')
@@ -962,8 +963,14 @@ class HFMFFCHK(ReaderRequiredUnit):
             keyB = f"{CG}{keyB.hex().upper()}{C0} | {CG}1{C0}" if keyB else f"{CR}------------{C0} | {CR}0{C0}"
             print(f" {CY}{sectorNo:03d}{C0} | {blk:03d} | {keyA} | {keyB} ")
         print("-----+-----+--------------+---+--------------+----")
-        print(f"( {CR}0{C0}: Failed, {CG}1{C0}: Success )\n\n")
+        print(f"( {CR}0{C0}: Failed, {CG}1{C0}: Success )\n")
 
+        if args.export_file:
+            for sectorNo in range(args.maxSectors):
+                keyA = sectorKeys.get(2 * sectorNo, None)
+                keyB = sectorKeys.get(2 * sectorNo + 1, None)
+                args.export_file.write(f"{keyA.hex()}:{keyB.hex()}\n")
+            print(f" - keys exported to: {CG}{args.export_file.name}{C0}\n")
 
 @hf_mf.command('rdbl')
 class HFMFRDBL(MF1AuthArgsUnit):
