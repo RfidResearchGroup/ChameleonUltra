@@ -1005,11 +1005,94 @@ uint8_t static_nested_recover_key(uint64_t keyKnown, uint8_t blkKnown, uint8_t t
 * @retval   : validationResults
 *
 */
-uint8_t auth_key_use_522_hw(uint8_t block, uint8_t type, uint8_t *key) {
+uint16_t auth_key_use_522_hw(uint8_t block, uint8_t type, uint8_t *key) {
     // Each verification of a block must re -find a card
     if (pcd_14a_reader_scan_auto(p_tag_info) != STATUS_HF_TAG_OK) {
         return STATUS_HF_TAG_NO;
     }
     // After finding the card, we start to verify!
     return pcd_14a_reader_mf1_auth(p_tag_info, type, block, key);
+}
+
+inline void mf1_toolbox_antenna_restart () {
+    pcd_14a_reader_reset();
+    pcd_14a_reader_antenna_on();
+    bsp_delay_ms(8);
+}
+
+inline void mf1_toolbox_report_healthy () {
+    bsp_wdt_feed();
+    while (NRF_LOG_PROCESS());
+}
+
+uint16_t mf1_toolbox_check_keys_of_sectors (
+    mf1_toolbox_check_keys_of_sectors_in_t *in,
+    mf1_toolbox_check_keys_of_sectors_out_t *out
+) {
+    memset(out, 0, sizeof(mf1_toolbox_check_keys_of_sectors_out_t));
+    uint8_t trailer[18] = {}; // trailer 16 bytes + padding 2 bytes
+
+    // keys unique
+    uint8_t i, j, maskSector, maskShift, trailerNo;
+    for (i = 0; i < in->keys_len; i++) {
+        for (j = i + 1; j < in->keys_len; j++) {
+            if (memcmp(&in->keys[i], &in->keys[j], sizeof(mf1_key_t)) != 0) continue;
+
+            // key duplicated, replace with last key
+            if (j != in->keys_len - 1) in->keys[j] = in->keys[in->keys_len - 1];
+            in->keys_len--;
+            j--;
+        }
+    }
+
+    uint16_t status = STATUS_HF_TAG_OK;
+    bool skipKeyB;
+    for (i = 0; i < 40; i++) {
+        maskShift = 6 - i % 4 * 2;
+        maskSector = (in->mask.b[i / 4] >> maskShift) & 0b11;
+        trailerNo = i < 32 ? i * 4 + 3 : i * 16 - 369; // trailerNo of sector
+        skipKeyB = (maskSector & 0b1) > 0;
+        if ((maskSector & 0b10) == 0) {
+            for (j = 0; j < in->keys_len; j++) {
+                mf1_toolbox_report_healthy();
+                if (status != STATUS_HF_TAG_OK) mf1_toolbox_antenna_restart();
+
+                status = auth_key_use_522_hw(trailerNo, PICC_AUTHENT1A, in->keys[j].key);
+                if (status != STATUS_HF_TAG_OK) { // auth failed
+                    if (status == STATUS_HF_TAG_NO) return STATUS_HF_TAG_NO;
+                    continue;
+                }
+                // key A found
+                out->found.b[i / 4] |= 0b10 << maskShift;
+                out->keys[i][0] = in->keys[j];
+                // try to read keyB from trailer of sector
+                status = pcd_14a_reader_mf1_read(trailerNo, trailer);
+                // key B not in trailer
+                if (status != STATUS_HF_TAG_OK || 0 == *(uint64_t*) &trailer[10]) break;
+                // key B found
+                skipKeyB = true;
+                out->found.b[i / 4] |= 0b1 << maskShift;
+                out->keys[i][1] = *(mf1_key_t*)&trailer[10];
+                break;
+            }
+        }
+        if (skipKeyB) continue;
+
+        for (j = 0; j < in->keys_len; j++) {
+            mf1_toolbox_report_healthy();
+            if (status != STATUS_HF_TAG_OK) mf1_toolbox_antenna_restart();
+
+            status = auth_key_use_522_hw(trailerNo, PICC_AUTHENT1B, in->keys[j].key);
+            if (status != STATUS_HF_TAG_OK) { // auth failed
+                if (status == STATUS_HF_TAG_NO) return STATUS_HF_TAG_NO;
+                continue;
+            }
+            // key B found
+            out->found.b[i / 4] |= 0b1 << maskShift;
+            out->keys[i][1] = in->keys[j];
+            break;
+        }
+    }
+
+    return STATUS_HF_TAG_OK;
 }

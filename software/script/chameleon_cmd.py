@@ -300,6 +300,45 @@ class ChameleonCMD:
         resp.parsed = resp.status == Status.HF_TAG_OK
         return resp
 
+    @expect_response([Status.HF_TAG_OK, Status.HF_TAG_NO])
+    def mf1_check_keys_of_sectors(self, mask: bytes, keys: list[bytes]):
+        """
+        Check keys of sectors.
+        :return:
+        """
+        if len(mask) != 10:
+            raise ValueError("len(mask) should be 10")
+        if len(keys) < 1 or len(keys) > 83:
+            raise ValueError("Invalid len(keys)")
+        data = struct.pack(f'!10s{6*len(keys)}s', mask, b''.join(keys))
+
+        bitsCnt = 80 # maximum sectorKey_to_be_checked
+        for b in mask:
+            while b > 0:
+                [bitsCnt, b] = [bitsCnt - (b & 0b1), b >> 1]
+        if bitsCnt < 1:
+            # All sectorKey is masked
+            return chameleon_com.Response(
+                cmd=Command.MF1_CHECK_KEYS_OF_SECTORS, 
+                status=Status.HF_TAG_OK,
+                parsed={ 'status': Status.HF_TAG_OK },
+            )
+        # base timeout: 1s
+        # auth: len(keys) * sectorKey_to_be_checked * 0.1s
+        # read keyB from trailer block: 0.1s
+        timeout = 1 + (bitsCnt + 1) * len(keys) * 0.1
+
+        resp = self.device.send_cmd_sync(Command.MF1_CHECK_KEYS_OF_SECTORS, data, timeout=timeout)
+        resp.parsed = { 'status': resp.status }
+        if len(resp.data) == 490:
+            found = ''.join([format(i, '08b') for i in resp.data[0:10]])
+            # print(f'{found = }')
+            resp.parsed.update({
+                'found': resp.data[0:10],
+                'sectorKeys': {k: resp.data[6 * k + 10:6 * k + 16] for k, v in enumerate(found) if v == '1'}
+            })
+        return resp
+
     @expect_response(Status.HF_TAG_OK)
     def mf1_static_nested_acquire(self, block_known, type_known, key_known, block_target, type_target):
         """

@@ -67,6 +67,7 @@
 #define DATA_CMD_MF1_WRITE_ONE_BLOCK            (2009)
 #define DATA_CMD_HF14A_RAW                      (2010)
 #define DATA_CMD_MF1_MANIPULATE_VALUE_BLOCK     (2011)
+#define DATA_CMD_MF1_CHECK_KEYS_OF_SECTORS      (2012)
 
 //
 // ******************************************************************

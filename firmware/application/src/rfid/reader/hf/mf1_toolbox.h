@@ -57,6 +57,24 @@ typedef struct {
     uint8_t ar[4];
 } PACKED DarksideCore_t;
 
+typedef struct {
+    uint8_t key[6];
+} PACKED mf1_key_t;
+
+typedef struct {
+    uint8_t b[10]; // 80 bits: 40 sectors * 2 keys
+} PACKED mf1_toolbox_check_keys_of_sectors_mask_t;
+
+typedef struct {
+    mf1_toolbox_check_keys_of_sectors_mask_t mask;
+    uint8_t keys_len;
+    mf1_key_t *keys;
+} mf1_toolbox_check_keys_of_sectors_in_t;
+
+typedef struct {
+    mf1_toolbox_check_keys_of_sectors_mask_t found;
+    mf1_key_t keys[40][2]; // 6 bytes * 2 keys * 40 sectors = 480 bytes
+} PACKED mf1_toolbox_check_keys_of_sectors_out_t;
 
 #ifdef __cplusplus
 extern "C" {
@@ -93,7 +111,12 @@ uint8_t static_nested_recover_key(NESTED_CORE_PARAM_DEF, mf1_static_nested_core_
 uint8_t check_prng_type(mf1_prng_type_t *type);
 uint8_t check_std_mifare_nt_support();
 void antenna_switch_delay(uint32_t delay_ms);
-uint8_t auth_key_use_522_hw(uint8_t block, uint8_t type, uint8_t *key);
+uint16_t auth_key_use_522_hw(uint8_t block, uint8_t type, uint8_t *key);
+
+uint16_t mf1_toolbox_check_keys_of_sectors (
+    mf1_toolbox_check_keys_of_sectors_in_t *in,
+    mf1_toolbox_check_keys_of_sectors_out_t *out
+);
 
 #ifdef __cplusplus
 }

@@ -14,6 +14,7 @@ from multiprocessing import Pool, cpu_count
 from typing import Union
 from pathlib import Path
 from platform import uname
+from datetime import datetime
 
 import chameleon_com
 import chameleon_cmd
@@ -851,6 +852,126 @@ class HFMFDarkside(ReaderRequiredUnit):
         return
 
 
+@hf_mf.command('fchk')
+class HFMFFCHK(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+
+        mifare_type_group = parser.add_mutually_exclusive_group()
+        mifare_type_group.add_argument('--mini', help='MIFARE Classic Mini / S20', action='store_const', dest='maxSectors', const=5)
+        mifare_type_group.add_argument('--1k', help='MIFARE Classic 1k / S50 (default)', action='store_const', dest='maxSectors', const=16)
+        mifare_type_group.add_argument('--2k', help='MIFARE Classic/Plus 2k', action='store_const', dest='maxSectors', const=32)
+        mifare_type_group.add_argument('--4k', help='MIFARE Classic 4k / S70', action='store_const', dest='maxSectors', const=40)
+
+        parser.add_argument(dest='keys', help='Key (in hex[12] format)', metavar='<hex>', type=str, nargs='*')
+        parser.add_argument('-f', '--file', type=argparse.FileType('rb'), help='Read keys from file')
+        parser.add_argument('-e', '--export-file', type=argparse.FileType('w'), help='Export found keys to file', default=None)
+
+        file_type_group = parser.add_mutually_exclusive_group()
+        file_type_group.add_argument('--hex', action='store_const', dest='fileType', const='hex', help='Type of keys file is dictionary (in hex[12] format) (default)')
+        file_type_group.add_argument('-b', '--bin', action='store_const', dest='fileType', const='bin', help='Type of keys file is binary')
+
+        parser.add_argument('-m', '--mask', help='Which sectorKey to be skip, 1 bit per sectorKey. `0b1` represent to skip to check. (in hex[20] format)', type=str, default='00000000000000000000', metavar='<hex>')
+
+        parser.set_defaults(maxSectors=16, fileType='hex')
+        return parser
+    
+    def check_keys(self, mask: bytearray, keys: list[bytes], chunkSize=20):
+        sectorKeys = dict()
+
+        for i in range(0, len(keys), chunkSize):
+            # print("mask = {}".format(mask.hex(sep=' ', bytes_per_sep=1)))
+            chunkKeys = keys[i:i+chunkSize]
+            print(f' - progress of checking keys... {CY}{i}{C0} / {len(keys)} ({CY}{100 * i / len(keys):.1f}{C0} %)')
+            resp = self.cmd.mf1_check_keys_of_sectors(mask, chunkKeys)
+            # print(resp)
+
+            if resp["status"] != Status.HF_TAG_OK:
+                print(f' - check interrupted, reason: {CR}{str(Status(resp["status"]))}{C0}')
+                break
+            elif 'sectorKeys' not in resp:
+                print(f' - check interrupted, reason: {CG}All sectorKey is found or masked{C0}')
+                break
+
+            for j in range(10):
+                mask[j] |= resp['found'][j]
+            sectorKeys.update(resp['sectorKeys'])
+
+        return sectorKeys
+
+    def on_exec(self, args: argparse.Namespace):
+        # print(args)
+
+        keys = set()
+
+        # keys from args
+        for key in args.keys:
+            if not re.match(r'^[a-fA-F0-9]{12}$', key):
+                print(f' - {CR}Key should in hex[12] format, invalid key is ignored{C0}, key = "{key}"')
+                continue
+            keys.add(bytes.fromhex(key))
+
+        # keys from file
+        if args.file is not None:
+            buf = bytearray()
+
+            if args.fileType == 'bin':
+                buf.extend(args.file.read())
+            elif args.fileType == 'hex':
+                text = re.sub(r'#.*$', '', args.file.read().decode('utf-8'), flags=re.MULTILINE)
+                # print(text)
+                buf.extend(bytearray.fromhex(text))
+            
+            if len(buf) % 6 != 0:
+                print(f' - {CR}keys from file not align for 6 bytes{C0}')
+                return
+            
+            for i in range(0, len(buf), 6):
+                keys.add(bytes(buf[i:i+6]))
+
+        if len(keys) == 0:
+            print(f' - {CR}No keys{C0}')
+            return
+
+        print(f" - loaded {CG}{len(keys)}{C0} keys")
+
+        # mask
+        if not re.match(r'^[a-fA-F0-9]{1,20}$', args.mask):
+            print(f' - {CR}mask should in hex[20] format{C0}, mask = "{args.mask}"')
+            return
+        mask = bytearray.fromhex(f'{args.mask:0<20}')
+        for i in range(args.maxSectors, 40):
+            mask[i // 4] |= 3 << (6 - i % 4 * 2)
+
+        # check keys
+        startedAt = datetime.now()
+        sectorKeys = self.check_keys(mask, list(keys))
+        endedAt = datetime.now()
+        duration = endedAt - startedAt
+        print(f" - elapsed time: {CY}{duration.total_seconds():.3f}s{C0}")
+
+        # print sectorKeys
+        print(f"\n - {CG}result of key checking:{C0}\n")
+        print("-----+-----+--------------+---+--------------+----")
+        print(" Sec | Blk | key A        |res| key B        |res ")
+        print("-----+-----+--------------+---+--------------+----")
+        for sectorNo in range(args.maxSectors):
+            blk = (sectorNo * 4 + 3) if sectorNo < 32 else (sectorNo * 16 - 369)
+            keyA = sectorKeys.get(2 * sectorNo, None)
+            keyA = f"{CG}{keyA.hex().upper()}{C0} | {CG}1{C0}" if keyA else f"{CR}------------{C0} | {CR}0{C0}"
+            keyB = sectorKeys.get(2 * sectorNo + 1, None)
+            keyB = f"{CG}{keyB.hex().upper()}{C0} | {CG}1{C0}" if keyB else f"{CR}------------{C0} | {CR}0{C0}"
+            print(f" {CY}{sectorNo:03d}{C0} | {blk:03d} | {keyA} | {keyB} ")
+        print("-----+-----+--------------+---+--------------+----")
+        print(f"( {CR}0{C0}: Failed, {CG}1{C0}: Success )\n")
+
+        if args.export_file:
+            for sectorNo in range(args.maxSectors):
+                keyA = sectorKeys.get(2 * sectorNo, None)
+                keyB = sectorKeys.get(2 * sectorNo + 1, None)
+                args.export_file.write(f"{keyA.hex()}:{keyB.hex()}\n")
+            print(f" - keys exported to: {CG}{args.export_file.name}{C0}\n")
+
 @hf_mf.command('rdbl')
 class HFMFRDBL(MF1AuthArgsUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -884,6 +1005,132 @@ class HFMFWRBL(MF1AuthArgsUnit):
         else:
             print(f" - {CR}Write fail.{C0}")
 
+@hf_mf.command('dump')
+class HFMFDump(MF1AuthArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Mifare Classic dump tag'
+        parser.add_argument('-t', '--dump-file-type', type=str, required=False, help="Dump file content type", choices=['bin', 'hex'])
+        parser.add_argument('-f', '--dump-file', type=argparse.FileType("wb"), required=True,
+                            help="Dump file to write data from tag")
+        parser.add_argument('-k', '--key-file', type=argparse.FileType("r"), required=True,
+                            help="File containing keys of tag to write (exported with fchk --export)")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        # check dump type
+        if args.dump_file_type is None:
+            if args.dump_file.name.endswith('.bin'):
+                content_type = 'bin'
+            elif args.dump_file.name.endswith('.eml'):
+                content_type = 'hex'
+            else:
+                raise Exception("Unknown file format, Specify content type with -t option")
+        else:
+            content_type = args.type
+
+        # read keys from file
+        keys = list()
+        for line in args.key_file.readlines():
+            a, b = [bytes.fromhex(h) for h in line[:-1].split(":")]
+            keys.append((a, b))
+
+        # data to write from dump file
+        buffer = bytearray()
+
+        # iterate over sectors
+        for s in range(16):
+            # iterate over blocks
+            for b in range(4):
+                resp = None
+                try:
+                    # first try with key B
+                    resp = self.cmd.mf1_read_one_block(4*s + b, MfcKeyType.B, keys[s][1])
+                except UnexpectedResponseError:
+                    # ignore read errors at this stage as we want to try key A
+                    pass
+                if not resp:
+                    # try with key A if B was unsuccessful
+                    # this will raise an exception if key A fails too
+                    resp = self.cmd.mf1_read_one_block(4*s + b, MfcKeyType.A, keys[s][0])
+                # add data to buffer
+                if content_type == 'bin':
+                    buffer.extend(resp)
+                elif content_type == 'hex':
+                    buffer.extend(resp.hex())
+        # write buffer to file
+        args.dump_file.write(buffer)
+
+@hf_mf.command('clone')
+class HFMFClone(MF1AuthArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Mifare Classic clone tag from dump'
+        parser.add_argument('-t', '--dump-file-type', type=str, required=False, help="Dump file content type", choices=['bin', 'hex'])
+        parser.add_argument('-a', '--clone-access', type=bool, default=False, help="Write ACL from original dump too (/!\ could brick your tag)")
+        parser.add_argument('-f', '--dump-file', type=argparse.FileType("rb"), required=True,
+                            help="Dump file containing data to write on new tag")
+        parser.add_argument('-k', '--key-file', type=argparse.FileType("r"), required=True,
+                            help="File containing keys of tag to write (exported with fchk)")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.dump_file_type is None:
+            if args.dump_file.name.endswith('.bin'):
+                content_type = 'bin'
+            elif args.dump_file.name.endswith('.eml'):
+                content_type = 'hex'
+            else:
+                raise Exception("Unknown file format, Specify content type with -t option")
+        else:
+            content_type = args.type
+
+        # data to write from dump file
+        buffer = bytearray()
+        if content_type == 'bin':
+            buffer.extend(args.dump_file.read())
+        if content_type == 'hex':
+            buffer.extend(bytearray.fromhex(args.dump_file.read().decode()))
+        if len(buffer) % 16 != 0:
+            raise Exception("Data block not align for 16 bytes")
+        if len(buffer) / 16 > 256:
+            raise Exception("Data block memory overflow")
+
+        # keys to use from file
+        keys = list()
+        for line in args.key_file.readlines():
+            a, b = [bytes.fromhex(h) for h in line[:-1].split(":")]
+            keys.append((a, b))
+
+        # iterate over sectors
+        for s in range(16):
+            # iterate over blocks
+            for b in range(4):
+                data = buffer[(4*s+b)*16:(4*s+b+1)*16]
+                # special case for last block of each sector
+                if b == 3:
+                    # check ACL option
+                    if not args.clone_access:
+                        # if option is not specified, use generic ACL to be able to write again
+                        data = data[:6] + bytes.fromhex("08778F") + data[9:]
+                ok = False
+                try:
+                    # try B key first
+                    resp = self.cmd.mf1_write_one_block(4*s + b, MfcKeyType.B, keys[s][1], data)
+                    if resp:
+                        ok = True
+                except UnexpectedResponseError:
+                    pass
+                if not ok:
+                    # try with key B
+                    try:
+                        resp = self.cmd.mf1_write_one_block(4*s + b, MfcKeyType.A, keys[s][0], data)
+                        if resp:
+                            ok = True
+                    except UnexpectedResponseError:
+                        pass
+                if not ok:
+                    print(f"[!] error writing block {4*s + b}")
 
 @hf_mf.command('value')
 class HFMFVALUE(ReaderRequiredUnit):

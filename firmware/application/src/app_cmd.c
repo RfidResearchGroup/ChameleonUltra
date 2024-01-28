@@ -31,7 +31,6 @@ static void change_slot_auto(uint8_t slot) {
     set_slot_light_color(RGB_RED);
 }
 
-
 static data_frame_tx_t *cmd_processor_get_app_version(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     struct {
         uint8_t version_major;
@@ -345,6 +344,23 @@ static data_frame_tx_t *cmd_processor_mf1_auth_one_key_block(uint16_t cmd, uint1
     status = auth_key_use_522_hw(payload->block, payload->type, payload->key);
     pcd_14a_reader_mf1_unauth();
     return data_frame_make(cmd, status, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_mf1_check_keys_of_sectors(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length < 16 || (length - 10) % 6 != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    // init
+    mf1_toolbox_check_keys_of_sectors_in_t in = {
+        .mask = *(mf1_toolbox_check_keys_of_sectors_mask_t *) &data[0],
+        .keys_len = (length - 10) / 6,
+        .keys = (mf1_key_t *) &data[10]
+    };
+    mf1_toolbox_check_keys_of_sectors_out_t out;
+    status = mf1_toolbox_check_keys_of_sectors(&in, &out);
+
+    return data_frame_make(cmd, status, sizeof(out), (uint8_t *)&out);
 }
 
 static data_frame_tx_t *cmd_processor_mf1_read_one_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -1068,6 +1084,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_WRITE_ONE_BLOCK,          before_hf_reader_run,        cmd_processor_mf1_write_one_block,           after_hf_reader_run    },
     {    DATA_CMD_HF14A_RAW,                    before_reader_run,           cmd_processor_hf14a_raw,                     NULL                   },
     {    DATA_CMD_MF1_MANIPULATE_VALUE_BLOCK,   before_hf_reader_run,        cmd_processor_mf1_manipulate_value_block,    after_hf_reader_run    },
+    {    DATA_CMD_MF1_CHECK_KEYS_OF_SECTORS,    before_hf_reader_run,        cmd_processor_mf1_check_keys_of_sectors,     after_hf_reader_run    },
 
     {    DATA_CMD_EM410X_SCAN,                  before_reader_run,           cmd_processor_em410x_scan,                   NULL                   },
     {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_em410x_write_to_t55XX,         NULL                   },
