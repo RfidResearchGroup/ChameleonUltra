@@ -1061,6 +1061,76 @@ class HFMFDump(MF1AuthArgsUnit):
         # write buffer to file
         args.dump_file.write(buffer)
 
+@hf_mf.command('clone')
+class HFMFClone(MF1AuthArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Mifare Classic clone tag from dump'
+        parser.add_argument('-t', '--dump-file-type', type=str, required=False, help="Dump file content type", choices=['bin', 'hex'])
+        parser.add_argument('-a', '--clone-access', type=bool, default=False, help="Write ACL from original dump too (/!\ could brick your tag)")
+        parser.add_argument('-f', '--dump-file', type=argparse.FileType("rb"), required=True,
+                            help="Dump file containing data to write on new tag")
+        parser.add_argument('-k', '--key-file', type=argparse.FileType("r"), required=True,
+                            help="File containing keys of tag to write (exported with fchk)")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.dump_file_type is None:
+            if args.dump_file.name.endswith('.bin'):
+                content_type = 'bin'
+            elif args.dump_file.name.endswith('.eml'):
+                content_type = 'hex'
+            else:
+                raise Exception("Unknown file format, Specify content type with -t option")
+        else:
+            content_type = args.type
+
+        # data to write from dump file
+        buffer = bytearray()
+        if content_type == 'bin':
+            buffer.extend(args.dump_file.read())
+        if content_type == 'hex':
+            buffer.extend(bytearray.fromhex(args.dump_file.read().decode()))
+        if len(buffer) % 16 != 0:
+            raise Exception("Data block not align for 16 bytes")
+        if len(buffer) / 16 > 256:
+            raise Exception("Data block memory overflow")
+
+        # keys to use from file
+        keys = list()
+        for line in args.key_file.readlines():
+            a, b = [bytes.fromhex(h) for h in line[:-1].split(":")]
+            keys.append((a, b))
+
+        # iterate over sectors
+        for s in range(16):
+            # iterate over blocks
+            for b in range(4):
+                data = buffer[(4*s+b)*16:(4*s+b+1)*16]
+                # special case for last block of each sector
+                if b == 3:
+                    # check ACL option
+                    if not args.clone_access:
+                        # if option is not specified, use generic ACL to be able to write again
+                        data = data[:6] + bytes.fromhex("08778F") + data[9:]
+                ok = False
+                try:
+                    # try B key first
+                    resp = self.cmd.mf1_write_one_block(4*s + b, MfcKeyType.B, keys[s][1], data)
+                    if resp:
+                        ok = True
+                except UnexpectedResponseError:
+                    pass
+                if not ok:
+                    # try with key B
+                    try:
+                        resp = self.cmd.mf1_write_one_block(4*s + b, MfcKeyType.A, keys[s][0], data)
+                        if resp:
+                            ok = True
+                    except UnexpectedResponseError:
+                        pass
+                if not ok:
+                    print(f"[!] error writing block {4*s + b}")
 
 @hf_mf.command('value')
 class HFMFVALUE(ReaderRequiredUnit):
