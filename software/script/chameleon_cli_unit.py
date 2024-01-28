@@ -870,12 +870,7 @@ class HFMFFuzz(ReaderRequiredUnit):
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        keys = []
-        for i in range(16):
-            keys.append({
-                    'a': bytes.fromhex("FFFFFFFFFFFF"),
-                    'b': bytes.fromhex("000000000000"),
-                })
+        keys = [{'a': b'\xff\xff\xff\xff\xff\xff', 'b': b'\x00\x00\x00\x00\x00\x00'} for _ in range(16)]
         for keyarg in args.key:
             keys[keyarg[0]][keyarg[1].lower()] = keyarg[2]
         # generate and write blocks to emulate
