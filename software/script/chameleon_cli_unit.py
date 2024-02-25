@@ -703,7 +703,7 @@ class HFMFNested(ReaderRequiredUnit):
         if nt_level == 0:  # It's a staticnested tag?
             nt_uid_obj = self.cmd.mf1_static_nested_acquire(
                 block_known, type_known, key_known, block_target, type_target)
-            cmd_param = f"{nt_uid_obj['uid']} {str(type_target)}"
+            cmd_param = f"{nt_uid_obj['uid']} {int(type_target)}"
             for nt_item in nt_uid_obj['nts']:
                 cmd_param += f" {nt_item['nt']} {nt_item['nt_enc']}"
             tool_name = "staticnested"
