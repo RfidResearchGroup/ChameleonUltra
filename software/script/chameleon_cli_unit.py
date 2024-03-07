@@ -763,7 +763,7 @@ class HFMFNested(ReaderRequiredUnit):
         key_known_bytes = bytes.fromhex(key_known)
         block_target = args.tblk
         # default to A
-        type_target = MfcKeyType.B if args.b else MfcKeyType.A
+        type_target = MfcKeyType.B if args.tb else MfcKeyType.A
         if block_known == block_target and type_known == type_target:
             print(f"{CR}Target key already known{C0}")
             return
