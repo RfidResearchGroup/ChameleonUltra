@@ -1012,6 +1012,52 @@ class HFMFWRBL(MF1AuthArgsUnit):
         else:
             print(f" - {CR}Write fail.{C0}")
 
+@hf_mf.command('view')
+class HFMFView(MF1AuthArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Display content from tag memory or dump file'
+        mifare_type_group = parser.add_mutually_exclusive_group()
+        mifare_type_group.add_argument('--mini', help='MIFARE Classic Mini / S20', action='store_const', dest='maxSectors', const=5)
+        mifare_type_group.add_argument('--1k', help='MIFARE Classic 1k / S50 (default)', action='store_const', dest='maxSectors', const=16)
+        mifare_type_group.add_argument('--2k', help='MIFARE Classic/Plus 2k', action='store_const', dest='maxSectors', const=32)
+        mifare_type_group.add_argument('--4k', help='MIFARE Classic 4k / S70', action='store_const', dest='maxSectors', const=40)
+        parser.add_argument('-d', '--dump-file', required=False, type=argparse.FileType("rb"), help="Dump file to read")
+        parser.add_argument('-k', '--key-file', required=False, type=argparse.FileType("r"), help="File containing keys of tag to write (exported with fchk --export)")
+        parser.set_defaults(maxSectors=16)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        data = bytearray(0)
+        if args.dump_file is not None:
+            print("Reading dump file")
+            data = args.dump_file.read()
+        elif args.key_file is not None:
+            print("Reading tag memory")
+            # read keys from file
+            keys = list()
+            for line in args.key_file.readlines():
+                a, b = [bytes.fromhex(h) for h in line[:-1].split(":")]
+                keys.append((a, b))
+            if len(keys) != args.maxSectors:
+                raise ArgsParserError(f"Invalid key file. Found {len(keys)}, expected {args.maxSectors}")
+            # iterate over blocks
+            for blk in range(0, args.maxSectors * 4):
+                resp = None
+                try:
+                    # first try with key B
+                    resp = self.cmd.mf1_read_one_block(blk, MfcKeyType.B, keys[blk//4][1])
+                except UnexpectedResponseError:
+                    # ignore read errors at this stage as we want to try key A
+                    pass
+                if not resp:
+                    # try with key A if B was unsuccessful
+                    # this will raise an exception if key A fails too
+                    resp = self.cmd.mf1_read_one_block(blk, MfcKeyType.A, keys[blk//4][0])
+                data.extend(resp)
+        else:
+            raise ArgsParserError("Missing args. Specify --dump-file (-d) or --key-file (-k)")
+        print_mem_dump(data,16)
 
 @hf_mf.command('value')
 class HFMFVALUE(ReaderRequiredUnit):
