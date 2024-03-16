@@ -21,6 +21,7 @@ import chameleon_cmd
 from chameleon_utils import ArgumentParserNoExit, ArgsParserError, UnexpectedResponseError
 from chameleon_utils import CLITree
 from chameleon_utils import CR, CG, CB, CC, CY, C0
+from chameleon_utils import print_mem_dump
 from chameleon_enum import Command, Status, SlotNumber, TagSenseType, TagSpecificType
 from chameleon_enum import MifareClassicWriteMode, MifareClassicPrngType, MifareClassicDarksideStatus, MfcKeyType
 from chameleon_enum import AnimationMode, ButtonPressFunction, ButtonType, MfcValueBlockOperator
@@ -1420,6 +1421,39 @@ class HFMFESave(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
                 fd.write(data)
         print("\n - Read success")
 
+@hf_mf.command('eview')
+class HFMFEView(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'View data from emulator memory'
+        self.add_slot_args(parser)
+        return parser
+    
+    def on_exec(self, args: argparse.Namespace):
+        selected_slot = self.cmd.get_active_slot()
+        slot_info = self.cmd.get_slot_info()
+        tag_type = TagSpecificType(slot_info[selected_slot]['hf'])      
+        
+        if tag_type == TagSpecificType.MIFARE_Mini:
+            block_count = 20
+        elif tag_type == TagSpecificType.MIFARE_1024:
+            block_count = 64
+        elif tag_type == TagSpecificType.MIFARE_2048:
+            block_count = 128
+        elif tag_type == TagSpecificType.MIFARE_4096:
+            block_count = 256
+        else:
+            raise Exception("Card in current slot is not Mifare Classic/Plus in SL1 mode")
+        index = 0
+        data = bytearray(0)
+        max_blocks = self.device_com.data_max_length // 16
+        while block_count > 0:
+            # read all the blocks
+            chunk_count = min(block_count, max_blocks)
+            data.extend(self.cmd.mf1_read_emu_block_data(index, chunk_count))
+            index += chunk_count
+            block_count -= chunk_count
+        print_mem_dump(data,16)
 
 @hf_mf.command('econfig')
 class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredUnit):
