@@ -1733,6 +1733,17 @@ class LFEM410xWriteT55xx(LFEMIdArgsUnit, ReaderRequiredUnit):
         print(f" - EM410x ID(10H): {id_hex} write done.")
 
 
+@lf.command('read')
+class LFRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Scan lf tag and print data'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        data = self.cmd.lf_read()
+        print(f" - LF card dump: {CG}{data.hex()}{C0}")
+
 @hw_slot.command('list')
 class HWSlotList(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
