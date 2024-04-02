@@ -105,6 +105,14 @@ uint8_t PcdWriteT55XX(uint8_t *uid, uint8_t *newkey, uint8_t *old_keys, uint8_t 
     return STATUS_LF_TAG_OK;
 }
 
+uint8_t lf_reader_read(uint8_t *data, size_t buffer_len) {
+    uint8_t ret = STATUS_LF_TAG_NO_FOUND;
+    if (em410x_read(data, g_timeout_readem_ms) == 1) {
+        ret = STATUS_LF_TAG_OK;
+    }
+    return ret;
+}
+
 /**
 * Set the time value of the card search timeout of the EM card
 */
