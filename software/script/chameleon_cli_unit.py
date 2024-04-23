@@ -1144,7 +1144,7 @@ class HFMFClone(MF1AuthArgsUnit):
                     # check ACL option
                     if not args.clone_access:
                         # if option is not specified, use generic ACL to be able to write again
-                        block_data = block_data[:6] + bytes.fromhex("08778F") + block_data[9:]
+                        block_data = block_data[:6] + bytes.fromhex("ff0780") + block_data[9:]
                 try:
                     # try B key first
                     self.cmd.mf1_write_one_block(4*s + b, MfcKeyType.B, keyB, block_data)
