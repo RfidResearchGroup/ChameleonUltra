@@ -102,13 +102,23 @@ To run again after installing, just do the following:
 
 2. Run the CLI with `python chameleon_cli_main.py`
 
-### Linux
+### MacOS
+
+Requires [Homebrew](https://brew.sh/) to be installed.
+  - If you don't have Homebrew installed on your macOS, open the Terminal and run: 
+  `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"`
+
+See Linux/Macos instructions below for the rest.
+
+### Linux / MacOS
 
 Install the dependencies
   - Ubuntu / Debian:  
   `sudo apt install git cmake build-essential python3-venv`
   - Arch:  
   `sudo pacman -S  git cmake base-devel python3`
+  - MacOS:
+  `brew install git cmake python3`
 
 Python 3.9 or above is required.
 
@@ -144,10 +154,6 @@ source venv/bin/activate
 python3 chameleon_cli_main.py
 deactivate
 ```
-
-### MacOS
-
-*Coming Soon*
 
 ## Usage
 

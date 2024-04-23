@@ -294,6 +294,13 @@ Notes:
 * Command: 21 bytes: `src_type|src_block|src_key[6]|operator|operand[4]|dst_type|dst_block|dst_key[6]`. Key as 6 bytes. Type=`0x60` for key A, `0x61` for key B. Operator=`0xC0` for decrement, `0xC1` for increment, `0xC2` for restore. Operand as I32 in Network byte order.
 * Response: no data
 * CLI: cf `hf mf value`
+### 2012: MF1_CHECK_KEYS_OF_SECTORS
+* Command: 10+N*6 bytes: `mask[10]|keys[N][6]` (1<=N<=83)
+  * `mask`: 40 sectors, 2 bits/sector, MSB: `0A|0B|1A|1B|...|39A|39B`. `0b1` represent to skip checking the key.
+* Response: 490 bytes: `found[10]|sectorKey[40][2][6]`.
+  * `found`: 40 sectors, 2 bits/sector, MSB: `0A|0B|1A|1B|...|39A|39B`. `0b1` represent the key is found.
+  * `sectorKey`: 40 sectors, 2 keys/sector, 6 bytes/key: `key0A[6]|key0B[6]|key1A[6]|key1B[6]|...|key39A[6]|key39B[6]`
+* CLI: cf `hf mf fchk`
 ### 3000: EM410X_SCAN
 * Command: no data
 * Response: 5 bytes. `id[5]`. ID as 5 bytes.

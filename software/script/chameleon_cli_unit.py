@@ -14,6 +14,7 @@ from multiprocessing import Pool, cpu_count
 from typing import Union
 from pathlib import Path
 from platform import uname
+from datetime import datetime
 
 import chameleon_com
 import chameleon_cmd
@@ -703,7 +704,7 @@ class HFMFNested(ReaderRequiredUnit):
         if nt_level == 0:  # It's a staticnested tag?
             nt_uid_obj = self.cmd.mf1_static_nested_acquire(
                 block_known, type_known, key_known, block_target, type_target)
-            cmd_param = f"{nt_uid_obj['uid']} {str(type_target)}"
+            cmd_param = f"{nt_uid_obj['uid']} {int(type_target)}"
             for nt_item in nt_uid_obj['nts']:
                 cmd_param += f" {nt_item['nt']} {nt_item['nt_enc']}"
             tool_name = "staticnested"
@@ -763,7 +764,7 @@ class HFMFNested(ReaderRequiredUnit):
         key_known_bytes = bytes.fromhex(key_known)
         block_target = args.tblk
         # default to A
-        type_target = MfcKeyType.B if args.b else MfcKeyType.A
+        type_target = MfcKeyType.B if args.tb else MfcKeyType.A
         if block_known == block_target and type_known == type_target:
             print(f"{CR}Target key already known{C0}")
             return
@@ -884,6 +885,132 @@ class HFMFFuzz(ReaderRequiredUnit):
         # set fuzzer mode
         self.cmd.mf1_set_mode_fuzzing(True)
         return
+
+      
+@hf_mf.command('fchk')
+class HFMFFCHK(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+
+        mifare_type_group = parser.add_mutually_exclusive_group()
+        mifare_type_group.add_argument('--mini', help='MIFARE Classic Mini / S20', action='store_const', dest='maxSectors', const=5)
+        mifare_type_group.add_argument('--1k', help='MIFARE Classic 1k / S50 (default)', action='store_const', dest='maxSectors', const=16)
+        mifare_type_group.add_argument('--2k', help='MIFARE Classic/Plus 2k', action='store_const', dest='maxSectors', const=32)
+        mifare_type_group.add_argument('--4k', help='MIFARE Classic 4k / S70', action='store_const', dest='maxSectors', const=40)
+
+        parser.add_argument(dest='keys', help='Key (as hex[12] format)', metavar='<hex>', type=str, nargs='*')
+        parser.add_argument('--key', dest='import_key', type=argparse.FileType('rb'), help='Read keys from .key format file')
+        parser.add_argument('--dic', dest='import_dic', type=argparse.FileType('r', encoding='utf8'), help='Read keys from .dic format file')
+
+        parser.add_argument('--export-key', type=argparse.FileType('wb'), help=f'Export result as .key format, file will be {CR}OVERWRITTEN{C0} if exists')
+        parser.add_argument('--export-dic', type=argparse.FileType('w', encoding='utf8'), help=f'Export result as .dic format, file will be {CR}OVERWRITTEN{C0} if exists')
+
+        parser.add_argument('-m', '--mask', help='Which sectorKey to be skip, 1 bit per sectorKey. `0b1` represent to skip to check. (in hex[20] format)', type=str, default='00000000000000000000', metavar='<hex>')
+
+        parser.set_defaults(maxSectors=16)
+        return parser
+    
+    def check_keys(self, mask: bytearray, keys: list[bytes], chunkSize=20):
+        sectorKeys = dict()
+
+        for i in range(0, len(keys), chunkSize):
+            # print("mask = {}".format(mask.hex(sep=' ', bytes_per_sep=1)))
+            chunkKeys = keys[i:i+chunkSize]
+            print(f' - progress of checking keys... {CY}{i}{C0} / {len(keys)} ({CY}{100 * i / len(keys):.1f}{C0} %)')
+            resp = self.cmd.mf1_check_keys_of_sectors(mask, chunkKeys)
+            # print(resp)
+
+            if resp["status"] != Status.HF_TAG_OK:
+                print(f' - check interrupted, reason: {CR}{str(Status(resp["status"]))}{C0}')
+                break
+            elif 'sectorKeys' not in resp:
+                print(f' - check interrupted, reason: {CG}All sectorKey is found or masked{C0}')
+                break
+
+            for j in range(10):
+                mask[j] |= resp['found'][j]
+            sectorKeys.update(resp['sectorKeys'])
+
+        return sectorKeys
+
+    def on_exec(self, args: argparse.Namespace):
+        # print(args)
+
+        keys = set()
+
+        # keys from args
+        for key in args.keys:
+            if not re.match(r'^[a-fA-F0-9]{12}$', key):
+                print(f' - {CR}Key should in hex[12] format, invalid key is ignored{C0}, key = "{key}"')
+                continue
+            keys.add(bytes.fromhex(key))
+
+        # read keys from key format file
+        if args.import_key is not None:
+            buf = args.import_key.read()
+            if len(buf) % 6 != 0:
+                print(f' - {CR}Failed to parse keys from {args.import_key.name} (as .key format){C0}')
+                return
+            for i in range(0, len(buf), 6):
+                keys.add(bytes(buf[i:i+6]))
+
+        if args.import_dic is not None:
+            text = re.sub(r'#.*$', '', args.import_dic.read(), flags=re.MULTILINE)
+            buf = bytearray.fromhex(text)
+            if len(buf) % 6 != 0:
+                print(f' - {CR}Failed to parse keys from {args.import_dic.name} (as .dic format){C0}')
+                return
+            for i in range(0, len(buf), 6):
+                keys.add(bytes(buf[i:i+6]))
+
+        if len(keys) == 0:
+            print(f' - {CR}No keys{C0}')
+            return
+
+        print(f" - loaded {CG}{len(keys)}{C0} keys")
+
+        # mask
+        if not re.match(r'^[a-fA-F0-9]{1,20}$', args.mask):
+            print(f' - {CR}mask should in hex[20] format{C0}, mask = "{args.mask}"')
+            return
+        mask = bytearray.fromhex(f'{args.mask:0<20}')
+        for i in range(args.maxSectors, 40):
+            mask[i // 4] |= 3 << (6 - i % 4 * 2)
+
+        # check keys
+        startedAt = datetime.now()
+        sectorKeys = self.check_keys(mask, list(keys))
+        endedAt = datetime.now()
+        duration = endedAt - startedAt
+        print(f" - elapsed time: {CY}{duration.total_seconds():.3f}s{C0}")
+
+        if args.export_key is not None:
+            unknownkey = bytes(6)
+            for sectorNo in range(args.maxSectors):
+                args.export_key.write(sectorKeys.get(2 * sectorNo, unknownkey))
+                args.export_key.write(sectorKeys.get(2 * sectorNo + 1, unknownkey))
+            print(f" - result exported to: {CG}{args.export_key.name}{C0} (as .key format)")
+
+        if args.export_dic is not None:
+            uniq_result = set(sectorKeys.values())
+            for key in uniq_result:
+                args.export_dic.write(key.hex().upper() + '\n')
+            print(f" - result exported to: {CG}{args.export_dic.name}{C0} (as .dic format)")
+
+        # print sectorKeys
+        print(f"\n - {CG}result of key checking:{C0}\n")
+        print("-----+-----+--------------+---+--------------+----")
+        print(" Sec | Blk | key A        |res| key B        |res ")
+        print("-----+-----+--------------+---+--------------+----")
+        for sectorNo in range(args.maxSectors):
+            blk = (sectorNo * 4 + 3) if sectorNo < 32 else (sectorNo * 16 - 369)
+            keyA = sectorKeys.get(2 * sectorNo, None)
+            keyA = f"{CG}{keyA.hex().upper()}{C0} | {CG}1{C0}" if keyA else f"{CR}------------{C0} | {CR}0{C0}"
+            keyB = sectorKeys.get(2 * sectorNo + 1, None)
+            keyB = f"{CG}{keyB.hex().upper()}{C0} | {CG}1{C0}" if keyB else f"{CR}------------{C0} | {CR}0{C0}"
+            print(f" {CY}{sectorNo:03d}{C0} | {blk:03d} | {keyA} | {keyB} ")
+        print("-----+-----+--------------+---+--------------+----")
+        print(f"( {CR}0{C0}: Failed, {CG}1{C0}: Success )\n\n")
 
 
 @hf_mf.command('rdbl')
