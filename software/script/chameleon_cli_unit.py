@@ -1019,8 +1019,8 @@ class HFMFDump(MF1AuthArgsUnit):
         parser.add_argument('-t', '--dump-file-type', type=str, required=False, help="Dump file content type", choices=['bin', 'hex'])
         parser.add_argument('-f', '--dump-file', type=argparse.FileType("wb"), required=True,
                             help="Dump file to write data from tag")
-        parser.add_argument('-k', '--key-file', type=argparse.FileType("r"), required=True,
-                            help="File containing keys of tag to write (exported with fchk --export)")
+        parser.add_argument('-d', '--dic', type=argparse.FileType("r"), required=True,
+                            help="Read keys (to communicate with tag to dump) from .dic format file")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
@@ -1033,37 +1033,44 @@ class HFMFDump(MF1AuthArgsUnit):
             else:
                 raise Exception("Unknown file format, Specify content type with -t option")
         else:
-            content_type = args.type
+            content_type = args.dump_file_type
 
         # read keys from file
-        keys = list()
-        for line in args.key_file.readlines():
-            a, b = [bytes.fromhex(h) for h in line[:-1].split(":")]
-            keys.append((a, b))
+        keys = [bytes.fromhex(line[:-1]) for line in args.dic.readlines()]
 
         # data to write from dump file
         buffer = bytearray()
 
         # iterate over sectors
         for s in range(16):
-            # iterate over blocks
-            for b in range(4):
-                resp = None
+            # try all keys for this sector
+            typ = None
+            for key in keys:
+                # first try key B
                 try:
-                    # first try with key B
-                    resp = self.cmd.mf1_read_one_block(4*s + b, MfcKeyType.B, keys[s][1])
+                    self.cmd.mf1_read_one_block(4*s, MfcKeyType.B, key)
+                    typ = MfcKeyType.B
+                    break
                 except UnexpectedResponseError:
                     # ignore read errors at this stage as we want to try key A
                     pass
-                if not resp:
-                    # try with key A if B was unsuccessful
-                    # this will raise an exception if key A fails too
-                    resp = self.cmd.mf1_read_one_block(4*s + b, MfcKeyType.A, keys[s][0])
+                # try with key A if B was unsuccessful
+                try:
+                    self.cmd.mf1_read_one_block(4*s, MfcKeyType.A, key)
+                    typ = MfcKeyType.A
+                    break
+                except UnexpectedResponseError:
+                    pass
+            else:
+                raise Exception(f"No key found for sector {s}")
+            # iterate over blocks
+            for b in range(4):
+                block_data = self.cmd.mf1_read_one_block(4*s + b, typ, key)
                 # add data to buffer
                 if content_type == 'bin':
-                    buffer.extend(resp)
+                    buffer.extend(block_data)
                 elif content_type == 'hex':
-                    buffer.extend(resp.hex())
+                    buffer.extend(block_data.hex().encode("utf-8"))
         # write buffer to file
         args.dump_file.write(buffer)
 
@@ -1076,8 +1083,8 @@ class HFMFClone(MF1AuthArgsUnit):
         parser.add_argument('-a', '--clone-access', type=bool, default=False, help="Write ACL from original dump too (/!\ could brick your tag)")
         parser.add_argument('-f', '--dump-file', type=argparse.FileType("rb"), required=True,
                             help="Dump file containing data to write on new tag")
-        parser.add_argument('-k', '--key-file', type=argparse.FileType("r"), required=True,
-                            help="File containing keys of tag to write (exported with fchk)")
+        parser.add_argument('-d', '--dic', type=argparse.FileType("r"), required=True,
+                            help="Read keys (to communicate with tag to write) from .dic format file")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
@@ -1089,7 +1096,7 @@ class HFMFClone(MF1AuthArgsUnit):
             else:
                 raise Exception("Unknown file format, Specify content type with -t option")
         else:
-            content_type = args.type
+            content_type = args.dump_file_type
 
         # data to write from dump file
         buffer = bytearray()
@@ -1103,40 +1110,49 @@ class HFMFClone(MF1AuthArgsUnit):
             raise Exception("Data block memory overflow")
 
         # keys to use from file
-        keys = list()
-        for line in args.key_file.readlines():
-            a, b = [bytes.fromhex(h) for h in line[:-1].split(":")]
-            keys.append((a, b))
+        keys = [bytes.fromhex(line[:-1]) for line in args.dic.readlines()]
 
         # iterate over sectors
         for s in range(16):
+            # try all keys for this sector
+            keyA, keyB = None, None
+            for key in keys:
+                # first try key B
+                try:
+                    self.cmd.mf1_read_one_block(4*s, MfcKeyType.B, key)
+                    keyB = key
+                except UnexpectedResponseError:
+                    # ignore read errors at this stage as we want to try key A
+                    pass
+                # try with key A if B was unsuccessful
+                try:
+                    self.cmd.mf1_read_one_block(4*s, MfcKeyType.A, key)
+                    keyA = key
+                except UnexpectedResponseError:
+                    pass
+                # both keys were found, no need to continue iterating
+                if keyA and keyB:
+                    break
+            # neither A or B key was found
+            if not keyA and not keyB:
+                raise Exception(f"No key found for sector {s}")
             # iterate over blocks
             for b in range(4):
-                data = buffer[(4*s+b)*16:(4*s+b+1)*16]
+                block_data = buffer[(4*s+b)*16:(4*s+b+1)*16]
                 # special case for last block of each sector
                 if b == 3:
                     # check ACL option
                     if not args.clone_access:
                         # if option is not specified, use generic ACL to be able to write again
-                        data = data[:6] + bytes.fromhex("08778F") + data[9:]
-                ok = False
+                        block_data = block_data[:6] + bytes.fromhex("08778F") + block_data[9:]
                 try:
                     # try B key first
-                    resp = self.cmd.mf1_write_one_block(4*s + b, MfcKeyType.B, keys[s][1], data)
-                    if resp:
-                        ok = True
+                    self.cmd.mf1_write_one_block(4*s + b, MfcKeyType.B, keyB, block_data)
+                    continue
                 except UnexpectedResponseError:
                     pass
-                if not ok:
-                    # try with key B
-                    try:
-                        resp = self.cmd.mf1_write_one_block(4*s + b, MfcKeyType.A, keys[s][0], data)
-                        if resp:
-                            ok = True
-                    except UnexpectedResponseError:
-                        pass
-                if not ok:
-                    print(f"[!] error writing block {4*s + b}")
+                self.cmd.mf1_write_one_block(4*s + b, MfcKeyType.A, keyA, block_data)
+
 
 @hf_mf.command('value')
 class HFMFVALUE(ReaderRequiredUnit):
