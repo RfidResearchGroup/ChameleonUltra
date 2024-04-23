@@ -704,7 +704,7 @@ class HFMFNested(ReaderRequiredUnit):
         if nt_level == 0:  # It's a staticnested tag?
             nt_uid_obj = self.cmd.mf1_static_nested_acquire(
                 block_known, type_known, key_known, block_target, type_target)
-            cmd_param = f"{nt_uid_obj['uid']} {str(type_target)}"
+            cmd_param = f"{nt_uid_obj['uid']} {int(type_target)}"
             for nt_item in nt_uid_obj['nts']:
                 cmd_param += f" {nt_item['nt']} {nt_item['nt_enc']}"
             tool_name = "staticnested"
@@ -764,7 +764,7 @@ class HFMFNested(ReaderRequiredUnit):
         key_known_bytes = bytes.fromhex(key_known)
         block_target = args.tblk
         # default to A
-        type_target = MfcKeyType.B if args.b else MfcKeyType.A
+        type_target = MfcKeyType.B if args.tb else MfcKeyType.A
         if block_known == block_target and type_known == type_target:
             print(f"{CR}Target key already known{C0}")
             return
@@ -863,17 +863,16 @@ class HFMFFCHK(ReaderRequiredUnit):
         mifare_type_group.add_argument('--2k', help='MIFARE Classic/Plus 2k', action='store_const', dest='maxSectors', const=32)
         mifare_type_group.add_argument('--4k', help='MIFARE Classic 4k / S70', action='store_const', dest='maxSectors', const=40)
 
-        parser.add_argument(dest='keys', help='Key (in hex[12] format)', metavar='<hex>', type=str, nargs='*')
-        parser.add_argument('-f', '--file', type=argparse.FileType('rb'), help='Read keys from file')
-        parser.add_argument('-e', '--export-file', type=argparse.FileType('w'), help='Export found keys to file', default=None)
+        parser.add_argument(dest='keys', help='Key (as hex[12] format)', metavar='<hex>', type=str, nargs='*')
+        parser.add_argument('--key', dest='import_key', type=argparse.FileType('rb'), help='Read keys from .key format file')
+        parser.add_argument('--dic', dest='import_dic', type=argparse.FileType('r', encoding='utf8'), help='Read keys from .dic format file')
 
-        file_type_group = parser.add_mutually_exclusive_group()
-        file_type_group.add_argument('--hex', action='store_const', dest='fileType', const='hex', help='Type of keys file is dictionary (in hex[12] format) (default)')
-        file_type_group.add_argument('-b', '--bin', action='store_const', dest='fileType', const='bin', help='Type of keys file is binary')
+        parser.add_argument('--export-key', type=argparse.FileType('wb'), help=f'Export result as .key format, file will be {CR}OVERWRITTEN{C0} if exists')
+        parser.add_argument('--export-dic', type=argparse.FileType('w', encoding='utf8'), help=f'Export result as .dic format, file will be {CR}OVERWRITTEN{C0} if exists')
 
         parser.add_argument('-m', '--mask', help='Which sectorKey to be skip, 1 bit per sectorKey. `0b1` represent to skip to check. (in hex[20] format)', type=str, default='00000000000000000000', metavar='<hex>')
 
-        parser.set_defaults(maxSectors=16, fileType='hex')
+        parser.set_defaults(maxSectors=16)
         return parser
     
     def check_keys(self, mask: bytearray, keys: list[bytes], chunkSize=20):
@@ -911,6 +910,7 @@ class HFMFFCHK(ReaderRequiredUnit):
                 continue
             keys.add(bytes.fromhex(key))
 
+<<<<<<< HEAD
         # keys from file
         if args.file is not None:
             buf = bytearray()
@@ -926,6 +926,23 @@ class HFMFFCHK(ReaderRequiredUnit):
                 print(f' - {CR}keys from file not align for 6 bytes{C0}')
                 return
             
+=======
+        # read keys from key format file
+        if args.import_key is not None:
+            buf = args.import_key.read()
+            if len(buf) % 6 != 0:
+                print(f' - {CR}Failed to parse keys from {args.import_key.name} (as .key format){C0}')
+                return
+            for i in range(0, len(buf), 6):
+                keys.add(bytes(buf[i:i+6]))
+
+        if args.import_dic is not None:
+            text = re.sub(r'#.*$', '', args.import_dic.read(), flags=re.MULTILINE)
+            buf = bytearray.fromhex(text)
+            if len(buf) % 6 != 0:
+                print(f' - {CR}Failed to parse keys from {args.import_dic.name} (as .dic format){C0}')
+                return
+>>>>>>> 767f6e2f7e643fee25c40b2fd6e04240a19a9e00
             for i in range(0, len(buf), 6):
                 keys.add(bytes(buf[i:i+6]))
 
@@ -950,6 +967,22 @@ class HFMFFCHK(ReaderRequiredUnit):
         duration = endedAt - startedAt
         print(f" - elapsed time: {CY}{duration.total_seconds():.3f}s{C0}")
 
+<<<<<<< HEAD
+=======
+        if args.export_key is not None:
+            unknownkey = bytes(6)
+            for sectorNo in range(args.maxSectors):
+                args.export_key.write(sectorKeys.get(2 * sectorNo, unknownkey))
+                args.export_key.write(sectorKeys.get(2 * sectorNo + 1, unknownkey))
+            print(f" - result exported to: {CG}{args.export_key.name}{C0} (as .key format)")
+
+        if args.export_dic is not None:
+            uniq_result = set(sectorKeys.values())
+            for key in uniq_result:
+                args.export_dic.write(key.hex().upper() + '\n')
+            print(f" - result exported to: {CG}{args.export_dic.name}{C0} (as .dic format)")
+
+>>>>>>> 767f6e2f7e643fee25c40b2fd6e04240a19a9e00
         # print sectorKeys
         print(f"\n - {CG}result of key checking:{C0}\n")
         print("-----+-----+--------------+---+--------------+----")
@@ -963,6 +996,7 @@ class HFMFFCHK(ReaderRequiredUnit):
             keyB = f"{CG}{keyB.hex().upper()}{C0} | {CG}1{C0}" if keyB else f"{CR}------------{C0} | {CR}0{C0}"
             print(f" {CY}{sectorNo:03d}{C0} | {blk:03d} | {keyA} | {keyB} ")
         print("-----+-----+--------------+---+--------------+----")
+<<<<<<< HEAD
         print(f"( {CR}0{C0}: Failed, {CG}1{C0}: Success )\n")
 
         if args.export_file:
@@ -971,6 +1005,10 @@ class HFMFFCHK(ReaderRequiredUnit):
                 keyB = sectorKeys.get(2 * sectorNo + 1, None)
                 args.export_file.write(f"{keyA.hex()}:{keyB.hex()}\n")
             print(f" - keys exported to: {CG}{args.export_file.name}{C0}\n")
+=======
+        print(f"( {CR}0{C0}: Failed, {CG}1{C0}: Success )\n\n")
+
+>>>>>>> 767f6e2f7e643fee25c40b2fd6e04240a19a9e00
 
 @hf_mf.command('rdbl')
 class HFMFRDBL(MF1AuthArgsUnit):

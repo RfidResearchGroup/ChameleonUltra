@@ -4,6 +4,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 
 ## [unreleased][unreleased]
  - Added command to check keys of multiple sectors at once (@taichunmin)
+ - Fixed unused target key type parameter for nested (@petepriority)
  - Skip already used items `hf mf elog --decrypt` (@p-l-)
  - Parallelize mfkey32v2 processes called from CLI (@p-l-)
  - Added support for mifare classic value block operations (@taichunmin)
