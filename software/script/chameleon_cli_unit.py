@@ -910,23 +910,6 @@ class HFMFFCHK(ReaderRequiredUnit):
                 continue
             keys.add(bytes.fromhex(key))
 
-<<<<<<< HEAD
-        # keys from file
-        if args.file is not None:
-            buf = bytearray()
-
-            if args.fileType == 'bin':
-                buf.extend(args.file.read())
-            elif args.fileType == 'hex':
-                text = re.sub(r'#.*$', '', args.file.read().decode('utf-8'), flags=re.MULTILINE)
-                # print(text)
-                buf.extend(bytearray.fromhex(text))
-            
-            if len(buf) % 6 != 0:
-                print(f' - {CR}keys from file not align for 6 bytes{C0}')
-                return
-            
-=======
         # read keys from key format file
         if args.import_key is not None:
             buf = args.import_key.read()
@@ -942,7 +925,6 @@ class HFMFFCHK(ReaderRequiredUnit):
             if len(buf) % 6 != 0:
                 print(f' - {CR}Failed to parse keys from {args.import_dic.name} (as .dic format){C0}')
                 return
->>>>>>> 767f6e2f7e643fee25c40b2fd6e04240a19a9e00
             for i in range(0, len(buf), 6):
                 keys.add(bytes(buf[i:i+6]))
 
@@ -967,8 +949,6 @@ class HFMFFCHK(ReaderRequiredUnit):
         duration = endedAt - startedAt
         print(f" - elapsed time: {CY}{duration.total_seconds():.3f}s{C0}")
 
-<<<<<<< HEAD
-=======
         if args.export_key is not None:
             unknownkey = bytes(6)
             for sectorNo in range(args.maxSectors):
@@ -982,7 +962,6 @@ class HFMFFCHK(ReaderRequiredUnit):
                 args.export_dic.write(key.hex().upper() + '\n')
             print(f" - result exported to: {CG}{args.export_dic.name}{C0} (as .dic format)")
 
->>>>>>> 767f6e2f7e643fee25c40b2fd6e04240a19a9e00
         # print sectorKeys
         print(f"\n - {CG}result of key checking:{C0}\n")
         print("-----+-----+--------------+---+--------------+----")
@@ -996,19 +975,8 @@ class HFMFFCHK(ReaderRequiredUnit):
             keyB = f"{CG}{keyB.hex().upper()}{C0} | {CG}1{C0}" if keyB else f"{CR}------------{C0} | {CR}0{C0}"
             print(f" {CY}{sectorNo:03d}{C0} | {blk:03d} | {keyA} | {keyB} ")
         print("-----+-----+--------------+---+--------------+----")
-<<<<<<< HEAD
-        print(f"( {CR}0{C0}: Failed, {CG}1{C0}: Success )\n")
-
-        if args.export_file:
-            for sectorNo in range(args.maxSectors):
-                keyA = sectorKeys.get(2 * sectorNo, None)
-                keyB = sectorKeys.get(2 * sectorNo + 1, None)
-                args.export_file.write(f"{keyA.hex()}:{keyB.hex()}\n")
-            print(f" - keys exported to: {CG}{args.export_file.name}{C0}\n")
-=======
         print(f"( {CR}0{C0}: Failed, {CG}1{C0}: Success )\n\n")
 
->>>>>>> 767f6e2f7e643fee25c40b2fd6e04240a19a9e00
 
 @hf_mf.command('rdbl')
 class HFMFRDBL(MF1AuthArgsUnit):
