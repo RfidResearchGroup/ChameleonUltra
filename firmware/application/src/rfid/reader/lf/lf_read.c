@@ -172,13 +172,18 @@ void lf_read_init_hw(void) {
 }
 
 uint8_t lf_read_reader(uint8_t *uid, uint32_t timeout_ms) {
+    dataindex = 0;
+    memset(datatest, 0, sizeof(datatest));
+
     lf_read_init_hw();
     start_lf_125khz_radio();
 
     autotimer *p_at = bsp_obtain_timer(0);
     while (NO_TIMEOUT_1MS(p_at, timeout_ms)) {
-        if (dataindex >= sizeof(datatest))
+        if (dataindex >= sizeof(datatest)) {
+
             break;
+        }
 
     }
 
@@ -186,6 +191,14 @@ uint8_t lf_read_reader(uint8_t *uid, uint32_t timeout_ms) {
 
     bsp_return_timer(p_at);
     p_at = NULL;
+
+    if (dataindex > 0) {
+        NRF_LOG_INFO("--> data [%d]", dataindex - 1);
+        NRF_LOG_HEXDUMP_INFO(datatest, dataindex - 1);
+    } else {
+        NRF_LOG_INFO("--> data empty");
+    }
+
 
     return 0;
 }
