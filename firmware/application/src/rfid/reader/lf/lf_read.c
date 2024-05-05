@@ -21,7 +21,7 @@ static RAWBUF_TYPE_S carddata;
 static volatile uint8_t dataindex = 0;          //Record changes along the number of times
 uint8_t lf_cardbuf[LF_CARD_BUF_SIZE];
 
-uint8_t datatest[256] = { 0x00 };
+uint8_t databuf[256] = { 0x00 };
 
 
 //Process card data, enter raw Buffer's starting position 2 position (21111 ...)
@@ -101,7 +101,7 @@ uint8_t em410x_acquire2(void) {
             }
             NRF_LOG_INFO("///raw data\r\n");
             for (int i = 0; i < RAW_BUF_SIZE * 8; i++) {
-                NRF_LOG_INFO("%d ", datatest[i]);
+                NRF_LOG_INFO("%d ", databuf[i]);
             }
             NRF_LOG_INFO("///time data\r\n");
         }
@@ -157,11 +157,8 @@ uint8_t em410x_acquire2(void) {
 
 //GPIO interrupt recovery function is used to detect the descending edge
 void GPIO_INT0_cb(void) {
-    uint32_t thistimelen = get_lf_counter_value();
-
-    if (dataindex < sizeof(datatest)) {
-        datatest[dataindex] = thistimelen;
-        dataindex++;
+    if (dataindex < sizeof(databuf)) {
+        databuf[dataindex++] = get_lf_counter_value();
     }
 
     clear_lf_counter_value();
@@ -173,14 +170,14 @@ void lf_read_init_hw(void) {
 
 uint8_t lf_read_reader(uint8_t *uid, uint32_t timeout_ms) {
     dataindex = 0;
-    memset(datatest, 0, sizeof(datatest));
+    memset(databuf, 0, sizeof(databuf));
 
     lf_read_init_hw();
     start_lf_125khz_radio();
 
     autotimer *p_at = bsp_obtain_timer(0);
-    while (NO_TIMEOUT_1MS(p_at, timeout_ms)) {
-        if (dataindex >= sizeof(datatest)) {
+    while (NO_TIMEOUT_1MS(p_at, 500)) {
+        if (dataindex >= sizeof(databuf)) {
 
             break;
         }
@@ -194,7 +191,7 @@ uint8_t lf_read_reader(uint8_t *uid, uint32_t timeout_ms) {
 
     if (dataindex > 0) {
         NRF_LOG_INFO("--> data [%d]", dataindex - 1);
-        NRF_LOG_HEXDUMP_INFO(datatest, dataindex - 1);
+        NRF_LOG_HEXDUMP_INFO(databuf, dataindex - 1);
     } else {
         NRF_LOG_INFO("--> data empty");
     }
