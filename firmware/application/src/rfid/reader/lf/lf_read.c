@@ -18,10 +18,10 @@ NRF_LOG_MODULE_REGISTER();
 
 
 static RAWBUF_TYPE_S carddata;
-static volatile uint8_t dataindex = 0;          //Record changes along the number of times
+static volatile uint32_t dataindex = 0;          //Record changes along the number of times
 uint8_t lf_cardbuf[LF_CARD_BUF_SIZE];
 
-uint8_t databuf[256] = { 0x00 };
+uint8_t databuf[512] = { 0x00 };
 
 
 //Process card data, enter raw Buffer's starting position 2 position (21111 ...)
@@ -158,7 +158,12 @@ uint8_t em410x_acquire2(void) {
 //GPIO interrupt recovery function is used to detect the descending edge
 void GPIO_INT0_cb(void) {
     if (dataindex < sizeof(databuf)) {
-        databuf[dataindex++] = get_lf_counter_value();
+        uint32_t cntr = get_lf_counter_value();
+        if (cntr > 0xff)
+            databuf[dataindex] = 0xff;
+        else
+            databuf[dataindex] = cntr;
+        dataindex++;
     }
 
     clear_lf_counter_value();
