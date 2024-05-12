@@ -204,9 +204,15 @@ uint8_t lf_read_reader(uint8_t *uid, uint32_t timeout_ms) {
 
     NRF_LOG_INFO("--> protocols count: %d", lfrfid_protocols_size);
     for (int i = 0; i < lfrfid_protocols_size; i++) {
+        void* data = lfrfid_protocols[i]->alloc();
+        NRF_LOG_INFO("-- protocol: %s %s", lfrfid_protocols[i]->manufacturer, lfrfid_protocols[i]->name);
 
+        //lfrfid_protocols[i]->decoder()
+
+        lfrfid_protocols[i]->free(data);
     }
 
+    NRF_LOG_INFO("--> read done.");
 
     return 0;
 }

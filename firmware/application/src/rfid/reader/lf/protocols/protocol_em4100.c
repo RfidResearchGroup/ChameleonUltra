@@ -340,7 +340,7 @@ void protocol_em4100_render_data(ProtocolEM4100* protocol, String* result) {
 };
 
 const ProtocolBase protocol_em4100 = {
-    .name = "EM4100",
+    .name = "EM4100/64(std)",
     .manufacturer = "EM-Micro",
     .data_size = EM4100_DECODED_DATA_SIZE,
     .features = LFRFIDFeatureASK | LFRFIDFeaturePSK,
