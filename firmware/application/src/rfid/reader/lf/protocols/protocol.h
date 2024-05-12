@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <level_duration.h>
-#include "spstring.h"
+#include <spstring.h>
 
 typedef void* (*ProtocolAlloc)(void);
 typedef void (*ProtocolFree)(void* protocol);

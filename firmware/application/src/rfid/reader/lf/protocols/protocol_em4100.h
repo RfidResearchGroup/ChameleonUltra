@@ -1,5 +1,5 @@
 #pragma once
-#include <utils/protocol.h>
+#include <protocols/protocol.h>
 
 extern const ProtocolBase protocol_em4100;
 

@@ -1,4 +1,4 @@
-#include <protocol.h>
+#include <protocols/protocol.h>
 #include <stdlib.h>
 #include <string.h>
 #include <utils/manchester_decoder.h>

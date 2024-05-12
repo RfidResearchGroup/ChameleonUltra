@@ -1,5 +1,5 @@
 #pragma once
-#include <utils/protocol.h>
+#include "protocol.h"
 #include "utils/t5577.h"
 
 typedef enum {
