@@ -18,9 +18,9 @@ NRF_LOG_MODULE_REGISTER();
 
 
 static RAWBUF_TYPE_S carddata;
-static volatile uint32_t dataindex = 0;          //Record changes along the number of times
 uint8_t lf_cardbuf[LF_CARD_BUF_SIZE];
 
+static volatile uint32_t dataindex = 0;
 uint8_t databuf[512] = { 0x00 };
 
 

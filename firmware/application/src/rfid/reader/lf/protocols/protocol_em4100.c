@@ -1,4 +1,6 @@
 #include <protocol.h>
+#include <stdlib.h>
+#include <string.h>
 #include <utils/manchester_decoder.h>
 #include "lfrfid_protocols.h"
 
@@ -115,8 +117,9 @@ static void em4100_decode(
     const uint8_t encoded_data_size,
     uint8_t* decoded_data,
     const uint8_t decoded_data_size) {
-    furi_check(decoded_data_size >= EM4100_DECODED_DATA_SIZE);
-    furi_check(encoded_data_size >= EM4100_ENCODED_DATA_SIZE);
+    if (decoded_data_size >= EM4100_DECODED_DATA_SIZE ||
+        encoded_data_size >= EM4100_ENCODED_DATA_SIZE)
+        return;
 
     uint8_t decoded_data_index = 0;
     EM4100DecodedData card_data = *((EM4100DecodedData*)(encoded_data));
@@ -147,7 +150,8 @@ static void em4100_decode(
 }
 
 static bool em4100_can_be_decoded(const uint8_t* encoded_data, const uint8_t encoded_data_size) {
-    furi_check(encoded_data_size >= EM4100_ENCODED_DATA_SIZE);
+    if (encoded_data_size >= EM4100_ENCODED_DATA_SIZE)
+        return false;
     const EM4100DecodedData* card_data = (EM4100DecodedData*)encoded_data;
 
     // check header and stop bit
@@ -325,9 +329,9 @@ bool protocol_em4100_write_data(ProtocolEM4100* protocol, void* data) {
     return result;
 };
 
-void protocol_em4100_render_data(ProtocolEM4100* protocol, FuriString* result) {
+void protocol_em4100_render_data(ProtocolEM4100* protocol, String* result) {
     uint8_t* data = protocol->data;
-    furi_string_printf(
+    stringprintf(
         result,
         "FC: %03u, Card: %05u (RF/%u)",
         data[2],

@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <level_duration.h>
-#include <string.h>
+#include "spstring.h"
 
 typedef void* (*ProtocolAlloc)(void);
 typedef void (*ProtocolFree)(void* protocol);
@@ -15,7 +15,7 @@ typedef bool (*ProtocolDecoderFeed)(void* protocol, bool level, uint32_t duratio
 typedef bool (*ProtocolEncoderStart)(void* protocol);
 typedef LevelDuration (*ProtocolEncoderYield)(void* protocol);
 
-typedef void (*ProtocolRenderData)(void* protocol, string* result);
+typedef void (*ProtocolRenderData)(void* protocol, String* result);
 typedef bool (*ProtocolWriteData)(void* protocol, void* data);
 
 typedef struct {
