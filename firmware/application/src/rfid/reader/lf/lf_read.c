@@ -162,7 +162,7 @@ void GPIO_INT0_cb(void) {
         if (cntr > 0xff)
             databuf[dataindex] = 0xff;
         else
-            databuf[dataindex] = cntr;
+            databuf[dataindex] = cntr & 0xff;
         dataindex++;
     }
 
@@ -195,7 +195,7 @@ uint8_t lf_read_reader(uint8_t *uid, uint32_t timeout_ms) {
     p_at = NULL;
 
     if (dataindex > 0) {
-        NRF_LOG_INFO("--> data [%d]", dataindex - 1);
+        NRF_LOG_INFO("--> data [%d]", dataindex);
         NRF_LOG_HEXDUMP_INFO(databuf, dataindex - 1);
     } else {
         NRF_LOG_INFO("--> data empty");
