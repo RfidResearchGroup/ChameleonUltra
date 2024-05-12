@@ -28,6 +28,7 @@
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 #include "spstring.h"
  
 #undef  TIDY               /* Tidy up buffers by filling them with zeroes       */
@@ -38,6 +39,18 @@
 static int ST_ERR = ST_NO_ERR;
 static int incsz ( String *string, size_t len );
 size_t strlcpy(char *dst, const char *src, size_t siz);
+
+char *sp_strdup(const char *s1)
+{
+  char *str;
+  size_t size = strlen(s1) + 1;
+
+  str = malloc(size);
+  if (str) {
+    memcpy(str, s1, size);
+  }
+  return str;
+}
 
 /* --- Dynamic allocation
  
@@ -54,7 +67,7 @@ String * newString ( const char *chars )
                 {
                         newS->len = len;
                         newS->sz = len + 1;
-                        newS->str = strdup ( chars );
+                        newS->str = sp_strdup ( chars );
                         if ( newS->str == NULL )
                         {
                                 ST_ERR = ST_ALLOC_ERR;
