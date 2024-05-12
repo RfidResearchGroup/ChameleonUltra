@@ -1,3 +1,4 @@
+#include <nordic_common.h>
 #include "lfrfid_protocols.h"
 #include "protocol_em4100.h"
 /*#include "protocol_h10301.h"
@@ -40,3 +41,5 @@ const ProtocolBase* lfrfid_protocols[] = {
     [LFRFIDProtocolGallagher] = &protocol_gallagher,
     [LFRFIDProtocolNexwatch] = &protocol_nexwatch,*/
 };
+
+size_t lfrfid_protocols_size = ARRAY_SIZE(lfrfid_protocols);

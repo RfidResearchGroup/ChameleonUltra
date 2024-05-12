@@ -32,6 +32,7 @@ typedef enum {
 } LFRFIDProtocol;
 
 extern const ProtocolBase* lfrfid_protocols[];
+extern size_t lfrfid_protocols_size;
 
 typedef enum {
     LFRFIDWriteTypeT5577,

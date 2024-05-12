@@ -9,6 +9,7 @@
 #include "lf_reader_data.h"
 #include "lf_em410x_data.h"
 #include "lf_125khz_radio.h"
+#include "protocols/lfrfid_protocols.h"
 
 #define NRF_LOG_MODULE_NAME lf_read
 #include "nrf_log.h"
@@ -199,6 +200,11 @@ uint8_t lf_read_reader(uint8_t *uid, uint32_t timeout_ms) {
         NRF_LOG_HEXDUMP_INFO(databuf, dataindex - 1);
     } else {
         NRF_LOG_INFO("--> data empty");
+    }
+
+    NRF_LOG_INFO("--> protocols count: %d", lfrfid_protocols_size);
+    for (int i = 0; i < lfrfid_protocols_size; i++) {
+
     }
 
 
