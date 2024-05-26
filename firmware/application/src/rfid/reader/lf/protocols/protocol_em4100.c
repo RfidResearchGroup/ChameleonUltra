@@ -149,7 +149,7 @@ static void em4100_decode(
     }
 }
 
-static bool em4100_can_be_decoded(const uint8_t* encoded_data, const uint8_t encoded_data_size) {
+/*static bool em4100_can_be_decoded(const uint8_t* encoded_data, const uint8_t encoded_data_size) {
     if (encoded_data_size >= EM4100_ENCODED_DATA_SIZE)
         return false;
     const EM4100DecodedData* card_data = (EM4100DecodedData*)encoded_data;
@@ -184,22 +184,22 @@ static bool em4100_can_be_decoded(const uint8_t* encoded_data, const uint8_t enc
     }
 
     return true;
-}
+}*/
 
 void protocol_em4100_decoder_start(ProtocolEM4100* proto) {
     memset(proto->data, 0, EM4100_DECODED_DATA_SIZE);
     proto->encoded_data = 0;
-    manchester_advance(
+/*    manchester_advance(
         proto->decoder_manchester_state,
         ManchesterEventReset,
         &proto->decoder_manchester_state,
-        NULL);
+        NULL); */
 };
 
 bool protocol_em4100_decoder_feed(ProtocolEM4100* proto, bool level, uint32_t duration) {
     bool result = false;
 
-    ManchesterEvent event = ManchesterEventReset;
+  /*  ManchesterEvent event = ManchesterEventReset;
 
     if(duration > protocol_em4100_get_short_time_low(proto) &&
        duration < protocol_em4100_get_short_time_high(proto)) {
@@ -217,8 +217,8 @@ bool protocol_em4100_decoder_feed(ProtocolEM4100* proto, bool level, uint32_t du
             event = ManchesterEventLongLow;
         }
     }
-
-    if(event != ManchesterEventReset) {
+*/
+ /*   if(event != ManchesterEventReset) {
         bool data;
         bool data_ok = manchester_advance(
             proto->decoder_manchester_state, event, &proto->decoder_manchester_state, &data);
@@ -236,9 +236,16 @@ bool protocol_em4100_decoder_feed(ProtocolEM4100* proto, bool level, uint32_t du
             }
         }
     }
-
+*/
     return result;
 };
+
+void protocol_em4100_decoder_decode(ProtocolEM4100* proto, uint8_t* data, size_t datalen) {
+    protocol_em4100_decoder_start(proto);
+
+
+
+}
 
 static void em4100_write_nibble(bool low_nibble, uint8_t data, EM4100DecodedData* encoded_data) {
     uint8_t parity_sum = 0;
@@ -350,6 +357,7 @@ const ProtocolBase protocol_em4100 = {
     .get_data = (ProtocolGetData)protocol_em4100_get_data,
     .decoder =
         {
+            .decode = (ProtocolDecoderDecode)protocol_em4100_decoder_decode,
             .start = (ProtocolDecoderStart)protocol_em4100_decoder_start,
             .feed = (ProtocolDecoderFeed)protocol_em4100_decoder_feed,
         },
@@ -374,6 +382,7 @@ const ProtocolBase protocol_em4100_32 = {
     .get_data = (ProtocolGetData)protocol_em4100_get_data,
     .decoder =
         {
+            .decode = (ProtocolDecoderDecode)protocol_em4100_decoder_decode,
             .start = (ProtocolDecoderStart)protocol_em4100_decoder_start,
             .feed = (ProtocolDecoderFeed)protocol_em4100_decoder_feed,
         },
@@ -398,6 +407,7 @@ const ProtocolBase protocol_em4100_16 = {
     .get_data = (ProtocolGetData)protocol_em4100_get_data,
     .decoder =
         {
+            .decode = (ProtocolDecoderDecode)protocol_em4100_decoder_decode,
             .start = (ProtocolDecoderStart)protocol_em4100_decoder_start,
             .feed = (ProtocolDecoderFeed)protocol_em4100_decoder_feed,
         },

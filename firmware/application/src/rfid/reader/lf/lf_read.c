@@ -207,7 +207,7 @@ uint8_t lf_read_reader(uint8_t *uid, uint32_t timeout_ms) {
         void* data = lfrfid_protocols[i]->alloc();
         NRF_LOG_INFO("-- protocol: %s %s", lfrfid_protocols[i]->manufacturer, lfrfid_protocols[i]->name);
 
-        //lfrfid_protocols[i]->decoder()
+        lfrfid_protocols[i]->decoder.decode(data, databuf, dataindex - 1);
 
         lfrfid_protocols[i]->free(data);
     }

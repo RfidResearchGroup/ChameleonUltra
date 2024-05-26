@@ -9,6 +9,7 @@ typedef void* (*ProtocolAlloc)(void);
 typedef void (*ProtocolFree)(void* protocol);
 typedef uint8_t* (*ProtocolGetData)(void* protocol);
 
+typedef void (*ProtocolDecoderDecode)(void* protocol, uint8_t* data, size_t datalen);
 typedef void (*ProtocolDecoderStart)(void* protocol);
 typedef bool (*ProtocolDecoderFeed)(void* protocol, bool level, uint32_t duration);
 
@@ -19,6 +20,7 @@ typedef void (*ProtocolRenderData)(void* protocol, String* result);
 typedef bool (*ProtocolWriteData)(void* protocol, void* data);
 
 typedef struct {
+    ProtocolDecoderDecode decode;
     ProtocolDecoderStart start;
     ProtocolDecoderFeed feed;
 } ProtocolDecoder;
