@@ -1,5 +1,10 @@
 #include "bitarray.h"
 
+void bitarray_clear(BitArray* b) {
+    b->count = 0;
+    b->value = 0;
+}
+
 bool bitarray_get_bit(BitArray b, uint8_t bit_num, bool* bit) {
     if (bit == NULL || b.count < bit_num + 1)
         return false;
