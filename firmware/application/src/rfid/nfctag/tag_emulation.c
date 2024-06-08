@@ -105,6 +105,9 @@ static tag_base_handler_map_t tag_base_map[] = {
     { TAG_SENSE_HF,    TAG_TYPE_NTAG_216,      nfc_tag_mf0_ntag_data_loadcb,     nfc_tag_mf0_ntag_data_savecb,      nfc_tag_mf0_ntag_data_factory,     &m_tag_data_hf },
     // MF0 tag simulation
     { TAG_SENSE_HF,    TAG_TYPE_MF0ICU1,       nfc_tag_mf0_ntag_data_loadcb,     nfc_tag_mf0_ntag_data_savecb,      nfc_tag_mf0_ntag_data_factory,     &m_tag_data_hf },
+    { TAG_SENSE_HF,    TAG_TYPE_MF0ICU2,       nfc_tag_mf0_ntag_data_loadcb,     nfc_tag_mf0_ntag_data_savecb,      nfc_tag_mf0_ntag_data_factory,     &m_tag_data_hf },
+    { TAG_SENSE_HF,    TAG_TYPE_MF0UL11,       nfc_tag_mf0_ntag_data_loadcb,     nfc_tag_mf0_ntag_data_savecb,      nfc_tag_mf0_ntag_data_factory,     &m_tag_data_hf },
+    { TAG_SENSE_HF,    TAG_TYPE_MF0UL21,       nfc_tag_mf0_ntag_data_loadcb,     nfc_tag_mf0_ntag_data_savecb,      nfc_tag_mf0_ntag_data_factory,     &m_tag_data_hf },
 };
 
 
