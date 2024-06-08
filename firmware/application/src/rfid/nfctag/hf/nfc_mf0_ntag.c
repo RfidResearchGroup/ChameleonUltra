@@ -34,7 +34,7 @@ NRF_LOG_MODULE_REGISTER();
 #define CMD_WRITE                       0xA2
 #define CMD_COMPAT_WRITE                0xA0
 #define CMD_READ_CNT                    0x39
-#define CMD_INCR_CNT                    0x3A
+#define CMD_INCR_CNT                    0xA5
 #define CMD_PWD_AUTH                    0x1B
 #define CMD_READ_SIG                    0x3C
 #define CMD_CHECK_TEARING_EVENT         0x3E
