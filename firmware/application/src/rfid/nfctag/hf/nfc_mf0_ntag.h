@@ -11,14 +11,21 @@
 #define NFC_TAG_MF0_FRAME_SIZE (16 + NFC_TAG_14A_CRC_LENGTH)
 #define NFC_TAG_MF0_BLOCK_MAX   41
 
+#define MF0ULx1_NUM_CTRS 3 // number of Ultralight EV1 one-way counters
+
 #define NTAG213_PAGES 45 //45 pages total for ntag213, from 0 to 44
+#define NTAG213_PAGES_WITH_CTR (NTAG213_PAGES + 1) // 1 more page for the counter
 #define NTAG215_PAGES 135 //135 pages total for ntag215, from 0 to 134
+#define NTAG215_PAGES_WITH_CTR (NTAG215_PAGES + 1) // 1 more page for the counter
 #define NTAG216_PAGES 231 //231 pages total for ntag216, from 0 to 230
+#define NTAG216_PAGES_WITH_CTR (NTAG216_PAGES + 1) // 1 more page for the counter
 
 #define MF0ICU1_PAGES 16 //16 pages total for MF0ICU1 (the original UL), from 0 to 15
 #define MF0ICU2_PAGES 36 //16 pages total for MF0ICU2 (UL C), from 0 to 35
 #define MF0UL11_PAGES 20 //20 pages total for MF0UL11 (UL EV1), from 0 to 19
+#define MF0UL11_PAGES_WITH_CTRS (MF0UL11_PAGES + MF0ULx1_NUM_CTRS) // 3 more pages for 3 one way counters
 #define MF0UL21_PAGES 41 //231 pages total for MF0UL21 (UL EV1), from 0 to 40
+#define MF0UL21_PAGES_WITH_CTRS (MF0UL21_PAGES + MF0ULx1_NUM_CTRS) // 3 more pages for 3 one way counters
 
 
 typedef struct {

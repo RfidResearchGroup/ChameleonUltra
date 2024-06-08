@@ -97,8 +97,8 @@ static nfc_tag_mf0_ntag_tx_buffer_t m_tag_tx_buffer;
 static tag_specific_type_t m_tag_type;
 static bool m_tag_authenticated = false;
 
-static uint8_t get_nr_pages_by_tag_type(tag_specific_type_t tag_type) {
-    uint8_t nr_pages;
+static int get_nr_pages_by_tag_type(tag_specific_type_t tag_type) {
+    int nr_pages;
 
     switch (tag_type) {
         case TAG_TYPE_MF0ICU1:
@@ -130,8 +130,41 @@ static uint8_t get_nr_pages_by_tag_type(tag_specific_type_t tag_type) {
     return nr_pages;
 }
 
-static uint8_t get_first_cfg_page_by_tag_type(tag_specific_type_t tag_type) {
-    uint8_t page;
+static int get_nr_mem_pages_by_tag_type(tag_specific_type_t tag_type) {
+    int nr_pages;
+
+    switch (tag_type) {
+        case TAG_TYPE_MF0ICU1:
+            nr_pages = MF0ICU1_PAGES;
+            break;
+        case TAG_TYPE_MF0ICU2:
+            nr_pages = MF0ICU2_PAGES;
+            break;
+        case TAG_TYPE_MF0UL11:
+            nr_pages = MF0UL11_PAGES_WITH_CTRS;
+            break;
+        case TAG_TYPE_MF0UL21:
+            nr_pages = MF0UL21_PAGES_WITH_CTRS;
+            break;
+        case TAG_TYPE_NTAG_213:
+            nr_pages = NTAG213_PAGES_WITH_CTR;
+            break;
+        case TAG_TYPE_NTAG_215:
+            nr_pages = NTAG215_PAGES_WITH_CTR;
+            break;
+        case TAG_TYPE_NTAG_216:
+            nr_pages = NTAG216_PAGES_WITH_CTR;
+            break;
+        default:
+            nr_pages = 0;
+            break;
+    }
+
+    return nr_pages;
+}
+
+static int get_first_cfg_page_by_tag_type(tag_specific_type_t tag_type) {
+    int page;
 
     switch (tag_type) {
         case TAG_TYPE_MF0UL11:
@@ -157,9 +190,9 @@ static uint8_t get_first_cfg_page_by_tag_type(tag_specific_type_t tag_type) {
     return page;
 }
 
-static uint8_t get_block_max_by_tag_type(tag_specific_type_t tag_type) {
-    uint8_t max_pages = get_nr_pages_by_tag_type(tag_type);
-    uint8_t first_cfg_page = get_first_cfg_page_by_tag_type(tag_type);
+static int get_block_max_by_tag_type(tag_specific_type_t tag_type) {
+    int max_pages = get_nr_pages_by_tag_type(tag_type);
+    int first_cfg_page = get_first_cfg_page_by_tag_type(tag_type);
 
     if (first_cfg_page == 0 || m_tag_authenticated || m_tag_information->config.mode_uid_magic) return max_pages;
     
@@ -300,6 +333,82 @@ static int handle_write_command(uint8_t block_num, uint8_t *p_data) {
     return ACK_VALUE;
 }
 
+static void handle_read_cnt_command(uint8_t block_num) {
+    uint8_t ctr_page_off;
+    uint8_t ctr_page_end;
+    switch (m_tag_type) {
+        case TAG_TYPE_MF0UL11:
+            ctr_page_off = MF0UL11_PAGES;
+            ctr_page_end = MF0UL11_PAGES_WITH_CTRS;
+            break;
+        case TAG_TYPE_MF0UL21:
+            ctr_page_off = MF0UL21_PAGES;
+            ctr_page_end = MF0UL21_PAGES_WITH_CTRS;
+            break;
+        case TAG_TYPE_NTAG_213:
+            ctr_page_off = NTAG213_PAGES;
+            ctr_page_end = NTAG213_PAGES_WITH_CTR;
+            break;
+        case TAG_TYPE_NTAG_215:
+            ctr_page_off = NTAG215_PAGES;
+            ctr_page_end = NTAG215_PAGES_WITH_CTR;
+            break;
+        case TAG_TYPE_NTAG_216:
+            ctr_page_off = NTAG216_PAGES;
+            ctr_page_end = NTAG216_PAGES_WITH_CTR;
+            break;
+        default:
+            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+            return;
+    }
+
+    // check that counter index is in bounds
+    if (block_num >= (ctr_page_end - ctr_page_off)) {
+        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        return;
+    }
+
+    memcpy(m_tag_tx_buffer.tx_buffer, m_tag_information->memory[ctr_page_off + block_num], 3);
+    nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, 3, true);
+}
+
+static void handle_incr_cnt_command(uint8_t block_num, uint8_t *p_data) {
+    uint8_t ctr_page_off;
+    uint8_t ctr_page_end;
+    switch (m_tag_type) {
+        case TAG_TYPE_MF0UL11:
+            ctr_page_off = MF0UL11_PAGES;
+            ctr_page_end = MF0UL11_PAGES_WITH_CTRS;
+            break;
+        case TAG_TYPE_MF0UL21:
+            ctr_page_off = MF0UL21_PAGES;
+            ctr_page_end = MF0UL21_PAGES_WITH_CTRS;
+            break;
+        default:
+            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+            return;
+    }
+
+    // check that counter index is in bounds
+    if (block_num >= (ctr_page_end - ctr_page_off)) {
+        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        return;
+    }
+
+    uint8_t *cnt_data = m_tag_information->memory[ctr_page_off + block_num];
+    uint32_t incr_value = ((uint32_t)p_data[0]) | ((uint32_t)p_data[1] << 8) | ((uint32_t)p_data[2] << 16);
+    uint32_t cnt = ((uint32_t)cnt_data[0]) | ((uint32_t)cnt_data[1] << 8) | ((uint32_t)cnt_data[2] << 16);
+
+    if ((0xFFFFFF - cnt) < incr_value) cnt = 0xFFFFFF;
+    else cnt += incr_value;
+
+    cnt_data[0] = (uint8_t)(cnt & 0xff);
+    cnt_data[1] = (uint8_t)(cnt >> 8);
+    cnt_data[2] = (uint8_t)(cnt >> 16);
+
+    nfc_tag_14a_tx_nbit(ACK_VALUE, 4);
+}
+
 static void nfc_tag_mf0_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits) {
     uint8_t command = p_data[0];
     uint8_t block_num = p_data[1];
@@ -354,6 +463,12 @@ static void nfc_tag_mf0_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits)
             memset(m_tag_tx_buffer.tx_buffer, 0xCA, SIGNATURE_LENGTH);
             nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, SIGNATURE_LENGTH, true);
             break;
+        case CMD_READ_CNT:
+            handle_read_cnt_command(block_num);
+            break;
+        case CMD_INCR_CNT:
+            handle_incr_cnt_command(block_num, &p_data[2]);
+            break;
     }
     return;
 }
@@ -374,7 +489,7 @@ static void nfc_tag_mf0_ntag_reset_handler() {
 }
 
 static int get_information_size_by_tag_type(tag_specific_type_t type) {
-    return sizeof(nfc_tag_14a_coll_res_entity_t) + sizeof(nfc_tag_mf0_ntag_configure_t) + (get_nr_pages_by_tag_type(type) * NFC_TAG_MF0_NTAG_DATA_SIZE);
+    return sizeof(nfc_tag_14a_coll_res_entity_t) + sizeof(nfc_tag_mf0_ntag_configure_t) + (get_nr_mem_pages_by_tag_type(type) * NFC_TAG_MF0_NTAG_DATA_SIZE);
 }
 
 /** @brief MF0/NTAG callback before saving data
