@@ -1744,9 +1744,12 @@ class HFMFUDUMP(MFUAuthArgsUnit):
 class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = 'Settings of Mifare Classic emulator'
+        parser.description = 'Settings of Mifare Ultralight / NTAG emulator'
         self.add_slot_args(parser)
         self.add_hf14a_anticoll_args(parser)
+        uid_magic_group = parser.add_mutually_exclusive_group()
+        uid_magic_group.add_argument('--enable-uid-magic', action='store_true', help="Enable UID magic mode")
+        uid_magic_group.add_argument('--disable-uid-magic', action='store_true', help="Disable UID magic mode")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
@@ -1763,6 +1766,10 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
         fwslot = SlotNumber.to_fw(self.slot_num)
         hf_tag_type = TagSpecificType(slotinfo[fwslot]['hf'])
         if hf_tag_type not in [
+            TagSpecificType.MF0ICU1,
+            TagSpecificType.MF0ICU2,
+            TagSpecificType.MF0UL11,
+            TagSpecificType.MF0UL21,
             TagSpecificType.NTAG_213,
             TagSpecificType.NTAG_215,
             TagSpecificType.NTAG_216,
@@ -1770,6 +1777,18 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
             print(f"{CR}Slot {self.slot_num} not configured as MIFARE Ultralight / NTAG{C0}")
             return
         change_requested, change_done, uid, atqa, sak, ats = self.update_hf14a_anticoll(args, uid, atqa, sak, ats)
+
+        if args.enable_uid_magic:
+            change_requested = True
+            self.cmd.mf0_ntag_set_uid_magic_mode(True)
+            magic_mode = True
+        elif args.disable_uid_magic:
+            change_requested = True
+            self.cmd.mf0_ntag_set_uid_magic_mode(False)
+            magic_mode = False
+        else:
+            magic_mode = self.cmd.mf0_ntag_get_uid_magic_mode()
+
         if change_done:
             print(' - MFU/NTAG Emulator settings updated')
         if not change_requested:
@@ -1780,6 +1799,10 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
             print(f'- {"SAK:":40}{CY}{sak.hex().upper()}{C0}')
             if len(ats) > 0:
                 print(f'- {"ATS:":40}{CY}{ats.hex().upper()}{C0}')
+            if magic_mode: 
+                print(f'- {"UID Magic:":40}{CY}enabled{C0}')
+            else:
+                print(f'- {"UID Magic:":40}{CY}disabled{C0}')
 
 
 @lf_em_410x.command('read')

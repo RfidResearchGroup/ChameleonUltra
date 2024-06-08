@@ -95,6 +95,8 @@ class Command(enum.IntEnum):
     MF1_GET_WRITE_MODE = 4016
     MF1_SET_WRITE_MODE = 4017
     HF14A_GET_ANTI_COLL_DATA = 4018
+    MF0_NTAG_GET_UID_MAGIC_MODE = 4019
+    MF0_NTAG_SET_UID_MAGIC_MODE = 4020
 
     EM410X_SET_EMU_ID = 5000
     EM410X_GET_EMU_ID = 5001
@@ -260,6 +262,10 @@ class TagSpecificType(enum.IntEnum):
     NTAG_213 = 1100
     NTAG_215 = 1101
     NTAG_216 = 1102
+    MF0ICU1 = 1103
+    MF0ICU2 = 1104
+    MF0UL11 = 1105
+    MF0UL21 = 1106
     # MIFARE Plus series     1200
     # DESFire series         1300
 
@@ -303,6 +309,14 @@ class TagSpecificType(enum.IntEnum):
             return "NTAG 215"
         elif self == TagSpecificType.NTAG_216:
             return "NTAG 216"
+        elif self == TagSpecificType.MF0ICU1:
+            return "Mifare Ultralight"
+        elif self == TagSpecificType.MF0ICU2:
+            return "Mifare Ultralight C"
+        elif self == TagSpecificType.MF0UL11:
+            return "Mifare Ultralight EV1 (640 bit)"
+        elif self == TagSpecificType.MF0UL21:
+            return "Mifare Ultralight EV1 (1312 bit)"
         elif self < TagSpecificType.OLD_TAG_TYPES_END:
             return "Old tag type, must be migrated! Upgrade fw!"
         return "Invalid"
