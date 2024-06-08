@@ -412,6 +412,13 @@ int nfc_tag_mf0_ntag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *bu
     return info_size;
 }
 
+typedef struct __attribute__((aligned(4))) {
+    nfc_tag_14a_coll_res_entity_t res_coll;
+    nfc_tag_mf0_ntag_configure_t config;
+    uint8_t memory[NFC_TAG_NTAG_BLOCK_MAX][NFC_TAG_MF0_NTAG_DATA_SIZE];
+}
+nfc_tag_mf0_ntag_information_max_t;
+
 // Initialized NTAG factory data
 bool nfc_tag_mf0_ntag_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     // default ntag data
@@ -425,9 +432,9 @@ bool nfc_tag_mf0_ntag_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     }
 
     // default ntag info
-    nfc_tag_mf0_ntag_information_t ntag_tmp_information;
+    nfc_tag_mf0_ntag_information_max_t ntag_tmp_information;
     nfc_tag_mf0_ntag_information_t *p_ntag_information;
-    p_ntag_information = &ntag_tmp_information;
+    p_ntag_information = (nfc_tag_mf0_ntag_information_t *)&ntag_tmp_information;
     int block_max = get_nr_pages_by_tag_type(tag_type);
     for (int block = 0; block < block_max; block++) {
         switch (block) {
