@@ -260,10 +260,11 @@ static void handle_read_command(uint8_t block_num) {
     uint8_t pwd_page = get_first_cfg_page_by_tag_type(m_tag_type);
     if (pwd_page != 0) pwd_page += CONF_PWD_PAGE_OFFSET;
 
-    for (int block = 0; block < 4; block++) {
-    // In case PWD or PACK pages are read we need to write zero to the output buffer. In UID magic mode we don't care.
-        if (m_tag_information->config.mode_uid_magic || (pwd_page == 0) || ((block - pwd_page) >= 2)) {
-            memcpy(m_tag_tx_buffer.tx_buffer + block * 4, m_tag_information->memory[(block_num + block) % block_max], NFC_TAG_MF0_NTAG_DATA_SIZE);
+    for (uint8_t block = 0; block < 4; block++) {
+        // In case PWD or PACK pages are read we need to write zero to the output buffer. In UID magic mode we don't care.
+        uint8_t block_to_read = (block_num + block) % block_max;
+        if (m_tag_information->config.mode_uid_magic || (pwd_page == 0) || (block_to_read < pwd_page) || (block_to_read > (pwd_page + 1))) {
+            memcpy(m_tag_tx_buffer.tx_buffer + block * 4, m_tag_information->memory[block_to_read], NFC_TAG_MF0_NTAG_DATA_SIZE);
         } else {
             memset(m_tag_tx_buffer.tx_buffer + block * 4, 0, NFC_TAG_MF0_NTAG_DATA_SIZE);
         }
