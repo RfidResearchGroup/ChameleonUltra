@@ -190,14 +190,16 @@ static int get_first_cfg_page_by_tag_type(tag_specific_type_t tag_type) {
     return page;
 }
 
-static int get_block_max_by_tag_type(tag_specific_type_t tag_type) {
+static int get_block_max_by_tag_type(tag_specific_type_t tag_type, bool read) {
     int max_pages = get_nr_pages_by_tag_type(tag_type);
     int first_cfg_page = get_first_cfg_page_by_tag_type(tag_type);
 
     if (first_cfg_page == 0 || m_tag_authenticated || m_tag_information->config.mode_uid_magic) return max_pages;
     
     uint8_t auth0 = m_tag_information->memory[first_cfg_page][CONF_AUTH0_BYTE];
-    return (max_pages > auth0) ? auth0 : max_pages;
+    uint8_t access = m_tag_information->memory[first_cfg_page + 1][0];
+    if (!read || ((access & CONF_ACCESS_PROT) != 0)) return (max_pages > auth0) ? auth0 : max_pages;
+    else return max_pages;
 }
 
 static bool is_ntag() {
@@ -250,7 +252,7 @@ static void handle_get_version_command() {
 }
 
 static void handle_read_command(uint8_t block_num) {
-    int block_max = get_block_max_by_tag_type(m_tag_type);
+    int block_max = get_block_max_by_tag_type(m_tag_type, true);
 
     if (block_num >= block_max) {
         nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
@@ -292,7 +294,7 @@ static bool check_ro_lock_on_page(int block_num) {
 }
 
 static int handle_write_command(uint8_t block_num, uint8_t *p_data) {
-    int block_max = get_block_max_by_tag_type(m_tag_type);
+    int block_max = get_block_max_by_tag_type(m_tag_type, false);
 
     if (block_num >= block_max) {
         return NAK_INVALID_OPERATION_TBIV;
@@ -423,9 +425,10 @@ static void nfc_tag_mf0_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits)
             break;
         }
         case CMD_FAST_READ: {
+            uint8_t block_max = get_block_max_by_tag_type(m_tag_type, true);
             uint8_t end_block_num = p_data[2];
             // TODO: support ultralight
-            if (!is_ntag() || (block_num > end_block_num) || (block_num >= get_block_max_by_tag_type(m_tag_type)) || (end_block_num >= get_block_max_by_tag_type(m_tag_type))) {
+            if (!is_ntag() || (block_num > end_block_num) || (block_num >= block_max) || (end_block_num >= block_max)) {
                 nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
                 break;
             }
