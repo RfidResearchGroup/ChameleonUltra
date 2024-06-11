@@ -44,7 +44,9 @@ typedef struct __attribute__((aligned(4))) {
 nfc_tag_mf0_ntag_information_t;
 
 typedef struct {
-    uint8_t tx_buffer[NFC_TAG_NTAG_FRAME_SIZE];
+    // TX buffer must fit the largest possible frame size.
+    // TODO: This size should be decreased as the maximum allowed frame size is 257 (see 6.14.13.36 in datasheet).
+    uint8_t tx_buffer[NFC_TAG_NTAG_BLOCK_MAX * NFC_TAG_MF0_NTAG_DATA_SIZE];
 } nfc_tag_mf0_ntag_tx_buffer_t;
 
 int nfc_tag_mf0_ntag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer);
