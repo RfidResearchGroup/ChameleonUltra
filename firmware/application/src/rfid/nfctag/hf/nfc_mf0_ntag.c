@@ -274,6 +274,44 @@ static void handle_read_command(uint8_t block_num) {
     nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, BYTES_PER_READ, true);
 }
 
+static void handle_fast_read_command(uint8_t block_num, uint8_t end_block_num) {
+    switch (m_tag_type)
+    {
+    case TAG_TYPE_MF0UL11:
+    case TAG_TYPE_MF0UL21:
+    case TAG_TYPE_NTAG_213:
+    case TAG_TYPE_NTAG_215:
+    case TAG_TYPE_NTAG_216:
+        // command is supported
+        break;
+    default:
+        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        return;
+    }
+
+    int block_max = get_block_max_by_tag_type(m_tag_type, true);
+
+    if (block_num >= end_block_num || end_block_num >= block_max) {
+        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        return;
+    }
+
+    uint8_t pwd_page = get_first_cfg_page_by_tag_type(m_tag_type);
+    if (pwd_page != 0) pwd_page += CONF_PWD_PAGE_OFFSET;
+
+    for (uint8_t block = block_num; block < end_block_num; block++) {
+        // In case PWD or PACK pages are read we need to write zero to the output buffer. In UID magic mode we don't care.
+        if (m_tag_information->config.mode_uid_magic || (pwd_page == 0) || (block < pwd_page) || (block > (pwd_page + 1))) {
+            memcpy(m_tag_tx_buffer.tx_buffer + (block - block_num) * 4, m_tag_information->memory[block], NFC_TAG_MF0_NTAG_DATA_SIZE);
+        } else {
+            memset(m_tag_tx_buffer.tx_buffer + (block - block_num) * 4, 0, NFC_TAG_MF0_NTAG_DATA_SIZE);
+        }
+    }
+
+    size_t send_size = (end_block_num - block_num) * NFC_TAG_MF0_NTAG_DATA_SIZE;
+    nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, send_size, true);
+}
+
 static bool check_ro_lock_on_page(int block_num) {
     if (block_num < 3) return true;
     else if (block_num == 3) return (m_tag_information->memory[2][2] & 1) == 1;
@@ -425,17 +463,9 @@ static void nfc_tag_mf0_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits)
             break;
         }
         case CMD_FAST_READ: {
-            uint8_t block_max = get_block_max_by_tag_type(m_tag_type, true);
             uint8_t end_block_num = p_data[2];
             // TODO: support ultralight
-            if (!is_ntag() || (block_num > end_block_num) || (block_num >= block_max) || (end_block_num >= block_max)) {
-                nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
-                break;
-            }
-            for (int block = block_num; block <= end_block_num; block++) {
-                memcpy(m_tag_tx_buffer.tx_buffer + (block - block_num) * 4, m_tag_information->memory[block], NFC_TAG_MF0_NTAG_DATA_SIZE);
-            }
-            nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, (end_block_num - block_num + 1) * NFC_TAG_MF0_NTAG_DATA_SIZE, true);
+            handle_fast_read_command(block_num, end_block_num);
             break;
         }
         case CMD_WRITE:
