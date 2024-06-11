@@ -61,7 +61,7 @@ NRF_LOG_MODULE_REGISTER();
 
 // CONFIG offsets, relative to config start address
 #define CONF_AUTH0_BYTE          0x03
-#define CONF_ACCESS_OFFSET       0x04
+#define CONF_ACCESS_AUTHLIM_MASK 0x07
 #define CONF_PWD_PAGE_OFFSET        2
 #define CONF_PACK_PAGE_OFFSET       3
 
@@ -78,6 +78,11 @@ NRF_LOG_MODULE_REGISTER();
 
 // SIGNATURE Length
 #define SIGNATURE_LENGTH            32
+
+// Since all counters are 24-bit and each currently supported tag that supports counters
+// has password authentication we store the auth attempts counter in the last bit of the
+// first counter.
+#define AUTHLIM_OFF_IN_CTR          3
 
 // NTAG215_Version[7] mean:
 // 0x0F ntag213
@@ -374,7 +379,7 @@ static int handle_write_command(uint8_t block_num, uint8_t *p_data) {
     return ACK_VALUE;
 }
 
-static void handle_read_cnt_command(uint8_t block_num) {
+static uint8_t *get_counter_data_by_index(uint8_t index) {
     uint8_t ctr_page_off;
     uint8_t ctr_page_end;
     switch (m_tag_type) {
@@ -400,16 +405,23 @@ static void handle_read_cnt_command(uint8_t block_num) {
             break;
         default:
             nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
-            return;
+            return NULL;
     }
 
     // check that counter index is in bounds
-    if (block_num >= (ctr_page_end - ctr_page_off)) {
+    if (index >= (ctr_page_end - ctr_page_off)) return NULL;
+
+    return m_tag_information->memory[ctr_page_off + index];
+}
+
+static void handle_read_cnt_command(uint8_t index) {
+    uint8_t *cnt_data = get_counter_data_by_index(index);
+    if (cnt_data == NULL) {
         nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
         return;
     }
 
-    memcpy(m_tag_tx_buffer.tx_buffer, m_tag_information->memory[ctr_page_off + block_num], 3);
+    memcpy(m_tag_tx_buffer.tx_buffer, cnt_data, 3);
     nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, 3, true);
 }
 
@@ -450,6 +462,42 @@ static void handle_incr_cnt_command(uint8_t block_num, uint8_t *p_data) {
     nfc_tag_14a_tx_nbit(ACK_VALUE, 4);
 }
 
+static void handle_pwd_auth_command(uint8_t *p_data) {
+    int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
+    uint8_t *cnt_data = get_counter_data_by_index(0);
+    if (first_cfg_page == 0 || cnt_data == NULL) {
+        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        return;
+    }
+
+    // check AUTHLIM counter
+    uint8_t auth_cnt = cnt_data[AUTHLIM_OFF_IN_CTR];
+    uint8_t auth_lim = m_tag_information->memory[first_cfg_page + 1][0] & CONF_ACCESS_AUTHLIM_MASK;
+    if ((auth_lim > 0) && (auth_lim <= auth_cnt)) {
+        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        return;
+    }
+
+    uint32_t pwd = *(uint32_t *)m_tag_information->memory[first_cfg_page + CONF_PWD_PAGE_OFFSET];
+    uint32_t supplied_pwd = *(uint32_t *)&p_data[1];
+    if (pwd != supplied_pwd) {
+        cnt_data[AUTHLIM_OFF_IN_CTR] = auth_cnt + 1;
+        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        return;
+    }
+
+    // reset authentication attempts counter and authenticate user
+    cnt_data[AUTHLIM_OFF_IN_CTR] = 0;
+    m_tag_authenticated = true; // TODO: this should be possible to reset somehow
+
+    // Send the PACK value back
+    if (m_tag_information->config.mode_uid_magic) {
+        nfc_tag_14a_tx_bytes(ntagPwdOK, 2, true);
+    } else {
+        nfc_tag_14a_tx_bytes(m_tag_information->memory[first_cfg_page + CONF_PACK_PAGE_OFFSET], 2, true);
+    }
+}
+
 static void nfc_tag_mf0_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits) {
     uint8_t command = p_data[0];
     uint8_t block_num = p_data[1];
@@ -474,25 +522,10 @@ static void nfc_tag_mf0_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits)
             nfc_tag_14a_tx_nbit(resp, 4);
             break;
         }
-        /*case CMD_PWD_AUTH: {
-            // TODO: IMPLEMENT COUNTER AUTHLIM
-            uint8_t Password[4];
-            memcpy(Password, m_tag_information->memory[get_block_cfg_by_tag_type(m_tag_type) + CONF_PASSWORD_OFFSET], 4);
-            if (Password[0] != p_data[1] || Password[1] != p_data[2] || Password[2] != p_data[3] || Password[3] != p_data[4]) {
-                nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
-                break;
-            }
-            // Authenticate the user
-            //RESET AUTHLIM COUNTER, CURRENTLY NOT IMPLEMENTED
-            // TODO
-            // Send the PACK value back
-            if (m_tag_information->config.mode_uid_magic) {
-                nfc_tag_14a_tx_bytes(ntagPwdOK, 2, true);
-            } else {
-                nfc_tag_14a_tx_bytes(m_tag_information->memory[get_block_cfg_by_tag_type(m_tag_type) + CONF_PASSWORD_OFFSET], 2, true);
-            }
+        case CMD_PWD_AUTH: {
+            handle_pwd_auth_command(p_data);
             break;
-        }*/
+        }
         case CMD_READ_SIG:
             memset(m_tag_tx_buffer.tx_buffer, 0xCA, SIGNATURE_LENGTH);
             nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, SIGNATURE_LENGTH, true);
