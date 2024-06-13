@@ -716,6 +716,12 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                                     memcpy(respTrailerInfo->key_b, m_tag_trailer_info->key_b, 6);
                                 }
                             } else {
+                                /* If tag is marked as fuzzer: randomize data for next read */
+                                if (m_tag_information->config.mode_fuzzing) {
+                                    for (uint8_t i = 0; i < 16; i++) {
+                                        m_tag_information->memory[CurrentAddress][i] = (uint8_t) rand();
+                                    }
+                                }
                                 // For data, just return to the corresponding location sector
                                 memcpy(m_tag_tx_buffer.tx_raw_buffer, m_tag_information->memory[CurrentAddress], 16);
                             }
@@ -1157,6 +1163,7 @@ bool nfc_tag_mf1_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     p_mf1_information->config.use_mf1_coll_res = false;
     p_mf1_information->config.mode_block_write = NFC_TAG_MF1_WRITE_NORMAL;
     p_mf1_information->config.detection_enable = false;
+    p_mf1_information->config.mode_fuzzing = false;
 
     // save data to flash
     tag_sense_type_t sense_type = get_sense_type_from_tag_type(tag_type);
@@ -1191,6 +1198,16 @@ void nfc_tag_mf1_detection_log_clear(void) {
 // The number of statistics of detection records
 uint32_t nfc_tag_mf1_detection_log_count(void) {
     return m_auth_log.count;
+}
+
+// Settling whether mode fuzzing is on or off
+void nfc_tag_mf1_set_mode_fuzzing(bool fuzzing) {
+    m_tag_information->config.mode_fuzzing = fuzzing;
+}
+
+// Whether mode fuzzing is on or off
+bool nfc_tag_mf1_is_mode_fuzzing(void) {
+    return m_tag_information->config.mode_fuzzing;
 }
 
 // Set gen1a magic mode
