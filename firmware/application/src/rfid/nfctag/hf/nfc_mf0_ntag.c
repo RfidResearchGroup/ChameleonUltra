@@ -617,6 +617,9 @@ bool nfc_tag_mf0_ntag_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     nfc_tag_mf0_ntag_information_max_t ntag_tmp_information;
     nfc_tag_mf0_ntag_information_t *p_ntag_information;
     p_ntag_information = (nfc_tag_mf0_ntag_information_t *)&ntag_tmp_information;
+
+    memset(p_ntag_information, 0, sizeof(nfc_tag_mf0_ntag_information_max_t));
+
     int block_max = get_nr_pages_by_tag_type(tag_type);
     for (int block = 0; block < block_max; block++) {
         switch (block) {
@@ -631,6 +634,27 @@ bool nfc_tag_mf0_ntag_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
                 break;
             default:
                 memset(p_ntag_information->memory[block], 0, NFC_TAG_MF0_NTAG_DATA_SIZE);
+                break;
+        }
+    }
+
+    int first_cfg_page = get_first_cfg_page_by_tag_type(tag_type);
+    if (first_cfg_page != 0) {
+        p_ntag_information->memory[first_cfg_page][CONF_AUTH0_BYTE] = 0xFF; // set AUTH to 0xFF
+        *(uint32_t *)p_ntag_information->memory[first_cfg_page + CONF_PWD_PAGE_OFFSET] = 0xFFFFFFFF; // set PWD to FFFFFFFF
+
+        switch (tag_type) {
+        case TAG_TYPE_MF0UL11:
+        case TAG_TYPE_MF0UL21:
+            p_ntag_information->memory[first_cfg_page + 1][1] = 0x05; // set VCTID to 0x05
+            break;
+        case TAG_TYPE_NTAG_213:
+        case TAG_TYPE_NTAG_215:
+        case TAG_TYPE_NTAG_216:
+            p_ntag_information->memory[first_cfg_page][0] = 0x04; // set MIRROR to 0x04 (STRG_MOD_EN to 1)
+            break;
+        default:
+            ASSERT(false);
                 break;
         }
     }
