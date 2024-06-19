@@ -52,14 +52,23 @@ NRF_LOG_MODULE_REGISTER();
 #define STATIC_LOCKBYTE_0_ADDRESS   0x0A
 #define STATIC_LOCKBYTE_1_ADDRESS   0x0B
 // CONFIG stuff
+#define MF0ICU2_USER_MEMORY_END  0x28
+#define MF0ICU2_CNT_PAGE         0x29
+#define MF0ICU2_FIRST_KEY_PAGE   0x2C
 #define MF0UL11_FIRST_CFG_PAGE   0x10
+#define MF0UL11_USER_MEMORY_END  (MF0UL11_FIRST_CFG_PAGE)
 #define MF0UL21_FIRST_CFG_PAGE   0x25
+#define MF0UL21_USER_MEMORY_END  0x24
 #define NTAG213_FIRST_CFG_PAGE   0x29
+#define NTAG213_USER_MEMORY_END  0x28
 #define NTAG215_FIRST_CFG_PAGE   0x83
+#define NTAG215_USER_MEMORY_END  0x82
 #define NTAG216_FIRST_CFG_PAGE   0xE3
+#define NTAG216_USER_MEMORY_END  0xE2
 #define CONFIG_AREA_SIZE            8
 
 // CONFIG offsets, relative to config start address
+#define CONF_MIRROR_BYTE            0
 #define CONF_AUTH0_BYTE          0x03
 #define CONF_ACCESS_AUTHLIM_MASK 0x07
 #define CONF_PWD_PAGE_OFFSET        2
@@ -70,6 +79,7 @@ NRF_LOG_MODULE_REGISTER();
 #define PAGE_WRITE_MIN              0x02
 
 // CONFIG masks to check individual needed bits
+#define CONF_CFGLCK_PROT            0x40
 #define CONF_ACCESS_PROT            0x80
 
 #define VERSION_INFO_LENGTH         8 //8 bytes info length + crc
@@ -103,7 +113,7 @@ static tag_specific_type_t m_tag_type;
 static bool m_tag_authenticated = false;
 
 static int get_nr_pages_by_tag_type(tag_specific_type_t tag_type) {
-    int nr_pages;
+    int nr_pages = 0;
 
     switch (tag_type) {
         case TAG_TYPE_MF0ICU1:
@@ -136,7 +146,7 @@ static int get_nr_pages_by_tag_type(tag_specific_type_t tag_type) {
 }
 
 static int get_nr_mem_pages_by_tag_type(tag_specific_type_t tag_type) {
-    int nr_pages;
+    int nr_pages = 0;
 
     switch (tag_type) {
         case TAG_TYPE_MF0ICU1:
@@ -161,7 +171,7 @@ static int get_nr_mem_pages_by_tag_type(tag_specific_type_t tag_type) {
             nr_pages = NTAG216_PAGES_WITH_CTR;
             break;
         default:
-            nr_pages = 0;
+            ASSERT(false);
             break;
     }
 
@@ -321,11 +331,12 @@ static void handle_fast_read_command(uint8_t block_num, uint8_t end_block_num) {
     if (pwd_page != 0) pwd_page += CONF_PWD_PAGE_OFFSET;
 
     for (uint8_t block = block_num; block < end_block_num; block++) {
+        int tx_buf_offset = (block - block_num) * 4;
         // In case PWD or PACK pages are read we need to write zero to the output buffer. In UID magic mode we don't care.
         if (m_tag_information->config.mode_uid_magic || (pwd_page == 0) || (block < pwd_page) || (block > (pwd_page + 1))) {
-            memcpy(m_tag_tx_buffer.tx_buffer + (block - block_num) * 4, m_tag_information->memory[block], NFC_TAG_MF0_NTAG_DATA_SIZE);
+            memcpy(m_tag_tx_buffer.tx_buffer + tx_buf_offset, m_tag_information->memory[block], NFC_TAG_MF0_NTAG_DATA_SIZE);
         } else {
-            memset(m_tag_tx_buffer.tx_buffer + (block - block_num) * 4, 0, NFC_TAG_MF0_NTAG_DATA_SIZE);
+            memset(m_tag_tx_buffer.tx_buffer + tx_buf_offset, 0, NFC_TAG_MF0_NTAG_DATA_SIZE);
         }
     }
 
@@ -349,8 +360,75 @@ static bool check_ro_lock_on_page(int block_num) {
 
         return locked;
     } else {
-        // too large block number
+        uint8_t *p_lock_bytes = NULL;
+        int user_memory_end = 0;
+        int dyn_lock_bit_page_cnt = 0;
+        int index = block_num - MF0ICU1_PAGES;
+
+        switch (m_tag_type) {
+        // These two do only have 16 pages so a single pair of lock bytes.
+        case TAG_TYPE_MF0ICU1:
+        case TAG_TYPE_MF0UL11:
+        default:
         return true;
+        case TAG_TYPE_MF0ICU2: {
+            p_lock_bytes = m_tag_information->memory[MF0ICU2_USER_MEMORY_END];
+
+            if (block_num < MF0ICU2_USER_MEMORY_END) {
+                uint8_t byte2 = p_lock_bytes[0];
+
+                // Account for block locking bits first.
+                bool locked = (byte2 & (0x10 * (block_num >= 28))) != 0;
+                locked |= (byte2 >> (1 + (index / 4) + (block_num >= 28)));
+                return locked;
+            } else if (block_num == MF0ICU2_USER_MEMORY_END) {
+                return false;
+            } else if (block_num < MF0ICU2_FIRST_KEY_PAGE) {
+                uint8_t byte3 = p_lock_bytes[1];
+                return ((byte3 >> (block_num - MF0ICU2_CNT_PAGE)) & 1) != 0;
+            } else {
+                uint8_t byte3 = p_lock_bytes[1];
+                return (byte3 & 0x80) != 0;
+            }
+        }
+        case TAG_TYPE_MF0UL21: {
+            p_lock_bytes = m_tag_information->memory[MF0UL21_USER_MEMORY_END];
+            uint16_t lock_word = (((uint16_t)p_lock_bytes[1]) << 8) | (uint16_t)p_lock_bytes[0];
+            bool locked = ((lock_word >> (index / 2)) & 1) != 0;
+            locked |= ((p_lock_bytes[2] >> (index / 4)) & 1) != 0;
+            return locked;
+        }
+        case TAG_TYPE_NTAG_213:
+            user_memory_end = NTAG213_USER_MEMORY_END;
+            dyn_lock_bit_page_cnt = 2;
+            break;
+        case TAG_TYPE_NTAG_215:
+            user_memory_end = NTAG215_USER_MEMORY_END;
+            dyn_lock_bit_page_cnt = 16;
+            break;
+        case TAG_TYPE_NTAG_216:
+            user_memory_end = NTAG216_USER_MEMORY_END;
+            dyn_lock_bit_page_cnt = 16;
+            break;
+        }
+
+        if (block_num < user_memory_end) {
+            p_lock_bytes = m_tag_information->memory[user_memory_end];
+            uint16_t lock_word = (((uint16_t)p_lock_bytes[1]) << 8) | (uint16_t)p_lock_bytes[0];
+
+            bool locked_small_range = ((lock_word >> (index / dyn_lock_bit_page_cnt)) & 1) != 0;
+            bool locked_large_range = ((p_lock_bytes[2] >> (index / dyn_lock_bit_page_cnt / 2)) & 1) != 0;
+
+            return locked_small_range | locked_large_range;
+        } else {
+            // check CFGLCK bit
+            int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
+            uint8_t mirror = m_tag_information->memory[first_cfg_page][CONF_MIRROR_BYTE];
+            if ((mirror & CONF_CFGLCK_PROT) != 0)
+                return (block_num >= first_cfg_page) && ((block_num - first_cfg_page) <= 1);
+            else
+                return false;
+        }
     }
 }
 
