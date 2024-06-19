@@ -128,7 +128,7 @@ static int get_nr_pages_by_tag_type(tag_specific_type_t tag_type) {
             nr_pages = NTAG216_PAGES;
             break;
         default:
-            nr_pages = 0;
+            ASSERT(false);
             break;
     }
 
@@ -219,6 +219,8 @@ static bool is_ntag() {
 }
 
 static void handle_get_version_command() {
+    NRF_LOG_DEBUG("handling GET_VERSION");
+
     switch (m_tag_type) {
         case TAG_TYPE_MF0UL11:
             m_tag_tx_buffer.tx_buffer[6] = MF0UL11_VERSION_STORAGE_SIZE;
@@ -241,6 +243,7 @@ static void handle_get_version_command() {
             m_tag_tx_buffer.tx_buffer[2] = NTAG_VERSION_PRODUCT_TYPE;
             break;
         default:
+            NRF_LOG_WARNING("current card type does not support GET_VERSION");
             // MF0ICU1 and MF0ICU2 do not support GET_VERSION
             nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
             return;
@@ -253,13 +256,23 @@ static void handle_get_version_command() {
     m_tag_tx_buffer.tx_buffer[5] = VERSION_MINOR_PRODUCT;
     m_tag_tx_buffer.tx_buffer[7] = VERSION_PROTOCOL_TYPE;
 
+    NRF_LOG_INFO(
+        "replying with %08x%08x", 
+        U32HTONL(*(uint32_t *)&m_tag_tx_buffer.tx_buffer[0]),
+        U32HTONL(*(uint32_t *)&m_tag_tx_buffer.tx_buffer[0])
+    );
+
     nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, 8, true);
 }
 
 static void handle_read_command(uint8_t block_num) {
     int block_max = get_block_max_by_tag_type(m_tag_type, true);
 
+    NRF_LOG_DEBUG("handling READ %02x %02x", block_num, block_max);
+
     if (block_num >= block_max) {
+        NRF_LOG_WARNING("too large block num %02x >= %02x", block_num, block_max);
+
         nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
         return;
     }
@@ -276,6 +289,9 @@ static void handle_read_command(uint8_t block_num) {
             memset(m_tag_tx_buffer.tx_buffer + block * 4, 0, NFC_TAG_MF0_NTAG_DATA_SIZE);
         }
     }
+
+    NRF_LOG_DEBUG("READ handled %02x %02x", block_num);
+
     nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, BYTES_PER_READ, true);
 }
 
@@ -314,6 +330,8 @@ static void handle_fast_read_command(uint8_t block_num, uint8_t end_block_num) {
     }
 
     size_t send_size = (end_block_num - block_num) * NFC_TAG_MF0_NTAG_DATA_SIZE;
+    
+    ASSERT(send_size <= MAX_NFC_TX_BUFFER_SIZE);
     nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, send_size, true);
 }
 
@@ -502,6 +520,10 @@ static void nfc_tag_mf0_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits)
     uint8_t command = p_data[0];
     uint8_t block_num = p_data[1];
 
+    if (szDataBits < 16) return;
+
+    NRF_LOG_INFO("received mfu command %x of size %u bits", command, szDataBits);
+
     switch (command) {
         case CMD_GET_VERSION:
             handle_get_version_command();
@@ -569,6 +591,7 @@ int nfc_tag_mf0_ntag_data_savecb(tag_specific_type_t type, tag_data_buffer_t *bu
         // Save the corresponding size data according to the current label type
         return get_information_size_by_tag_type(type);
     } else {
+        ASSERT(false);
         return 0;
     }
 }
@@ -589,6 +612,7 @@ int nfc_tag_mf0_ntag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *bu
         nfc_tag_14a_set_handler(&handler_for_14a);
         NRF_LOG_INFO("HF ntag data load finish.");
     } else {
+        ASSERT(buffer->length == info_size);
         NRF_LOG_ERROR("nfc_tag_mf0_ntag_information_t too big.");
     }
     return info_size;
