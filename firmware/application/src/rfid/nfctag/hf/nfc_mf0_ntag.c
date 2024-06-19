@@ -69,6 +69,8 @@ NRF_LOG_MODULE_REGISTER();
 
 // CONFIG offsets, relative to config start address
 #define CONF_MIRROR_BYTE            0
+#define CONF_ACCESS_PAGE_OFFSET     1
+#define CONF_ACCESS_BYTE            0
 #define CONF_AUTH0_BYTE          0x03
 #define CONF_ACCESS_AUTHLIM_MASK 0x07
 #define CONF_PWD_PAGE_OFFSET        2
@@ -213,6 +215,9 @@ static int get_block_max_by_tag_type(tag_specific_type_t tag_type, bool read) {
     
     uint8_t auth0 = m_tag_information->memory[first_cfg_page][CONF_AUTH0_BYTE];
     uint8_t access = m_tag_information->memory[first_cfg_page + 1][0];
+
+    NRF_LOG_INFO("auth0 %02x access %02x max_pages %02x first_cfg_page %02x", auth0, access, max_pages, first_cfg_page);
+
     if (!read || ((access & CONF_ACCESS_PROT) != 0)) return (max_pages > auth0) ? auth0 : max_pages;
     else return max_pages;
 }
@@ -366,10 +371,7 @@ static bool check_ro_lock_on_page(int block_num) {
         int index = block_num - MF0ICU1_PAGES;
 
         switch (m_tag_type) {
-        // These two do only have 16 pages so a single pair of lock bytes.
         case TAG_TYPE_MF0ICU1:
-        case TAG_TYPE_MF0UL11:
-        default:
         return true;
         case TAG_TYPE_MF0ICU2: {
             p_lock_bytes = m_tag_information->memory[MF0ICU2_USER_MEMORY_END];
@@ -391,12 +393,21 @@ static bool check_ro_lock_on_page(int block_num) {
                 return (byte3 & 0x80) != 0;
             }
         }
+        // for the next two we reuse the check for CFGLCK bit used for NTAG
+        case TAG_TYPE_MF0UL11:
+            ASSERT(block_num >= MF0UL11_USER_MEMORY_END);
+            user_memory_end = MF0UL11_USER_MEMORY_END;
+            break;
         case TAG_TYPE_MF0UL21: {
+            user_memory_end = MF0UL11_USER_MEMORY_END;
+            if (block_num < user_memory_end) {
             p_lock_bytes = m_tag_information->memory[MF0UL21_USER_MEMORY_END];
             uint16_t lock_word = (((uint16_t)p_lock_bytes[1]) << 8) | (uint16_t)p_lock_bytes[0];
             bool locked = ((lock_word >> (index / 2)) & 1) != 0;
             locked |= ((p_lock_bytes[2] >> (index / 4)) & 1) != 0;
             return locked;
+            }
+            break;
         }
         case TAG_TYPE_NTAG_213:
             user_memory_end = NTAG213_USER_MEMORY_END;
@@ -409,6 +420,9 @@ static bool check_ro_lock_on_page(int block_num) {
         case TAG_TYPE_NTAG_216:
             user_memory_end = NTAG216_USER_MEMORY_END;
             dyn_lock_bit_page_cnt = 16;
+            break;
+        default:
+            ASSERT(false);
             break;
         }
 
@@ -423,8 +437,8 @@ static bool check_ro_lock_on_page(int block_num) {
         } else {
             // check CFGLCK bit
             int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
-            uint8_t mirror = m_tag_information->memory[first_cfg_page][CONF_MIRROR_BYTE];
-            if ((mirror & CONF_CFGLCK_PROT) != 0)
+            uint8_t access = m_tag_information->memory[first_cfg_page + CONF_ACCESS_PAGE_OFFSET][CONF_ACCESS_BYTE];
+            if ((access & CONF_CFGLCK_PROT) != 0)
                 return (block_num >= first_cfg_page) && ((block_num - first_cfg_page) <= 1);
             else
                 return false;
@@ -463,12 +477,12 @@ static int handle_write_command(uint8_t block_num, uint8_t *p_data) {
                 for (int i = 0; i < NFC_TAG_MF0_NTAG_DATA_SIZE; i++) {
                     m_tag_information->memory[3][i] |= p_data[i];
                 }
-            }
+            } else return NAK_INVALID_OPERATION_TBIV;
             break;
         default:
             if (!check_ro_lock_on_page(block_num)) {
                 memcpy(m_tag_information->memory[block_num], p_data, NFC_TAG_MF0_NTAG_DATA_SIZE);
-            }
+            } else return NAK_INVALID_OPERATION_TBIV;
             break;
     }
 
@@ -635,6 +649,9 @@ static void nfc_tag_mf0_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits)
             break;
         case CMD_INCR_CNT:
             handle_incr_cnt_command(block_num, &p_data[2]);
+            break;
+        default:
+            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
             break;
     }
     return;
