@@ -274,7 +274,7 @@ static void handle_get_version_command() {
     NRF_LOG_INFO(
         "replying with %08x%08x", 
         U32HTONL(*(uint32_t *)&m_tag_tx_buffer.tx_buffer[0]),
-        U32HTONL(*(uint32_t *)&m_tag_tx_buffer.tx_buffer[0])
+        U32HTONL(*(uint32_t *)&m_tag_tx_buffer.tx_buffer[1])
     );
 
     nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, 8, true);
