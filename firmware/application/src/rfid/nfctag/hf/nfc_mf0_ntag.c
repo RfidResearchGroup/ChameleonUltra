@@ -69,12 +69,18 @@ NRF_LOG_MODULE_REGISTER();
 
 // CONFIG offsets, relative to config start address
 #define CONF_MIRROR_BYTE            0
+#define CONF_MIRROR_PAGE_BYTE       2
 #define CONF_ACCESS_PAGE_OFFSET     1
 #define CONF_ACCESS_BYTE            0
 #define CONF_AUTH0_BYTE          0x03
 #define CONF_ACCESS_AUTHLIM_MASK 0x07
 #define CONF_PWD_PAGE_OFFSET        2
 #define CONF_PACK_PAGE_OFFSET       3
+
+#define MIRROR_BYTE_BYTE_MASK    0x30
+#define MIRROR_BYTE_BYTE_SHIFT      4
+#define MIRROR_BYTE_CONF_MASK    0xC0
+#define MIRROR_BYTE_CONF_SHIFT      6
 
 // WRITE STUFF
 #define BYTES_PER_WRITE             4
@@ -95,6 +101,16 @@ NRF_LOG_MODULE_REGISTER();
 // has password authentication we store the auth attempts counter in the last bit of the
 // first counter.
 #define AUTHLIM_OFF_IN_CTR          3
+
+// Values for MIRROR_CONF
+#define MIRROR_CONF_DISABLED        0
+#define MIRROR_CONF_UID             1
+#define MIRROR_CONF_CNT             2
+#define MIRROR_CONF_UID_CNT         3
+
+#define MIRROR_UID_SIZE            14
+#define MIRROR_CNT_SIZE             6
+#define MIRROR_UID_CNT_SIZE        21
 
 // NTAG215_Version[7] mean:
 // 0x0F ntag213
@@ -280,6 +296,192 @@ static void handle_get_version_command() {
     nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, 8, true);
 }
 
+static int mirror_size_for_mode(uint8_t mirror_mode) {
+    switch (mirror_mode) {
+    case MIRROR_CONF_UID:
+        return MIRROR_UID_SIZE;
+    case MIRROR_CONF_CNT:
+        return MIRROR_CNT_SIZE;
+    case MIRROR_CONF_UID_CNT:
+        return MIRROR_UID_CNT_SIZE;
+    default:
+        ASSERT(false);
+        return 0;
+    }
+}
+
+static int get_user_data_end_by_tag_type(tag_specific_type_t type) {
+    int nr_pages = 0;
+
+    switch (type) {
+    case TAG_TYPE_MF0ICU1:
+        nr_pages = MF0ICU1_PAGES;
+        break;
+    case TAG_TYPE_MF0ICU2:
+        nr_pages = MF0ICU2_USER_MEMORY_END;
+        break;
+    case TAG_TYPE_MF0UL11:
+        nr_pages = MF0UL11_USER_MEMORY_END;
+        break;
+    case TAG_TYPE_MF0UL21:
+        nr_pages = MF0UL21_USER_MEMORY_END;
+        break;
+    case TAG_TYPE_NTAG_213:
+        nr_pages = NTAG213_USER_MEMORY_END;
+        break;
+    case TAG_TYPE_NTAG_215:
+        nr_pages = NTAG215_USER_MEMORY_END;
+        break;
+    case TAG_TYPE_NTAG_216:
+        nr_pages = NTAG216_USER_MEMORY_END;
+        break;
+    default:
+        ASSERT(false);
+        break;
+    }
+
+    return nr_pages;
+}
+
+static uint8_t *get_counter_data_by_index(uint8_t index) {
+    uint8_t ctr_page_off;
+    uint8_t ctr_page_end;
+    switch (m_tag_type) {
+        case TAG_TYPE_MF0UL11:
+            ctr_page_off = MF0UL11_PAGES;
+            ctr_page_end = MF0UL11_PAGES_WITH_CTRS;
+            break;
+        case TAG_TYPE_MF0UL21:
+            ctr_page_off = MF0UL21_PAGES;
+            ctr_page_end = MF0UL21_PAGES_WITH_CTRS;
+            break;
+        case TAG_TYPE_NTAG_213:
+            ctr_page_off = NTAG213_PAGES;
+            ctr_page_end = NTAG213_PAGES_WITH_CTR;
+            break;
+        case TAG_TYPE_NTAG_215:
+            ctr_page_off = NTAG215_PAGES;
+            ctr_page_end = NTAG215_PAGES_WITH_CTR;
+            break;
+        case TAG_TYPE_NTAG_216:
+            ctr_page_off = NTAG216_PAGES;
+            ctr_page_end = NTAG216_PAGES_WITH_CTR;
+            break;
+        default:
+        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+            return NULL;
+    }
+
+    // check that counter index is in bounds
+    if (index >= (ctr_page_end - ctr_page_off)) return NULL;
+
+    return m_tag_information->memory[ctr_page_off + index];
+}
+
+static char hex_digit(int n) {
+    if (n < 10) return '0' + n;
+    else return 'A' + n;
+}
+
+static void bytes2hex(const uint8_t *bytes, char *hex, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        *hex++ = hex_digit(bytes[i] >> 8);
+        *hex++ = hex_digit(bytes[i] & 0x0F);
+    }
+}
+
+static void handle_any_read(uint8_t block_num, uint8_t block_cnt, uint8_t block_max) {
+    ASSERT(block_cnt <= block_max);
+    ASSERT((block_max - block_cnt) >= block_num);
+
+    uint8_t first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
+
+    // password pages are present on all tags that have config pages
+    uint8_t pwd_page = 0;
+    if (first_cfg_page != 0) pwd_page = first_cfg_page + CONF_PWD_PAGE_OFFSET;
+
+    // extract mirroring config
+    int mirror_page_off = 0;
+    int mirror_page_end = 0;
+    int mirror_byte_off = 0;
+    int mirror_mode = 0;
+    int mirror_size = 0;
+    uint8_t mirror_buf[MIRROR_UID_CNT_SIZE];
+    if (is_ntag()) {
+        uint8_t mirror = m_tag_information->memory[first_cfg_page][CONF_MIRROR_BYTE];
+        mirror_page_off = m_tag_information->memory[first_cfg_page][CONF_MIRROR_PAGE_BYTE];
+        mirror_mode = (mirror & MIRROR_BYTE_CONF_MASK) >> MIRROR_BYTE_CONF_SHIFT;
+        mirror_byte_off = (mirror & MIRROR_BYTE_BYTE_MASK) >> MIRROR_BYTE_BYTE_SHIFT;
+
+        if ((mirror_page_off > 3) && (mirror_mode != MIRROR_CONF_DISABLED)) {
+            mirror_size = mirror_size_for_mode(mirror_mode);
+            int user_data_end = get_user_data_end_by_tag_type(m_tag_type);
+            int pages_needed = 
+                (mirror_byte_off + mirror_size + (NFC_TAG_MF0_NTAG_DATA_SIZE - 1)) / NFC_TAG_MF0_NTAG_DATA_SIZE;
+
+            if ((pages_needed >= user_data_end) || ((user_data_end - pages_needed) < mirror_page_off)) {
+                NRF_LOG_ERROR("invalid mirror config %02x %02x %02x", mirror_page_off, mirror_byte_off, mirror_mode);
+                mirror_page_off = 0;
+            } else {
+                mirror_page_end = mirror_page_off + pages_needed;
+
+                switch (mirror_mode) {
+                case MIRROR_CONF_UID:
+                    bytes2hex(m_tag_information->res_coll.uid, (char *)mirror_buf, 7);
+                    break;
+                case MIRROR_CONF_CNT:
+                    bytes2hex(get_counter_data_by_index(0), (char *)mirror_buf, 3);
+                    break;
+                case MIRROR_CONF_UID_CNT:
+                    bytes2hex(m_tag_information->res_coll.uid, (char *)mirror_buf, 7);
+                    mirror_buf[7] = 'x';
+                    bytes2hex(get_counter_data_by_index(0), (char *)&mirror_buf[8], 3);
+                    break;
+                }
+            }
+        }
+    }
+
+    for (uint8_t block = 0; block < block_cnt; block++) {
+        uint8_t block_to_read = (block_num + block) % block_max;
+        uint8_t *tx_buf_ptr = m_tag_tx_buffer.tx_buffer + block * NFC_TAG_MF0_NTAG_DATA_SIZE;
+
+        // In case PWD or PACK pages are read we need to write zero to the output buffer. In UID magic mode we don't care.
+        if (m_tag_information->config.mode_uid_magic || (pwd_page == 0) || (block_to_read < pwd_page) || (block_to_read > (pwd_page + 1))) {
+            memcpy(tx_buf_ptr, m_tag_information->memory[block_to_read], NFC_TAG_MF0_NTAG_DATA_SIZE);
+        } else {
+            memset(tx_buf_ptr, 0, NFC_TAG_MF0_NTAG_DATA_SIZE);
+        }
+
+        // apply mirroring if needed
+        if ((mirror_page_off > 0) && (mirror_size > 0) && (block_to_read >= mirror_page_off) && (block_to_read < mirror_page_end)) {
+            // When accessing the first page that includes mirrored data the offset into the mirror buffer is 
+            // definitely zero. Later pages need to account for the offset in the first page. Offset in the
+            // destination page chunk will be zero however.
+            int mirror_buf_off = (block_to_read - mirror_page_off) * NFC_TAG_MF0_NTAG_DATA_SIZE;
+            int offset_in_cur_block = mirror_byte_off;
+            if (mirror_buf_off != 0) {
+                mirror_buf_off -= mirror_byte_off;
+                offset_in_cur_block = 0;
+            }
+
+            int mirror_copy_size = mirror_size - mirror_buf_off;
+            if (mirror_copy_size > NFC_TAG_MF0_NTAG_DATA_SIZE) mirror_copy_size = NFC_TAG_MF0_NTAG_DATA_SIZE;
+
+            // Ensure we don't corrupt memory here.
+            ASSERT(offset_in_cur_block < NFC_TAG_MF0_NTAG_DATA_SIZE);
+            ASSERT(mirror_buf_off <= sizeof(mirror_buf));
+            ASSERT(mirror_copy_size <= (sizeof(mirror_buf) - mirror_buf_off));
+
+            memcpy(&tx_buf_ptr[offset_in_cur_block], &mirror_buf[mirror_buf_off], mirror_copy_size);
+        }
+    }
+
+    NRF_LOG_DEBUG("READ handled %02x %02x %02x", block_num, block_cnt, block_max);
+
+    nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, ((int)block_cnt) * NFC_TAG_MF0_NTAG_DATA_SIZE, true);
+}
+
 static void handle_read_command(uint8_t block_num) {
     int block_max = get_block_max_by_tag_type(m_tag_type, true);
 
@@ -292,22 +494,7 @@ static void handle_read_command(uint8_t block_num) {
         return;
     }
 
-    uint8_t pwd_page = get_first_cfg_page_by_tag_type(m_tag_type);
-    if (pwd_page != 0) pwd_page += CONF_PWD_PAGE_OFFSET;
-
-    for (uint8_t block = 0; block < 4; block++) {
-        // In case PWD or PACK pages are read we need to write zero to the output buffer. In UID magic mode we don't care.
-        uint8_t block_to_read = (block_num + block) % block_max;
-        if (m_tag_information->config.mode_uid_magic || (pwd_page == 0) || (block_to_read < pwd_page) || (block_to_read > (pwd_page + 1))) {
-            memcpy(m_tag_tx_buffer.tx_buffer + block * 4, m_tag_information->memory[block_to_read], NFC_TAG_MF0_NTAG_DATA_SIZE);
-        } else {
-            memset(m_tag_tx_buffer.tx_buffer + block * 4, 0, NFC_TAG_MF0_NTAG_DATA_SIZE);
-        }
-    }
-
-    NRF_LOG_DEBUG("READ handled %02x %02x", block_num);
-
-    nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, BYTES_PER_READ, true);
+    handle_any_read(block_num, 4, block_max);
 }
 
 static void handle_fast_read_command(uint8_t block_num, uint8_t end_block_num) {
@@ -332,23 +519,9 @@ static void handle_fast_read_command(uint8_t block_num, uint8_t end_block_num) {
         return;
     }
 
-    uint8_t pwd_page = get_first_cfg_page_by_tag_type(m_tag_type);
-    if (pwd_page != 0) pwd_page += CONF_PWD_PAGE_OFFSET;
+    NRF_LOG_INFO("HANDLING FAST READ %02x %02x", block_num, end_block_num);
 
-    for (uint8_t block = block_num; block < end_block_num; block++) {
-        int tx_buf_offset = (block - block_num) * 4;
-        // In case PWD or PACK pages are read we need to write zero to the output buffer. In UID magic mode we don't care.
-        if (m_tag_information->config.mode_uid_magic || (pwd_page == 0) || (block < pwd_page) || (block > (pwd_page + 1))) {
-            memcpy(m_tag_tx_buffer.tx_buffer + tx_buf_offset, m_tag_information->memory[block], NFC_TAG_MF0_NTAG_DATA_SIZE);
-        } else {
-            memset(m_tag_tx_buffer.tx_buffer + tx_buf_offset, 0, NFC_TAG_MF0_NTAG_DATA_SIZE);
-        }
-    }
-
-    size_t send_size = (end_block_num - block_num) * NFC_TAG_MF0_NTAG_DATA_SIZE;
-    
-    ASSERT(send_size <= MAX_NFC_TX_BUFFER_SIZE);
-    nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, send_size, true);
+    handle_any_read(block_num, end_block_num - block_num, block_max);
 }
 
 static bool check_ro_lock_on_page(int block_num) {
@@ -462,6 +635,9 @@ static int handle_write_command(uint8_t block_num, uint8_t *p_data) {
     switch (block_num) {
         case 0:
         case 1:
+            if (!memcmp(p_data, m_tag_information->memory[block_num], NFC_TAG_MF0_NTAG_DATA_SIZE))
+                return ACK_VALUE;
+            else
             return NAK_INVALID_OPERATION_TBIV;
         case 2:
             // Page 2 contains lock bytes for pages 3-15. These are OR'ed when not in the UID
@@ -487,41 +663,6 @@ static int handle_write_command(uint8_t block_num, uint8_t *p_data) {
     }
 
     return ACK_VALUE;
-}
-
-static uint8_t *get_counter_data_by_index(uint8_t index) {
-    uint8_t ctr_page_off;
-    uint8_t ctr_page_end;
-    switch (m_tag_type) {
-        case TAG_TYPE_MF0UL11:
-            ctr_page_off = MF0UL11_PAGES;
-            ctr_page_end = MF0UL11_PAGES_WITH_CTRS;
-            break;
-        case TAG_TYPE_MF0UL21:
-            ctr_page_off = MF0UL21_PAGES;
-            ctr_page_end = MF0UL21_PAGES_WITH_CTRS;
-            break;
-        case TAG_TYPE_NTAG_213:
-            ctr_page_off = NTAG213_PAGES;
-            ctr_page_end = NTAG213_PAGES_WITH_CTR;
-            break;
-        case TAG_TYPE_NTAG_215:
-            ctr_page_off = NTAG215_PAGES;
-            ctr_page_end = NTAG215_PAGES_WITH_CTR;
-            break;
-        case TAG_TYPE_NTAG_216:
-            ctr_page_off = NTAG216_PAGES;
-            ctr_page_end = NTAG216_PAGES_WITH_CTR;
-            break;
-        default:
-            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
-            return NULL;
-    }
-
-    // check that counter index is in bounds
-    if (index >= (ctr_page_end - ctr_page_off)) return NULL;
-
-    return m_tag_information->memory[ctr_page_off + index];
 }
 
 static void handle_read_cnt_command(uint8_t index) {
