@@ -295,6 +295,7 @@ uint8_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBi
  * @param[in]   appendCrc  Whether to send the byte flow, automatically send the CRC16 verification automatically
  */
 void nfc_tag_14a_tx_bytes(uint8_t *data, uint32_t bytes, bool appendCrc) {
+    ASSERT(bytes <= MAX_NFC_TX_BUFFER_SIZE);
     NFC_14A_TX_BYTE_CORE(data, bytes, appendCrc, NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
 }
 

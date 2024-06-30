@@ -920,6 +920,17 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
+    def mf0_ntag_get_uid_magic_mode(self):
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_GET_UID_MAGIC_MODE)
+        if resp.status == Status.SUCCESS:
+            resp.parsed, = struct.unpack('!?', resp.data)
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mf0_ntag_set_uid_magic_mode(self, enabled: bool):
+        return self.device.send_cmd_sync(Command.MF0_NTAG_SET_UID_MAGIC_MODE, struct.pack('?', enabled))
+
+    @expect_response(Status.SUCCESS)
     def get_ble_pairing_enable(self):
         """
         Is ble pairing enable?

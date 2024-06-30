@@ -1026,6 +1026,24 @@ static data_frame_tx_t *after_hf_reader_run(uint16_t cmd, uint16_t status, uint1
 // fct will be defined after m_data_cmd_map because we need to know its size
 data_frame_tx_t *cmd_processor_get_device_capabilities(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data);
 
+static data_frame_tx_t *cmd_processor_mf0_ntag_get_uid_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    int rc = nfc_tag_mf0_ntag_get_uid_mode();
+
+    if (rc < 0) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    else {
+        uint8_t res = rc;
+        return data_frame_make(cmd, STATUS_SUCCESS, 1, &res);
+    }
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_set_uid_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 1 || !nfc_tag_mf0_ntag_set_uid_mode(data[0] != 0)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
 /**
  * (cmd -> processor) function map, the map struct is:
  *       cmd code                               before process               cmd processor                                after process
@@ -1109,6 +1127,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_GET_WRITE_MODE,           NULL,                        cmd_processor_mf1_get_write_mode,            NULL                   },
     {    DATA_CMD_MF1_SET_WRITE_MODE,           NULL,                        cmd_processor_mf1_set_write_mode,            NULL                   },
     {    DATA_CMD_HF14A_GET_ANTI_COLL_DATA,     NULL,                        cmd_processor_hf14a_get_anti_coll_data,      NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_UID_MAGIC_MODE,  NULL,                        cmd_processor_mf0_ntag_get_uid_mode,         NULL                   },
+    {    DATA_CMD_MF0_NTAG_SET_UID_MAGIC_MODE,  NULL,                        cmd_processor_mf0_ntag_set_uid_mode,         NULL                   },
 
     {    DATA_CMD_EM410X_SET_EMU_ID,            NULL,                        cmd_processor_em410x_set_emu_id,             NULL                   },
     {    DATA_CMD_EM410X_GET_EMU_ID,            NULL,                        cmd_processor_em410x_get_emu_id,             NULL                   },
