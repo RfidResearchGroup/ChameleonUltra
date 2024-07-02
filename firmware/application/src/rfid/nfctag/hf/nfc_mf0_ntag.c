@@ -42,75 +42,77 @@ NRF_LOG_MODULE_REGISTER();
 
 // MEMORY LAYOUT STUFF, addresses and sizes in bytes
 // UID stuff
-#define UID_CL1_ADDRESS             0x00
-#define UID_CL1_SIZE                3
-#define UID_BCC1_ADDRESS            0x03
-#define UID_CL2_ADDRESS             0x04
-#define UID_CL2_SIZE                4
-#define UID_BCC2_ADDRESS            0x08
+#define UID_CL1_ADDRESS                 0x00
+#define UID_CL1_SIZE                       3
+#define UID_BCC1_ADDRESS                0x03
+#define UID_CL2_ADDRESS                 0x04
+#define UID_CL2_SIZE                       4
+#define UID_BCC2_ADDRESS                0x08
 // LockBytes stuff
-#define STATIC_LOCKBYTE_0_ADDRESS   0x0A
-#define STATIC_LOCKBYTE_1_ADDRESS   0x0B
+#define STATIC_LOCKBYTE_0_ADDRESS       0x0A
+#define STATIC_LOCKBYTE_1_ADDRESS       0x0B
 // CONFIG stuff
-#define MF0ICU2_USER_MEMORY_END  0x28
-#define MF0ICU2_CNT_PAGE         0x29
-#define MF0ICU2_FIRST_KEY_PAGE   0x2C
-#define MF0UL11_FIRST_CFG_PAGE   0x10
-#define MF0UL11_USER_MEMORY_END  (MF0UL11_FIRST_CFG_PAGE)
-#define MF0UL21_FIRST_CFG_PAGE   0x25
-#define MF0UL21_USER_MEMORY_END  0x24
-#define NTAG213_FIRST_CFG_PAGE   0x29
-#define NTAG213_USER_MEMORY_END  0x28
-#define NTAG215_FIRST_CFG_PAGE   0x83
-#define NTAG215_USER_MEMORY_END  0x82
-#define NTAG216_FIRST_CFG_PAGE   0xE3
-#define NTAG216_USER_MEMORY_END  0xE2
-#define CONFIG_AREA_SIZE            8
+#define MF0ICU2_USER_MEMORY_END         0x28
+#define MF0ICU2_CNT_PAGE                0x29
+#define MF0ICU2_FIRST_KEY_PAGE          0x2C
+#define MF0UL11_FIRST_CFG_PAGE          0x10
+#define MF0UL11_USER_MEMORY_END         (MF0UL11_FIRST_CFG_PAGE)
+#define MF0UL21_FIRST_CFG_PAGE          0x25
+#define MF0UL21_USER_MEMORY_END         0x24
+#define NTAG213_FIRST_CFG_PAGE          0x29
+#define NTAG213_USER_MEMORY_END         0x28
+#define NTAG215_FIRST_CFG_PAGE          0x83
+#define NTAG215_USER_MEMORY_END         0x82
+#define NTAG216_FIRST_CFG_PAGE          0xE3
+#define NTAG216_USER_MEMORY_END         0xE2
+#define CONFIG_AREA_SIZE                   8
 
 // CONFIG offsets, relative to config start address
-#define CONF_MIRROR_BYTE            0
-#define CONF_MIRROR_PAGE_BYTE       2
-#define CONF_ACCESS_PAGE_OFFSET     1
-#define CONF_ACCESS_BYTE            0
-#define CONF_AUTH0_BYTE          0x03
-#define CONF_ACCESS_AUTHLIM_MASK 0x07
-#define CONF_PWD_PAGE_OFFSET        2
-#define CONF_PACK_PAGE_OFFSET       3
+#define CONF_MIRROR_BYTE                   0
+#define CONF_MIRROR_PAGE_BYTE              2
+#define CONF_ACCESS_PAGE_OFFSET            1
+#define CONF_ACCESS_BYTE                   0
+#define CONF_AUTH0_BYTE                 0x03
+#define CONF_PWD_PAGE_OFFSET               2
+#define CONF_PACK_PAGE_OFFSET              3
 
-#define MIRROR_BYTE_BYTE_MASK    0x30
-#define MIRROR_BYTE_BYTE_SHIFT      4
-#define MIRROR_BYTE_CONF_MASK    0xC0
-#define MIRROR_BYTE_CONF_SHIFT      6
+#define MIRROR_BYTE_BYTE_MASK           0x30
+#define MIRROR_BYTE_BYTE_SHIFT             4
+#define MIRROR_BYTE_CONF_MASK           0xC0
+#define MIRROR_BYTE_CONF_SHIFT             6
 
 // WRITE STUFF
-#define BYTES_PER_WRITE             4
-#define PAGE_WRITE_MIN              0x02
+#define BYTES_PER_WRITE                    4
+#define PAGE_WRITE_MIN                  0x02
 
 // CONFIG masks to check individual needed bits
-#define CONF_CFGLCK_PROT            0x40
-#define CONF_ACCESS_PROT            0x80
+#define CONF_ACCESS_AUTHLIM_MASK        0x07
+#define CONF_ACCESS_NFC_CNT_EN          0x10
+#define CONF_ACCESS_NFC_CNT_PWD_PROT    0x04
+#define CONF_ACCESS_CFGLCK              0x40
+#define CONF_ACCESS_PROT                0x80
 
-#define VERSION_INFO_LENGTH         8 //8 bytes info length + crc
+#define VERSION_INFO_LENGTH                8 //8 bytes info length + crc
 
-#define BYTES_PER_READ              16
+#define BYTES_PER_READ                    16
 
 // SIGNATURE Length
-#define SIGNATURE_LENGTH            32
+#define SIGNATURE_LENGTH                  32
 
 // Since all counters are 24-bit and each currently supported tag that supports counters
 // has password authentication we store the auth attempts counter in the last bit of the
 // first counter.
-#define AUTHLIM_OFF_IN_CTR          3
+#define AUTHLIM_OFF_IN_CTR                 3
 
 // Values for MIRROR_CONF
-#define MIRROR_CONF_DISABLED        0
-#define MIRROR_CONF_UID             1
-#define MIRROR_CONF_CNT             2
-#define MIRROR_CONF_UID_CNT         3
+#define MIRROR_CONF_DISABLED               0
+#define MIRROR_CONF_UID                    1
+#define MIRROR_CONF_CNT                    2
+#define MIRROR_CONF_UID_CNT                3
 
-#define MIRROR_UID_SIZE            14
-#define MIRROR_CNT_SIZE             6
-#define MIRROR_UID_CNT_SIZE        21
+#define MIRROR_UID_SIZE                   14
+#define MIRROR_CNT_SIZE                    6
+#define MIRROR_UID_CNT_SIZE               21
 
 // NTAG215_Version[7] mean:
 // 0x0F ntag213
@@ -129,6 +131,7 @@ static nfc_tag_mf0_ntag_tx_buffer_t m_tag_tx_buffer;
 // Save the specific type of MF0/NTAG currently being simulated
 static tag_specific_type_t m_tag_type;
 static bool m_tag_authenticated = false;
+static bool m_did_first_read = false;
 
 static int get_nr_pages_by_tag_type(tag_specific_type_t tag_type) {
     int nr_pages = 0;
@@ -232,7 +235,7 @@ static int get_block_max_by_tag_type(tag_specific_type_t tag_type, bool read) {
     uint8_t auth0 = m_tag_information->memory[first_cfg_page][CONF_AUTH0_BYTE];
     uint8_t access = m_tag_information->memory[first_cfg_page + 1][0];
 
-    NRF_LOG_INFO("auth0 %02x access %02x max_pages %02x first_cfg_page %02x", auth0, access, max_pages, first_cfg_page);
+    NRF_LOG_INFO("auth0 %02x access %02x max_pages %02x first_cfg_page %02x authenticated %i", auth0, access, max_pages, first_cfg_page, m_tag_authenticated);
 
     if (!read || ((access & CONF_ACCESS_PROT) != 0)) return (max_pages > auth0) ? auth0 : max_pages;
     else return max_pages;
@@ -479,6 +482,23 @@ static void handle_any_read(uint8_t block_num, uint8_t block_cnt, uint8_t block_
 
     NRF_LOG_DEBUG("READ handled %02x %02x %02x", block_num, block_cnt, block_max);
 
+    // update counter for NTAG cards if needed
+    if (is_ntag() && !m_did_first_read) {
+        m_did_first_read = true;
+
+        int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
+        int access = m_tag_information->memory[first_cfg_page + CONF_ACCESS_PAGE_OFFSET][CONF_ACCESS_BYTE];
+
+        if ((access & CONF_ACCESS_NFC_CNT_EN) != 0) {
+            uint8_t *ctr = get_counter_data_by_index(0);
+            uint32_t counter = (((uint32_t)ctr[0]) << 16) | (((uint32_t)ctr[1]) << 8) | ((uint32_t)ctr[2]);
+            if (counter < 0xFFFFFF) counter += 1;
+            ctr[0] = (uint8_t)(counter >> 16);
+            ctr[1] = (uint8_t)(counter >> 8);
+            ctr[2] = (uint8_t)(counter);
+        }
+    }
+
     nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, ((int)block_cnt) * NFC_TAG_MF0_NTAG_DATA_SIZE, true);
 }
 
@@ -611,7 +631,7 @@ static bool check_ro_lock_on_page(int block_num) {
             // check CFGLCK bit
             int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
             uint8_t access = m_tag_information->memory[first_cfg_page + CONF_ACCESS_PAGE_OFFSET][CONF_ACCESS_BYTE];
-            if ((access & CONF_CFGLCK_PROT) != 0)
+            if ((access & CONF_ACCESS_CFGLCK) != 0)
                 return (block_num >= first_cfg_page) && ((block_num - first_cfg_page) <= 1);
             else
                 return false;
@@ -623,6 +643,8 @@ static int handle_write_command(uint8_t block_num, uint8_t *p_data) {
     int block_max = get_block_max_by_tag_type(m_tag_type, false);
 
     if (block_num >= block_max) {
+        NRF_LOG_ERROR("Write failed: block_num %08x >= block_max %08x", block_num, block_max);
+
         return NAK_INVALID_OPERATION_TBIV;
     }
 
@@ -666,6 +688,17 @@ static int handle_write_command(uint8_t block_num, uint8_t *p_data) {
 }
 
 static void handle_read_cnt_command(uint8_t index) {
+    // deny counter reading when counter password protection is enabled and reader is not authenticated
+    if (is_ntag() && !m_tag_information->config.mode_uid_magic) {
+        int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
+        int access = m_tag_information->memory[first_cfg_page + CONF_ACCESS_PAGE_OFFSET][CONF_ACCESS_BYTE];
+
+        if ((access & CONF_ACCESS_NFC_CNT_PWD_PROT) != 0 && !m_tag_authenticated) {
+            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+            return;
+        }
+    }
+
     uint8_t *cnt_data = get_counter_data_by_index(index);
     if (cnt_data == NULL) {
         nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
@@ -732,7 +765,7 @@ static void handle_pwd_auth_command(uint8_t *p_data) {
     uint32_t pwd = *(uint32_t *)m_tag_information->memory[first_cfg_page + CONF_PWD_PAGE_OFFSET];
     uint32_t supplied_pwd = *(uint32_t *)&p_data[1];
     if (pwd != supplied_pwd) {
-        cnt_data[AUTHLIM_OFF_IN_CTR] = auth_cnt + 1;
+        if (auth_lim) cnt_data[AUTHLIM_OFF_IN_CTR] = auth_cnt + 1;
         nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
         return;
     }
@@ -810,7 +843,8 @@ static nfc_tag_14a_coll_res_reference_t *get_coll_res() {
 }
 
 static void nfc_tag_mf0_ntag_reset_handler() {
-
+    m_tag_authenticated = false;
+    m_did_first_read = false;
 }
 
 static int get_information_size_by_tag_type(tag_specific_type_t type) {
