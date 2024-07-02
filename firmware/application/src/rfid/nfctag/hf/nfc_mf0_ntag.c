@@ -368,7 +368,7 @@ static uint8_t *get_counter_data_by_index(uint8_t index) {
             ctr_page_end = NTAG216_PAGES_WITH_CTR;
             break;
         default:
-        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
             return NULL;
     }
 
@@ -380,12 +380,12 @@ static uint8_t *get_counter_data_by_index(uint8_t index) {
 
 static char hex_digit(int n) {
     if (n < 10) return '0' + n;
-    else return 'A' + n;
+    else return 'A' + n - 10;
 }
 
 static void bytes2hex(const uint8_t *bytes, char *hex, size_t len) {
     for (size_t i = 0; i < len; i++) {
-        *hex++ = hex_digit(bytes[i] >> 8);
+        *hex++ = hex_digit(bytes[i] >> 4);
         *hex++ = hex_digit(bytes[i] & 0x0F);
     }
 }
@@ -545,7 +545,7 @@ static bool check_ro_lock_on_page(int block_num) {
 
         switch (m_tag_type) {
         case TAG_TYPE_MF0ICU1:
-        return true;
+            return true;
         case TAG_TYPE_MF0ICU2: {
             p_lock_bytes = m_tag_information->memory[MF0ICU2_USER_MEMORY_END];
 
@@ -574,11 +574,11 @@ static bool check_ro_lock_on_page(int block_num) {
         case TAG_TYPE_MF0UL21: {
             user_memory_end = MF0UL11_USER_MEMORY_END;
             if (block_num < user_memory_end) {
-            p_lock_bytes = m_tag_information->memory[MF0UL21_USER_MEMORY_END];
-            uint16_t lock_word = (((uint16_t)p_lock_bytes[1]) << 8) | (uint16_t)p_lock_bytes[0];
-            bool locked = ((lock_word >> (index / 2)) & 1) != 0;
-            locked |= ((p_lock_bytes[2] >> (index / 4)) & 1) != 0;
-            return locked;
+                p_lock_bytes = m_tag_information->memory[MF0UL21_USER_MEMORY_END];
+                uint16_t lock_word = (((uint16_t)p_lock_bytes[1]) << 8) | (uint16_t)p_lock_bytes[0];
+                bool locked = ((lock_word >> (index / 2)) & 1) != 0;
+                locked |= ((p_lock_bytes[2] >> (index / 4)) & 1) != 0;
+                return locked;
             }
             break;
         }
@@ -638,7 +638,7 @@ static int handle_write_command(uint8_t block_num, uint8_t *p_data) {
             if (!memcmp(p_data, m_tag_information->memory[block_num], NFC_TAG_MF0_NTAG_DATA_SIZE))
                 return ACK_VALUE;
             else
-            return NAK_INVALID_OPERATION_TBIV;
+                return NAK_INVALID_OPERATION_TBIV;
         case 2:
             // Page 2 contains lock bytes for pages 3-15. These are OR'ed when not in the UID
             // magic mode. First two bytes are ignored.
@@ -915,7 +915,7 @@ bool nfc_tag_mf0_ntag_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
             break;
         default:
             ASSERT(false);
-                break;
+            break;
         }
     }
 
