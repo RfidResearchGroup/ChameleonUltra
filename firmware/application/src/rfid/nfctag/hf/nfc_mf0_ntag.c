@@ -733,15 +733,15 @@ static void handle_incr_cnt_command(uint8_t block_num, uint8_t *p_data) {
     }
 
     uint8_t *cnt_data = m_tag_information->memory[ctr_page_off + block_num];
-    uint32_t incr_value = ((uint32_t)p_data[0]) | ((uint32_t)p_data[1] << 8) | ((uint32_t)p_data[2] << 16);
-    uint32_t cnt = ((uint32_t)cnt_data[0]) | ((uint32_t)cnt_data[1] << 8) | ((uint32_t)cnt_data[2] << 16);
+    uint32_t incr_value = ((uint32_t)p_data[0] << 16) | ((uint32_t)p_data[1] << 8) | ((uint32_t)p_data[2]);
+    uint32_t cnt = ((uint32_t)cnt_data[0] << 16) | ((uint32_t)cnt_data[1] << 8) | ((uint32_t)cnt_data[2]);
 
     if ((0xFFFFFF - cnt) < incr_value) cnt = 0xFFFFFF;
     else cnt += incr_value;
 
-    cnt_data[0] = (uint8_t)(cnt & 0xff);
+    cnt_data[0] = (uint8_t)(cnt >> 16);
     cnt_data[1] = (uint8_t)(cnt >> 8);
-    cnt_data[2] = (uint8_t)(cnt >> 16);
+    cnt_data[2] = (uint8_t)(cnt & 0xff);
 
     nfc_tag_14a_tx_nbit(ACK_VALUE, 4);
 }
