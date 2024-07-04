@@ -388,6 +388,14 @@ Notes:
 * Command: no data
 * Response: no data or N bytes: `uidlen|uid[uidlen]|atqa[2]|sak|atslen|ats[atslen]`. UID, ATQA, SAK and ATS as bytes.
 * CLI: cf `hw slot list`/`hf mf econfig`/`hf mfu econfig`
+### 4019: MF0_NTAG_GET_UID_MAGIC_MODE
+* Command: no data
+* Response: 1 byte where a non-zero value indicates that UID magic mode is enabled for the current slot.
+* CLI: cf `hf mfu econfig`
+### 4020: MF0_NTAG_SET_UID_MAGIC_MODE
+* Command: 1 byte where a non-zero value indicates that UID magic mode should be enabled for the current slot, otherwise disabled.
+* Response: no data
+* CLI: cf `hf mfu econfig --enable-uid-magic`/`hf mfu econfig --disable-uid-magic`
 ### 5000: EM410X_SET_EMU_ID
 * Command: 5 bytes. `id[5]`. ID as 5 bytes.
 * Response: no data
