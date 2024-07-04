@@ -133,8 +133,8 @@ static tag_specific_type_t m_tag_type;
 static bool m_tag_authenticated = false;
 static bool m_did_first_read = false;
 
-static int get_nr_pages_by_tag_type(tag_specific_type_t tag_type) {
-    int nr_pages = 0;
+int nfc_tag_mf0_ntag_get_nr_pages_by_tag_type(tag_specific_type_t tag_type) {
+    int nr_pages = -1;
 
     switch (tag_type) {
         case TAG_TYPE_MF0ICU1:
@@ -159,10 +159,16 @@ static int get_nr_pages_by_tag_type(tag_specific_type_t tag_type) {
             nr_pages = NTAG216_PAGES;
             break;
         default:
-            ASSERT(false);
+            nr_pages = -1;
             break;
     }
 
+    return nr_pages;
+}
+
+static int get_nr_pages_by_tag_type(tag_specific_type_t tag_type) {
+    int nr_pages = nfc_tag_mf0_ntag_get_nr_pages_by_tag_type(tag_type);
+    ASSERT(nr_pages > 0);
     return nr_pages;
 }
 

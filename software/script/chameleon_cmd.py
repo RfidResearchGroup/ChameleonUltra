@@ -573,6 +573,28 @@ class ChameleonCMD:
         resp.parsed = resp.data
         return resp
 
+    @expect_response(Status.INVALID_PARAMS)
+    def mfu_get_emu_pages_count(self):
+        """
+            Gets the number of pages available in the current MF0 / NTAG slot
+        """
+        data = struct.pack('!BB', 255, 255)
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_READ_EMU_PAGE_DATA, data)
+        if len(resp.data) > 0:
+            resp.parsed = resp.data[0]
+        print(resp.data)
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mfu_read_emu_page_data(self, page_start: int, page_count: int):
+        """
+            Gets data for selected block range
+        """
+        data = struct.pack('!BB', page_start, page_count)
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_READ_EMU_PAGE_DATA, data)
+        resp.parsed = resp.data
+        return resp
+
     @expect_response(Status.SUCCESS)
     def hf14a_set_anti_coll_data(self, uid: bytes, atqa: bytes, sak: bytes, ats: bytes = b''):
         """

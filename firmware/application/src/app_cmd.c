@@ -790,6 +790,65 @@ static data_frame_tx_t *cmd_processor_mf1_read_emu_block_data(uint16_t cmd, uint
     return data_frame_make(cmd, STATUS_SUCCESS, result_length, result_buffer);
 }
 
+static data_frame_tx_t *cmd_processor_mf0_ntag_write_emu_page_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t active_slot = tag_emulation_get_slot();
+
+    tag_slot_specific_type_t active_slot_tag_types;
+    tag_emulation_get_specific_types_by_slot(active_slot, &active_slot_tag_types);
+
+    uint8_t nr_pages = nfc_tag_mf0_ntag_get_nr_pages_by_tag_type(active_slot_tag_types.tag_hf);
+    // This means wrong slot type.
+    if (nr_pages <= 0) return data_frame_make(cmd, STATUS_INVALID_SLOT_TYPE, 0, data);
+
+    if (length < 2) return data_frame_make(cmd, STATUS_INVALID_PARAMS, 1, &nr_pages);
+
+    int page_index = data[0];
+    int pages_count = data[1];
+    int byte_length = (int)nr_pages * NFC_TAG_MF0_NTAG_DATA_SIZE;
+
+    if (pages_count == 0) return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+    else if (
+        (page_index >= ((int)nr_pages)) 
+        || (pages_count > (((int)nr_pages) - page_index)) 
+        || (((int)length - 2) < byte_length)
+    ) {
+        return data_frame_make(cmd, STATUS_INVALID_PARAMS, 1, &nr_pages);
+    }
+
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(active_slot_tag_types.tag_hf);
+    nfc_tag_mf0_ntag_information_t *info = (nfc_tag_mf0_ntag_information_t *)buffer->buffer;
+
+    memcpy(&info->memory[page_index][0], &data[2], byte_length);
+
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_read_emu_page_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t active_slot = tag_emulation_get_slot();
+
+    tag_slot_specific_type_t active_slot_tag_types;
+    tag_emulation_get_specific_types_by_slot(active_slot, &active_slot_tag_types);
+
+    uint8_t nr_pages = nfc_tag_mf0_ntag_get_nr_pages_by_tag_type(active_slot_tag_types.tag_hf);
+    // This means wrong slot type.
+    if (nr_pages <= 0) return data_frame_make(cmd, STATUS_INVALID_SLOT_TYPE, 0, data);
+
+    if (length < 2) return data_frame_make(cmd, STATUS_INVALID_PARAMS, 1, &nr_pages);
+
+    int page_index = data[0];
+    int pages_count = data[1];
+
+    if (pages_count == 0) return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+    else if ((page_index >= ((int)nr_pages)) || (pages_count > (((int)nr_pages) - page_index))) {
+        return data_frame_make(cmd, STATUS_INVALID_PARAMS, 1, &nr_pages);
+    }
+
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(active_slot_tag_types.tag_hf);
+    nfc_tag_mf0_ntag_information_t *info = (nfc_tag_mf0_ntag_information_t *)buffer->buffer;
+
+    return data_frame_make(cmd, STATUS_SUCCESS, pages_count * NFC_TAG_MF0_NTAG_DATA_SIZE, &info->memory[page_index][0]);
+}
+
 static data_frame_tx_t *cmd_processor_hf14a_set_anti_coll_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     // uidlen[1]|uid[uidlen]|atqa[2]|sak[1]|atslen[1]|ats[atslen]
     // dynamic length, so no struct
@@ -1129,6 +1188,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_HF14A_GET_ANTI_COLL_DATA,     NULL,                        cmd_processor_hf14a_get_anti_coll_data,      NULL                   },
     {    DATA_CMD_MF0_NTAG_GET_UID_MAGIC_MODE,  NULL,                        cmd_processor_mf0_ntag_get_uid_mode,         NULL                   },
     {    DATA_CMD_MF0_NTAG_SET_UID_MAGIC_MODE,  NULL,                        cmd_processor_mf0_ntag_set_uid_mode,         NULL                   },
+    {    DATA_CMD_MF0_NTAG_READ_EMU_PAGE_DATA,  NULL,                        cmd_processor_mf0_ntag_read_emu_page_data,   NULL                   },
+    {    DATA_CMD_MF0_NTAG_WRITE_EMU_PAGE_DATA, NULL,                        cmd_processor_mf0_ntag_write_emu_page_data,  NULL                   },
 
     {    DATA_CMD_EM410X_SET_EMU_ID,            NULL,                        cmd_processor_em410x_set_emu_id,             NULL                   },
     {    DATA_CMD_EM410X_GET_EMU_ID,            NULL,                        cmd_processor_em410x_get_emu_id,             NULL                   },

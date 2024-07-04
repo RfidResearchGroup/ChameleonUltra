@@ -52,6 +52,7 @@ typedef struct {
 int nfc_tag_mf0_ntag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 int nfc_tag_mf0_ntag_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 bool nfc_tag_mf0_ntag_data_factory(uint8_t slot, tag_specific_type_t tag_type);
+int nfc_tag_mf0_ntag_get_nr_pages_by_tag_type(tag_specific_type_t tag_type);
 
 int nfc_tag_mf0_ntag_get_uid_mode(void);
 bool nfc_tag_mf0_ntag_set_uid_mode(bool enabled);

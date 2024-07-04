@@ -396,6 +396,14 @@ Notes:
 * Command: 1 byte where a non-zero value indicates that UID magic mode should be enabled for the current slot, otherwise disabled.
 * Response: no data
 * CLI: cf `hf mfu econfig --enable-uid-magic`/`hf mfu econfig --disable-uid-magic`
+### 4021: MF0_NTAG_READ_EMU_PAGE_DATA
+* Command: 2 bytes: one for first page index, one for count of pages to be read.
+* Response: `4 * n` bytes where `n` is the number if pages to be read
+* CLI: cf `hf mfu eview`
+### 4022: MF0_NTAG_WRITE_EMU_PAGE_DATA
+* Command: 2 + `n * 4` bytes: one for first page index, one for count of pages to be read, `n * 4` for `n` pages data.
+* Response: no data
+* CLI: unused
 ### 5000: EM410X_SET_EMU_ID
 * Command: 5 bytes. `id[5]`. ID as 5 bytes.
 * Response: no data

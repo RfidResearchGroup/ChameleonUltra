@@ -108,6 +108,8 @@
 #define DATA_CMD_HF14A_GET_ANTI_COLL_DATA       (4018)
 #define DATA_CMD_MF0_NTAG_GET_UID_MAGIC_MODE    (4019)
 #define DATA_CMD_MF0_NTAG_SET_UID_MAGIC_MODE    (4020)
+#define DATA_CMD_MF0_NTAG_READ_EMU_PAGE_DATA    (4021)
+#define DATA_CMD_MF0_NTAG_WRITE_EMU_PAGE_DATA   (4022)
 //
 // ******************************************************************
 
