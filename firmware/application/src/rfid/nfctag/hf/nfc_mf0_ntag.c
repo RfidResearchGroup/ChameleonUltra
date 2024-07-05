@@ -838,6 +838,26 @@ static void handle_pwd_auth_command(uint8_t *p_data) {
     }
 }
 
+static void handle_vcsl_command(uint16_t szDataBits) {
+    switch (m_tag_type) {
+    case TAG_TYPE_MF0UL11:
+    case TAG_TYPE_MF0UL21:
+        if (szDataBits < 168) {
+            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+            break;
+        }
+        break;
+    default:
+        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        break;
+    }
+    
+    int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
+    m_tag_tx_buffer.tx_buffer[0] = m_tag_information->memory[first_cfg_page + CONF_VCTID_PAGE_OFFSET][CONF_VCTID_PAGE_BYTE];
+
+    nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, 1, true);
+}
+
 static void nfc_tag_mf0_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits) {
     uint8_t command = p_data[0];
     uint8_t block_num = p_data[1];
@@ -880,23 +900,8 @@ static void nfc_tag_mf0_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits)
             handle_incr_cnt_command(block_num, &p_data[2]);
             break;
         case CMD_VCSL: {
-            switch (m_tag_type) {
-            case TAG_TYPE_MF0UL11:
-            case TAG_TYPE_MF0UL21:
-                if (szDataBits < 168) {
-                    nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
-                    break;
-                }
-                break;
-            default:
-                nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
-                break;
-            }
-            
-            int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
-            m_tag_tx_buffer.tx_buffer[0] = m_tag_information->memory[first_cfg_page + CONF_VCTID_PAGE_OFFSET][CONF_VCTID_PAGE_BYTE];
-
-            nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, 1, true);
+            handle_vcsl_command(szDataBits);
+            break;
         }
         default:
             nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
