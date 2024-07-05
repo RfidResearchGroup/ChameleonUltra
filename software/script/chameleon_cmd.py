@@ -582,7 +582,6 @@ class ChameleonCMD:
         resp = self.device.send_cmd_sync(Command.MF0_NTAG_READ_EMU_PAGE_DATA, data)
         if len(resp.data) > 0:
             resp.parsed = resp.data[0]
-        print(resp.data)
         return resp
 
     @expect_response(Status.SUCCESS)

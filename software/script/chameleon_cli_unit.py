@@ -1752,6 +1752,33 @@ class HFMFUWRPG(MFUAuthArgsUnit):
         print(f" - Ok")
 
 
+@hf_mfu.command('eview')
+class HFMFUEVIEW(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'MIFARE Ultralight / NTAG view emulator data'
+        return parser
+
+    def get_param(self, args):
+        class Param:
+            def __init__(self):
+                pass
+
+        return Param()
+
+    def on_exec(self, args: argparse.Namespace):
+        param = self.get_param(args)
+
+        nr_pages = self.cmd.mfu_get_emu_pages_count()
+        page = 0
+        while page < nr_pages:
+            count = min(nr_pages - page, 16)
+            data = self.cmd.mfu_read_emu_page_data(page, count)
+            for i in range(0, len(data), 4):
+                print(f"#{page+(i>>2):02x}: {data[i:i+4].hex()}")
+            page += count
+
+
 @hf_mfu.command('rcnt')
 class HFMFURCNT(MFUAuthArgsUnit):
     def args_parser(self) -> ArgumentParserNoExit:
