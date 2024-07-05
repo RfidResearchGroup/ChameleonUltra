@@ -1954,6 +1954,27 @@ class HFMFUVERSION(MFUAuthArgsUnit):
         print(f" - Data: {resp[:8].hex()}")
 
 
+@hf_mfu.command('signature')
+class HFMFUSIGNATURE(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Request MIFARE Ultralight / NTAG ECC signature data.'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        options = {
+            'activate_rf_field': 0,
+            'wait_response': 1,
+            'append_crc': 1,
+            'auto_select': 1,
+            'keep_rf_field': 0,
+            'check_response_crc': 1,
+        }
+
+        resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x3C))
+        print(f" - Data: {resp[:32].hex()}")
+
+
 @hf_mfu.command('econfig')
 class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
