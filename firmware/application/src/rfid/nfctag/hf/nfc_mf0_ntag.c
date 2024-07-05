@@ -75,6 +75,8 @@ NRF_LOG_MODULE_REGISTER();
 #define CONF_AUTH0_BYTE                 0x03
 #define CONF_PWD_PAGE_OFFSET               2
 #define CONF_PACK_PAGE_OFFSET              3
+#define CONF_VCTID_PAGE_OFFSET             1
+#define CONF_VCTID_PAGE_BYTE               1
 
 #define MIRROR_BYTE_BYTE_MASK           0x30
 #define MIRROR_BYTE_BYTE_SHIFT             4
@@ -830,6 +832,25 @@ static void nfc_tag_mf0_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits)
         case CMD_INCR_CNT:
             handle_incr_cnt_command(block_num, &p_data[2]);
             break;
+        case CMD_VCSL: {
+            switch (m_tag_type) {
+            case TAG_TYPE_MF0UL11:
+            case TAG_TYPE_MF0UL21:
+                if (szDataBits < 168) {
+                    nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+                    break;
+                }
+                break;
+            default:
+                nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+                break;
+            }
+            
+            int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
+            m_tag_tx_buffer.tx_buffer[0] = m_tag_information->memory[first_cfg_page + CONF_VCTID_PAGE_OFFSET][CONF_VCTID_PAGE_BYTE];
+
+            nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, 1, true);
+        }
         default:
             nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
             break;
