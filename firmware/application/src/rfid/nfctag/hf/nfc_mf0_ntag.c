@@ -100,6 +100,7 @@ NRF_LOG_MODULE_REGISTER();
 
 // SIGNATURE Length
 #define SIGNATURE_LENGTH                  32
+#define PAGES_PER_VERSION               (NFC_TAG_MF0_NTAG_VER_SIZE / NFC_TAG_MF0_NTAG_DATA_SIZE)
 
 // Since all counters are 24-bit and each currently supported tag that supports counters
 // has password authentication we store the auth attempts counter in the last bit of the
@@ -174,7 +175,7 @@ static int get_nr_pages_by_tag_type(tag_specific_type_t tag_type) {
     return nr_pages;
 }
 
-static int get_nr_mem_pages_by_tag_type(tag_specific_type_t tag_type) {
+static int get_total_pages_by_tag_type(tag_specific_type_t tag_type) {
     int nr_pages = 0;
 
     switch (tag_type) {
@@ -185,19 +186,19 @@ static int get_nr_mem_pages_by_tag_type(tag_specific_type_t tag_type) {
             nr_pages = MF0ICU2_PAGES;
             break;
         case TAG_TYPE_MF0UL11:
-            nr_pages = MF0UL11_PAGES_WITH_CTRS;
+            nr_pages = MF0UL11_TOTAL_PAGES;
             break;
         case TAG_TYPE_MF0UL21:
-            nr_pages = MF0UL21_PAGES_WITH_CTRS;
+            nr_pages = MF0UL21_TOTAL_PAGES;
             break;
         case TAG_TYPE_NTAG_213:
-            nr_pages = NTAG213_PAGES_WITH_CTR;
+            nr_pages = NTAG213_TOTAL_PAGES;
             break;
         case TAG_TYPE_NTAG_215:
-            nr_pages = NTAG215_PAGES_WITH_CTR;
+            nr_pages = NTAG215_TOTAL_PAGES;
             break;
         case TAG_TYPE_NTAG_216:
-            nr_pages = NTAG216_PAGES_WITH_CTR;
+            nr_pages = NTAG216_TOTAL_PAGES;
             break;
         default:
             ASSERT(false);
@@ -260,51 +261,98 @@ static bool is_ntag() {
     }
 }
 
-static void handle_get_version_command() {
-    NRF_LOG_DEBUG("handling GET_VERSION");
+int get_version_page_by_tag_type(tag_specific_type_t tag_type) {
+    int version_page_off;
+
+    switch (tag_type) {
+        case TAG_TYPE_MF0UL11:
+            version_page_off = MF0UL11_PAGES + MF0ULx1_NUM_CTRS;
+            break;
+        case TAG_TYPE_MF0UL21:
+            version_page_off = MF0UL21_PAGES + MF0ULx1_NUM_CTRS;
+            break;
+        case TAG_TYPE_NTAG_213:
+            version_page_off = NTAG213_PAGES + NTAG_NUM_CTRS;
+            break;
+        case TAG_TYPE_NTAG_215:
+            version_page_off = NTAG215_PAGES + NTAG_NUM_CTRS;
+            break;
+        case TAG_TYPE_NTAG_216:
+            version_page_off = NTAG216_PAGES + NTAG_NUM_CTRS;
+            break;
+        default:
+            version_page_off = -1;
+            break;
+    }
+
+    return version_page_off;
+}
+
+int get_signature_page_by_tag_type(tag_specific_type_t tag_type) {
+    int version_page_off;
 
     switch (m_tag_type) {
         case TAG_TYPE_MF0UL11:
-            m_tag_tx_buffer.tx_buffer[6] = MF0UL11_VERSION_STORAGE_SIZE;
-            m_tag_tx_buffer.tx_buffer[2] = MF0ULx1_VERSION_PRODUCT_TYPE;
+            version_page_off = MF0UL11_PAGES + MF0ULx1_NUM_CTRS + PAGES_PER_VERSION;
             break;
         case TAG_TYPE_MF0UL21:
-            m_tag_tx_buffer.tx_buffer[6] = MF0UL21_VERSION_STORAGE_SIZE;
-            m_tag_tx_buffer.tx_buffer[2] = MF0ULx1_VERSION_PRODUCT_TYPE;
+            version_page_off = MF0UL21_PAGES + MF0ULx1_NUM_CTRS + PAGES_PER_VERSION;
             break;
         case TAG_TYPE_NTAG_213:
-            m_tag_tx_buffer.tx_buffer[6] = NTAG213_VERSION_STORAGE_SIZE;
-            m_tag_tx_buffer.tx_buffer[2] = NTAG_VERSION_PRODUCT_TYPE;
+            version_page_off = NTAG213_PAGES + NTAG_NUM_CTRS + PAGES_PER_VERSION;
             break;
         case TAG_TYPE_NTAG_215:
-            m_tag_tx_buffer.tx_buffer[6] = NTAG215_VERSION_STORAGE_SIZE;
-            m_tag_tx_buffer.tx_buffer[2] = NTAG_VERSION_PRODUCT_TYPE;
+            version_page_off = NTAG215_PAGES + NTAG_NUM_CTRS + PAGES_PER_VERSION;
             break;
         case TAG_TYPE_NTAG_216:
-            m_tag_tx_buffer.tx_buffer[6] = NTAG216_VERSION_STORAGE_SIZE;
-            m_tag_tx_buffer.tx_buffer[2] = NTAG_VERSION_PRODUCT_TYPE;
+            version_page_off = NTAG216_PAGES + NTAG_NUM_CTRS + PAGES_PER_VERSION;
             break;
         default:
-            NRF_LOG_WARNING("current card type does not support GET_VERSION");
-            // MF0ICU1 and MF0ICU2 do not support GET_VERSION
-            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
-            return;
+            version_page_off = -1;
+            break;
     }
 
-    m_tag_tx_buffer.tx_buffer[0] = VERSION_FIXED_HEADER;
-    m_tag_tx_buffer.tx_buffer[1] = VERSION_VENDOR_ID;
-    m_tag_tx_buffer.tx_buffer[3] = VERSION_PRODUCT_SUBTYPE_50pF; // TODO: make configurable for MF0ULx1
-    m_tag_tx_buffer.tx_buffer[4] = VERSION_MAJOR_PRODUCT;
-    m_tag_tx_buffer.tx_buffer[5] = VERSION_MINOR_PRODUCT;
-    m_tag_tx_buffer.tx_buffer[7] = VERSION_PROTOCOL_TYPE;
+    return version_page_off;
+}
 
-    NRF_LOG_INFO(
-        "replying with %08x%08x", 
-        U32HTONL(*(uint32_t *)&m_tag_tx_buffer.tx_buffer[0]),
-        U32HTONL(*(uint32_t *)&m_tag_tx_buffer.tx_buffer[1])
-    );
+uint8_t *nfc_tag_mf0_ntag_get_version_data() {
+    int version_page = get_version_page_by_tag_type(m_tag_type);
 
-    nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, 8, true);
+    if (version_page > 0) return &m_tag_information->memory[version_page][0];
+    else return NULL;
+}
+
+uint8_t *nfc_tag_mf0_ntag_get_signature_data() {
+    int signature_page = get_signature_page_by_tag_type(m_tag_type);
+
+    if (signature_page > 0) return &m_tag_information->memory[signature_page][0];
+    else return NULL;
+}
+
+static void handle_get_version_command() {
+    int version_page = get_version_page_by_tag_type(m_tag_type);
+
+    if (version_page > 0) {
+        memcpy(m_tag_tx_buffer.tx_buffer, &m_tag_information->memory[version_page][0], NFC_TAG_MF0_NTAG_VER_SIZE);
+        nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, NFC_TAG_MF0_NTAG_VER_SIZE, true);
+    } else {
+        NRF_LOG_WARNING("current card type does not support GET_VERSION");
+        // MF0ICU1 and MF0ICU2 do not support GET_VERSION
+        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+    }
+}
+
+static void handle_read_sig_command() {
+    int signature_page = get_signature_page_by_tag_type(m_tag_type);
+
+    if (signature_page > 0) {
+        memcpy(m_tag_tx_buffer.tx_buffer, &m_tag_information->memory[signature_page][0], NFC_TAG_MF0_NTAG_SIG_SIZE);
+        nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, NFC_TAG_MF0_NTAG_SIG_SIZE, true);
+    } else {
+        NRF_LOG_WARNING("current card type does not support READ_SIG");
+        // MF0ICU1 and MF0ICU2 do not support READ_SIG
+        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+    }
 }
 
 static int mirror_size_for_mode(uint8_t mirror_mode) {
@@ -360,23 +408,23 @@ static uint8_t *get_counter_data_by_index(uint8_t index) {
     switch (m_tag_type) {
         case TAG_TYPE_MF0UL11:
             ctr_page_off = MF0UL11_PAGES;
-            ctr_page_end = MF0UL11_PAGES_WITH_CTRS;
+            ctr_page_end = ctr_page_off + MF0ULx1_NUM_CTRS;
             break;
         case TAG_TYPE_MF0UL21:
             ctr_page_off = MF0UL21_PAGES;
-            ctr_page_end = MF0UL21_PAGES_WITH_CTRS;
+            ctr_page_end = ctr_page_off + MF0ULx1_NUM_CTRS;
             break;
         case TAG_TYPE_NTAG_213:
             ctr_page_off = NTAG213_PAGES;
-            ctr_page_end = NTAG213_PAGES_WITH_CTR;
+            ctr_page_end = ctr_page_off + NTAG_NUM_CTRS;
             break;
         case TAG_TYPE_NTAG_215:
             ctr_page_off = NTAG215_PAGES;
-            ctr_page_end = NTAG215_PAGES_WITH_CTR;
+            ctr_page_end = ctr_page_off + NTAG_NUM_CTRS;
             break;
         case TAG_TYPE_NTAG_216:
             ctr_page_off = NTAG216_PAGES;
-            ctr_page_end = NTAG216_PAGES_WITH_CTR;
+            ctr_page_end = ctr_page_off + NTAG_NUM_CTRS;
             break;
         default:
             nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
@@ -723,11 +771,11 @@ static void handle_incr_cnt_command(uint8_t block_num, uint8_t *p_data) {
     switch (m_tag_type) {
         case TAG_TYPE_MF0UL11:
             ctr_page_off = MF0UL11_PAGES;
-            ctr_page_end = MF0UL11_PAGES_WITH_CTRS;
+            ctr_page_end = ctr_page_off + MF0ULx1_NUM_CTRS;
             break;
         case TAG_TYPE_MF0UL21:
             ctr_page_off = MF0UL21_PAGES;
-            ctr_page_end = MF0UL21_PAGES_WITH_CTRS;
+            ctr_page_end = ctr_page_off + MF0ULx1_NUM_CTRS;
             break;
         default:
             nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
@@ -823,8 +871,7 @@ static void nfc_tag_mf0_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits)
             break;
         }
         case CMD_READ_SIG:
-            memset(m_tag_tx_buffer.tx_buffer, 0xCA, SIGNATURE_LENGTH);
-            nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, SIGNATURE_LENGTH, true);
+            handle_read_sig_command();
             break;
         case CMD_READ_CNT:
             handle_read_cnt_command(block_num);
@@ -875,7 +922,7 @@ static void nfc_tag_mf0_ntag_reset_handler() {
 }
 
 static int get_information_size_by_tag_type(tag_specific_type_t type) {
-    return sizeof(nfc_tag_14a_coll_res_entity_t) + sizeof(nfc_tag_mf0_ntag_configure_t) + (get_nr_mem_pages_by_tag_type(type) * NFC_TAG_MF0_NTAG_DATA_SIZE);
+    return sizeof(nfc_tag_14a_coll_res_entity_t) + sizeof(nfc_tag_mf0_ntag_configure_t) + (get_total_pages_by_tag_type(type) * NFC_TAG_MF0_NTAG_DATA_SIZE);
 }
 
 /** @brief MF0/NTAG callback before saving data
@@ -978,6 +1025,49 @@ bool nfc_tag_mf0_ntag_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
             ASSERT(false);
             break;
         }
+    }
+
+    int version_page = get_version_page_by_tag_type(tag_type);
+    if (version_page > 0) {
+        uint8_t *version_data = &p_ntag_information->memory[version_page][0];
+
+        switch (m_tag_type) {
+        case TAG_TYPE_MF0UL11:
+            version_data[6] = MF0UL11_VERSION_STORAGE_SIZE;
+            version_data[2] = MF0ULx1_VERSION_PRODUCT_TYPE;
+            break;
+        case TAG_TYPE_MF0UL21:
+            version_data[6] = MF0UL21_VERSION_STORAGE_SIZE;
+            version_data[2] = MF0ULx1_VERSION_PRODUCT_TYPE;
+            break;
+        case TAG_TYPE_NTAG_213:
+            version_data[6] = NTAG213_VERSION_STORAGE_SIZE;
+            version_data[2] = NTAG_VERSION_PRODUCT_TYPE;
+            break;
+        case TAG_TYPE_NTAG_215:
+            version_data[6] = NTAG215_VERSION_STORAGE_SIZE;
+            version_data[2] = NTAG_VERSION_PRODUCT_TYPE;
+            break;
+        case TAG_TYPE_NTAG_216:
+            version_data[6] = NTAG216_VERSION_STORAGE_SIZE;
+            version_data[2] = NTAG_VERSION_PRODUCT_TYPE;
+            break;
+        default:
+            ASSERT(false);
+            break;
+        }
+
+        version_data[0] = VERSION_FIXED_HEADER;
+        version_data[1] = VERSION_VENDOR_ID;
+        version_data[3] = VERSION_PRODUCT_SUBTYPE_50pF; // TODO: make configurable for MF0ULx1
+        version_data[4] = VERSION_MAJOR_PRODUCT;
+        version_data[5] = VERSION_MINOR_PRODUCT;
+        version_data[7] = VERSION_PROTOCOL_TYPE;
+    }
+
+    int signature_page = get_signature_page_by_tag_type(tag_type);
+    if (signature_page > 0) {
+        memset(&p_ntag_information->memory[signature_page][0], 0, NFC_TAG_MF0_NTAG_SIG_SIZE);
     }
 
     // default ntag auto ant-collision res

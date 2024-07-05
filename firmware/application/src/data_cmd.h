@@ -110,6 +110,10 @@
 #define DATA_CMD_MF0_NTAG_SET_UID_MAGIC_MODE    (4020)
 #define DATA_CMD_MF0_NTAG_READ_EMU_PAGE_DATA    (4021)
 #define DATA_CMD_MF0_NTAG_WRITE_EMU_PAGE_DATA   (4022)
+#define DATA_CMD_MF0_NTAG_GET_VERSION_DATA      (4023)
+#define DATA_CMD_MF0_NTAG_SET_VERSION_DATA      (4024)
+#define DATA_CMD_MF0_NTAG_GET_SIGNATURE_DATA    (4025)
+#define DATA_CMD_MF0_NTAG_SET_SIGNATURE_DATA    (4026)
 //
 // ******************************************************************
 

@@ -404,6 +404,22 @@ Notes:
 * Command: 2 + `n * 4` bytes: one for first page index, one for count of pages to be read, `n * 4` for `n` pages data.
 * Response: no data
 * CLI: unused
+### 4023: MF0_NTAG_GET_VERSION_DATA
+* Command: no data
+* Response: 8 version data bytes.
+* CLI: cf `hf mfu econfig`
+### 4024: MF0_NTAG_SET_VERSION_DATA
+* Command: 8 version data bytes.
+* Response: no data
+* CLI: cf `hf mfu econfig --set-version <hex>`
+### 4025: MF0_NTAG_GET_SIGNATURE_DATA
+* Command: no data
+* Response: 32 signature data bytes.
+* CLI: cf `hf mfu econfig`
+### 4026: MF0_NTAG_SET_SIGNATURE_DATA
+* Command: 32 signature data bytes.
+* Response: no data
+* CLI: cf `hf mfu econfig --set-signature <hex>`
 ### 5000: EM410X_SET_EMU_ID
 * Command: 5 bytes. `id[5]`. ID as 5 bytes.
 * Response: no data

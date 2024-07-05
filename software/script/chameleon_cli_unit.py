@@ -1934,9 +1934,9 @@ class HFMFUDUMP(MFUAuthArgsUnit):
 
 
 @hf_mfu.command('version')
-class HFMFUVERSION(MFUAuthArgsUnit):
+class HFMFUVERSION(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
-        parser = super().args_parser()
+        parser = ArgumentParserNoExit()
         parser.description = 'Request MIFARE Ultralight / NTAG version data.'
         return parser
 
@@ -1985,9 +1985,39 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
         uid_magic_group = parser.add_mutually_exclusive_group()
         uid_magic_group.add_argument('--enable-uid-magic', action='store_true', help="Enable UID magic mode")
         uid_magic_group.add_argument('--disable-uid-magic', action='store_true', help="Disable UID magic mode")
+        parser.add_argument('--set-version', type=bytes.fromhex, help="Set data to be returned by the GET_VERSION command.")
+        parser.add_argument('--set-signature', type=bytes.fromhex, help="Set data to be returned by the READ_SIG command.")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
+        aux_data_changed = False
+        
+        if args.set_version is not None:
+            aux_data_changed = True
+
+            if len(args.set_version) != 8:
+                print(f"{CR}Version data should be 8 bytes long.{C0}")
+                return
+            
+            try:
+                self.cmd.mf0_ntag_set_version_data(args.set_version)
+            except:
+                print(f"{CR}Tag type does not support GET_VERSION command.{C0}")
+                return
+
+        if args.set_signature is not None:
+            aux_data_changed = True
+
+            if len(args.set_signature) != 32:
+                print(f"{CR}Signature data should be 32 bytes long.{C0}")
+                return
+            
+            try:
+                self.cmd.mf0_ntag_set_signature_data(args.set_signature)
+            except:
+                print(f"{CR}Tag type does not support READ_SIG command.{C0}")
+                return
+
         # collect current settings
         anti_coll_data = self.cmd.hf14a_get_anti_coll_data()
         if len(anti_coll_data) == 0:
@@ -2024,9 +2054,9 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
         else:
             magic_mode = self.cmd.mf0_ntag_get_uid_magic_mode()
 
-        if change_done:
+        if change_done or aux_data_changed:
             print(' - MFU/NTAG Emulator settings updated')
-        if not change_requested:
+        if not (change_requested or aux_data_changed):
             print(f'- {"Type:":40}{CY}{hf_tag_type}{C0}')
             print(f'- {"UID:":40}{CY}{uid.hex().upper()}{C0}')
             print(f'- {"ATQA:":40}{CY}{atqa.hex().upper()} '
@@ -2038,6 +2068,18 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
                 print(f'- {"UID Magic:":40}{CY}enabled{C0}')
             else:
                 print(f'- {"UID Magic:":40}{CY}disabled{C0}')
+            
+            try:
+                version = self.cmd.mf0_ntag_get_version_data()
+                print(f'- {"Version:":40}{CY}{version.hex().upper()}{C0}')
+            except:
+                pass
+            
+            try:
+                signature = self.cmd.mf0_ntag_get_signature_data()
+                print(f'- {"Signature:":40}{CY}{signature.hex().upper()}{C0}')
+            except:
+                pass
 
 
 @lf_em_410x.command('read')
