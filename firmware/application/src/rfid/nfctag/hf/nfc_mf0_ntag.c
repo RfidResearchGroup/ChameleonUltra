@@ -104,8 +104,11 @@ NRF_LOG_MODULE_REGISTER();
 
 // Since all counters are 24-bit and each currently supported tag that supports counters
 // has password authentication we store the auth attempts counter in the last bit of the
-// first counter.
+// first counter. AUTHLIM is only 3 bits though so we reserve 4 bits just to be sure and
+// use the top bit for tearing event flag.
 #define AUTHLIM_OFF_IN_CTR                 3
+#define AUTHLIM_MASK_IN_CTR              0xF
+#define TEARING_MASK_IN_AUTHLIM         0x80
 
 // Values for MIRROR_CONF
 #define MIRROR_CONF_DISABLED               0
@@ -791,14 +794,20 @@ static void handle_incr_cnt_command(uint8_t block_num, uint8_t *p_data) {
     uint32_t incr_value = ((uint32_t)p_data[0] << 16) | ((uint32_t)p_data[1] << 8) | ((uint32_t)p_data[2]);
     uint32_t cnt = ((uint32_t)cnt_data[0] << 16) | ((uint32_t)cnt_data[1] << 8) | ((uint32_t)cnt_data[2]);
 
-    if ((0xFFFFFF - cnt) < incr_value) cnt = 0xFFFFFF;
-    else cnt += incr_value;
+    if ((0xFFFFFF - cnt) < incr_value) {
+        // set tearing event flag
+        cnt_data[AUTHLIM_OFF_IN_CTR] |= TEARING_MASK_IN_AUTHLIM;
+        
+        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+    } else {
+        cnt += incr_value;
 
-    cnt_data[0] = (uint8_t)(cnt >> 16);
-    cnt_data[1] = (uint8_t)(cnt >> 8);
-    cnt_data[2] = (uint8_t)(cnt & 0xff);
+        cnt_data[0] = (uint8_t)(cnt >> 16);
+        cnt_data[1] = (uint8_t)(cnt >> 8);
+        cnt_data[2] = (uint8_t)(cnt & 0xff);
 
-    nfc_tag_14a_tx_nbit(ACK_VALUE, 4);
+        nfc_tag_14a_tx_nbit(ACK_VALUE, 4);
+    }
 }
 
 static void handle_pwd_auth_command(uint8_t *p_data) {
@@ -810,7 +819,7 @@ static void handle_pwd_auth_command(uint8_t *p_data) {
     }
 
     // check AUTHLIM counter
-    uint8_t auth_cnt = cnt_data[AUTHLIM_OFF_IN_CTR];
+    uint8_t auth_cnt = cnt_data[AUTHLIM_OFF_IN_CTR] & AUTHLIM_MASK_IN_CTR;
     uint8_t auth_lim = m_tag_information->memory[first_cfg_page + 1][0] & CONF_ACCESS_AUTHLIM_MASK;
     if ((auth_lim > 0) && (auth_lim <= auth_cnt)) {
         nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
@@ -820,7 +829,7 @@ static void handle_pwd_auth_command(uint8_t *p_data) {
     uint32_t pwd = *(uint32_t *)m_tag_information->memory[first_cfg_page + CONF_PWD_PAGE_OFFSET];
     uint32_t supplied_pwd = *(uint32_t *)&p_data[1];
     if (pwd != supplied_pwd) {
-        if (auth_lim) cnt_data[AUTHLIM_OFF_IN_CTR] = auth_cnt + 1;
+        if (auth_lim) cnt_data[AUTHLIM_OFF_IN_CTR] |= (auth_cnt + 1) & AUTHLIM_MASK_IN_CTR;
         nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
         return;
     }
@@ -834,6 +843,27 @@ static void handle_pwd_auth_command(uint8_t *p_data) {
         nfc_tag_14a_tx_bytes(ntagPwdOK, 2, true);
     } else {
         nfc_tag_14a_tx_bytes(m_tag_information->memory[first_cfg_page + CONF_PACK_PAGE_OFFSET], 2, true);
+    }
+}
+
+static void handle_check_tearing_event(int index) {
+    switch (m_tag_type) {
+    case TAG_TYPE_MF0UL11:
+    case TAG_TYPE_MF0UL21: {
+        uint8_t *ctr_data = get_counter_data_by_index(index);
+
+        if (ctr_data) {
+            m_tag_tx_buffer.tx_buffer[0] = (ctr_data[AUTHLIM_OFF_IN_CTR] & TEARING_MASK_IN_AUTHLIM) == 0 ? 0xBD : 0x00;
+            nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, 1, true);
+        } else {
+            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        }
+
+        break;
+    }
+    default:
+        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        break;
     }
 }
 
@@ -897,6 +927,9 @@ static void nfc_tag_mf0_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits)
             break;
         case CMD_INCR_CNT:
             handle_incr_cnt_command(block_num, &p_data[2]);
+            break;
+        case CMD_CHECK_TEARING_EVENT:
+            handle_check_tearing_event(block_num);
             break;
         case CMD_VCSL: {
             handle_vcsl_command(szDataBits);
