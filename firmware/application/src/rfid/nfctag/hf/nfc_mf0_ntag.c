@@ -427,7 +427,6 @@ static uint8_t *get_counter_data_by_index(uint8_t index) {
             ctr_page_end = ctr_page_off + NTAG_NUM_CTRS;
             break;
         default:
-            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
             return NULL;
     }
 
