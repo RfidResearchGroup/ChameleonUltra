@@ -796,7 +796,7 @@ static data_frame_tx_t *cmd_processor_mf0_ntag_write_emu_page_data(uint16_t cmd,
     tag_slot_specific_type_t active_slot_tag_types;
     tag_emulation_get_specific_types_by_slot(active_slot, &active_slot_tag_types);
 
-    uint8_t nr_pages = nfc_tag_mf0_ntag_get_nr_pages_by_tag_type(active_slot_tag_types.tag_hf);
+    int nr_pages = nfc_tag_mf0_ntag_get_nr_pages_by_tag_type(active_slot_tag_types.tag_hf);
     // This means wrong slot type.
     if (nr_pages <= 0) return data_frame_make(cmd, STATUS_INVALID_SLOT_TYPE, 0, data);
 
@@ -829,7 +829,7 @@ static data_frame_tx_t *cmd_processor_mf0_ntag_read_emu_page_data(uint16_t cmd, 
     tag_slot_specific_type_t active_slot_tag_types;
     tag_emulation_get_specific_types_by_slot(active_slot, &active_slot_tag_types);
 
-    uint8_t nr_pages = nfc_tag_mf0_ntag_get_nr_pages_by_tag_type(active_slot_tag_types.tag_hf);
+    int nr_pages = nfc_tag_mf0_ntag_get_nr_pages_by_tag_type(active_slot_tag_types.tag_hf);
     // This means wrong slot type.
     if (nr_pages <= 0) return data_frame_make(cmd, STATUS_INVALID_SLOT_TYPE, 0, data);
 
