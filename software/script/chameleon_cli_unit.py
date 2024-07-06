@@ -1971,7 +1971,7 @@ class HFMFUSIGNATURE(ReaderRequiredUnit):
             'check_response_crc': 1,
         }
 
-        resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x3C))
+        resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x3C, 0x00))
         print(f" - Data: {resp[:32].hex()}")
 
 
