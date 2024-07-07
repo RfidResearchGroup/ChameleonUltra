@@ -1767,6 +1767,64 @@ class HFMFUEVIEW(DeviceRequiredUnit):
             page += count
 
 
+@hf_mfu.command('eload')
+class HFMFUELOAD(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'MIFARE Ultralight / NTAG load emulator data'
+        parser.add_argument(
+            '-f', '--file', required=True, type=str, help="File to load data from."
+        )
+        return parser
+
+    def get_param(self, args):
+        class Param:
+            def __init__(self):
+                pass
+
+        return Param()
+
+    def on_exec(self, args: argparse.Namespace):
+        param = self.get_param(args)
+
+        if args.file.endswith('.eml'):
+            with open(args.file, 'r') as f:
+                data = f.read()
+            data = re.sub('#.*$', '', data, flags=re.MULTILINE)
+            data = bytes.fromhex(data)
+        else:
+            with open(args.file, 'rb') as f:
+                data = f.read()
+
+        # this will throw an exception on incorrect slot type
+        nr_pages = self.cmd.mfu_get_emu_pages_count()
+        size = nr_pages * 4
+        if len(data) > size:
+            print(f"{CR}Dump file is too large for the current slot (expected {size} bytes).{C0}")
+            return
+        elif (len(data) % 4) > 0:
+            print(f"{CR}Dump file's length is not a multiple of 4 bytes.{C0}")
+            return
+        elif len(data) < size:
+            print(f"{CY}Dump file is smaller than the current slot's memory ({len(data)} < {size}).{C0}")
+        
+        nr_pages = len(data) >> 2
+        page = 0
+        while page < nr_pages:
+            offset = page * 4
+            cur_count = min(16, nr_pages - page)
+
+            if offset >= len(data):
+                page_data = bytes.fromhex("00000000") * cur_count
+            else:
+                page_data = data[offset:offset + 4 * cur_count]
+            
+            self.cmd.mfu_write_emu_page_data(page, page_data)
+            page += cur_count
+        
+        print(f" - Ok")
+
+
 @hf_mfu.command('rcnt')
 class HFMFURCNT(MFUAuthArgsUnit):
     def args_parser(self) -> ArgumentParserNoExit:

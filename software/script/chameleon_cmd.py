@@ -595,6 +595,20 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
+    def mfu_write_emu_page_data(self, page_start: int, data: bytes):
+        """
+            Gets data for selected block range
+        """
+        count = len(data) >> 2
+
+        assert (len(data) % 4) == 0
+        assert (page_start >= 0) and (count + page_start) <= 256
+
+        data = struct.pack('!BB', page_start, count) + data
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_WRITE_EMU_PAGE_DATA, data)
+        return resp
+
+    @expect_response(Status.SUCCESS)
     def hf14a_set_anti_coll_data(self, uid: bytes, atqa: bytes, sak: bytes, ats: bytes = b''):
         """
         Set anti-collision data of current HF slot (UID/SAK/ATQA/ATS).
