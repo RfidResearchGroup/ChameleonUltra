@@ -125,8 +125,6 @@ NRF_LOG_MODULE_REGISTER();
 // 0x11 ntag215
 // 0x13 ntag216
 const uint8_t ntagVersion[8] = {0x00, 0x04, 0x04, 0x02, 0x01, 0x00, 0x11, 0x03};
-/* pwd auth for amiibo */
-uint8_t ntagPwdOK[2] = {0x80, 0x80};
 
 // Data structure pointer to the label information
 static nfc_tag_mf0_ntag_information_t *m_tag_information = NULL;
@@ -839,11 +837,7 @@ static void handle_pwd_auth_command(uint8_t *p_data) {
     m_tag_authenticated = true; // TODO: this should be possible to reset somehow
 
     // Send the PACK value back
-    if (m_tag_information->config.mode_uid_magic) {
-        nfc_tag_14a_tx_bytes(ntagPwdOK, 2, true);
-    } else {
-        nfc_tag_14a_tx_bytes(m_tag_information->memory[first_cfg_page + CONF_PACK_PAGE_OFFSET], 2, true);
-    }
+    nfc_tag_14a_tx_bytes(m_tag_information->memory[first_cfg_page + CONF_PACK_PAGE_OFFSET], 2, true);
 }
 
 static void handle_check_tearing_event(int index) {
