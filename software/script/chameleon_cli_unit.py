@@ -328,16 +328,42 @@ class HF14AAntiCollArgsUnit(DeviceRequiredUnit):
 class MFUAuthArgsUnit(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        # TODO:
-        #     -k, --key <hex>                Authentication key (UL-C 16 bytes, EV1/NTAG 4 bytes)
-        #     -l                             Swap entered key's endianness
+
+        def key_parser(key: str) -> bytes:
+            try:
+                key = bytes.fromhex(key)
+            except:
+                raise ValueError("Key should be a hex string")
+            
+            if len(key) not in [4, 16]:
+                raise ValueError("Key should either be 4 or 16 bytes long")
+            elif len(key) == 16:
+                raise ValueError("Ultralight-C authentication isn't supported yet")
+
+            return key
+        
+        parser.add_argument(
+            '-k', '--key', type=key_parser, metavar="<hex>", help="Authentication key (EV1/NTAG 4 bytes)."
+        )
+        parser.add_argument('-l', action='store_true', dest='swap_endian', help="Swap endianness of the key.")
+
         return parser
 
     def get_param(self, args):
+        key = args.key
+
+        if key is not None and args.swap_endian:
+            key = bytearray(key)
+            for i in range(len(key)):
+                tmp = key[i]
+                key[i] = key[len(key) - 1 - i]
+            key = bytes(key)
+
         class Param:
-            def __init__(self):
-                pass
-        return Param()
+            def __init__(self, key):
+                self.key = key
+
+        return Param(key)
 
     def on_exec(self, args: argparse.Namespace):
         raise NotImplementedError("Please implement this")
@@ -1651,24 +1677,7 @@ class HFMFURDPG(MFUAuthArgsUnit):
         parser.description = 'MIFARE Ultralight / NTAG read one page'
         parser.add_argument('-p', '--page', type=int, required=True, metavar="<dec>",
                             help="The page where the key will be used against")
-        parser.add_argument('-P', '--pwd', type=str, required=False, metavar="<hex>",
-                            help="Ultralight EV1 / NTAG password, as a 4 byte (8 character) hex string.")
         return parser
-
-    def get_param(self, args):
-        if args.pwd is not None:
-            pwd = bytes.fromhex(args.pwd)
-            if len(pwd) != 4:
-                raise LengthError("Invalid MFU EV 1 / NTAG password data length.")
-        else:
-            pwd = None
-        
-        class Param:
-            def __init__(self):
-                self.page = args.page
-                self.pwd = pwd
-
-        return Param()
 
     def on_exec(self, args: argparse.Namespace):
         param = self.get_param(args)
@@ -1682,14 +1691,14 @@ class HFMFURDPG(MFUAuthArgsUnit):
             'check_response_crc': 1,
         }
 
-        if param.pwd is not None:
+        if param.key is not None:
             options['keep_rf_field'] = 1
-            resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.pwd)
+            resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.key)
             options['keep_rf_field'] = 0
             options['auto_select'] = 0
             print(f" - PACK: {resp[:2].hex()}")
 
-        resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x30, param.page))
+        resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x30, args.page))
         print(f" - Data: {resp[:4].hex()}")
 
 
@@ -1700,37 +1709,16 @@ class HFMFUWRPG(MFUAuthArgsUnit):
         parser.description = 'MIFARE Ultralight / NTAG write one page'
         parser.add_argument('-p', '--page', type=int, required=True, metavar="<dec>",
                             help="The index of the page to write to.")
-        parser.add_argument('-d', '--data', type=str, required=True, metavar="<hex>",
+        parser.add_argument('-d', '--data', type=bytes.fromhex, required=True, metavar="<hex>",
                             help="Your page data, as a 4 byte (8 character) hex string.")
-        parser.add_argument('-P', '--pwd', type=str, required=False, metavar="<hex>",
-                            help="Ultralight EV1 / NTAG password, as a 4 byte (8 character) hex string.")
         return parser
 
-    def get_param(self, args):
-        data = bytes.fromhex(args.data)
-        if len(data) != 4:
-            raise LengthError("Invalid MF0 / NTAG page data length.")
-        
-        if args.pwd is not None:
-            pwd = bytes.fromhex(args.pwd)
-            if len(pwd) != 4:
-                raise LengthError("Invalid MFU EV 1 / NTAG password data length.")
-        else:
-            pwd = None
-        
-        class Param:
-            def __init__(self):
-                self.page = args.page
-                self.data = data
-                self.pwd = pwd
-
-        return Param()
-
     def on_exec(self, args: argparse.Namespace):
-        try:
-            param = self.get_param(args)
-        except:
-            print(f"{CR}Page data and password should be 4 byte (8 character) hex strings.{C0}")
+        param = self.get_param(args)
+
+        data = args.data
+        if len(data) != 4:
+            print(f"{CR}Page data should be a 4 byte (8 character) hex string{C0}")
 
         options = {
             'activate_rf_field': 0,
@@ -1741,14 +1729,14 @@ class HFMFUWRPG(MFUAuthArgsUnit):
             'check_response_crc': 1,
         }
         
-        if param.pwd is not None:
+        if param.key is not None:
             options['keep_rf_field'] = 1
-            resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.pwd)
+            resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.key)
             options['keep_rf_field'] = 0
             options['auto_select'] = 0
             print(f" - PACK: {resp[:2].hex()}")
         
-        resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0xA2, param.page)+param.data)
+        resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0xA2, args.page)+data)
         print(f" - Ok")
 
 
@@ -1786,24 +1774,7 @@ class HFMFURCNT(MFUAuthArgsUnit):
         parser.description = 'MIFARE Ultralight / NTAG read counter'
         parser.add_argument('-c', '--counter', type=int, required=True, metavar="<dec>",
                             help="Index of the counter to read (always 0 for NTAG, 0-2 for Ultralight EV1).")
-        parser.add_argument('-P', '--pwd', type=str, required=False, metavar="<hex>",
-                            help="NTAG password, as a 4 byte (8 character) hex string.")
         return parser
-
-    def get_param(self, args):
-        if args.pwd is not None:
-            pwd = bytes.fromhex(args.pwd)
-            if len(pwd) != 4:
-                raise LengthError("Invalid MFU EV 1 / NTAG password data length.")
-        else:
-            pwd = None
-        
-        class Param:
-            def __init__(self):
-                self.counter = args.counter
-                self.pwd = pwd
-
-        return Param()
 
     def on_exec(self, args: argparse.Namespace):
         param = self.get_param(args)
@@ -1817,9 +1788,9 @@ class HFMFURCNT(MFUAuthArgsUnit):
             'check_response_crc': 1,
         }
 
-        if param.pwd is not None:
+        if param.key is not None:
             options['keep_rf_field'] = 1
-            resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.pwd)
+            resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.key)
             options['keep_rf_field'] = 0
             options['auto_select'] = 0
             print(f" - PACK: {resp[:2].hex()}")
@@ -1839,42 +1810,23 @@ class HFMFUDUMP(MFUAuthArgsUnit):
                             help="Manually set number of pages to dump")
         parser.add_argument('-f', '--file', type=str, required=False, default="",
                             help="Specify a filename for dump file")
-        parser.add_argument('-P', '--pwd', type=str, required=False, metavar="<hex>",
-                            help="Ultralight EV1 / NTAG password, as a 4 byte (8 character) hex string.")
         return parser
-
-    def get_param(self, args):
-        if args.pwd is not None:
-            pwd = bytes.fromhex(args.pwd)
-            if len(pwd) != 4:
-                raise LengthError("Invalid MFU EV 1 / NTAG password data length.")
-        else:
-            pwd = None
-        
-        class Param:
-            def __init__(self):
-                self.start_page = args.page
-
-                if args.qty is None:
-                    self.stop_page = 256
-                else:
-                    self.stop_page = min(args.page + args.qty, 256)
-                
-                self.output_file = args.file
-                self.pwd = pwd
-                
-        return Param()
 
     def on_exec(self, args: argparse.Namespace):
         param = self.get_param(args)
         fd = None
         save_as_eml = False
-        if param.output_file != "":
-            if param.output_file.endswith('.eml'):
-                fd = open(param.output_file, 'w+')
+        if args.file != "":
+            if args.file.endswith('.eml'):
+                fd = open(args.file, 'w+')
                 save_as_eml = True
             else:
-                fd = open(param.output_file, 'wb+')
+                fd = open(args.file, 'wb+')
+        
+        if args.qty is not None:
+            stop_page = min(args.page + args.qty, 256)
+        else:
+            stop_page = 256
         
         options = {
             'activate_rf_field': 0,
@@ -1887,15 +1839,15 @@ class HFMFUDUMP(MFUAuthArgsUnit):
         
         pack = None
         needs_stop = False
-        for i in range(param.start_page, param.stop_page):
+        for i in range(args.page, stop_page):
             # this could be done once in theory but the command would need to be optimized properly
-            if param.pwd is not None:
-                resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.pwd)
+            if param.key is not None and not needs_stop:
+                resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.key)
                 options['auto_select'] = 0  # prevent resets
                 pack = resp[:2].hex()
             
             # disable the rf field after the last command
-            if i == (param.stop_page - 1) or needs_stop:
+            if i == (stop_page - 1) or needs_stop:
                 options['keep_rf_field'] = 0
 
             try:
