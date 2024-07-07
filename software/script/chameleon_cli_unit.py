@@ -1940,7 +1940,7 @@ class HFMFUDUMP(MFUAuthArgsUnit):
             print(f" - PACK: {pack}")
         
         if fd is not None:
-            print(f" - {CG}Dump written in {param.output_file}.{C0}")
+            print(f" - {CG}Dump written in {args.file}.{C0}")
             fd.close()
 
 
