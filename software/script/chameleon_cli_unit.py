@@ -1719,6 +1719,7 @@ class HFMFUWRPG(MFUAuthArgsUnit):
         data = args.data
         if len(data) != 4:
             print(f"{CR}Page data should be a 4 byte (8 character) hex string{C0}")
+            return
 
         options = {
             'activate_rf_field': 0,
