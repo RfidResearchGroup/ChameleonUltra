@@ -1693,13 +1693,31 @@ class HFMFURDPG(MFUAuthArgsUnit):
 
         if param.key is not None:
             options['keep_rf_field'] = 1
-            resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.key)
+            try:
+                resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.key)
+
+                failed_auth = len(resp) < 2
+                if not failed_auth:
+                    print(f" - PACK: {resp[:2].hex()}")
+            except Exception as e:
+                # failed auth may cause tags to be lost
+                failed_auth = True
+
             options['keep_rf_field'] = 0
             options['auto_select'] = 0
-            print(f" - PACK: {resp[:2].hex()}")
+        else:
+            failed_auth = False
 
-        resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x30, args.page))
-        print(f" - Data: {resp[:4].hex()}")
+        if not failed_auth:
+            resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x30, args.page))
+            print(f" - Data: {resp[:4].hex()}")
+        else:
+            try:
+                self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x30, args.page))
+            except:
+                # we may lose the tag again here
+                pass
+            print(f" {CR}- Auth failed{C0}")
 
 
 @hf_mfu.command('wrpg')
@@ -1732,13 +1750,32 @@ class HFMFUWRPG(MFUAuthArgsUnit):
         
         if param.key is not None:
             options['keep_rf_field'] = 1
-            resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.key)
+            try:
+                resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.key)
+
+                failed_auth = len(resp) < 2
+                if not failed_auth:
+                    print(f" - PACK: {resp[:2].hex()}")
+            except Exception as e:
+                # failed auth may cause tags to be lost
+                failed_auth = True
+
             options['keep_rf_field'] = 0
             options['auto_select'] = 0
-            print(f" - PACK: {resp[:2].hex()}")
+        else:
+            failed_auth = False
         
-        resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0xA2, args.page)+data)
-        print(f" - Ok")
+        if not failed_auth:
+            resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0xA2, args.page)+data)
+            print(f" - Ok")
+        else:
+            # send a command just to disable the field. use read to avoid corrupting the data
+            try:
+                self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x30, args.page))
+            except:
+                # we may lose the tag again here
+                pass
+            print(f" {CR}- Auth failed{C0}")
 
 
 @hf_mfu.command('eview')
@@ -1846,16 +1883,34 @@ class HFMFURCNT(MFUAuthArgsUnit):
             'keep_rf_field': 0,
             'check_response_crc': 1,
         }
-
+        
         if param.key is not None:
             options['keep_rf_field'] = 1
-            resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.key)
+            try:
+                resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.key)
+
+                failed_auth = len(resp) < 2
+                if not failed_auth:
+                    print(f" - PACK: {resp[:2].hex()}")
+            except Exception as e:
+                # failed auth may cause tags to be lost
+                failed_auth = True
+
             options['keep_rf_field'] = 0
             options['auto_select'] = 0
-            print(f" - PACK: {resp[:2].hex()}")
-
-        resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x39, param.counter))
-        print(f" - Data: {resp[:3].hex()}")
+        else:
+            failed_auth = False
+        
+        if not failed_auth:
+            resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x39, param.counter))
+            print(f" - Data: {resp[:3].hex()}")
+        else:
+            try:
+                self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x39, param.counter))
+            except:
+                # we may lose the tag again here
+                pass
+            print(f" {CR}- Auth failed{C0}")
 
 
 @hf_mfu.command('dump')
@@ -1896,8 +1951,29 @@ class HFMFUDUMP(MFUAuthArgsUnit):
             'check_response_crc': 1,
         }
         
-        pack = None
         needs_stop = False
+
+        if param.key is not None:
+            options['keep_rf_field'] = 1
+            try:
+                resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.key)
+
+                needs_stop = len(resp) < 2
+                if not needs_stop:
+                    print(f" - PACK: {resp[:2].hex()}")
+            except Exception as e:
+                # failed auth may cause tags to be lost
+                needs_stop = True
+
+            options['auto_select'] = 0
+        
+        # this handles auth failure
+        if needs_stop:
+            print(f" {CR}- Auth failed{C0}")
+            if fd is not None:
+                fd.close()
+                fd = None
+
         for i in range(args.page, stop_page):
             # this could be done once in theory but the command would need to be optimized properly
             if param.key is not None and not needs_stop:
@@ -1935,9 +2011,6 @@ class HFMFUDUMP(MFUAuthArgsUnit):
                     fd.write(data.hex()+'\n')
                 else:
                     fd.write(data)
-        
-        if pack is not None:
-            print(f" - PACK: {pack}")
         
         if fd is not None:
             print(f" - {CG}Dump written in {args.file}.{C0}")
