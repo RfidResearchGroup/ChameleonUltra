@@ -1813,6 +1813,9 @@ class HFMFUELOAD(DeviceRequiredUnit):
         parser.add_argument(
             '-f', '--file', required=True, type=str, help="File to load data from."
         )
+        parser.add_argument(
+            '-t', '--type', type=str, required=False, help="Force writing as either raw binary or hex.", choices=['bin', 'hex']
+        )
         return parser
 
     def get_param(self, args):
@@ -1823,9 +1826,14 @@ class HFMFUELOAD(DeviceRequiredUnit):
         return Param()
 
     def on_exec(self, args: argparse.Namespace):
-        param = self.get_param(args)
-
-        if args.file.endswith('.eml'):
+        file_type = args.type
+        if file_type is None:
+            if args.file.endswith('.eml') or args.file.endswith('.txt'):
+                file_type = 'hex'
+            else:
+                file_type = 'bin'
+        
+        if file_type == 'hex':
             with open(args.file, 'r') as f:
                 data = f.read()
             data = re.sub('#.*$', '', data, flags=re.MULTILINE)
@@ -1924,97 +1932,109 @@ class HFMFUDUMP(MFUAuthArgsUnit):
                             help="Manually set number of pages to dump")
         parser.add_argument('-f', '--file', type=str, required=False, default="",
                             help="Specify a filename for dump file")
+        parser.add_argument('-t', '--type', type=str, required=False, choices=['bin', 'hex'], 
+                            help="Force writing as either raw binary or hex.")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
         param = self.get_param(args)
+
+        file_type = args.type
         fd = None
         save_as_eml = False
-        if args.file != "":
-            if args.file.endswith('.eml'):
-                fd = open(args.file, 'w+')
-                save_as_eml = True
+
+        if file_type is None:
+            if args.file.endswith('.eml') or args.file.endswith('.txt'):
+                file_type = 'hex'
             else:
-                fd = open(args.file, 'wb+')
-        
-        if args.qty is not None:
-            stop_page = min(args.page + args.qty, 256)
+                file_type = 'bin'
+
+        if file_type == 'hex':
+            fd = open(args.file, 'w+')
+            save_as_eml = True
         else:
-            stop_page = 256
-        
-        options = {
-            'activate_rf_field': 0,
-            'wait_response': 1,
-            'append_crc': 1,
-            'auto_select': 1,
-            'keep_rf_field': 1,
-            'check_response_crc': 1,
-        }
-        
-        needs_stop = False
+            fd = open(args.file, 'wb+')
 
-        if param.key is not None:
-            options['keep_rf_field'] = 1
-            try:
-                resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.key)
+        with fd:
+            fd.truncate(0)
 
-                needs_stop = len(resp) < 2
-                if not needs_stop:
-                    print(f" - PACK: {resp[:2].hex()}")
-            except Exception as e:
-                # failed auth may cause tags to be lost
-                needs_stop = True
-
-            options['auto_select'] = 0
-        
-        # this handles auth failure
-        if needs_stop:
-            print(f" {CR}- Auth failed{C0}")
-            if fd is not None:
-                fd.close()
-                fd = None
-
-        for i in range(args.page, stop_page):
-            # this could be done once in theory but the command would need to be optimized properly
-            if param.key is not None and not needs_stop:
-                resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.key)
-                options['auto_select'] = 0  # prevent resets
-                pack = resp[:2].hex()
+            if args.qty is not None:
+                stop_page = min(args.page + args.qty, 256)
+            else:
+                stop_page = 256
             
-            # disable the rf field after the last command
-            if i == (stop_page - 1) or needs_stop:
-                options['keep_rf_field'] = 0
+            options = {
+                'activate_rf_field': 0,
+                'wait_response': 1,
+                'append_crc': 1,
+                'auto_select': 1,
+                'keep_rf_field': 1,
+                'check_response_crc': 1,
+            }
+            
+            needs_stop = False
 
-            try:
-                resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x30, i))
-            except:
-                # probably lost tag, but we still need to disable rf field
-                resp = None
+            if param.key is not None:
+                options['keep_rf_field'] = 1
+                try:
+                    resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.key)
 
+                    needs_stop = len(resp) < 2
+                    if not needs_stop:
+                        print(f" - PACK: {resp[:2].hex()}")
+                except Exception as e:
+                    # failed auth may cause tags to be lost
+                    needs_stop = True
+
+                options['auto_select'] = 0
+            
+            # this handles auth failure
             if needs_stop:
-                # break if this command was sent just to disable RF field
-                break
-            elif resp is None or len(resp) == 0:
-                # we need to disable RF field if we reached the last valid page so send one more read command
-                needs_stop = True
-                continue
+                print(f" {CR}- Auth failed{C0}")
+                if fd is not None:
+                    fd.close()
+                    fd = None
 
-            # after the read we are sure we no longer need to select again
-            options['auto_select'] = 0
+            for i in range(args.page, stop_page):
+                # this could be done once in theory but the command would need to be optimized properly
+                if param.key is not None and not needs_stop:
+                    resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.key)
+                    options['auto_select'] = 0  # prevent resets
+                    pack = resp[:2].hex()
+                
+                # disable the rf field after the last command
+                if i == (stop_page - 1) or needs_stop:
+                    options['keep_rf_field'] = 0
 
-            # TODO: can be optimized as we get 4 pages at once but beware of wrapping
-            # in case of end of memory or LOCK on ULC and no key provided
-            data = resp[:4]
-            print(f" - Page {i:2}: {data.hex()}")
-            if fd is not None:
-                if save_as_eml:
-                    fd.write(data.hex()+'\n')
-                else:
-                    fd.write(data)
+                try:
+                    resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x30, i))
+                except:
+                    # probably lost tag, but we still need to disable rf field
+                    resp = None
+
+                if needs_stop:
+                    # break if this command was sent just to disable RF field
+                    break
+                elif resp is None or len(resp) == 0:
+                    # we need to disable RF field if we reached the last valid page so send one more read command
+                    needs_stop = True
+                    continue
+
+                # after the read we are sure we no longer need to select again
+                options['auto_select'] = 0
+
+                # TODO: can be optimized as we get 4 pages at once but beware of wrapping
+                # in case of end of memory or LOCK on ULC and no key provided
+                data = resp[:4]
+                print(f" - Page {i:2}: {data.hex()}")
+                if fd is not None:
+                    if save_as_eml:
+                        fd.write(data.hex()+'\n')
+                    else:
+                        fd.write(data)
         
-        if fd is not None:
+        if args.file is not None:
             print(f" - {CG}Dump written in {args.file}.{C0}")
-            fd.close()
 
 
 @hf_mfu.command('version')
