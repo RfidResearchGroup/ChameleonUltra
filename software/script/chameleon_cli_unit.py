@@ -1871,6 +1871,82 @@ class HFMFUELOAD(DeviceRequiredUnit):
         print(f" - Ok")
 
 
+@hf_mfu.command('esave')
+class HFMFUESAVE(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'MIFARE Ultralight / NTAG save emulator data'
+        parser.add_argument(
+            '-f', '--file', required=True, type=str, help='File to save data to.'
+        )
+        parser.add_argument(
+            '-t', '--type', type=str, required=False, help="Force writing as either raw binary or hex.", choices=['bin', 'hex']
+        )
+        return parser
+
+    def get_param(self, args):
+        class Param:
+            def __init__(self):
+                pass
+
+        return Param()
+
+    def on_exec(self, args: argparse.Namespace):
+        file_type = args.type
+        fd = None
+        save_as_eml = False
+
+        if file_type is None:
+            if args.file.endswith('.eml') or args.file.endswith('.txt'):
+                file_type = 'hex'
+            else:
+                file_type = 'bin'
+
+        if file_type == 'hex':
+            fd = open(args.file, 'w+')
+            save_as_eml = True
+        else:
+            fd = open(args.file, 'wb+')
+
+        with fd:
+            # this will throw an exception on incorrect slot type
+            nr_pages = self.cmd.mfu_get_emu_pages_count()
+
+            fd.truncate(0)
+            
+            # write version and signature as comments if saving as .eml
+            if save_as_eml:
+                try:
+                    version = self.cmd.mf0_ntag_get_version_data()
+
+                    fd.write(f"# Version: {version.hex()}\n")
+                except:
+                    pass # slot does not have version data
+                
+                try:
+                    signature = self.cmd.mf0_ntag_get_signature_data()
+
+                    if signature != b"\x00" * 32:
+                        fd.write(f"# Signature: {signature.hex()}\n")
+                except:
+                    pass # slot does not have signature data
+            
+            page = 0
+            while page < nr_pages:
+                cur_count = min(32, nr_pages - page)
+                
+                data = self.cmd.mfu_read_emu_page_data(page, cur_count)
+                if save_as_eml:
+                    for i in range(0, len(data), 4):
+                        fd.write(data[i:i+4].hex() + "\n")
+                else:
+                    fd.write(data)
+                
+                page += cur_count
+        
+        print(f" - Ok")
+
+
 @hf_mfu.command('rcnt')
 class HFMFURCNT(MFUAuthArgsUnit):
     def args_parser(self) -> ArgumentParserNoExit:
