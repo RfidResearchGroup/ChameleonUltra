@@ -35,6 +35,14 @@
 #define NFC_TAG_NTAG_FRAME_SIZE 64
 #define NFC_TAG_NTAG_BLOCK_MAX   NTAG216_TOTAL_PAGES
 
+// Since all counters are 24-bit and each currently supported tag that supports counters
+// has password authentication we store the auth attempts counter in the last bit of the
+// first counter. AUTHLIM is only 3 bits though so we reserve 4 bits just to be sure and
+// use the top bit for tearing event flag.
+#define MF0_NTAG_AUTHLIM_OFF_IN_CTR                 3
+#define MF0_NTAG_AUTHLIM_MASK_IN_CTR              0xF
+#define MF0_NTAG_TEARING_MASK_IN_AUTHLIM         0x80
+
 typedef struct {
     uint8_t mode_uid_magic: 1;
     // reserve
@@ -60,6 +68,7 @@ int nfc_tag_mf0_ntag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *bu
 int nfc_tag_mf0_ntag_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 bool nfc_tag_mf0_ntag_data_factory(uint8_t slot, tag_specific_type_t tag_type);
 int nfc_tag_mf0_ntag_get_nr_pages_by_tag_type(tag_specific_type_t tag_type);
+uint8_t *nfc_tag_mf0_ntag_get_counter_data_by_index(uint8_t index);
 uint8_t *nfc_tag_mf0_ntag_get_version_data(void);
 uint8_t *nfc_tag_mf0_ntag_get_signature_data(void);
 

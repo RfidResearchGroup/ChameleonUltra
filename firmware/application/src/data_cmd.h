@@ -114,6 +114,8 @@
 #define DATA_CMD_MF0_NTAG_SET_VERSION_DATA      (4024)
 #define DATA_CMD_MF0_NTAG_GET_SIGNATURE_DATA    (4025)
 #define DATA_CMD_MF0_NTAG_SET_SIGNATURE_DATA    (4026)
+#define DATA_CMD_MF0_NTAG_GET_COUNTER_DATA      (4027)
+#define DATA_CMD_MF0_NTAG_SET_COUNTER_DATA      (4028)
 //
 // ******************************************************************
 

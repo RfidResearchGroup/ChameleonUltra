@@ -893,6 +893,40 @@ static data_frame_tx_t *cmd_processor_mf0_ntag_set_signature_data(uint16_t cmd, 
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
+static data_frame_tx_t *cmd_processor_mf0_ntag_get_counter_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 1) return data_frame_make(cmd, STATUS_INVALID_PARAMS, 0, NULL);
+
+    uint8_t index = data[0] & 0x7F;
+    uint8_t *counter_data = nfc_tag_mf0_ntag_get_counter_data_by_index(index);
+    if (counter_data == NULL) return data_frame_make(cmd, STATUS_INVALID_SLOT_TYPE, 0, NULL);
+
+    bool tearing = (counter_data[MF0_NTAG_AUTHLIM_OFF_IN_CTR] & MF0_NTAG_AUTHLIM_MASK_IN_CTR) != 0;
+
+    uint8_t response[4];
+    memcpy(response, counter_data, 3);
+    response[3] = tearing ? 0x00 : 0xBD;
+
+    return data_frame_make(cmd, STATUS_SUCCESS, 4, response);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_set_counter_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 4) return data_frame_make(cmd, STATUS_INVALID_PARAMS, 0, NULL);
+
+    uint8_t index = data[0] & 0x7F;
+    uint8_t *counter_data = nfc_tag_mf0_ntag_get_counter_data_by_index(index);
+    if (counter_data == NULL) return data_frame_make(cmd, STATUS_INVALID_SLOT_TYPE, 0, NULL);
+
+    // clear tearing event flag
+    if ((data[0] & 0x80) == 0x80) {
+        counter_data[MF0_NTAG_AUTHLIM_OFF_IN_CTR] &= ~MF0_NTAG_TEARING_MASK_IN_AUTHLIM;
+    }
+
+    // copy the actual counter value
+    memcpy(counter_data, &data[1], 3);
+
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
 static data_frame_tx_t *cmd_processor_hf14a_set_anti_coll_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     // uidlen[1]|uid[uidlen]|atqa[2]|sak[1]|atslen[1]|ats[atslen]
     // dynamic length, so no struct
@@ -1238,6 +1272,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF0_NTAG_SET_VERSION_DATA,    NULL,                        cmd_processor_mf0_ntag_set_version_data,     NULL                   },
     {    DATA_CMD_MF0_NTAG_GET_SIGNATURE_DATA,  NULL,                        cmd_processor_mf0_ntag_get_signature_data,   NULL                   },
     {    DATA_CMD_MF0_NTAG_SET_SIGNATURE_DATA,  NULL,                        cmd_processor_mf0_ntag_set_signature_data,   NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_COUNTER_DATA,    NULL,                        cmd_processor_mf0_ntag_get_counter_data,     NULL                   },
+    {    DATA_CMD_MF0_NTAG_SET_COUNTER_DATA,    NULL,                        cmd_processor_mf0_ntag_set_counter_data,   NULL                   },
 
     {    DATA_CMD_EM410X_SET_EMU_ID,            NULL,                        cmd_processor_em410x_set_emu_id,             NULL                   },
     {    DATA_CMD_EM410X_GET_EMU_ID,            NULL,                        cmd_processor_em410x_get_emu_id,             NULL                   },

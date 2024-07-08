@@ -420,6 +420,14 @@ Notes:
 * Command: 32 signature data bytes.
 * Response: no data
 * CLI: cf `hf mfu econfig --set-signature <hex>`
+### 4027: MF0_NTAG_GET_COUNTER_DATA
+* Command: 1 byte for the counter index
+* Response: 3 bytes for the counter value (big-endian) + 1 byte for tearing where `0xBD` means tearing flag is not set.
+* CLI: cf `hf mfu ercnt`
+### 4028: MF0_NTAG_SET_COUNTER_DATA
+* Command: 1 byte where the lower 7 bits are the counter index and the top bit indicates whether tearing event flag should be reset + 3 bytes of the counter value (big-endian).
+* Response: no data
+* CLI: cf `hf mfu ewcnt`
 ### 5000: EM410X_SET_EMU_ID
 * Command: 5 bytes. `id[5]`. ID as 5 bytes.
 * Response: no data

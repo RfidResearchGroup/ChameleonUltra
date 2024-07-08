@@ -1670,6 +1670,43 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 f'- {"Log (mfkey32) mode:":40}{f"{CG}enabled{C0}" if detection else f"{CR}disabled{C0}"}')
 
 
+@hf_mfu.command('ercnt')
+class HFMFUVERSION(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Read MIFARE Ultralight / NTAG counter value.'
+        parser.add_argument('-c', '--counter', type=int, required=True, help="Counter index.")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        value, no_tearing = self.cmd.mfu_read_emu_counter_data(args.counter)
+        print(f" - Value: {value:06x}")
+        if no_tearing:
+            print(f" - Tearing: {CG}not set{C0}")
+        else:
+            print(f" - Tearing: {CR}set{C0}")
+
+
+@hf_mfu.command('ewcnt')
+class HFMFUVERSION(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Read MIFARE Ultralight / NTAG counter value.'
+        parser.add_argument('-c', '--counter', type=int, required=True, help="Counter index.")
+        parser.add_argument('-v', '--value', type=int, required=True, help="Counter value (24-bit).")
+        parser.add_argument('-t', '--reset-tearing', action='store_true', help="Reset tearing event flag.")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.value > 0xFFFFFF:
+            print(f"{CR}Counter value {args.value:#x} is too large.{C0}")
+            return
+
+        self.cmd.mfu_write_emu_counter_data(args.counter, args.value, args.reset_tearing)
+
+        print('- Ok')
+
+
 @hf_mfu.command('rdpg')
 class HFMFURDPG(MFUAuthArgsUnit):
     def args_parser(self) -> ArgumentParserNoExit:

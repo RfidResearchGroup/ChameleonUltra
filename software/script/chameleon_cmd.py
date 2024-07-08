@@ -609,6 +609,26 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
+    def mfu_read_emu_counter_data(self, index: int) -> (int, bool):
+        """
+            Gets data for selected counter
+        """
+        data = struct.pack('!B', index)
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_GET_COUNTER_DATA, data)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = (((resp.data[0] << 16) | (resp.data[1] << 8) | resp.data[2]), resp.data[3] == 0xBD)
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mfu_write_emu_counter_data(self, index: int, value: int, reset_tearing: bool):
+        """
+            Sets data for selected counter
+        """
+        data = struct.pack('!BBBB', index | (int(reset_tearing) << 7), (value >> 16) & 0xFF, (value >> 8) & 0xFF, value & 0xFF)
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_SET_COUNTER_DATA, data)
+        return resp
+
+    @expect_response(Status.SUCCESS)
     def hf14a_set_anti_coll_data(self, uid: bytes, atqa: bytes, sak: bytes, ats: bytes = b''):
         """
         Set anti-collision data of current HF slot (UID/SAK/ATQA/ATS).
