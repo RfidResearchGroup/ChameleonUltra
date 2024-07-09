@@ -398,6 +398,8 @@ static int get_user_data_end_by_tag_type(tag_specific_type_t type) {
 uint8_t *nfc_tag_mf0_ntag_get_counter_data_by_index(uint8_t index) {
     uint8_t ctr_page_off;
     uint8_t ctr_page_end;
+    uint8_t first_index = 0; // NTAG cards have one counter that is at address 2 so we have to adjust logic
+
     switch (m_tag_type) {
         case TAG_TYPE_MF0UL11:
             ctr_page_off = MF0UL11_PAGES;
@@ -410,21 +412,24 @@ uint8_t *nfc_tag_mf0_ntag_get_counter_data_by_index(uint8_t index) {
         case TAG_TYPE_NTAG_213:
             ctr_page_off = NTAG213_PAGES;
             ctr_page_end = ctr_page_off + NTAG_NUM_CTRS;
+            first_index = 2;
             break;
         case TAG_TYPE_NTAG_215:
             ctr_page_off = NTAG215_PAGES;
             ctr_page_end = ctr_page_off + NTAG_NUM_CTRS;
+            first_index = 2;
             break;
         case TAG_TYPE_NTAG_216:
             ctr_page_off = NTAG216_PAGES;
             ctr_page_end = ctr_page_off + NTAG_NUM_CTRS;
+            first_index = 2;
             break;
         default:
             return NULL;
     }
 
     // check that counter index is in bounds
-    if (index >= (ctr_page_end - ctr_page_off)) return NULL;
+    if ((index < first_index) || ((index - first_index) >= (ctr_page_end - ctr_page_off))) return NULL;
 
     return m_tag_information->memory[ctr_page_off + index];
 }
