@@ -828,13 +828,16 @@ static void handle_pwd_auth_command(uint8_t *p_data) {
     uint32_t pwd = *(uint32_t *)m_tag_information->memory[first_cfg_page + CONF_PWD_PAGE_OFFSET];
     uint32_t supplied_pwd = *(uint32_t *)&p_data[1];
     if (pwd != supplied_pwd) {
-        if (auth_lim) cnt_data[MF0_NTAG_AUTHLIM_OFF_IN_CTR] |= (auth_cnt + 1) & MF0_NTAG_AUTHLIM_MASK_IN_CTR;
+        if (auth_lim) {
+            cnt_data[MF0_NTAG_AUTHLIM_OFF_IN_CTR] &= ~MF0_NTAG_AUTHLIM_MASK_IN_CTR;
+            cnt_data[MF0_NTAG_AUTHLIM_OFF_IN_CTR] |= (auth_cnt + 1) & MF0_NTAG_AUTHLIM_MASK_IN_CTR;
+        }
         nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
         return;
     }
 
     // reset authentication attempts counter and authenticate user
-    cnt_data[MF0_NTAG_AUTHLIM_OFF_IN_CTR] = 0;
+    cnt_data[MF0_NTAG_AUTHLIM_OFF_IN_CTR] &= ~MF0_NTAG_AUTHLIM_MASK_IN_CTR;
     m_tag_authenticated = true; // TODO: this should be possible to reset somehow
 
     // Send the PACK value back
