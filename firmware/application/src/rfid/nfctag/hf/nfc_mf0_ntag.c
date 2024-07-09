@@ -395,7 +395,7 @@ static int get_user_data_end_by_tag_type(tag_specific_type_t type) {
     return nr_pages;
 }
 
-uint8_t *nfc_tag_mf0_ntag_get_counter_data_by_index(uint8_t index) {
+static uint8_t *get_counter_data_by_index(uint8_t index, bool external) {
     uint8_t ctr_page_off;
     uint8_t ctr_page_end;
     uint8_t first_index = 0; // NTAG cards have one counter that is at address 2 so we have to adjust logic
@@ -428,10 +428,17 @@ uint8_t *nfc_tag_mf0_ntag_get_counter_data_by_index(uint8_t index) {
             return NULL;
     }
 
+    if (!external) first_index = 0;
+
     // check that counter index is in bounds
     if ((index < first_index) || ((index - first_index) >= (ctr_page_end - ctr_page_off))) return NULL;
 
     return m_tag_information->memory[ctr_page_off + index];
+}
+
+uint8_t *nfc_tag_mf0_ntag_get_counter_data_by_index(uint8_t index) {
+    // from the point of chameleon this is an internal access since only NFC accesses are considered external accesses
+    return get_counter_data_by_index(index, false);
 }
 
 static char hex_digit(int n) {
@@ -486,12 +493,12 @@ static void handle_any_read(uint8_t block_num, uint8_t block_cnt, uint8_t block_
                     bytes2hex(m_tag_information->res_coll.uid, (char *)mirror_buf, 7);
                     break;
                 case MIRROR_CONF_CNT:
-                    bytes2hex(nfc_tag_mf0_ntag_get_counter_data_by_index(0), (char *)mirror_buf, 3);
+                    bytes2hex(get_counter_data_by_index(0, false), (char *)mirror_buf, 3);
                     break;
                 case MIRROR_CONF_UID_CNT:
                     bytes2hex(m_tag_information->res_coll.uid, (char *)mirror_buf, 7);
                     mirror_buf[7] = 'x';
-                    bytes2hex(nfc_tag_mf0_ntag_get_counter_data_by_index(0), (char *)&mirror_buf[8], 3);
+                    bytes2hex(get_counter_data_by_index(0, false), (char *)&mirror_buf[8], 3);
                     break;
                 }
             }
@@ -543,7 +550,7 @@ static void handle_any_read(uint8_t block_num, uint8_t block_cnt, uint8_t block_
         int access = m_tag_information->memory[first_cfg_page + CONF_ACCESS_PAGE_OFFSET][CONF_ACCESS_BYTE];
 
         if ((access & CONF_ACCESS_NFC_CNT_EN) != 0) {
-            uint8_t *ctr = nfc_tag_mf0_ntag_get_counter_data_by_index(0);
+            uint8_t *ctr = get_counter_data_by_index(0, false);
             uint32_t counter = (((uint32_t)ctr[0]) << 16) | (((uint32_t)ctr[1]) << 8) | ((uint32_t)ctr[2]);
             if (counter < 0xFFFFFF) counter += 1;
             ctr[0] = (uint8_t)(counter >> 16);
@@ -752,7 +759,7 @@ static void handle_read_cnt_command(uint8_t index) {
         }
     }
 
-    uint8_t *cnt_data = nfc_tag_mf0_ntag_get_counter_data_by_index(index);
+    uint8_t *cnt_data = get_counter_data_by_index(index, true);
     if (cnt_data == NULL) {
         nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
         return;
@@ -807,7 +814,7 @@ static void handle_incr_cnt_command(uint8_t block_num, uint8_t *p_data) {
 
 static void handle_pwd_auth_command(uint8_t *p_data) {
     int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
-    uint8_t *cnt_data = nfc_tag_mf0_ntag_get_counter_data_by_index(0);
+    uint8_t *cnt_data = get_counter_data_by_index(0, false);
     if (first_cfg_page == 0 || cnt_data == NULL) {
         nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
         return;
@@ -841,7 +848,7 @@ static void handle_check_tearing_event(int index) {
     switch (m_tag_type) {
     case TAG_TYPE_MF0UL11:
     case TAG_TYPE_MF0UL21: {
-        uint8_t *ctr_data = nfc_tag_mf0_ntag_get_counter_data_by_index(index);
+        uint8_t *ctr_data = get_counter_data_by_index(index, true);
 
         if (ctr_data) {
             m_tag_tx_buffer.tx_buffer[0] = (ctr_data[MF0_NTAG_AUTHLIM_OFF_IN_CTR] & MF0_NTAG_TEARING_MASK_IN_AUTHLIM) == 0 ? 0xBD : 0x00;
