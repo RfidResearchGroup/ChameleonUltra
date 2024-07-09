@@ -116,6 +116,7 @@
 #define DATA_CMD_MF0_NTAG_SET_SIGNATURE_DATA    (4026)
 #define DATA_CMD_MF0_NTAG_GET_COUNTER_DATA      (4027)
 #define DATA_CMD_MF0_NTAG_SET_COUNTER_DATA      (4028)
+#define DATA_CMD_MF0_NTAG_RESET_AUTH_CNT        (4029)
 //
 // ******************************************************************
 

@@ -629,6 +629,16 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
+    def mfu_reset_auth_cnt(self):
+        """
+            Resets authentication counter
+        """
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_RESET_AUTH_CNT, bytes())
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data[0]
+        return resp
+
+    @expect_response(Status.SUCCESS)
     def hf14a_set_anti_coll_data(self, uid: bytes, atqa: bytes, sak: bytes, ats: bytes = b''):
         """
         Set anti-collision data of current HF slot (UID/SAK/ATQA/ATS).

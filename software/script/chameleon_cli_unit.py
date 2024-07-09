@@ -2216,12 +2216,15 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
         uid_magic_group.add_argument('--disable-uid-magic', action='store_true', help="Disable UID magic mode")
         parser.add_argument('--set-version', type=bytes.fromhex, help="Set data to be returned by the GET_VERSION command.")
         parser.add_argument('--set-signature', type=bytes.fromhex, help="Set data to be returned by the READ_SIG command.")
+        parser.add_argument('--reset-auth-cnt', action='store_true', help="Resets the counter of unsuccessful authentication attempts.")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
         aux_data_changed = False
+        aux_data_change_requested = False
         
         if args.set_version is not None:
+            aux_data_change_requested = True
             aux_data_changed = True
 
             if len(args.set_version) != 8:
@@ -2235,6 +2238,7 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
                 return
 
         if args.set_signature is not None:
+            aux_data_change_requested = True
             aux_data_changed = True
 
             if len(args.set_signature) != 32:
@@ -2246,6 +2250,13 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
             except:
                 print(f"{CR}Tag type does not support READ_SIG command.{C0}")
                 return
+        
+        if args.reset_auth_cnt:
+            aux_data_change_requested = True
+            old_value = self.cmd.mfu_reset_auth_cnt()
+            if old_value != 0:
+                aux_data_changed = True
+                print(f"- Unsuccessful auth counter has been reset from {old_value} to 0.")
 
         # collect current settings
         anti_coll_data = self.cmd.hf14a_get_anti_coll_data()
@@ -2285,7 +2296,7 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
 
         if change_done or aux_data_changed:
             print(' - MFU/NTAG Emulator settings updated')
-        if not (change_requested or aux_data_changed):
+        if not (change_requested or aux_data_change_requested):
             print(f'- {"Type:":40}{CY}{hf_tag_type}{C0}')
             print(f'- {"UID:":40}{CY}{uid.hex().upper()}{C0}')
             print(f'- {"ATQA:":40}{CY}{atqa.hex().upper()} '

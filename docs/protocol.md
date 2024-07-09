@@ -428,6 +428,10 @@ Notes:
 * Command: 1 byte where the lower 7 bits are the counter index and the top bit indicates whether tearing event flag should be reset + 3 bytes of the counter value (big-endian).
 * Response: no data
 * CLI: cf `hf mfu ewcnt`
+### 4029: MF0_NTAG_RESET_AUTH_CNT
+* Command: no data
+* Response: 1 byte for the old value of the unsuccessful auth counter.
+* CLI: cf `hf mfu econfig --reset-auth-cnt`
 ### 5000: EM410X_SET_EMU_ID
 * Command: 5 bytes. `id[5]`. ID as 5 bytes.
 * Response: no data
