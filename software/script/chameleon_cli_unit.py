@@ -1782,11 +1782,12 @@ class HFMFUWRPG(MFUAuthArgsUnit):
             'append_crc': 1,
             'auto_select': 1,
             'keep_rf_field': 0,
-            'check_response_crc': 1,
+            'check_response_crc': 0,
         }
         
         if param.key is not None:
             options['keep_rf_field'] = 1
+            options['check_response_crc'] = 1
             try:
                 resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.key)
 
@@ -1799,12 +1800,17 @@ class HFMFUWRPG(MFUAuthArgsUnit):
 
             options['keep_rf_field'] = 0
             options['auto_select'] = 0
+            options['check_response_crc'] = 0
         else:
             failed_auth = False
         
         if not failed_auth:
             resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0xA2, args.page)+data)
-            print(f" - Ok")
+
+            if resp[0] == 0x0A:
+                print(f" - Ok")
+            else:
+                print(f"{CR}Write failed ({resp[0]:#04x}).{C0}")
         else:
             # send a command just to disable the field. use read to avoid corrupting the data
             try:
