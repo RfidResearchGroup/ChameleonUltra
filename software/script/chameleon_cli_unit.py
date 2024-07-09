@@ -2029,11 +2029,11 @@ class HFMFURCNT(MFUAuthArgsUnit):
             failed_auth = False
         
         if not failed_auth:
-            resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x39, param.counter))
+            resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x39, args.counter))
             print(f" - Data: {resp[:3].hex()}")
         else:
             try:
-                self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x39, param.counter))
+                self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x39, args.counter))
             except:
                 # we may lose the tag again here
                 pass
