@@ -594,7 +594,7 @@ static void handle_fast_read_command(uint8_t block_num, uint8_t end_block_num) {
 
 static bool check_ro_lock_on_page(int block_num) {
     if (block_num < 3) return true;
-    else if (block_num == 3) return (m_tag_information->memory[2][2] & 1) == 1;
+    else if (block_num == 3) return (m_tag_information->memory[2][2] & 9) != 0; // bits 0 and 3
     else if (block_num <= MF0ICU1_PAGES) {
         bool locked = false;
 
