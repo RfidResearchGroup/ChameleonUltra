@@ -331,7 +331,7 @@ static void handle_get_version_command() {
     } else {
         NRF_LOG_WARNING("current card type does not support GET_VERSION");
         // MF0ICU1 and MF0ICU2 do not support GET_VERSION
-        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        if (is_ntag()) nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
     }
 }
 
@@ -344,7 +344,7 @@ static void handle_read_sig_command() {
     } else {
         NRF_LOG_WARNING("current card type does not support READ_SIG");
         // MF0ICU1 and MF0ICU2 do not support READ_SIG
-        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        if (is_ntag()) nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
     }
 }
 
@@ -570,7 +570,7 @@ static void handle_read_command(uint8_t block_num) {
     if (block_num >= block_max) {
         NRF_LOG_WARNING("too large block num %02x >= %02x", block_num, block_max);
 
-        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
         return;
     }
 
@@ -588,14 +588,14 @@ static void handle_fast_read_command(uint8_t block_num, uint8_t end_block_num) {
         // command is supported
         break;
     default:
-        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        if (is_ntag()) nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
         return;
     }
 
     int block_max = get_block_max_by_tag_type(m_tag_type, true);
 
     if (block_num >= end_block_num || end_block_num >= block_max) {
-        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
         return;
     }
 
@@ -705,7 +705,7 @@ static int handle_write_command(uint8_t block_num, uint8_t *p_data) {
     if (block_num >= block_max) {
         NRF_LOG_ERROR("Write failed: block_num %08x >= block_max %08x", block_num, block_max);
 
-        return NAK_INVALID_OPERATION_TBIV;
+        return NAK_INVALID_OPERATION_TBV;
     }
 
     if (m_tag_information->config.mode_uid_magic) {
@@ -717,10 +717,7 @@ static int handle_write_command(uint8_t block_num, uint8_t *p_data) {
     switch (block_num) {
         case 0:
         case 1:
-            if (!memcmp(p_data, m_tag_information->memory[block_num], NFC_TAG_MF0_NTAG_DATA_SIZE))
-                return ACK_VALUE;
-            else
-                return NAK_INVALID_OPERATION_TBIV;
+            return NAK_INVALID_OPERATION_TBV;
         case 2:
             // Page 2 contains lock bytes for pages 3-15. These are OR'ed when not in the UID
             // magic mode. First two bytes are ignored.
@@ -735,12 +732,12 @@ static int handle_write_command(uint8_t block_num, uint8_t *p_data) {
                 for (int i = 0; i < NFC_TAG_MF0_NTAG_DATA_SIZE; i++) {
                     m_tag_information->memory[3][i] |= p_data[i];
                 }
-            } else return NAK_INVALID_OPERATION_TBIV;
+            } else return NAK_INVALID_OPERATION_TBV;
             break;
         default:
             if (!check_ro_lock_on_page(block_num)) {
                 memcpy(m_tag_information->memory[block_num], p_data, NFC_TAG_MF0_NTAG_DATA_SIZE);
-            } else return NAK_INVALID_OPERATION_TBIV;
+            } else return NAK_INVALID_OPERATION_TBV;
             break;
     }
 
@@ -754,14 +751,14 @@ static void handle_read_cnt_command(uint8_t index) {
         int access = m_tag_information->memory[first_cfg_page + CONF_ACCESS_PAGE_OFFSET][CONF_ACCESS_BYTE];
 
         if ((access & CONF_ACCESS_NFC_CNT_PWD_PROT) != 0 && !m_tag_authenticated) {
-            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
             return;
         }
     }
 
     uint8_t *cnt_data = get_counter_data_by_index(index, true);
     if (cnt_data == NULL) {
-        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
         return;
     }
 
@@ -782,13 +779,13 @@ static void handle_incr_cnt_command(uint8_t block_num, uint8_t *p_data) {
             ctr_page_end = ctr_page_off + MF0ULx1_NUM_CTRS;
             break;
         default:
-            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+            if (is_ntag()) nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
             return;
     }
 
     // check that counter index is in bounds
     if (block_num >= (ctr_page_end - ctr_page_off)) {
-        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
         return;
     }
 
@@ -816,7 +813,7 @@ static void handle_pwd_auth_command(uint8_t *p_data) {
     int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
     uint8_t *cnt_data = get_counter_data_by_index(0, false);
     if (first_cfg_page == 0 || cnt_data == NULL) {
-        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        if (is_ntag()) nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
         return;
     }
 
@@ -854,13 +851,13 @@ static void handle_check_tearing_event(int index) {
             m_tag_tx_buffer.tx_buffer[0] = (ctr_data[MF0_NTAG_AUTHLIM_OFF_IN_CTR] & MF0_NTAG_TEARING_MASK_IN_AUTHLIM) == 0 ? 0xBD : 0x00;
             nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, 1, true);
         } else {
-            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
         }
 
         break;
     }
     default:
-        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        if (is_ntag()) nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
         break;
     }
 }
@@ -870,12 +867,12 @@ static void handle_vcsl_command(uint16_t szDataBits) {
     case TAG_TYPE_MF0UL11:
     case TAG_TYPE_MF0UL21:
         if (szDataBits < 168) {
-            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
             break;
         }
         break;
     default:
-        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        if (is_ntag()) nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
         break;
     }
     
@@ -934,7 +931,7 @@ static void nfc_tag_mf0_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits)
             break;
         }
         default:
-            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+            if (is_ntag()) nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
             break;
     }
     return;
