@@ -433,7 +433,7 @@ static uint8_t *get_counter_data_by_index(uint8_t index, bool external) {
     // check that counter index is in bounds
     if ((index < first_index) || ((index - first_index) >= (ctr_page_end - ctr_page_off))) return NULL;
 
-    return m_tag_information->memory[ctr_page_off + index];
+    return m_tag_information->memory[ctr_page_off + index - first_index];
 }
 
 uint8_t *nfc_tag_mf0_ntag_get_counter_data_by_index(uint8_t index) {
