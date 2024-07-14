@@ -1671,7 +1671,7 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
 
 
 @hf_mfu.command('ercnt')
-class HFMFUVERSION(ReaderRequiredUnit):
+class HFMFUVERSION(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Read MIFARE Ultralight / NTAG counter value.'
@@ -1688,7 +1688,7 @@ class HFMFUVERSION(ReaderRequiredUnit):
 
 
 @hf_mfu.command('ewcnt')
-class HFMFUVERSION(ReaderRequiredUnit):
+class HFMFUVERSION(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Read MIFARE Ultralight / NTAG counter value.'
