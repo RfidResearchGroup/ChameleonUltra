@@ -2059,7 +2059,18 @@ class HFMFUDUMP(MFUAuthArgsUnit):
         if args.qty is not None:
             stop_page = min(args.page + args.qty, 256)
         else:
-            stop_page = 256
+            stop_page = None
+        
+        tags = self.cmd.hf14a_scan()
+        if len(tags) > 1:
+            print(f'- {CR}Collision detected, leave only one tag.{C0}')
+            return
+        elif len(tags) == 0:
+            print(f'- {CR}No tag detected.{C0}')
+            return
+        elif tags[0]['atqa'] != b'\x44\x00' or tags[0]['sak'] != b'\x00':
+            print(f'- {CR}Tag is not Mifare Ultralight compatible (ATQA {tags[0]["atqa"].hex()} SAK {tags[0]["sak"].hex()}).{C0}')
+            return
         
         options = {
             'activate_rf_field': 0,
@@ -2070,10 +2081,78 @@ class HFMFUDUMP(MFUAuthArgsUnit):
             'check_response_crc': 1,
         }
         
+        # if stop page isn't set manually, try autodetection
+        if stop_page is None:
+            tag_name = None
+
+            # first try sending the GET_VERSION command
+            try:
+                version = self.cmd.hf14a_raw(options=options, resp_timeout_ms=100, data=struct.pack('!B', 0x60))
+                if len(version) == 0:
+                    version = None
+            except:
+                version = None
+            
+            # try sending AUTHENTICATE command and observe the result
+            try:
+                supports_auth = len(self.cmd.hf14a_raw(options=options, resp_timeout_ms=100, data=struct.pack('!B', 0x1A))) != 0
+            except:
+                supports_auth = False
+            
+            if version is not None and not supports_auth:
+                # either ULEV1 or NTAG
+                assert len(version) == 8
+
+                is_mikron_ulev1 = version[1] == 0x34 and version[2] == 0x21
+                if (version[2] == 3 or is_mikron_ulev1) and version[4] == 1 and version[5] == 0:
+                    # Ultralight EV1 V0
+                    size_map = {
+                        0x0B: ('Mifare Ultralight EV1 48b', 20),
+                        0x0E: ('Mifare Ultralight EV1 128b', 41),
+                    }
+                elif version[2] == 4 and version[4] == 1 and version[5] == 0:
+                    # NTAG 210/212/213/215/216 V0
+                    size_map = {
+                        0x0B: ('NTAG 210', 20),
+                        0x0E: ('NTAG 212', 41),
+                        0x0F: ('NTAG 213', 45),
+                        0x11: ('NTAG 215', 135),
+                        0x13: ('NTAG 216', 231),
+                    }
+                else:
+                    size_map = {}
+                
+                if version[6] in size_map:
+                    tag_name, stop_page = size_map[version[6]]
+            elif version is None and supports_auth:
+                # Ultralight C
+                tag_name = 'Mifare Ultralight C'
+                stop_page = 48
+            elif version is None and not supports_auth:
+                try:
+                    # Invalid command returning a NAK means that's some old type of NTAG.
+                    self.cmd.hf14a_raw(options=options, resp_timeout_ms=100, data=struct.pack('!B', 0xFF))
+
+                    print(f' - {CY}Tag is likely NTAG 20x, reading until first error.{C0}')
+                    stop_page = 256
+                except:
+                    # Regular Ultralight
+                    tag_name = 'Mifare Ultralight'
+                    stop_page = 16
+            else:
+                # This is probably Ultralight AES, but we don't support this one yet.
+                pass
+            
+            if tag_name is not None:
+                print(f' - Detected tag type as {tag_name}.')
+
+            if stop_page is None:
+                print(f' - {CY}Couldn\'t autodetect the expected card size, reading until first error.{C0}')
+                stop_page = 256
+        
         needs_stop = False
 
         if param.key is not None:
-            options['keep_rf_field'] = 1
             try:
                 resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.key)
 
@@ -2088,7 +2167,7 @@ class HFMFUDUMP(MFUAuthArgsUnit):
         
         # this handles auth failure
         if needs_stop:
-            print(f" {CR}- Auth failed{C0}")
+            print(f" - {CR}Auth failed{C0}")
             if fd is not None:
                 fd.close()
                 fd = None
@@ -2131,6 +2210,8 @@ class HFMFUDUMP(MFUAuthArgsUnit):
                 else:
                     fd.write(data)
         
+        if needs_stop and stop_page != 256:
+            print(f' - {CY}Dump is shorter than expected.{C0}')
         if args.file != '':
             print(f" - {CG}Dump written in {args.file}.{C0}")
 
