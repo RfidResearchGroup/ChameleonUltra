@@ -651,6 +651,8 @@ static void btn_fn_copy_ic_uid(void) {
             break;
         }
 
+        case TAG_TYPE_NTAG_210:
+        case TAG_TYPE_NTAG_212:
         case TAG_TYPE_NTAG_213:
         case TAG_TYPE_NTAG_215:
         case TAG_TYPE_NTAG_216:

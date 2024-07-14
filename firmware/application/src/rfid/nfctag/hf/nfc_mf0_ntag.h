@@ -18,6 +18,10 @@
 #define MF0ULx1_EXTRA_PAGES (MF0ULx1_NUM_CTRS + NFC_TAG_MF0_NTAG_VER_PAGES + NFC_TAG_MF0_NTAG_SIG_PAGES)
 #define NTAG_EXTRA_PAGES (NTAG_NUM_CTRS + NFC_TAG_MF0_NTAG_VER_PAGES + NFC_TAG_MF0_NTAG_SIG_PAGES)
 
+#define NTAG210_PAGES 20 //20 pages total for ntag210, from 0 to 44
+#define NTAG210_TOTAL_PAGES (NTAG210_PAGES + NTAG_EXTRA_PAGES) // 1 more page for the counter
+#define NTAG212_PAGES 41 //41 pages total for ntag212, from 0 to 44
+#define NTAG212_TOTAL_PAGES (NTAG212_PAGES + NTAG_EXTRA_PAGES) // 1 more page for the counter
 #define NTAG213_PAGES 45 //45 pages total for ntag213, from 0 to 44
 #define NTAG213_TOTAL_PAGES (NTAG213_PAGES + NTAG_EXTRA_PAGES) // 1 more page for the counter
 #define NTAG215_PAGES 135 //135 pages total for ntag215, from 0 to 134

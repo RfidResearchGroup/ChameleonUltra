@@ -281,6 +281,8 @@ class TagSpecificType(enum.IntEnum):
     MF0ICU2 = 1104
     MF0UL11 = 1105
     MF0UL21 = 1106
+    NTAG_210 = 1107
+    NTAG_212 = 1108
     # MIFARE Plus series     1200
     # DESFire series         1300
 
@@ -332,6 +334,10 @@ class TagSpecificType(enum.IntEnum):
             return "Mifare Ultralight EV1 (640 bit)"
         elif self == TagSpecificType.MF0UL21:
             return "Mifare Ultralight EV1 (1312 bit)"
+        elif self == TagSpecificType.NTAG_210:
+            return "NTAG 210"
+        elif self == TagSpecificType.NTAG_212:
+            return "NTAG 212"
         elif self < TagSpecificType.OLD_TAG_TYPES_END:
             return "Old tag type, must be migrated! Upgrade fw!"
         return "Invalid"

@@ -22,6 +22,8 @@ NRF_LOG_MODULE_REGISTER();
 #define VERSION_MINOR_PRODUCT           0x00
 #define MF0UL11_VERSION_STORAGE_SIZE    0x0B
 #define MF0UL21_VERSION_STORAGE_SIZE    0x0E
+#define NTAG210_VERSION_STORAGE_SIZE    0x0B
+#define NTAG212_VERSION_STORAGE_SIZE    0x0E
 #define NTAG213_VERSION_STORAGE_SIZE    0x0F
 #define NTAG215_VERSION_STORAGE_SIZE    0x11
 #define NTAG216_VERSION_STORAGE_SIZE    0x13
@@ -59,6 +61,10 @@ NRF_LOG_MODULE_REGISTER();
 #define MF0UL11_USER_MEMORY_END         (MF0UL11_FIRST_CFG_PAGE)
 #define MF0UL21_FIRST_CFG_PAGE          0x25
 #define MF0UL21_USER_MEMORY_END         0x24
+#define NTAG210_FIRST_CFG_PAGE          0x10
+#define NTAG210_USER_MEMORY_END         (NTAG210_FIRST_CFG_PAGE)
+#define NTAG212_FIRST_CFG_PAGE          0x25
+#define NTAG212_USER_MEMORY_END         0x24
 #define NTAG213_FIRST_CFG_PAGE          0x29
 #define NTAG213_USER_MEMORY_END         0x28
 #define NTAG215_FIRST_CFG_PAGE          0x83
@@ -145,6 +151,12 @@ int nfc_tag_mf0_ntag_get_nr_pages_by_tag_type(tag_specific_type_t tag_type) {
         case TAG_TYPE_MF0UL21:
             nr_pages = MF0UL21_PAGES;
             break;
+        case TAG_TYPE_NTAG_210:
+            nr_pages = NTAG210_PAGES;
+            break;
+        case TAG_TYPE_NTAG_212:
+            nr_pages = NTAG212_PAGES;
+            break;
         case TAG_TYPE_NTAG_213:
             nr_pages = NTAG213_PAGES;
             break;
@@ -184,6 +196,12 @@ static int get_total_pages_by_tag_type(tag_specific_type_t tag_type) {
         case TAG_TYPE_MF0UL21:
             nr_pages = MF0UL21_TOTAL_PAGES;
             break;
+        case TAG_TYPE_NTAG_210:
+            nr_pages = NTAG210_TOTAL_PAGES;
+            break;
+        case TAG_TYPE_NTAG_212:
+            nr_pages = NTAG212_TOTAL_PAGES;
+            break;
         case TAG_TYPE_NTAG_213:
             nr_pages = NTAG213_TOTAL_PAGES;
             break;
@@ -210,6 +228,12 @@ static int get_first_cfg_page_by_tag_type(tag_specific_type_t tag_type) {
             break;
         case TAG_TYPE_MF0UL21:
             page = MF0UL21_FIRST_CFG_PAGE;
+            break;
+        case TAG_TYPE_NTAG_210:
+            page = NTAG210_FIRST_CFG_PAGE;
+            break;
+        case TAG_TYPE_NTAG_212:
+            page = NTAG212_FIRST_CFG_PAGE;
             break;
         case TAG_TYPE_NTAG_213:
             page = NTAG213_FIRST_CFG_PAGE;
@@ -245,6 +269,8 @@ static int get_block_max_by_tag_type(tag_specific_type_t tag_type, bool read) {
 
 static bool is_ntag() {
     switch (m_tag_type) {
+        case TAG_TYPE_NTAG_210:
+        case TAG_TYPE_NTAG_212:
         case TAG_TYPE_NTAG_213:
         case TAG_TYPE_NTAG_215:
         case TAG_TYPE_NTAG_216:
@@ -263,6 +289,14 @@ int get_version_page_by_tag_type(tag_specific_type_t tag_type) {
             break;
         case TAG_TYPE_MF0UL21:
             version_page_off = MF0UL21_PAGES + MF0ULx1_NUM_CTRS;
+            break;
+        // NTAG 210 and 212 don't have a counter, but we still allocate space for one to
+        // record unsuccessful auth attempts
+        case TAG_TYPE_NTAG_210:
+            version_page_off = NTAG210_PAGES + NTAG_NUM_CTRS;
+            break;
+        case TAG_TYPE_NTAG_212:
+            version_page_off = NTAG212_PAGES + NTAG_NUM_CTRS;
             break;
         case TAG_TYPE_NTAG_213:
             version_page_off = NTAG213_PAGES + NTAG_NUM_CTRS;
@@ -290,6 +324,12 @@ int get_signature_page_by_tag_type(tag_specific_type_t tag_type) {
             break;
         case TAG_TYPE_MF0UL21:
             version_page_off = MF0UL21_PAGES + MF0ULx1_NUM_CTRS + PAGES_PER_VERSION;
+            break;
+        case TAG_TYPE_NTAG_210:
+            version_page_off = NTAG210_PAGES + NTAG_NUM_CTRS + PAGES_PER_VERSION;
+            break;
+        case TAG_TYPE_NTAG_212:
+            version_page_off = NTAG212_PAGES + NTAG_NUM_CTRS + PAGES_PER_VERSION;
             break;
         case TAG_TYPE_NTAG_213:
             version_page_off = NTAG213_PAGES + NTAG_NUM_CTRS + PAGES_PER_VERSION;
@@ -378,6 +418,12 @@ static int get_user_data_end_by_tag_type(tag_specific_type_t type) {
     case TAG_TYPE_MF0UL21:
         nr_pages = MF0UL21_USER_MEMORY_END;
         break;
+    case TAG_TYPE_NTAG_210:
+        nr_pages = NTAG210_USER_MEMORY_END;
+        break;
+    case TAG_TYPE_NTAG_212:
+        nr_pages = NTAG212_USER_MEMORY_END;
+        break;
     case TAG_TYPE_NTAG_213:
         nr_pages = NTAG213_USER_MEMORY_END;
         break;
@@ -408,6 +454,16 @@ static uint8_t *get_counter_data_by_index(uint8_t index, bool external) {
         case TAG_TYPE_MF0UL21:
             ctr_page_off = MF0UL21_PAGES;
             ctr_page_end = ctr_page_off + MF0ULx1_NUM_CTRS;
+            break;
+        case TAG_TYPE_NTAG_210:
+            if (external) return NULL; // NTAG 210 tags don't really have a counter
+            ctr_page_off = NTAG210_PAGES;
+            ctr_page_end = ctr_page_off + NTAG_NUM_CTRS;
+            break;
+        case TAG_TYPE_NTAG_212:
+            if (external) return NULL; // NTAG 212 tags don't really have a counter
+            ctr_page_off = NTAG212_PAGES;
+            ctr_page_end = ctr_page_off + NTAG_NUM_CTRS;
             break;
         case TAG_TYPE_NTAG_213:
             ctr_page_off = NTAG213_PAGES;
@@ -476,6 +532,16 @@ static void handle_any_read(uint8_t block_num, uint8_t block_cnt, uint8_t block_
         mirror_mode = (mirror & MIRROR_BYTE_CONF_MASK) >> MIRROR_BYTE_CONF_SHIFT;
         mirror_byte_off = (mirror & MIRROR_BYTE_BYTE_MASK) >> MIRROR_BYTE_BYTE_SHIFT;
 
+        // NTAG 210/212 don't have a counter thus no mirror mode
+        switch (m_tag_type) {
+        case TAG_TYPE_NTAG_210:
+        case TAG_TYPE_NTAG_212:
+            mirror_mode = MIRROR_CONF_UID;
+            break;
+        default:
+            break;
+        }
+
         if ((mirror_page_off > 3) && (mirror_mode != MIRROR_CONF_DISABLED)) {
             mirror_size = mirror_size_for_mode(mirror_mode);
             int user_data_end = get_user_data_end_by_tag_type(m_tag_type);
@@ -543,7 +609,10 @@ static void handle_any_read(uint8_t block_num, uint8_t block_cnt, uint8_t block_
     NRF_LOG_DEBUG("READ handled %02x %02x %02x", block_num, block_cnt, block_max);
 
     // update counter for NTAG cards if needed
-    if (is_ntag() && !m_did_first_read) {
+    switch (m_tag_type) {
+    case TAG_TYPE_NTAG_213:
+    case TAG_TYPE_NTAG_215:
+    case TAG_TYPE_NTAG_216: if (!m_did_first_read) {
         m_did_first_read = true;
 
         int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
@@ -557,6 +626,10 @@ static void handle_any_read(uint8_t block_num, uint8_t block_cnt, uint8_t block_
             ctr[1] = (uint8_t)(counter >> 8);
             ctr[2] = (uint8_t)(counter);
         }
+        break;
+    }
+    default:
+        break;
     }
 
     nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, ((int)block_cnt) * NFC_TAG_MF0_NTAG_DATA_SIZE, true);
@@ -582,6 +655,8 @@ static void handle_fast_read_command(uint8_t block_num, uint8_t end_block_num) {
     {
     case TAG_TYPE_MF0UL11:
     case TAG_TYPE_MF0UL21:
+    case TAG_TYPE_NTAG_210:
+    case TAG_TYPE_NTAG_212:
     case TAG_TYPE_NTAG_213:
     case TAG_TYPE_NTAG_215:
     case TAG_TYPE_NTAG_216:
@@ -662,6 +737,14 @@ static bool check_ro_lock_on_page(int block_num) {
             }
             break;
         }
+        case TAG_TYPE_NTAG_210:
+            user_memory_end = NTAG210_USER_MEMORY_END;
+            dyn_lock_bit_page_cnt = 0; // NTAG 210 doesn't have dynamic lock bits
+            break;
+        case TAG_TYPE_NTAG_212:
+            user_memory_end = NTAG212_USER_MEMORY_END;
+            dyn_lock_bit_page_cnt = 2;
+            break;
         case TAG_TYPE_NTAG_213:
             user_memory_end = NTAG213_USER_MEMORY_END;
             dyn_lock_bit_page_cnt = 2;
@@ -680,6 +763,8 @@ static bool check_ro_lock_on_page(int block_num) {
         }
 
         if (block_num < user_memory_end) {
+            ASSERT(dyn_lock_bit_page_cnt > 0);
+
             p_lock_bytes = m_tag_information->memory[user_memory_end];
             uint16_t lock_word = (((uint16_t)p_lock_bytes[1]) << 8) | (uint16_t)p_lock_bytes[0];
 
@@ -745,6 +830,13 @@ static int handle_write_command(uint8_t block_num, uint8_t *p_data) {
 }
 
 static void handle_read_cnt_command(uint8_t index) {
+    // first check if the counter even exists for external commands
+    uint8_t *cnt_data = get_counter_data_by_index(index, true);
+    if (cnt_data == NULL) {
+        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
+        return;
+    }
+
     // deny counter reading when counter password protection is enabled and reader is not authenticated
     if (is_ntag() && !m_tag_information->config.mode_uid_magic) {
         int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
@@ -754,12 +846,6 @@ static void handle_read_cnt_command(uint8_t index) {
             nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
             return;
         }
-    }
-
-    uint8_t *cnt_data = get_counter_data_by_index(index, true);
-    if (cnt_data == NULL) {
-        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
-        return;
     }
 
     memcpy(m_tag_tx_buffer.tx_buffer, cnt_data, 3);
@@ -1075,6 +1161,16 @@ bool nfc_tag_mf0_ntag_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
             version_data[6] = MF0UL21_VERSION_STORAGE_SIZE;
             version_data[2] = MF0ULx1_VERSION_PRODUCT_TYPE;
             break;
+        case TAG_TYPE_NTAG_210:
+            version_data[6] = NTAG210_VERSION_STORAGE_SIZE;
+            version_data[2] = NTAG_VERSION_PRODUCT_TYPE;
+            version_data[3] = VERSION_PRODUCT_SUBTYPE_17pF;
+            break;
+        case TAG_TYPE_NTAG_212:
+            version_data[6] = NTAG212_VERSION_STORAGE_SIZE;
+            version_data[2] = NTAG_VERSION_PRODUCT_TYPE;
+            version_data[3] = VERSION_PRODUCT_SUBTYPE_17pF;
+            break;
         case TAG_TYPE_NTAG_213:
             version_data[6] = NTAG213_VERSION_STORAGE_SIZE;
             version_data[2] = NTAG_VERSION_PRODUCT_TYPE;
@@ -1094,7 +1190,7 @@ bool nfc_tag_mf0_ntag_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
 
         version_data[0] = VERSION_FIXED_HEADER;
         version_data[1] = VERSION_VENDOR_ID;
-        version_data[3] = VERSION_PRODUCT_SUBTYPE_50pF; // TODO: make configurable for MF0ULx1
+        if (version_data[3] == 0) version_data[3] = VERSION_PRODUCT_SUBTYPE_50pF; // TODO: make configurable for MF0ULx1
         version_data[4] = VERSION_MAJOR_PRODUCT;
         version_data[5] = VERSION_MINOR_PRODUCT;
         version_data[7] = VERSION_PROTOCOL_TYPE;
