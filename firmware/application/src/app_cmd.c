@@ -688,13 +688,44 @@ static data_frame_tx_t *cmd_processor_em410x_get_emu_id(uint16_t cmd, uint16_t s
     return data_frame_make(cmd, STATUS_SUCCESS, LF_EM410X_TAG_ID_SIZE, responseData);
 }
 
-static data_frame_tx_t *cmd_processor_hf14a_get_anti_coll_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+static nfc_tag_14a_coll_res_reference_t *get_coll_res_data(bool write) {
+    nfc_tag_14a_coll_res_reference_t *info;
     tag_slot_specific_type_t tag_types;
+
     tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &tag_types);
-    if (tag_types.tag_hf == TAG_TYPE_UNDEFINED) {
-        return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL); // no data in slot, don't send garbage
+
+    switch (tag_types.tag_hf) {
+    case TAG_TYPE_MIFARE_1024:
+    case TAG_TYPE_MIFARE_2048:
+    case TAG_TYPE_MIFARE_4096:
+    case TAG_TYPE_MIFARE_Mini:
+        info = write ? get_mifare_coll_res() : get_saved_mifare_coll_res();
+        break;
+    case TAG_TYPE_MF0ICU1:
+    case TAG_TYPE_MF0ICU2:
+    case TAG_TYPE_MF0UL11:
+    case TAG_TYPE_MF0UL21:
+    case TAG_TYPE_NTAG_210:
+    case TAG_TYPE_NTAG_212:
+    case TAG_TYPE_NTAG_213:
+    case TAG_TYPE_NTAG_215:
+    case TAG_TYPE_NTAG_216:
+        info = nfc_tag_mf0_ntag_get_coll_res();
+        break;
+    default:
+        // no collision resolution data for slot
+        info = NULL;
+        break;
     }
-    nfc_tag_14a_coll_res_reference_t *info = get_saved_mifare_coll_res();
+
+    return info;
+}
+
+static data_frame_tx_t *cmd_processor_hf14a_get_anti_coll_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    nfc_tag_14a_coll_res_reference_t *info = get_coll_res_data(false);
+
+    if (info == NULL) return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+
     // uidlen[1]|uid[uidlen]|atqa[2]|sak[1]|atslen[1]|ats[atslen]
     // dynamic length, so no struct
     uint8_t payload[1 + *info->size + 2 + 1 + 1 + 254];
@@ -947,7 +978,8 @@ static data_frame_tx_t *cmd_processor_hf14a_set_anti_coll_data(uint16_t cmd, uin
             (length < 1 + data[0] + 2 + 1 + 1 + data[1 + data[0] + 2 + 1])) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-    nfc_tag_14a_coll_res_reference_t *info = get_mifare_coll_res();
+    nfc_tag_14a_coll_res_reference_t *info = get_coll_res_data(true);
+
     uint16_t offset = 0;
     *(info->size) = (nfc_tag_14a_uid_size)data[offset];
     offset++;

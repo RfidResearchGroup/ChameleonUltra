@@ -1026,7 +1026,7 @@ static void nfc_tag_mf0_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits)
     return;
 }
 
-static nfc_tag_14a_coll_res_reference_t *get_coll_res() {
+nfc_tag_14a_coll_res_reference_t *nfc_tag_mf0_ntag_get_coll_res() {
     // Use a separate anti -conflict information instead of using the information in the sector
     m_shadow_coll_res.sak = m_tag_information->res_coll.sak;
     m_shadow_coll_res.atqa = m_tag_information->res_coll.atqa;
@@ -1070,7 +1070,7 @@ int nfc_tag_mf0_ntag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *bu
         m_tag_type = type;
         // Register 14A communication management interface
         nfc_tag_14a_handler_t handler_for_14a = {
-            .get_coll_res = get_coll_res,
+            .get_coll_res = nfc_tag_mf0_ntag_get_coll_res,
             .cb_state = nfc_tag_mf0_ntag_state_handler,
             .cb_reset = nfc_tag_mf0_ntag_reset_handler,
         };

@@ -75,6 +75,7 @@ int nfc_tag_mf0_ntag_get_nr_pages_by_tag_type(tag_specific_type_t tag_type);
 uint8_t *nfc_tag_mf0_ntag_get_counter_data_by_index(uint8_t index);
 uint8_t *nfc_tag_mf0_ntag_get_version_data(void);
 uint8_t *nfc_tag_mf0_ntag_get_signature_data(void);
+nfc_tag_14a_coll_res_reference_t *nfc_tag_mf0_ntag_get_coll_res(void);
 
 int nfc_tag_mf0_ntag_get_uid_mode(void);
 bool nfc_tag_mf0_ntag_set_uid_mode(bool enabled);
