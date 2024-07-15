@@ -2356,6 +2356,8 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
             TagSpecificType.MF0ICU2,
             TagSpecificType.MF0UL11,
             TagSpecificType.MF0UL21,
+            TagSpecificType.NTAG_210,
+            TagSpecificType.NTAG_212,
             TagSpecificType.NTAG_213,
             TagSpecificType.NTAG_215,
             TagSpecificType.NTAG_216,
