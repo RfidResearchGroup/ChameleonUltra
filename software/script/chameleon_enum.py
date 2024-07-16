@@ -106,6 +106,7 @@ class Command(enum.IntEnum):
     MF0_NTAG_GET_COUNTER_DATA = 4027
     MF0_NTAG_SET_COUNTER_DATA = 4028
     MF0_NTAG_RESET_AUTH_CNT = 4029
+    MF0_NTAG_GET_PAGE_COUNT = 4030
 
     EM410X_SET_EMU_ID = 5000
     EM410X_GET_EMU_ID = 5001
@@ -139,7 +140,6 @@ class Status(enum.IntEnum):
     FLASH_WRITE_FAIL = 0x70
     FLASH_READ_FAIL = 0x71
     INVALID_SLOT_TYPE = 0x72
-    INVALID_PARAMS = 0x73
 
     def __str__(self):
         if self == Status.HF_TAG_OK:
@@ -180,8 +180,6 @@ class Status(enum.IntEnum):
             return "Flash read failed"
         elif self == Status.INVALID_SLOT_TYPE:
             return "Invalid card type in slot"
-        elif self == Status.INVALID_PARAMS:
-            return "Invalid command parameters"
         return "Invalid status"
 
 

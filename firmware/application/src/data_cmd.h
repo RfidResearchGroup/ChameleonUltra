@@ -117,6 +117,7 @@
 #define DATA_CMD_MF0_NTAG_GET_COUNTER_DATA      (4027)
 #define DATA_CMD_MF0_NTAG_SET_COUNTER_DATA      (4028)
 #define DATA_CMD_MF0_NTAG_RESET_AUTH_CNT        (4029)
+#define DATA_CMD_MF0_NTAG_GET_PAGE_COUNT        (4030)
 //
 // ******************************************************************
 
