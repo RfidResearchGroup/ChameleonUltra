@@ -834,7 +834,7 @@ static data_frame_tx_t *cmd_processor_mf0_ntag_write_emu_page_data(uint16_t cmd,
 
     if (length < 2) {
         byte = nr_pages;
-        return data_frame_make(cmd, STATUS_INVALID_PARAMS, 1, &byte);
+        return data_frame_make(cmd, STATUS_PAR_ERR, 1, &byte);
     }
 
     int page_index = data[0];
@@ -848,7 +848,7 @@ static data_frame_tx_t *cmd_processor_mf0_ntag_write_emu_page_data(uint16_t cmd,
         || (((int)length - 2) < byte_length)
     ) {
         byte = nr_pages;
-        return data_frame_make(cmd, STATUS_INVALID_PARAMS, 1, &byte);
+        return data_frame_make(cmd, STATUS_PAR_ERR, 1, &byte);
     }
 
     tag_data_buffer_t *buffer = get_buffer_by_tag_type(active_slot_tag_types.tag_hf);
@@ -857,6 +857,22 @@ static data_frame_tx_t *cmd_processor_mf0_ntag_write_emu_page_data(uint16_t cmd,
     memcpy(&info->memory[page_index][0], &data[2], byte_length);
 
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_get_emu_page_count(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t byte;
+    uint8_t active_slot = tag_emulation_get_slot();
+
+    tag_slot_specific_type_t active_slot_tag_types;
+    tag_emulation_get_specific_types_by_slot(active_slot, &active_slot_tag_types);
+
+    int nr_pages = nfc_tag_mf0_ntag_get_nr_pages_by_tag_type(active_slot_tag_types.tag_hf);
+    // This means wrong slot type.
+    if (nr_pages <= 0) return data_frame_make(cmd, STATUS_INVALID_SLOT_TYPE, 0, data);
+
+    // Convert the int value to u8 value if it's valid.
+    byte = nr_pages;
+    return data_frame_make(cmd, STATUS_SUCCESS, 1, &byte);
 }
 
 static data_frame_tx_t *cmd_processor_mf0_ntag_read_emu_page_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -872,17 +888,13 @@ static data_frame_tx_t *cmd_processor_mf0_ntag_read_emu_page_data(uint16_t cmd, 
 
     if (length < 2) {
         byte = nr_pages;
-        return data_frame_make(cmd, STATUS_INVALID_PARAMS, 1, &byte);
+        return data_frame_make(cmd, STATUS_PAR_ERR, 1, &byte);
     }
 
     int page_index = data[0];
     int pages_count = data[1];
 
     if (pages_count == 0) return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
-    else if ((page_index >= ((int)nr_pages)) || (pages_count > (((int)nr_pages) - page_index))) {
-        byte = nr_pages;
-        return data_frame_make(cmd, STATUS_INVALID_PARAMS, 1, &byte);
-    }
 
     tag_data_buffer_t *buffer = get_buffer_by_tag_type(active_slot_tag_types.tag_hf);
     nfc_tag_mf0_ntag_information_t *info = (nfc_tag_mf0_ntag_information_t *)buffer->buffer;
@@ -898,7 +910,7 @@ static data_frame_tx_t *cmd_processor_mf0_ntag_get_version_data(uint16_t cmd, ui
 }
 
 static data_frame_tx_t *cmd_processor_mf0_ntag_set_version_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    if (length != 8) return data_frame_make(cmd, STATUS_INVALID_PARAMS, 0, NULL);
+    if (length != 8) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
 
     uint8_t *version_data = nfc_tag_mf0_ntag_get_version_data();
     if (version_data == NULL) return data_frame_make(cmd, STATUS_INVALID_SLOT_TYPE, 0, NULL);
@@ -915,7 +927,7 @@ static data_frame_tx_t *cmd_processor_mf0_ntag_get_signature_data(uint16_t cmd, 
 }
 
 static data_frame_tx_t *cmd_processor_mf0_ntag_set_signature_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    if (length != NFC_TAG_MF0_NTAG_SIG_SIZE) return data_frame_make(cmd, STATUS_INVALID_PARAMS, 0, NULL);
+    if (length != NFC_TAG_MF0_NTAG_SIG_SIZE) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
 
     uint8_t *signature_data = nfc_tag_mf0_ntag_get_signature_data();
     if (signature_data == NULL) return data_frame_make(cmd, STATUS_INVALID_SLOT_TYPE, 0, NULL);
@@ -925,7 +937,7 @@ static data_frame_tx_t *cmd_processor_mf0_ntag_set_signature_data(uint16_t cmd, 
 }
 
 static data_frame_tx_t *cmd_processor_mf0_ntag_get_counter_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    if (length != 1) return data_frame_make(cmd, STATUS_INVALID_PARAMS, 0, NULL);
+    if (length != 1) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
 
     uint8_t index = data[0] & 0x7F;
     uint8_t *counter_data = nfc_tag_mf0_ntag_get_counter_data_by_index(index);
@@ -941,7 +953,7 @@ static data_frame_tx_t *cmd_processor_mf0_ntag_get_counter_data(uint16_t cmd, ui
 }
 
 static data_frame_tx_t *cmd_processor_mf0_ntag_set_counter_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    if (length != 4) return data_frame_make(cmd, STATUS_INVALID_PARAMS, 0, NULL);
+    if (length != 4) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
 
     uint8_t index = data[0] & 0x7F;
     uint8_t *counter_data = nfc_tag_mf0_ntag_get_counter_data_by_index(index);
@@ -1318,6 +1330,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF0_NTAG_GET_COUNTER_DATA,    NULL,                        cmd_processor_mf0_ntag_get_counter_data,     NULL                   },
     {    DATA_CMD_MF0_NTAG_SET_COUNTER_DATA,    NULL,                        cmd_processor_mf0_ntag_set_counter_data,     NULL                   },
     {    DATA_CMD_MF0_NTAG_RESET_AUTH_CNT,      NULL,                        cmd_processor_mf0_ntag_reset_auth_cnt,       NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_PAGE_COUNT,      NULL,                        cmd_processor_mf0_ntag_get_emu_page_count,   NULL                   },
 
     {    DATA_CMD_EM410X_SET_EMU_ID,            NULL,                        cmd_processor_em410x_set_emu_id,             NULL                   },
     {    DATA_CMD_EM410X_GET_EMU_ID,            NULL,                        cmd_processor_em410x_get_emu_id,             NULL                   },

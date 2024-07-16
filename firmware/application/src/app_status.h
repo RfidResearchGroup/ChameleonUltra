@@ -33,5 +33,4 @@
 #define     STATUS_FLASH_WRITE_FAIL                 (0x70)  // Flash writing failed
 #define     STATUS_FLASH_READ_FAIL                  (0x71)  // Flash read failed
 #define     STATUS_INVALID_SLOT_TYPE                (0x72)  // Invalid slot type
-#define     STATUS_INVALID_PARAMS                   (0x73)  // Invalid command parameters
 #endif
