@@ -432,6 +432,10 @@ Notes:
 * Command: no data
 * Response: 1 byte for the old value of the unsuccessful auth counter.
 * CLI: cf `hf mfu econfig --reset-auth-cnt`
+### 4030: MF0_NTAG_GET_PAGE_COUNT
+* Command: no data
+* Response: 1 byte is the number of pages available in the current card slot
+* CLI: unused
 ### 5000: EM410X_SET_EMU_ID
 * Command: 5 bytes. `id[5]`. ID as 5 bytes.
 * Response: no data
