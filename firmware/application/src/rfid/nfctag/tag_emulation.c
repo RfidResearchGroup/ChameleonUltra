@@ -71,7 +71,7 @@ static tag_slot_config_t slotConfig ALIGN_U32 = {
     // See tag_emulation_factory_init for actual tag content
     .slots = {
         { .enabled_hf = true,  .enabled_lf = true,  .tag_hf = TAG_TYPE_MIFARE_1024, .tag_lf = TAG_TYPE_EM410X,    },   // 1
-        { .enabled_hf = true,  .enabled_lf = false, .tag_hf = TAG_TYPE_MIFARE_1024, .tag_lf = TAG_TYPE_UNDEFINED, },   // 2
+        { .enabled_hf = true,  .enabled_lf = false, .tag_hf = TAG_TYPE_MF0ICU1,     .tag_lf = TAG_TYPE_UNDEFINED, },   // 2
         { .enabled_hf = false, .enabled_lf = true,  .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_EM410X,    },   // 3
         { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },   // 4
         { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },   // 5
