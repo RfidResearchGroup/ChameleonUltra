@@ -95,6 +95,17 @@ class Command(enum.IntEnum):
     MF1_GET_WRITE_MODE = 4016
     MF1_SET_WRITE_MODE = 4017
     HF14A_GET_ANTI_COLL_DATA = 4018
+    MF0_NTAG_GET_UID_MAGIC_MODE = 4019
+    MF0_NTAG_SET_UID_MAGIC_MODE = 4020
+    MF0_NTAG_READ_EMU_PAGE_DATA = 4021
+    MF0_NTAG_WRITE_EMU_PAGE_DATA = 4022
+    MF0_NTAG_GET_VERSION_DATA = 4023
+    MF0_NTAG_SET_VERSION_DATA = 4024
+    MF0_NTAG_GET_SIGNATURE_DATA = 4025
+    MF0_NTAG_SET_SIGNATURE_DATA = 4026
+    MF0_NTAG_GET_COUNTER_DATA = 4027
+    MF0_NTAG_SET_COUNTER_DATA = 4028
+    MF0_NTAG_RESET_AUTH_CNT = 4029
 
     EM410X_SET_EMU_ID = 5000
     EM410X_GET_EMU_ID = 5001
@@ -127,6 +138,8 @@ class Status(enum.IntEnum):
     NOT_IMPLEMENTED = 0x69
     FLASH_WRITE_FAIL = 0x70
     FLASH_READ_FAIL = 0x71
+    INVALID_SLOT_TYPE = 0x72
+    INVALID_PARAMS = 0x73
 
     def __str__(self):
         if self == Status.HF_TAG_OK:
@@ -165,6 +178,10 @@ class Status(enum.IntEnum):
             return "Flash write failed"
         elif self == Status.FLASH_READ_FAIL:
             return "Flash read failed"
+        elif self == Status.INVALID_SLOT_TYPE:
+            return "Invalid card type in slot"
+        elif self == Status.INVALID_PARAMS:
+            return "Invalid command parameters"
         return "Invalid status"
 
 
@@ -260,6 +277,12 @@ class TagSpecificType(enum.IntEnum):
     NTAG_213 = 1100
     NTAG_215 = 1101
     NTAG_216 = 1102
+    MF0ICU1 = 1103
+    MF0ICU2 = 1104
+    MF0UL11 = 1105
+    MF0UL21 = 1106
+    NTAG_210 = 1107
+    NTAG_212 = 1108
     # MIFARE Plus series     1200
     # DESFire series         1300
 
@@ -303,6 +326,18 @@ class TagSpecificType(enum.IntEnum):
             return "NTAG 215"
         elif self == TagSpecificType.NTAG_216:
             return "NTAG 216"
+        elif self == TagSpecificType.MF0ICU1:
+            return "Mifare Ultralight"
+        elif self == TagSpecificType.MF0ICU2:
+            return "Mifare Ultralight C"
+        elif self == TagSpecificType.MF0UL11:
+            return "Mifare Ultralight EV1 (640 bit)"
+        elif self == TagSpecificType.MF0UL21:
+            return "Mifare Ultralight EV1 (1312 bit)"
+        elif self == TagSpecificType.NTAG_210:
+            return "NTAG 210"
+        elif self == TagSpecificType.NTAG_212:
+            return "NTAG 212"
         elif self < TagSpecificType.OLD_TAG_TYPES_END:
             return "Old tag type, must be migrated! Upgrade fw!"
         return "Invalid"

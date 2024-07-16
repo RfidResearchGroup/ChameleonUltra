@@ -388,6 +388,50 @@ Notes:
 * Command: no data
 * Response: no data or N bytes: `uidlen|uid[uidlen]|atqa[2]|sak|atslen|ats[atslen]`. UID, ATQA, SAK and ATS as bytes.
 * CLI: cf `hw slot list`/`hf mf econfig`/`hf mfu econfig`
+### 4019: MF0_NTAG_GET_UID_MAGIC_MODE
+* Command: no data
+* Response: 1 byte where a non-zero value indicates that UID magic mode is enabled for the current slot.
+* CLI: cf `hf mfu econfig`
+### 4020: MF0_NTAG_SET_UID_MAGIC_MODE
+* Command: 1 byte where a non-zero value indicates that UID magic mode should be enabled for the current slot, otherwise disabled.
+* Response: no data
+* CLI: cf `hf mfu econfig --enable-uid-magic`/`hf mfu econfig --disable-uid-magic`
+### 4021: MF0_NTAG_READ_EMU_PAGE_DATA
+* Command: 2 bytes: one for first page index, one for count of pages to be read.
+* Response: `4 * n` bytes where `n` is the number if pages to be read
+* CLI: cf `hf mfu eview`
+### 4022: MF0_NTAG_WRITE_EMU_PAGE_DATA
+* Command: 2 + `n * 4` bytes: one for first page index, one for count of pages to be read, `n * 4` for `n` pages data.
+* Response: no data
+* CLI: unused
+### 4023: MF0_NTAG_GET_VERSION_DATA
+* Command: no data
+* Response: 8 version data bytes.
+* CLI: cf `hf mfu econfig`
+### 4024: MF0_NTAG_SET_VERSION_DATA
+* Command: 8 version data bytes.
+* Response: no data
+* CLI: cf `hf mfu econfig --set-version <hex>`
+### 4025: MF0_NTAG_GET_SIGNATURE_DATA
+* Command: no data
+* Response: 32 signature data bytes.
+* CLI: cf `hf mfu econfig`
+### 4026: MF0_NTAG_SET_SIGNATURE_DATA
+* Command: 32 signature data bytes.
+* Response: no data
+* CLI: cf `hf mfu econfig --set-signature <hex>`
+### 4027: MF0_NTAG_GET_COUNTER_DATA
+* Command: 1 byte for the counter index
+* Response: 3 bytes for the counter value (big-endian) + 1 byte for tearing where `0xBD` means tearing flag is not set.
+* CLI: cf `hf mfu ercnt`
+### 4028: MF0_NTAG_SET_COUNTER_DATA
+* Command: 1 byte where the lower 7 bits are the counter index and the top bit indicates whether tearing event flag should be reset + 3 bytes of the counter value (big-endian).
+* Response: no data
+* CLI: cf `hf mfu ewcnt`
+### 4029: MF0_NTAG_RESET_AUTH_CNT
+* Command: no data
+* Response: 1 byte for the old value of the unsuccessful auth counter.
+* CLI: cf `hf mfu econfig --reset-auth-cnt`
 ### 5000: EM410X_SET_EMU_ID
 * Command: 5 bytes. `id[5]`. ID as 5 bytes.
 * Response: no data

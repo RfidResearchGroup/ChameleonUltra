@@ -2,7 +2,7 @@
 #include "nfc_14a.h"
 #include "lf_tag_em.h"
 #include "nfc_mf1.h"
-#include "nfc_ntag.h"
+#include "nfc_mf0_ntag.h"
 #include "fds_ids.h"
 #include "fds_util.h"
 #include "tag_emulation.h"
@@ -100,9 +100,16 @@ static tag_base_handler_map_t tag_base_map[] = {
     { TAG_SENSE_HF,    TAG_TYPE_MIFARE_2048,    nfc_tag_mf1_data_loadcb,      nfc_tag_mf1_data_savecb,      nfc_tag_mf1_data_factory,      &m_tag_data_hf },
     { TAG_SENSE_HF,    TAG_TYPE_MIFARE_4096,    nfc_tag_mf1_data_loadcb,      nfc_tag_mf1_data_savecb,      nfc_tag_mf1_data_factory,      &m_tag_data_hf },
     // NTAG tag simulation
-    { TAG_SENSE_HF,    TAG_TYPE_NTAG_213,      nfc_tag_ntag_data_loadcb,     nfc_tag_ntag_data_savecb,      nfc_tag_ntag_data_factory,     &m_tag_data_hf },
-    { TAG_SENSE_HF,    TAG_TYPE_NTAG_215,      nfc_tag_ntag_data_loadcb,     nfc_tag_ntag_data_savecb,      nfc_tag_ntag_data_factory,     &m_tag_data_hf },
-    { TAG_SENSE_HF,    TAG_TYPE_NTAG_216,      nfc_tag_ntag_data_loadcb,     nfc_tag_ntag_data_savecb,      nfc_tag_ntag_data_factory,     &m_tag_data_hf },
+    { TAG_SENSE_HF,    TAG_TYPE_NTAG_210,      nfc_tag_mf0_ntag_data_loadcb,     nfc_tag_mf0_ntag_data_savecb,      nfc_tag_mf0_ntag_data_factory,     &m_tag_data_hf },
+    { TAG_SENSE_HF,    TAG_TYPE_NTAG_212,      nfc_tag_mf0_ntag_data_loadcb,     nfc_tag_mf0_ntag_data_savecb,      nfc_tag_mf0_ntag_data_factory,     &m_tag_data_hf },
+    { TAG_SENSE_HF,    TAG_TYPE_NTAG_213,      nfc_tag_mf0_ntag_data_loadcb,     nfc_tag_mf0_ntag_data_savecb,      nfc_tag_mf0_ntag_data_factory,     &m_tag_data_hf },
+    { TAG_SENSE_HF,    TAG_TYPE_NTAG_215,      nfc_tag_mf0_ntag_data_loadcb,     nfc_tag_mf0_ntag_data_savecb,      nfc_tag_mf0_ntag_data_factory,     &m_tag_data_hf },
+    { TAG_SENSE_HF,    TAG_TYPE_NTAG_216,      nfc_tag_mf0_ntag_data_loadcb,     nfc_tag_mf0_ntag_data_savecb,      nfc_tag_mf0_ntag_data_factory,     &m_tag_data_hf },
+    // MF0 tag simulation
+    { TAG_SENSE_HF,    TAG_TYPE_MF0ICU1,       nfc_tag_mf0_ntag_data_loadcb,     nfc_tag_mf0_ntag_data_savecb,      nfc_tag_mf0_ntag_data_factory,     &m_tag_data_hf },
+    { TAG_SENSE_HF,    TAG_TYPE_MF0ICU2,       nfc_tag_mf0_ntag_data_loadcb,     nfc_tag_mf0_ntag_data_savecb,      nfc_tag_mf0_ntag_data_factory,     &m_tag_data_hf },
+    { TAG_SENSE_HF,    TAG_TYPE_MF0UL11,       nfc_tag_mf0_ntag_data_loadcb,     nfc_tag_mf0_ntag_data_savecb,      nfc_tag_mf0_ntag_data_factory,     &m_tag_data_hf },
+    { TAG_SENSE_HF,    TAG_TYPE_MF0UL21,       nfc_tag_mf0_ntag_data_loadcb,     nfc_tag_mf0_ntag_data_savecb,      nfc_tag_mf0_ntag_data_factory,     &m_tag_data_hf },
 };
 
 
@@ -701,7 +708,7 @@ void tag_emulation_factory_init(void) {
         }
     }
 
-    if (slotConfig.slots[1].enabled_hf && slotConfig.slots[1].tag_hf == TAG_TYPE_MIFARE_1024) {
+    if (slotConfig.slots[1].enabled_hf && slotConfig.slots[1].tag_hf == TAG_TYPE_MF0ICU1) {
         // Initialize a high -frequency M1 card in the card slot 2, if it does not exist.
         get_fds_map_by_slot_sense_type_for_dump(1, TAG_SENSE_HF, &map_info);
         if (!fds_is_exists(map_info.id, map_info.key)) {
