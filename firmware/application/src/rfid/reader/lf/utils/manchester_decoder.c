@@ -1,7 +1,7 @@
 #include "manchester_decoder.h"
 #include <stdint.h>
 
-static const uint8_t transitions[] = {0b00000001, 0b10010001, 0b10011011, 0b11111011};
+//static const uint8_t transitions[] = {0b00000001, 0b10010001, 0b10011011, 0b11111011};
 static const ManchesterState manchester_reset_state = ManchesterResetState;
 
 bool manchester_advance(
@@ -24,7 +24,7 @@ bool manchester_advance(
     *next_state = new_state;
     return result;
 }
-
+/*
 uint8_t mcst(RAWBUF_TYPE_S *Pdata) {
     uint8_t sync = 1;      //After the current interval process is processed, is it on the judgment line
     uint8_t cardindex = 0; //Record change number
@@ -77,4 +77,4 @@ uint8_t mcst(RAWBUF_TYPE_S *Pdata) {
     }
     return 1;
 }
-
+*/
