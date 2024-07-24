@@ -539,6 +539,15 @@ static data_frame_tx_t *cmd_processor_em410x_write_to_t55XX(uint16_t cmd, uint16
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+static data_frame_tx_t *cmd_processor_lf_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t card_buffer[64] = { 0x00 };
+    status = lf_reader_read(card_buffer, sizeof(card_buffer));
+    if (status != STATUS_LF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_buffer), card_buffer);
+}
+
 #endif
 
 
@@ -1298,6 +1307,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
 
     {    DATA_CMD_EM410X_SCAN,                  before_reader_run,           cmd_processor_em410x_scan,                   NULL                   },
     {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_em410x_write_to_t55XX,         NULL                   },
+    {    DATA_CMD_LF_READ,                      before_reader_run,           cmd_processor_lf_read,                       NULL                   },
 
 #endif
 
