@@ -33,6 +33,12 @@ typedef uint64_t EM4100DecodedData;
 #define EM_READ_TIME3_BASE (0x80)
 #define EM_READ_JITTER_TIME_BASE (0x10)
 
+#define NRF_LOG_MODULE_NAME em4100
+#include "nrf_log.h"
+#include "nrf_log_ctrl.h"
+#include "nrf_log_default_backends.h"
+NRF_LOG_MODULE_REGISTER();
+
 typedef struct {
 
     uint8_t data[EM4100_DECODED_DATA_SIZE];
@@ -76,7 +82,7 @@ uint8_t protocol_em4100_get_time1_low(ProtocolEM4100* proto) {
 }
 
 uint8_t protocol_em4100_get_time1_high(ProtocolEM4100* proto) {
-    return EM_READ_TIME1_BASE / protocol_em4100_get_time_divisor(proto) -
+    return EM_READ_TIME1_BASE / protocol_em4100_get_time_divisor(proto) +
            EM_READ_JITTER_TIME_BASE / protocol_em4100_get_time_divisor(proto);
 }
 
@@ -92,7 +98,7 @@ uint8_t protocol_em4100_get_time2_low(ProtocolEM4100* proto) {
 }
 
 uint8_t protocol_em4100_get_time2_high(ProtocolEM4100* proto) {
-    return EM_READ_TIME2_BASE / protocol_em4100_get_time_divisor(proto) -
+    return EM_READ_TIME2_BASE / protocol_em4100_get_time_divisor(proto) +
            EM_READ_JITTER_TIME_BASE / protocol_em4100_get_time_divisor(proto);
 }
 
@@ -108,7 +114,7 @@ uint8_t protocol_em4100_get_time3_low(ProtocolEM4100* proto) {
 }
 
 uint8_t protocol_em4100_get_time3_high(ProtocolEM4100* proto) {
-    return EM_READ_TIME3_BASE / protocol_em4100_get_time_divisor(proto) -
+    return EM_READ_TIME3_BASE / protocol_em4100_get_time_divisor(proto) +
            EM_READ_JITTER_TIME_BASE / protocol_em4100_get_time_divisor(proto);
 }
 
