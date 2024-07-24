@@ -334,6 +334,31 @@ in a second terminal:
 JLinkRTTClient
 ```
 
+For Windows add these lines to the `tasks.json`:
+```json
+        {
+            "label": "logs",
+            "type": "shell",
+            "command": "C:\\WINDOWS\\System32\\cmd.exe",
+            "args": ["/K", "C:\\Program Files\\SEGGER\\JLink\\JLinkRTTClient.exe"],
+            "options": {
+                "cwd": "C:\\Program Files\\SEGGER\\JLink"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "logger server",
+            "type": "shell",
+            "command": "C:\\WINDOWS\\System32\\cmd.exe",
+            "args": ["/K", "C:\\Program Files\\SEGGER\\JLink\\JLink.Exe", "-if",  "SWD",  "-device",  "nrf52",  "-speed",  "4000", "-autoconnect", "1"],
+            "options": {
+                "cwd": "C:\\Program Files\\SEGGER\\JLink"
+            },
+            "problemMatcher": []
+        },
+```
+
+
 ## Using SWO pin as UART to monitor NRF_LOG
 
 One can set `NRF_LOG_UART_ON_SWO_ENABLED := 1` in `Makefile.defs` to activate this functionality.

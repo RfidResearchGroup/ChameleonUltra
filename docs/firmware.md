@@ -71,7 +71,7 @@ On a new Chameleon (or after a factory reset), 3 slots are defined, slot 1 holdi
 
 - slot 1 LF: a EM4100 with UID `DEADBEEF88`
 - slot 1 HF: a MIFARE Classic 1k with UID `DEADBEEF`
-- slot 2 HF: a MIFARE Classic 1k with UID `DEADBEEF`
+- slot 2 HF: a MIFARE Classic Ultralight  with UID `04689571FA5C64`
 - slot 3 LF: a EM4100 with UID `DEADBEEF88`
 
 When a slot is selected, the LED shows what type of card is loaded with the following color code:

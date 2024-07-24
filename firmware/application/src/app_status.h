@@ -33,4 +33,5 @@
 #define     STATUS_NOT_IMPLEMENTED                  (0x69)  // Calling some unrealized operations, which belongs to the missed error of the developer
 #define     STATUS_FLASH_WRITE_FAIL                 (0x70)  // Flash writing failed
 #define     STATUS_FLASH_READ_FAIL                  (0x71)  // Flash read failed
+#define     STATUS_INVALID_SLOT_TYPE                (0x72)  // Invalid slot type
 #endif
