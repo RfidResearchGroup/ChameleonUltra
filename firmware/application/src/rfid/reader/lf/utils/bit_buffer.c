@@ -4,6 +4,12 @@
 
 #define BITS_IN_BYTE (8)
 
+#define NRF_LOG_MODULE_NAME bit_buffer
+#include "nrf_log.h"
+#include "nrf_log_ctrl.h"
+#include "nrf_log_default_backends.h"
+NRF_LOG_MODULE_REGISTER();
+
 struct BitBuffer {
     uint8_t* data;
     uint8_t* parity;
@@ -41,6 +47,8 @@ BitBuffer* bit_buffer_alloc(size_t capacity_bytes) {
     buf->parity = malloc(parity_buf_size);
     buf->capacity_bytes = capacity_bytes;
     buf->size_bits = 0;
+
+    bit_buffer_reset(buf);
 
     return buf;
 }
@@ -360,4 +368,9 @@ void bit_buffer_append_bit(BitBuffer* buf, bool bit) {
     }
 
     buf->size_bits++;
+}
+
+void bit_buffer_dump(BitBuffer* buf) {
+    NRF_LOG_INFO("--> bit buffer len: %d bits", buf->size_bits);
+    NRF_LOG_HEXDUMP_INFO(buf->data, bit_buffer_get_size_bytes(buf));    
 }

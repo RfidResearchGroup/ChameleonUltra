@@ -321,6 +321,8 @@ void bit_buffer_append_bytes(BitBuffer* buf, const uint8_t* data, size_t size_by
  */
 void bit_buffer_append_bit(BitBuffer* buf, bool bit);
 
+void bit_buffer_dump(BitBuffer* buf);
+
 #ifdef __cplusplus
 }
 #endif
