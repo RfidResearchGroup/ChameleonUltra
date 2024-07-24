@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <utils/manchester_decoder.h>
+#include <utils/bit_buffer.h>
 #include "lfrfid_protocols.h"
 
 typedef uint64_t EM4100DecodedData;
@@ -25,13 +26,16 @@ typedef uint64_t EM4100DecodedData;
 #define EM4100_DECODED_DATA_SIZE (5)
 #define EM4100_ENCODED_DATA_SIZE (sizeof(EM4100DecodedData))
 
-#define EM_READ_SHORT_TIME_BASE (256)
-#define EM_READ_LONG_TIME_BASE (512)
-#define EM_READ_JITTER_TIME_BASE (100)
+#define EM4100_RAW_DATA_SIZE (50)
+
+#define EM_READ_TIME1_BASE (0x40)
+#define EM_READ_TIME2_BASE (0x60)
+#define EM_READ_TIME3_BASE (0x80)
+#define EM_READ_JITTER_TIME_BASE (0x10)
 
 typedef struct {
-    uint8_t data[EM4100_DECODED_DATA_SIZE];
 
+    uint8_t data[EM4100_DECODED_DATA_SIZE];
     EM4100DecodedData encoded_data;
     uint8_t encoded_data_index;
     bool encoded_polarity;
@@ -66,24 +70,52 @@ uint32_t protocol_em4100_get_t5577_bitrate(ProtocolEM4100* proto) {
     }
 }
 
-uint16_t protocol_em4100_get_short_time_low(ProtocolEM4100* proto) {
-    return EM_READ_SHORT_TIME_BASE / protocol_em4100_get_time_divisor(proto) -
+uint8_t protocol_em4100_get_time1_low(ProtocolEM4100* proto) {
+    return EM_READ_TIME1_BASE / protocol_em4100_get_time_divisor(proto) -
            EM_READ_JITTER_TIME_BASE / protocol_em4100_get_time_divisor(proto);
 }
 
-uint16_t protocol_em4100_get_short_time_high(ProtocolEM4100* proto) {
-    return EM_READ_SHORT_TIME_BASE / protocol_em4100_get_time_divisor(proto) +
+uint8_t protocol_em4100_get_time1_high(ProtocolEM4100* proto) {
+    return EM_READ_TIME1_BASE / protocol_em4100_get_time_divisor(proto) -
            EM_READ_JITTER_TIME_BASE / protocol_em4100_get_time_divisor(proto);
 }
 
-uint16_t protocol_em4100_get_long_time_low(ProtocolEM4100* proto) {
-    return EM_READ_LONG_TIME_BASE / protocol_em4100_get_time_divisor(proto) -
+bool protocol_em4100_get_time1(ProtocolEM4100* proto, uint8_t interval) {
+    return 
+        interval >= protocol_em4100_get_time1_low(proto) && 
+        interval <= protocol_em4100_get_time1_high(proto);
+}
+
+uint8_t protocol_em4100_get_time2_low(ProtocolEM4100* proto) {
+    return EM_READ_TIME2_BASE / protocol_em4100_get_time_divisor(proto) -
            EM_READ_JITTER_TIME_BASE / protocol_em4100_get_time_divisor(proto);
 }
 
-uint16_t protocol_em4100_get_long_time_high(ProtocolEM4100* proto) {
-    return EM_READ_LONG_TIME_BASE / protocol_em4100_get_time_divisor(proto) +
+uint8_t protocol_em4100_get_time2_high(ProtocolEM4100* proto) {
+    return EM_READ_TIME2_BASE / protocol_em4100_get_time_divisor(proto) -
            EM_READ_JITTER_TIME_BASE / protocol_em4100_get_time_divisor(proto);
+}
+
+bool protocol_em4100_get_time2(ProtocolEM4100* proto, uint8_t interval) {
+    return 
+        interval >= protocol_em4100_get_time2_low(proto) && 
+        interval <= protocol_em4100_get_time2_high(proto);
+}
+
+uint8_t protocol_em4100_get_time3_low(ProtocolEM4100* proto) {
+    return EM_READ_TIME3_BASE / protocol_em4100_get_time_divisor(proto) -
+           EM_READ_JITTER_TIME_BASE / protocol_em4100_get_time_divisor(proto);
+}
+
+uint8_t protocol_em4100_get_time3_high(ProtocolEM4100* proto) {
+    return EM_READ_TIME3_BASE / protocol_em4100_get_time_divisor(proto) -
+           EM_READ_JITTER_TIME_BASE / protocol_em4100_get_time_divisor(proto);
+}
+
+bool protocol_em4100_get_time3(ProtocolEM4100* proto, uint8_t interval) {
+    return 
+        interval >= protocol_em4100_get_time3_low(proto) && 
+        interval <= protocol_em4100_get_time3_high(proto);
 }
 
 ProtocolEM4100* protocol_em4100_alloc(void) {
@@ -240,11 +272,84 @@ bool protocol_em4100_decoder_feed(ProtocolEM4100* proto, bool level, uint32_t du
     return result;
 };
 
+uint8_t read_bit_interval(ProtocolEM4100* proto, uint8_t interval) {
+    if (protocol_em4100_get_time1(proto, interval))
+        return 1;
+
+    if (protocol_em4100_get_time2(proto, interval))
+        return 2;
+
+    if (protocol_em4100_get_time3(proto, interval))
+        return 3;
+
+    return 0;
+}
+
+
+uint8_t decode(ProtocolEM4100* proto, uint8_t* data, size_t datalen) {
+    BitBuffer* bit_buffer = bit_buffer_alloc(EM4100_RAW_DATA_SIZE);
+
+    uint8_t sync = 1;      //After the current interval process is processed, is it on the judgment line
+    uint8_t cardindex = 0; //Record change number
+    for (int i = 0; i < datalen; i++) {
+        uint8_t bit_interval = read_bit_interval(proto, data[i]);
+        switch (sync) {
+            case 1: //Synchronous state
+                switch (bit_interval) {
+                    case 0: //TheSynchronousState1T,Add1Digit0,StillSynchronize
+                        bit_buffer_append_bit(bit_buffer, 0);
+                        cardindex++;
+                        break;
+                    case 1: // Synchronous status 1.5T, add 1 digit 1, switch to non -synchronized state
+                        bit_buffer_append_bit(bit_buffer, 1);
+                        cardindex++;
+                        sync = 0;
+                        break;
+                    case 2: //Synchronous2T,Add2Digits10,StillSynchronize
+                        bit_buffer_append_bit(bit_buffer, 1);
+                        cardindex++;
+                        bit_buffer_append_bit(bit_buffer, 0);
+                        cardindex++;
+                        break;
+                    default:
+                        return 0;
+                }
+                break;
+            case 0: //Non -synchronous state
+                switch (bit_interval) {
+                    case 0: //1TInNonSynchronousState,Add1Digit1,StillNonSynchronous
+                        bit_buffer_append_bit(bit_buffer, 1);
+                        cardindex++;
+                        break;
+                    case 1: // In non -synchronous status 1.5T, add 2 digits 10, switch to the synchronous state
+                        bit_buffer_append_bit(bit_buffer, 1);
+                        cardindex++;
+                        bit_buffer_append_bit(bit_buffer, 0);
+                        cardindex++;
+                        sync = 1;
+                        break;
+                    case 2: //The2TOfTheNonSynchronousState,ItIsImpossibleToOccur,ReportAnError
+                        return 0;
+                    default:
+                        return 0;
+                }
+                break;
+        }
+        if (cardindex >= EM4100_RAW_DATA_SIZE * 8)
+            break;
+    }
+
+    bit_buffer_dump(bit_buffer);
+
+    bit_buffer_free(bit_buffer);
+
+    return 1;
+}
+
 void protocol_em4100_decoder_decode(ProtocolEM4100* proto, uint8_t* data, size_t datalen) {
     protocol_em4100_decoder_start(proto);
 
-
-
+    decode(proto, data, datalen);
 }
 
 static void em4100_write_nibble(bool low_nibble, uint8_t data, EM4100DecodedData* encoded_data) {
