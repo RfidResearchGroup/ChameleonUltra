@@ -262,7 +262,7 @@ void timer_ce_handler(nrf_timer_event_t event_type, void *p_context) {
             if (m_is_send_first_edge == true) { // The first edge of the next sends next time
                 if (++m_bit_send_position >= LF_125KHZ_EM410X_BIT_SIZE) {
                     m_bit_send_position = 0;    // The broadcast is successful once, and the BIT position is zero
-/* The main part of the idea. The original EM4100 tag continuously sends it's ID.
+/* The main part of the idea. The original EM4100 tag continuously sends its ID.
 * The root problem, in my point of view, was that CU started to "feel" the field too far to be able to modulate it deep enough,
 * and 3 times (LF_125KHZ_BROADCAST_MAX) of repeating takes only about 100ms, CU is still not close enough to the reader.
 * That is why the emulation worked only if the CU moved past the reader quickly (fly by).*/
