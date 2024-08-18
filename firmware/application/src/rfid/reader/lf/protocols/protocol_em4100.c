@@ -297,8 +297,18 @@ uint8_t decode(ProtocolEM4100* proto, uint8_t* data, size_t datalen) {
 
     uint8_t sync = 1;      //After the current interval process is processed, is it on the judgment line
     uint8_t cardindex = 0; //Record change number
+    bool error = false;
     for (int i = 0; i < datalen; i++) {
         uint8_t bit_interval = read_bit_interval(proto, data[i]);
+
+        NRF_LOG_INFO("-->[%d] %x %d", protocol_em4100_get_time_divisor(proto), data[i], bit_interval);
+
+        if (bit_interval == 0) {
+            bit_buffer_reset(bit_buffer);
+            cardindex = 0;
+            continue;
+        }
+
         switch (sync) {
             case 1: //Synchronous state
                 switch (bit_interval) {
@@ -318,7 +328,8 @@ uint8_t decode(ProtocolEM4100* proto, uint8_t* data, size_t datalen) {
                         cardindex++;
                         break;
                     default:
-                        return 0;
+                        error = true;
+                        break;
                 }
                 break;
             case 0: //Non -synchronous state
@@ -335,13 +346,15 @@ uint8_t decode(ProtocolEM4100* proto, uint8_t* data, size_t datalen) {
                         sync = 1;
                         break;
                     case 2: //The2TOfTheNonSynchronousState,ItIsImpossibleToOccur,ReportAnError
-                        return 0;
+                        error = true;
+                        break;
                     default:
-                        return 0;
+                        error = true;
+                        break;
                 }
                 break;
         }
-        if (cardindex >= EM4100_RAW_DATA_SIZE * 8)
+        if (bit_buffer_get_size(bit_buffer) >= EM4100_RAW_DATA_SIZE * 8 || error)
             break;
     }
 
