@@ -101,19 +101,11 @@ int main(int argc, char *argv[]) {
 	return 0;
     }
     else if (argc == 2 && ! strncmp(argv[1], "--server", 9)) {
-        char *line =NULL;
-        size_t len = 0;
-        ssize_t line_size;
-	while(true) {
-            line_size = getline(&line, &len, stdin);
-            if (line_size > 1) {
-                sscanf(line, "%x %x %x %x %x %x %x\n", &uid, &nt0, &nr0_enc, &ar0_enc, &nt1, &nr1_enc, &ar1_enc);
-	        attack(uid, nt0, nr0_enc, ar0_enc, nt1, nr1_enc, ar1_enc, false);
-            }
-	    else {
-                break;
-	    }
-	}
+        char line[63];
+        while(fgets(line, sizeof(line), stdin)) {
+            sscanf(line, "%x %x %x %x %x %x %x\n", &uid, &nt0, &nr0_enc, &ar0_enc, &nt1, &nr1_enc, &ar1_enc);
+            attack(uid, nt0, nr0_enc, ar0_enc, nt1, nr1_enc, ar1_enc, false);
+        }
     }
     else {
         printf("syntax: %s <uid> <nt> <nr_0> <ar_0> <nt1> <nr_1> <ar_1>\n", argv[0]);
