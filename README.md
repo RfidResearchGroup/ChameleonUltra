@@ -8,7 +8,10 @@ Europe: [Lab401](https://lab401.com/)
 
 United States: [Hackerwarehouse](https://hackerwarehouse.com/)
 
-Anywhere else: [Sneaktechnology](https://sneaktechnology.com) / [Aliexpress by RRG](https://proxgrind.aliexpress.com/store/1101312023)
+MTools Tec: [MTools Tec](https://shop.mtoolstec.com/)
+
+Anywhere else: [Sneaktechnology](https://sneaktechnology.com) / [Aliexpress by RRG](https://proxgrind.aliexpress.com/store/1101312023) 
+
 
 # What is it and how to use ?
 
@@ -36,9 +39,10 @@ Table for future functionality progress
 |13|:--------------:|:--------------:|:------------:|:------------:|:------------:|
 |14|:--------------:|:--------------:|:------------:|:------------:|:------------:|
 
-# Compatible applications
+# Compatible Applications
 
 * [ChameleonUltraGUI](https://github.com/GameTec-live/ChameleonUltraGUI)
+* [MTools BLE](docs/mtoolsble.md)
 
 # Videos
 
@@ -47,6 +51,7 @@ Table for future functionality progress
 * [Downloading and compiling the official CLI](https://www.youtube.com/watch?v=VGpAeitNXH0)
 * [Downloading ChameleonUltraGUI](https://www.youtube.com/watch?v=rHH7iqbX3nY)
 * [ChameleonGUI features overview](https://www.youtube.com/watch?v=YqE8wyVSse4)
+* [MTools BLE - How to clone a card with ChameleonUltra](https://youtu.be/IvH-xtdW1Wk?si=4exqgAAeJ-kxU3aN)
 
 # Official channels
 
