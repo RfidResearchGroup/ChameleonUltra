@@ -30,8 +30,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Added support for timestamped comments in CLI via `rem`, `;`, `%` or `#` (@doegox)
  - Fixed watchdog trigger during `hw factory_reset` (@doegox)
  - Added PyInstaller support for CLI client (@augustozanellato)
- - Added TechSecurityTools to Autorized Distributors (@yanis333)
-
+ - Added proper Mifare Ultralight (original, C, EV1) / NTAG (213, 215, 216) emulation (@turbocooler).
 
 ## [v2.0.0][2023-09-26]
  - Added `hw slot nick delete` and DELETE_SLOT_TAG_NICK (@doegox)
