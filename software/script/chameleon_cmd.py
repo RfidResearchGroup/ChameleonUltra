@@ -385,6 +385,17 @@ class ChameleonCMD:
         data = struct.pack(f'!5s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.EM410X_WRITE_TO_T55XX, data)
 
+    @expect_response(Status.LF_TAG_OK)
+    def lf_read(self):
+        """
+        Read the lf card.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.DATA_CMD_LF_READ)
+        resp.parsed = resp.data
+        return resp
+
     @expect_response(Status.SUCCESS)
     def get_slot_info(self):
         """
