@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - `hf mf elog --decrypt` skip records with found keys (@taichunmin)
  - Added cmd for fetching all slots nicks (@Foxushka)
  - Added `hf mf senested` for recovering keys from static encrypted cards via backdoor (https://eprint.iacr.org/2024/1275) (@Foxushka)
  - Added cmd for faster bulk key checking on one block (~33 keys per second) (@Foxushka)
