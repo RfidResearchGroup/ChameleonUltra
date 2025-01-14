@@ -11,7 +11,6 @@
  * The definition of the packaging tool macro only needs to be modulated 0 and 1
  */
 #define LF_125KHZ_EM410X_BIT_SIZE   64
-// Have decided to increase the period of field sensing in this way
 #define LF_125KHZ_BROADCAST_MAX     10      // 32.768ms once, about 31 times in one second
 #define LF_125KHZ_EM410X_BIT_CLOCK  256
 #define LF_EM410X_TAG_ID_SIZE       5
