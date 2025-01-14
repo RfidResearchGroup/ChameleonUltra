@@ -201,7 +201,7 @@ uint64_t em410x_id_to_memory64(uint8_t id[5]) {
  */
 bool lf_is_field_exists(void) {
     nrf_drv_lpcomp_enable();
-    bsp_delay_us(20);                                   // Display for a period of time and sampling to avoid misjudgment
+    bsp_delay_us(30);                                   // Display for a period of time and sampling to avoid misjudgment
     nrf_lpcomp_task_trigger(NRF_LPCOMP_TASK_SAMPLE);    //Trigger a sampling
     return nrf_lpcomp_result_get() == 1;                //Determine the sampling results of the LF field status
 }
@@ -261,7 +261,10 @@ void timer_ce_handler(nrf_timer_event_t event_type, void *p_context) {
             if (m_is_send_first_edge == true) { // The first edge of the next sends next time
                 if (++m_bit_send_position >= LF_125KHZ_EM410X_BIT_SIZE) {
                     m_bit_send_position = 0;    // The broadcast is successful once, and the BIT position is zero
-                    if (++m_send_id_count >= LF_125KHZ_BROADCAST_MAX) {
+                    if(!lf_is_field_exists()){  // To avoid stopping sending when the reader field is present
+                        m_send_id_count++;
+                    }
+                    if (m_send_id_count >= LF_125KHZ_BROADCAST_MAX) {
                         m_send_id_count = 0;                                        //The number of broadcasts reaches the upper limit, re -identifies the status of the field and re -statistically count the number of broadcast times
                     }
                 }
