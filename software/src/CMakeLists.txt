@@ -35,7 +35,8 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     
     add_compile_options(-D_GNU_SOURCE)
 
-    find_package(Threads)
+    find_package(Threads REQUIRED)
+    set(LIBTHREAD pthread)
 elseif (CMAKE_SYSTEM_NAME MATCHES "Windows")
     MESSAGE(STATUS "Run on Windows.")
 
