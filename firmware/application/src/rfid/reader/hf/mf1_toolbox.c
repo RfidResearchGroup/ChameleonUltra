@@ -861,6 +861,7 @@ static uint8_t nested_recover_core(mf1_nested_core_t *pnc, uint64_t keyKnown, ui
     pnc->par |= ((oddparity8(answer[0]) != parity[0]) << 0);
     pnc->par |= ((oddparity8(answer[1]) != parity[1]) << 1);
     pnc->par |= ((oddparity8(answer[2]) != parity[2]) << 2);
+    pnc->par |= ((oddparity8(answer[3]) != parity[3]) << 3);
     return STATUS_HF_TAG_OK;
 }
 
