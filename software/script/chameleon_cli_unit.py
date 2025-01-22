@@ -1217,26 +1217,39 @@ class HFMFVALUE(ReaderRequiredUnit):
 _KEY = re.compile("[a-fA-F0-9]{12}", flags=re.MULTILINE)
 
 
+class Mfkey32v2Runner:
+
+    def __init__(self):
+        self.proc = subprocess.Popen(
+            [default_cwd / (f"mfkey32v2{'.exe' if sys.platform == 'win32' else ''}"), "--server"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            bufsize=1,
+            encoding="ascii",
+        )
+
+    def close(self):
+        self.proc.stdin.close()
+        self.proc.wait()
+
+    def check(self, items):
+        if not items:
+            self.close()
+            return None
+        self.proc.stdin.write(f"{items[0]['uid']} {items[0]['nt']} {items[0]['nr']} {items[0]['ar']} {items[1]['nt']} {items[1]['nr']} {items[1]['ar']}\n")
+        answer = self.proc.stdout.readline().strip()
+        if answer:
+            return answer, items
+        return None
+
+
+def _init_mfkey32v2_run():
+    global _MFKEY32V2_RUNNER
+    _MFKEY32V2_RUNNER = Mfkey32v2Runner()
+
+
 def _run_mfkey32v2(items):
-    output_str = subprocess.run(
-        [
-            default_cwd / ("mfkey32v2.exe" if sys.platform == "win32" else "mfkey32v2"),
-            items[0]["uid"],
-            items[0]["nt"],
-            items[0]["nr"],
-            items[0]["ar"],
-            items[1]["nt"],
-            items[1]["nr"],
-            items[1]["ar"],
-        ],
-        capture_output=True,
-        check=True,
-        encoding="ascii",
-    ).stdout
-    sea_obj = _KEY.search(output_str)
-    if sea_obj is not None:
-        return sea_obj[0], items
-    return None
+    return _MFKEY32V2_RUNNER.check(items)
 
 
 class ItemGenerator:
@@ -1308,15 +1321,23 @@ class HFMFELog(DeviceRequiredUnit):
         msg3 = " key(s) found"
         n = 1
         gen = ItemGenerator(rs)
-        with Pool(cpu_count()) as pool:
+        with Pool(
+            processes=cpu_count(),
+            initializer=_init_mfkey32v2_run,
+        ) as pool:
             for result in pool.imap(_run_mfkey32v2, gen):
                 # TODO: if some keys already recovered, test them on item before running mfkey32 on item
                 if result is not None:
                     gen.key_found(*result)
                 print(f"{msg1}{n}{msg2}{len(gen.keys)}{msg3}\r", end="")
                 n += 1
+            pool.imap(_run_mfkey32v2, [[]] * cpu_count())
         print()
         return gen.keys
+
+    @staticmethod
+    def disp_key(key: str):
+        return f"{key} [{''.join(chr(c) if 31 < c < 127 else '.' for c in bytes.fromhex(key))}]"
 
     def on_exec(self, args: argparse.Namespace):
         if not args.decrypt:
@@ -1341,44 +1362,29 @@ class HFMFELog(DeviceRequiredUnit):
         # classify
         result_maps = {}
         for item in result_list:
-            uid = item['uid']
-            if uid not in result_maps:
-                result_maps[uid] = {}
-            block = item['block']
-            if block not in result_maps[uid]:
-                result_maps[uid][block] = {}
-            type = item['type']
-            if type not in result_maps[uid][block]:
-                result_maps[uid][block][type] = []
+            (
+                result_maps.setdefault(item["uid"], {})
+                .setdefault(item["block"], {})
+                .setdefault(item["type"], [])
+                .append(item)
+            )
 
-            result_maps[uid][block][type].append(item)
-
-        for uid in result_maps.keys():
+        for uid, result_maps_for_uid in result_maps.items():
             print(f" - Detection log for uid [{uid.upper()}]")
-            result_maps_for_uid = result_maps[uid]
-            for block in result_maps_for_uid:
+            for block, result_for_block in result_maps_for_uid.items():
                 print(f"  > Block {block} detect log decrypting...")
-                if 'A' in result_maps_for_uid[block]:
-                    # print(f" - A record: { result_maps[block]['A'] }")
-                    records = result_maps_for_uid[block]['A']
+                for type_, records in result_for_block.items():
+                    # print(f" - {type_} record: { records }")
                     if len(records) > 1:
-                        result_maps[uid][block]['A'] = self.decrypt_by_list(records)
-                    else:
-                        print(f"  > {len(records)} record")
-                if 'B' in result_maps_for_uid[block]:
-                    # print(f" - B record: { result_maps[block]['B'] }")
-                    records = result_maps_for_uid[block]['B']
-                    if len(records) > 1:
-                        result_maps[uid][block]['B'] = self.decrypt_by_list(records)
+                        result_for_block[type_] = self.decrypt_by_list(records)
                     else:
                         print(f"  > {len(records)} record")
             print("  > Result ---------------------------")
-            for block in result_maps_for_uid.keys():
-                if 'A' in result_maps_for_uid[block]:
-                    print(f"  > Block {block}, A key result: {result_maps_for_uid[block]['A']}")
-                if 'B' in result_maps_for_uid[block]:
-                    print(f"  > Block {block}, B key result: {result_maps_for_uid[block]['B']}")
-        return
+            for block, result_for_block in result_maps_for_uid.items():
+                for type_, results in result_for_block.items():
+                    print(f"  > Block {block}, {type_} key result:")
+                    for key in sorted(results):
+                        print(f"    - {self.disp_key(key)}")
 
 
 @hf_mf.command('eload')
