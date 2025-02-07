@@ -943,9 +943,17 @@ class HFMFFCHK(ReaderRequiredUnit):
                 return
 
         if args.import_dic is not None:
-            if not load_dic_file(args.import_dic, keys):
-                return
-
+            for key in args.import_dic.readlines():
+                if key.startswith("#"): # ignore comments
+                    pass
+                elif key.isspace(): # ignore empty lines
+                    pass
+                elif re.match(r'^[a-fA-F0-9]{12}$', key): # take only this key format
+                    keys.add(bytes.fromhex(key))
+                else: # in case of another format, a conversion is needed
+                    print(f' - {CR}Key should in hex[12] format, invalid key is ignored{C0}, key = "{key}"')
+                    continue
+                    
         if len(keys) == 0:
             print(f' - {CR}No keys{C0}')
             return
@@ -2484,7 +2492,7 @@ class HWSlotList(DeviceRequiredUnit):
                 print(f"{CY if enabled[fwslot]['hf'] else C0}{hf_tag_type}{C0}")
             else:
                 print("undef")
-            if (not args.short) and enabled[fwslot]['hf']:
+            if (not args.short) and enabled[fwslot]['hf'] and hf_tag_type != TagSpecificType.UNDEFINED:
                 if current != slot:
                     self.cmd.set_active_slot(slot)
                     current = slot
@@ -2535,7 +2543,7 @@ class HWSlotList(DeviceRequiredUnit):
                 print(f"{CY if enabled[fwslot]['lf'] else C0}{lf_tag_type}{C0}")
             else:
                 print("undef")
-            if (not args.short) and enabled[fwslot]['lf']:
+            if (not args.short) and enabled[fwslot]['lf'] and lf_tag_type != TagSpecificType.UNDEFINED:
                 if current != slot:
                     self.cmd.set_active_slot(slot)
                     current = slot
