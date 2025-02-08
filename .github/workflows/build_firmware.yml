@@ -20,7 +20,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Check out the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ inputs.checkout-sha == null && github.sha || inputs.checkout-sha }}
           fetch-depth: 0
@@ -54,7 +54,7 @@ jobs:
         device_type: [ultra, lite]
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ inputs.checkout-sha == null && github.sha || inputs.checkout-sha }}
           fetch-depth: 0
@@ -94,5 +94,5 @@ jobs:
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-artifacts
+          name: ${{ matrix.device_type }}-release-artifacts
           path: firmware/objects/*.zip
