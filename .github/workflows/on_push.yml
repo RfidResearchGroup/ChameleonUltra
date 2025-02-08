@@ -28,7 +28,8 @@ jobs:
       - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
-          name: release-artifacts
+          name: release-artifacts-*
+          merge-multiple: true
           path: release-artifacts
       - name: Upload to dev release
         uses: softprops/action-gh-release@v1
@@ -64,7 +65,8 @@ jobs:
       - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
-          name: release-artifacts
+          name: release-artifacts-*
+          merge-multiple: true
           path: release-artifacts
       - name: Upload to tagged release
         uses: softprops/action-gh-release@v1
