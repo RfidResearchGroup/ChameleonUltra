@@ -24,11 +24,12 @@ jobs:
       - client_pipeline
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Download release artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: release-artifacts
+          name: release-artifacts-*
+          merge-multiple: true
           path: release-artifacts
       - name: Upload to dev release
         uses: softprops/action-gh-release@v1
@@ -60,11 +61,12 @@ jobs:
       - client_pipeline
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Download release artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: release-artifacts
+          name: release-artifacts-*
+          merge-multiple: true
           path: release-artifacts
       - name: Upload to tagged release
         uses: softprops/action-gh-release@v1
