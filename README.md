@@ -1,3 +1,5 @@
+# Chameleon Ultra Fireman fork
+
 ![logo](docs/images/ultra-logo.png)
 
 ![ultra picture](docs/images/ultra-overview.png)
@@ -8,35 +10,13 @@ Europe: [Lab401](https://lab401.com/)
 
 United States: [Hackerwarehouse](https://hackerwarehouse.com/)
 
-MTools Tec: [MTools Tec](https://shop.mtoolstec.com/)
+UK: [KSEC](https://labs.ksec.co.uk/product/proxgrind-chameleon-ultra/)
 
-Anywhere else: [Sneaktechnology](https://sneaktechnology.com) / [Aliexpress by RRG](https://proxgrind.aliexpress.com/store/1101312023) / [TechSecurityTools](https://techsecuritytools.com/product/chameleon-ultra/)
+Anywhere else: [Sneaktechnology](https://sneaktechnology.com) / [Aliexpress by RRG](https://proxgrind.aliexpress.com/store/1101312023) / [TechSecurityTools](https://techsecuritytools.com/product/chameleon-ultra/) / [MTools Tec](https://shop.mtoolstec.com/)
 
 # What is it and how to use ?
 
 Read the [available documentation](docs/README.md).
-
-# Public Roadmap with reference to [Here](https://github.com/RfidResearchGroup/ChameleonUltra/wiki/Public-Roadmap)
-
-Table for future functionality progress
----------------------------------
-
-|No.|Functionality to achieve| Date | In Progress / Achieved ? | Contributors | RRG will reward |
-|:--------------:|:--------------:|:--------:|:------------:|:------------:|:------------:|
-|1| Adding DESfire Support|28/09/2023|:--------------:|:--------------:|:------------:|
-|2| Adding Indala Emulation|28/09/2023|:--------------:|:--------------:|:------------:|
-|3| Adding HID Prox 26 bit Emulation|28/09/2023|:--------------:|:--------------:|:------------:|
-|4| Adding custom keys for t5577 read|28/09/2023|:------------:|:------------:|:------------:|
-|5|:--------------:|:--------------:|:------------:|:------------:|:------------:|
-|6|:--------------:|:--------------:|:------------:|:------------:|:------------:|
-|7|:--------------:|:--------------:|:------------:|:------------:|:------------:|
-|8|:--------------:|:--------------:|:------------:|:------------:|:------------:|
-|9|:--------------:|:--------------:|:------------:|:------------:|:------------:|
-|10|:--------------:|:--------------:|:------------:|:------------:|:------------:|
-|11|:--------------:|:--------------:|:------------:|:------------:|:------------:|
-|12|:--------------:|:--------------:|:------------:|:------------:|:------------:|
-|13|:--------------:|:--------------:|:------------:|:------------:|:------------:|
-|14|:--------------:|:--------------:|:------------:|:------------:|:------------:|
 
 # Compatible applications
 
@@ -55,7 +35,8 @@ Table for future functionality progress
 # Official channels
 
 Where do you find the community?
-
+* [GameTec_live discord server](https://discord.gg/DJ2A4wxncK)
 * [RFID Hacking community discord server](https://t.ly/d4_C)
   * Software/chameleon-dev for firmware and clients development discussions
   * Devices/chameleon-ultra for usage discussions
+
