@@ -6,13 +6,19 @@
 
 # ChameleonUltra Authorized Distributors
 
-Europe: [Lab401](https://lab401.com/)
+Lyon, France: [Lab401](https://lab401.com/)
 
-United States: [Hackerwarehouse](https://hackerwarehouse.com/)
+Santa Ana, United States: [Hackerwarehouse](https://hackerwarehouse.com/)
 
-UK: [KSEC](https://labs.ksec.co.uk/product/proxgrind-chameleon-ultra/)
+Hastings, UK: [KSEC](https://labs.ksec.co.uk/product/proxgrind-chameleon-ultra/)
 
-Anywhere else: [Sneaktechnology](https://sneaktechnology.com) / [Aliexpress by RRG](https://proxgrind.aliexpress.com/store/1101312023) / [TechSecurityTools](https://techsecuritytools.com/product/chameleon-ultra/) / [MTools Tec](https://shop.mtoolstec.com/)
+Montreal, Canada: [TechSecurityTools](https://techsecuritytools.com/product/chameleon-ultra/)
+
+Shenzhen, China: [Sneaktechnology](https://sneaktechnology.com)
+
+Guangdong, China: [MTools Tec](https://shop.mtoolstec.com/)
+
+Lazada One, Singapore: [Aliexpress by RRG](https://proxgrind.aliexpress.com/store/1101312023)
 
 # What is it and how to use ?
 
@@ -21,7 +27,7 @@ Read the [available documentation](https://github.com/ChameleonUltra/ChameleonUl
 # Compatible applications
 
 * [ChameleonUltraGUI](https://github.com/GameTec-live/ChameleonUltraGUI)
-* [MTools BLE](docs/mtoolsble.md)
+* [MTools BLE](https://github.com/ChameleonUltra/ChameleonUltra/wiki/mtoolsble)
 
 # Videos
 
