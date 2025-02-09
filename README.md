@@ -16,7 +16,7 @@ Anywhere else: [Sneaktechnology](https://sneaktechnology.com) / [Aliexpress by R
 
 # What is it and how to use ?
 
-Read the [available documentation](docs/README.md).
+Read the [available documentation](https://github.com/ChameleonUltra/ChameleonUltra/wiki).
 
 # Compatible applications
 
@@ -29,7 +29,8 @@ Read the [available documentation](docs/README.md).
 
 * [Downloading and compiling the official CLI](https://www.youtube.com/watch?v=VGpAeitNXH0)
 * [Downloading ChameleonUltraGUI](https://www.youtube.com/watch?v=rHH7iqbX3nY)
-* [ChameleonGUI features overview](https://www.youtube.com/watch?v=YqE8wyVSse4)
+* [ChameleonUltraGUI features overview](https://www.youtube.com/watch?v=YqE8wyVSse4)
+* [Using ChameleonUltraGUI and the Chameleon Ultra](https://www.youtube.com/watch?v=9jtKNJ5-kVY)
 * [MTools BLE - How to clone a card with ChameleonUltra](https://youtu.be/IvH-xtdW1Wk?si=4exqgAAeJ-kxU3aN)
 
 # Official channels
