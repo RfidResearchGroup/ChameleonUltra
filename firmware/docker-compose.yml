@@ -1,0 +1,27 @@
+# How to use this docker-compose.yml file:
+# ========================================
+# 1. Install [Docker](https://www.docker.com/)
+# 2. Change the current directory to the `firmware/` directory
+# 3. Run `docker compose up --pull=always build-ultra` to build the firmware for the ChameleonUltra
+# 4. Run `docker compose up --pull=always build-lite` to build the firmware for the ChameleonLite
+# 5. The firmware will be available in the `firmware/objects/` directory, you can build only one firmware at once.
+# 6. Install the firmware `ultra-dfu-app.zip` or `lite-dfu-app.zip` (in DFU mode)
+services:
+  build-ultra:
+    image: ghcr.io/rfidresearchgroup/chameleonultra-fw-builder:main
+    # image: ghcr.io/chameleonultra/chameleonultra-fw-builder:main
+    platform: linux/amd64
+    volumes:
+      - '../:/workdir:rw'
+    environment:
+      CURRENT_DEVICE_TYPE: ultra
+    command: bash ./firmware/build.sh
+  build-lite:
+    image: ghcr.io/rfidresearchgroup/chameleonultra-fw-builder:main
+    # image: ghcr.io/chameleonultra/chameleonultra-fw-builder:main
+    platform: linux/amd64
+    volumes:
+      - '../:/workdir:rw'
+    environment:
+      CURRENT_DEVICE_TYPE: lite
+    command: bash ./firmware/build.sh
