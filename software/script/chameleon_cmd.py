@@ -1034,6 +1034,28 @@ class ChameleonCMD:
         data = struct.pack('!B', enabled)
         return self.device.send_cmd_sync(Command.SET_BLE_PAIRING_ENABLE, data)
 
+    def get_long_press_threshold(self):
+        """
+        Get the long press threshold in milliseconds
+        """
+        resp = self.device.send_cmd_sync(Command.GET_LONG_PRESS_THRESHOLD)
+        if resp is not None and resp.status == Status.SUCCESS and len(resp.data) == 2:
+            resp.parsed, = struct.unpack('!H', resp.data)
+        else:
+            # Ensure resp exists before trying to assign to resp.parsed
+            if resp is not None:
+                resp.parsed = None
+            # If resp itself is None, we can't assign parsed = None.
+            # The function will return None in this case.
+        return resp
+
+    def set_long_press_threshold(self, duration: int):
+        """
+        Set the long press threshold in milliseconds
+        """
+        data = struct.pack('!H', duration)
+        return self.device.send_cmd_sync(Command.SET_LONG_PRESS_THRESHOLD, data)
+
 
 def test_fn():
     # connect to chameleon

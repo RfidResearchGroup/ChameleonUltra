@@ -209,6 +209,30 @@ static data_frame_tx_t *cmd_processor_set_ble_pairing_enable(uint16_t cmd, uint1
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
+static data_frame_tx_t *cmd_processor_get_long_press_threshold(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    // Ignore unused parameters
+    (void)status;
+    (void)length;
+    (void)data;
+
+    uint16_t duration = settings_get_long_press_threshold();
+    uint8_t resp_data[2];
+    // Pack as big-endian (network byte order)
+    resp_data[0] = (uint8_t)(duration >> 8);
+    resp_data[1] = (uint8_t)(duration & 0xFF);
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(resp_data), resp_data);
+}
+
+static data_frame_tx_t *cmd_processor_set_long_press_threshold(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 2) { // Check for 2 bytes
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    // Unpack uint16_t from data (assuming big-endian/network byte order)
+    uint16_t duration = ((uint16_t)data[0] << 8) | data[1];
+    settings_set_long_press_threshold(duration);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
 static data_frame_tx_t *cmd_processor_hf14a_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -1278,6 +1302,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_DEVICE_CAPABILITIES,      NULL,                        cmd_processor_get_device_capabilities,       NULL                   },
     {    DATA_CMD_GET_BLE_PAIRING_ENABLE,       NULL,                        cmd_processor_get_ble_pairing_enable,        NULL                   },
     {    DATA_CMD_SET_BLE_PAIRING_ENABLE,       NULL,                        cmd_processor_set_ble_pairing_enable,        NULL                   },
+    {    DATA_CMD_GET_LONG_PRESS_THRESHOLD,      NULL,                        cmd_processor_get_long_press_threshold,       NULL                   },
+    {    DATA_CMD_SET_LONG_PRESS_THRESHOLD,      NULL,                        cmd_processor_set_long_press_threshold,       NULL                   },
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
