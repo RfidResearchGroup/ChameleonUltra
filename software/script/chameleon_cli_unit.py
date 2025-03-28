@@ -7330,6 +7330,33 @@ class HWBlePair(DeviceRequiredUnit):
             print(f" - Successfully change ble pairing to {disabled_str}.")
             print(color_string((CY, "Do not forget to store your settings in flash!")))
 
+@hw_settings.command("longpressthreshold")
+class HWSettingsLongPressThreshold(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Get or set the long button press threshold (200-65535 ms)"
+        parser.add_argument(
+            "-d",
+            "--duration",
+            type=int,
+            required=False,
+            help="Threshold in milliseconds (200-65535)",
+            metavar="MS",
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.duration is not None:
+            if args.duration < 200 or args.duration > 65535:
+                print(color_string((CR, "Error: value must be between 200 and 65535 ms.")))
+                return
+            self.cmd.set_long_press_threshold(args.duration)
+            print(f"Long press threshold set to {args.duration} ms.")
+            print(color_string((CY, "Do not forget to store your settings in flash!")))
+        else:
+            current = self.cmd.get_long_press_threshold()
+            print(f"Current long press threshold: {current} ms")
+
 
 @hw.command("raw")
 class HWRaw(DeviceRequiredUnit):
