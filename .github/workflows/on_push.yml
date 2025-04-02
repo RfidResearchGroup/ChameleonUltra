@@ -28,7 +28,7 @@ jobs:
       - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
-          name: release-artifacts-*
+          pattern: release-artifacts-*
           merge-multiple: true
           path: release-artifacts
       - name: Upload to dev release
@@ -65,7 +65,7 @@ jobs:
       - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
-          name: release-artifacts-*
+          pattern: release-artifacts-*
           merge-multiple: true
           path: release-artifacts
       - name: Upload to tagged release
