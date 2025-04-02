@@ -363,6 +363,44 @@ static data_frame_tx_t *cmd_processor_mf1_check_keys_of_sectors(uint16_t cmd, ui
     return data_frame_make(cmd, status, sizeof(out), (uint8_t *)&out);
 }
 
+static data_frame_tx_t *cmd_processor_mf1_hardnested_nonces_acquire(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+	typedef struct {
+        uint8_t slow;
+        uint8_t type_known;
+        uint8_t block_known;
+        uint8_t key_known[6];
+        uint8_t type_target;
+        uint8_t block_target;
+    } PACKED payload_t;
+    if (length != sizeof(payload_t)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    payload_t *payload = (payload_t *)data;
+    
+    // It is enough to collect 110 nonces at a time. The total transmitted data payload is 495 + 1 bytes
+    // Then, the total length can be controlled within 512, so that when encountering a BLE host that supports large packets, one communication can be completed.
+    // There is no need to send or receive packets in separate packets, which improves communication speed.
+    uint8_t nonces[500] = { 0x00 };
+    if (length < 11) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    status = mf1_hardnested_nonces_acquire(
+        payload->slow,
+        payload->block_known,
+        payload->type_known,
+        bytes_to_num(payload->key_known, 6), 
+        payload->block_target,
+        payload->type_target,
+        nonces + 1,
+        sizeof(nonces) - 1,         // The upper limit of the buffer size. Here we take out the first byte to mark the number of collections.
+        &nonces[0]                  // The number of random numbers collected above
+    );
+    if (status != STATUS_HF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    return data_frame_make(cmd, status, nonces[0] * 4.5, (uint8_t *)(nonces + 1));
+}
+
 static data_frame_tx_t *cmd_processor_mf1_read_one_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     typedef struct {
         uint8_t type;
@@ -1295,7 +1333,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_HF14A_RAW,                    before_reader_run,           cmd_processor_hf14a_raw,                     NULL                   },
     {    DATA_CMD_MF1_MANIPULATE_VALUE_BLOCK,   before_hf_reader_run,        cmd_processor_mf1_manipulate_value_block,    after_hf_reader_run    },
     {    DATA_CMD_MF1_CHECK_KEYS_OF_SECTORS,    before_hf_reader_run,        cmd_processor_mf1_check_keys_of_sectors,     after_hf_reader_run    },
-
+    {    DATA_CMD_MF1_HARDNESTED_ACQUIRE,       before_hf_reader_run,        cmd_processor_mf1_hardnested_nonces_acquire, after_hf_reader_run    },
+    
     {    DATA_CMD_EM410X_SCAN,                  before_reader_run,           cmd_processor_em410x_scan,                   NULL                   },
     {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_em410x_write_to_t55XX,         NULL                   },
 

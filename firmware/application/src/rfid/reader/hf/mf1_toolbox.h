@@ -118,6 +118,9 @@ uint16_t mf1_toolbox_check_keys_of_sectors (
     mf1_toolbox_check_keys_of_sectors_out_t *out
 );
 
+uint8_t mf1_hardnested_nonces_acquire(bool slow, uint8_t blkKnown, uint8_t typKnown, uint64_t keyKnown, 
+    uint8_t targetBlk, uint8_t targetTyp, uint8_t* nonces, uint16_t noncesMax, uint8_t* num_nonces);
+
 #ifdef __cplusplus
 }
 #endif

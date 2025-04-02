@@ -17,7 +17,7 @@
 // The default delay of the antenna reset
 static uint32_t g_ant_reset_delay = 100;
 
-// Label information used for global operations
+// tag information used for this module.
 static picc_14a_tag_t m_tag_info;
 static picc_14a_tag_t *p_tag_info = &m_tag_info;
 
@@ -1094,5 +1094,98 @@ uint16_t mf1_toolbox_check_keys_of_sectors (
         }
     }
 
+    return STATUS_HF_TAG_OK;
+}
+
+/**
+* @brief : HardNested random number acquisition implementation
+* @param :slow : Is it a low-speed acquisition mode? Low-speed acquisition is suitable for some non-standard cards
+* @param :keyKnown : The known secret key of the card
+* @param :blkKnown : The sector to which the known secret key of the card belongs
+* @param :typKnown : The type of the known secret key of the card, 0x60 (A secret key) or 0x61 (B secret key)
+* @param :targetBlk : The target sector for nested attack
+* @param :targetTyp : The target secret key type for nested attack
+* @param :nonces : The buffer for storing random numbers
+* @param :noncesMax : The upper limit of the random number buffer in bytes
+* @retval : STATUS_HF_TAG_OK is returned if the acquisition is successful, and non-HF_TAG_OK is returned if the acquisition is unsuccessful Value
+*
+*/
+uint8_t mf1_hardnested_nonces_acquire(bool slow, uint8_t blkKnown, uint8_t typKnown, uint64_t keyKnown, 
+    uint8_t targetBlk, uint8_t targetTyp, uint8_t* nonces, uint16_t noncesMax, uint8_t* num_nonces) {
+    struct Crypto1State mpcs = { 0, 0 };
+    struct Crypto1State *pcs = &mpcs;
+    uint8_t answer[] 	     = { 0x00, 0x00, 0x00, 0x00 };
+    uint8_t parity[] 	     = { 0x00, 0x00, 0x00, 0x00 };
+    uint8_t nt_par_enc       = 0;
+    uint8_t status           = STATUS_HF_TAG_NO;
+    uint32_t cuid            = 0;   // cuid can be fixed when selecting card
+    uint16_t len             = 0;
+    *num_nonces              = 0;   // The number of random numbers currently counted must be reset
+    bool tag_selected        = false;
+    uint8_t err_count        = 0;
+
+    for (uint16_t i = 0; i <= noncesMax - 9;) {
+        // NRF_LOG_INFO("AcquireEncryptedNonces: %d\r\n", i);
+        if (tag_selected) {
+            mf1_toolbox_report_healthy();
+            if (pcd_14a_reader_fast_select(p_tag_info) != STATUS_HF_TAG_OK) {
+                NRF_LOG_INFO("AcquireEncryptedNonces: Tag lost\r\n");
+                if (++err_count >= 15) {
+                    return STATUS_HF_TAG_NO;
+                }
+                continue;
+            }
+            // Slow mode, delay some time?
+            if (slow) {
+                bsp_delay_us(400);
+            }
+            // First auth
+            if (authex(pcs, cuid, blkKnown, typKnown, keyKnown, AUTH_FIRST, NULL) != STATUS_HF_TAG_OK) {
+                NRF_LOG_INFO("AcquireEncryptedNonces: Auth1 error\r\n");
+                if (++err_count >= 15) {
+                    return STATUS_MF_ERR_AUTH;
+                }
+                continue;
+            }
+            // Nested auth
+            len = send_cmd(pcs, AUTH_NESTED, targetTyp, targetBlk, &status, answer, parity, U8ARR_BIT_LEN(answer));
+            if (len != 32) {
+                NRF_LOG_INFO("AcquireEncryptedNonces: Auth2 error len=%d\r\n", len);
+                if (++err_count >= 15) {
+                    return STATUS_HF_ERR_STAT;
+                }
+                continue;
+            }
+            // Reset err count
+            err_count = 0;
+            // merge parity
+            uint8_t par_enc = 0;
+            par_enc |= parity[3] << 4;
+            par_enc |= parity[2] << 5;
+            par_enc |= parity[1] << 6;
+            par_enc |= parity[0] << 7;
+            // copy to buffer
+            *num_nonces = *num_nonces + 1;
+            if (*num_nonces % 2) {
+                memcpy(nonces + i, answer, 4);
+                nt_par_enc = par_enc & 0xf0;
+            } else {
+                nt_par_enc |= par_enc >> 4;
+                memcpy(nonces + i + 4, answer, 4);
+                memcpy(nonces + i + 8, &nt_par_enc, 1);
+                i += 9;
+            }
+        } else {
+            // scan the tag to fixed cuid.
+            status = pcd_14a_reader_scan_auto(p_tag_info);
+            if (status != STATUS_HF_TAG_OK) {
+                return STATUS_HF_TAG_NO;
+            }
+            cuid = get_u32_tag_uid(p_tag_info);
+            tag_selected = true;
+        }
+    }
+    
+    // OK!
     return STATUS_HF_TAG_OK;
 }
