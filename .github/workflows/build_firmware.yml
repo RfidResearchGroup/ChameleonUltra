@@ -88,5 +88,5 @@ jobs:
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-artifacts
+          name: release-artifacts-${{ matrix.device_type }}
           path: firmware/objects/*.zip
