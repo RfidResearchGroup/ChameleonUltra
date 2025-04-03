@@ -42,7 +42,18 @@ type_id_SAK_dict = {0x00: "MIFARE Ultralight Classic/C/EV1/Nano | NTAG 2xx",
 
 default_cwd = Path.cwd() / Path(__file__).with_name("bin")
 
+def load_key_file(import_key, keys):
+    """
+    Load key file and append its content to the provided set of keys.
+    Each key is expected to be on a new line in the file.
+    """
+    with open(import_key.name, 'rb') as file:
+        keys.update(line.encode('utf-8') for line in file.read().decode('utf-8').splitlines())
+    return keys
 
+def load_dic_file(import_dic, keys):
+    return keys
+    
 def check_tools():
     tools = ['staticnested', 'nested', 'darkside', 'mfkey32v2']
     if sys.platform == "win32":
