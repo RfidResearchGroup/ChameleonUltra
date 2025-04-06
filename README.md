@@ -44,3 +44,5 @@ Where do you find the community?
   * Software/chameleon-dev for firmware and clients development discussions
   * Devices/chameleon-ultra for usage discussions
 * [GameTec_live discord server](https://discord.gg/DJ2A4wxncK)
+
+###### Searching for the docs repo? Find it [here](https://github.com/RfidResearchGroup/ChameleonUltraDocs)
