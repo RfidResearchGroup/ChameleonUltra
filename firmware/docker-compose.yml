@@ -9,7 +9,6 @@
 services:
   build-ultra:
     image: ghcr.io/rfidresearchgroup/chameleonultra-fw-builder:main
-    # image: ghcr.io/chameleonultra/chameleonultra-fw-builder:main
     platform: linux/amd64
     volumes:
       - '../:/workdir:rw'
@@ -18,7 +17,6 @@ services:
     command: bash ./firmware/build.sh
   build-lite:
     image: ghcr.io/rfidresearchgroup/chameleonultra-fw-builder:main
-    # image: ghcr.io/chameleonultra/chameleonultra-fw-builder:main
     platform: linux/amd64
     volumes:
       - '../:/workdir:rw'

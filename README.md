@@ -1,5 +1,3 @@
-# Chameleon Ultra Fireman fork
-
 ![logo](docs/images/ultra-logo.png)
 
 ![ultra picture](docs/images/ultra-overview.png)
@@ -22,12 +20,12 @@ Lazada One, Singapore: [Aliexpress by RRG](https://proxgrind.aliexpress.com/stor
 
 # What is it and how to use ?
 
-Read the [available documentation](https://github.com/ChameleonUltra/ChameleonUltra/wiki).
+Read the [available documentation](https://github.com/RfidResearchGroup/ChameleonUltra/wiki).
 
 # Compatible applications
 
 * [ChameleonUltraGUI](https://github.com/GameTec-live/ChameleonUltraGUI)
-* [MTools BLE](https://github.com/ChameleonUltra/ChameleonUltra/wiki/mtoolsble)
+* [MTools BLE](https://github.com/RfidResearchGroup/ChameleonUltra/wiki/mtoolsble)
 
 # Videos
 
@@ -42,8 +40,7 @@ Read the [available documentation](https://github.com/ChameleonUltra/ChameleonUl
 # Official channels
 
 Where do you find the community?
-* [GameTec_live discord server](https://discord.gg/DJ2A4wxncK)
 * [RFID Hacking community discord server](https://t.ly/d4_C)
   * Software/chameleon-dev for firmware and clients development discussions
   * Devices/chameleon-ultra for usage discussions
-
+* [GameTec_live discord server](https://discord.gg/DJ2A4wxncK)
