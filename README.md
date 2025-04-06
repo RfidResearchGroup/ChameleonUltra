@@ -4,44 +4,28 @@
 
 # ChameleonUltra Authorized Distributors
 
-Europe: [Lab401](https://lab401.com/)
+Lyon, France: [Lab401](https://lab401.com/)
 
-United States: [Hackerwarehouse](https://hackerwarehouse.com/)
+Santa Ana, United States: [Hackerwarehouse](https://hackerwarehouse.com/)
 
-MTools Tec: [MTools Tec](https://shop.mtoolstec.com/)
+Hastings, UK: [KSEC](https://labs.ksec.co.uk/product/proxgrind-chameleon-ultra/)
 
-Anywhere else: [Sneaktechnology](https://sneaktechnology.com) / [Aliexpress by RRG](https://proxgrind.aliexpress.com/store/1101312023) / [TechSecurityTools](https://techsecuritytools.com/product/chameleon-ultra/)
+Montreal, Canada: [TechSecurityTools](https://techsecuritytools.com/product/chameleon-ultra/)
+
+Shenzhen, China: [Sneaktechnology](https://sneaktechnology.com)
+
+Guangdong, China: [MTools Tec](https://shop.mtoolstec.com/)
+
+Lazada One, Singapore: [Aliexpress by RRG](https://proxgrind.aliexpress.com/store/1101312023)
 
 # What is it and how to use ?
 
-Read the [available documentation](docs/README.md).
-
-# Public Roadmap with reference to [Here](https://github.com/RfidResearchGroup/ChameleonUltra/wiki/Public-Roadmap)
-
-Table for future functionality progress
----------------------------------
-
-|No.|Functionality to achieve| Date | In Progress / Achieved ? | Contributors | RRG will reward |
-|:--------------:|:--------------:|:--------:|:------------:|:------------:|:------------:|
-|1| Adding DESfire Support|28/09/2023|:--------------:|:--------------:|:------------:|
-|2| Adding Indala Emulation|28/09/2023|:--------------:|:--------------:|:------------:|
-|3| Adding HID Prox 26 bit Emulation|28/09/2023|:--------------:|:--------------:|:------------:|
-|4| Adding custom keys for t5577 read|28/09/2023|:------------:|:------------:|:------------:|
-|5|:--------------:|:--------------:|:------------:|:------------:|:------------:|
-|6|:--------------:|:--------------:|:------------:|:------------:|:------------:|
-|7|:--------------:|:--------------:|:------------:|:------------:|:------------:|
-|8|:--------------:|:--------------:|:------------:|:------------:|:------------:|
-|9|:--------------:|:--------------:|:------------:|:------------:|:------------:|
-|10|:--------------:|:--------------:|:------------:|:------------:|:------------:|
-|11|:--------------:|:--------------:|:------------:|:------------:|:------------:|
-|12|:--------------:|:--------------:|:------------:|:------------:|:------------:|
-|13|:--------------:|:--------------:|:------------:|:------------:|:------------:|
-|14|:--------------:|:--------------:|:------------:|:------------:|:------------:|
+Read the [available documentation](https://github.com/RfidResearchGroup/ChameleonUltra/wiki).
 
 # Compatible applications
 
 * [ChameleonUltraGUI](https://github.com/GameTec-live/ChameleonUltraGUI)
-* [MTools BLE](docs/mtoolsble.md)
+* [MTools BLE](https://github.com/RfidResearchGroup/ChameleonUltra/wiki/mtoolsble)
 
 # Videos
 
@@ -49,13 +33,16 @@ Table for future functionality progress
 
 * [Downloading and compiling the official CLI](https://www.youtube.com/watch?v=VGpAeitNXH0)
 * [Downloading ChameleonUltraGUI](https://www.youtube.com/watch?v=rHH7iqbX3nY)
-* [ChameleonGUI features overview](https://www.youtube.com/watch?v=YqE8wyVSse4)
+* [ChameleonUltraGUI features overview](https://www.youtube.com/watch?v=YqE8wyVSse4)
+* [Using ChameleonUltraGUI and the Chameleon Ultra](https://www.youtube.com/watch?v=9jtKNJ5-kVY)
 * [MTools BLE - How to clone a card with ChameleonUltra](https://youtu.be/IvH-xtdW1Wk?si=4exqgAAeJ-kxU3aN)
 
 # Official channels
 
 Where do you find the community?
-
 * [RFID Hacking community discord server](https://t.ly/d4_C)
   * Software/chameleon-dev for firmware and clients development discussions
   * Devices/chameleon-ultra for usage discussions
+* [GameTec_live discord server](https://discord.gg/DJ2A4wxncK)
+
+###### Searching for the docs repo? Find it [here](https://github.com/RfidResearchGroup/ChameleonUltraDocs)
