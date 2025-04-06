@@ -358,6 +358,18 @@ class ChameleonCMD:
                 ]
             }
         return resp
+    
+    @expect_response(Status.HF_TAG_OK)
+    def mf1_hard_nested_acquire(self, slow, block_known, type_known, key_known, block_target, type_target):
+        """
+        Collect the NT_ENC list for HardNested decryption
+        :return:
+        """
+        data = struct.pack('!BBB6sBB', slow, type_known, block_known, key_known, type_target, block_target)
+        resp = self.device.send_cmd_sync(Command.DATA_CMD_MF1_HARDNESTED_ACQUIRE, data)
+        if resp.status == Status.HF_TAG_OK:
+            resp.parsed = resp.data  # we can return the raw nonces bytes
+        return resp
 
     @expect_response(Status.LF_TAG_OK)
     def em410x_scan(self):

@@ -4,6 +4,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 
 ## [unreleased][unreleased]
  - Added `firmware/docker-compose.yml` to build firmware in local docker (@taichunmin)
+ - Added cmd to acquire nonces for hardnested(Protocol doc need update) (@xianglin1998)
  - Added command to check keys of multiple sectors at once (@taichunmin)
  - Fixed unused target key type parameter for nested (@petepriority)
  - Skip already used items `hf mf elog --decrypt` (@p-l-)
