@@ -1,37 +1,15 @@
 on: pull_request_target
 name: Changelog Reminder
-
 jobs:
-  welcome:
+  remind:
+    name: Changelog Reminder
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/github-script@v7
-        with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            const creator = context.payload.sender.login
-            const opts = github.rest.issues.listForRepo.endpoint.merge({
-              ...context.issue,
-              creator,
-              state: 'all'
-            })
-            const issues = await github.paginate(opts)
-
-            for (const issue of issues) {
-              if (issue.number === context.issue.number) {
-                continue
-              }
-
-              if (issue.pull_request) {
-                return // Creator is already a contributor.
-              }
-            }
-
-            await github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `Reminder:
-
-              You are welcome to add an entry to the [CHANGELOG.md](CHANGELOG.md) as well`
-            })
+    - uses: actions/checkout@master
+    - name: Changelog Reminder
+      uses: peterjgrainger/action-changelog-reminder@v1.2.0
+      with:
+        changelog_regex: 'CHANGELOG.md'
+        customPrMessage: 'You are welcome to add an entry to the CHANGELOG.md as well'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
