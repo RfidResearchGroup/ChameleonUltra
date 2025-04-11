@@ -955,16 +955,8 @@ class HFMFFCHK(ReaderRequiredUnit):
                 return
 
         if args.import_dic is not None:
-            for key in args.import_dic.readlines():
-                if key.startswith("#"): # ignore comments
-                    pass
-                elif key.isspace(): # ignore empty lines
-                    pass
-                elif re.match(r'^[a-fA-F0-9]{12}$', key): # take only this key format
-                    keys.add(bytes.fromhex(key))
-                else: # in case of another format, a conversion is needed
-                    print(f' - {CR}Key should in hex[12] format, invalid key is ignored{C0}, key = "{key}"')
-                continue
+            if not load_dic_file(args.import_dic, keys):
+                return
 
         if len(keys) == 0:
             print(f' - {CR}No keys{C0}')
