@@ -24,6 +24,7 @@ from chameleon_utils import CR, CG, CB, CC, CY, C0
 from chameleon_utils import print_mem_dump
 from chameleon_enum import Command, Status, SlotNumber, TagSenseType, TagSpecificType
 from chameleon_enum import MifareClassicWriteMode, MifareClassicPrngType, MifareClassicDarksideStatus, MfcKeyType
+from chameleon_enum import MifareUltralightWriteMode
 from chameleon_enum import AnimationMode, ButtonPressFunction, ButtonType, MfcValueBlockOperator
 
 # NXP IDs based on https://www.nxp.com/docs/en/application-note/AN10833.pdf
@@ -954,8 +955,16 @@ class HFMFFCHK(ReaderRequiredUnit):
                 return
 
         if args.import_dic is not None:
-            if not load_dic_file(args.import_dic, keys):
-                return
+            for key in args.import_dic.readlines():
+                if key.startswith("#"): # ignore comments
+                    pass
+                elif key.isspace(): # ignore empty lines
+                    pass
+                elif re.match(r'^[a-fA-F0-9]{12}$', key): # take only this key format
+                    keys.add(bytes.fromhex(key))
+                else: # in case of another format, a conversion is needed
+                    print(f' - {CR}Key should in hex[12] format, invalid key is ignored{C0}, key = "{key}"')
+                continue
 
         if len(keys) == 0:
             print(f' - {CR}No keys{C0}')
@@ -1557,7 +1566,7 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
     def on_exec(self, args: argparse.Namespace):
         # collect current settings
         anti_coll_data = self.cmd.hf14a_get_anti_coll_data()
-        if len(anti_coll_data) == 0:
+        if anti_coll_data is None or len(anti_coll_data) == 0:
             print(f"{CR}Slot {self.slot_num} does not contain any HF 14A config{C0}")
             return
         uid = anti_coll_data['uid']
@@ -2306,6 +2315,12 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
         uid_magic_group = parser.add_mutually_exclusive_group()
         uid_magic_group.add_argument('--enable-uid-magic', action='store_true', help="Enable UID magic mode")
         uid_magic_group.add_argument('--disable-uid-magic', action='store_true', help="Disable UID magic mode")
+        
+        # Add this new write mode parameter
+        write_names = [w.name for w in MifareUltralightWriteMode.list()]
+        help_str = "Write Mode: " + ", ".join(write_names)
+        parser.add_argument('--write', type=str, help=help_str, metavar="MODE", choices=write_names)
+        
         parser.add_argument('--set-version', type=bytes.fromhex, help="Set data to be returned by the GET_VERSION command.")
         parser.add_argument('--set-signature', type=bytes.fromhex, help="Set data to be returned by the READ_SIG command.")
         parser.add_argument('--reset-auth-cnt', action='store_true', help="Resets the counter of unsuccessful authentication attempts.")
@@ -2387,6 +2402,22 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
             magic_mode = False
         else:
             magic_mode = self.cmd.mf0_ntag_get_uid_magic_mode()
+            
+        # Add this new write mode handling
+        write_mode = None
+        if args.write is not None:
+            change_requested = True
+            new_write_mode = MifareUltralightWriteMode[args.write]
+            try:
+                current_write_mode = self.cmd.mf0_ntag_get_write_mode()
+                if new_write_mode != current_write_mode:
+                    self.cmd.mf0_ntag_set_write_mode(new_write_mode)
+                    change_done = True
+                    write_mode = new_write_mode
+                else:
+                    print(f'{CY}Requested write mode already set{C0}')
+            except:
+                print(f"{CR}Failed to set write mode. Check if device firmware supports this feature.{C0}")
 
         if change_done or aux_data_changed:
             print(' - MFU/NTAG Emulator settings updated')
@@ -2398,11 +2429,22 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
             print(f'- {"SAK:":40}{CY}{sak.hex().upper()}{C0}')
             if len(ats) > 0:
                 print(f'- {"ATS:":40}{CY}{ats.hex().upper()}{C0}')
+            
+            # Display UID Magic status
             if magic_mode: 
                 print(f'- {"UID Magic:":40}{CY}enabled{C0}')
             else:
                 print(f'- {"UID Magic:":40}{CY}disabled{C0}')
             
+            # Add this to display write mode if available
+            try:
+                write_mode = self.cmd.mf0_ntag_get_write_mode()
+                print(f'- {"Write mode:":40}{CY}{MifareUltralightWriteMode(write_mode)}{C0}')
+            except:
+                # Write mode not supported in current firmware
+                pass
+            
+            # Existing version/signature display code
             try:
                 version = self.cmd.mf0_ntag_get_version_data()
                 print(f'- {"Version:":40}{CY}{version.hex().upper()}{C0}')
@@ -2495,7 +2537,7 @@ class HWSlotList(DeviceRequiredUnit):
                 print(f"{CY if enabled[fwslot]['hf'] else C0}{hf_tag_type}{C0}")
             else:
                 print("undef")
-            if (not args.short) and enabled[fwslot]['hf']:
+            if (not args.short) and enabled[fwslot]['hf'] and hf_tag_type != TagSpecificType.UNDEFINED:
                 if current != slot:
                     self.cmd.set_active_slot(slot)
                     current = slot
@@ -2546,7 +2588,7 @@ class HWSlotList(DeviceRequiredUnit):
                 print(f"{CY if enabled[fwslot]['lf'] else C0}{lf_tag_type}{C0}")
             else:
                 print("undef")
-            if (not args.short) and enabled[fwslot]['lf']:
+            if (not args.short) and enabled[fwslot]['lf'] and lf_tag_type != TagSpecificType.UNDEFINED:
                 if current != slot:
                     self.cmd.set_active_slot(slot)
                     current = slot

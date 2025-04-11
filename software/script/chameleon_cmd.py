@@ -1030,6 +1030,24 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(Command.MF0_NTAG_SET_SIGNATURE_DATA, data)
 
     @expect_response(Status.SUCCESS)
+    def mf0_ntag_get_write_mode(self):
+        """
+        Get write mode for MF0/NTAG
+        """
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_GET_WRITE_MODE)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data[0]
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mf0_ntag_set_write_mode(self, mode: int):
+        """
+        Set write mode for MF0/NTAG
+        """
+        data = struct.pack('!B', mode)
+        return self.device.send_cmd_sync(Command.MF0_NTAG_SET_WRITE_MODE, data)
+
+    @expect_response(Status.SUCCESS)
     def get_ble_pairing_enable(self):
         """
         Is ble pairing enable?
