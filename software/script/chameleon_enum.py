@@ -108,6 +108,8 @@ class Command(enum.IntEnum):
     MF0_NTAG_SET_COUNTER_DATA = 4028
     MF0_NTAG_RESET_AUTH_CNT = 4029
     MF0_NTAG_GET_PAGE_COUNT = 4030
+    MF0_NTAG_GET_WRITE_MODE = 4031
+    MF0_NTAG_SET_WRITE_MODE = 4032
 
     EM410X_SET_EMU_ID = 5000
     EM410X_GET_EMU_ID = 5001
@@ -374,6 +376,37 @@ class MifareClassicWriteMode(enum.IntEnum):
             return "Shadow requested"
         return "None"
 
+@enum.unique
+class MifareUltralightWriteMode(enum.IntEnum):
+    # Normal write
+    NORMAL = 0
+    # Send NACK to write attempts
+    DENIED = 1
+    # Acknowledge writes, but don't remember contents
+    DECEIVE = 2
+    # Store data to RAM, but not to ROM
+    SHADOW = 3
+    # Shadow requested, will be changed to SHADOW and stored to ROM
+    SHADOW_REQ = 4
+
+    @staticmethod
+    def list(exclude_meta=True):
+        return [m for m in MifareUltralightWriteMode
+                if m != MifareUltralightWriteMode.SHADOW_REQ
+                or not exclude_meta]
+
+    def __str__(self):
+        if self == MifareUltralightWriteMode.NORMAL:
+            return "Normal"
+        elif self == MifareUltralightWriteMode.DENIED:
+            return "Denied"
+        elif self == MifareUltralightWriteMode.DECEIVE:
+            return "Deceive"
+        elif self == MifareUltralightWriteMode.SHADOW:
+            return "Shadow"
+        elif self == MifareUltralightWriteMode.SHADOW_REQ:
+            return "Shadow requested"
+        return "None"
 
 @enum.unique
 class MifareClassicPrngType(enum.IntEnum):
