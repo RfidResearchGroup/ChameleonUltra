@@ -16,7 +16,7 @@ def test_hardnested_acquire():
     block_known = 0x0B
     type_known = 0x60
     block_target = 0x03
-    type_target = 0x60
+    type_target = 0x61
 
 
     # Before acquire start, we need to reset history
