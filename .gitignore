@@ -709,3 +709,4 @@ FodyWeavers.xsd
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudio,c++,c,python,visualstudiocode,macos,windows
 software/script/tests/nonces.bin
+software/script/nonces.bin
