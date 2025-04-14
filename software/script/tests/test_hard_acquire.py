@@ -12,11 +12,11 @@ def test_hardnested_acquire():
     acquire_count = 0
 
     # known key and target block
-    key = bytes.fromhex("749934CC8ED3") # <-- Your known key
-    block_known = 0x0B
+    key = bytes.fromhex("FFFFFFFFFFFF") # <-- Your known key
+    block_known = 0x00
     type_known = 0x60
-    block_target = 0x03
-    type_target = 0x61
+    block_target = 0x00
+    type_target = 0x60
 
 
     # Before acquire start, we need to reset history
