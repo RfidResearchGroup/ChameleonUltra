@@ -21,7 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
-#include <lzma.h>
+#include <../../xz-5.8.1/src/liblzma/api/lzma.h>
 #include "../cmdhfmfhard.h"
 
 typedef struct bitflip_info {
