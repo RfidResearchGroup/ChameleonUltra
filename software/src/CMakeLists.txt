@@ -75,8 +75,6 @@ else()
     set(LIBMATH "")
 endif()
 
-add_compile_options(-D_CRT_SECURE_NO_WARNINGS)
-
 add_executable(nested ${COMMON_FILES} ${NESTED_UTIL} nested.c)
 target_link_libraries(nested PRIVATE ${LIBTHREAD})
 
@@ -90,29 +88,12 @@ add_executable(mfkey32v2 ${COMMON_FILES} mfkey32v2.c)
 add_executable(mfkey64 ${COMMON_FILES} mfkey64.c)
 
 
-# --- Find the local static lzma library ---
-# Define the path where your local liblzma.a is located, relative to this CMakeLists.txt
-set(LOCAL_LZMA_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/xz-5.8.1/build) # Path to the directory containing liblzma.a
-
-find_library(LOCAL_LZMA_STATIC_LIBRARY
-             NAMES lzma # Base name CMake will look for (liblzma.a)
-             PATHS ${LOCAL_LZMA_LIB_DIR} # Tell CMake to search in this specific directory
-             NO_DEFAULT_PATH       # Prevent searching standard system paths
-             REQUIRED              # Make CMake fail if it's not found here
-            )
-
-message(STATUS "Using local static lzma library: ${LOCAL_LZMA_STATIC_LIBRARY}")
-# --- End of find_library section ---
-
-
 add_executable(hardnested ${COMMON_FILES} ${HARDNESTED_SOURCES})
 
-# Note: Removed -static flag here, linking the .a file directly handles it for lzma
 target_compile_options(hardnested PRIVATE -Wall -fPIC )
 
 target_link_libraries(hardnested PRIVATE
     ${LIBTHREAD}
     ${LIBMATH}
-    #lzma  # Link the specific static library path found above instead
-    ${LOCAL_LZMA_STATIC_LIBRARY}
+    ${CMAKE_CURRENT_SOURCE_DIR}/xz-5.8.1/build/liblzma.a
 )
