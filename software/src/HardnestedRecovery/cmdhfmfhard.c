@@ -42,7 +42,7 @@
 #include "pm3/commonutil.h"
 #include "pm3/util_posix.h"
 #include "hardnested/tables.h"
-#include <lzma.h>
+#include <../../xz-5.8.1/src/liblzma/api/lzma.h>
 
 #define NUM_CHECK_BITFLIPS_THREADS      (num_CPUs())
 #if defined(_MSC_VER)
