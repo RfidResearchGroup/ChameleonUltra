@@ -59,7 +59,7 @@ add_custom_target(build_liblzma ALL # Add ALL to ensure it runs with the default
     # Command 2: Build liblzma (using CMake)
     # Runs CMake's build tool mode, targeting the 'build' subdirectory
     # No --config flag here, relying on default behavior (likely Debug for VS)
-    COMMAND ${CMAKE_COMMAND} --build ${LIBLZMA_BUILD_SUBDIR}
+    COMMAND ${CMAKE_COMMAND} --build ${LIBLZMA_BUILD_SUBDIR} --config Release
     # Specify the working directory where these commands should run
     WORKING_DIRECTORY ${LIBLZMA_SRC_DIR}
     COMMENT "Configuring and building liblzma via custom commands..."
