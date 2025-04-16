@@ -44,15 +44,18 @@ set(LIBLZMA_CMAKE_ARGS
     # or just to be consistent
     -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
 )
+# Add platform-specific args
+if(CMAKE_SYSTEM_NAME MATCHES "Windows")
+    list(APPEND LIBLZMA_CMAKE_ARGS "-DXZ_SANDBOX=no")
+endif()
 
-# Custom target to run the build commands for liblzma
-# NOTE: This assumes the commands succeed. Error checking is minimal.
 add_custom_target(build_liblzma ALL # Add ALL to ensure it runs with the default build
     # Command 1: Configure liblzma (using CMake)
     # Runs CMake from LIBLZMA_SRC_DIR, telling it to configure into the 'build' subdirectory
     COMMAND ${CMAKE_COMMAND} -B ${LIBLZMA_BUILD_SUBDIR} -S . ${LIBLZMA_CMAKE_ARGS}
     # Command 2: Build liblzma (using CMake)
     # Runs CMake's build tool mode, targeting the 'build' subdirectory
+    # No --config flag here, relying on default behavior (likely Debug for VS)
     COMMAND ${CMAKE_COMMAND} --build ${LIBLZMA_BUILD_SUBDIR}
     # Specify the working directory where these commands should run
     WORKING_DIRECTORY ${LIBLZMA_SRC_DIR}
@@ -61,28 +64,14 @@ add_custom_target(build_liblzma ALL # Add ALL to ensure it runs with the default
 )
 
 # --- Define the expected path for the built liblzma library ---
-# Path construction based on user input (library directly in build dir)
+# Hardcoding the path to the Debug directory on Windows
 
 if(CMAKE_SYSTEM_NAME MATCHES "Windows")
-    # For multi-config generators (like Visual Studio), the lib might be under the config name
-    # Check if liblzma puts the lib directly in build/<Config>/ or just build/
-    set(LIBLZMA_LIB_PATH_CONFIG "${LIBLZMA_BUILD_DIR}/${CMAKE_BUILD_TYPE}/liblzma.lib")
-    set(LIBLZMA_LIB_PATH_NOCONFIG "${LIBLZMA_BUILD_DIR}/liblzma.lib") # Directly in build dir
-    # Determine the path based on existence check *only if* CMAKE_BUILD_TYPE is set (for multi-config)
-    # Otherwise, default to the non-config path. This check is imperfect at configure time.
-    #disables landlock check in windows
-    list(APPEND LIBLZMA_CMAKE_ARGS "-DXZ_SANDBOX=no")
-    if(CMAKE_BUILD_TYPE AND EXISTS "${LIBLZMA_LIB_PATH_CONFIG}")
-        set(LIBLZMA_LIB_PATH "${LIBLZMA_LIB_PATH_CONFIG}")
-    else()
-        set(LIBLZMA_LIB_PATH "${LIBLZMA_LIB_PATH_NOCONFIG}")
-    endif()
-    # Existence check removed here - file is built later during the build phase.
+    # Always point to the Debug directory and use lzma.lib
+    set(LIBLZMA_LIB_PATH "${LIBLZMA_BUILD_DIR}/Debug/lzma.lib")
 else()
-    # For single-config generators (like Makefiles, Ninja)
-    # Set path directly in the build directory
-    set(LIBLZMA_LIB_PATH ${LIBLZMA_BUILD_DIR}/liblzma.a)
-    # Existence check removed here - file is built later during the build phase.
+    # Single-config (Linux Makefiles/Ninja): Library is typically directly in the build directory
+    set(LIBLZMA_LIB_PATH "${LIBLZMA_BUILD_DIR}/liblzma.a")
 endif()
 
 # Create an IMPORTED library target for the custom-built liblzma
@@ -112,8 +101,12 @@ set(HARDNESTED_SOURCES
     ${HARDNESTED_RECOVERY_DIR}/hardnested/hardnested_bruteforce.c
     ${HARDNESTED_RECOVERY_DIR}/hardnested/hardnested_bitarray_core.c
     ${HARDNESTED_RECOVERY_DIR}/hardnested/tables.c
-    ${HARDNESTED_RECOVERY_DIR}/pm3/util_posix.c
+    # Only include util_posix.c on non-Windows systems
 )
+if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows")
+    list(APPEND HARDNESTED_SOURCES ${HARDNESTED_RECOVERY_DIR}/pm3/util_posix.c)
+endif()
+
 
 # Platform specific settings
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
@@ -169,8 +162,8 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     target_compile_definitions(nested PRIVATE HAVE_STRUCT_TIMESPEC)
-    # Use INTERFACE_INCLUDE_DIRECTORIES from imported pthread target instead
-    # target_include_directories(nested PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/pthread/include)
+    # Link pthread target to get include dirs automatically
+    target_link_libraries(nested PRIVATE pthread)
 endif()
 
 
@@ -182,8 +175,8 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     target_compile_definitions(staticnested PRIVATE HAVE_STRUCT_TIMESPEC)
-    # Use INTERFACE_INCLUDE_DIRECTORIES from imported pthread target instead
-    # target_include_directories(staticnested PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/pthread/include)
+    # Link pthread target to get include dirs automatically
+    target_link_libraries(staticnested PRIVATE pthread)
 endif()
 
 
@@ -195,8 +188,8 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     target_compile_definitions(darkside PRIVATE HAVE_STRUCT_TIMESPEC)
-    # Add include if needed, even without linking:
-    # target_include_directories(darkside PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/pthread/include)
+    # If it needs pthread headers, link the target:
+    # target_link_libraries(darkside PRIVATE pthread)
 endif()
 
 
@@ -208,8 +201,8 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     target_compile_definitions(mfkey32 PRIVATE HAVE_STRUCT_TIMESPEC)
-    # Add include if needed:
-    # target_include_directories(mfkey32 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/pthread/include)
+    # If it needs pthread headers, link the target:
+    # target_link_libraries(mfkey32 PRIVATE pthread)
 endif()
 
 
@@ -221,8 +214,8 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     target_compile_definitions(mfkey32v2 PRIVATE HAVE_STRUCT_TIMESPEC)
-    # Add include if needed:
-    # target_include_directories(mfkey32v2 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/pthread/include)
+    # If it needs pthread headers, link the target:
+    # target_link_libraries(mfkey32v2 PRIVATE pthread)
 endif()
 
 
@@ -234,8 +227,8 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     target_compile_definitions(mfkey64 PRIVATE HAVE_STRUCT_TIMESPEC)
-    # Add include if needed:
-    # target_include_directories(mfkey64 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/pthread/include)
+    # If it needs pthread headers, link the target:
+    # target_link_libraries(mfkey64 PRIVATE pthread)
 endif()
 
 
@@ -253,14 +246,14 @@ target_include_directories(hardnested PRIVATE
 )
 # Note: -fPIC is generally not needed for executables, only shared libraries or static libs used by shared libs.
 # Removed -fPIC from the context provided earlier unless specifically required.
-target_compile_options(hardnested PRIVATE -Wall)
+target_compile_options(hardnested PRIVATE -Wall) # Consider adding more warnings like -Wextra -pedantic
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_compile_definitions(hardnested PRIVATE _GNU_SOURCE)
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     target_compile_definitions(hardnested PRIVATE HAVE_STRUCT_TIMESPEC)
-    # Use INTERFACE_INCLUDE_DIRECTORIES from imported pthread target instead
-    # target_include_directories(hardnested PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/pthread/include)
+    # Link pthread target to get include dirs automatically
+    target_link_libraries(hardnested PRIVATE pthread)
 endif()
 
 target_link_libraries(hardnested PRIVATE
@@ -268,4 +261,3 @@ target_link_libraries(hardnested PRIVATE
     ${LIBMATH} # Link math library if needed (usually only Linux/non-Windows)
     liblzma_imported # Link against the IMPORTED target name
 )
-
