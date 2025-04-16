@@ -49,6 +49,9 @@ if(CMAKE_SYSTEM_NAME MATCHES "Windows")
     list(APPEND LIBLZMA_CMAKE_ARGS "-DXZ_SANDBOX=no")
 endif()
 
+# Custom target to run the build commands for liblzma
+# NOTE: This assumes the commands succeed. Error checking is minimal.
+# NOTE: The build command below does NOT specify --config, so on VS it will likely default to Debug.
 add_custom_target(build_liblzma ALL # Add ALL to ensure it runs with the default build
     # Command 1: Configure liblzma (using CMake)
     # Runs CMake from LIBLZMA_SRC_DIR, telling it to configure into the 'build' subdirectory
@@ -251,7 +254,11 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_compile_definitions(hardnested PRIVATE _GNU_SOURCE)
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
-    target_compile_definitions(hardnested PRIVATE HAVE_STRUCT_TIMESPEC)
+    # Add LZMA_API_STATIC for Windows builds linking statically
+    target_compile_definitions(hardnested PRIVATE
+        HAVE_STRUCT_TIMESPEC
+        LZMA_API_STATIC  # <--- Added this line
+    )
     # Link pthread target to get include dirs automatically
     target_link_libraries(hardnested PRIVATE pthread)
 endif()
