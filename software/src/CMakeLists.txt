@@ -22,7 +22,6 @@ set(
     ${SRC_DIR}/mfkey.c
 )
 
-# --- liblzma Build ---
 set(LIBLZMA_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/xz)
 # Define the build directory *relative* to the liblzma source directory
 set(LIBLZMA_BUILD_SUBDIR build)
