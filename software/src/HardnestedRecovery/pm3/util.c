@@ -16,6 +16,33 @@
 // utilities
 //-----------------------------------------------------------------------------
 
+#ifdef _WIN32 // Only compile this block on Windows
+
+#include <windows.h> // Include the necessary Windows header
+
+// Function to return milliseconds since some arbitrary point in time
+uint64_t msclock(void) {
+    // Static variable to store the frequency; initialized only once.
+    static LARGE_INTEGER frequency = {0};
+    LARGE_INTEGER counter;
+
+    // Get the high-resolution timer frequency (ticks per second)
+    // This only needs to be done once.
+    if (frequency.QuadPart == 0) {
+        QueryPerformanceFrequency(&frequency);
+    }
+
+    // Get the current high-resolution counter value (ticks)
+    QueryPerformanceCounter(&counter);
+
+    // Calculate milliseconds: (ticks * 1000) / ticks_per_second
+    // We multiply by 1000 first to maintain precision before dividing.
+    // Ensure 64-bit arithmetic is used via QuadPart.
+    return (uint64_t)((counter.QuadPart * 1000) / frequency.QuadPart);
+}
+
+#endif // _WIN32
+
 #include "util.h"
 
 // global client debug variable
