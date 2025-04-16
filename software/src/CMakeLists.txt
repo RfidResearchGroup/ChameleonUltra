@@ -70,6 +70,8 @@ if(CMAKE_SYSTEM_NAME MATCHES "Windows")
     set(LIBLZMA_LIB_PATH_NOCONFIG "${LIBLZMA_BUILD_DIR}/liblzma.lib") # Directly in build dir
     # Determine the path based on existence check *only if* CMAKE_BUILD_TYPE is set (for multi-config)
     # Otherwise, default to the non-config path. This check is imperfect at configure time.
+    #disables landlock check in windows
+    list(APPEND LIBLZMA_CMAKE_ARGS "-DXZ_SANDBOX=no")
     if(CMAKE_BUILD_TYPE AND EXISTS "${LIBLZMA_LIB_PATH_CONFIG}")
         set(LIBLZMA_LIB_PATH "${LIBLZMA_LIB_PATH_CONFIG}")
     else()
