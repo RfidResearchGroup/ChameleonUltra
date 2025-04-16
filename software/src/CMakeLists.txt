@@ -23,7 +23,7 @@ set(
 )
 
 # --- liblzma Build ---
-set(LIBLZMA_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/xz-5.8.1)
+set(LIBLZMA_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/xz)
 # Define the build directory *relative* to the liblzma source directory
 set(LIBLZMA_BUILD_SUBDIR build)
 set(LIBLZMA_BUILD_DIR ${LIBLZMA_SRC_DIR}/${LIBLZMA_BUILD_SUBDIR})
@@ -232,7 +232,7 @@ target_include_directories(hardnested PRIVATE
     ${HARDNESTED_RECOVERY_DIR}/hardnested
     # Include dir now comes from linking liblzma_imported
 )
-target_compile_options(hardnested PRIVATE -Wall) # -fPIC usually not needed for executables
+target_compile_options(hardnested PRIVATE -Wall -fPIC)
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_compile_definitions(hardnested PRIVATE _GNU_SOURCE)
 endif()
@@ -246,5 +246,3 @@ target_link_libraries(hardnested PRIVATE
     ${LIBMATH} # Link math library if needed (usually only Linux)
     liblzma_imported # Link against the IMPORTED target name
 )
-
-# --- End Executable Definitions ---
