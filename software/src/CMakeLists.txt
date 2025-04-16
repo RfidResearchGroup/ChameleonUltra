@@ -71,7 +71,7 @@ add_custom_target(build_liblzma ALL # Add ALL to ensure it runs with the default
 
 if(CMAKE_SYSTEM_NAME MATCHES "Windows")
     # Always point to the Debug directory and use lzma.lib
-    set(LIBLZMA_LIB_PATH "${LIBLZMA_BUILD_DIR}/Debug/lzma.lib")
+    set(LIBLZMA_LIB_PATH "${LIBLZMA_BUILD_DIR}/Release/lzma.lib")
 else()
     # Single-config (Linux Makefiles/Ninja): Library is typically directly in the build directory
     set(LIBLZMA_LIB_PATH "${LIBLZMA_BUILD_DIR}/liblzma.a")
