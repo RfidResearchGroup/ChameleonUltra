@@ -16,9 +16,13 @@
 // utilities
 //-----------------------------------------------------------------------------
 
+#include "util.h"
+
 #ifdef _WIN32 // Only compile this block on Windows
 
 #include <windows.h> // Include the necessary Windows header
+#include <stdint.h>  // <-- Add this line to include standard integer types
+
 
 // Function to return milliseconds since some arbitrary point in time
 uint64_t msclock(void) {
@@ -42,8 +46,6 @@ uint64_t msclock(void) {
 }
 
 #endif // _WIN32
-
-#include "util.h"
 
 // global client debug variable
 uint8_t g_debugMode = 0;
