@@ -36,9 +36,7 @@ uint64_t msclock(void) {
 }
 
 #endif // _WIN32
-
-#endif // _WIN32
-
+ #include "util.h"
 // global client debug variable
 uint8_t g_debugMode = 0;
 // global client disable logging variable
