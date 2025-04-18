@@ -366,7 +366,7 @@ class ChameleonCMD:
         :return:
         """
         data = struct.pack('!BBB6sBB', slow, type_known, block_known, key_known, type_target, block_target)
-        resp = self.device.send_cmd_sync(Command.DATA_CMD_MF1_HARDNESTED_ACQUIRE, data)
+        resp = self.device.send_cmd_sync(Command.DATA_CMD_MF1_HARDNESTED_ACQUIRE, data, timeout=30)
         if resp.status == Status.HF_TAG_OK:
             resp.parsed = resp.data  # we can return the raw nonces bytes
         return resp

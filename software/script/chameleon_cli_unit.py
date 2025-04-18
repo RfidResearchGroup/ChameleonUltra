@@ -1,5 +1,6 @@
 import binascii
 import os
+import tempfile
 import re
 import subprocess
 import argparse
@@ -15,6 +16,7 @@ from typing import Union
 from pathlib import Path
 from platform import uname
 from datetime import datetime
+import hardnested_utils
 
 import chameleon_com
 import chameleon_cmd
@@ -888,6 +890,445 @@ class HFMFDarkside(ReaderRequiredUnit):
         else:
             print(" - Key recover fail.")
         return
+
+@hf_mf.command('hardnested')
+class HFMFHardNested(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Mifare Classic hardnested recover key '
+        parser.add_argument('--blk', '--known-block', type=int, required=True, metavar="<dec>",
+                            help="Known key block number")
+        srctype_group = parser.add_mutually_exclusive_group()
+        srctype_group.add_argument('-a', '-A', action='store_true', help="Known key is A key (default)")
+        srctype_group.add_argument('-b', '-B', action='store_true', help="Known key is B key")
+        parser.add_argument('-k', '--key', type=str, required=True, metavar="<hex>", help="Known key")
+        parser.add_argument('--tblk', '--target-block', type=int, required=True, metavar="<dec>",
+                            help="Target key block number")
+        dsttype_group = parser.add_mutually_exclusive_group()
+        dsttype_group.add_argument('--ta', '--tA', action='store_true', help="Target A key (default)")
+        dsttype_group.add_argument('--tb', '--tB', action='store_true', help="Target B key")
+        parser.add_argument('--slow', action='store_true', help="Use slower acquisition mode (more nonces)")
+        parser.add_argument('--keep-nonce-file', action='store_true', help="Keep the generated nonce file (nonces.bin)")
+        parser.add_argument('--max-runs', type=int, default=200, metavar="<dec>",
+                            help="Maximum acquisition runs per attempt before giving up (default: 200)")
+        # Add max acquisition attempts
+        parser.add_argument('--max-attempts', type=int, default=3, metavar="<dec>",
+                            help="Maximum acquisition attempts if MSB sum is invalid (default: 3)")
+        return parser
+
+    def recover_key(self, slow_mode, block_known, type_known, key_known, block_target, type_target, keep_nonce_file, max_runs, max_attempts):
+        """
+        Recover a key using the HardNested attack via a nonce file, with dynamic MSB-based acquisition and restart on invalid sum.
+
+        :param slow_mode: Boolean indicating if slow mode should be used.
+        :param block_known: Known key block number.
+        :param type_known: Known key type (A or B).
+        :param key_known: Known key bytes.
+        :param block_target: Target key block number.
+        :param type_target: Target key type (A or B).
+        :param keep_nonce_file: Boolean indicating whether to keep the nonce file.
+        :param max_runs: Maximum number of acquisition runs per attempt.
+        :param max_attempts: Maximum number of full acquisition attempts.
+        :return: Recovered key as a hex string, or None if not found.
+        """
+        print(f" - Starting HardNested attack...")
+        nonces_buffer = bytearray() # This will hold the final data for the file
+        uid_bytes = b'' # To store UID from the successful attempt
+
+        # --- Outer loop for acquisition attempts ---
+        acquisition_success = False # Flag to indicate if any attempt was successful
+        for attempt in range(max_attempts):
+            print(f"\n--- Starting Acquisition Attempt {attempt + 1}/{max_attempts} ---")
+            total_raw_nonces_bytes = bytearray() # Accumulator for raw nonces for THIS attempt
+            nonces_buffer.clear() # Clear buffer for each new attempt
+
+            # --- MSB Tracking Initialization (Reset for each attempt) ---
+            seen_msbs = [False] * 256
+            unique_msb_count = 0
+            msb_parity_sum = 0
+            # --- End MSB Tracking Initialization ---
+
+            run_count = 0
+            acquisition_goal_met = False
+
+            # 1. Scan for the tag to get UID and prepare file header (Done ONCE per attempt)
+            print("   Scanning for tag...")
+            try:
+                scan_resp = self.cmd.hf14a_scan()
+            except Exception as e:
+                print(f"{CR}   Error scanning tag: {e}{C0}")
+                # Decide if we should retry or fail completely. Let's fail for now.
+                print(f"{CR}   Attack failed due to error during scanning.{C0}")
+                return None
+
+            if scan_resp is None or len(scan_resp) == 0:
+                print(f"{CR}   Error: No tag found.{C0}")
+                if attempt + 1 < max_attempts:
+                    print(f"{CY}   Retrying scan in 1 second...{C0}")
+                    time.sleep(1)
+                    continue # Retry the outer loop (next attempt)
+                else:
+                    print(f"{CR}   Maximum attempts reached without finding tag. Attack failed.{C0}")
+                    return None
+            if len(scan_resp) > 1:
+                print(f"{CR}   Error: Multiple tags found. Please present only one tag.{C0}")
+                # Fail immediately if multiple tags are present
+                return None
+
+            tag_info = scan_resp[0]
+            uid_bytes = tag_info['uid'] # Store UID for later verification
+            uid_len = len(uid_bytes)
+            uid_for_file = b''
+            if uid_len == 4:
+                uid_for_file = uid_bytes[0: 4]
+            elif uid_len == 7:
+                uid_for_file = uid_bytes[3: 7]
+            elif uid_len == 10:
+                 uid_for_file = uid_bytes[6: 10]
+            else:
+                 print(f"{CR}   Error: Unexpected UID length ({uid_len} bytes). Cannot create nonce file header.{C0}")
+                 return None # Fail if UID length is unexpected
+            print(f"   Tag found with UID: {uid_bytes.hex().upper()}")
+            # Prepare header in the main buffer for this attempt
+            nonces_buffer.extend(uid_for_file)
+            nonces_buffer.extend(struct.pack('!BB', block_target, type_target.value & 0x01))
+            print(f"   Nonce file header prepared: {nonces_buffer.hex().upper()}")
+
+
+            # 2. Acquire nonces dynamically based on MSB criteria (Inner loop for runs)
+            print(f"   Acquiring nonces (slow mode: {slow_mode}, max runs: {max_runs}). This may take a while...")
+            while run_count < max_runs:
+                run_count += 1
+                print(f"   Starting acquisition run {run_count}/{max_runs}...")
+                try:
+                    # Check if tag is still present before each run
+                    current_scan = self.cmd.hf14a_scan()
+                    if current_scan is None or len(current_scan) == 0 or current_scan[0]['uid'] != uid_bytes:
+                        print(f"{CR}   Error: Tag lost or changed before run {run_count}. Stopping acquisition attempt.{C0}")
+                        acquisition_goal_met = False # Mark as failed
+                        break # Exit inner run loop for this attempt
+
+                    # Acquire nonces for this run
+                    raw_nonces_bytes_this_run = self.cmd.mf1_hard_nested_acquire(
+                        slow_mode, block_known, type_known, key_known, block_target, type_target
+                    )
+
+                    if not raw_nonces_bytes_this_run:
+                        print(f"{CY}   Run {run_count}: No nonces acquired in this run. Continuing...{C0}")
+                        time.sleep(0.1) # Small delay before retrying
+                        continue
+
+                    # Append successfully acquired nonces to the total buffer for this attempt
+                    total_raw_nonces_bytes.extend(raw_nonces_bytes_this_run)
+
+                    # --- Process acquired nonces for MSB tracking ---
+                    num_pairs_this_run = len(raw_nonces_bytes_this_run) // 9
+                    print(f"   Run {run_count}: Acquired {num_pairs_this_run * 2} nonces ({len(raw_nonces_bytes_this_run)} bytes raw). Processing MSBs...")
+
+                    new_msbs_found_this_run = 0
+                    for i in range(num_pairs_this_run):
+                        offset = i * 9
+                        try:
+                            nt, nt_enc, par = struct.unpack_from('!IIB', raw_nonces_bytes_this_run, offset)
+                        except struct.error as unpack_err:
+                            print(f"{CR}   Error unpacking nonce data at offset {offset}: {unpack_err}. Skipping pair.{C0}")
+                            continue
+
+                        msb = (nt_enc >> 24) & 0xFF
+
+                        if not seen_msbs[msb]:
+                            seen_msbs[msb] = True
+                            unique_msb_count += 1
+                            new_msbs_found_this_run += 1
+                            parity_bit = hardnested_utils.evenparity32((nt_enc & 0xff000000) | (par & 0x08))
+                            msb_parity_sum += parity_bit
+                            print(f"\r   Unique MSBs: {unique_msb_count}/256 | Current Sum: {msb_parity_sum}   ", end="")
+
+                    if new_msbs_found_this_run > 0:
+                        print() # Print a newline after progress update
+
+                    # --- Check termination condition ---
+                    if unique_msb_count == 256:
+                        print(f"\n   {CG}All 256 unique MSBs found.{C0} Final parity sum: {msb_parity_sum}")
+                        if msb_parity_sum in hardnested_utils.hardnested_sums:
+                            print(f"   {CG}Parity sum {msb_parity_sum} is VALID. Stopping acquisition runs.{C0}")
+                            acquisition_goal_met = True
+                            acquisition_success = True # Mark attempt as successful
+                            break # Exit the inner run loop successfully
+                        else:
+                            print(f"   {CR}Parity sum {msb_parity_sum} is INVALID (Expected one of {hardnested_utils.hardnested_sums}).{C0}")
+                            acquisition_goal_met = False # Mark as failed
+                            acquisition_success = False
+                            break # Exit the inner run loop to restart the attempt
+
+                except chameleon_com.CMDInvalidException:
+                     print(f"{CR}   Error: Hardnested command not supported by this firmware version.{C0}")
+                     return None # Cannot proceed at all
+                except UnexpectedResponseError as e:
+                    print(f"{CR}   Error acquiring nonces during run {run_count}: {e}{C0}")
+                    print(f"{CY}   Stopping acquisition runs for this attempt...{C0}")
+                    acquisition_goal_met = False
+                    break # Exit inner run loop
+                except TimeoutError:
+                    print(f"{CR}   Error: Timeout during nonce acquisition run {run_count}.{C0}")
+                    print(f"{CY}   Stopping acquisition runs for this attempt...{C0}")
+                    acquisition_goal_met = False
+                    break # Exit inner run loop
+                except Exception as e:
+                    print(f"{CR}   Unexpected error during acquisition run {run_count}: {e}{C0}")
+                    print(f"{CY}   Stopping acquisition runs for this attempt...{C0}")
+                    acquisition_goal_met = False
+                    break # Exit inner run loop
+            # --- End of inner run loop (while run_count < max_runs) ---
+
+            # --- Post-Acquisition Summary for this attempt ---
+            print(f"\n   Finished acquisition phase for attempt {attempt + 1}.")
+            if acquisition_success:
+                print(f"   {CG}Successfully acquired nonces meeting the MSB sum criteria in {run_count} runs.{C0}")
+                # Append collected raw nonces to the main buffer for the file
+                nonces_buffer.extend(total_raw_nonces_bytes)
+                break # Exit the outer attempt loop successfully
+            elif unique_msb_count == 256 and not acquisition_goal_met:
+                 print(f"   {CR}Found all 256 MSBs, but the parity sum was invalid.{C0}")
+                 if attempt + 1 < max_attempts:
+                     print(f"   {CY}Restarting acquisition process...{C0}")
+                     time.sleep(1) # Small delay before restarting
+                     continue # Continue to the next iteration of the outer attempt loop
+                 else:
+                     print(f"   {CR}Maximum attempts ({max_attempts}) reached with invalid sum. Attack failed.{C0}")
+                     return None # Failed after max attempts
+            elif run_count >= max_runs:
+                print(f"   {CY}Warning: Reached max runs ({max_runs}) for attempt {attempt + 1}. Found {unique_msb_count}/256 unique MSBs.{C0}")
+                if attempt + 1 < max_attempts:
+                    print(f"   {CY}Restarting acquisition process...{C0}")
+                    time.sleep(1)
+                    continue # Continue to the next iteration of the outer attempt loop
+                else:
+                    print(f"   {CR}Maximum attempts ({max_attempts}) reached without meeting criteria. Attack failed.{C0}")
+                    return None # Failed after max attempts
+            else: # Acquisition stopped due to error or tag loss
+                 print(f"   {CR}Acquisition attempt {attempt + 1} stopped prematurely due to an error after {run_count} runs.{C0}")
+                 # Decide if we should retry or fail completely. Let's fail for now.
+                 print(f"   {CR}Attack failed due to error during acquisition.{C0}")
+                 return None # Failed due to error
+
+        # --- End of outer attempt loop ---
+
+        # If we exited the loop successfully (acquisition_success is True)
+        if not acquisition_success:
+             # This case should ideally be caught within the loop, but as a safeguard:
+             print(f"{CR}   Error: Acquisition failed after {max_attempts} attempts.{C0}")
+             return None
+
+        # --- Proceed with the rest of the attack using the successfully collected nonces ---
+        total_nonce_pairs = len(total_raw_nonces_bytes) // 9 # Use data from the successful attempt
+        print(f"\n   Proceeding with attack using {total_nonce_pairs * 2} nonces ({len(total_raw_nonces_bytes)} bytes raw).")
+        print(f"   Total nonce file size will be {len(nonces_buffer)} bytes.")
+
+        if total_nonce_pairs == 0:
+            print(f"{CR}   Error: No nonces were successfully acquired in the final attempt.{C0}")
+            return None
+
+        # 3. Save nonces to a temporary file
+        nonce_file_path = None
+        temp_nonce_file = None
+        temp_output_file = None # For hardnested output
+        process = None # Define process here for finally block
+        output_str = "" # To store the output read from the file
+        output_log_path = "" # To store the path of the output log
+
+        try:
+            # --- Nonce File Handling ---
+            delete_nonce_on_close = not keep_nonce_file
+            # Use delete_on_close=False to manage deletion manually in finally block
+            temp_nonce_file = tempfile.NamedTemporaryFile(
+                suffix=".bin", prefix="hardnested_nonces_", delete=False,
+                mode='wb', dir='.'
+            )
+            temp_nonce_file.write(nonces_buffer) # Write the buffer from the successful attempt
+            temp_nonce_file.flush()
+            nonce_file_path = temp_nonce_file.name
+            temp_nonce_file.close() # Close it so hardnested can access it
+            temp_nonce_file = None # Clear variable after closing
+            print(f"   Nonces saved to {'temporary ' if delete_nonce_on_close else ''}file: {os.path.abspath(nonce_file_path)}")
+
+            # --- Output File Handling ---
+            # Create a temporary file to capture hardnested's output
+            # Keep it open while the subprocess runs, use delete=False for manual cleanup
+            temp_output_file = tempfile.NamedTemporaryFile(
+                suffix=".log", prefix="hardnested_output_", delete=False,
+                mode='w+', encoding='utf-8', errors='replace', dir='.'
+            )
+            output_log_path = temp_output_file.name # Store path for potential error messages
+            print(f"   Redirecting hardnested output to temporary log file: {os.path.abspath(output_log_path)}")
+
+
+            # 4. Prepare and run the external hardnested tool, redirecting output
+            tool_name = "hardnested"
+            if sys.platform == "win32":
+                tool_executable = f"{tool_name}.exe"
+            else:
+                tool_executable = f"./{tool_name}"
+
+            tool_path = os.path.join(default_cwd, tool_executable)
+            # Use list for Popen, ensure paths are correct
+            cmd_recover_list = [tool_path, os.path.abspath(nonce_file_path)]
+
+            print(f"   Executing: {' '.join(cmd_recover_list)}")
+            print(f"{CC}--- Running Hardnested Tool (Output redirected) ---{C0}")
+
+            # Run the process, redirecting stdout and stderr to the output file
+            process = subprocess.Popen(
+                cmd_recover_list,
+                cwd=default_cwd, # Run from the bin directory
+                stdout=temp_output_file, # Redirect stdout to file
+                stderr=subprocess.STDOUT, # Redirect stderr to the same file as stdout
+            )
+
+            # Wait for the process to complete
+            ret_code = process.wait() # This blocks until the tool finishes
+
+            print(f"{CC}--- Hardnested Tool Finished (Exit Code: {ret_code}) ---{C0}")
+
+            # 5. Read the output from the temporary log file
+            temp_output_file.seek(0) # Go back to the start of the file
+            output_str = temp_output_file.read() # Read the entire content
+            temp_output_file.close() # Close the file
+            temp_output_file = None # Clear the variable
+
+            # Optional: Print the captured output if needed for debugging
+            # print(f"{CY}--- Captured Hardnested Output ---{C0}\n{output_str}\n{CY}--- End Captured Output ---{C0}")
+
+            # 6. Process the result (using output_str read from the file)
+            if ret_code != 0:
+                print(f"{CR}   Error: Hardnested exited with code {ret_code}. Check log: {os.path.abspath(output_log_path)}{C0}")
+                if output_str:
+                    print(f"{CR}   Output captured:\n{output_str}{C0}")
+                return None
+
+            key_list = []
+            key_prefix = "Key found: " # Define the specific prefix to look for
+            for line in output_str.splitlines():
+                line_stripped = line.strip() # Remove leading/trailing whitespace
+                if line_stripped.startswith(key_prefix):
+                    # Found the target line, now extract the key using regex
+                    # Regex now looks for 12 hex chars specifically after the prefix
+                    sea_obj = re.search(r"([a-fA-F0-9]{12})", line_stripped[len(key_prefix):])
+                    if sea_obj:
+                        key_list.append(sea_obj.group(1))
+                        # Optional: Break if you only expect one "Key found:" line
+                        # break
+
+            if not key_list:
+                print(f"{CY}   No line starting with '{key_prefix}' found in the output file.{C0}")
+                return None
+
+            # 7. Verify Keys (Same as before)
+            print(f"   [{len(key_list)} candidate key(s) found in output. Verifying...]")
+            # Use the UID from the successful acquisition attempt
+            uid_bytes_for_verify = uid_bytes # From the last successful scan in the outer loop
+
+            for key_hex in key_list:
+                key_bytes = bytes.fromhex(key_hex)
+                print(f"   Trying key: {key_hex.upper()}...", end="")
+                try:
+                    # Check tag presence before auth attempt
+                    scan_check = self.cmd.hf14a_scan()
+                    if scan_check is None or len(scan_check) == 0 or scan_check[0]['uid'] != uid_bytes_for_verify:
+                        print(f" {CR}Tag lost or changed during verification. Cannot verify.{C0}")
+                        return None # Stop verification if tag is gone
+
+                    if self.cmd.mf1_auth_one_key_block(block_target, type_target, key_bytes):
+                        print(f" {CG}Success!{C0}")
+                        return key_hex # Return the verified key
+                    else:
+                        print(f" {CR}Auth failed.{C0}")
+                except UnexpectedResponseError as e:
+                    print(f" {CR}Verification error: {e}{C0}")
+                    # Consider if we should continue trying other keys or stop
+                except Exception as e:
+                    print(f" {CR}Unexpected error during verification: {e}{C0}")
+                    # Consider stopping here
+
+            print(f"{CY}   Verification failed for all candidate keys.{C0}")
+            return None
+
+        finally:
+            # 8. Clean up nonce file
+            if nonce_file_path and os.path.exists(nonce_file_path):
+                if keep_nonce_file:
+                    final_nonce_filename = "nonces.bin"
+                    try:
+                        if os.path.exists(final_nonce_filename):
+                            os.remove(final_nonce_filename)
+                        # Use replace for atomicity if possible
+                        os.replace(nonce_file_path, final_nonce_filename)
+                        print(f"   Nonce file kept as: {os.path.abspath(final_nonce_filename)}")
+                    except OSError as e:
+                        print(f"{CR}   Error renaming/replacing temporary nonce file to {final_nonce_filename}: {e}{C0}")
+                        print(f"   Temporary file might remain: {nonce_file_path}")
+                else:
+                    try:
+                        os.remove(nonce_file_path)
+                        # print(f"   Temporary nonce file deleted: {nonce_file_path}") # Optional confirmation
+                    except OSError as e:
+                        print(f"{CR}   Error deleting temporary nonce file {nonce_file_path}: {e}{C0}")
+
+            # Ensure output file is closed and deleted if an error occurred before its closure
+            if temp_output_file: # If it wasn't closed and cleared in the try block
+                try:
+                    temp_output_file.close()
+                except Exception:
+                    pass # Ignore errors during cleanup close
+
+            # Delete the output log file unless an error occurred and we want to keep it
+            if output_log_path and os.path.exists(output_log_path):
+                 # Keep log if hardnested failed (ret_code != 0) or if verification failed?
+                 # For now, let's always delete it unless there was an exception *before* reading it.
+                 # If ret_code != 0, the path was already printed.
+                 try:
+                     os.remove(output_log_path)
+                 except OSError as e:
+                     print(f"{CR}   Error deleting temporary output log file {output_log_path}: {e}{C0}")
+
+
+            # Ensure process is terminated if something went wrong
+            if process and process.poll() is None:
+                try:
+                    print(f"{CY}   Terminating hardnested process...{C0}")
+                    process.terminate() # Try graceful termination
+                    process.wait(timeout=0.5) # Wait briefly
+                    if process.poll() is None:
+                        process.kill() # Force kill if still running
+                except Exception as kill_err:
+                    print(f"{CR}   Error terminating process: {kill_err}{C0}")
+
+
+    def on_exec(self, args: argparse.Namespace):
+        block_known = args.blk
+        type_known = MfcKeyType.B if args.b else MfcKeyType.A
+        key_known_str: str = args.key
+        if not re.match(r"^[a-fA-F0-9]{12}$", key_known_str):
+            raise ArgsParserError("Known key must include 12 HEX symbols")
+        key_known_bytes = bytes.fromhex(key_known_str)
+
+        block_target = args.tblk
+        type_target = MfcKeyType.B if args.tb else MfcKeyType.A
+
+        if block_known == block_target and type_known == type_target:
+            print(f"{CR}Target key is the same as the known key.{C0}")
+            return
+
+        # Pass the max_runs and max_attempts arguments
+        recovered_key = self.recover_key(
+            args.slow, block_known, type_known, key_known_bytes, block_target, type_target,
+            args.keep_nonce_file, args.max_runs, args.max_attempts
+        )
+
+        if recovered_key:
+            print(f" - Key Found: Block {block_target} Type {type_target.name} Key = {CG}{recovered_key.upper()}{C0}")
+        else:
+            print(f"{CR} - HardNested attack failed to recover the key.{C0}")
 
 
 @hf_mf.command('fchk')

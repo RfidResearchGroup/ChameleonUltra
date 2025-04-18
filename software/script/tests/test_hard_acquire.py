@@ -12,10 +12,10 @@ def test_hardnested_acquire():
     acquire_count = 0
 
     # known key and target block
-    key = bytes.fromhex("????????????")
+    key = bytes.fromhex("FFFFFFFFFFFF") # <-- Your known key
     block_known = 0x00
     type_known = 0x60
-    block_target = 0x07
+    block_target = 0x00
     type_target = 0x60
 
 
@@ -32,6 +32,10 @@ def test_hardnested_acquire():
         cml = ChameleonCom().open('/dev/ttyACM0')
     cml_cmd = ChameleonCMD(cml)
 
+        # ------------------------ SET DEVICE MODE ------------------------
+    print("Setting device mode to HF Reader...")
+    status = cml_cmd.set_device_reader_mode()
+
     # ------------------------     append tag info     ------------------------
 
     resp = cml_cmd.hf14a_scan()
@@ -39,7 +43,8 @@ def test_hardnested_acquire():
         print("ISO14443-A Tag no found")
         return
 
-    uidbytes = bytearray.fromhex(resp['uid'])
+    tag_info = resp[0]
+    uidbytes = tag_info['uid']
     uid_len = len(uidbytes)
     if uid_len == 4:
         nonces_buffer.extend(uidbytes[0: 4])
@@ -96,3 +101,9 @@ def test_hardnested_acquire():
 
     # You can decrypt nonce bin by pm3 client, or any app if support pm3 nonce bin format.
     # TODO If CU bin can decrypt, run cmd on here...
+
+if __name__ == "__main__":
+    try:
+        test_hardnested_acquire()
+    except Exception as e:
+        print(f"An error occurred: {e}")

@@ -1,0 +1,3 @@
+# Heavily modifed XZ Utils only containing LibLZMA
+# Based on xz-5.8.1
+# See https://github.com/tukaani-project/xz for the original source

@@ -123,7 +123,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -236,7 +235,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-
+.vscode/
 # Spyder project settings
 .spyderproject
 .spyproject
@@ -708,3 +707,5 @@ FodyWeavers.xsd
 # Additional files built by Visual Studio
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudio,c++,c,python,visualstudiocode,macos,windows
+software/script/tests/nonces.bin
+software/script/nonces.bin
