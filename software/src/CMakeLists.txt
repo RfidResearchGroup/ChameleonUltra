@@ -250,29 +250,35 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_compile_definitions(hardnested PRIVATE _GNU_SOURCE)
 endif()
 
+# Platform-specific settings for Windows
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
-    # --- Add fmemopen compatibility layer for Windows ---
-    target_sources(hardnested PRIVATE
-        ${COMPAT_DIR}/fmemopen/libfmemopen.c # Compile the source file
-    )
-    target_include_directories(hardnested PRIVATE
-         ${COMPAT_DIR}/fmemopen # Add include directory for fmemopen.h
-    )
-    # --- End fmemopen changes ---
 
+    # Settings common to all Windows builds (MSVC & MinGW)
     target_compile_definitions(hardnested PRIVATE
         HAVE_STRUCT_TIMESPEC
         # LZMA_API_STATIC # Add this back if you get lzma linker errors
     )
-    target_link_libraries(hardnested PRIVATE pthread)
-endif()
+    target_link_libraries(hardnested PRIVATE pthread) # Link the imported pthread target
 
+    # Add fmemopen compatibility layer ONLY for non-MSVC Windows builds (e.g., MinGW)
+    if(NOT MSVC)
+        message(STATUS "Non-MSVC Windows build detected, adding fmemopen compatibility layer.")
+        target_sources(hardnested PRIVATE
+            ${COMPAT_DIR}/fmemopen/libfmemopen.c # Compile the source file
+        )
+        target_include_directories(hardnested PRIVATE
+             ${COMPAT_DIR}/fmemopen # Add include directory for fmemopen.h
+        )
+    endif() # End NOT MSVC
+
+endif() # End Windows
+
+# Link libraries common to all platforms (or handled by variables)
 target_link_libraries(hardnested PRIVATE
-    ${LIBTHREAD}
-    ${LIBMATH}
+    ${LIBTHREAD}    # Handles pthread on Windows, Threads::Threads on Linux
+    ${LIBMATH}      # Handles 'm' on Linux, empty on Windows
     liblzma_imported # Link against the IMPORTED target name
 )
 
 # Set the output directory for all executables at the end
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${EXECUTABLE_OUTPUT_PATH})
-
