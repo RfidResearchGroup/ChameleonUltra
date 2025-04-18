@@ -3,7 +3,10 @@ cmake_minimum_required (VERSION 3.5)
 project (mifare C)
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../script/bin)
-set(SRC_DIR ./)
+set(SRC_DIR ./) # Assuming source files are in the same directory as CMakeLists.txt
+
+# Define a variable for the compatibility code directory
+set(COMPAT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/compat)
 
 set(COMMON_FILES
     ${SRC_DIR}/common.c
@@ -229,9 +232,9 @@ if (CMAKE_SYSTEM_NAME MATCHES "Windows")
 endif()
 
 
+# --- hardnested Executable ---
 add_executable(hardnested ${COMMON_FILES} ${HARDNESTED_SOURCES})
 # Add dependency: hardnested depends on the *imported library target*
-# CMake handles the transitive dependency: hardnested -> liblzma_imported -> build_liblzma
 add_dependencies(hardnested liblzma_imported) # Keep this explicit dependency
 
 target_include_directories(hardnested PRIVATE
@@ -239,17 +242,27 @@ target_include_directories(hardnested PRIVATE
     ${HARDNESTED_RECOVERY_DIR}
     ${HARDNESTED_RECOVERY_DIR}/pm3
     ${HARDNESTED_RECOVERY_DIR}/hardnested
-    # Include dir now comes from linking liblzma_imported via INTERFACE_INCLUDE_DIRECTORIES
+    # liblzma include dir comes via INTERFACE property of liblzma_imported
 )
 target_compile_options(hardnested PRIVATE -Wall)
+
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_compile_definitions(hardnested PRIVATE _GNU_SOURCE)
 endif()
+
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
-    # NOTE: LZMA_API_STATIC definition was NOT added here, as requested
+    # --- Add fmemopen compatibility layer for Windows ---
+    target_sources(hardnested PRIVATE
+        ${COMPAT_DIR}/fmemopen/fmemopen.c # Compile the source file
+    )
+    target_include_directories(hardnested PRIVATE
+         ${COMPAT_DIR}/fmemopen # Add include directory for fmemopen.h
+    )
+    # --- End fmemopen changes ---
+
     target_compile_definitions(hardnested PRIVATE
         HAVE_STRUCT_TIMESPEC
-        # LZMA_API_STATIC # <-- Kept commented out per request
+        # LZMA_API_STATIC # Add this back if you get lzma linker errors
     )
     target_link_libraries(hardnested PRIVATE pthread)
 endif()
@@ -262,3 +275,4 @@ target_link_libraries(hardnested PRIVATE
 
 # Set the output directory for all executables at the end
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${EXECUTABLE_OUTPUT_PATH})
+
