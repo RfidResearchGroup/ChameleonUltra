@@ -256,7 +256,7 @@ if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     # Settings common to all Windows builds (MSVC & MinGW)
     target_compile_definitions(hardnested PRIVATE
         HAVE_STRUCT_TIMESPEC
-        # LZMA_API_STATIC # Add this back if you get lzma linker errors
+        LZMA_API_STATIC # Add this back if you get lzma linker errors
     )
     target_link_libraries(hardnested PRIVATE pthread) # Link the imported pthread target
 
