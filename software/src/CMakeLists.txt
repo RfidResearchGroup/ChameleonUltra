@@ -253,7 +253,7 @@ endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     # --- Add fmemopen compatibility layer for Windows ---
     target_sources(hardnested PRIVATE
-        ${COMPAT_DIR}/fmemopen/fmemopen.c # Compile the source file
+        ${COMPAT_DIR}/fmemopen/libfmemopen.c # Compile the source file
     )
     target_include_directories(hardnested PRIVATE
          ${COMPAT_DIR}/fmemopen # Add include directory for fmemopen.h
