@@ -111,7 +111,7 @@ THE SOFTWARE.
     #define atomic_add __sync_fetch_and_add
     #ifdef _WIN32 // Non-MSVC Windows (MinGW, etc.)
     // Include the compatibility header provided via CMake
-    #include <fmemopen.h>
+    #include "../../compat/fmemopen/libfmemopen.h"
 #endif // _WIN32 (Non-MSVC)
 
 #endif
