@@ -48,7 +48,6 @@ THE SOFTWARE.
 */
 
 #include "hardnested_bruteforce.h"
-
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -110,6 +109,11 @@ THE SOFTWARE.
 	}
 #else
     #define atomic_add __sync_fetch_and_add
+    #ifdef _WIN32 // Non-MSVC Windows (MinGW, etc.)
+    // Include the compatibility header provided via CMake
+    #include <fmemopen.h>
+#endif // _WIN32 (Non-MSVC)
+
 #endif
 // debugging options
 #define DEBUG_KEY_ELIMINATION           1
