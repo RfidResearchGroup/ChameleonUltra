@@ -51,21 +51,19 @@ if(CMAKE_SYSTEM_NAME MATCHES "Windows")
 endif()
 
 # --- Define the expected path for the built liblzma library ---
-# (This logic remains the same as in the provided context)
 if(CMAKE_SYSTEM_NAME MATCHES "Windows")
     if(MSVC)
         # Point to the Release directory as the build command uses --config Release
         set(LIBLZMA_LIB_PATH "${LIBLZMA_BUILD_DIR}/Release/lzma.lib")
     else() # MinGW / Ninja
         # Assuming liblzma.a goes directly into build/ for non-MSVC Windows
-        # based on previous user confirmation. Adjust if needed.
         set(LIBLZMA_LIB_PATH "${LIBLZMA_BUILD_DIR}/liblzma.a")
     endif()
 else()
     # Single-config (Linux Makefiles/Ninja): Library is typically directly in the build directory
     set(LIBLZMA_LIB_PATH "${LIBLZMA_BUILD_DIR}/liblzma.a")
 endif()
-message(STATUS "Expecting liblzma at: ${LIBLZMA_LIB_PATH}") # Add message for verification
+message(STATUS "Expecting liblzma at: ${LIBLZMA_LIB_PATH}")
 
 # --- Use add_custom_command to declare the output file and the commands to create it ---
 add_custom_command(
@@ -89,7 +87,6 @@ add_custom_target(build_liblzma ALL
 )
 
 # --- Create an IMPORTED library target for liblzma ---
-# (This part remains the same)
 add_library(liblzma_imported STATIC IMPORTED GLOBAL)
 set_target_properties(liblzma_imported PROPERTIES
     IMPORTED_LOCATION "${LIBLZMA_LIB_PATH}"
@@ -97,14 +94,10 @@ set_target_properties(liblzma_imported PROPERTIES
 )
 
 # --- Ensure the IMPORTED target depends on the custom target ---
-# This links the IMPORTED library concept to the custom target that ensures
-# the underlying file is created.
 add_dependencies(liblzma_imported build_liblzma)
 
 
-# --- Rest of your CMakeLists.txt ---
-# (The following sections are identical to the context provided)
-
+# --- Hardnested Recovery Sources ---
 set(HARDNESTED_RECOVERY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/HardnestedRecovery)
 
 set(HARDNESTED_SOURCES
@@ -117,41 +110,69 @@ set(HARDNESTED_SOURCES
     ${HARDNESTED_RECOVERY_DIR}/hardnested/hardnested_bruteforce.c
     ${HARDNESTED_RECOVERY_DIR}/hardnested/hardnested_bitarray_core.c
     ${HARDNESTED_RECOVERY_DIR}/hardnested/tables.c
-    # Only include util_posix.c on non-Windows systems
 )
 if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows")
     list(APPEND HARDNESTED_SOURCES ${HARDNESTED_RECOVERY_DIR}/pm3/util_posix.c)
 endif()
 
 
-# Platform specific settings
+# --- Platform specific settings ---
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     MESSAGE(STATUS "Run on linux.")
     if (CMAKE_BUILD_TYPE STREQUAL "Release")
-        set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3") # Use specific variable
+        set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3")
     endif()
     find_package(Threads REQUIRED)
-    set(LIBTHREAD Threads::Threads) # Use modern target if available
+    set(LIBTHREAD Threads::Threads) # Use modern target
     set(LIBMATH m)
+
 elseif (CMAKE_SYSTEM_NAME MATCHES "Windows")
     MESSAGE(STATUS "Run on Windows.")
     if (CMAKE_BUILD_TYPE STREQUAL "Release")
-        set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /Ox") # Use specific variable
+        # Set optimization flags based on compiler
+        if(MSVC)
+            set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /Ox")
+        else() # Assuming MinGW or similar GCC-compatible
+            set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3")
+        endif()
     endif()
-    # Ensure the path to pthread lib is correct relative to CMAKE_CURRENT_SOURCE_DIR
-    find_library(PTHREAD_LIB pthreadVC2.lib PATHS ${CMAKE_CURRENT_SOURCE_DIR}/lib/pthread/lib/x64/)
-    if (NOT PTHREAD_LIB)
-        message(FATAL_ERROR "pthreadVC2.lib not found in ${CMAKE_CURRENT_SOURCE_DIR}/lib/pthread/lib/x64/")
+
+    # --- Pthread library handling for Windows ---
+    if(MSVC)
+        # MSVC: Find the specific pthreads-win32 library
+        message(STATUS "MSVC compiler detected. Looking for pthreads-win32 library.")
+        find_library(PTHREAD_LIB_PATH pthreadVC2.lib PATHS ${CMAKE_CURRENT_SOURCE_DIR}/lib/pthread/lib/x64/)
+        if (NOT PTHREAD_LIB_PATH)
+            message(FATAL_ERROR "pthreadVC2.lib not found in ${CMAKE_CURRENT_SOURCE_DIR}/lib/pthread/lib/x64/. Please provide pthreads-win32 for MSVC.")
+        endif()
+
+        # Create an imported library for pthread on Windows for consistency
+        add_library(pthread STATIC IMPORTED GLOBAL)
+        set_target_properties(pthread PROPERTIES
+            IMPORTED_LOCATION ${PTHREAD_LIB_PATH}
+            INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/lib/pthread/include
+        )
+        set(LIBTHREAD pthread) # Use the imported target name
+
+    elseif(CMAKE_C_COMPILER_ID MATCHES "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang") # Check for MinGW (GCC) or Clang on Windows
+        # MinGW or Clang on Windows: Use find_package(Threads) to find the bundled winpthreads
+        message(STATUS "MinGW (GCC) or Clang compiler detected on Windows. Using find_package(Threads).")
+        find_package(Threads REQUIRED)
+        if(Threads_FOUND)
+            set(LIBTHREAD Threads::Threads) # Use the modern CMake target
+            message(STATUS "Found MinGW pthreads using find_package(Threads).")
+        else()
+            # This shouldn't happen if Threads is REQUIRED, but good practice
+            message(FATAL_ERROR "Could not find pthreads using find_package(Threads) with MinGW/Clang. Check your toolchain installation.")
+        endif()
+
+    else()
+        message(FATAL_ERROR "Unsupported Windows compiler: ${CMAKE_C_COMPILER_ID}. Cannot determine how to find pthreads.")
     endif()
-    # Create an imported library for pthread on Windows for consistency
-    # Added GLOBAL scope
-    add_library(pthread STATIC IMPORTED GLOBAL)
-    set_target_properties(pthread PROPERTIES
-        IMPORTED_LOCATION ${PTHREAD_LIB}
-        INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/lib/pthread/include
-    )
-    set(LIBTHREAD pthread) # Use the imported target name
-    set(LIBMATH "")
+    # --- End Pthread library handling ---
+
+    set(LIBMATH "") # No separate math library needed on Windows
+
 else()
     # Handle other platforms or provide a default/error
     MESSAGE(STATUS "Running on other platform: ${CMAKE_SYSTEM_NAME}")
@@ -170,30 +191,31 @@ endif()
 
 add_executable(nested ${COMMON_FILES} ${NESTED_UTIL} nested.c)
 target_include_directories(nested PRIVATE ${SRC_DIR})
-target_link_libraries(nested PRIVATE ${LIBTHREAD})
+target_link_libraries(nested PRIVATE ${LIBTHREAD}) # Link common thread lib
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_compile_definitions(nested PRIVATE _GNU_SOURCE)
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     target_compile_definitions(nested PRIVATE HAVE_STRUCT_TIMESPEC)
-    target_link_libraries(nested PRIVATE pthread)
+    # No extra target_link_libraries needed here, ${LIBTHREAD} handles it
 endif()
 
 
 add_executable(staticnested ${COMMON_FILES} ${NESTED_UTIL} staticnested.c)
 target_include_directories(staticnested PRIVATE ${SRC_DIR})
-target_link_libraries(staticnested PRIVATE ${LIBTHREAD})
+target_link_libraries(staticnested PRIVATE ${LIBTHREAD}) # Link common thread lib
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_compile_definitions(staticnested PRIVATE _GNU_SOURCE)
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     target_compile_definitions(staticnested PRIVATE HAVE_STRUCT_TIMESPEC)
-    target_link_libraries(staticnested PRIVATE pthread)
+    # No extra target_link_libraries needed here, ${LIBTHREAD} handles it
 endif()
 
 
 add_executable(darkside ${COMMON_FILES} ${MFKEY_UTIL} darkside.c)
 target_include_directories(darkside PRIVATE ${SRC_DIR})
+# darkside doesn't seem to need pthreads based on original file
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_compile_definitions(darkside PRIVATE _GNU_SOURCE)
 endif()
@@ -204,6 +226,7 @@ endif()
 
 add_executable(mfkey32 ${COMMON_FILES} mfkey32.c)
 target_include_directories(mfkey32 PRIVATE ${SRC_DIR})
+# mfkey32 doesn't seem to need pthreads based on original file
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_compile_definitions(mfkey32 PRIVATE _GNU_SOURCE)
 endif()
@@ -214,6 +237,7 @@ endif()
 
 add_executable(mfkey32v2 ${COMMON_FILES} mfkey32v2.c)
 target_include_directories(mfkey32v2 PRIVATE ${SRC_DIR})
+# mfkey32v2 doesn't seem to need pthreads based on original file
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_compile_definitions(mfkey32v2 PRIVATE _GNU_SOURCE)
 endif()
@@ -224,6 +248,7 @@ endif()
 
 add_executable(mfkey64 ${COMMON_FILES} mfkey64.c)
 target_include_directories(mfkey64 PRIVATE ${SRC_DIR})
+# mfkey64 doesn't seem to need pthreads based on original file
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_compile_definitions(mfkey64 PRIVATE _GNU_SOURCE)
 endif()
@@ -234,8 +259,7 @@ endif()
 
 # --- hardnested Executable ---
 add_executable(hardnested ${COMMON_FILES} ${HARDNESTED_SOURCES})
-# Add dependency: hardnested depends on the *imported library target*
-add_dependencies(hardnested liblzma_imported) # Keep this explicit dependency
+add_dependencies(hardnested liblzma_imported) # Ensure liblzma is built first
 
 target_include_directories(hardnested PRIVATE
     ${SRC_DIR}
@@ -256,9 +280,9 @@ if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     # Settings common to all Windows builds (MSVC & MinGW)
     target_compile_definitions(hardnested PRIVATE
         HAVE_STRUCT_TIMESPEC
-        LZMA_API_STATIC # Add this back if you get lzma linker errors
+        LZMA_API_STATIC # Keep if needed for static linking of lzma
     )
-    target_link_libraries(hardnested PRIVATE pthread) # Link the imported pthread target
+    # No extra target_link_libraries needed here, ${LIBTHREAD} handles it below
 
     # Add fmemopen compatibility layer ONLY for non-MSVC Windows builds (e.g., MinGW)
     if(NOT MSVC)
@@ -275,10 +299,11 @@ endif() # End Windows
 
 # Link libraries common to all platforms (or handled by variables)
 target_link_libraries(hardnested PRIVATE
-    ${LIBTHREAD}    # Handles pthread on Windows, Threads::Threads on Linux
+    ${LIBTHREAD}    # Handles pthread correctly now for Linux, MSVC, MinGW
     ${LIBMATH}      # Handles 'm' on Linux, empty on Windows
     liblzma_imported # Link against the IMPORTED target name
 )
 
 # Set the output directory for all executables at the end
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${EXECUTABLE_OUTPUT_PATH})
+
