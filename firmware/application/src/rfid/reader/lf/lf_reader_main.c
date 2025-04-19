@@ -2,6 +2,7 @@
 #include "bsp_delay.h"
 #include "lf_reader_main.h"
 #include "lf_125khz_radio.h"
+#include "lf_read.h"
 
 
 #define NRF_LOG_MODULE_NAME lf_main
@@ -103,6 +104,14 @@ uint8_t PcdWriteT55XX(uint8_t *uid, uint8_t *newkey, uint8_t *old_keys, uint8_t 
     // Read the verification and return the results of the card writing
     // Do not read it here, you can check it by the upper machine
     return STATUS_LF_TAG_OK;
+}
+
+uint8_t lf_reader_read(uint8_t *data, size_t buffer_len) {
+    uint8_t ret = STATUS_LF_TAG_NO_FOUND;
+    if (lf_read_reader(data, g_timeout_readem_ms) == 1) {
+        ret = STATUS_LF_TAG_OK;
+    }
+    return ret;
 }
 
 /**
