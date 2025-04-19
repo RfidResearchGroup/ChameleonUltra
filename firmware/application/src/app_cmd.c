@@ -1258,11 +1258,10 @@ data_frame_tx_t *cmd_processor_get_device_capabilities(uint16_t cmd, uint16_t st
 
 static data_frame_tx_t *cmd_processor_mf0_ntag_get_uid_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     int rc = nfc_tag_mf0_ntag_get_uid_mode();
-
     if (rc < 0) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     else {
-        uint8_t res = rc;
-        return data_frame_make(cmd, STATUS_SUCCESS, 1, &res);
+        uint8_t mode = rc;
+        return data_frame_make(cmd, STATUS_SUCCESS, 1, &mode);
     }
 }
 
@@ -1270,7 +1269,19 @@ static data_frame_tx_t *cmd_processor_mf0_ntag_set_uid_mode(uint16_t cmd, uint16
     if (length != 1 || !nfc_tag_mf0_ntag_set_uid_mode(data[0] != 0)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
 
+static data_frame_tx_t *cmd_processor_mf0_ntag_get_write_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t mode = nfc_tag_mf0_ntag_get_write_mode();
+    return data_frame_make(cmd, STATUS_SUCCESS, 1, &mode);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_set_write_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 1 || data[0] > 4) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    nfc_tag_mf0_ntag_set_write_mode(data[0]);
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
@@ -1334,7 +1345,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_MANIPULATE_VALUE_BLOCK,   before_hf_reader_run,        cmd_processor_mf1_manipulate_value_block,    after_hf_reader_run    },
     {    DATA_CMD_MF1_CHECK_KEYS_OF_SECTORS,    before_hf_reader_run,        cmd_processor_mf1_check_keys_of_sectors,     after_hf_reader_run    },
     {    DATA_CMD_MF1_HARDNESTED_ACQUIRE,       before_hf_reader_run,        cmd_processor_mf1_hardnested_nonces_acquire, after_hf_reader_run    },
-    
+
     {    DATA_CMD_EM410X_SCAN,                  before_reader_run,           cmd_processor_em410x_scan,                   NULL                   },
     {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_em410x_write_to_t55XX,         NULL                   },
 
@@ -1370,7 +1381,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF0_NTAG_SET_COUNTER_DATA,    NULL,                        cmd_processor_mf0_ntag_set_counter_data,     NULL                   },
     {    DATA_CMD_MF0_NTAG_RESET_AUTH_CNT,      NULL,                        cmd_processor_mf0_ntag_reset_auth_cnt,       NULL                   },
     {    DATA_CMD_MF0_NTAG_GET_PAGE_COUNT,      NULL,                        cmd_processor_mf0_ntag_get_emu_page_count,   NULL                   },
-
+    {    DATA_CMD_MF0_NTAG_GET_WRITE_MODE,      NULL,                        cmd_processor_mf0_ntag_get_write_mode,       NULL                   },
+    {    DATA_CMD_MF0_NTAG_SET_WRITE_MODE,      NULL,                        cmd_processor_mf0_ntag_set_write_mode,       NULL                   },
     {    DATA_CMD_EM410X_SET_EMU_ID,            NULL,                        cmd_processor_em410x_set_emu_id,             NULL                   },
     {    DATA_CMD_EM410X_GET_EMU_ID,            NULL,                        cmd_processor_em410x_get_emu_id,             NULL                   },
 };

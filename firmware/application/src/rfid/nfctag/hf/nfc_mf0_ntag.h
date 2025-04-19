@@ -47,10 +47,21 @@
 #define MF0_NTAG_AUTHLIM_MASK_IN_CTR              0xF
 #define MF0_NTAG_TEARING_MASK_IN_AUTHLIM         0x80
 
+//MF0/NTAG label writing mode
+typedef enum {
+    NFC_TAG_MF0_NTAG_WRITE_NORMAL     =   0u,
+    NFC_TAG_MF0_NTAG_WRITE_DENIED     =   1u,
+    NFC_TAG_MF0_NTAG_WRITE_DECEIVE    =   2u,
+    NFC_TAG_MF0_NTAG_WRITE_SHADOW     =   3u,
+    NFC_TAG_MF0_NTAG_WRITE_SHADOW_REQ =   4u,
+} nfc_tag_mf0_ntag_write_mode_t;
+
 typedef struct {
     uint8_t mode_uid_magic: 1;
-    // reserve
-    uint8_t reserved1: 7;
+    // New field for write mode
+    nfc_tag_mf0_ntag_write_mode_t mode_block_write: 3;
+    // reserve remaining bits
+    uint8_t reserved1: 4;
     uint8_t reserved2;
     uint8_t reserved3;
 } nfc_tag_mf0_ntag_configure_t;
@@ -79,5 +90,7 @@ nfc_tag_14a_coll_res_reference_t *nfc_tag_mf0_ntag_get_coll_res(void);
 
 int nfc_tag_mf0_ntag_get_uid_mode(void);
 bool nfc_tag_mf0_ntag_set_uid_mode(bool enabled);
+void nfc_tag_mf0_ntag_set_write_mode(nfc_tag_mf0_ntag_write_mode_t write_mode);
+nfc_tag_mf0_ntag_write_mode_t nfc_tag_mf0_ntag_get_write_mode(void);
 
 #endif
