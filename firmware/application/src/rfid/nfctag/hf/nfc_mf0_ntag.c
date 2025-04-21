@@ -789,9 +789,21 @@ static int handle_write_command(uint8_t block_num, uint8_t *p_data) {
 
     if (block_num >= block_max) {
         NRF_LOG_ERROR("Write failed: block_num %08x >= block_max %08x", block_num, block_max);
-
         return NAK_INVALID_OPERATION_TBV;
     }
+
+    // Handle writing based on the current write mode
+    if (m_tag_information->config.mode_block_write == NFC_TAG_MF0_NTAG_WRITE_DENIED) {
+        // In this mode, reject all write operations
+        NRF_LOG_INFO("Write denied due to WRITE_DENIED mode");
+        return NAK_INVALID_OPERATION_TBV;
+    } 
+    else if (m_tag_information->config.mode_block_write == NFC_TAG_MF0_NTAG_WRITE_DECEIVE) {
+        // In this mode, pretend to accept the write but don't actually write anything
+        NRF_LOG_INFO("Write deceived in WRITE_DECEIVE mode");
+        return ACK_VALUE;
+    }
+    // For NORMAL, SHADOW, and SHADOW_REQ modes, proceed with the write operation
 
     if (m_tag_information->config.mode_uid_magic) {
         // anything can be written in this mode
@@ -1053,6 +1065,15 @@ static int get_information_size_by_tag_type(tag_specific_type_t type) {
  */
 int nfc_tag_mf0_ntag_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     if (m_tag_type != TAG_TYPE_UNDEFINED && m_tag_information != NULL) {
+        // Add shadow mode handling
+        if (m_tag_information->config.mode_block_write == NFC_TAG_MF0_NTAG_WRITE_SHADOW) {
+            NRF_LOG_INFO("The mf0/ntag is in shadow write mode.");
+            return 0;
+        }
+        if (m_tag_information->config.mode_block_write == NFC_TAG_MF0_NTAG_WRITE_SHADOW_REQ) {
+            NRF_LOG_INFO("The mf0/ntag will be set to shadow write mode.");
+            m_tag_information->config.mode_block_write = NFC_TAG_MF0_NTAG_WRITE_SHADOW;
+        }
         // Save the corresponding size data according to the current label type
         return get_information_size_by_tag_type(type);
     } else {
@@ -1217,6 +1238,7 @@ bool nfc_tag_mf0_ntag_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
 
     // default ntag config
     p_ntag_information->config.mode_uid_magic = false;
+    p_ntag_information->config.mode_block_write = NFC_TAG_MF0_NTAG_WRITE_NORMAL;
 
     // save data to flash
     tag_sense_type_t sense_type = get_sense_type_from_tag_type(tag_type);
@@ -1244,4 +1266,20 @@ bool nfc_tag_mf0_ntag_set_uid_mode(bool enabled) {
 
     m_tag_information->config.mode_uid_magic = enabled;
     return true;
+}
+
+void nfc_tag_mf0_ntag_set_write_mode(nfc_tag_mf0_ntag_write_mode_t write_mode) {
+    if (m_tag_type == TAG_TYPE_UNDEFINED || m_tag_information == NULL) return;
+    
+    if (write_mode == NFC_TAG_MF0_NTAG_WRITE_SHADOW) {
+        write_mode = NFC_TAG_MF0_NTAG_WRITE_SHADOW_REQ;
+    }
+    m_tag_information->config.mode_block_write = write_mode;
+}
+
+nfc_tag_mf0_ntag_write_mode_t nfc_tag_mf0_ntag_get_write_mode(void) {
+    if (m_tag_type == TAG_TYPE_UNDEFINED || m_tag_information == NULL) 
+        return NFC_TAG_MF0_NTAG_WRITE_NORMAL;
+    
+    return m_tag_information->config.mode_block_write;
 }
