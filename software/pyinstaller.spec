@@ -11,7 +11,12 @@ a = Analysis(
         ("script/bin/*", "bin/"),
     ],
     datas=[],
-    hiddenimports=[],
+    hiddenimports=[
+        'chameleon_cli_lf_enhanced',
+        'chameleon_lf_protocols',
+        'chameleon_lf_commands',
+        'integrate_lf_cli',
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

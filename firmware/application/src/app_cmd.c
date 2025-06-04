@@ -1256,6 +1256,10 @@ static data_frame_tx_t *after_hf_reader_run(uint16_t cmd, uint16_t status, uint1
 // fct will be defined after m_data_cmd_map because we need to know its size
 data_frame_tx_t *cmd_processor_get_device_capabilities(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data);
 
+static data_frame_tx_t *cmd_processor_not_implemented(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    return data_frame_make(cmd, STATUS_NOT_IMPLEMENTED, 0, NULL);
+}
+
 static data_frame_tx_t *cmd_processor_mf0_ntag_get_uid_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     int rc = nfc_tag_mf0_ntag_get_uid_mode();
     if (rc < 0) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
@@ -1348,6 +1352,20 @@ static cmd_data_map_t m_data_cmd_map[] = {
 
     {    DATA_CMD_EM410X_SCAN,                  before_reader_run,           cmd_processor_em410x_scan,                   NULL                   },
     {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_em410x_write_to_t55XX,         NULL                   },
+    {    DATA_CMD_T55XX_READ_BLOCK,             before_reader_run,           cmd_processor_not_implemented,               NULL                   },
+    {    DATA_CMD_T55XX_WRITE_BLOCK,            before_reader_run,           cmd_processor_not_implemented,               NULL                   },
+    {    DATA_CMD_HID_PROX_SCAN,                before_reader_run,           cmd_processor_not_implemented,               NULL                   },
+    {    DATA_CMD_HID_PROX_WRITE_TO_T55XX,      before_reader_run,           cmd_processor_not_implemented,               NULL                   },
+    {    DATA_CMD_INDALA_SCAN,                  before_reader_run,           cmd_processor_not_implemented,               NULL                   },
+    {    DATA_CMD_INDALA_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_not_implemented,               NULL                   },
+    {    DATA_CMD_FDX_B_SCAN,                   before_reader_run,           cmd_processor_not_implemented,               NULL                   },
+    {    DATA_CMD_PARADOX_SCAN,                 before_reader_run,           cmd_processor_not_implemented,               NULL                   },
+    {    DATA_CMD_KERI_SCAN,                    before_reader_run,           cmd_processor_not_implemented,               NULL                   },
+    {    DATA_CMD_AWD_SCAN,                     before_reader_run,           cmd_processor_not_implemented,               NULL                   },
+    {    DATA_CMD_IOPROX_SCAN,                  before_reader_run,           cmd_processor_not_implemented,               NULL                   },
+    {    DATA_CMD_LF_READ_RAW,                  before_reader_run,           cmd_processor_not_implemented,               NULL                   },
+    {    DATA_CMD_LF_WRITE_RAW,                 before_reader_run,           cmd_processor_not_implemented,               NULL                   },
+    {    DATA_CMD_LF_TUNE_ANTENNA,              before_reader_run,           cmd_processor_not_implemented,               NULL                   },
 
 #endif
 
@@ -1385,6 +1403,10 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF0_NTAG_SET_WRITE_MODE,      NULL,                        cmd_processor_mf0_ntag_set_write_mode,       NULL                   },
     {    DATA_CMD_EM410X_SET_EMU_ID,            NULL,                        cmd_processor_em410x_set_emu_id,             NULL                   },
     {    DATA_CMD_EM410X_GET_EMU_ID,            NULL,                        cmd_processor_em410x_get_emu_id,             NULL                   },
+    {    DATA_CMD_HID_PROX_GET_EMU_DATA,        NULL,                        cmd_processor_not_implemented,               NULL                   },
+    {    DATA_CMD_HID_PROX_SET_EMU_DATA,        NULL,                        cmd_processor_not_implemented,               NULL                   },
+    {    DATA_CMD_INDALA_GET_EMU_ID,            NULL,                        cmd_processor_not_implemented,               NULL                   },
+    {    DATA_CMD_INDALA_SET_EMU_ID,            NULL,                        cmd_processor_not_implemented,               NULL                   },
 };
 
 data_frame_tx_t *cmd_processor_get_device_capabilities(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
