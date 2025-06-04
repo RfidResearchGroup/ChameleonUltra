@@ -29,6 +29,10 @@ from chameleon_enum import MifareClassicWriteMode, MifareClassicPrngType, Mifare
 from chameleon_enum import MifareUltralightWriteMode
 from chameleon_enum import AnimationMode, ButtonPressFunction, ButtonType, MfcValueBlockOperator
 
+# LF command integration
+from .chameleon_lf_commands import extend_chameleon_cmd
+from .chameleon_cli_lf_enhanced import lf as lf_group_enhanced
+
 # NXP IDs based on https://www.nxp.com/docs/en/application-note/AN10833.pdf
 type_id_SAK_dict = {0x00: "MIFARE Ultralight Classic/C/EV1/Nano | NTAG 2xx",
                     0x08: "MIFARE Classic 1K | Plus SE 1K | Plug S 2K | Plus X 2K",
@@ -178,6 +182,9 @@ class DeviceRequiredUnit(BaseCLIUnit):
     """
         Make sure of device online
     """
+    # Note: LFReaderRequiredUnit and LFIdArgsUnit are defined in chameleon_cli_lf_enhanced.py
+    # and chameleon_lf_commands.py. They are used by the LF commands and do not need
+    # to be explicitly registered here, as they are part of the LF command structure.
 
     def before_exec(self, args: argparse.Namespace):
         ret = self.device_com.isOpen()
@@ -430,9 +437,13 @@ hf_14a = hf.subgroup('14a', 'ISO14443-a commands')
 hf_mf = hf.subgroup('mf', 'MIFARE Classic commands')
 hf_mfu = hf.subgroup('mfu', 'MIFARE Ultralight / NTAG commands')
 
-lf = root.subgroup('lf', 'Low Frequency commands')
-lf_em = lf.subgroup('em', 'EM commands')
-lf_em_410x = lf_em.subgroup('410x', 'EM410x commands')
+# Extend ChameleonCMD with LF commands
+extend_chameleon_cmd()
+
+# Add the enhanced LF command group. This will overwrite the existing 'lf' group
+# if one with the same name was already added, or add it if not.
+# The enhanced lf_group contains all subcommands like em, t55xx, hid etc.
+root.add_subgroup(lf_group_enhanced)
 
 
 @root.command('clear')
