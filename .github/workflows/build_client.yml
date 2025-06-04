@@ -100,6 +100,16 @@ jobs:
           pip install pytest
           pip install -r software/script/requirements.txt
       - name: Run CLI Unit Tests
-        run: pytest software/script/tests/test_cli_unit.py
+        run: |
+          cd software/script
+          python -m pytest tests/test_cli_unit.py -v
       - name: Run LF CLI Tests
-        run: pytest -m lf software/script/tests/test_lf_cli.py
+        run: |
+          cd software/script
+          python -m pytest tests/test_lf_cli.py -v -m lf
+      - name: Run All LF Tests (fallback)
+        if: failure()
+        run: |
+          cd software/script
+          python -m pytest tests/test_lf_cli.py -v
+
