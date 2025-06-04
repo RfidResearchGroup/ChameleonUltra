@@ -14,7 +14,11 @@ Date: June 2, 2025
 Version: 1.0
 """
 
-from chameleon_cli_lf_enhanced import *
+from chameleon_cli_lf_enhanced import lf_em_410x, lf_t55xx, lf_hid, lf_indala
+from chameleon_cli_lf_enhanced import LFReaderRequiredUnit, LFEMIdArgsUnit, LFT55xxArgsUnit
+from chameleon_cli_lf_enhanced import LFHIDArgsUnit, LFIndalaArgsUnit, ArgumentParserNoExit
+from chameleon_cli_lf_enhanced import LFEmulationUnit, LFProtocolUnit, SlotIndexArgsUnit
+import argparse
 
 # ===== EM410x Protocol Implementation =====
 
@@ -131,7 +135,7 @@ class LFEM410xEconfig(LFEmulationUnit, LFEMIdArgsUnit):
         parser.description = 'Configure EM410x card emulation'
         SlotIndexArgsUnit.add_slot_args(parser)
         self.add_card_arg(parser)
-        parser.add_argument('--show', '-s', action='store_true',
+        parser.add_argument('--show', action='store_true',
                           help='Show current emulation configuration')
         return parser
 
@@ -504,7 +508,7 @@ class LFHIDEconfig(LFEmulationUnit, LFHIDArgsUnit):
         parser.description = 'Configure HID Prox card emulation'
         SlotIndexArgsUnit.add_slot_args(parser)
         self.add_hid_args(parser)
-        parser.add_argument('--show', '-s', action='store_true',
+        parser.add_argument('--show', action='store_true',
                           help='Show current emulation configuration')
         return parser
 
@@ -648,7 +652,7 @@ class LFIndalaEconfig(LFEmulationUnit, LFIndalaArgsUnit):
         parser.description = 'Configure Indala card emulation'
         SlotIndexArgsUnit.add_slot_args(parser)
         self.add_indala_arg(parser)
-        parser.add_argument('--show', '-s', action='store_true',
+        parser.add_argument('--show', action='store_true',
                           help='Show current emulation configuration')
         return parser
 
