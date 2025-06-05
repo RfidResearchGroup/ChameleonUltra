@@ -30,6 +30,9 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/nfctag/hf/nfc_mf1.c \
   $(PROJ_DIR)/rfid/nfctag/hf/nfc_mf0_ntag.c \
   $(PROJ_DIR)/rfid/nfctag/lf/lf_tag_em.c \
+  $(PROJ_DIR)/rfid/reader/lf/lf_cmd_handlers.c \
+  $(PROJ_DIR)/rfid/reader/lf/lf_hardware_abstraction.c \
+  $(PROJ_DIR)/rfid/reader/lf/lf_protocol_handlers.c \
   $(PROJ_DIR)/utils/dataframe.c \
   $(PROJ_DIR)/utils/delayed_reset.c \
   $(PROJ_DIR)/utils/fds_util.c \
@@ -174,6 +177,7 @@ INC_FOLDERS += \
   ${PROJ_DIR}/rfid/nfctag/ \
   ${PROJ_DIR}/rfid/nfctag/hf \
   ${PROJ_DIR}/rfid/nfctag/lf \
+  ${PROJ_DIR}/rfid/reader/lf \
   $(SDK_ROOT)/components/nfc/ndef/generic/message \
   $(SDK_ROOT)/components/nfc/t2t_lib \
   $(SDK_ROOT)/components/nfc/t4t_parser/hl_detection_procedure \
