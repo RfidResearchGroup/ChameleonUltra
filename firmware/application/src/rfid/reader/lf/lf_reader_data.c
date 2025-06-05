@@ -29,14 +29,25 @@ void GPIO_INT0_IRQHandler(void) {
 }
 
 
+#if defined(PROJECT_CHAMELEON_ULTRA)
 extern nrfx_timer_t m_timer_lf_reader;
+#endif
 
 // Get the value of the counter
 uint32_t get_lf_counter_value(void) {
+#if defined(PROJECT_CHAMELEON_ULTRA)
     return nrfx_timer_capture(&m_timer_lf_reader, NRF_TIMER_CC_CHANNEL1);
+#elif defined(PROJECT_CHAMELEON_LITE)
+    // Lite version counter (simplified)
+    return 0;
+#endif
 }
 
 // Clear the value of the counter
 void clear_lf_counter_value(void) {
+#if defined(PROJECT_CHAMELEON_ULTRA)
     nrfx_timer_clear(&m_timer_lf_reader);
+#elif defined(PROJECT_CHAMELEON_LITE)
+    // Lite version counter clear (simplified)
+#endif
 }

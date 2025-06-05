@@ -1385,6 +1385,17 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF0_NTAG_SET_WRITE_MODE,      NULL,                        cmd_processor_mf0_ntag_set_write_mode,       NULL                   },
     {    DATA_CMD_EM410X_SET_EMU_ID,            NULL,                        cmd_processor_em410x_set_emu_id,             NULL                   },
     {    DATA_CMD_EM410X_GET_EMU_ID,            NULL,                        cmd_processor_em410x_get_emu_id,             NULL                   },
+    // LF Reader Commands
+    {    DATA_CMD_EM410X_SCAN,                  NULL,                        cmd_lf_em410x_read,                          NULL                   },
+    {    DATA_CMD_EM410X_WRITE_TO_T55XX,        NULL,                        cmd_lf_em410x_simulate,                     NULL                   },
+    {    DATA_CMD_T55XX_READ_BLOCK,             NULL,                        cmd_lf_t55xx_read_block,                    NULL                   },
+    {    DATA_CMD_T55XX_WRITE_BLOCK,            NULL,                        cmd_lf_t55xx_write_block,                   NULL                   },
+    {    DATA_CMD_HID_PROX_SCAN,                NULL,                        cmd_lf_hid_prox_scan,                       NULL                   },
+    {    DATA_CMD_HID_PROX_WRITE_TO_T55XX,      NULL,                        cmd_lf_hid_prox_write_to_t55xx,             NULL                   },
+    {    DATA_CMD_INDALA_SCAN,                  NULL,                        cmd_lf_indala_scan,                         NULL                   },
+    {    DATA_CMD_LF_SCAN_AUTO,                 NULL,                        cmd_lf_scan_auto,                           NULL                   },
+    {    DATA_CMD_LF_READ_RAW,                  NULL,                        cmd_lf_read_raw,                            NULL                   },
+    {    DATA_CMD_LF_TUNE_ANTENNA,              NULL,                        cmd_lf_tune_antenna,                        NULL                   },
 };
 
 data_frame_tx_t *cmd_processor_get_device_capabilities(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {

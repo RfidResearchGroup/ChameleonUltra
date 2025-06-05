@@ -22,8 +22,10 @@ static uint32_t m_timeout_duration_us = 0;
 static bool m_timeout_active = false;
 
 // PWM and timer instances (reuse existing ones from lf_125khz_radio.c)
+#if defined(PROJECT_CHAMELEON_ULTRA)
 extern nrf_drv_pwm_t m_pwm;
 extern nrfx_timer_t m_timer_lf_reader;
+#endif
 extern nrf_ppi_channel_t m_ppi_channel1;
 
 // Internal timing reference
@@ -92,7 +94,11 @@ int lf_signal_start(void) {
         return LF_ERROR_NOT_INITIALIZED;
     }
     
+#if defined(PROJECT_CHAMELEON_ULTRA)
     start_lf_125khz_radio();
+#elif defined(PROJECT_CHAMELEON_LITE)
+    // Lite version signal start (simplified)
+#endif
     return LF_SUCCESS;
 }
 
@@ -101,7 +107,11 @@ int lf_signal_stop(void) {
         return LF_ERROR_NOT_INITIALIZED;
     }
     
+#if defined(PROJECT_CHAMELEON_ULTRA)
     stop_lf_125khz_radio();
+#elif defined(PROJECT_CHAMELEON_LITE)
+    // Lite version signal stop (simplified)
+#endif
     return LF_SUCCESS;
 }
 
@@ -114,6 +124,7 @@ int lf_signal_send_sequence(const lf_pwm_sequence_t *sequence) {
         return LF_ERROR_INVALID_PARAM;
     }
     
+#if defined(PROJECT_CHAMELEON_ULTRA)
     // Create nRF PWM sequence structure
     nrf_pwm_values_individual_t *pwm_values = (nrf_pwm_values_individual_t *)sequence->sequence;
     nrf_pwm_sequence_t pwm_seq = {
@@ -128,6 +139,9 @@ int lf_signal_send_sequence(const lf_pwm_sequence_t *sequence) {
     if (err_code != NRF_SUCCESS) {
         return LF_ERROR_HARDWARE_FAILURE;
     }
+#elif defined(PROJECT_CHAMELEON_LITE)
+    // Lite version PWM sequence (simplified)
+#endif
     
     return LF_SUCCESS;
 }
@@ -140,7 +154,8 @@ int lf_signal_send_bits(const uint8_t *bits, uint16_t bit_count, const lf_signal
     if (bits == NULL || bit_count == 0) {
         return LF_ERROR_INVALID_PARAM;
     }
-    
+
+#if defined(PROJECT_CHAMELEON_ULTRA)
     // Use current config if none provided
     const lf_signal_config_t *active_config = config ? config : &m_current_signal_config;
     
@@ -202,6 +217,9 @@ int lf_signal_send_bits(const uint8_t *bits, uint16_t bit_count, const lf_signal
     if (err_code != NRF_SUCCESS) {
         return LF_ERROR_HARDWARE_FAILURE;
     }
+#elif defined(PROJECT_CHAMELEON_LITE)
+    // Lite version bit transmission (simplified)
+#endif
     
     return LF_SUCCESS;
 }
@@ -517,7 +535,11 @@ int lf_field_on(void) {
         return LF_ERROR_NOT_INITIALIZED;
     }
     
+#if defined(PROJECT_CHAMELEON_ULTRA)
     start_lf_125khz_radio();
+#elif defined(PROJECT_CHAMELEON_LITE)
+    // Lite version field on (simplified)
+#endif
     return LF_SUCCESS;
 }
 
@@ -526,7 +548,11 @@ int lf_field_off(void) {
         return LF_ERROR_NOT_INITIALIZED;
     }
     
+#if defined(PROJECT_CHAMELEON_ULTRA)
     stop_lf_125khz_radio();
+#elif defined(PROJECT_CHAMELEON_LITE)
+    // Lite version field off (simplified)
+#endif
     return LF_SUCCESS;
 }
 
