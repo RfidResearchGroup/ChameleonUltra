@@ -1,15 +1,17 @@
-#include "lf_protocol_handlers.h"
+#include "lf_cmd_handlers.h"
 #include "lf_hardware_abstraction.h"
-#include "data_cmd.h"
+#include "lf_protocol_handlers.h"
 #include "app_status.h"
 #include "app_cmd.h"
+#include <stdlib.h>
+#include <string.h>
 
 // ============================================================================
 // LF Command Handler Implementation
 // ============================================================================
 
 // Initialize LF subsystem
-static data_frame_tx_t *cmd_lf_init(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+data_frame_tx_t *cmd_lf_init(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     int ret = lf_signal_init();
     if (ret != LF_SUCCESS) {
         return data_frame_make(cmd, STATUS_DEVICE_MODE_ERROR, 0, NULL);
@@ -32,7 +34,7 @@ static data_frame_tx_t *cmd_lf_init(uint16_t cmd, uint16_t status, uint16_t leng
 }
 
 // EM410x read command handler
-static data_frame_tx_t *cmd_lf_em410x_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+data_frame_tx_t *cmd_lf_em410x_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     // Parse input parameters (timeout, verbose flag, etc.)
     struct {
         uint32_t timeout_ms;
@@ -50,7 +52,7 @@ static data_frame_tx_t *cmd_lf_em410x_read(uint16_t cmd, uint16_t status, uint16
     int ret = lf_em410x_read(&result, &config);
     
     if (ret != LF_PROTOCOL_SUCCESS || !result.valid) {
-        return data_frame_make(cmd, STATUS_NOT_FOUND, 0, NULL);
+        return data_frame_make(cmd, STATUS_EM410X_TAG_NO_FOUND, 0, NULL);
     }
     
     // Prepare response
@@ -70,7 +72,7 @@ static data_frame_tx_t *cmd_lf_em410x_read(uint16_t cmd, uint16_t status, uint16
 }
 
 // EM410x simulate command handler
-static data_frame_tx_t *cmd_lf_em410x_simulate(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+data_frame_tx_t *cmd_lf_em410x_simulate(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length < 12) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
@@ -91,7 +93,7 @@ static data_frame_tx_t *cmd_lf_em410x_simulate(uint16_t cmd, uint16_t status, ui
 }
 
 // T55xx read block command handler
-static data_frame_tx_t *cmd_lf_t55xx_read_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+data_frame_tx_t *cmd_lf_t55xx_read_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length < 1) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
@@ -122,7 +124,7 @@ static data_frame_tx_t *cmd_lf_t55xx_read_block(uint16_t cmd, uint16_t status, u
     int ret = lf_t55xx_read_block(params->block, &result, &timing);
     
     if (ret != LF_PROTOCOL_SUCCESS || !result.valid) {
-        return data_frame_make(cmd, STATUS_NOT_FOUND, 0, NULL);
+        return data_frame_make(cmd, STATUS_EM410X_TAG_NO_FOUND, 0, NULL);
     }
     
     // Prepare response
@@ -140,7 +142,7 @@ static data_frame_tx_t *cmd_lf_t55xx_read_block(uint16_t cmd, uint16_t status, u
 }
 
 // T55xx write block command handler
-static data_frame_tx_t *cmd_lf_t55xx_write_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+data_frame_tx_t *cmd_lf_t55xx_write_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length < 5) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
@@ -178,7 +180,7 @@ static data_frame_tx_t *cmd_lf_t55xx_write_block(uint16_t cmd, uint16_t status, 
 }
 
 // LF scan auto command handler
-static data_frame_tx_t *cmd_lf_scan_auto(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+data_frame_tx_t *cmd_lf_scan_auto(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     struct {
         uint32_t scan_time_ms;
         uint8_t scan_all;
@@ -198,7 +200,7 @@ static data_frame_tx_t *cmd_lf_scan_auto(uint16_t cmd, uint16_t status, uint16_t
     int ret = lf_scan_auto(results, sizeof(results)/sizeof(results[0]), &result_count, &config);
     
     if (ret != LF_PROTOCOL_SUCCESS || result_count == 0) {
-        return data_frame_make(cmd, STATUS_NOT_FOUND, 0, NULL);
+        return data_frame_make(cmd, STATUS_EM410X_TAG_NO_FOUND, 0, NULL);
     }
     
     // Prepare response with first result
@@ -230,25 +232,25 @@ static data_frame_tx_t *cmd_lf_scan_auto(uint16_t cmd, uint16_t status, uint16_t
 }
 
 // HID Prox scan command handler
-static data_frame_tx_t *cmd_lf_hid_prox_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+data_frame_tx_t *cmd_lf_hid_prox_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     // For now, return not implemented - would need full HID implementation
     return data_frame_make(cmd, STATUS_NOT_IMPLEMENTED, 0, NULL);
 }
 
 // HID Prox write to T55xx command handler
-static data_frame_tx_t *cmd_lf_hid_prox_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+data_frame_tx_t *cmd_lf_hid_prox_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     // For now, return not implemented - would need full HID implementation
     return data_frame_make(cmd, STATUS_NOT_IMPLEMENTED, 0, NULL);
 }
 
 // Indala scan command handler
-static data_frame_tx_t *cmd_lf_indala_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+data_frame_tx_t *cmd_lf_indala_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     // For now, return not implemented - would need full Indala implementation
     return data_frame_make(cmd, STATUS_NOT_IMPLEMENTED, 0, NULL);
 }
 
 // LF read raw command handler
-static data_frame_tx_t *cmd_lf_read_raw(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+data_frame_tx_t *cmd_lf_read_raw(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     struct {
         uint32_t samples;
         uint32_t timeout_ms;
@@ -314,7 +316,7 @@ static data_frame_tx_t *cmd_lf_read_raw(uint16_t cmd, uint16_t status, uint16_t 
 }
 
 // LF tune antenna command handler
-static data_frame_tx_t *cmd_lf_tune_antenna(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+data_frame_tx_t *cmd_lf_tune_antenna(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     // Start field for tuning
     int ret = lf_field_on();
     if (ret != LF_SUCCESS) {

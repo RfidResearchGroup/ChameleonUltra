@@ -7,6 +7,7 @@
 #include "app_timer.h"
 #include "app_error.h"
 #include <string.h>
+#include <stdlib.h>
 
 // ============================================================================
 // Private Variables and State
@@ -509,8 +510,8 @@ int lf_field_off(void) {
 }
 
 bool lf_field_is_on(void) {
-    // Check if PWM is running (simplified check)
-    return nrf_pwm_enable_check(m_pwm.p_registers);
+    // Check if LF system is initialized and active
+    return m_lf_abstraction_initialized;
 }
 
 int lf_field_set_power(uint8_t power_level) {

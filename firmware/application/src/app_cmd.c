@@ -554,15 +554,6 @@ static data_frame_tx_t *cmd_processor_mf1_manipulate_value_block(uint16_t cmd, u
     return data_frame_make(cmd, status, 0, NULL);
 }
 
-static data_frame_tx_t *cmd_processor_em410x_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t id_buffer[5] = { 0x00 };
-    status = PcdScanEM410X(id_buffer);
-    if (status != STATUS_LF_TAG_OK) {
-        return data_frame_make(cmd, status, 0, NULL);
-    }
-    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(id_buffer), id_buffer);
-}
-
 static data_frame_tx_t *cmd_processor_em410x_write_to_t55XX(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     typedef struct {
         uint8_t id[5];

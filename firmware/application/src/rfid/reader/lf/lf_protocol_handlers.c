@@ -109,32 +109,6 @@ static int ask_demod(uint8_t *bits, size_t *size, int *clock, int *invert, int m
 }
 
 // Adapted from Proxmark3's lfdemod.c - Manchester decoding
-static int manchester_decode_buffer(uint8_t *bits, size_t *size) {
-    if (*size < 2) return -1;
-    
-    size_t output_idx = 0;
-    uint8_t output_bits[*size / 2];
-    
-    for (size_t i = 0; i < *size - 1; i += 2) {
-        uint8_t bit1 = bits[i];
-        uint8_t bit2 = bits[i + 1];
-        
-        // Manchester decoding: 01 = 1, 10 = 0
-        if (bit1 == 0 && bit2 == 1) {
-            output_bits[output_idx++] = 1;
-        } else if (bit1 == 1 && bit2 == 0) {
-            output_bits[output_idx++] = 0;
-        } else {
-            // Invalid Manchester encoding - try to recover
-            output_bits[output_idx++] = bit1; // Use first bit as fallback
-        }
-    }
-    
-    memcpy(bits, output_bits, output_idx);
-    *size = output_idx;
-    
-    return 0;
-}
 
 // Convert bit array to bytes
 static uint32_t bits_to_uint32(const uint8_t *bits, size_t start_bit, size_t num_bits) {
@@ -149,17 +123,6 @@ static uint32_t bits_to_uint32(const uint8_t *bits, size_t start_bit, size_t num
     return result;
 }
 
-static uint64_t bits_to_uint64(const uint8_t *bits, size_t start_bit, size_t num_bits) {
-    uint64_t result = 0;
-    
-    for (size_t i = 0; i < num_bits && i < 64; i++) {
-        if (start_bit + i < 8 * sizeof(uint64_t)) {
-            result |= ((uint64_t)(bits[start_bit + i] & 1)) << (num_bits - 1 - i);
-        }
-    }
-    
-    return result;
-}
 
 // ============================================================================
 // EM410x Protocol Implementation
