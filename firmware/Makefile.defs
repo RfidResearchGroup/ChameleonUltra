@@ -36,7 +36,7 @@ ifeq ($(APP_FW_VER_MAJOR),)
 APP_FW_VER_MAJOR := 2
 endif
 ifeq ($(APP_FW_VER_MINOR),)
-APP_FW_VER_MINOR := 0
+APP_FW_VER_MINOR := 1
 endif
 
 # Enable NRF_LOG on SWO pin as UART TX
