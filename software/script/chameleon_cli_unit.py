@@ -29,10 +29,6 @@ from chameleon_enum import MifareClassicWriteMode, MifareClassicPrngType, Mifare
 from chameleon_enum import MifareUltralightWriteMode
 from chameleon_enum import AnimationMode, ButtonPressFunction, ButtonType, MfcValueBlockOperator
 
-# LF command integration
-from chameleon_lf_commands import extend_chameleon_cmd
-from chameleon_cli_lf_enhanced import lf as lf_group_enhanced
-
 # NXP IDs based on https://www.nxp.com/docs/en/application-note/AN10833.pdf
 type_id_SAK_dict = {0x00: "MIFARE Ultralight Classic/C/EV1/Nano | NTAG 2xx",
                     0x08: "MIFARE Classic 1K | Plus SE 1K | Plug S 2K | Plus X 2K",
@@ -182,9 +178,6 @@ class DeviceRequiredUnit(BaseCLIUnit):
     """
         Make sure of device online
     """
-    # Note: LFReaderRequiredUnit and LFIdArgsUnit are defined in chameleon_cli_lf_enhanced.py
-    # and chameleon_lf_commands.py. They are used by the LF commands and do not need
-    # to be explicitly registered here, as they are part of the LF command structure.
 
     def before_exec(self, args: argparse.Namespace):
         ret = self.device_com.isOpen()
@@ -437,13 +430,9 @@ hf_14a = hf.subgroup('14a', 'ISO14443-a commands')
 hf_mf = hf.subgroup('mf', 'MIFARE Classic commands')
 hf_mfu = hf.subgroup('mfu', 'MIFARE Ultralight / NTAG commands')
 
-# Extend ChameleonCMD with LF commands
-extend_chameleon_cmd()
-
-# Add the enhanced LF command group. This will overwrite the existing 'lf' group
-# if one with the same name was already added, or add it if not.
-# The enhanced lf_group contains all subcommands like em, t55xx, hid etc.
-root.children.append(lf_group_enhanced)
+lf = root.subgroup('lf', 'Low Frequency commands')
+lf_em = lf.subgroup('em', 'EM commands')
+lf_em_410x = lf_em.subgroup('410x', 'EM410x commands')
 
 
 @root.command('clear')
@@ -2902,6 +2891,33 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
                 pass
 
 
+@lf_em_410x.command('read')
+class LFEMRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Scan em410x tag and print id'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        id = self.cmd.em410x_scan()
+        print(f" - EM410x ID(10H): {CG}{id.hex()}{C0}")
+
+
+@lf_em_410x.command('write')
+class LFEM410xWriteT55xx(LFEMIdArgsUnit, ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Write em410x id to t55xx'
+        return self.add_card_arg(parser, required=True)
+
+    def before_exec(self, args: argparse.Namespace):
+        b1 = super(LFEMIdArgsUnit, self).before_exec(args)
+        b2 = super(ReaderRequiredUnit, self).before_exec(args)
+        return b1 and b2
+
+    def on_exec(self, args: argparse.Namespace):
+        id_hex = args.id
+        id_bytes = bytes.fromhex(id_hex)
         self.cmd.em410x_write_to_t55xx(id_bytes)
         print(f" - EM410x ID(10H): {id_hex} write done.")
 
@@ -3130,6 +3146,23 @@ class HWSlotDisable(SlotIndexArgsUnit, SenseTypeArgsUnit):
         print(f' - Disable slot {slot_num} {sense_type.name} success.')
 
 
+@lf_em_410x.command('econfig')
+class LFEM410xEconfig(SlotIndexArgsAndGoUnit, LFEMIdArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Set simulated em410x card id'
+        self.add_slot_args(parser)
+        self.add_card_arg(parser)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.id is not None:
+            self.cmd.em410x_set_emu_id(bytes.fromhex(args.id))
+            print(' - Set em410x tag id success.')
+        else:
+            response = self.cmd.em410x_get_emu_id()
+            print(' - Get em410x tag id success.')
+            print(f'ID: {response.hex()}')
 
 
 @hw_slot.command('nick')

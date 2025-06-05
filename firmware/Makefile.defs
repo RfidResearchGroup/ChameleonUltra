@@ -26,28 +26,10 @@ CHAMELEON_LITE  := lite
 CURRENT_DEVICE_TYPE ?= ${CHAMELEON_ULTRA}
 
 # Versioning information
-# Try to get GIT_VERSION, fallback to "unknown"
-GIT_VERSION := $(shell git describe --abbrev=7 --dirty --always --tags --match "v*.*" 2>/dev/null || echo "unknown")
-
-# Try to get APP_FW_SEMVER from tags, fallback to "v0.0.0-unknown"
-# The `2>/dev/null` silences errors from git describe if no tags are found
-APP_FW_SEMVER_RAW := $(shell git describe --tags --abbrev=0 --match "v*.*" 2>/dev/null)
-ifeq ($(strip $(APP_FW_SEMVER_RAW)),)
-  APP_FW_SEMVER := 0.0.0-unknown
-else
-  APP_FW_SEMVER := $(subst v,,$(APP_FW_SEMVER_RAW))
-endif
-
+GIT_VERSION := $(shell git describe --abbrev=7 --dirty --always --tags --match "v*.*")
+APP_FW_SEMVER := $(subst v,,$(shell git describe --tags --abbrev=0 --match "v*.*"))
 APP_FW_VER_MAJOR := $(word 1,$(subst ., ,$(APP_FW_SEMVER)))
 APP_FW_VER_MINOR := $(word 2,$(subst ., ,$(APP_FW_SEMVER)))
-
-# Ensure MAJOR and MINOR are not empty, default to 0 if they are (e.g. if SEMVER was "unknown")
-ifeq ($(strip $(APP_FW_VER_MAJOR)),)
-  APP_FW_VER_MAJOR := 0
-endif
-ifeq ($(strip $(APP_FW_VER_MINOR)),)
-  APP_FW_VER_MINOR := 0
-endif
 
 # Enable NRF_LOG on SWO pin as UART TX
 NRF_LOG_UART_ON_SWO_ENABLED := 0

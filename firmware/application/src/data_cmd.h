@@ -81,20 +81,14 @@
 //
 #define DATA_CMD_EM410X_SCAN                    (3000)
 #define DATA_CMD_EM410X_WRITE_TO_T55XX          (3001)
-#define DATA_CMD_T55XX_READ_BLOCK               (3010)
-#define DATA_CMD_T55XX_WRITE_BLOCK              (3011)
-#define DATA_CMD_HID_PROX_SCAN                  (3020)
-#define DATA_CMD_HID_PROX_WRITE_TO_T55XX        (3021)
-#define DATA_CMD_INDALA_SCAN                    (3030)
-#define DATA_CMD_INDALA_WRITE_TO_T55XX          (3031)
-#define DATA_CMD_FDX_B_SCAN                     (3040)
-#define DATA_CMD_PARADOX_SCAN                   (3050)
-#define DATA_CMD_KERI_SCAN                      (3060)
-#define DATA_CMD_AWD_SCAN                       (3070)
-#define DATA_CMD_IOPROX_SCAN                    (3080)
-#define DATA_CMD_LF_READ_RAW                    (3100)
-#define DATA_CMD_LF_WRITE_RAW                   (3101)
-#define DATA_CMD_LF_TUNE_ANTENNA                (3110)
+#define DATA_CMD_T55XX_READ_BLOCK               (3002)
+#define DATA_CMD_T55XX_WRITE_BLOCK              (3003)
+#define DATA_CMD_HID_PROX_SCAN                  (3004)
+#define DATA_CMD_HID_PROX_WRITE_TO_T55XX        (3005)
+#define DATA_CMD_INDALA_SCAN                    (3006)
+#define DATA_CMD_LF_SCAN_AUTO                   (3007)
+#define DATA_CMD_LF_READ_RAW                    (3008)
+#define DATA_CMD_LF_TUNE_ANTENNA                (3009)
 //
 // ******************************************************************
 
@@ -146,13 +140,10 @@
 //                  Range from 5000 -> 5999
 // ******************************************************************
 //
-#define DATA_CMD_EM410X_SET_EMU_ID              (5000)
-#define DATA_CMD_EM410X_GET_EMU_ID              (5001)
-#define DATA_CMD_HID_PROX_GET_EMU_DATA          (5020)
-#define DATA_CMD_HID_PROX_SET_EMU_DATA          (5021)
-#define DATA_CMD_INDALA_GET_EMU_ID              (5030)
-#define DATA_CMD_INDALA_SET_EMU_ID              (5031)
+
 //
 // ******************************************************************
+#define DATA_CMD_EM410X_SET_EMU_ID              (5000)
+#define DATA_CMD_EM410X_GET_EMU_ID              (5001)
 
 #endif
