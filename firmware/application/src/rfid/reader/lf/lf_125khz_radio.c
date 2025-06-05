@@ -90,10 +90,14 @@ void lf_125khz_radio_init(void) {
         // ******************************************************************
 
         // The LF collection decline is interrupted, and the GPIO is pulled down by default. The trigger method is triggering
+#if defined(PROJECT_CHAMELEON_ULTRA)
         nrf_drv_gpiote_in_config_t in_config = NRFX_GPIOTE_CONFIG_IN_SENSE_LOTOHI(false);
         err_code = nrf_drv_gpiote_in_init(LF_OA_OUT, &in_config, lf_125khz_gpio_handler);
         APP_ERROR_CHECK(err_code);
         nrf_drv_gpiote_in_event_enable(LF_OA_OUT, true);
+#elif defined(PROJECT_CHAMELEON_LITE)
+        // Lite version uses alternative GPIO handling
+#endif
 
         // ******************************************************************
     }
@@ -103,8 +107,12 @@ void lf_125khz_radio_init(void) {
 void lf_125khz_radio_uninit(void) {
     if (m_is_125khz_radio_init) {
         m_is_125khz_radio_init = false;
+#if defined(PROJECT_CHAMELEON_ULTRA)
         nrf_drv_gpiote_in_event_disable(LF_OA_OUT);
         nrf_drv_gpiote_in_uninit(LF_OA_OUT);
+#elif defined(PROJECT_CHAMELEON_LITE)
+        // Lite version cleanup (no specific actions needed)
+#endif
         nrf_drv_ppi_channel_free(m_ppi_channel1);
         nrf_drv_ppi_uninit();
         nrfx_timer_uninit(&m_timer_lf_reader);

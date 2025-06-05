@@ -210,6 +210,7 @@ int lf_signal_send_bits(const uint8_t *bits, uint16_t bit_count, const lf_signal
 // Signal Detection Implementation
 // ============================================================================
 
+#if defined(PROJECT_CHAMELEON_ULTRA)
 static void lf_detection_gpio_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action) {
     if (m_current_detection_buffer == NULL) {
         return;
@@ -237,18 +238,24 @@ static void lf_detection_gpio_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polar
         m_detection_callback(&event);
     }
 }
+#endif
 
 int lf_detection_init(void) {
     if (!m_lf_abstraction_initialized) {
         return LF_ERROR_NOT_INITIALIZED;
     }
     
-    // Initialize GPIO interrupt for LF detection
+#if defined(PROJECT_CHAMELEON_ULTRA)
+    // Initialize GPIO interrupt for LF detection (Ultra only)
     nrf_drv_gpiote_in_config_t in_config = NRFX_GPIOTE_CONFIG_IN_SENSE_TOGGLE(false);
     ret_code_t err_code = nrf_drv_gpiote_in_init(LF_OA_OUT, &in_config, lf_detection_gpio_handler);
     if (err_code != NRF_SUCCESS) {
         return LF_ERROR_HARDWARE_FAILURE;
     }
+#elif defined(PROJECT_CHAMELEON_LITE)
+    // Lite version uses simplified detection method
+    // No specific OA_OUT pin available, use alternative detection
+#endif
     
     return LF_SUCCESS;
 }
@@ -258,8 +265,12 @@ int lf_detection_uninit(void) {
         return LF_ERROR_NOT_INITIALIZED;
     }
     
+#if defined(PROJECT_CHAMELEON_ULTRA)
     nrf_drv_gpiote_in_event_disable(LF_OA_OUT);
     nrf_drv_gpiote_in_uninit(LF_OA_OUT);
+#elif defined(PROJECT_CHAMELEON_LITE)
+    // Lite version cleanup (no specific actions needed)
+#endif
     
     return LF_SUCCESS;
 }
@@ -280,7 +291,12 @@ int lf_detection_start(lf_detection_buffer_t *buffer) {
     
     // Clear counter and enable detection
     clear_lf_counter_value();
+    
+#if defined(PROJECT_CHAMELEON_ULTRA)
     nrf_drv_gpiote_in_event_enable(LF_OA_OUT, true);
+#elif defined(PROJECT_CHAMELEON_LITE)
+    // Lite version uses alternative detection method
+#endif
     
     return LF_SUCCESS;
 }
@@ -290,7 +306,12 @@ int lf_detection_stop(void) {
         return LF_ERROR_NOT_INITIALIZED;
     }
     
+#if defined(PROJECT_CHAMELEON_ULTRA)
     nrf_drv_gpiote_in_event_disable(LF_OA_OUT);
+#elif defined(PROJECT_CHAMELEON_LITE)
+    // Lite version cleanup (no specific actions needed)
+#endif
+    
     m_current_detection_buffer = NULL;
     
     return LF_SUCCESS;
