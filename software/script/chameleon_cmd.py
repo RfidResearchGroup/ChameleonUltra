@@ -498,7 +498,6 @@ class ChameleonCMD:
             resp.parsed = resp.data
         return resp
 
-    @expect_response(Status.LF_TAG_OK)
     def lf_read_raw(self, samples: int, frequency: int = 125000):
         """
         Read raw LF signal data.
@@ -510,24 +509,14 @@ class ChameleonCMD:
         data = struct.pack('!II', samples, frequency)
         resp = self.device.send_cmd_sync(Command.LF_READ_RAW, data)
         
-        # Handle different response types
-        if hasattr(resp, 'status'):
-            if resp.status == Status.LF_TAG_OK:
-                resp.parsed = resp.data if hasattr(resp, 'data') else b''
-            elif resp.status == getattr(Status, 'LF_TAG_NO_FOUND', 0x42):
-                resp.parsed = b''
+        # Always ensure parsed attribute exists
+        if hasattr(resp, 'data') and resp.data:
+            resp.parsed = resp.data
         else:
-            # Handle raw bytes response
-            class MockResponse:
-                def __init__(self, data):
-                    self.status = Status.LF_TAG_OK if data else getattr(Status, 'LF_TAG_NO_FOUND', 0x42)
-                    self.data = data
-                    self.parsed = data
-            resp = MockResponse(resp if isinstance(resp, bytes) else b'')
-        
+            resp.parsed = b''
+            
         return resp
 
-    @expect_response(Status.SUCCESS)
     def lf_tune_antenna(self):
         """
         Tune LF antenna for optimal performance.
@@ -535,8 +524,13 @@ class ChameleonCMD:
         :return:
         """
         resp = self.device.send_cmd_sync(Command.LF_TUNE_ANTENNA)
-        if resp.status == Status.SUCCESS:
+        
+        # Always ensure parsed attribute exists
+        if hasattr(resp, 'data') and resp.data:
             resp.parsed = resp.data
+        else:
+            resp.parsed = b''
+            
         return resp
 
     @expect_response(Status.SUCCESS)

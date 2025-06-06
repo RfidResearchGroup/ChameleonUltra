@@ -3068,23 +3068,38 @@ class LFReadRaw(ReaderRequiredUnit):
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        resp = self.cmd.lf_read_raw(args.samples, args.frequency)
-        if hasattr(resp, 'status'):
-            if resp.status == Status.LF_TAG_OK:
-                data_len = len(resp.parsed) if hasattr(resp, 'parsed') and resp.parsed else 0
-                data_hex = resp.parsed.hex().upper() if hasattr(resp, 'parsed') and resp.parsed else "No data"
+        try:
+            resp = self.cmd.lf_read_raw(args.samples, args.frequency)
+            
+            # Handle response regardless of format
+            status = getattr(resp, 'status', None)
+            parsed_data = getattr(resp, 'parsed', b'')
+            
+            if status == Status.LF_TAG_OK:
+                data_len = len(parsed_data) if parsed_data else 0
+                data_hex = parsed_data.hex().upper() if parsed_data else "No data"
                 print(f" - Raw LF data ({data_len} bytes): {data_hex}")
-            elif resp.status == Status.DEVICE_MODE_ERROR:
+            elif status == Status.DEVICE_MODE_ERROR:
                 print(f" [!] {CR}Device mode error - switch to reader mode first{C0}")
+            elif status == getattr(Status, 'LF_TAG_NO_FOUND', 0x42):
+                print(f" - LF tag no found")
+            elif status is not None:
+                print(f" [!] {CR}Failed to read raw LF data (status: 0x{status:02X}){C0}")
             else:
-                print(f" [!] {CR}Failed to read raw LF data (status: 0x{resp.status:02X}){C0}")
-        else:
-            print(f" [!] {CR}Invalid response format{C0}")
+                # Handle case where response has no status (raw bytes)
+                if isinstance(resp, bytes):
+                    data_hex = resp.hex().upper() if resp else "No data"
+                    print(f" - Raw LF data ({len(resp)} bytes): {data_hex}")
+                else:
+                    print(f" - Raw LF data: Response received")
+                    
+        except Exception as e:
+            print(f" [!] {CR}Error reading raw LF data: {e}{C0}")
 
 
 # LF Tuning Commands
 @lf_tune.command('antenna')
-class LFTuneAntenna(ReaderRequiredUnit):
+class LFTuneAntenna(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Tune LF antenna for optimal performance'
