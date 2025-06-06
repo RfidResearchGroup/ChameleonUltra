@@ -397,6 +397,134 @@ class ChameleonCMD:
         data = struct.pack(f'!5s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.EM410X_WRITE_TO_T55XX, data)
 
+    @expect_response(Status.LF_TAG_OK)
+    def t55xx_read_block(self, block: int, key: bytes = None):
+        """
+        Read T55xx block data.
+
+        :param block: Block number to read (0-7)
+        :param key: Optional password for protected cards
+        :return:
+        """
+        if block < 0 or block > 7:
+            raise ValueError("Block number must be between 0 and 7")
+        
+        if key is None:
+            key = b'\x00\x00\x00\x00'  # Default key
+        elif len(key) != 4:
+            raise ValueError("Key must be 4 bytes")
+            
+        data = struct.pack('!B4s', block, key)
+        resp = self.device.send_cmd_sync(Command.T55XX_READ_BLOCK, data)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def t55xx_write_block(self, block: int, data_bytes: bytes, key: bytes = None):
+        """
+        Write T55xx block data.
+
+        :param block: Block number to write (0-7)
+        :param data_bytes: 4 bytes of data to write
+        :param key: Optional password for protected cards
+        :return:
+        """
+        if block < 0 or block > 7:
+            raise ValueError("Block number must be between 0 and 7")
+        if len(data_bytes) != 4:
+            raise ValueError("Data must be 4 bytes")
+            
+        if key is None:
+            key = b'\x00\x00\x00\x00'  # Default key
+        elif len(key) != 4:
+            raise ValueError("Key must be 4 bytes")
+            
+        data = struct.pack('!B4s4s', block, data_bytes, key)
+        return self.device.send_cmd_sync(Command.T55XX_WRITE_BLOCK, data)
+
+    @expect_response(Status.LF_TAG_OK)
+    def hid_prox_scan(self, timeout_ms: int = 1000):
+        """
+        Scan for HID Prox cards.
+
+        :param timeout_ms: Timeout in milliseconds
+        :return:
+        """
+        data = struct.pack('!I', timeout_ms)
+        resp = self.device.send_cmd_sync(Command.HID_PROX_SCAN, data)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def hid_prox_write_to_t55xx(self, facility_code: int, card_number: int):
+        """
+        Write HID Prox data to T55xx card.
+
+        :param facility_code: HID facility code
+        :param card_number: HID card number
+        :return:
+        """
+        data = struct.pack('!HI', facility_code, card_number)
+        return self.device.send_cmd_sync(Command.HID_PROX_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
+    def indala_scan(self, timeout_ms: int = 1000):
+        """
+        Scan for Indala cards.
+
+        :param timeout_ms: Timeout in milliseconds
+        :return:
+        """
+        data = struct.pack('!I', timeout_ms)
+        resp = self.device.send_cmd_sync(Command.INDALA_SCAN, data)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def lf_scan_auto(self, timeout_ms: int = 3000, verbose: bool = False):
+        """
+        Auto-scan for any LF card type.
+
+        :param timeout_ms: Timeout in milliseconds
+        :param verbose: Enable verbose output
+        :return:
+        """
+        data = struct.pack('!I?', timeout_ms, verbose)
+        resp = self.device.send_cmd_sync(Command.LF_SCAN_AUTO, data)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def lf_read_raw(self, samples: int, frequency: int = 125000):
+        """
+        Read raw LF signal data.
+
+        :param samples: Number of samples to capture
+        :param frequency: Sampling frequency in Hz
+        :return:
+        """
+        data = struct.pack('!II', samples, frequency)
+        resp = self.device.send_cmd_sync(Command.LF_READ_RAW, data)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def lf_tune_antenna(self):
+        """
+        Tune LF antenna for optimal performance.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.LF_TUNE_ANTENNA)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data
+        return resp
+
     @expect_response(Status.SUCCESS)
     def get_slot_info(self):
         """

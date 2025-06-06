@@ -433,6 +433,13 @@ hf_mfu = hf.subgroup('mfu', 'MIFARE Ultralight / NTAG commands')
 lf = root.subgroup('lf', 'Low Frequency commands')
 lf_em = lf.subgroup('em', 'EM commands')
 lf_em_410x = lf_em.subgroup('410x', 'EM410x commands')
+lf_t55xx = lf.subgroup('t55xx', 'T55xx commands')
+lf_hid = lf.subgroup('hid', 'HID commands')
+lf_hid_prox = lf_hid.subgroup('prox', 'HID Prox commands')
+lf_indala = lf.subgroup('indala', 'Indala commands')
+lf_scan = lf.subgroup('scan', 'LF scanning commands')
+lf_read = lf.subgroup('read', 'LF reading commands')
+lf_tune = lf.subgroup('tune', 'LF tuning commands')
 
 
 @root.command('clear')
@@ -2920,6 +2927,168 @@ class LFEM410xWriteT55xx(LFEMIdArgsUnit, ReaderRequiredUnit):
         id_bytes = bytes.fromhex(id_hex)
         self.cmd.em410x_write_to_t55xx(id_bytes)
         print(f" - EM410x ID(10H): {id_hex} write done.")
+
+
+# T55xx Commands
+@lf_t55xx.command('read_block')
+class LFT55xxReadBlock(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Read T55xx block data'
+        parser.add_argument('--block', type=int, required=True, help="Block number to read (0-7)")
+        parser.add_argument('--key', type=str, required=False, help="Password for protected cards (hex)")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        key = None
+        if args.key:
+            key = bytes.fromhex(args.key)
+        
+        resp = self.cmd.t55xx_read_block(args.block, key)
+        if resp.status == Status.LF_TAG_OK:
+            data_hex = resp.parsed.hex().upper()
+            print(f" - T55xx block {args.block} data: {data_hex}")
+        else:
+            print(f" [!] {CR}Failed to read T55xx block{C0}")
+
+
+@lf_t55xx.command('write_block')
+class LFT55xxWriteBlock(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Write T55xx block data'
+        parser.add_argument('--block', type=int, required=True, help="Block number to write (0-7)")
+        parser.add_argument('--data', type=str, required=True, help="4 bytes of data to write (hex)")
+        parser.add_argument('--key', type=str, required=False, help="Password for protected cards (hex)")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            data_bytes = bytes.fromhex(args.data)
+            if len(data_bytes) != 4:
+                print(f" [!] {CR}Data must be exactly 4 bytes (8 hex characters){C0}")
+                return
+        except ValueError:
+            print(f" [!] {CR}Invalid hex data{C0}")
+            return
+            
+        key = None
+        if args.key:
+            key = bytes.fromhex(args.key)
+        
+        resp = self.cmd.t55xx_write_block(args.block, data_bytes, key)
+        if resp.status == Status.LF_TAG_OK:
+            print(f" - T55xx block {args.block} write done.")
+        else:
+            print(f" [!] {CR}Failed to write T55xx block{C0}")
+
+
+# HID Prox Commands
+@lf_hid_prox.command('scan')
+class LFHIDProxScan(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Scan for HID Prox cards'
+        parser.add_argument('--timeout', type=int, default=1000, help="Timeout in milliseconds")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        resp = self.cmd.hid_prox_scan(args.timeout)
+        if resp.status == Status.LF_TAG_OK:
+            if len(resp.parsed) >= 6:
+                facility_code = struct.unpack('!H', resp.parsed[0:2])[0]
+                card_number = struct.unpack('!I', resp.parsed[2:6])[0]
+                print(f" - HID Prox found: Facility Code: {facility_code}, Card Number: {card_number}")
+            else:
+                print(f" - HID Prox data: {resp.parsed.hex().upper()}")
+        else:
+            print(f" [!] {CR}No HID Prox card found{C0}")
+
+
+@lf_hid_prox.command('write_to_t55xx')
+class LFHIDProxWriteToT55xx(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Write HID Prox data to T55xx card'
+        parser.add_argument('--facility', type=int, required=True, help="HID facility code")
+        parser.add_argument('--card', type=int, required=True, help="HID card number")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        resp = self.cmd.hid_prox_write_to_t55xx(args.facility, args.card)
+        if resp.status == Status.LF_TAG_OK:
+            print(f" - HID Prox (Facility: {args.facility}, Card: {args.card}) write to T55xx done.")
+        else:
+            print(f" [!] {CR}Failed to write HID Prox data to T55xx{C0}")
+
+
+# Indala Commands
+@lf_indala.command('scan')
+class LFIndalaScan(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Scan for Indala cards'
+        parser.add_argument('--timeout', type=int, default=1000, help="Timeout in milliseconds")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        resp = self.cmd.indala_scan(args.timeout)
+        if resp.status == Status.LF_TAG_OK:
+            print(f" - Indala card found: {resp.parsed.hex().upper()}")
+        else:
+            print(f" [!] {CR}No Indala card found{C0}")
+
+
+# LF Scanning Commands
+@lf_scan.command('auto')
+class LFScanAuto(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Auto-scan for any LF card type'
+        parser.add_argument('--timeout', type=int, default=3000, help="Timeout in milliseconds")
+        parser.add_argument('--verbose', action='store_true', help="Enable verbose output")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        resp = self.cmd.lf_scan_auto(args.timeout, args.verbose)
+        if resp.status == Status.LF_TAG_OK:
+            print(f" - LF card detected: {resp.parsed.hex().upper()}")
+        else:
+            print(f" [!] {CR}No LF card found{C0}")
+
+
+# LF Reading Commands
+@lf_read.command('raw')
+class LFReadRaw(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Read raw LF signal data'
+        parser.add_argument('--samples', type=int, required=True, help="Number of samples to capture")
+        parser.add_argument('--frequency', type=int, default=125000, help="Sampling frequency in Hz")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        resp = self.cmd.lf_read_raw(args.samples, args.frequency)
+        if resp.status == Status.LF_TAG_OK:
+            print(f" - Raw LF data ({len(resp.parsed)} bytes): {resp.parsed.hex().upper()}")
+        else:
+            print(f" [!] {CR}Failed to read raw LF data{C0}")
+
+
+# LF Tuning Commands
+@lf_tune.command('antenna')
+class LFTuneAntenna(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Tune LF antenna for optimal performance'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        resp = self.cmd.lf_tune_antenna()
+        if resp.status == Status.SUCCESS:
+            print(f" - LF antenna tuning completed: {resp.parsed.hex().upper()}")
+        else:
+            print(f" [!] {CR}Failed to tune LF antenna{C0}")
 
 
 @hw_slot.command('list')
