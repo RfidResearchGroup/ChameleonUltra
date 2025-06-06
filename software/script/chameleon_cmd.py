@@ -509,8 +509,22 @@ class ChameleonCMD:
         """
         data = struct.pack('!II', samples, frequency)
         resp = self.device.send_cmd_sync(Command.LF_READ_RAW, data)
-        if resp.status == Status.LF_TAG_OK:
-            resp.parsed = resp.data
+        
+        # Handle different response types
+        if hasattr(resp, 'status'):
+            if resp.status == Status.LF_TAG_OK:
+                resp.parsed = resp.data if hasattr(resp, 'data') else b''
+            elif resp.status == getattr(Status, 'LF_TAG_NO_FOUND', 0x42):
+                resp.parsed = b''
+        else:
+            # Handle raw bytes response
+            class MockResponse:
+                def __init__(self, data):
+                    self.status = Status.LF_TAG_OK if data else getattr(Status, 'LF_TAG_NO_FOUND', 0x42)
+                    self.data = data
+                    self.parsed = data
+            resp = MockResponse(resp if isinstance(resp, bytes) else b'')
+        
         return resp
 
     @expect_response(Status.SUCCESS)

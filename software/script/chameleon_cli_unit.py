@@ -3069,10 +3069,17 @@ class LFReadRaw(ReaderRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         resp = self.cmd.lf_read_raw(args.samples, args.frequency)
-        if resp.status == Status.LF_TAG_OK:
-            print(f" - Raw LF data ({len(resp.parsed)} bytes): {resp.parsed.hex().upper()}")
+        if hasattr(resp, 'status'):
+            if resp.status == Status.LF_TAG_OK:
+                data_len = len(resp.parsed) if hasattr(resp, 'parsed') and resp.parsed else 0
+                data_hex = resp.parsed.hex().upper() if hasattr(resp, 'parsed') and resp.parsed else "No data"
+                print(f" - Raw LF data ({data_len} bytes): {data_hex}")
+            elif resp.status == Status.DEVICE_MODE_ERROR:
+                print(f" [!] {CR}Device mode error - switch to reader mode first{C0}")
+            else:
+                print(f" [!] {CR}Failed to read raw LF data (status: 0x{resp.status:02X}){C0}")
         else:
-            print(f" [!] {CR}Failed to read raw LF data{C0}")
+            print(f" [!] {CR}Invalid response format{C0}")
 
 
 # LF Tuning Commands
@@ -3084,11 +3091,21 @@ class LFTuneAntenna(ReaderRequiredUnit):
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        resp = self.cmd.lf_tune_antenna()
-        if resp.status == Status.SUCCESS:
-            print(f" - LF antenna tuning completed: {resp.parsed.hex().upper()}")
-        else:
-            print(f" [!] {CR}Failed to tune LF antenna{C0}")
+        try:
+            resp = self.cmd.lf_tune_antenna()
+            if resp.status == Status.SUCCESS or resp.status == Status.LF_TAG_OK:
+                if hasattr(resp, 'parsed') and resp.parsed:
+                    print(f" - LF antenna tuning completed: {resp.parsed.hex().upper()}")
+                else:
+                    print(f" - LF antenna tuning completed")
+            elif resp.status == Status.DEVICE_MODE_ERROR:
+                print(f" [!] {CR}Device mode error - make sure device is in reader mode{C0}")
+            elif resp.status == Status.NOT_IMPLEMENTED:
+                print(f" [!] {CR}LF antenna tuning not implemented on this device{C0}")
+            else:
+                print(f" [!] {CR}Failed to tune LF antenna (status: {resp.status}){C0}")
+        except Exception as e:
+            print(f" [!] {CR}Error tuning LF antenna: {e}{C0}")
 
 
 @hw_slot.command('list')
