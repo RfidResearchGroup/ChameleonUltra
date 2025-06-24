@@ -1181,7 +1181,6 @@ class HFMFHardNested(ReaderRequiredUnit):
             # Run the process, redirecting stdout and stderr to the output file
             process = subprocess.Popen(
                 cmd_recover_list,
-                cwd=default_cwd, # Run from the bin directory
                 stdout=temp_output_file, # Redirect stdout to file
                 stderr=subprocess.STDOUT, # Redirect stderr to the same file as stdout
             )
