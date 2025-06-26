@@ -522,14 +522,7 @@ static void cycle_slot(bool dec) {
     // Update status only if the new card slot switch is valid
     tag_emulation_change_slot(slot_new, true); // Tell the analog card module that we need to switch card slots
     // Go back to the color corresponding to the field enablement type
-    uint8_t color_now = get_color_by_slot(slot_now);
-    uint8_t color_new = get_color_by_slot(slot_new);
-    // Switching the light effect of the card slot
-    ledblink3(slot_now, color_now, slot_new, color_new);
-    // Switched the card slot, we need to re-light
-    light_up_by_slot();
-    // Then switch the color of the light again
-    set_slot_light_color(color_new);
+    apply_slot_change(slot_now, slot_new);
 }
 
 static void show_battery(void) {

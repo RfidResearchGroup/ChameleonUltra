@@ -24,11 +24,11 @@
 NRF_LOG_MODULE_REGISTER();
 
 
-static void change_slot_auto(uint8_t slot) {
+static void change_slot_auto(uint8_t slot_new) {
+    uint8_t slot_now = tag_emulation_get_slot();
     device_mode_t mode = get_device_mode();
-    tag_emulation_change_slot(slot, mode != DEVICE_MODE_READER);
-    light_up_by_slot();
-    set_slot_light_color(RGB_RED);
+    tag_emulation_change_slot(slot_new, mode != DEVICE_MODE_READER);
+    apply_slot_change(slot_now, slot_new);
 }
 
 static data_frame_tx_t *cmd_processor_get_app_version(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
