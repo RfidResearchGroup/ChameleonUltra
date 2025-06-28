@@ -3491,6 +3491,35 @@ class HWBlePair(DeviceRequiredUnit):
             print(f" - Successfully change ble pairing to {CR}Disabled{C0}.")
             print(f"{CY}Do not forget to store your settings in flash!{C0}")
 
+@hw_settings.command('longpressthreshold')
+class HWLongPressThreshold(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit(description='Get or set the long press threshold')
+        parser.description = 'Configure threshold in ms to be considered as long press'
+        parser.add_argument('--get', action='store_true', help='Get current long press threshold')
+        parser.add_argument('--set', type=int, help='Set long press threshold in milliseconds (200-65535)')
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.get:
+            resp = self.cmd.get_long_press_threshold()
+            if resp is not None and resp.parsed is not None:
+                print(f"Current long press threshold: {resp.parsed}ms")
+            else:
+                print("Error: Failed to get long press threshold")
+        elif args.set is not None:
+            if args.set < 200:
+                print("Error: Long press threshold must be at least 200ms")
+                return
+            if args.set > 65535:
+                print("Error: Long press threshold must be at most 65535ms")
+                return
+            self.cmd.set_long_press_threshold(args.set)
+            print(f"Long press threshold set to {args.set}ms")
+            print(f"{CY}Do not forget to store your settings in flash!{C0}")
+        else:
+            print("Error: Must specify either --get or --set")
+
 
 @hw.command('raw')
 class HWRaw(DeviceRequiredUnit):
