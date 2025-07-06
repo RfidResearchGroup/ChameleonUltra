@@ -270,7 +270,7 @@ class ChameleonCMD:
                 raise ValueError(f'bitlen={bitlen} but missing data')
             if not ((len(data) - 1) * 8 < bitlen <= len(data) * 8):
                 raise ValueError(f'bitlen={bitlen} incompatible with provided data ({len(data)} bytes), '
-                                 f'must be between {((len(data) - 1) * 8 )+1} and {len(data) * 8} included')
+                                 f'must be between {((len(data) - 1) * 8)+1} and {len(data) * 8} included')
 
         data = bytes(cs)+struct.pack(f'!HH{len(data)}s', resp_timeout_ms, bitlen, bytearray(data))
         resp = self.device.send_cmd_sync(Command.HF14A_RAW, data, timeout=(resp_timeout_ms // 1000) + 1)
@@ -312,16 +312,16 @@ class ChameleonCMD:
             raise ValueError("Invalid len(keys)")
         data = struct.pack(f'!10s{6*len(keys)}s', mask, b''.join(keys))
 
-        bitsCnt = 80 # maximum sectorKey_to_be_checked
+        bitsCnt = 80  # maximum sectorKey_to_be_checked
         for b in mask:
             while b > 0:
                 [bitsCnt, b] = [bitsCnt - (b & 0b1), b >> 1]
         if bitsCnt < 1:
             # All sectorKey is masked
             return chameleon_com.Response(
-                cmd=Command.MF1_CHECK_KEYS_OF_SECTORS, 
+                cmd=Command.MF1_CHECK_KEYS_OF_SECTORS,
                 status=Status.HF_TAG_OK,
-                parsed={ 'status': Status.HF_TAG_OK },
+                parsed={'status': Status.HF_TAG_OK},
             )
         # base timeout: 1s
         # auth: len(keys) * sectorKey_to_be_checked * 0.1s
@@ -329,7 +329,7 @@ class ChameleonCMD:
         timeout = 1 + (bitsCnt + 1) * len(keys) * 0.1
 
         resp = self.device.send_cmd_sync(Command.MF1_CHECK_KEYS_OF_SECTORS, data, timeout=timeout)
-        resp.parsed = { 'status': resp.status }
+        resp.parsed = {'status': resp.status}
         if len(resp.data) == 490:
             found = ''.join([format(i, '08b') for i in resp.data[0:10]])
             # print(f'{found = }')
@@ -358,7 +358,7 @@ class ChameleonCMD:
                 ]
             }
         return resp
-    
+
     @expect_response(Status.HF_TAG_OK)
     def mf1_hard_nested_acquire(self, slow, block_known, type_known, key_known, block_target, type_target):
         """
@@ -634,7 +634,8 @@ class ChameleonCMD:
         """
             Sets data for selected counter
         """
-        data = struct.pack('!BBBB', index | (int(reset_tearing) << 7), (value >> 16) & 0xFF, (value >> 8) & 0xFF, value & 0xFF)
+        data = struct.pack('!BBBB', index | (int(reset_tearing) << 7),
+                           (value >> 16) & 0xFF, (value >> 8) & 0xFF, value & 0xFF)
         resp = self.device.send_cmd_sync(Command.MF0_NTAG_SET_COUNTER_DATA, data)
         return resp
 

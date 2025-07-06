@@ -102,6 +102,7 @@ class ArgumentParserNoExit(argparse.ArgumentParser):
         print('')
         self.help_requested = True
 
+
 def print_mem_dump(bindata, blocksize):
 
     hexadecimal_len = blocksize*3+1
@@ -114,9 +115,10 @@ def print_mem_dump(bindata, blocksize):
     blk_index = 1
     for b in blocks:
         hexstr = ' '.join(b.hex()[i:i+2] for i in range(0, len(b.hex()), 2))
-        asciistr = ''.join([chr(b[i]) if (b[i] > 31 and b[i] < 127) else '.' for i in range(0,len(b),1)])
+        asciistr = ''.join([chr(b[i]) if (b[i] > 31 and b[i] < 127) else '.' for i in range(0, len(b), 1)])
         print(f"[=] {blk_index:3} | {hexstr.upper()} | {asciistr} ")
         blk_index += 1
+
 
 def expect_response(accepted_responses: Union[int, list[int]]) -> Callable[..., Any]:
     """

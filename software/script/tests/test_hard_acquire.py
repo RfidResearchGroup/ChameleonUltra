@@ -12,12 +12,11 @@ def test_hardnested_acquire():
     acquire_count = 0
 
     # known key and target block
-    key = bytes.fromhex("FFFFFFFFFFFF") # <-- Your known key
+    key = bytes.fromhex("FFFFFFFFFFFF")  # <-- Your known key
     block_known = 0x00
     type_known = 0x60
     block_target = 0x00
     type_target = 0x60
-
 
     # Before acquire start, we need to reset history
     hardnested_utils.reset()
@@ -32,7 +31,7 @@ def test_hardnested_acquire():
         cml = ChameleonCom().open('/dev/ttyACM0')
     cml_cmd = ChameleonCMD(cml)
 
-        # ------------------------ SET DEVICE MODE ------------------------
+    # ------------------------ SET DEVICE MODE ------------------------
     print("Setting device mode to HF Reader...")
     status = cml_cmd.set_device_reader_mode()
 
@@ -59,7 +58,8 @@ def test_hardnested_acquire():
 
     while True:
         # 1, acquire from device
-        acquire_datas = cml_cmd.mf1_hard_nested_acquire(0, block_known, type_known, key, block_target, type_target) # slow = 0 to fast acquire...
+        # slow = 0 to fast acquire...
+        acquire_datas = cml_cmd.mf1_hard_nested_acquire(0, block_known, type_known, key, block_target, type_target)
         if acquire_datas is not None:
             acquire_count += 1
             print(f"Acquire success, count: {acquire_count}")
@@ -101,6 +101,7 @@ def test_hardnested_acquire():
 
     # You can decrypt nonce bin by pm3 client, or any app if support pm3 nonce bin format.
     # TODO If CU bin can decrypt, run cmd on here...
+
 
 if __name__ == "__main__":
     try:

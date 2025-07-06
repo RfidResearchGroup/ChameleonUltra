@@ -330,6 +330,27 @@ static data_frame_tx_t *cmd_processor_mf1_nested_acquire(uint16_t cmd, uint16_t 
     return data_frame_make(cmd, STATUS_HF_TAG_OK, sizeof(ncs), (uint8_t *)(&ncs));
 }
 
+static data_frame_tx_t *cmd_processor_mf1_enc_nested_acquire(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t key[6];
+        uint8_t sector_count;
+    } PACKED payload_t;
+    
+    if (length != sizeof(payload_t)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    payload_t *payload = (payload_t *)data;
+    
+    uint64_t ui64Key = bytes_to_num(payload->key, 6);
+    uint8_t sector_data[40][sizeof(mf1_static_nonce_sector_t)];
+    uint8_t sectors_acquired = 0;
+    
+    status = mf1_static_encrypted_nonces_acquire(ui64Key, payload->sector_count, sector_data, &sectors_acquired);
+    
+    return data_frame_make(cmd, status, sectors_acquired * sizeof(mf1_static_nonce_sector_t), (uint8_t *)(sector_data));
+}
+
 static data_frame_tx_t *cmd_processor_mf1_auth_one_key_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     typedef struct {
         uint8_t type;
@@ -1337,6 +1358,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_DARKSIDE_ACQUIRE,         before_hf_reader_run,        cmd_processor_mf1_darkside_acquire,          after_hf_reader_run    },
     {    DATA_CMD_MF1_DETECT_NT_DIST,           before_hf_reader_run,        cmd_processor_mf1_detect_nt_dist,            after_hf_reader_run    },
     {    DATA_CMD_MF1_NESTED_ACQUIRE,           before_hf_reader_run,        cmd_processor_mf1_nested_acquire,            after_hf_reader_run    },
+    {    DATA_CMD_MF1_ENC_NESTED_ACQUIRE,       before_hf_reader_run,        cmd_processor_mf1_enc_nested_acquire,        after_hf_reader_run    },
 
     {    DATA_CMD_MF1_AUTH_ONE_KEY_BLOCK,       before_hf_reader_run,        cmd_processor_mf1_auth_one_key_block,        after_hf_reader_run    },
     {    DATA_CMD_MF1_READ_ONE_BLOCK,           before_hf_reader_run,        cmd_processor_mf1_read_one_block,            after_hf_reader_run    },

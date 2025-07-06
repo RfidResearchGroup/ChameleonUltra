@@ -69,6 +69,7 @@
 #define DATA_CMD_MF1_MANIPULATE_VALUE_BLOCK     (2011)
 #define DATA_CMD_MF1_CHECK_KEYS_OF_SECTORS      (2012)
 #define DATA_CMD_MF1_HARDNESTED_ACQUIRE         (2013)
+#define DATA_CMD_MF1_ENC_NESTED_ACQUIRE         (2014)
 
 //
 // ******************************************************************
