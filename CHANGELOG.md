@@ -3,6 +3,8 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Added `hf mf senested` for recovering keys from static encrypted cards via backdoor (https://eprint.iacr.org/2024/1275) (@Foxushka)
+ - Added cmd for faster bulk key checking on one block (~33 keys per second) (@Foxushka)
  - Added cmd to acquire nonces for static encrypted cards via backdoor (@Foxushka) 
  - Added `firmware/docker-compose.yml` to build firmware in local docker (@taichunmin)
  - Added cmd to acquire nonces for hardnested(Protocol doc need update) (@xianglin1998)
