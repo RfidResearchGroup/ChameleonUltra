@@ -99,7 +99,7 @@ elseif (CMAKE_SYSTEM_NAME MATCHES "Windows")
         EXCLUDE_FROM_ALL
     )
     find_package(pthreads4w CONFIG REQUIRED)
-    set(LIBTHREAD pthreads4w::pthreadVC3)
+    set(LIBTHREAD pthreads4w::pthreadVC2)
 
     set(LIBMATH "") # No separate math library needed on Windows
 else()
@@ -221,7 +221,7 @@ target_include_directories(hardnested PRIVATE
     ${HARDNESTED_RECOVERY_DIR}
     ${HARDNESTED_RECOVERY_DIR}/pm3
     ${HARDNESTED_RECOVERY_DIR}/hardnested
-    # liblzma include dir comes via INTERFACE property of liblzma_imported
+    ${xz_SOURCE_DIR}/src/liblzma/api
 )
 target_compile_options(hardnested PRIVATE -Wall)
 
