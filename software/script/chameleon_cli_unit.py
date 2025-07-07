@@ -64,7 +64,7 @@ def load_dic_file(import_dic, keys):
 
 
 def check_tools():
-    tools = ['staticnested', 'nested', 'darkside', 'mfkey32v2', 'staticnested_1nt', 'staticnested_2x1nt_rf08s', '']
+    tools = ['staticnested', 'nested', 'darkside', 'mfkey32v2', 'staticnested_1nt', 'staticnested_2x1nt_rf08s', 'staticnested_2x1nt_rf08s_1key']
     if sys.platform == "win32":
         tools = [x+'.exe' for x in tools]
     missing_tools = [tool for tool in tools if not (default_cwd / tool).exists()]

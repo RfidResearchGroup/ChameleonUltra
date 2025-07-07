@@ -7,6 +7,15 @@ include(FetchContent)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../script/bin)
 set(SRC_DIR ./) # Assuming source files are in the same directory as CMakeLists.txt
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${EXECUTABLE_OUTPUT_PATH})
+
+if(CMAKE_CONFIGURATION_TYPES)
+    foreach(config ${CMAKE_CONFIGURATION_TYPES})
+        string(TOUPPER ${config} config_upper)
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${config_upper} ${EXECUTABLE_OUTPUT_PATH})
+    endforeach()
+endif()
+
 # Define a variable for the compatibility code directory
 set(COMPAT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/compat)
 
@@ -254,7 +263,3 @@ target_link_libraries(hardnested PRIVATE
     ${LIBMATH}      # Handles 'm' on Linux, empty on Windows
     liblzma
 )
-
-# Set the output directory for all executables at the end
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${EXECUTABLE_OUTPUT_PATH})
-
