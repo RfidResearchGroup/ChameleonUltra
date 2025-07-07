@@ -95,7 +95,7 @@ elseif (CMAKE_SYSTEM_NAME MATCHES "Windows")
         EXCLUDE_FROM_ALL
     )
     find_package(pthreads4w CONFIG REQUIRED)
-    set(LIBTHREAD pthreads4w::pthreadVC2)
+    set(LIBTHREAD pthreads4w::pthreadVC3)
 
     set(LIBMATH "") # No separate math library needed on Windows
 else()
