@@ -45,10 +45,6 @@ set(XZ_NLS OFF CACHE BOOL "")
 set(XZ_DOXYGEN OFF CACHE BOOL "")
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
 
-if(CMAKE_SYSTEM_NAME MATCHES "Windows")
-    set(XZ_SANDBOX OFF CACHE BOOL "")
-endif()
-
 FetchContent_MakeAvailable(xz)
 
 
