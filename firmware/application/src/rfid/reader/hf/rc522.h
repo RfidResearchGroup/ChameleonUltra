@@ -196,12 +196,12 @@ uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command,
                                       uint16_t *pOutLenBit,
                                       uint16_t maxOutLenBit);
 uint8_t pcd_14a_reader_bytes_transfer_flags(uint8_t Command,
-                                            uint8_t *pIn,
-                                            uint8_t  InLenByte,
-                                            uint8_t *pOut,
-                                            uint16_t *pOutLenBit,
-                                            uint16_t maxOutLenBit,
-                                            uint32_t flags);
+        uint8_t *pIn,
+        uint8_t  InLenByte,
+        uint8_t *pOut,
+        uint16_t *pOutLenBit,
+        uint16_t maxOutLenBit,
+        uint32_t flags);
 uint8_t pcd_14a_reader_bits_transfer(uint8_t *pTx,
                                      uint16_t  szTxBits,
                                      uint8_t *pTxPar,

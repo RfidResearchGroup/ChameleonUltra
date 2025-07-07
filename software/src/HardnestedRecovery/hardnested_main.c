@@ -138,21 +138,30 @@ int main(int argc, char *argv[]) {
         if (!read_uint32_be(bin_fp, &nt_enc1)) {
             if (feof(bin_fp)) break; // Expected EOF after last full chunk
             fprintf(stderr, "Error reading nt_enc1 (BE) from binary file body.\n");
-            fclose(bin_fp); fclose(temp_fp); remove(temp_file); return 1;
+            fclose(bin_fp);
+            fclose(temp_fp);
+            remove(temp_file);
+            return 1;
         }
 
         // *** Use Big-Endian reader for nonces ***
         if (!read_uint32_be(bin_fp, &nt_enc2)) {
             // Should not happen if nt_enc1 read succeeded, unless file is truncated
             fprintf(stderr, "Error reading nt_enc2 (BE) from binary file body (truncated file?).\n");
-            fclose(bin_fp); fclose(temp_fp); remove(temp_file); return 1;
+            fclose(bin_fp);
+            fclose(temp_fp);
+            remove(temp_file);
+            return 1;
         }
 
         // Read packed parity byte (single byte, no endianness issue)
         if (!read_uint8(bin_fp, &par_packed)) {
             // Should not happen if nt_enc2 read succeeded, unless file is truncated
             fprintf(stderr, "Error reading packed parity from binary file body (truncated file?).\n");
-            fclose(bin_fp); fclose(temp_fp); remove(temp_file); return 1;
+            fclose(bin_fp);
+            fclose(temp_fp);
+            remove(temp_file);
+            return 1;
         }
 
         // Extract individual parities
@@ -162,11 +171,17 @@ int main(int argc, char *argv[]) {
         // Write both nonce/parity pairs to temp file in expected text format
         if (fprintf(temp_fp, "%u|%u\n", nt_enc1, par_enc1) < 0) {
             perror("Error writing nt_enc1 pair to temporary file");
-            fclose(bin_fp); fclose(temp_fp); remove(temp_file); return 1;
+            fclose(bin_fp);
+            fclose(temp_fp);
+            remove(temp_file);
+            return 1;
         }
         if (fprintf(temp_fp, "%u|%u\n", nt_enc2, par_enc2) < 0) {
             perror("Error writing nt_enc2 pair to temporary file");
-            fclose(bin_fp); fclose(temp_fp); remove(temp_file); return 1;
+            fclose(bin_fp);
+            fclose(temp_fp);
+            remove(temp_file);
+            return 1;
         }
 
         nonces_processed++;

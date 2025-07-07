@@ -117,7 +117,7 @@
  * \return The value of LZMA_VERSION macro at the compile time of liblzma
  */
 extern LZMA_API(uint32_t) lzma_version_number(void)
-		lzma_nothrow lzma_attr_const;
+lzma_nothrow lzma_attr_const;
 
 
 /**
@@ -129,6 +129,6 @@ extern LZMA_API(uint32_t) lzma_version_number(void)
  * \return      Run-time version of liblzma
  */
 extern LZMA_API(const char *) lzma_version_string(void)
-		lzma_nothrow lzma_attr_const;
+lzma_nothrow lzma_attr_const;
 
 #endif

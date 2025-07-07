@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
+import hardnested_utils
+from chameleon_cmd import ChameleonCMD
+from chameleon_com import ChameleonCom, OpenFailException
 import sys
 sys.path.append('..')
-
-from chameleon_com import ChameleonCom, OpenFailException
-from chameleon_cmd import ChameleonCMD
-import hardnested_utils
 
 
 def test_hardnested_acquire():

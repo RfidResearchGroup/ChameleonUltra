@@ -4,6 +4,8 @@ import threading
 import time
 
 # From https://stackoverflow.com/a/29834357
+
+
 class OutputGrabber(object):
     """
     Class used to grab standard output or another stream.

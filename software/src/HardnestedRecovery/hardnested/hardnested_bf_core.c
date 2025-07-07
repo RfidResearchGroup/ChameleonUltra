@@ -84,14 +84,14 @@ THE SOFTWARE.
 #define VECTOR_SIZE (MAX_BITSLICES/8)
 
 #ifdef _MSC_VER
-    #include <Windows.h>
-    #define atomic_add(num, val) (InterlockedExchangeAdd(num, val) + val)
-    #pragma pack(push, VECTOR_SIZE)
-    typedef uint32_t bitslice_value_t;
-    #pragma pack(pop)
+#include <Windows.h>
+#define atomic_add(num, val) (InterlockedExchangeAdd(num, val) + val)
+#pragma pack(push, VECTOR_SIZE)
+typedef uint32_t bitslice_value_t;
+#pragma pack(pop)
 #else
-    #define atomic_add __sync_fetch_and_add
-    typedef uint32_t __attribute__((aligned(VECTOR_SIZE))) __attribute__((vector_size(VECTOR_SIZE))) bitslice_value_t;
+#define atomic_add __sync_fetch_and_add
+typedef uint32_t __attribute__((aligned(VECTOR_SIZE))) __attribute__((vector_size(VECTOR_SIZE))) bitslice_value_t;
 #endif
 
 
@@ -314,8 +314,8 @@ uint64_t CRACK_STATES_BITSLICED(uint32_t cuid, uint8_t *best_first_bytes, statel
         bitsliced_even_states[bitsliced_blocks] = lstate_p;
         // bitsliced_even_feedback[bitsliced_blocks] = bs_ones;
         bitsliced_even_feedback[bitsliced_blocks] = lstate_p[(47 - 0) / 2].value ^
-                                                    lstate_p[(47 - 10) / 2].value ^ lstate_p[(47 - 12) / 2].value ^ lstate_p[(47 - 14) / 2].value ^
-                                                    lstate_p[(47 - 24) / 2].value ^ lstate_p[(47 - 42) / 2].value;
+            lstate_p[(47 - 10) / 2].value ^ lstate_p[(47 - 12) / 2].value ^ lstate_p[(47 - 14) / 2].value ^
+            lstate_p[(47 - 24) / 2].value ^ lstate_p[(47 - 42) / 2].value;
         bitsliced_blocks++;
     }
     // bitslice every odd state to every block of even states
@@ -629,9 +629,9 @@ SIMDExecInstr GetSIMDInstrAuto(void) {
 
 // determine the available instruction set at runtime and call the correct function
 uint64_t crack_states_bitsliced_dispatch(uint32_t cuid, uint8_t *best_first_bytes, statelist_t *p,
-                                         uint32_t *keys_found, uint64_t *num_keys_tested,
-                                         uint32_t nonces_to_bruteforce, const uint8_t *bf_test_nonce_2nd_byte,
-                                         noncelist_t *nonces) {
+        uint32_t *keys_found, uint64_t *num_keys_tested,
+        uint32_t nonces_to_bruteforce, const uint8_t *bf_test_nonce_2nd_byte,
+        noncelist_t *nonces) {
 //    switch (GetSIMDInstrAuto()) {
 //#if defined(COMPILER_HAS_SIMD_AVX512)
 //        case SIMD_AVX512:

@@ -18,90 +18,90 @@
 /// Output buffer for a single thread
 typedef struct lzma_outbuf_s lzma_outbuf;
 struct lzma_outbuf_s {
-	/// Pointer to the next buffer. This is used for the cached buffers.
-	/// The worker thread must not modify this.
-	lzma_outbuf *next;
+    /// Pointer to the next buffer. This is used for the cached buffers.
+    /// The worker thread must not modify this.
+    lzma_outbuf *next;
 
-	/// This initialized by lzma_outq_get_buf() and
-	/// is used by lzma_outq_enable_partial_output().
-	/// The worker thread must not modify this.
-	void *worker;
+    /// This initialized by lzma_outq_get_buf() and
+    /// is used by lzma_outq_enable_partial_output().
+    /// The worker thread must not modify this.
+    void *worker;
 
-	/// Amount of memory allocated for buf[].
-	/// The worker thread must not modify this.
-	size_t allocated;
+    /// Amount of memory allocated for buf[].
+    /// The worker thread must not modify this.
+    size_t allocated;
 
-	/// Writing position in the worker thread or, in other words, the
-	/// amount of finished data written to buf[] which can be copied out
-	///
-	/// \note       This is read by another thread and thus access
-	///             to this variable needs a mutex.
-	size_t pos;
+    /// Writing position in the worker thread or, in other words, the
+    /// amount of finished data written to buf[] which can be copied out
+    ///
+    /// \note       This is read by another thread and thus access
+    ///             to this variable needs a mutex.
+    size_t pos;
 
-	/// Decompression: Position in the input buffer in the worker thread
-	/// that matches the output "pos" above. This is used to detect if
-	/// more output might be possible from the worker thread: if it has
-	/// consumed all its input, then more output isn't possible.
-	///
-	/// \note       This is read by another thread and thus access
-	///             to this variable needs a mutex.
-	size_t decoder_in_pos;
+    /// Decompression: Position in the input buffer in the worker thread
+    /// that matches the output "pos" above. This is used to detect if
+    /// more output might be possible from the worker thread: if it has
+    /// consumed all its input, then more output isn't possible.
+    ///
+    /// \note       This is read by another thread and thus access
+    ///             to this variable needs a mutex.
+    size_t decoder_in_pos;
 
-	/// True when no more data will be written into this buffer.
-	///
-	/// \note       This is read by another thread and thus access
-	///             to this variable needs a mutex.
-	bool finished;
+    /// True when no more data will be written into this buffer.
+    ///
+    /// \note       This is read by another thread and thus access
+    ///             to this variable needs a mutex.
+    bool finished;
 
-	/// Return value for lzma_outq_read() when the last byte from
-	/// a finished buffer has been read. Defaults to LZMA_STREAM_END.
-	/// This must *not* be LZMA_OK. The idea is to allow a decoder to
-	/// pass an error code to the main thread, setting the code here
-	/// together with finished = true.
-	lzma_ret finish_ret;
+    /// Return value for lzma_outq_read() when the last byte from
+    /// a finished buffer has been read. Defaults to LZMA_STREAM_END.
+    /// This must *not* be LZMA_OK. The idea is to allow a decoder to
+    /// pass an error code to the main thread, setting the code here
+    /// together with finished = true.
+    lzma_ret finish_ret;
 
-	/// Additional size information. lzma_outq_read() may read these
-	/// when "finished" is true.
-	lzma_vli unpadded_size;
-	lzma_vli uncompressed_size;
+    /// Additional size information. lzma_outq_read() may read these
+    /// when "finished" is true.
+    lzma_vli unpadded_size;
+    lzma_vli uncompressed_size;
 
-	/// Buffer of "allocated" bytes
-	uint8_t buf[];
+    /// Buffer of "allocated" bytes
+    uint8_t buf[];
 };
 
 
 typedef struct {
-	/// Linked list of buffers in use. The next output byte will be
-	/// read from the head and buffers for the next thread will be
-	/// appended to the tail. tail->next is always NULL.
-	lzma_outbuf *head;
-	lzma_outbuf *tail;
+    /// Linked list of buffers in use. The next output byte will be
+    /// read from the head and buffers for the next thread will be
+    /// appended to the tail. tail->next is always NULL.
+    lzma_outbuf *head;
+    lzma_outbuf *tail;
 
-	/// Number of bytes read from head->buf[] in lzma_outq_read()
-	size_t read_pos;
+    /// Number of bytes read from head->buf[] in lzma_outq_read()
+    size_t read_pos;
 
-	/// Linked list of allocated buffers that aren't currently used.
-	/// This way buffers of similar size can be reused and don't
-	/// need to be reallocated every time. For simplicity, all
-	/// cached buffers in the list have the same allocated size.
-	lzma_outbuf *cache;
+    /// Linked list of allocated buffers that aren't currently used.
+    /// This way buffers of similar size can be reused and don't
+    /// need to be reallocated every time. For simplicity, all
+    /// cached buffers in the list have the same allocated size.
+    lzma_outbuf *cache;
 
-	/// Total amount of memory allocated for buffers
-	uint64_t mem_allocated;
+    /// Total amount of memory allocated for buffers
+    uint64_t mem_allocated;
 
-	/// Amount of memory used by the buffers that are in use in
-	/// the head...tail linked list.
-	uint64_t mem_in_use;
+    /// Amount of memory used by the buffers that are in use in
+    /// the head...tail linked list.
+    uint64_t mem_in_use;
 
-	/// Number of buffers in use in the head...tail list. If and only if
-	/// this is zero, the pointers head and tail above are NULL.
-	uint32_t bufs_in_use;
+    /// Number of buffers in use in the head...tail list. If and only if
+    /// this is zero, the pointers head and tail above are NULL.
+    uint32_t bufs_in_use;
 
-	/// Number of buffers allocated (in use + cached)
-	uint32_t bufs_allocated;
+    /// Number of buffers allocated (in use + cached)
+    uint32_t bufs_allocated;
 
-	/// Maximum allowed number of allocated buffers
-	uint32_t bufs_limit;
+    /// Maximum allowed number of allocated buffers
+    uint32_t bufs_limit;
 } lzma_outq;
 
 
@@ -133,7 +133,7 @@ extern uint64_t lzma_outq_memusage(uint64_t buf_size_max, uint32_t threads);
 ///             - LZMA_MEM_ERROR
 ///
 extern lzma_ret lzma_outq_init(lzma_outq *outq,
-		const lzma_allocator *allocator, uint32_t threads);
+                               const lzma_allocator *allocator, uint32_t threads);
 
 
 /// \brief      Free the memory associated with the output queue
@@ -142,7 +142,7 @@ extern void lzma_outq_end(lzma_outq *outq, const lzma_allocator *allocator);
 
 /// \brief      Free all cached buffers that consume memory but aren't in use
 extern void lzma_outq_clear_cache(
-		lzma_outq *outq, const lzma_allocator *allocator);
+    lzma_outq *outq, const lzma_allocator *allocator);
 
 
 /// \brief      Like lzma_outq_clear_cache() but might keep one buffer
@@ -151,8 +151,8 @@ extern void lzma_outq_clear_cache(
 /// This is useful if the caller knows that it will soon need a buffer of
 /// keep_size bytes. This way it won't be freed and immediately reallocated.
 extern void lzma_outq_clear_cache2(
-		lzma_outq *outq, const lzma_allocator *allocator,
-		size_t keep_size);
+    lzma_outq *outq, const lzma_allocator *allocator,
+    size_t keep_size);
 
 
 /// \brief      Preallocate a new buffer into cache
@@ -166,7 +166,7 @@ extern void lzma_outq_clear_cache2(
 /// \return     LZMA_OK on success, LZMA_MEM_ERROR if allocation fails
 ///
 extern lzma_ret lzma_outq_prealloc_buf(
-		lzma_outq *outq, const lzma_allocator *allocator, size_t size);
+    lzma_outq *outq, const lzma_allocator *allocator, size_t size);
 
 
 /// \brief      Get a new buffer
@@ -206,10 +206,10 @@ extern bool lzma_outq_is_readable(const lzma_outq *outq);
 ///             calls to this function need to be protected with a mutex.
 ///
 extern lzma_ret lzma_outq_read(lzma_outq *restrict outq,
-		const lzma_allocator *restrict allocator,
-		uint8_t *restrict out, size_t *restrict out_pos,
-		size_t out_size, lzma_vli *restrict unpadded_size,
-		lzma_vli *restrict uncompressed_size);
+                               const lzma_allocator *restrict allocator,
+                               uint8_t *restrict out, size_t *restrict out_pos,
+                               size_t out_size, lzma_vli *restrict unpadded_size,
+                               lzma_vli *restrict uncompressed_size);
 
 
 /// \brief      Enable partial output from a worker thread
@@ -222,7 +222,7 @@ extern lzma_ret lzma_outq_read(lzma_outq *restrict outq,
 ///             calls to this function need to be protected with a mutex.
 ///
 extern void lzma_outq_enable_partial_output(lzma_outq *outq,
-		void (*enable_partial_output)(void *worker));
+        void (*enable_partial_output)(void *worker));
 
 
 /// \brief      Test if there is at least one buffer free
@@ -230,17 +230,15 @@ extern void lzma_outq_enable_partial_output(lzma_outq *outq,
 /// This must be used before getting a new buffer with lzma_outq_get_buf().
 ///
 static inline bool
-lzma_outq_has_buf(const lzma_outq *outq)
-{
-	return outq->bufs_in_use < outq->bufs_limit;
+lzma_outq_has_buf(const lzma_outq *outq) {
+    return outq->bufs_in_use < outq->bufs_limit;
 }
 
 
 /// \brief      Test if the queue is completely empty
 static inline bool
-lzma_outq_is_empty(const lzma_outq *outq)
-{
-	return outq->bufs_in_use == 0;
+lzma_outq_is_empty(const lzma_outq *outq) {
+    return outq->bufs_in_use == 0;
 }
 
 
@@ -249,10 +247,9 @@ lzma_outq_is_empty(const lzma_outq *outq)
 /// \note       Caller must check that the argument is significantly less
 ///             than SIZE_MAX to avoid an integer overflow!
 static inline uint64_t
-lzma_outq_outbuf_memusage(size_t buf_size)
-{
-	assert(buf_size <= SIZE_MAX - sizeof(lzma_outbuf));
-	return sizeof(lzma_outbuf) + buf_size;
+lzma_outq_outbuf_memusage(size_t buf_size) {
+    assert(buf_size <= SIZE_MAX - sizeof(lzma_outbuf));
+    return sizeof(lzma_outbuf) + buf_size;
 }
 
 #endif

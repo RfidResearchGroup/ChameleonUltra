@@ -39,26 +39,26 @@
  * that is too small would make liblzma write past the end of the array.
  */
 typedef struct {
-	/**
-	 * \brief       Filter ID
-	 *
-	 * Use constants whose name begin with 'LZMA_FILTER_' to specify
-	 * different filters. In an array of lzma_filter structures, use
-	 * LZMA_VLI_UNKNOWN to indicate end of filters.
-	 *
-	 * \note        This is not an enum, because on some systems enums
-	 *              cannot be 64-bit.
-	 */
-	lzma_vli id;
+    /**
+     * \brief       Filter ID
+     *
+     * Use constants whose name begin with 'LZMA_FILTER_' to specify
+     * different filters. In an array of lzma_filter structures, use
+     * LZMA_VLI_UNKNOWN to indicate end of filters.
+     *
+     * \note        This is not an enum, because on some systems enums
+     *              cannot be 64-bit.
+     */
+    lzma_vli id;
 
-	/**
-	 * \brief       Pointer to filter-specific options structure
-	 *
-	 * If the filter doesn't need options, set this to NULL. If id is
-	 * set to LZMA_VLI_UNKNOWN, options is ignored, and thus
-	 * doesn't need be initialized.
-	 */
-	void *options;
+    /**
+     * \brief       Pointer to filter-specific options structure
+     *
+     * If the filter doesn't need options, set this to NULL. If id is
+     * set to LZMA_VLI_UNKNOWN, options is ignored, and thus
+     * doesn't need be initialized.
+     */
+    void *options;
 
 } lzma_filter;
 
@@ -74,7 +74,7 @@ typedef struct {
   *             - false otherwise.
  */
 extern LZMA_API(lzma_bool) lzma_filter_encoder_is_supported(lzma_vli id)
-		lzma_nothrow lzma_attr_const;
+lzma_nothrow lzma_attr_const;
 
 
 /**
@@ -88,7 +88,7 @@ extern LZMA_API(lzma_bool) lzma_filter_encoder_is_supported(lzma_vli id)
  *              - false otherwise.
  */
 extern LZMA_API(lzma_bool) lzma_filter_decoder_is_supported(lzma_vli id)
-		lzma_nothrow lzma_attr_const;
+lzma_nothrow lzma_attr_const;
 
 
 /**
@@ -128,9 +128,9 @@ extern LZMA_API(lzma_bool) lzma_filter_decoder_is_supported(lzma_vli id)
  *              - LZMA_PROG_ERROR: src or dest is NULL.
  */
 extern LZMA_API(lzma_ret) lzma_filters_copy(
-		const lzma_filter *src, lzma_filter *dest,
-		const lzma_allocator *allocator)
-		lzma_nothrow lzma_attr_warn_unused_result;
+    const lzma_filter *src, lzma_filter *dest,
+    const lzma_allocator *allocator)
+lzma_nothrow lzma_attr_warn_unused_result;
 
 
 /**
@@ -155,8 +155,8 @@ extern LZMA_API(lzma_ret) lzma_filters_copy(
  *                          Set to NULL to use malloc() and free().
  */
 extern LZMA_API(void) lzma_filters_free(
-		lzma_filter *filters, const lzma_allocator *allocator)
-		lzma_nothrow;
+    lzma_filter *filters, const lzma_allocator *allocator)
+lzma_nothrow;
 
 
 /**
@@ -173,7 +173,7 @@ extern LZMA_API(void) lzma_filters_free(
  *              filter chain when encoding or UINT64_MAX on error.
  */
 extern LZMA_API(uint64_t) lzma_raw_encoder_memusage(const lzma_filter *filters)
-		lzma_nothrow lzma_attr_pure;
+lzma_nothrow lzma_attr_pure;
 
 
 /**
@@ -190,7 +190,7 @@ extern LZMA_API(uint64_t) lzma_raw_encoder_memusage(const lzma_filter *filters)
  *              filter chain when decoding or UINT64_MAX on error.
  */
 extern LZMA_API(uint64_t) lzma_raw_decoder_memusage(const lzma_filter *filters)
-		lzma_nothrow lzma_attr_pure;
+lzma_nothrow lzma_attr_pure;
 
 
 /**
@@ -213,8 +213,8 @@ extern LZMA_API(uint64_t) lzma_raw_decoder_memusage(const lzma_filter *filters)
  *              - LZMA_PROG_ERROR
  */
 extern LZMA_API(lzma_ret) lzma_raw_encoder(
-		lzma_stream *strm, const lzma_filter *filters)
-		lzma_nothrow lzma_attr_warn_unused_result;
+    lzma_stream *strm, const lzma_filter *filters)
+lzma_nothrow lzma_attr_warn_unused_result;
 
 
 /**
@@ -237,8 +237,8 @@ extern LZMA_API(lzma_ret) lzma_raw_encoder(
  *              - LZMA_PROG_ERROR
  */
 extern LZMA_API(lzma_ret) lzma_raw_decoder(
-		lzma_stream *strm, const lzma_filter *filters)
-		lzma_nothrow lzma_attr_warn_unused_result;
+    lzma_stream *strm, const lzma_filter *filters)
+lzma_nothrow lzma_attr_warn_unused_result;
 
 
 /**
@@ -280,7 +280,7 @@ extern LZMA_API(lzma_ret) lzma_raw_decoder(
  *              - LZMA_PROG_ERROR
  */
 extern LZMA_API(lzma_ret) lzma_filters_update(
-		lzma_stream *strm, const lzma_filter *filters) lzma_nothrow;
+    lzma_stream *strm, const lzma_filter *filters) lzma_nothrow;
 
 
 /**
@@ -312,9 +312,9 @@ extern LZMA_API(lzma_ret) lzma_filters_update(
  *              - LZMA_PROG_ERROR
  */
 extern LZMA_API(lzma_ret) lzma_raw_buffer_encode(
-		const lzma_filter *filters, const lzma_allocator *allocator,
-		const uint8_t *in, size_t in_size, uint8_t *out,
-		size_t *out_pos, size_t out_size) lzma_nothrow;
+    const lzma_filter *filters, const lzma_allocator *allocator,
+    const uint8_t *in, size_t in_size, uint8_t *out,
+    size_t *out_pos, size_t out_size) lzma_nothrow;
 
 
 /**
@@ -344,9 +344,9 @@ extern LZMA_API(lzma_ret) lzma_raw_buffer_encode(
  *              - LZMA_PROG_ERROR
  */
 extern LZMA_API(lzma_ret) lzma_raw_buffer_decode(
-		const lzma_filter *filters, const lzma_allocator *allocator,
-		const uint8_t *in, size_t *in_pos, size_t in_size,
-		uint8_t *out, size_t *out_pos, size_t out_size) lzma_nothrow;
+    const lzma_filter *filters, const lzma_allocator *allocator,
+    const uint8_t *in, size_t *in_pos, size_t in_size,
+    uint8_t *out, size_t *out_pos, size_t out_size) lzma_nothrow;
 
 
 /**
@@ -370,7 +370,7 @@ extern LZMA_API(lzma_ret) lzma_raw_buffer_decode(
  *              - LZMA_PROG_ERROR
  */
 extern LZMA_API(lzma_ret) lzma_properties_size(
-		uint32_t *size, const lzma_filter *filter) lzma_nothrow;
+    uint32_t *size, const lzma_filter *filter) lzma_nothrow;
 
 
 /**
@@ -396,7 +396,7 @@ extern LZMA_API(lzma_ret) lzma_properties_size(
  *              - LZMA_PROG_ERROR
  */
 extern LZMA_API(lzma_ret) lzma_properties_encode(
-		const lzma_filter *filter, uint8_t *props) lzma_nothrow;
+    const lzma_filter *filter, uint8_t *props) lzma_nothrow;
 
 
 /**
@@ -423,8 +423,8 @@ extern LZMA_API(lzma_ret) lzma_properties_encode(
  *              - LZMA_MEM_ERROR
  */
 extern LZMA_API(lzma_ret) lzma_properties_decode(
-		lzma_filter *filter, const lzma_allocator *allocator,
-		const uint8_t *props, size_t props_size) lzma_nothrow;
+    lzma_filter *filter, const lzma_allocator *allocator,
+    const uint8_t *props, size_t props_size) lzma_nothrow;
 
 
 /**
@@ -448,8 +448,8 @@ extern LZMA_API(lzma_ret) lzma_properties_decode(
  *              - LZMA_PROG_ERROR: Invalid options
  */
 extern LZMA_API(lzma_ret) lzma_filter_flags_size(
-		uint32_t *size, const lzma_filter *filter)
-		lzma_nothrow lzma_attr_warn_unused_result;
+    uint32_t *size, const lzma_filter *filter)
+lzma_nothrow lzma_attr_warn_unused_result;
 
 
 /**
@@ -472,8 +472,8 @@ extern LZMA_API(lzma_ret) lzma_filter_flags_size(
  *                lzma_filter_flags_size()).
  */
 extern LZMA_API(lzma_ret) lzma_filter_flags_encode(const lzma_filter *filter,
-		uint8_t *out, size_t *out_pos, size_t out_size)
-		lzma_nothrow lzma_attr_warn_unused_result;
+        uint8_t *out, size_t *out_pos, size_t out_size)
+lzma_nothrow lzma_attr_warn_unused_result;
 
 
 /**
@@ -503,9 +503,9 @@ extern LZMA_API(lzma_ret) lzma_filter_flags_encode(const lzma_filter *filter,
  *              - LZMA_PROG_ERROR
  */
 extern LZMA_API(lzma_ret) lzma_filter_flags_decode(
-		lzma_filter *filter, const lzma_allocator *allocator,
-		const uint8_t *in, size_t *in_pos, size_t in_size)
-		lzma_nothrow lzma_attr_warn_unused_result;
+    lzma_filter *filter, const lzma_allocator *allocator,
+    const uint8_t *in, size_t *in_pos, size_t in_size)
+lzma_nothrow lzma_attr_warn_unused_result;
 
 
 /***********
@@ -673,9 +673,9 @@ extern LZMA_API(lzma_ret) lzma_filter_flags_decode(
  *              should give some idea what is wrong.
  */
 extern LZMA_API(const char *) lzma_str_to_filters(
-		const char *str, int *error_pos, lzma_filter *filters,
-		uint32_t flags, const lzma_allocator *allocator)
-		lzma_nothrow lzma_attr_warn_unused_result;
+    const char *str, int *error_pos, lzma_filter *filters,
+    uint32_t flags, const lzma_allocator *allocator)
+lzma_nothrow lzma_attr_warn_unused_result;
 
 
 /**
@@ -720,9 +720,9 @@ extern LZMA_API(const char *) lzma_str_to_filters(
  *              - LZMA_PROG_ERROR
  */
 extern LZMA_API(lzma_ret) lzma_str_from_filters(
-		char **str, const lzma_filter *filters, uint32_t flags,
-		const lzma_allocator *allocator)
-		lzma_nothrow lzma_attr_warn_unused_result;
+    char **str, const lzma_filter *filters, uint32_t flags,
+    const lzma_allocator *allocator)
+lzma_nothrow lzma_attr_warn_unused_result;
 
 
 /**
@@ -764,6 +764,6 @@ extern LZMA_API(lzma_ret) lzma_str_from_filters(
  *              - LZMA_PROG_ERROR
  */
 extern LZMA_API(lzma_ret) lzma_str_list_filters(
-		char **str, lzma_vli filter_id, uint32_t flags,
-		const lzma_allocator *allocator)
-		lzma_nothrow lzma_attr_warn_unused_result;
+    char **str, lzma_vli filter_id, uint32_t flags,
+    const lzma_allocator *allocator)
+lzma_nothrow lzma_attr_warn_unused_result;

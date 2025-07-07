@@ -25,11 +25,10 @@ extern const uint8_t lzma_footer_magic[2];
 
 
 static inline bool
-is_backward_size_valid(const lzma_stream_flags *options)
-{
-	return options->backward_size >= LZMA_BACKWARD_SIZE_MIN
-			&& options->backward_size <= LZMA_BACKWARD_SIZE_MAX
-			&& (options->backward_size & 3) == 0;
+is_backward_size_valid(const lzma_stream_flags *options) {
+    return options->backward_size >= LZMA_BACKWARD_SIZE_MIN
+           && options->backward_size <= LZMA_BACKWARD_SIZE_MAX
+           && (options->backward_size & 3) == 0;
 }
 
 #endif

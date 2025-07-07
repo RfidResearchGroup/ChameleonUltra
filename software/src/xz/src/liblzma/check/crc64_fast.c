@@ -34,7 +34,7 @@
 
 #ifdef HAVE_CRC_X86_ASM
 extern uint64_t lzma_crc64_generic(
-		const uint8_t *buf, size_t size, uint64_t crc);
+    const uint8_t *buf, size_t size, uint64_t crc);
 #else
 
 #ifdef WORDS_BIGENDIAN
@@ -46,49 +46,48 @@ extern uint64_t lzma_crc64_generic(
 
 // See the comments in crc32_fast.c. They aren't duplicated here.
 static uint64_t
-lzma_crc64_generic(const uint8_t *buf, size_t size, uint64_t crc)
-{
-	crc = ~crc;
+lzma_crc64_generic(const uint8_t *buf, size_t size, uint64_t crc) {
+    crc = ~crc;
 
 #ifdef WORDS_BIGENDIAN
-	crc = byteswap64(crc);
+    crc = byteswap64(crc);
 #endif
 
-	if (size > 4) {
-		while ((uintptr_t)(buf) & 3) {
-			crc = lzma_crc64_table[0][*buf++ ^ A1(crc)] ^ S8(crc);
-			--size;
-		}
+    if (size > 4) {
+        while ((uintptr_t)(buf) & 3) {
+            crc = lzma_crc64_table[0][*buf++ ^ A1(crc)] ^ S8(crc);
+            --size;
+        }
 
-		const uint8_t *const limit = buf + (size & ~(size_t)(3));
-		size &= (size_t)(3);
+        const uint8_t *const limit = buf + (size & ~(size_t)(3));
+        size &= (size_t)(3);
 
-		while (buf < limit) {
+        while (buf < limit) {
 #ifdef WORDS_BIGENDIAN
-			const uint32_t tmp = (uint32_t)(crc >> 32)
-					^ aligned_read32ne(buf);
+            const uint32_t tmp = (uint32_t)(crc >> 32)
+                                 ^ aligned_read32ne(buf);
 #else
-			const uint32_t tmp = (uint32_t)crc
-					^ aligned_read32ne(buf);
+            const uint32_t tmp = (uint32_t)crc
+                                 ^ aligned_read32ne(buf);
 #endif
-			buf += 4;
+            buf += 4;
 
-			crc = lzma_crc64_table[3][A(tmp)]
-			    ^ lzma_crc64_table[2][B(tmp)]
-			    ^ S32(crc)
-			    ^ lzma_crc64_table[1][C(tmp)]
-			    ^ lzma_crc64_table[0][D(tmp)];
-		}
-	}
+            crc = lzma_crc64_table[3][A(tmp)]
+                  ^ lzma_crc64_table[2][B(tmp)]
+                  ^ S32(crc)
+                  ^ lzma_crc64_table[1][C(tmp)]
+                  ^ lzma_crc64_table[0][D(tmp)];
+        }
+    }
 
-	while (size-- != 0)
-		crc = lzma_crc64_table[0][*buf++ ^ A1(crc)] ^ S8(crc);
+    while (size-- != 0)
+        crc = lzma_crc64_table[0][*buf++ ^ A1(crc)] ^ S8(crc);
 
 #ifdef WORDS_BIGENDIAN
-	crc = byteswap64(crc);
+    crc = byteswap64(crc);
 #endif
 
-	return ~crc;
+    return ~crc;
 }
 #endif // HAVE_CRC_X86_ASM
 #endif // CRC64_GENERIC
@@ -104,13 +103,12 @@ lzma_crc64_generic(const uint8_t *buf, size_t size, uint64_t crc)
 // the function that is used is selected at runtime. See crc32_fast.c.
 
 typedef uint64_t (*crc64_func_type)(
-		const uint8_t *buf, size_t size, uint64_t crc);
+    const uint8_t *buf, size_t size, uint64_t crc);
 
 static crc64_func_type
-crc64_resolve(void)
-{
-	return is_arch_extension_supported()
-			? &crc64_arch_optimized : &lzma_crc64_generic;
+crc64_resolve(void) {
+    return is_arch_extension_supported()
+           ? &crc64_arch_optimized : &lzma_crc64_generic;
 }
 
 #ifdef HAVE_FUNC_ATTRIBUTE_CONSTRUCTOR
@@ -125,45 +123,42 @@ static crc64_func_type crc64_func = &crc64_dispatch;
 
 CRC64_SET_FUNC_ATTR
 static void
-crc64_set_func(void)
-{
-	crc64_func = crc64_resolve();
-	return;
+crc64_set_func(void) {
+    crc64_func = crc64_resolve();
+    return;
 }
 
 
 #ifndef HAVE_FUNC_ATTRIBUTE_CONSTRUCTOR
 static uint64_t
-crc64_dispatch(const uint8_t *buf, size_t size, uint64_t crc)
-{
-	crc64_set_func();
-	return crc64_func(buf, size, crc);
+crc64_dispatch(const uint8_t *buf, size_t size, uint64_t crc) {
+    crc64_set_func();
+    return crc64_func(buf, size, crc);
 }
 #endif
 #endif
 
 
 extern LZMA_API(uint64_t)
-lzma_crc64(const uint8_t *buf, size_t size, uint64_t crc)
-{
+lzma_crc64(const uint8_t *buf, size_t size, uint64_t crc) {
 #if defined(_MSC_VER) && !defined(__INTEL_COMPILER) && !defined(__clang__) \
 		&& defined(_M_IX86) && defined(CRC64_ARCH_OPTIMIZED)
-	// VS2015-2022 might corrupt the ebx register on 32-bit x86 when
-	// the CLMUL code is enabled. This hack forces MSVC to store and
-	// restore ebx. This is only needed here, not in lzma_crc32().
-	__asm  mov ebx, ebx
+    // VS2015-2022 might corrupt the ebx register on 32-bit x86 when
+    // the CLMUL code is enabled. This hack forces MSVC to store and
+    // restore ebx. This is only needed here, not in lzma_crc32().
+    __asm  mov ebx, ebx
 #endif
 
 #if defined(CRC64_GENERIC) && defined(CRC64_ARCH_OPTIMIZED)
-	return crc64_func(buf, size, crc);
+    return crc64_func(buf, size, crc);
 
 #elif defined(CRC64_ARCH_OPTIMIZED)
-	// If arch-optimized version is used unconditionally without runtime
-	// CPU detection then omitting the generic version and its 8 KiB
-	// lookup table makes the library smaller.
-	return crc64_arch_optimized(buf, size, crc);
+    // If arch-optimized version is used unconditionally without runtime
+    // CPU detection then omitting the generic version and its 8 KiB
+    // lookup table makes the library smaller.
+    return crc64_arch_optimized(buf, size, crc);
 
 #else
-	return lzma_crc64_generic(buf, size, crc);
+    return lzma_crc64_generic(buf, size, crc);
 #endif
 }

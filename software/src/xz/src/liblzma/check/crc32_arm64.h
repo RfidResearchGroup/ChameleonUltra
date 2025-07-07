@@ -45,100 +45,98 @@
 
 crc_attr_target
 static uint32_t
-crc32_arch_optimized(const uint8_t *buf, size_t size, uint32_t crc)
-{
-	crc = ~crc;
+crc32_arch_optimized(const uint8_t *buf, size_t size, uint32_t crc) {
+    crc = ~crc;
 
-	if (size >= 8) {
-		// Align the input buffer because this was shown to be
-		// significantly faster than unaligned accesses.
-		const size_t align = (0 - (uintptr_t)buf) & 7;
+    if (size >= 8) {
+        // Align the input buffer because this was shown to be
+        // significantly faster than unaligned accesses.
+        const size_t align = (0 - (uintptr_t)buf) & 7;
 
-		if (align & 1)
-			crc = __crc32b(crc, *buf++);
+        if (align & 1)
+            crc = __crc32b(crc, *buf++);
 
-		if (align & 2) {
-			crc = __crc32h(crc, aligned_read16le(buf));
-			buf += 2;
-		}
+        if (align & 2) {
+            crc = __crc32h(crc, aligned_read16le(buf));
+            buf += 2;
+        }
 
-		if (align & 4) {
-			crc = __crc32w(crc, aligned_read32le(buf));
-			buf += 4;
-		}
+        if (align & 4) {
+            crc = __crc32w(crc, aligned_read32le(buf));
+            buf += 4;
+        }
 
-		size -= align;
+        size -= align;
 
-		// Process 8 bytes at a time. The end point is determined by
-		// ignoring the least significant three bits of size to
-		// ensure we do not process past the bounds of the buffer.
-		// This guarantees that limit is a multiple of 8 and is
-		// strictly less than size.
-		for (const uint8_t *limit = buf + (size & ~(size_t)7);
-				buf < limit; buf += 8)
-			crc = __crc32d(crc, aligned_read64le(buf));
+        // Process 8 bytes at a time. The end point is determined by
+        // ignoring the least significant three bits of size to
+        // ensure we do not process past the bounds of the buffer.
+        // This guarantees that limit is a multiple of 8 and is
+        // strictly less than size.
+        for (const uint8_t *limit = buf + (size & ~(size_t)7);
+                buf < limit; buf += 8)
+            crc = __crc32d(crc, aligned_read64le(buf));
 
-		size &= 7;
-	}
+        size &= 7;
+    }
 
-	// Process the remaining bytes that are not 8 byte aligned.
-	if (size & 4) {
-		crc = __crc32w(crc, aligned_read32le(buf));
-		buf += 4;
-	}
+    // Process the remaining bytes that are not 8 byte aligned.
+    if (size & 4) {
+        crc = __crc32w(crc, aligned_read32le(buf));
+        buf += 4;
+    }
 
-	if (size & 2) {
-		crc = __crc32h(crc, aligned_read16le(buf));
-		buf += 2;
-	}
+    if (size & 2) {
+        crc = __crc32h(crc, aligned_read16le(buf));
+        buf += 2;
+    }
 
-	if (size & 1)
-		crc = __crc32b(crc, *buf);
+    if (size & 1)
+        crc = __crc32b(crc, *buf);
 
-	return ~crc;
+    return ~crc;
 }
 
 
 #if defined(CRC32_GENERIC) && defined(CRC32_ARCH_OPTIMIZED)
 static inline bool
-is_arch_extension_supported(void)
-{
+is_arch_extension_supported(void) {
 #if defined(HAVE_GETAUXVAL)
-	return (getauxval(AT_HWCAP) & HWCAP_CRC32) != 0;
+    return (getauxval(AT_HWCAP) & HWCAP_CRC32) != 0;
 
 #elif defined(HAVE_ELF_AUX_INFO)
-	unsigned long feature_flags;
+    unsigned long feature_flags;
 
-	if (elf_aux_info(AT_HWCAP, &feature_flags, sizeof(feature_flags)) != 0)
-		return false;
+    if (elf_aux_info(AT_HWCAP, &feature_flags, sizeof(feature_flags)) != 0)
+        return false;
 
-	return (feature_flags & HWCAP_CRC32) != 0;
+    return (feature_flags & HWCAP_CRC32) != 0;
 
 #elif defined(_WIN32)
-	return IsProcessorFeaturePresent(
-			PF_ARM_V8_CRC32_INSTRUCTIONS_AVAILABLE);
+    return IsProcessorFeaturePresent(
+               PF_ARM_V8_CRC32_INSTRUCTIONS_AVAILABLE);
 
 #elif defined(__APPLE__) && defined(HAVE_SYSCTLBYNAME)
-	int has_crc32 = 0;
-	size_t size = sizeof(has_crc32);
+    int has_crc32 = 0;
+    size_t size = sizeof(has_crc32);
 
-	// The sysctlbyname() function requires a string identifier for the
-	// CPU feature it tests. The Apple documentation lists the string
-	// "hw.optional.armv8_crc32", which can be found here:
-	// https://developer.apple.com/documentation/kernel/1387446-sysctlbyname/determining_instruction_set_characteristics#3915619
-	if (sysctlbyname("hw.optional.armv8_crc32", &has_crc32,
-			&size, NULL, 0) != 0)
-		return false;
+    // The sysctlbyname() function requires a string identifier for the
+    // CPU feature it tests. The Apple documentation lists the string
+    // "hw.optional.armv8_crc32", which can be found here:
+    // https://developer.apple.com/documentation/kernel/1387446-sysctlbyname/determining_instruction_set_characteristics#3915619
+    if (sysctlbyname("hw.optional.armv8_crc32", &has_crc32,
+                     &size, NULL, 0) != 0)
+        return false;
 
-	return has_crc32;
+    return has_crc32;
 
 #else
-	// If a runtime detection method cannot be found, then this must
-	// be a compile time error. The checks in crc_common.h should ensure
-	// a runtime detection method is always found if this function is
-	// built. It would be possible to just return false here, but this
-	// is inefficient for binary size and runtime since only the generic
-	// method could ever be used.
+    // If a runtime detection method cannot be found, then this must
+    // be a compile time error. The checks in crc_common.h should ensure
+    // a runtime detection method is always found if this function is
+    // built. It would be possible to just return false here, but this
+    // is inefficient for binary size and runtime since only the generic
+    // method could ever be used.
 #	error Runtime detection method unavailable.
 #endif
 }

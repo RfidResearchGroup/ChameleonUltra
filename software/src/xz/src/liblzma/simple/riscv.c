@@ -351,40 +351,39 @@ AUIPC with rd == x0
 #ifdef HAVE_ENCODER_RISCV
 static size_t
 riscv_encode(void *simple lzma_attribute((__unused__)),
-		uint32_t now_pos,
-		bool is_encoder lzma_attribute((__unused__)),
-		uint8_t *buffer, size_t size)
-{
-	// Avoid using i + 8 <= size in the loop condition.
-	//
-	// NOTE: If there is a JAL in the last six bytes of the stream, it
-	// won't be converted. This is intentional to keep the code simpler.
-	if (size < 8)
-		return 0;
+             uint32_t now_pos,
+             bool is_encoder lzma_attribute((__unused__)),
+             uint8_t *buffer, size_t size) {
+    // Avoid using i + 8 <= size in the loop condition.
+    //
+    // NOTE: If there is a JAL in the last six bytes of the stream, it
+    // won't be converted. This is intentional to keep the code simpler.
+    if (size < 8)
+        return 0;
 
-	size -= 8;
+    size -= 8;
 
-	size_t i;
+    size_t i;
 
-	// The loop is advanced by 2 bytes every iteration since the
-	// instruction stream may include 16-bit instructions (C extension).
-	for (i = 0; i <= size; i += 2) {
-		uint32_t inst = buffer[i];
+    // The loop is advanced by 2 bytes every iteration since the
+    // instruction stream may include 16-bit instructions (C extension).
+    for (i = 0; i <= size; i += 2) {
+        uint32_t inst = buffer[i];
 
-		if (inst == 0xEF) {
-			// JAL
-			const uint32_t b1 = buffer[i + 1];
+        if (inst == 0xEF) {
+            // JAL
+            const uint32_t b1 = buffer[i + 1];
 
-			// Only filter rd=x1(ra) and rd=x5(t0).
-			if ((b1 & 0x0D) != 0)
-				continue;
+            // Only filter rd=x1(ra) and rd=x5(t0).
+            if ((b1 & 0x0D) != 0)
+                continue;
 
-			// The 20-bit immediate is in four pieces.
-			// The encoder stores it in big endian form
-			// since it improves compression slightly.
-			const uint32_t b2 = buffer[i + 2];
-			const uint32_t b3 = buffer[i + 3];
-			const uint32_t pc = now_pos + (uint32_t)i;
+            // The 20-bit immediate is in four pieces.
+            // The encoder stores it in big endian form
+            // since it improves compression slightly.
+            const uint32_t b2 = buffer[i + 2];
+            const uint32_t b3 = buffer[i + 3];
+            const uint32_t pc = now_pos + (uint32_t)i;
 
 // The following chart shows the highest three bytes of JAL, focusing on
 // the 20-bit immediate field [31:12]. The first row of numbers is the
@@ -408,223 +407,221 @@ riscv_encode(void *simple lzma_attribute((__unused__)),
 // | 20 10  9  8  7  6  5  4 |  3  2  1 11 19 18 17 16 | 15 14 13 12 x x x x |
 // |  7  6  5  4  3  2  1  0 |  7  6  5  4  3  2  1  0 |  7  6  5  4 x x x x |
 
-			uint32_t addr = ((b1 & 0xF0) << 8)
-					| ((b2 & 0x0F) << 16)
-					| ((b2 & 0x10) << 7)
-					| ((b2 & 0xE0) >> 4)
-					| ((b3 & 0x7F) << 4)
-					| ((b3 & 0x80) << 13);
+            uint32_t addr = ((b1 & 0xF0) << 8)
+                            | ((b2 & 0x0F) << 16)
+                            | ((b2 & 0x10) << 7)
+                            | ((b2 & 0xE0) >> 4)
+                            | ((b3 & 0x7F) << 4)
+                            | ((b3 & 0x80) << 13);
 
-			addr += pc;
+            addr += pc;
 
-			buffer[i + 1] = (uint8_t)((b1 & 0x0F)
-					| ((addr >> 13) & 0xF0));
+            buffer[i + 1] = (uint8_t)((b1 & 0x0F)
+                                      | ((addr >> 13) & 0xF0));
 
-			buffer[i + 2] = (uint8_t)(addr >> 9);
-			buffer[i + 3] = (uint8_t)(addr >> 1);
+            buffer[i + 2] = (uint8_t)(addr >> 9);
+            buffer[i + 3] = (uint8_t)(addr >> 1);
 
-			// The "-2" is included because the for-loop will
-			// always increment by 2. In this case, we want to
-			// skip an extra 2 bytes since we used 4 bytes
-			// of input.
-			i += 4 - 2;
+            // The "-2" is included because the for-loop will
+            // always increment by 2. In this case, we want to
+            // skip an extra 2 bytes since we used 4 bytes
+            // of input.
+            i += 4 - 2;
 
-		} else if ((inst & 0x7F) == 0x17) {
-			// AUIPC
-			inst |= (uint32_t)buffer[i + 1] << 8;
-			inst |= (uint32_t)buffer[i + 2] << 16;
-			inst |= (uint32_t)buffer[i + 3] << 24;
+        } else if ((inst & 0x7F) == 0x17) {
+            // AUIPC
+            inst |= (uint32_t)buffer[i + 1] << 8;
+            inst |= (uint32_t)buffer[i + 2] << 16;
+            inst |= (uint32_t)buffer[i + 3] << 24;
 
-			// Branch based on AUIPC's rd. The bitmask test does
-			// the same thing as this:
-			//
-			//     const uint32_t auipc_rd = (inst >> 7) & 0x1F;
-			//     if (auipc_rd != 0 && auipc_rd != 2) {
- 			if (inst & 0xE80) {
-				// AUIPC's rd doesn't equal x0 or x2.
+            // Branch based on AUIPC's rd. The bitmask test does
+            // the same thing as this:
+            //
+            //     const uint32_t auipc_rd = (inst >> 7) & 0x1F;
+            //     if (auipc_rd != 0 && auipc_rd != 2) {
+            if (inst & 0xE80) {
+                // AUIPC's rd doesn't equal x0 or x2.
 
-				// Check if AUIPC+inst2 are a pair.
-				uint32_t inst2 = read32le(buffer + i + 4);
+                // Check if AUIPC+inst2 are a pair.
+                uint32_t inst2 = read32le(buffer + i + 4);
 
-				if (NOT_AUIPC_PAIR(inst, inst2)) {
-					// The NOT_AUIPC_PAIR macro allows
-					// a false AUIPC+AUIPC pair if the
-					// bits [19:15] (where rs1 would be)
-					// in the second AUIPC match the rd
-					// of the first AUIPC.
-					//
-					// We must skip enough forward so
-					// that the first two bytes of the
-					// second AUIPC cannot get converted.
-					// Such a conversion could make the
-					// current pair become a valid pair
-					// which would desync the decoder.
-					//
-					// Skipping six bytes is enough even
-					// though the above condition looks
-					// at the lowest four bits of the
-					// buffer[i + 6] too. This is safe
-					// because this filter never changes
-					// those bits if a conversion at
-					// that position is done.
-					i += 6 - 2;
-					continue;
-				}
+                if (NOT_AUIPC_PAIR(inst, inst2)) {
+                    // The NOT_AUIPC_PAIR macro allows
+                    // a false AUIPC+AUIPC pair if the
+                    // bits [19:15] (where rs1 would be)
+                    // in the second AUIPC match the rd
+                    // of the first AUIPC.
+                    //
+                    // We must skip enough forward so
+                    // that the first two bytes of the
+                    // second AUIPC cannot get converted.
+                    // Such a conversion could make the
+                    // current pair become a valid pair
+                    // which would desync the decoder.
+                    //
+                    // Skipping six bytes is enough even
+                    // though the above condition looks
+                    // at the lowest four bits of the
+                    // buffer[i + 6] too. This is safe
+                    // because this filter never changes
+                    // those bits if a conversion at
+                    // that position is done.
+                    i += 6 - 2;
+                    continue;
+                }
 
-				// Convert AUIPC+inst2 to a special format:
-				//
-				//   - The lowest 7 bits [6:0] retain the
-				//     AUIPC opcode.
-				//
-				//   - The rd [11:7] is set to x2(sp). x2 is
-				//     used as the stack pointer so AUIPC with
-				//     rd=x2 should be very rare in real-world
-				//     executables.
-				//
-				//   - The remaining 20 bits [31:12] (that
-				//     normally hold the pc-relative immediate)
-				//     are used to store the lowest 20 bits of
-				//     inst2. That is, the 12-bit immediate of
-				//     inst2 is not included.
-				//
-				//   - The location of the original inst2 is
-				//     used to store the 32-bit absolute
-				//     address in big endian format. Compared
-				//     to the 20+12-bit split encoding, this
-				//     results in a longer uninterrupted
-				//     sequence of identical common bytes
-				//     when the same address is referred
-				//     with different instruction pairs
-				//     (like AUIPC+LD vs. AUIPC+ADDI) or
-				//     when the occurrences of the same
-				//     pair use different registers. When
-				//     referring to adjacent memory locations
-				//     (like function calls that go via the
-				//     ELF PLT), in big endian order only the
-				//     last 1-2 bytes differ; in little endian
-				//     the differing 1-2 bytes would be in the
-				//     middle of the 8-byte sequence.
-				//
-				// When reversing the transformation, the
-				// original rd of AUIPC can be restored
-				// from inst2's rs1 as they are required to
-				// be the same.
+                // Convert AUIPC+inst2 to a special format:
+                //
+                //   - The lowest 7 bits [6:0] retain the
+                //     AUIPC opcode.
+                //
+                //   - The rd [11:7] is set to x2(sp). x2 is
+                //     used as the stack pointer so AUIPC with
+                //     rd=x2 should be very rare in real-world
+                //     executables.
+                //
+                //   - The remaining 20 bits [31:12] (that
+                //     normally hold the pc-relative immediate)
+                //     are used to store the lowest 20 bits of
+                //     inst2. That is, the 12-bit immediate of
+                //     inst2 is not included.
+                //
+                //   - The location of the original inst2 is
+                //     used to store the 32-bit absolute
+                //     address in big endian format. Compared
+                //     to the 20+12-bit split encoding, this
+                //     results in a longer uninterrupted
+                //     sequence of identical common bytes
+                //     when the same address is referred
+                //     with different instruction pairs
+                //     (like AUIPC+LD vs. AUIPC+ADDI) or
+                //     when the occurrences of the same
+                //     pair use different registers. When
+                //     referring to adjacent memory locations
+                //     (like function calls that go via the
+                //     ELF PLT), in big endian order only the
+                //     last 1-2 bytes differ; in little endian
+                //     the differing 1-2 bytes would be in the
+                //     middle of the 8-byte sequence.
+                //
+                // When reversing the transformation, the
+                // original rd of AUIPC can be restored
+                // from inst2's rs1 as they are required to
+                // be the same.
 
-				// Arithmetic right shift makes sign extension
-				// trivial but (1) it's implementation-defined
-				// behavior (C99/C11/C23 6.5.7-p5) and so is
-				// (2) casting unsigned to signed (6.3.1.3-p3).
-				//
-				// One can check for (1) with
-				//
-				//     if ((-1 >> 1) == -1) ...
-				//
-				// but (2) has to be checked from the
-				// compiler docs. GCC promises that (1)
-				// and (2) behave in the common expected
-				// way and thus
-				//
-				//     addr += (uint32_t)(
-				//             (int32_t)inst2 >> 20);
-				//
-				// does the same as the code below. But since
-				// the 100 % portable way is only a few bytes
-				// bigger code and there is no real speed
-				// difference, let's just use that, especially
-				// since the decoder doesn't need this at all.
-				uint32_t addr = inst & 0xFFFFF000;
-				addr += (inst2 >> 20)
-						- ((inst2 >> 19) & 0x1000);
+                // Arithmetic right shift makes sign extension
+                // trivial but (1) it's implementation-defined
+                // behavior (C99/C11/C23 6.5.7-p5) and so is
+                // (2) casting unsigned to signed (6.3.1.3-p3).
+                //
+                // One can check for (1) with
+                //
+                //     if ((-1 >> 1) == -1) ...
+                //
+                // but (2) has to be checked from the
+                // compiler docs. GCC promises that (1)
+                // and (2) behave in the common expected
+                // way and thus
+                //
+                //     addr += (uint32_t)(
+                //             (int32_t)inst2 >> 20);
+                //
+                // does the same as the code below. But since
+                // the 100 % portable way is only a few bytes
+                // bigger code and there is no real speed
+                // difference, let's just use that, especially
+                // since the decoder doesn't need this at all.
+                uint32_t addr = inst & 0xFFFFF000;
+                addr += (inst2 >> 20)
+                        - ((inst2 >> 19) & 0x1000);
 
-				addr += now_pos + (uint32_t)i;
+                addr += now_pos + (uint32_t)i;
 
-				// Construct the first 32 bits:
-				//   [6:0]    AUIPC opcode
-				//   [11:7]   Special AUIPC rd = x2
-				//   [31:12]  The lowest 20 bits of inst2
-				inst = 0x17 | (2 << 7) | (inst2 << 12);
+                // Construct the first 32 bits:
+                //   [6:0]    AUIPC opcode
+                //   [11:7]   Special AUIPC rd = x2
+                //   [31:12]  The lowest 20 bits of inst2
+                inst = 0x17 | (2 << 7) | (inst2 << 12);
 
-				write32le(buffer + i, inst);
+                write32le(buffer + i, inst);
 
-				// The second 32 bits store the absolute
-				// address in big endian order.
-				write32be(buffer + i + 4, addr);
-			} else {
-				// AUIPC's rd equals x0 or x2.
-				//
-				// x0 indicates a landing pad (LPAD).
-				// It's always skipped.
-				//
-				// AUIPC with rd == x2 is used for the special
-				// format as explained above. When the input
-				// contains a byte sequence that matches the
-				// special format, "fake" decoding must be
-				// done to keep the filter bijective (that
-				// is, safe to apply on arbitrary data).
-				//
-				// See the "x0 or x2" section in riscv_decode()
-				// for how the "real" decoding is done. The
-				// "fake" decoding is a simplified version
-				// of "real" decoding with the following
-				// differences (these reduce code size of
-				// the decoder):
-				// (1) The lowest 12 bits aren't sign-extended.
-				// (2) No address conversion is done.
-				// (3) Big endian format isn't used (the fake
-				//     address is in little endian order).
+                // The second 32 bits store the absolute
+                // address in big endian order.
+                write32be(buffer + i + 4, addr);
+            } else {
+                // AUIPC's rd equals x0 or x2.
+                //
+                // x0 indicates a landing pad (LPAD).
+                // It's always skipped.
+                //
+                // AUIPC with rd == x2 is used for the special
+                // format as explained above. When the input
+                // contains a byte sequence that matches the
+                // special format, "fake" decoding must be
+                // done to keep the filter bijective (that
+                // is, safe to apply on arbitrary data).
+                //
+                // See the "x0 or x2" section in riscv_decode()
+                // for how the "real" decoding is done. The
+                // "fake" decoding is a simplified version
+                // of "real" decoding with the following
+                // differences (these reduce code size of
+                // the decoder):
+                // (1) The lowest 12 bits aren't sign-extended.
+                // (2) No address conversion is done.
+                // (3) Big endian format isn't used (the fake
+                //     address is in little endian order).
 
-				// Check if inst matches the special format.
-				const uint32_t fake_rs1 = inst >> 27;
+                // Check if inst matches the special format.
+                const uint32_t fake_rs1 = inst >> 27;
 
-				if (NOT_SPECIAL_AUIPC(inst, fake_rs1)) {
-					i += 4 - 2;
-					continue;
-				}
+                if (NOT_SPECIAL_AUIPC(inst, fake_rs1)) {
+                    i += 4 - 2;
+                    continue;
+                }
 
-				const uint32_t fake_addr =
-						read32le(buffer + i + 4);
+                const uint32_t fake_addr =
+                    read32le(buffer + i + 4);
 
-				// Construct the second 32 bits:
-				//   [19:0]   Upper 20 bits from AUIPC
-				//   [31:20]  The lowest 12 bits of fake_addr
-				const uint32_t fake_inst2 = (inst >> 12)
-						| (fake_addr << 20);
+                // Construct the second 32 bits:
+                //   [19:0]   Upper 20 bits from AUIPC
+                //   [31:20]  The lowest 12 bits of fake_addr
+                const uint32_t fake_inst2 = (inst >> 12)
+                                            | (fake_addr << 20);
 
-				// Construct new first 32 bits from:
-				//   [6:0]   AUIPC opcode
-				//   [11:7]  Fake AUIPC rd = fake_rs1
-				//   [31:12] The highest 20 bits of fake_addr
-				inst = 0x17 | (fake_rs1 << 7)
-					| (fake_addr & 0xFFFFF000);
+                // Construct new first 32 bits from:
+                //   [6:0]   AUIPC opcode
+                //   [11:7]  Fake AUIPC rd = fake_rs1
+                //   [31:12] The highest 20 bits of fake_addr
+                inst = 0x17 | (fake_rs1 << 7)
+                       | (fake_addr & 0xFFFFF000);
 
-				write32le(buffer + i, inst);
-				write32le(buffer + i + 4, fake_inst2);
-			}
+                write32le(buffer + i, inst);
+                write32le(buffer + i + 4, fake_inst2);
+            }
 
-			i += 8 - 2;
-		}
-	}
+            i += 8 - 2;
+        }
+    }
 
-	return i;
+    return i;
 }
 
 
 extern lzma_ret
 lzma_simple_riscv_encoder_init(lzma_next_coder *next,
-		const lzma_allocator *allocator,
-		const lzma_filter_info *filters)
-{
-	return lzma_simple_coder_init(next, allocator, filters,
-			&riscv_encode, 0, 8, 2, true);
+                               const lzma_allocator *allocator,
+                               const lzma_filter_info *filters) {
+    return lzma_simple_coder_init(next, allocator, filters,
+                                  &riscv_encode, 0, 8, 2, true);
 }
 
 
 extern LZMA_API(size_t)
-lzma_bcj_riscv_encode(uint32_t start_offset, uint8_t *buf, size_t size)
-{
-	// start_offset must be a multiple of two.
-	start_offset &= ~UINT32_C(1);
-	return riscv_encode(NULL, start_offset, true, buf, size);
+lzma_bcj_riscv_encode(uint32_t start_offset, uint8_t *buf, size_t size) {
+    // start_offset must be a multiple of two.
+    start_offset &= ~UINT32_C(1);
+    return riscv_encode(NULL, start_offset, true, buf, size);
 }
 #endif
 
@@ -632,142 +629,139 @@ lzma_bcj_riscv_encode(uint32_t start_offset, uint8_t *buf, size_t size)
 #ifdef HAVE_DECODER_RISCV
 static size_t
 riscv_decode(void *simple lzma_attribute((__unused__)),
-		uint32_t now_pos,
-		bool is_encoder lzma_attribute((__unused__)),
-		uint8_t *buffer, size_t size)
-{
-	if (size < 8)
-		return 0;
+             uint32_t now_pos,
+             bool is_encoder lzma_attribute((__unused__)),
+             uint8_t *buffer, size_t size) {
+    if (size < 8)
+        return 0;
 
-	size -= 8;
+    size -= 8;
 
-	size_t i;
-	for (i = 0; i <= size; i += 2) {
-		uint32_t inst = buffer[i];
+    size_t i;
+    for (i = 0; i <= size; i += 2) {
+        uint32_t inst = buffer[i];
 
-		if (inst == 0xEF) {
-			// JAL
-			const uint32_t b1 = buffer[i + 1];
+        if (inst == 0xEF) {
+            // JAL
+            const uint32_t b1 = buffer[i + 1];
 
-			// Only filter rd=x1(ra) and rd=x5(t0).
-			if ((b1 & 0x0D) != 0)
-				continue;
+            // Only filter rd=x1(ra) and rd=x5(t0).
+            if ((b1 & 0x0D) != 0)
+                continue;
 
-			const uint32_t b2 = buffer[i + 2];
-			const uint32_t b3 = buffer[i + 3];
-			const uint32_t pc = now_pos + (uint32_t)i;
+            const uint32_t b2 = buffer[i + 2];
+            const uint32_t b3 = buffer[i + 3];
+            const uint32_t pc = now_pos + (uint32_t)i;
 
 // |          b3             |          b2             |          b1         |
 // | 31 30 29 28 27 26 25 24 | 23 22 21 20 19 18 17 16 | 15 14 13 12 x x x x |
 // | 20 10  9  8  7  6  5  4 |  3  2  1 11 19 18 17 16 | 15 14 13 12 x x x x |
 // |  7  6  5  4  3  2  1  0 |  7  6  5  4  3  2  1  0 |  7  6  5  4 x x x x |
 
-			uint32_t addr = ((b1 & 0xF0) << 13)
-					| (b2 << 9) | (b3 << 1);
+            uint32_t addr = ((b1 & 0xF0) << 13)
+                            | (b2 << 9) | (b3 << 1);
 
-			addr -= pc;
+            addr -= pc;
 
-			buffer[i + 1] = (uint8_t)((b1 & 0x0F)
-					| ((addr >> 8) & 0xF0));
+            buffer[i + 1] = (uint8_t)((b1 & 0x0F)
+                                      | ((addr >> 8) & 0xF0));
 
-			buffer[i + 2] = (uint8_t)(((addr >> 16) & 0x0F)
-					| ((addr >> 7) & 0x10)
-					| ((addr << 4) & 0xE0));
+            buffer[i + 2] = (uint8_t)(((addr >> 16) & 0x0F)
+                                      | ((addr >> 7) & 0x10)
+                                      | ((addr << 4) & 0xE0));
 
-			buffer[i + 3] = (uint8_t)(((addr >> 4) & 0x7F)
-					| ((addr >> 13) & 0x80));
+            buffer[i + 3] = (uint8_t)(((addr >> 4) & 0x7F)
+                                      | ((addr >> 13) & 0x80));
 
-			i += 4 - 2;
+            i += 4 - 2;
 
-		} else if ((inst & 0x7F) == 0x17) {
-			// AUIPC
-			uint32_t inst2;
+        } else if ((inst & 0x7F) == 0x17) {
+            // AUIPC
+            uint32_t inst2;
 
-			inst |= (uint32_t)buffer[i + 1] << 8;
-			inst |= (uint32_t)buffer[i + 2] << 16;
-			inst |= (uint32_t)buffer[i + 3] << 24;
+            inst |= (uint32_t)buffer[i + 1] << 8;
+            inst |= (uint32_t)buffer[i + 2] << 16;
+            inst |= (uint32_t)buffer[i + 3] << 24;
 
-			if (inst & 0xE80) {
-				// AUIPC's rd doesn't equal x0 or x2.
+            if (inst & 0xE80) {
+                // AUIPC's rd doesn't equal x0 or x2.
 
-				// Check if it is a "fake" AUIPC+inst2 pair.
-				inst2 = read32le(buffer + i + 4);
+                // Check if it is a "fake" AUIPC+inst2 pair.
+                inst2 = read32le(buffer + i + 4);
 
-				if (NOT_AUIPC_PAIR(inst, inst2)) {
-					i += 6 - 2;
-					continue;
-				}
+                if (NOT_AUIPC_PAIR(inst, inst2)) {
+                    i += 6 - 2;
+                    continue;
+                }
 
-				// Decode (or more like re-encode) the "fake"
-				// pair. The "fake" format doesn't do
-				// sign-extension, address conversion, or
-				// use big endian. (The use of little endian
-				// allows sharing the write32le() calls in
-				// the decoder to reduce code size when
-				// unaligned access isn't supported.)
-				uint32_t addr = inst & 0xFFFFF000;
-				addr += inst2 >> 20;
+                // Decode (or more like re-encode) the "fake"
+                // pair. The "fake" format doesn't do
+                // sign-extension, address conversion, or
+                // use big endian. (The use of little endian
+                // allows sharing the write32le() calls in
+                // the decoder to reduce code size when
+                // unaligned access isn't supported.)
+                uint32_t addr = inst & 0xFFFFF000;
+                addr += inst2 >> 20;
 
-				inst = 0x17 | (2 << 7) | (inst2 << 12);
-				inst2 = addr;
-			} else {
-				// AUIPC's rd equals x0 or x2.
+                inst = 0x17 | (2 << 7) | (inst2 << 12);
+                inst2 = addr;
+            } else {
+                // AUIPC's rd equals x0 or x2.
 
-				// Check if inst matches the special format
-				// used by the encoder.
-				const uint32_t inst2_rs1 = inst >> 27;
+                // Check if inst matches the special format
+                // used by the encoder.
+                const uint32_t inst2_rs1 = inst >> 27;
 
-				if (NOT_SPECIAL_AUIPC(inst, inst2_rs1)) {
-					i += 4 - 2;
-					continue;
-				}
+                if (NOT_SPECIAL_AUIPC(inst, inst2_rs1)) {
+                    i += 4 - 2;
+                    continue;
+                }
 
-				// Decode the "real" pair.
-				uint32_t addr = read32be(buffer + i + 4);
+                // Decode the "real" pair.
+                uint32_t addr = read32be(buffer + i + 4);
 
-				addr -= now_pos + (uint32_t)i;
+                addr -= now_pos + (uint32_t)i;
 
-				// The second instruction:
-				//   - Get the lowest 20 bits from inst.
-				//   - Add the lowest 12 bits of the address
-				//     as the immediate field.
-				inst2 = (inst >> 12) | (addr << 20);
+                // The second instruction:
+                //   - Get the lowest 20 bits from inst.
+                //   - Add the lowest 12 bits of the address
+                //     as the immediate field.
+                inst2 = (inst >> 12) | (addr << 20);
 
-				// AUIPC:
-				//   - rd is the same as inst2_rs1.
-				//   - The sign extension of the lowest 12 bits
-				//     must be taken into account.
-				inst = 0x17 | (inst2_rs1 << 7)
-					| ((addr + 0x800) & 0xFFFFF000);
-			}
+                // AUIPC:
+                //   - rd is the same as inst2_rs1.
+                //   - The sign extension of the lowest 12 bits
+                //     must be taken into account.
+                inst = 0x17 | (inst2_rs1 << 7)
+                       | ((addr + 0x800) & 0xFFFFF000);
+            }
 
-			// Both decoder branches write in little endian order.
-			write32le(buffer + i, inst);
-			write32le(buffer + i + 4, inst2);
+            // Both decoder branches write in little endian order.
+            write32le(buffer + i, inst);
+            write32le(buffer + i + 4, inst2);
 
-			i += 8 - 2;
-		}
-	}
+            i += 8 - 2;
+        }
+    }
 
-	return i;
+    return i;
 }
 
 
 extern lzma_ret
 lzma_simple_riscv_decoder_init(lzma_next_coder *next,
-		const lzma_allocator *allocator,
-		const lzma_filter_info *filters)
-{
-	return lzma_simple_coder_init(next, allocator, filters,
-			&riscv_decode, 0, 8, 2, false);
+                               const lzma_allocator *allocator,
+                               const lzma_filter_info *filters) {
+    return lzma_simple_coder_init(next, allocator, filters,
+                                  &riscv_decode, 0, 8, 2, false);
 }
 
 
 extern LZMA_API(size_t)
-lzma_bcj_riscv_decode(uint32_t start_offset, uint8_t *buf, size_t size)
-{
-	// start_offset must be a multiple of two.
-	start_offset &= ~UINT32_C(1);
-	return riscv_decode(NULL, start_offset, false, buf, size);
+lzma_bcj_riscv_decode(uint32_t start_offset, uint8_t *buf, size_t size) {
+    // start_offset must be a multiple of two.
+    start_offset &= ~UINT32_C(1);
+    return riscv_decode(NULL, start_offset, false, buf, size);
 }
 #endif

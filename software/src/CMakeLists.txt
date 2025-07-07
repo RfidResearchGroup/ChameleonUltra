@@ -256,6 +256,33 @@ if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     target_compile_definitions(mfkey64 PRIVATE HAVE_STRUCT_TIMESPEC)
 endif()
 
+add_executable(staticnested_1nt ${COMMON_FILES} staticnested_1nt.c)
+target_include_directories(staticnested_1nt PRIVATE ${SRC_DIR})
+if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+    target_compile_definitions(staticnested_1nt PRIVATE _GNU_SOURCE)
+endif()
+if (CMAKE_SYSTEM_NAME MATCHES "Windows")
+    target_compile_definitions(staticnested_1nt PRIVATE HAVE_STRUCT_TIMESPEC)
+endif()
+
+add_executable(staticnested_2x1nt_rf08s ${COMMON_FILES} staticnested_2x1nt_rf08s.c)
+target_include_directories(staticnested_2x1nt_rf08s PRIVATE ${SRC_DIR})
+if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+    target_compile_definitions(staticnested_2x1nt_rf08s PRIVATE _GNU_SOURCE)
+endif()
+if (CMAKE_SYSTEM_NAME MATCHES "Windows")
+    target_compile_definitions(staticnested_2x1nt_rf08s PRIVATE HAVE_STRUCT_TIMESPEC)
+endif()
+
+add_executable(staticnested_2x1nt_rf08s_1key ${COMMON_FILES} staticnested_2x1nt_rf08s_1key.c)
+target_include_directories(staticnested_2x1nt_rf08s_1key PRIVATE ${SRC_DIR})
+if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+    target_compile_definitions(staticnested_2x1nt_rf08s_1key PRIVATE _GNU_SOURCE)
+endif()
+if (CMAKE_SYSTEM_NAME MATCHES "Windows")
+    target_compile_definitions(staticnested_2x1nt_rf08s_1key PRIVATE HAVE_STRUCT_TIMESPEC)
+endif()
+
 
 # --- hardnested Executable ---
 add_executable(hardnested ${COMMON_FILES} ${HARDNESTED_SOURCES})

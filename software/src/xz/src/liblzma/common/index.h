@@ -43,38 +43,34 @@ extern void lzma_index_prealloc(lzma_index *i, lzma_vli records);
 
 /// Round the variable-length integer to the next multiple of four.
 static inline lzma_vli
-vli_ceil4(lzma_vli vli)
-{
-	assert(vli <= UNPADDED_SIZE_MAX);
-	return (vli + 3) & ~LZMA_VLI_C(3);
+vli_ceil4(lzma_vli vli) {
+    assert(vli <= UNPADDED_SIZE_MAX);
+    return (vli + 3) & ~LZMA_VLI_C(3);
 }
 
 
 /// Calculate the size of the Index field excluding Index Padding
 static inline lzma_vli
-index_size_unpadded(lzma_vli count, lzma_vli index_list_size)
-{
-	// Index Indicator + Number of Records + List of Records + CRC32
-	return 1 + lzma_vli_size(count) + index_list_size + 4;
+index_size_unpadded(lzma_vli count, lzma_vli index_list_size) {
+    // Index Indicator + Number of Records + List of Records + CRC32
+    return 1 + lzma_vli_size(count) + index_list_size + 4;
 }
 
 
 /// Calculate the size of the Index field including Index Padding
 static inline lzma_vli
-index_size(lzma_vli count, lzma_vli index_list_size)
-{
-	return vli_ceil4(index_size_unpadded(count, index_list_size));
+index_size(lzma_vli count, lzma_vli index_list_size) {
+    return vli_ceil4(index_size_unpadded(count, index_list_size));
 }
 
 
 /// Calculate the total size of the Stream
 static inline lzma_vli
 index_stream_size(lzma_vli blocks_size,
-		lzma_vli count, lzma_vli index_list_size)
-{
-	return LZMA_STREAM_HEADER_SIZE + blocks_size
-			+ index_size(count, index_list_size)
-			+ LZMA_STREAM_HEADER_SIZE;
+                  lzma_vli count, lzma_vli index_list_size) {
+    return LZMA_STREAM_HEADER_SIZE + blocks_size
+           + index_size(count, index_list_size)
+           + LZMA_STREAM_HEADER_SIZE;
 }
 
 #endif

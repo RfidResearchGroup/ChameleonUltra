@@ -145,7 +145,7 @@ PTW32_DLLPORT int __cdecl sem_timedwait(sem_t *sem,
 PTW32_DLLPORT int __cdecl sem_post(sem_t *sem);
 
 PTW32_DLLPORT int __cdecl sem_post_multiple(sem_t *sem,
-                                            int count);
+        int count);
 
 PTW32_DLLPORT int __cdecl sem_open(const char *name,
                                    int oflag,

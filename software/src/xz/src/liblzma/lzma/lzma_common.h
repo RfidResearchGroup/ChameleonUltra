@@ -29,11 +29,10 @@
 
 /// Validates lc, lp, and pb.
 static inline bool
-is_lclppb_valid(const lzma_options_lzma *options)
-{
-	return options->lc <= LZMA_LCLP_MAX && options->lp <= LZMA_LCLP_MAX
-			&& options->lc + options->lp <= LZMA_LCLP_MAX
-			&& options->pb <= LZMA_PB_MAX;
+is_lclppb_valid(const lzma_options_lzma *options) {
+    return options->lc <= LZMA_LCLP_MAX && options->lp <= LZMA_LCLP_MAX
+           && options->lc + options->lp <= LZMA_LCLP_MAX
+           && options->pb <= LZMA_PB_MAX;
 }
 
 
@@ -53,18 +52,18 @@ is_lclppb_valid(const lzma_options_lzma *options)
 /// The event names are in from STATE_oldest_older_previous. REP means
 /// either short or long repeated match, and NONLIT means any non-literal.
 typedef enum {
-	STATE_LIT_LIT,
-	STATE_MATCH_LIT_LIT,
-	STATE_REP_LIT_LIT,
-	STATE_SHORTREP_LIT_LIT,
-	STATE_MATCH_LIT,
-	STATE_REP_LIT,
-	STATE_SHORTREP_LIT,
-	STATE_LIT_MATCH,
-	STATE_LIT_LONGREP,
-	STATE_LIT_SHORTREP,
-	STATE_NONLIT_MATCH,
-	STATE_NONLIT_REP,
+    STATE_LIT_LIT,
+    STATE_MATCH_LIT_LIT,
+    STATE_REP_LIT_LIT,
+    STATE_SHORTREP_LIT_LIT,
+    STATE_MATCH_LIT,
+    STATE_REP_LIT,
+    STATE_SHORTREP_LIT,
+    STATE_LIT_MATCH,
+    STATE_LIT_LONGREP,
+    STATE_LIT_SHORTREP,
+    STATE_NONLIT_MATCH,
+    STATE_NONLIT_REP,
 } lzma_lzma_state;
 
 
@@ -144,16 +143,15 @@ typedef enum {
 
 
 static inline void
-literal_init(probability *probs, uint32_t lc, uint32_t lp)
-{
-	assert(lc + lp <= LZMA_LCLP_MAX);
+literal_init(probability *probs, uint32_t lc, uint32_t lp) {
+    assert(lc + lp <= LZMA_LCLP_MAX);
 
-	const size_t coders = LITERAL_CODER_SIZE << (lc + lp);
+    const size_t coders = LITERAL_CODER_SIZE << (lc + lp);
 
-	for (size_t i = 0; i < coders; ++i)
-		bit_reset(probs[i]);
+    for (size_t i = 0; i < coders; ++i)
+        bit_reset(probs[i]);
 
-	return;
+    return;
 }
 
 

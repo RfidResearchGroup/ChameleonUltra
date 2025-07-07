@@ -17,8 +17,8 @@
 
 
 extern lzma_ret lzma_index_decoder_init(lzma_next_coder *next,
-		const lzma_allocator *allocator,
-		lzma_index **i, uint64_t memlimit);
+                                        const lzma_allocator *allocator,
+                                        lzma_index **i, uint64_t memlimit);
 
 
 #endif

@@ -99,9 +99,9 @@ extern const uint64_t lzma_crc64_table[4][256];
 // little endian is supported since we were unable to test on a big
 // endian machine.
 #if defined(HAVE_ARM64_CRC32) && !defined(WORDS_BIGENDIAN)
-	// Allow ARM64 CRC32 instruction without a runtime check if
-	// __ARM_FEATURE_CRC32 is defined. GCC and Clang only define
-	// this if the proper compiler options are used.
+// Allow ARM64 CRC32 instruction without a runtime check if
+// __ARM_FEATURE_CRC32 is defined. GCC and Clang only define
+// this if the proper compiler options are used.
 #	if defined(__ARM_FEATURE_CRC32)
 #		define CRC32_ARCH_OPTIMIZED 1
 #		define CRC32_ARM64 1
@@ -127,16 +127,16 @@ extern const uint64_t lzma_crc64_table[4][256];
 
 // x86 and E2K
 #if defined(HAVE_USABLE_CLMUL)
-	// If CLMUL is allowed unconditionally in the compiler options then
-	// the generic version and the tables can be omitted. Exceptions:
-	//
-	//   - If 32-bit x86 assembly files are enabled then those are always
-	//     built and runtime detection is used even if compiler flags
-	//     were set to allow CLMUL unconditionally.
-	//
-	//   - This doesn't work with MSVC as I don't know how to detect
-	//     the features here.
-	//
+// If CLMUL is allowed unconditionally in the compiler options then
+// the generic version and the tables can be omitted. Exceptions:
+//
+//   - If 32-bit x86 assembly files are enabled then those are always
+//     built and runtime detection is used even if compiler flags
+//     were set to allow CLMUL unconditionally.
+//
+//   - This doesn't work with MSVC as I don't know how to detect
+//     the features here.
+//
 #	if (defined(__SSSE3__) && defined(__SSE4_1__) && defined(__PCLMUL__) \
 			&& !defined(HAVE_CRC_X86_ASM)) \
 		|| (defined(__e2k__) && __iset__ >= 6)

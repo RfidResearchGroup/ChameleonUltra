@@ -69,50 +69,50 @@
  */
 
 #ifndef LZMA_MANUAL_HEADERS
-	/*
-	 * I suppose this works portably also in C++. Note that in C++,
-	 * we need to get size_t into the global namespace.
-	 */
+/*
+ * I suppose this works portably also in C++. Note that in C++,
+ * we need to get size_t into the global namespace.
+ */
 #	include <stddef.h>
 
-	/*
-	 * Skip inttypes.h if we already have all the required macros. If we
-	 * have the macros, we assume that we have the matching typedefs too.
-	 */
+/*
+ * Skip inttypes.h if we already have all the required macros. If we
+ * have the macros, we assume that we have the matching typedefs too.
+ */
 #	if !defined(UINT32_C) || !defined(UINT64_C) \
 			|| !defined(UINT32_MAX) || !defined(UINT64_MAX)
-		/*
-		 * MSVC versions older than 2013 have no C99 support, and
-		 * thus they cannot be used to compile liblzma. Using an
-		 * existing liblzma.dll with old MSVC can work though(*),
-		 * but we need to define the required standard integer
-		 * types here in a MSVC-specific way.
-		 *
-		 * (*) If you do this, the existing liblzma.dll probably uses
-		 *     a different runtime library than your MSVC-built
-		 *     application. Mixing runtimes is generally bad, but
-		 *     in this case it should work as long as you avoid
-		 *     the few rarely-needed liblzma functions that allocate
-		 *     memory and expect the caller to free it using free().
-		 */
+/*
+ * MSVC versions older than 2013 have no C99 support, and
+ * thus they cannot be used to compile liblzma. Using an
+ * existing liblzma.dll with old MSVC can work though(*),
+ * but we need to define the required standard integer
+ * types here in a MSVC-specific way.
+ *
+ * (*) If you do this, the existing liblzma.dll probably uses
+ *     a different runtime library than your MSVC-built
+ *     application. Mixing runtimes is generally bad, but
+ *     in this case it should work as long as you avoid
+ *     the few rarely-needed liblzma functions that allocate
+ *     memory and expect the caller to free it using free().
+ */
 #		if defined(_WIN32) && defined(_MSC_VER) && _MSC_VER < 1800
-			typedef unsigned __int8 uint8_t;
-			typedef unsigned __int32 uint32_t;
-			typedef unsigned __int64 uint64_t;
+typedef unsigned __int8 uint8_t;
+typedef unsigned __int32 uint32_t;
+typedef unsigned __int64 uint64_t;
 #		else
-			/* Use the standard inttypes.h. */
+/* Use the standard inttypes.h. */
 #			ifdef __cplusplus
-				/*
-				 * C99 sections 7.18.2 and 7.18.4 specify
-				 * that C++ implementations define the limit
-				 * and constant macros only if specifically
-				 * requested. Note that if you want the
-				 * format macros (PRIu64 etc.) too, you need
-				 * to define __STDC_FORMAT_MACROS before
-				 * including lzma.h, since re-including
-				 * inttypes.h with __STDC_FORMAT_MACROS
-				 * defined doesn't necessarily work.
-				 */
+/*
+ * C99 sections 7.18.2 and 7.18.4 specify
+ * that C++ implementations define the limit
+ * and constant macros only if specifically
+ * requested. Note that if you want the
+ * format macros (PRIu64 etc.) too, you need
+ * to define __STDC_FORMAT_MACROS before
+ * including lzma.h, since re-including
+ * inttypes.h with __STDC_FORMAT_MACROS
+ * defined doesn't necessarily work.
+ */
 #				ifndef __STDC_LIMIT_MACROS
 #					define __STDC_LIMIT_MACROS 1
 #				endif
@@ -124,14 +124,14 @@
 #			include <inttypes.h>
 #		endif
 
-		/*
-		 * Some old systems have only the typedefs in inttypes.h, and
-		 * lack all the macros. For those systems, we need a few more
-		 * hacks. We assume that unsigned int is 32-bit and unsigned
-		 * long is either 32-bit or 64-bit. If these hacks aren't
-		 * enough, the application has to setup the types manually
-		 * before including lzma.h.
-		 */
+/*
+ * Some old systems have only the typedefs in inttypes.h, and
+ * lack all the macros. For those systems, we need a few more
+ * hacks. We assume that unsigned int is 32-bit and unsigned
+ * long is either 32-bit or 64-bit. If these hacks aren't
+ * enough, the application has to setup the types manually
+ * before including lzma.h.
+ */
 #		ifndef UINT32_C
 #			if defined(_WIN32) && defined(_MSC_VER)
 #				define UINT32_C(n) n ## UI32
@@ -144,7 +144,7 @@
 #			if defined(_WIN32) && defined(_MSC_VER)
 #				define UINT64_C(n) n ## UI64
 #			else
-				/* Get ULONG_MAX. */
+/* Get ULONG_MAX. */
 #				include <limits.h>
 #				if ULONG_MAX == 4294967295UL
 #					define UINT64_C(n) n ## ULL
@@ -248,7 +248,7 @@
 #		define lzma_attribute(attr) __attribute__(attr)
 #	endif
 
-	/* warn_unused_result was added in GCC 3.4. */
+/* warn_unused_result was added in GCC 3.4. */
 #	ifndef lzma_attr_warn_unused_result
 #		if __GNUC__ == 3 && __GNUC_MINOR__ < 4
 #			define lzma_attr_warn_unused_result

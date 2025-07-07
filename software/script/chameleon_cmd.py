@@ -3,7 +3,7 @@ import ctypes
 from typing import Union
 
 import chameleon_com
-from chameleon_utils import expect_response
+from chameleon_utils import expect_response, reconstruct_full_nt, parity_to_str
 from chameleon_enum import Command, SlotNumber, Status, TagSenseType, TagSpecificType
 from chameleon_enum import ButtonPressFunction, ButtonType, MifareClassicDarksideStatus
 from chameleon_enum import MfcKeyType, MfcValueBlockOperator
@@ -339,6 +339,23 @@ class ChameleonCMD:
             })
         return resp
 
+    @expect_response([Status.HF_TAG_OK, Status.HF_TAG_NO])
+    def mf1_check_keys_on_block(self, block: int, key_type: int, keys: list[bytes]):
+        if key_type not in [0x60, 0x61]:
+            raise ValueError("Wrong key type")
+        if len(keys) < 1 or len(keys) > 83:
+            raise ValueError("Invalid len(keys)")
+        data = struct.pack(f'!BBB{6*len(keys)}s', block, key_type, len(keys), b''.join(keys))
+
+        resp = self.device.send_cmd_sync(Command.MF1_CHECK_KEYS_ON_BLOCK, data, timeout=10)
+
+        if resp.status == Status.HF_TAG_OK and len(resp.data) == 7:
+            found, key = struct.unpack('!B6s', resp.data)
+            if found:
+                resp.parsed = key
+
+        return resp
+
     @expect_response(Status.HF_TAG_OK)
     def mf1_static_nested_acquire(self, block_known, type_known, key_known, block_target, type_target):
         """
@@ -366,9 +383,44 @@ class ChameleonCMD:
         :return:
         """
         data = struct.pack('!BBB6sBB', slow, type_known, block_known, key_known, type_target, block_target)
-        resp = self.device.send_cmd_sync(Command.DATA_CMD_MF1_HARDNESTED_ACQUIRE, data, timeout=30)
+        resp = self.device.send_cmd_sync(Command.MF1_HARDNESTED_ACQUIRE, data, timeout=30)
         if resp.status == Status.HF_TAG_OK:
             resp.parsed = resp.data  # we can return the raw nonces bytes
+        return resp
+
+    @expect_response([Status.HF_TAG_OK, Status.HF_TAG_NO])
+    def mf1_static_encrypted_nested_acquire(self, backdoor_key, sector_count, starting_sector):
+        data = struct.pack('!6sBB', backdoor_key, sector_count, starting_sector)
+        resp = self.device.send_cmd_sync(Command.MF1_ENC_NESTED_ACQUIRE, data, timeout=30)
+        if resp.status == Status.HF_TAG_OK:
+            resp.parsed = {
+                'uid': struct.unpack('!I', resp.data[0:4])[0],
+                'nts': {
+                    'a': [],
+                    'b': []
+                }
+            }
+
+            i = 4
+
+            while i < len(resp.data):
+                resp.parsed['nts']['a'].append(
+                    {
+                        'nt': reconstruct_full_nt(resp.data, i),
+                        'nt_enc': int.from_bytes(resp.data[i + 3: i + 7]),
+                        'parity': parity_to_str(resp.data[i + 2])
+                    }
+                )
+
+                resp.parsed['nts']['b'].append(
+                    {
+                        'nt': reconstruct_full_nt(resp.data, i + 7),
+                        'nt_enc': int.from_bytes(resp.data[i + 10: i + 14]),
+                        'parity': parity_to_str(resp.data[i + 9])
+                    }
+                )
+
+                i += 14
         return resp
 
     @expect_response(Status.LF_TAG_OK)

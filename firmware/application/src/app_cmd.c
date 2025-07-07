@@ -334,21 +334,27 @@ static data_frame_tx_t *cmd_processor_mf1_enc_nested_acquire(uint16_t cmd, uint1
     typedef struct {
         uint8_t key[6];
         uint8_t sector_count;
+        uint8_t starting_sector;
     } PACKED payload_t;
-    
+
     if (length != sizeof(payload_t)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
     payload_t *payload = (payload_t *)data;
-    
+
     uint64_t ui64Key = bytes_to_num(payload->key, 6);
     uint8_t sector_data[40][sizeof(mf1_static_nonce_sector_t)];
     uint8_t sectors_acquired = 0;
-    
-    status = mf1_static_encrypted_nonces_acquire(ui64Key, payload->sector_count, sector_data, &sectors_acquired);
-    
-    return data_frame_make(cmd, status, sectors_acquired * sizeof(mf1_static_nonce_sector_t), (uint8_t *)(sector_data));
+    uint32_t cuid = 0;
+
+    status = mf1_static_encrypted_nonces_acquire(ui64Key, payload->sector_count, payload->starting_sector, sector_data, &sectors_acquired, &cuid);
+
+    uint8_t response_data[sizeof(uint32_t) + sectors_acquired * sizeof(mf1_static_nonce_sector_t)];
+    num_to_bytes(cuid, 4, response_data);
+    memcpy(response_data + sizeof(uint32_t), sector_data, sectors_acquired * sizeof(mf1_static_nonce_sector_t));
+
+    return data_frame_make(cmd, status, sectors_acquired * sizeof(mf1_static_nonce_sector_t) + sizeof(uint32_t), response_data);
 }
 
 static data_frame_tx_t *cmd_processor_mf1_auth_one_key_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -384,8 +390,30 @@ static data_frame_tx_t *cmd_processor_mf1_check_keys_of_sectors(uint16_t cmd, ui
     return data_frame_make(cmd, status, sizeof(out), (uint8_t *)&out);
 }
 
+static data_frame_tx_t *cmd_processor_mf1_check_keys_on_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length < 3 || (length - 3) % 6 != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    mf1_toolbox_check_keys_on_block_in_t in = {
+        .block = data[0],
+        .key_type = data[1],
+        .keys_len = data[2],
+        .keys = (mf1_key_t *) &data[3]
+    };
+
+    if ((length - 3) / 6 != in.keys_len) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    mf1_toolbox_check_keys_on_block_out_t out;
+    status = mf1_toolbox_check_keys_on_block(&in, &out);
+
+    return data_frame_make(cmd, status, sizeof(out), (uint8_t *)&out);
+}
+
 static data_frame_tx_t *cmd_processor_mf1_hardnested_nonces_acquire(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-	typedef struct {
+    typedef struct {
         uint8_t slow;
         uint8_t type_known;
         uint8_t block_known;
@@ -397,7 +425,7 @@ static data_frame_tx_t *cmd_processor_mf1_hardnested_nonces_acquire(uint16_t cmd
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     payload_t *payload = (payload_t *)data;
-    
+
     // It is enough to collect 110 nonces at a time. The total transmitted data payload is 495 + 1 bytes
     // Then, the total length can be controlled within 512, so that when encountering a BLE host that supports large packets, one communication can be completed.
     // There is no need to send or receive packets in separate packets, which improves communication speed.
@@ -406,16 +434,16 @@ static data_frame_tx_t *cmd_processor_mf1_hardnested_nonces_acquire(uint16_t cmd
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     status = mf1_hardnested_nonces_acquire(
-        payload->slow,
-        payload->block_known,
-        payload->type_known,
-        bytes_to_num(payload->key_known, 6), 
-        payload->block_target,
-        payload->type_target,
-        nonces + 1,
-        sizeof(nonces) - 1,         // The upper limit of the buffer size. Here we take out the first byte to mark the number of collections.
-        &nonces[0]                  // The number of random numbers collected above
-    );
+                 payload->slow,
+                 payload->block_known,
+                 payload->type_known,
+                 bytes_to_num(payload->key_known, 6),
+                 payload->block_target,
+                 payload->type_target,
+                 nonces + 1,
+                 sizeof(nonces) - 1,         // The upper limit of the buffer size. Here we take out the first byte to mark the number of collections.
+                 &nonces[0]                  // The number of random numbers collected above
+             );
     if (status != STATUS_HF_TAG_OK) {
         return data_frame_make(cmd, status, 0, NULL);
     }
@@ -754,27 +782,27 @@ static nfc_tag_14a_coll_res_reference_t *get_coll_res_data(bool write) {
     tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &tag_types);
 
     switch (tag_types.tag_hf) {
-    case TAG_TYPE_MIFARE_1024:
-    case TAG_TYPE_MIFARE_2048:
-    case TAG_TYPE_MIFARE_4096:
-    case TAG_TYPE_MIFARE_Mini:
-        info = write ? get_mifare_coll_res() : get_saved_mifare_coll_res();
-        break;
-    case TAG_TYPE_MF0ICU1:
-    case TAG_TYPE_MF0ICU2:
-    case TAG_TYPE_MF0UL11:
-    case TAG_TYPE_MF0UL21:
-    case TAG_TYPE_NTAG_210:
-    case TAG_TYPE_NTAG_212:
-    case TAG_TYPE_NTAG_213:
-    case TAG_TYPE_NTAG_215:
-    case TAG_TYPE_NTAG_216:
-        info = nfc_tag_mf0_ntag_get_coll_res();
-        break;
-    default:
-        // no collision resolution data for slot
-        info = NULL;
-        break;
+        case TAG_TYPE_MIFARE_1024:
+        case TAG_TYPE_MIFARE_2048:
+        case TAG_TYPE_MIFARE_4096:
+        case TAG_TYPE_MIFARE_Mini:
+            info = write ? get_mifare_coll_res() : get_saved_mifare_coll_res();
+            break;
+        case TAG_TYPE_MF0ICU1:
+        case TAG_TYPE_MF0ICU2:
+        case TAG_TYPE_MF0UL11:
+        case TAG_TYPE_MF0UL21:
+        case TAG_TYPE_NTAG_210:
+        case TAG_TYPE_NTAG_212:
+        case TAG_TYPE_NTAG_213:
+        case TAG_TYPE_NTAG_215:
+        case TAG_TYPE_NTAG_216:
+            info = nfc_tag_mf0_ntag_get_coll_res();
+            break;
+        default:
+            // no collision resolution data for slot
+            info = NULL;
+            break;
     }
 
     return info;
@@ -902,8 +930,8 @@ static data_frame_tx_t *cmd_processor_mf0_ntag_write_emu_page_data(uint16_t cmd,
 
     if (pages_count == 0) return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
     else if (
-        (page_index >= ((int)nr_pages)) 
-        || (pages_count > (((int)nr_pages) - page_index)) 
+        (page_index >= ((int)nr_pages))
+        || (pages_count > (((int)nr_pages) - page_index))
         || (((int)length - 2) < byte_length)
     ) {
         byte = nr_pages;
@@ -1367,6 +1395,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_MANIPULATE_VALUE_BLOCK,   before_hf_reader_run,        cmd_processor_mf1_manipulate_value_block,    after_hf_reader_run    },
     {    DATA_CMD_MF1_CHECK_KEYS_OF_SECTORS,    before_hf_reader_run,        cmd_processor_mf1_check_keys_of_sectors,     after_hf_reader_run    },
     {    DATA_CMD_MF1_HARDNESTED_ACQUIRE,       before_hf_reader_run,        cmd_processor_mf1_hardnested_nonces_acquire, after_hf_reader_run    },
+    {    DATA_CMD_MF1_CHECK_KEYS_ON_BLOCK,      before_hf_reader_run,        cmd_processor_mf1_check_keys_on_block,       after_hf_reader_run    },
 
     {    DATA_CMD_EM410X_SCAN,                  before_reader_run,           cmd_processor_em410x_scan,                   NULL                   },
     {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_em410x_write_to_t55XX,         NULL                   },

@@ -79,21 +79,21 @@
  *              LZMA_SYNC_FLUSH predictably.
  */
 typedef struct {
-	/**
-	 * \brief       Start offset for conversions
-	 *
-	 * This setting is useful only when the same filter is used
-	 * _separately_ for multiple sections of the same executable file,
-	 * and the sections contain cross-section branch/call/jump
-	 * instructions. In that case it is beneficial to set the start
-	 * offset of the non-first sections so that the relative addresses
-	 * of the cross-section branch/call/jump instructions will use the
-	 * same absolute addresses as in the first section.
-	 *
-	 * When the pointer to options is NULL, the default value (zero)
-	 * is used.
-	 */
-	uint32_t start_offset;
+    /**
+     * \brief       Start offset for conversions
+     *
+     * This setting is useful only when the same filter is used
+     * _separately_ for multiple sections of the same executable file,
+     * and the sections contain cross-section branch/call/jump
+     * instructions. In that case it is beneficial to set the start
+     * offset of the non-first sections so that the relative addresses
+     * of the cross-section branch/call/jump instructions will use the
+     * same absolute addresses as in the first section.
+     *
+     * When the pointer to options is NULL, the default value (zero)
+     * is used.
+     */
+    uint32_t start_offset;
 
 } lzma_options_bcj;
 
@@ -120,7 +120,7 @@ typedef struct {
  * \since       5.7.1alpha
  */
 extern LZMA_API(size_t) lzma_bcj_arm64_encode(
-		uint32_t start_offset, uint8_t *buf, size_t size) lzma_nothrow;
+    uint32_t start_offset, uint8_t *buf, size_t size) lzma_nothrow;
 
 /**
  * \brief       Raw ARM64 BCJ decoder
@@ -130,7 +130,7 @@ extern LZMA_API(size_t) lzma_bcj_arm64_encode(
  * \since       5.7.1alpha
  */
 extern LZMA_API(size_t) lzma_bcj_arm64_decode(
-		uint32_t start_offset, uint8_t *buf, size_t size) lzma_nothrow;
+    uint32_t start_offset, uint8_t *buf, size_t size) lzma_nothrow;
 
 
 /**
@@ -151,7 +151,7 @@ extern LZMA_API(size_t) lzma_bcj_arm64_decode(
  * \since       5.7.1alpha
  */
 extern LZMA_API(size_t) lzma_bcj_riscv_encode(
-		uint32_t start_offset, uint8_t *buf, size_t size) lzma_nothrow;
+    uint32_t start_offset, uint8_t *buf, size_t size) lzma_nothrow;
 
 /**
  * \brief       Raw RISC-V BCJ decoder
@@ -161,7 +161,7 @@ extern LZMA_API(size_t) lzma_bcj_riscv_encode(
  * \since       5.7.1alpha
  */
 extern LZMA_API(size_t) lzma_bcj_riscv_decode(
-		uint32_t start_offset, uint8_t *buf, size_t size) lzma_nothrow;
+    uint32_t start_offset, uint8_t *buf, size_t size) lzma_nothrow;
 
 
 /**
@@ -182,7 +182,7 @@ extern LZMA_API(size_t) lzma_bcj_riscv_decode(
  * \since       5.7.1alpha
  */
 extern LZMA_API(size_t) lzma_bcj_x86_encode(
-		uint32_t start_offset, uint8_t *buf, size_t size) lzma_nothrow;
+    uint32_t start_offset, uint8_t *buf, size_t size) lzma_nothrow;
 
 /**
  * \brief       Raw x86 BCJ decoder
@@ -192,4 +192,4 @@ extern LZMA_API(size_t) lzma_bcj_x86_encode(
  * \since       5.7.1alpha
  */
 extern LZMA_API(size_t) lzma_bcj_x86_decode(
-		uint32_t start_offset, uint8_t *buf, size_t size) lzma_nothrow;
+    uint32_t start_offset, uint8_t *buf, size_t size) lzma_nothrow;

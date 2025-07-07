@@ -126,8 +126,8 @@ uint64_t em410x_id_to_memory64(uint8_t id[5]) {
     // Okay, it's the most critical time at present, and now you need to assign and calculate the Qiqi school inspection
     // 1. First assign the front guide code
     memory.bit.h00 = memory.bit.h01 = memory.bit.h02 =
-                                          memory.bit.h03 = memory.bit.h04 = memory.bit.h05 =
-                                                               memory.bit.h06 = memory.bit.h07 = memory.bit.h08 = 1;
+    memory.bit.h03 = memory.bit.h04 = memory.bit.h05 =
+    memory.bit.h06 = memory.bit.h07 = memory.bit.h08 = 1;
     //2. Assign the 8bit version or custom ID
     memory.bit.d00 = GETBIT(id[0], 7);
     memory.bit.d01 = GETBIT(id[0], 6);
@@ -261,7 +261,7 @@ void timer_ce_handler(nrf_timer_event_t event_type, void *p_context) {
             if (m_is_send_first_edge == true) { // The first edge of the next sends next time
                 if (++m_bit_send_position >= LF_125KHZ_EM410X_BIT_SIZE) {
                     m_bit_send_position = 0;    // The broadcast is successful once, and the BIT position is zero
-                    if(!lf_is_field_exists()){  // To avoid stopping sending when the reader field is present
+                    if (!lf_is_field_exists()) { // To avoid stopping sending when the reader field is present
                         m_send_id_count++;
                     }
                     if (m_send_id_count >= LF_125KHZ_BROADCAST_MAX) {

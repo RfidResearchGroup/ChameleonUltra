@@ -50,35 +50,35 @@ TUKLIB_DECLS_BEGIN
 
 /// Options for tuklib_wraps() and tuklib_wrapf()
 struct tuklib_wrap_opt {
-	/// Indentation of the first output line after `\n` or `\r`.
-	/// This can be anything less than right_margin.
-	unsigned short left_margin;
+    /// Indentation of the first output line after `\n` or `\r`.
+    /// This can be anything less than right_margin.
+    unsigned short left_margin;
 
-	/// Column where word-wrapped continuation lines start.
-	/// This can be anything less than right_margin.
-	unsigned short left_cont;
+    /// Column where word-wrapped continuation lines start.
+    /// This can be anything less than right_margin.
+    unsigned short left_cont;
 
-	/// Column where the text after `\v` will start, either on the current
-	/// line (when there is room to add at least one space) or on a new
-	/// empty line.
-	unsigned short left2_margin;
+    /// Column where the text after `\v` will start, either on the current
+    /// line (when there is room to add at least one space) or on a new
+    /// empty line.
+    unsigned short left2_margin;
 
-	/// Like left_cont but for text after a `\v`. However, this must
-	/// be greater than or equal to left2_margin in addition to being
-	/// less than right_margin.
-	unsigned short left2_cont;
+    /// Like left_cont but for text after a `\v`. However, this must
+    /// be greater than or equal to left2_margin in addition to being
+    /// less than right_margin.
+    unsigned short left2_cont;
 
-	/// For 80-column terminals, it is recommended to use 79 here for
-	/// maximum portability. 80 will work most of the time but it will
-	/// result in unwanted empty lines in the rare case where a terminal
-	/// moves the cursor to the beginning of the next line immediately
-	/// when the last column has been used.
-	unsigned short right_margin;
+    /// For 80-column terminals, it is recommended to use 79 here for
+    /// maximum portability. 80 will work most of the time but it will
+    /// result in unwanted empty lines in the rare case where a terminal
+    /// moves the cursor to the beginning of the next line immediately
+    /// when the last column has been used.
+    unsigned short right_margin;
 };
 
 #define tuklib_wraps TUKLIB_SYMBOL(tuklib_wraps)
 extern int tuklib_wraps(FILE *stream, const struct tuklib_wrap_opt *opt,
-		const char *str);
+                        const char *str);
 ///<
 /// \brief      Word wrap a multibyte string and write it to a FILE
 ///
@@ -188,7 +188,7 @@ extern int tuklib_wraps(FILE *stream, const struct tuklib_wrap_opt *opt,
 #define tuklib_wrapf TUKLIB_SYMBOL(tuklib_wrapf)
 tuklib_attr_format_printf(3, 4)
 extern int tuklib_wrapf(FILE *stream, const struct tuklib_wrap_opt *opt,
-		const char *fmt, ...);
+                        const char *fmt, ...);
 ///<
 /// \brief      Format and word-wrap a multibyte string and write it to a FILE
 ///

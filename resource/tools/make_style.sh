@@ -20,7 +20,7 @@ find . \( -not -path "./.git/*" -and -not -path "./firmware/nrf52_sdk/*" -and -n
           -name "*.[ch]" \) \
     -exec astyle --formatted --mode=c --suffix=none \
     --indent=spaces=4 --indent-switches \
-    --keep-one-line-blocks --max-instatement-indent=60 \
+    --keep-one-line-blocks \
     --style=google --pad-oper --unpad-paren --pad-header \
     --align-pointer=name {} \;
 # Apply autopep8 on *py

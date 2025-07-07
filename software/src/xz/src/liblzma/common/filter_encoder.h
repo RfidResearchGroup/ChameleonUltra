@@ -16,7 +16,7 @@
 
 
 extern lzma_ret lzma_raw_encoder_init(
-		lzma_next_coder *next, const lzma_allocator *allocator,
-		const lzma_filter *filters);
+    lzma_next_coder *next, const lzma_allocator *allocator,
+    const lzma_filter *filters);
 
 #endif

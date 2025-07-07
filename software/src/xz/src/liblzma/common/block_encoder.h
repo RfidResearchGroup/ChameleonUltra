@@ -41,6 +41,6 @@
 
 
 extern lzma_ret lzma_block_encoder_init(lzma_next_coder *next,
-		const lzma_allocator *allocator, lzma_block *block);
+                                        const lzma_allocator *allocator, lzma_block *block);
 
 #endif
