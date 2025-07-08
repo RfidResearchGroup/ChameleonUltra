@@ -64,7 +64,8 @@ def load_dic_file(import_dic, keys):
 
 
 def check_tools():
-    tools = ['staticnested', 'nested', 'darkside', 'mfkey32v2', 'staticnested_1nt', 'staticnested_2x1nt_rf08s', 'staticnested_2x1nt_rf08s_1key']
+    tools = ['staticnested', 'nested', 'darkside', 'mfkey32v2', 'staticnested_1nt',
+             'staticnested_2x1nt_rf08s', 'staticnested_2x1nt_rf08s_1key']
     if sys.platform == "win32":
         tools = [x+'.exe' for x in tools]
     missing_tools = [tool for tool in tools if not (default_cwd / tool).exists()]
@@ -3072,9 +3073,10 @@ class HWSlotList(DeviceRequiredUnit):
         enabled = self.cmd.get_enabled_slots()
         maxnamelength = 0
         slotnames = []
-        for slot in SlotNumber:
-            hfn = self.get_slot_name(slot, TagSenseType.HF)
-            lfn = self.get_slot_name(slot, TagSenseType.LF)
+        all_nicks = self.cmd.get_all_slot_nicks()
+        for slot_data in all_nicks:
+            hfn = {'baselen': len(slot_data['hf']), 'metalen': len(CC+C0), 'name': f'{CC}{slot_data["hf"]}{C0}'}
+            lfn = {'baselen': len(slot_data['lf']), 'metalen': len(CC+C0), 'name': f'{CC}{slot_data["lf"]}{C0}'}
             m = max(hfn['baselen'], lfn['baselen'])
             maxnamelength = m if m > maxnamelength else maxnamelength
             slotnames.append({'hf': hfn, 'lf': lfn})

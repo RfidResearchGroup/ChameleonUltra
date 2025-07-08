@@ -748,6 +748,41 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
+    def get_all_slot_nicks(self):
+        resp = self.device.send_cmd_sync(Command.GET_ALL_SLOT_NICKS, b'')
+
+        slots = []
+        i = 0
+        slot_index = 0
+
+        while i < len(resp.data) and slot_index < 8:
+            slot_names = {'hf': '', 'lf': ''}
+
+            if i < len(resp.data):
+                hf_len = resp.data[i]
+                i += 1
+                if hf_len > 0 and i + hf_len <= len(resp.data):
+                    slot_names['hf'] = resp.data[i:i + hf_len].decode(encoding="utf8", errors="ignore")
+                    i += hf_len
+                else:
+                    i += hf_len
+
+            if i < len(resp.data):
+                lf_len = resp.data[i]
+                i += 1
+                if lf_len > 0 and i + lf_len <= len(resp.data):
+                    slot_names['lf'] = resp.data[i:i + lf_len].decode(encoding="utf8", errors="ignore")
+                    i += lf_len
+                else:
+                    i += lf_len
+
+            slots.append(slot_names)
+            slot_index += 1
+
+        resp.parsed = slots
+        return resp
+
+    @expect_response(Status.SUCCESS)
     def delete_slot_tag_nick(self, slot: SlotNumber, sense_type: TagSenseType):
         """
         Delete the nick name of the slot.

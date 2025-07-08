@@ -13,6 +13,7 @@ class Command(enum.IntEnum):
 
     SET_SLOT_TAG_NICK = 1007
     GET_SLOT_TAG_NICK = 1008
+    GET_ALL_SLOT_NICKS = 1038
 
     SLOT_DATA_CONFIG_SAVE = 1009
 

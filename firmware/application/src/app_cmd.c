@@ -1139,6 +1139,45 @@ static data_frame_tx_t *cmd_processor_get_slot_tag_nick(uint16_t cmd, uint16_t s
     return data_frame_make(cmd, STATUS_SUCCESS, buffer[0], &buffer[1]);
 }
 
+static data_frame_tx_t *cmd_processor_get_all_slot_nicks(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t response_buffer[TAG_MAX_SLOT_NUM * 2 * 37]; // Max possible size: 8 slots * 2 sense types * (1 byte length + 36 bytes nick)
+    uint16_t response_length = 0;
+
+    for (uint8_t slot = 0; slot < TAG_MAX_SLOT_NUM; slot++) {
+        uint8_t hf_buffer[36];
+        fds_slot_record_map_t hf_map_info;
+        get_fds_map_by_slot_sense_type_for_nick(slot, TAG_SENSE_HF, &hf_map_info);
+        uint16_t hf_buffer_length = sizeof(hf_buffer);
+        bool hf_ret = fds_read_sync(hf_map_info.id, hf_map_info.key, &hf_buffer_length, hf_buffer);
+
+        if (hf_ret && hf_buffer_length > 0) {
+            response_buffer[response_length++] = hf_buffer[0];
+            for (uint8_t i = 1; i <= hf_buffer[0] && i < hf_buffer_length; i++) {
+                response_buffer[response_length++] = hf_buffer[i];
+            }
+        } else {
+            response_buffer[response_length++] = 0;
+        }
+
+        uint8_t lf_buffer[36];
+        fds_slot_record_map_t lf_map_info;
+        get_fds_map_by_slot_sense_type_for_nick(slot, TAG_SENSE_LF, &lf_map_info);
+        uint16_t lf_buffer_length = sizeof(lf_buffer);
+        bool lf_ret = fds_read_sync(lf_map_info.id, lf_map_info.key, &lf_buffer_length, lf_buffer);
+
+        if (lf_ret && lf_buffer_length > 0) {
+            response_buffer[response_length++] = lf_buffer[0];
+            for (uint8_t i = 1; i <= lf_buffer[0] && i < lf_buffer_length; i++) {
+                response_buffer[response_length++] = lf_buffer[i];
+            }
+        } else {
+            response_buffer[response_length++] = 0;
+        }
+    }
+
+    return data_frame_make(cmd, STATUS_SUCCESS, response_length, response_buffer);
+}
+
 static data_frame_tx_t *cmd_processor_delete_slot_tag_nick(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length != 2) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
@@ -1376,6 +1415,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_DEVICE_CAPABILITIES,      NULL,                        cmd_processor_get_device_capabilities,       NULL                   },
     {    DATA_CMD_GET_BLE_PAIRING_ENABLE,       NULL,                        cmd_processor_get_ble_pairing_enable,        NULL                   },
     {    DATA_CMD_SET_BLE_PAIRING_ENABLE,       NULL,                        cmd_processor_set_ble_pairing_enable,        NULL                   },
+    {    DATA_CMD_GET_ALL_SLOT_NICKS,           NULL,                        cmd_processor_get_all_slot_nicks,            NULL                   },
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
