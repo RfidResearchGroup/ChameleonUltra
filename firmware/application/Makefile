@@ -30,6 +30,7 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/nfctag/hf/nfc_mf1.c \
   $(PROJ_DIR)/rfid/nfctag/hf/nfc_mf0_ntag.c \
   $(PROJ_DIR)/rfid/nfctag/lf/lf_tag_em.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/lf_tag_viking.c \
   $(PROJ_DIR)/utils/dataframe.c \
   $(PROJ_DIR)/utils/delayed_reset.c \
   $(PROJ_DIR)/utils/fds_util.c \
@@ -332,6 +333,7 @@ ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
     $(PROJ_DIR)/rfid/reader/lf/data_utils.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_125khz_radio.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_em410x_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_viking_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_reader_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_reader_main.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_t55xx_data.c \

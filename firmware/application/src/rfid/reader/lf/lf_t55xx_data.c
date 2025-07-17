@@ -203,8 +203,9 @@ void T55xx_Send_Cmd(uint8_t opcode, uint8_t usepassword, uint32_t password, uint
  *
  * @param passwd The password for the final encryption (also the current password of the card) (is a pointer, 4 -byte width small end byte sequence storage)
  * @param datas After the data of EM410X, you need to call the EM410X_ENCODER calculation
+ * @param config The config block (like 0x00148050)
  */
-void T55xx_Write_data(uint8_t *passwd, uint8_t *datas) {
+void T55xx_Write_data(uint8_t *passwd, uint8_t *datas, uint32_t config) {
     uint32_t blk1data = 0, blk2data = 0, u32passwd = 0;
     //Extract the data and passwords of two blocks
     for (uint8_t dataindex = 0; dataindex < 4; dataindex++) {
@@ -221,7 +222,7 @@ void T55xx_Write_data(uint8_t *passwd, uint8_t *datas) {
     T55xx_Send_Cmd(2, 1, u32passwd, 0, 1, u32passwd, 7);        // 0 area 7 blocks to write the current password (password)
     T55xx_Send_Cmd(2, 1, u32passwd, 0, 1, u32passwd, 7);        // 0 area 7 blocks to write the current password (password)
     //Then write to the control area
-    T55xx_Send_Cmd(2, 1, u32passwd, 0, 1, 0X00148050, 0);       // 0 area 0 blocks are written in the current password00148050 (control zone)
+    T55xx_Send_Cmd(2, 1, u32passwd, 0, 1, config, 0);       // 0 area 0 blocks are written in the current password00148050 (control zone)
     //Then write the data
     T55xx_Send_Cmd(2, 1, u32passwd, 0, 1, blk1data, 1);         // 0 area 1 block is written in the current passwordblk1data (data)
     T55xx_Send_Cmd(3, 1, u32passwd, 0, 1, blk1data, 1);         //zone 1 1 block is written in the current passwordblk1data (data)
@@ -232,7 +233,7 @@ void T55xx_Write_data(uint8_t *passwd, uint8_t *datas) {
     // T55xx_Send_Cmd(3, 1, u32passwd, 0, 1, 0X60000800, 3);    //zone 1 3 blocks are written in the current password60000800 (radio frequency parameter)
 
     //Then write again with non -password instructions
-    T55xx_Send_Cmd(2, 0, 0, 0, 1, 0X00148050, 0);               // 0 area 0 block writing00148050 (control zone)
+    T55xx_Send_Cmd(2, 0, 0, 0, 1, config, 0);               // 0 area 0 block writing00148050 (control zone)
     T55xx_Send_Cmd(2, 0, 0, 0, 1, blk1data, 1);                 // 0 area 1 pieceblk1data (data)
     T55xx_Send_Cmd(2, 0, 0, 0, 1, blk2data, 2);                 // 0 area 2 pieces of writingblk2data (data)
     T55xx_Send_Cmd(0, 0, 0, 0, 0, 0, 0);                        //Restart card

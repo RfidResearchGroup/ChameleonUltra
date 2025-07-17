@@ -510,6 +510,54 @@ class ChameleonCMD:
         resp.parsed = resp.data
         return resp
 
+    @expect_response(Status.LF_TAG_OK)
+    def viking_scan(self):
+        """
+        Read the card number of VIKING.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.VIKING_SCAN)
+        resp.parsed = resp.data
+        return resp
+    
+    @expect_response(Status.LF_TAG_OK)
+    def viking_write_to_t55xx(self, id_bytes: bytes):
+        """
+        Write VIKING card number into T55XX.
+
+        :param id_bytes: ID card number
+        :return:
+        """
+        new_key = b'\x20\x20\x66\x66'
+        old_keys = [b'\x51\x24\x36\x48', b'\x19\x92\x04\x27']
+        if len(id_bytes) != 4:
+            raise ValueError("The id bytes length must equal 4")
+        data = struct.pack(f'!4s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.VIKING_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.SUCCESS)
+    def viking_set_emu_id(self, id: bytes):
+        """
+        Set the card number simulated by VIKING.
+
+        :param id_bytes: byte of the card number
+        :return:
+        """
+        if len(id) != 4:
+            raise ValueError("The id bytes length must equal 4")
+        data = struct.pack('4s', id)
+        return self.device.send_cmd_sync(Command.VIKING_SET_EMU_ID, data)
+
+    @expect_response(Status.SUCCESS)
+    def viking_get_emu_id(self):
+        """
+            Get the simulated VIKING card id
+        """
+        resp = self.device.send_cmd_sync(Command.VIKING_GET_EMU_ID)
+        resp.parsed = resp.data
+        return resp
+
     @expect_response(Status.SUCCESS)
     def mf1_set_detection_enable(self, enabled: bool):
         """

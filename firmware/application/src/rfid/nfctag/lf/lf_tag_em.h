@@ -16,7 +16,7 @@
 #define LF_EM410X_TAG_ID_SIZE       5
 
 
-void lf_tag_125khz_sense_switch(bool enable);
+void lf_tag_125khz_em_sense_switch(bool enable);
 int lf_tag_em410x_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 int lf_tag_em410x_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 bool lf_tag_em410x_data_factory(uint8_t slot, tag_specific_type_t tag_type);

@@ -625,6 +625,21 @@ static void btn_fn_copy_ic_uid(void) {
                 offline_status_error();
             }
             break;
+        case TAG_TYPE_VIKING:
+            status = PcdScanViking(id_buffer);
+
+            if (status == STATUS_LF_TAG_OK) {
+                tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_VIKING);
+                memcpy(buffer->buffer, id_buffer, LF_VIKING_TAG_ID_SIZE);
+                tag_emulation_load_by_buffer(TAG_TYPE_VIKING, false);
+                NRF_LOG_INFO("Offline LF uid copied")
+                lf_copy_succeeded = true;
+                offline_status_ok();
+            } else {
+                NRF_LOG_INFO("No LF tag found");
+                offline_status_error();
+            }
+            break;
         case TAG_TYPE_UNDEFINED:
             // empty LF slot, nothing to do, move on to HF
             break;

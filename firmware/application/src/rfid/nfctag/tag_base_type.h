@@ -44,6 +44,7 @@ typedef enum {
     // Presco
     // Visa2000
     // Viking
+    TAG_TYPE_VIKING = 107,
     // Noralsy
     // Jablotron
 
@@ -103,7 +104,8 @@ typedef enum {
     {OLD_TAG_TYPE_NTAG_216, TAG_TYPE_NTAG_216}
 
 #define TAG_SPECIFIC_TYPE_LF_VALUES \
-    TAG_TYPE_EM410X
+    TAG_TYPE_EM410X,\
+    TAG_TYPE_VIKING
 
 #define TAG_SPECIFIC_TYPE_HF_VALUES \
     TAG_TYPE_MIFARE_Mini,\

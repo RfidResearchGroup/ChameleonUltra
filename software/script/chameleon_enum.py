@@ -73,6 +73,8 @@ class Command(enum.IntEnum):
 
     EM410X_SCAN = 3000
     EM410X_WRITE_TO_T55XX = 3001
+    VIKING_SCAN = 3002
+    VIKING_WRITE_TO_T55XX = 3003
 
     MF1_WRITE_EMU_BLOCK_DATA = 4000
     HF14A_SET_ANTI_COLL_DATA = 4001
@@ -113,6 +115,8 @@ class Command(enum.IntEnum):
 
     EM410X_SET_EMU_ID = 5000
     EM410X_GET_EMU_ID = 5001
+    VIKING_SET_EMU_ID = 5002
+    VIKING_GET_EMU_ID = 5003
 
 
 @enum.unique
@@ -131,6 +135,8 @@ class Status(enum.IntEnum):
     LF_TAG_OK = 0x40
     # Unable to search for a valid EM410X label
     EM410X_TAG_NO_FOUND = 0x41
+    # Unable to search for a valid VIKING label
+    VIKING_TAG_NO_FOUND = 0x42
 
     # The parameters passed by the BLE instruction are wrong, or the parameters passed
     # by calling some functions are wrong
@@ -167,6 +173,8 @@ class Status(enum.IntEnum):
             return "LF tag operation succeeded"
         elif self == Status.EM410X_TAG_NO_FOUND:
             return "EM410x tag no found"
+        elif self == Status.VIKING_TAG_NO_FOUND:
+            return "Viking tag not found"
         elif self == Status.PAR_ERR:
             return "API request fail, param error"
         elif self == Status.DEVICE_MODE_ERROR:
@@ -245,6 +253,7 @@ class TagSpecificType(enum.IntEnum):
     # Presco
     # Visa2000
     # Viking
+    VIKING = 107
     # Noralsy
     # Jablotron
 
@@ -313,6 +322,8 @@ class TagSpecificType(enum.IntEnum):
             return "Undefined"
         elif self == TagSpecificType.EM410X:
             return "EM410X"
+        elif self == TagSpecificType.VIKING:
+            return "VIKING"
         elif self == TagSpecificType.MIFARE_Mini:
             return "Mifare Mini"
         elif self == TagSpecificType.MIFARE_1024:

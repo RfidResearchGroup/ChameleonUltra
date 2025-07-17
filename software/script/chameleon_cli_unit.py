@@ -403,6 +403,25 @@ class LFEMIdArgsUnit(DeviceRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         raise NotImplementedError("Please implement this")
 
+class LFVikingIdArgsUnit(DeviceRequiredUnit):
+    @staticmethod
+    def add_card_arg(parser: ArgumentParserNoExit, required=False):
+        parser.add_argument("--id", type=str, required=required, help="Viking tag id", metavar="<hex>")
+        return parser
+
+    def before_exec(self, args: argparse.Namespace):
+        if super().before_exec(args):
+            if args.id is not None:
+                if not re.match(r"^[a-fA-F0-9]{8}$", args.id):
+                    raise ArgsParserError("ID must include 8 HEX symbols")
+            return True
+        return False
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        raise NotImplementedError("Please implement this")
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError("Please implement this")
 
 class TagTypeArgsUnit(DeviceRequiredUnit):
     @staticmethod
@@ -433,6 +452,7 @@ hf_mfu = hf.subgroup('mfu', 'MIFARE Ultralight / NTAG commands')
 lf = root.subgroup('lf', 'Low Frequency commands')
 lf_em = lf.subgroup('em', 'EM commands')
 lf_em_410x = lf_em.subgroup('410x', 'EM410x commands')
+lf_viking = lf.subgroup('viking', 'Viking commands')
 
 
 @root.command('clear')
@@ -3025,9 +3045,14 @@ class HWSlotList(DeviceRequiredUnit):
                 if current != slot:
                     self.cmd.set_active_slot(slot)
                     current = slot
-                id = self.cmd.em410x_get_emu_id()
-                # print('    - EM 410X emulator settings:')
-                print(f'      {"ID:":40}{CY}{id.hex().upper()}{C0}')
+                if lf_tag_type == TagSpecificType.EM410X:
+                    id = self.cmd.em410x_get_emu_id()
+                    # print('    - EM 410X emulator settings:')
+                    print(f'      {"ID:":40}{CY}{id.hex().upper()}{C0}')
+                if lf_tag_type == TagSpecificType.VIKING:
+                    id = self.cmd.viking_get_emu_id()
+                    # print('    - Viking emulator settings:')
+                    print(f'      {"ID:":40}{CY}{id.hex().upper()}{C0}')
         if current != selected:
             self.cmd.set_active_slot(selected)
 
@@ -3164,6 +3189,52 @@ class LFEM410xEconfig(SlotIndexArgsAndGoUnit, LFEMIdArgsUnit):
             print(' - Get em410x tag id success.')
             print(f'ID: {response.hex()}')
 
+@lf_viking.command('read')
+class LFVikingRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Scan Viking tag and print id'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        id = self.cmd.viking_scan()
+        print(f" - VIKING ID(8H): {CG}{id.hex()}{C0}")
+
+@lf_viking.command('write')
+class LFVikingWriteT55xx(LFVikingIdArgsUnit, ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Write Viking id to t55xx'
+        return self.add_card_arg(parser, required=True)
+
+    def before_exec(self, args: argparse.Namespace):
+        b1 = super(LFVikingIdArgsUnit, self).before_exec(args)
+        b2 = super(ReaderRequiredUnit, self).before_exec(args)
+        return b1 and b2
+
+    def on_exec(self, args: argparse.Namespace):
+        id_hex = args.id
+        id_bytes = bytes.fromhex(id_hex)
+        self.cmd.viking_write_to_t55xx(id_bytes)
+        print(f" - VIKING ID(8H): {id_hex} write done.")
+
+@lf_viking.command('econfig')
+class LFVikingEconfig(SlotIndexArgsAndGoUnit, LFVikingIdArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Set simulated Viking card id'
+        self.add_slot_args(parser)
+        self.add_card_arg(parser)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.id is not None:
+            self.cmd.viking_set_emu_id(bytes.fromhex(args.id))
+            print(' - Set Viking tag id success.')
+        else:
+            response = self.cmd.viking_get_emu_id()
+            print(' - Get Viking tag id success.')
+            print(f'ID: {response.hex().upper()}')
 
 @hw_slot.command('nick')
 class HWSlotNick(SlotIndexArgsUnit, SenseTypeArgsUnit):

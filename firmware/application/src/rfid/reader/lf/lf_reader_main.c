@@ -27,6 +27,18 @@ uint8_t PcdScanEM410X(uint8_t *uid) {
 }
 
 /**
+ * Search Viking tag
+ */
+uint8_t PcdScanViking(uint8_t *uid) {
+    uint8_t ret = STATUS_VIKING_TAG_NO_FOUND;
+    if (viking_read(uid, g_timeout_readem_ms) == 1) {
+        ret = STATUS_LF_TAG_OK;
+    }
+    return ret;
+}
+
+
+/**
 * Check whether there is a specified UID tag on the current field
 */
 uint8_t check_write_ok(uint8_t *uid, uint8_t *newuid, uint8_t on_uid_diff_return) {
@@ -51,9 +63,9 @@ uint8_t check_write_ok(uint8_t *uid, uint8_t *newuid, uint8_t on_uid_diff_return
 }
 
 /**
-* Write T55XX tag
+* Write EM410X protocol to T55XX tag
 */
-uint8_t PcdWriteT55XX(uint8_t *uid, uint8_t *newkey, uint8_t *old_keys, uint8_t old_key_count) {
+uint8_t PcdWriteEM410XT55XX(uint8_t *uid, uint8_t *newkey, uint8_t *old_keys, uint8_t old_key_count) {
     uint8_t datas[8] = { 255 };
     uint8_t i;
 
@@ -96,7 +108,62 @@ uint8_t PcdWriteT55XX(uint8_t *uid, uint8_t *newkey, uint8_t *old_keys, uint8_t 
         newkey[3]
     );
     */
-    T55xx_Write_data(newkey, datas);
+    T55xx_Write_data(newkey, datas, 0x00148050); // RF/64,Manchester,2blocks,pwd.
+
+    stop_lf_125khz_radio();
+
+    // Read the verification and return the results of the card writing
+    // Do not read it here, you can check it by the upper machine
+    return STATUS_LF_TAG_OK;
+}
+
+/**
+* Write Viking protocol to T55XX tag
+*/
+uint8_t PcdWriteVikingT55XX(uint8_t *uid, uint8_t *newkey, uint8_t *old_keys, uint8_t old_key_count) {
+    uint8_t datas[8] = { 255 };
+    uint8_t i;
+
+    init_t55xx_hw();
+    start_lf_125khz_radio();
+
+    bsp_delay_ms(1);    // Delays for a while after starting the field
+
+    // keys Need at least two, one newkey, one Oldkey
+    // one key The length is 4 Byte
+    // uid newkey oldkeys * n
+
+    // The key transmitted in iterative,
+    // Reset T55XX tags
+    // printf("The old keys count: %d\r\n", old_key_count);
+    for (i = 0; i < old_key_count; i++) {
+        T55xx_Reset_Passwd(old_keys + (i * 4), newkey);
+        /*
+        printf("oldkey is: %02x%02x%02x%02x\r\n",
+            (old_keys + (i * 4))[0],
+            (old_keys + (i * 4))[1],
+            (old_keys + (i * 4))[2],
+            (old_keys + (i * 4))[3]
+        );*/
+    }
+
+    // In order to avoid the labels of a special control area,
+    // We use the new key here to reset the control area
+    T55xx_Reset_Passwd(newkey, newkey);
+
+    // The data encoded 410X is the block data to prepare for the card writing
+    viking_encoder(uid, datas);
+
+    // After the key is reset, perform the card writing operation
+    /*
+    printf("newkey is: %02x%02x%02x%02x\r\n",
+        newkey[0],
+        newkey[1],
+        newkey[2],
+        newkey[3]
+    );
+    */
+    T55xx_Write_data(newkey, datas, 0x00088050); // RF/32,Manchester,2blocks,pwd.
 
     stop_lf_125khz_radio();
 

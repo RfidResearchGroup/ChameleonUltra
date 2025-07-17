@@ -5,6 +5,7 @@
 #include "bsp_time.h"
 #include "bsp_delay.h"
 #include "lf_reader_data.h"
+#include "lf_em410x_data_i.h"
 #include "lf_em410x_data.h"
 #include "lf_125khz_radio.h"
 
@@ -17,17 +18,17 @@ NRF_LOG_MODULE_REGISTER();
 
 static RAWBUF_TYPE_S carddata;
 static volatile uint8_t dataindex = 0;          //Record changes along the number of times
-uint8_t cardbufbyte[CARD_BUF_BYTES_SIZE];   //Card data
+static uint8_t cardbufbyte[CARD_BUF_BYTES_SIZE];   //Card data
 
 #ifdef debug410x
-uint8_t datatest[256] = { 0x00 };
+static uint8_t datatest[256] = { 0x00 };
 #endif
 
 
 //Process card data, enter raw Buffer's starting position 2 position (21111 ...)
 //After processing the card data, put cardbuf, return 5 normal analysis
 //pdata is rawbuffer
-uint8_t mcst(RAWBUF_TYPE_S *Pdata) {
+static uint8_t mcst(RAWBUF_TYPE_S *Pdata) {
     uint8_t sync = 1;      //After the current interval process is processed, is it on the judgment line
     uint8_t cardindex = 0; //Record change number
     for (int i = Pdata->startbit; i < RAW_BUF_SIZE * 8; i++) {
@@ -329,7 +330,7 @@ uint8_t em410x_acquire(void) {
 }
 
 //GPIO interrupt recovery function is used to detect the descending edge
-void GPIO_INT0_callback(void) {
+static void GPIO_INT0_callback(void) {
     static uint32_t thistimelen = 0;
     thistimelen = get_lf_counter_value();
     if (thistimelen > 47) {
