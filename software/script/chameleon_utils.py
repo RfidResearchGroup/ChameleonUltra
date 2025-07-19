@@ -199,7 +199,7 @@ def execute_tool(tool_name, args):
 
     process = subprocess.Popen(
         cmd_recover_list,
-        cwd=default_cwd,
+        cwd=tempfile.gettempdir(),
         stdout=temp_output_file,
         stderr=subprocess.STDOUT,
     )

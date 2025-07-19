@@ -9,7 +9,6 @@ import argparse
 import timeit
 import sys
 import time
-from datetime import datetime
 import serial.tools.list_ports
 import threading
 import struct
@@ -1360,6 +1359,9 @@ class HFMFStaticEncryptedNested(ReaderRequiredUnit):
         acquire_datas = self.cmd.mf1_static_encrypted_nested_acquire(
             bytes.fromhex(args.key), args.sectors, args.starting_sector)
 
+        if not acquire_datas:
+            print('Failed to collect nonces, is card present and has backdoor?')
+
         uid = format(acquire_datas['uid'], 'x')
 
         key_map = {'A': {}, 'B': {}}
@@ -1377,7 +1379,7 @@ class HFMFStaticEncryptedNested(ReaderRequiredUnit):
             b_key_dic = f"keys_{uid}_{sector_name}_{format(acquire_datas['nts']['b'][sector]['nt'], 'x').zfill(8)}.dic"
             execute_tool('staticnested_2x1nt_rf08s', [a_key_dic, b_key_dic])
 
-            keys = open(os.path.join(default_cwd, b_key_dic.replace('.dic', '_filtered.dic'))).readlines()
+            keys = open(os.path.join(tempfile.gettempdir(), b_key_dic.replace('.dic', '_filtered.dic'))).readlines()
             keys_bytes = []
             for key in keys:
                 keys_bytes.append(bytes.fromhex(key.strip()))
@@ -1408,7 +1410,7 @@ class HFMFStaticEncryptedNested(ReaderRequiredUnit):
                     continue
                 else:
                     print('Failed to find A key by fast method, trying all possible keys')
-                    keys = open(os.path.join(default_cwd, a_key_dic.replace('.dic', '_filtered.dic'))).readlines()
+                    keys = open(os.path.join(tempfile.gettempdir(), a_key_dic.replace('.dic', '_filtered.dic'))).readlines()
                     keys_bytes = []
                     for key in keys:
                         keys_bytes.append(bytes.fromhex(key.strip()))
@@ -1425,7 +1427,7 @@ class HFMFStaticEncryptedNested(ReaderRequiredUnit):
             else:
                 print('Failed to find key')
 
-        for file in glob.glob(str(default_cwd) + '/*.dic'):
+        for file in glob.glob(tempfile.gettempdir() + '/keys_*.dic'):
             os.remove(file)
 
         print_key_table(key_map)
@@ -2263,7 +2265,7 @@ class HFMFUVERSION(DeviceRequiredUnit):
 class HFMFUVERSION(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = 'Read MIFARE Ultralight / NTAG counter value.'
+        parser.description = 'Write MIFARE Ultralight / NTAG counter value.'
         parser.add_argument('-c', '--counter', type=int, required=True, help="Counter index.")
         parser.add_argument('-v', '--value', type=int, required=True, help="Counter value (24-bit).")
         parser.add_argument('-t', '--reset-tearing', action='store_true', help="Reset tearing event flag.")
