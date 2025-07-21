@@ -8,6 +8,7 @@
 #include "lf_viking_data_i.h"
 #include "lf_viking_data.h"
 #include "lf_125khz_radio.h"
+#include "lf_manchester.h"
 
 #define NRF_LOG_MODULE_NAME viking
 #include "nrf_log.h"
@@ -21,73 +22,6 @@ static volatile uint16_t dataindex = 0;          //Record changes along the numb
 static volatile uint16_t timeindex = 0;          // Each transition we increment index.
 #endif
 static uint8_t cardbufbyte[CARD_BUF_BYTES_SIZE];   //Card data
-
-//Process card data, enter raw Buffer's starting position in Non-sync state.
-//After processing the card data, put cardbuf, return 5 normal analysis
-//pdata is rawbuffer
-static uint8_t mcst(RAWBUF_TYPE_S *Pdata) {
-    uint8_t sync = 0;
-    uint8_t cardindex = 0; //Record change number
-    for (int i = Pdata->startbit; i < RAW_BUF_SIZE * 8; i++) {
-        uint8_t thisbit = readbit(Pdata->rawa, Pdata->rawb, i);
-        switch (sync) {
-            case 1: //Synchronous state
-                switch (thisbit) {
-                    case 0: //TheSynchronousState1T,Add1Digit0,StillSynchronize
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 0);
-                        cardindex++;
-                        break;
-                    case 1: // Synchronous status 1.5T, add 1 digit 1, switch to non -synchronized state
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 1);
-                        cardindex++;
-                        sync = 0;
-                        break;
-                    case 2: //Synchronous2T,Add2Digits10,StillSynchronize
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 1);
-                        cardindex++;
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 0);
-                        cardindex++;
-                        break;
-                    default:
-                        #ifdef debugviking
-                        NRF_LOG_INFO("sync 1 err. i:%d ci:%d case:%d!\n", i, cardindex, thisbit);
-                        #endif
-                        return 0;
-                }
-                break;
-            case 0: //Non -synchronous state
-                switch (thisbit) {
-                    case 0: //1TInNonSynchronousState,Add1Digit1,StillNonSynchronous
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 1);
-                        cardindex++;
-                        break;
-                    case 1: // In non -synchronous status 1.5T, add 2 digits 10, switch to the synchronous state
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 1);
-                        cardindex++;
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 0);
-                        cardindex++;
-                        sync = 1;
-                        break;
-                    case 2: //The2TOfTheNonSynchronousState,ItIsImpossibleToOccur,ReportAnError
-                        #ifdef debugviking
-                        NRF_LOG_INFO("sync 0 err. i:%d ci:%d case:%d!\n", i, cardindex, thisbit);
-                        #endif
-                        return 0;
-                    default:
-                        #ifdef debugviking
-                        NRF_LOG_INFO("sync 0 err. i:%d ci:%d case:%d!\n", i, cardindex, thisbit);
-                        #endif
-                        return 0;
-                }
-                break;
-        }
-        if (cardindex >= CARD_BUF_SIZE * 8)
-            break;
-    }
-
-
-    return 1;
-}
 
 //Process card, find school inspection and determine whether it is normal
 uint8_t viking_decoder(uint8_t *pData, uint8_t size, uint8_t *pOut) {
@@ -217,7 +151,7 @@ uint8_t viking_acquire(void) {
             NRF_LOG_INFO("timebuf: %d\r\n", timeindex);
             #endif
 
-            if (mcst(&carddata) == 1) {
+            if (mcst(carddata.rawa, carddata.rawb, carddata.hexbuf, carddata.startbit, RAW_BUF_SIZE, 0) == 1) {
 
                 #ifdef debugviking
                 // Bits for each byte are backwards.

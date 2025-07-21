@@ -8,6 +8,7 @@
 #include "lf_em410x_data_i.h"
 #include "lf_em410x_data.h"
 #include "lf_125khz_radio.h"
+#include "lf_manchester.h"
 
 #define NRF_LOG_MODULE_NAME em410x
 #include "nrf_log.h"
@@ -23,63 +24,6 @@ static uint8_t cardbufbyte[CARD_BUF_BYTES_SIZE];   //Card data
 #ifdef debug410x
 static uint8_t datatest[256] = { 0x00 };
 #endif
-
-
-//Process card data, enter raw Buffer's starting position 2 position (21111 ...)
-//After processing the card data, put cardbuf, return 5 normal analysis
-//pdata is rawbuffer
-static uint8_t mcst(RAWBUF_TYPE_S *Pdata) {
-    uint8_t sync = 1;      //After the current interval process is processed, is it on the judgment line
-    uint8_t cardindex = 0; //Record change number
-    for (int i = Pdata->startbit; i < RAW_BUF_SIZE * 8; i++) {
-        uint8_t thisbit = readbit(Pdata->rawa, Pdata->rawb, i);
-        switch (sync) {
-            case 1: //Synchronous state
-                switch (thisbit) {
-                    case 0: //TheSynchronousState1T,Add1Digit0,StillSynchronize
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 0);
-                        cardindex++;
-                        break;
-                    case 1: // Synchronous status 1.5T, add 1 digit 1, switch to non -synchronized state
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 1);
-                        cardindex++;
-                        sync = 0;
-                        break;
-                    case 2: //Synchronous2T,Add2Digits10,StillSynchronize
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 1);
-                        cardindex++;
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 0);
-                        cardindex++;
-                        break;
-                    default:
-                        return 0;
-                }
-                break;
-            case 0: //Non -synchronous state
-                switch (thisbit) {
-                    case 0: //1TInNonSynchronousState,Add1Digit1,StillNonSynchronous
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 1);
-                        cardindex++;
-                        break;
-                    case 1: // In non -synchronous status 1.5T, add 2 digits 10, switch to the synchronous state
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 1);
-                        cardindex++;
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 0);
-                        cardindex++;
-                        sync = 1;
-                        break;
-                    case 2: //The2TOfTheNonSynchronousState,ItIsImpossibleToOccur,ReportAnError
-                        return 0;
-                    default:
-                        return 0;
-                }
-                break;
-        }
-        if (cardindex >= CARD_BUF_SIZE * 8)
-            break;
-    }
-    return 1;
-}
 
 //Process card, find school inspection and determine whether it is normal
 uint8_t em410x_decoder(uint8_t *pData, uint8_t size, uint8_t *pOut) {
@@ -300,7 +244,7 @@ uint8_t em410x_acquire(void) {
         if (carddata.startbit != 255 && carddata.startbit < (RAW_BUF_SIZE * 8) - 64) {
             //Guarantee card data can be fully analyzed
             //NRF_LOG_INFO("do mac,start: %d\r\n",startbit);
-            if (mcst(&carddata) == 1) {
+            if (mcst(carddata.rawa, carddata.rawb, carddata.hexbuf, carddata.startbit, RAW_BUF_SIZE, 1) == 1) {
                 //Card normal analysis
 #ifdef debug410x
                 {
