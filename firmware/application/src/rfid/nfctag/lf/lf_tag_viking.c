@@ -195,9 +195,6 @@ uint64_t viking_id_to_memory64(uint8_t id[4]) {
     return memory.u64;
 }
 
-// Currently defined in lf_tag_em.c
-bool lf_is_field_exists(void);
-
 static void timer_ce_handler(nrf_timer_event_t event_type, void *p_context) {
     bool mod;
     switch (event_type) {

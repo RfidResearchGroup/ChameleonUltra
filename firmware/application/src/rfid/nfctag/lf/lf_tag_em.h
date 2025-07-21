@@ -1,9 +1,10 @@
-#ifndef __LF_TAG_H
-#define __LF_TAG_H
+#ifndef __LF_TAG_EM_H
+#define __LF_TAG_EM_H
 
 #include <stdbool.h>
 #include "rfid_main.h"
 #include "tag_emulation.h"
+#include "lf_tag.h"
 
 
 /**
@@ -20,6 +21,5 @@ void lf_tag_125khz_em_sense_switch(bool enable);
 int lf_tag_em410x_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 int lf_tag_em410x_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 bool lf_tag_em410x_data_factory(uint8_t slot, tag_specific_type_t tag_type);
-bool lf_is_field_exists(void);
 
 #endif

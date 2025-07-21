@@ -196,16 +196,6 @@ uint64_t em410x_id_to_memory64(uint8_t id[5]) {
     return memory.u64;
 }
 
-/**
-* @brief Judgment field status
- */
-bool lf_is_field_exists(void) {
-    nrf_drv_lpcomp_enable();
-    bsp_delay_us(30);                                   // Display for a period of time and sampling to avoid misjudgment
-    nrf_lpcomp_task_trigger(NRF_LPCOMP_TASK_SAMPLE);    //Trigger a sampling
-    return nrf_lpcomp_result_get() == 1;                //Determine the sampling results of the LF field status
-}
-
 static void timer_ce_handler(nrf_timer_event_t event_type, void *p_context) {
     bool mod;
     switch (event_type) {

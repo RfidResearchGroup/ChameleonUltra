@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include "rfid_main.h"
 #include "tag_emulation.h"
-
+#include "lf_tag.h"
 
 /**
  * Low -frequency analog card adjustment Manchester signal
@@ -13,10 +13,6 @@
 #define LF_125KHZ_VIKING_BIT_SIZE   64
 #define LF_125KHZ_VIKING_BIT_CLOCK  128     // RF/32
 #define LF_VIKING_TAG_ID_SIZE       4
-
-// REMOVED, as not specific...
-// #define LF_125KHZ_BROADCAST_MAX     10      // 32.768ms once, about 31 times in one second
-// bool lf_is_field_exists(void);
 
 int lf_tag_viking_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 int lf_tag_viking_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
