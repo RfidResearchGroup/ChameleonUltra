@@ -1,6 +1,7 @@
 #ifndef __VIKING_DATA_H__
 #define __VIKING_DATA_H__
 
+// #define debugviking 1
 
 #include "data_utils.h"
 #include "bsp_time.h"

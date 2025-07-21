@@ -1,5 +1,3 @@
-#define debugviking 1
-
 #ifdef debugviking
 #include <stdio.h>
 #endif
@@ -19,9 +17,10 @@ NRF_LOG_MODULE_REGISTER();
 
 static RAWBUF_TYPE_S carddata;
 static volatile uint16_t dataindex = 0;          //Record changes along the number of times
+#ifdef debugviking
+static volatile uint16_t timeindex = 0;          // Each transition we increment index.
+#endif
 static uint8_t cardbufbyte[CARD_BUF_BYTES_SIZE];   //Card data
-
-static volatile uint16_t timeindex = 0;
 
 //Process card data, enter raw Buffer's starting position in Non-sync state.
 //After processing the card data, put cardbuf, return 5 normal analysis
@@ -50,7 +49,9 @@ static uint8_t mcst(RAWBUF_TYPE_S *Pdata) {
                         cardindex++;
                         break;
                     default:
+                        #ifdef debugviking
                         NRF_LOG_INFO("sync 1 err. i:%d ci:%d case:%d!\n", i, cardindex, thisbit);
+                        #endif
                         return 0;
                 }
                 break;
@@ -68,10 +69,14 @@ static uint8_t mcst(RAWBUF_TYPE_S *Pdata) {
                         sync = 1;
                         break;
                     case 2: //The2TOfTheNonSynchronousState,ItIsImpossibleToOccur,ReportAnError
+                        #ifdef debugviking
                         NRF_LOG_INFO("sync 0 err. i:%d ci:%d case:%d!\n", i, cardindex, thisbit);
+                        #endif
                         return 0;
                     default:
+                        #ifdef debugviking
                         NRF_LOG_INFO("sync 0 err. i:%d ci:%d case:%d!\n", i, cardindex, thisbit);
+                        #endif
                         return 0;
                 }
                 break;
@@ -168,9 +173,13 @@ uint8_t viking_acquire(void) {
                     continue;
                 }
                 if (readbit(carddata.rawa, carddata.rawb, i -1) == 0) {
+                    #ifdef debugviking
                     NRF_LOG_INFO("000102 card\r\n");
+                    #endif
                 } else {
+                    #ifdef debugviking
                     NRF_LOG_INFO("x30102 card\r\n");
+                    #endif                    
                     writebit(carddata.rawa, carddata.rawb, i-1, 0);
                 }
             } else { // not valid start.
@@ -194,54 +203,68 @@ uint8_t viking_acquire(void) {
             //Guarantee card data can be fully analyzed
 
             #ifdef debugviking
+            // Capture 64 bits, starting at "startbit".
             char xx[64] = {0};
             for (int i = 0; i < 64; i++) {
                 xx[i] = readbit(carddata.rawa, carddata.rawb, i + carddata.startbit);
             }
             NRF_LOG_HEXDUMP_INFO(xx, 64);
+            NRF_LOG_INFO("mcst,start: %d\r\n",carddata.startbit); // Tell the startbit.
 
-            NRF_LOG_INFO("mcst,start: %d\r\n",carddata.startbit);
-
+            // Dump the first 128 timings.
             NRF_LOG_HEXDUMP_INFO(carddata.timebuf, 64);
             NRF_LOG_HEXDUMP_INFO(&carddata.timebuf[64], 64);
             NRF_LOG_INFO("timebuf: %d\r\n", timeindex);
             #endif
 
             if (mcst(&carddata) == 1) {
-                //Card normal analysis
+
+                #ifdef debugviking
+                // Bits for each byte are backwards.
                 char yy[CARD_BUF_SIZE] = {0};
                 for (int i=0; i<CARD_BUF_SIZE;i++) {
                     for (int j=0;j<8;j++) {
                         yy[i] |= getbit(carddata.hexbuf[i], j) << (7-j);
                     }
                 }
-                NRF_LOG_HEXDUMP_INFO(yy, CARD_BUF_SIZE); // BITS ARE BACKWARDS.
+                NRF_LOG_HEXDUMP_INFO(yy, CARD_BUF_SIZE);
+                #endif
 
                 if (viking_decoder(carddata.hexbuf, CARD_BUF_SIZE, cardbufbyte)) {
+                    #ifdef debugviking
                     NRF_LOG_INFO("///Valid viking card\r\n");
+                    #endif
+                
                     //Card data check passes
                     dataindex = 0;
-                    timeindex = 0;
+                    #ifdef debugviking
+                    timeindex = 0;  // Reset timeindex to start capturing new timings.
+                    #endif
                     return 1;
                 } else {
+                    #ifdef debugviking
                     NRF_LOG_INFO("///Invalid viking card\r\n");
+                    #endif
                 }
             }
         } else {
             #ifdef debugviking
+            // No start bit found, dump first 128 bits.
             char xx[128] = {0};
             for (int i = 0; i < 128; i++) {
                 xx[i] = readbit(carddata.rawa, carddata.rawb, i);
             }
-            NRF_LOG_HEXDUMP_INFO(xx, 128);
-
+            NRF_LOG_HEXDUMP_INFO(xx, 64);
+            NRF_LOG_HEXDUMP_INFO(&xx[64], 64);
             NRF_LOG_INFO("NO start\r\n");
             #endif
         }
 
         // Start a new cycle
         dataindex = 0;
-        timeindex = 0;
+        #ifdef debugviking
+        timeindex = 0; // Reset timeindex to start capturing new timings.
+        #endif
     }
     return 0;
 }
@@ -269,7 +292,9 @@ static void GPIO_INT0_callback(void) {
                 cons_temp = 3;
             }
 
-            if (cons_temp>3) {
+            if (cons_temp>3) { // Impossible in Manchester, so we must have missed a transition.
+                // Typically what I see is that we missed a `cons_temp=1` transition, so let's
+                // treat the missing signal as 48 cycles.
                 writebit(carddata.rawa, carddata.rawb, dataindex, 1);
                 dataindex++;
                 cons_temp -= 4;
@@ -279,23 +304,27 @@ static void GPIO_INT0_callback(void) {
                 writebit(carddata.rawa, carddata.rawb, dataindex, cons_temp);
             }
             
+            #ifdef debugviking
             if (timeindex < RAW_BUF_SIZE*8) {
-                if (thistimelen>255) {
+                if (thistimelen > 255) { // Max time we can store is 255.
                     thistimelen = 255;
                 }
-                carddata.timebuf[timeindex++] = thistimelen;
+                carddata.timebuf[timeindex++] = thistimelen; // Store duration since last transition.
             }
+            #endif
 
             dataindex++;
         }
         clear_lf_counter_value();
     } else {
+        #ifdef debugviking
         if (timeindex < RAW_BUF_SIZE*8) {
-            if (thistimelen>255) {
+            if (thistimelen>255) { // Max time we can store is 255.
                 thistimelen = 255;
             }
-            carddata.timebuf[timeindex++] = thistimelen;
+            carddata.timebuf[timeindex++] = thistimelen;  // Store duration since last transition.
         }
+        #endif
     }
 
     uint16_t counter = 0;
@@ -342,7 +371,9 @@ uint8_t viking_read(uint8_t *uid, uint32_t timeout_ms) {
     }
 
     dataindex = 0;  // After the end, keep in mind the index of resetting data
+    #ifdef debugviking    
     timeindex = 0;
+    #endif
 
     bsp_return_timer(p_at);
     p_at = NULL;
