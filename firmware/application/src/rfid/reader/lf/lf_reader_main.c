@@ -19,7 +19,7 @@ uint32_t g_timeout_readem_ms = 500;
 * Search EM410X tag
 */
 uint8_t PcdScanEM410X(uint8_t *uid) {
-    uint8_t ret = STATUS_EM410X_TAG_NO_FOUND;
+    uint8_t ret = STATUS_LF_TAG_NO_FOUND;
     if (em410x_read(uid, g_timeout_readem_ms) == 1) {
         ret = STATUS_LF_TAG_OK;
     }
@@ -30,7 +30,7 @@ uint8_t PcdScanEM410X(uint8_t *uid) {
  * Search Viking tag
  */
 uint8_t PcdScanViking(uint8_t *uid) {
-    uint8_t ret = STATUS_VIKING_TAG_NO_FOUND;
+    uint8_t ret = STATUS_LF_TAG_NO_FOUND;
     if (viking_read(uid, g_timeout_readem_ms) == 1) {
         ret = STATUS_LF_TAG_OK;
     }
@@ -45,7 +45,7 @@ uint8_t check_write_ok(uint8_t *uid, uint8_t *newuid, uint8_t on_uid_diff_return
     // After the card is written, we need to read it once,
     // If the data I read is incorrect, it means that the writing fails
     if (PcdScanEM410X(newuid) != STATUS_LF_TAG_OK) {
-        return STATUS_EM410X_TAG_NO_FOUND;
+        return STATUS_LF_TAG_NO_FOUND;
     }
     // If you read the card number the same
     // Explanation is successful (maybe)

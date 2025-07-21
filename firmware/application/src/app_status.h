@@ -19,9 +19,7 @@
 // lf status
 /////////////////////////////////////////////////////////////////////
 #define     STATUS_LF_TAG_OK                        (0x40)  // Some of the low -frequency cards are successful!
-#define     STATUS_EM410X_TAG_NO_FOUND              (0x41)  // Can't search for valid EM410X tags
-#define     STATUS_VIKING_TAG_NO_FOUND              (0x42)  // Can't search for valid EM410X tags
-
+#define     STATUS_LF_TAG_NO_FOUND                  (0x41)  // Can't search for valid LF tags
 
 /////////////////////////////////////////////////////////////////////
 // other status
