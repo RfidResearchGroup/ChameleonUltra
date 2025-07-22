@@ -1171,7 +1171,7 @@ static void apply_sum_a0(void) {
 static int simulate_acquire_nonces(uint32_t uid, char* path) {
     time_t time1 = time(NULL);
     last_sample_clock = 0;
-    sample_period = 1000; // for simulation
+    sample_period = 1000; // for emulation
     hardnested_stage = CHECK_1ST_BYTES;
     bool acquisition_completed = false;
     uint32_t total_num_nonces = 0;

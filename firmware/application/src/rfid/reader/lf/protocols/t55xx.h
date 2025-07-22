@@ -1,0 +1,65 @@
+#pragma once
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include <stdint.h>
+
+#define T5577_BLOCK_COUNT 8
+
+// t5577 block 0 definitions, thanks proxmark3!
+#define T5577_POR_DELAY 0x00000001
+#define T5577_ST_TERMINATOR 0x00000008
+#define T5577_PWD 0x00000010
+#define T5577_MAXBLOCK_SHIFT 5
+#define T5577_AOR 0x00000200
+#define T5577_PSKCF_RF_2 0
+#define T5577_PSKCF_RF_4 0x00000400
+#define T5577_PSKCF_RF_8 0x00000800
+#define T5577_MODULATION_DIRECT 0
+#define T5577_MODULATION_PSK1 0x00001000
+#define T5577_MODULATION_PSK2 0x00002000
+#define T5577_MODULATION_PSK3 0x00003000
+#define T5577_MODULATION_FSK1 0x00004000
+#define T5577_MODULATION_FSK2 0x00005000
+#define T5577_MODULATION_FSK1a 0x00006000
+#define T5577_MODULATION_FSK2a 0x00007000
+#define T5577_MODULATION_MANCHESTER 0x00008000
+#define T5577_MODULATION_BIPHASE 0x00010000
+#define T5577_MODULATION_DIPHASE 0x00018000
+#define T5577_X_MODE 0x00020000
+#define T5577_BITRATE_RF_8 0
+#define T5577_BITRATE_RF_16 0x00040000
+#define T5577_BITRATE_RF_32 0x00080000
+#define T5577_BITRATE_RF_40 0x000C0000
+#define T5577_BITRATE_RF_50 0x00100000
+#define T5577_BITRATE_RF_64 0x00140000
+#define T5577_BITRATE_RF_100 0x00180000
+#define T5577_BITRATE_RF_128 0x001C0000
+#define T5577_TESTMODE_DISABLED 0x60000000
+
+#define T5577_OPCODE_RESET 0x00
+#define T5577_OPCODE_PAGE0 0x02
+#define T5577_OPCODE_PAGE1 0x03
+#define T5577_EM410X_64_CONFIG (  \
+    T5577_BITRATE_RF_64 |         \
+    T5577_MODULATION_MANCHESTER | \
+    T5577_PWD |                   \
+    (2 << T5577_MAXBLOCK_SHIFT))
+
+#define T5577_HIDPROX_CONFIG ( \
+    T5577_BITRATE_RF_50 |      \
+    T5577_MODULATION_FSK2a |   \
+    T5577_PWD |                \
+    (3 << T5577_MAXBLOCK_SHIFT))
+
+void t55xx_write_data(uint32_t passwd, uint32_t *blks, uint8_t blk_count);
+void t55xx_reset_passwd(uint32_t old_passwd, uint32_t new_passwd);
+
+#ifdef __cplusplus
+}
+#endif

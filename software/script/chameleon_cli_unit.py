@@ -30,6 +30,7 @@ from chameleon_enum import Command, Status, SlotNumber, TagSenseType, TagSpecifi
 from chameleon_enum import MifareClassicWriteMode, MifareClassicPrngType, MifareClassicDarksideStatus, MfcKeyType
 from chameleon_enum import MifareUltralightWriteMode
 from chameleon_enum import AnimationMode, ButtonPressFunction, ButtonType, MfcValueBlockOperator
+from chameleon_enum import HIDFormat
 
 # NXP IDs based on https://www.nxp.com/docs/en/application-note/AN10833.pdf
 type_id_SAK_dict = {0x00: "MIFARE Ultralight Classic/C/EV1/Nano | NTAG 2xx",
@@ -200,15 +201,15 @@ class ReaderRequiredUnit(DeviceRequiredUnit):
     """
 
     def before_exec(self, args: argparse.Namespace):
-        if super().before_exec(args):
-            ret = self.cmd.is_device_reader_mode()
-            if ret:
-                return True
-            else:
-                self.cmd.set_device_reader_mode(True)
-                print("Switch to {  Tag Reader  } mode successfully.")
-                return True
-        return False
+        if not super().before_exec(args):
+            return False
+
+        if self.cmd.is_device_reader_mode():
+            return True
+
+        self.cmd.set_device_reader_mode(True)
+        print("Switch to {  Tag Reader  } mode successfully.")
+        return True
 
 
 class SlotIndexArgsUnit(DeviceRequiredUnit):
@@ -396,12 +397,11 @@ class LFEMIdArgsUnit(DeviceRequiredUnit):
         return parser
 
     def before_exec(self, args: argparse.Namespace):
-        if super().before_exec(args):
-            if args.id is not None:
-                if not re.match(r"^[a-fA-F0-9]{10}$", args.id):
-                    raise ArgsParserError("ID must include 10 HEX symbols")
-            return True
-        return False
+        if not super().before_exec(args):
+            return False
+        if args.id is None or not re.match(r"^[a-fA-F0-9]{10}$", args.id):
+            raise ArgsParserError("ID must include 10 HEX symbols")
+        return True
 
     def args_parser(self) -> ArgumentParserNoExit:
         raise NotImplementedError("Please implement this")
@@ -409,6 +409,103 @@ class LFEMIdArgsUnit(DeviceRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         raise NotImplementedError("Please implement this")
 
+class LFHIDIdArgsUnit(DeviceRequiredUnit):
+    @staticmethod
+    def add_card_arg(parser: ArgumentParserNoExit, required=False):
+        formats = [x.name for x in HIDFormat]
+        parser.add_argument("-f", "--format", type=str, required=required, help="HIDProx card format", metavar="", choices=formats)
+        parser.add_argument("--fc", type=int, required=False, help="HIDProx tag facility code", metavar="<int>")
+        parser.add_argument("--cn", type=int, required=required, help="HIDProx tag card number", metavar="<int>")
+        parser.add_argument("--il", type=int, required=False, help="HIDProx tag issue level", metavar="<int>")
+        parser.add_argument("--oem", type=int, required=False, help="HIDProx tag OEM", metavar="<int>")
+        return parser
+
+    @staticmethod
+    def check_limits(format: int, fc: int | None, cn: int | None, il: int | None, oem: int | None):
+        limits = {
+            HIDFormat.H10301: [0xFF, 0xFFFF, 0, 0],
+            HIDFormat.IND26: [0xFFF, 0xFFF, 0, 0],
+            HIDFormat.IND27: [0x1FFF, 0x3FFF, 0, 0],
+            HIDFormat.INDASC27: [0x1FFF, 0x3FFF, 0, 0],
+            HIDFormat.TECOM27 : [0x7FF, 0xFFFF, 0, 0],
+            HIDFormat.W2804: [0xFF, 0x7FFF, 0, 0],
+            HIDFormat.IND29: [0x1FFF, 0xFFFF, 0, 0],
+            HIDFormat.ATSW30: [0xFFF, 0xFFFF, 0, 0],
+            HIDFormat.ADT31: [0xF, 0x7FFFFF, 0, 0],
+            HIDFormat.HCP32: [0, 0x3FFF, 0, 0],
+            HIDFormat.HPP32: [0xFFF, 0x7FFFF, 0, 0],
+            HIDFormat.KASTLE: [0xFF, 0xFFFF, 0x1F, 0],
+            HIDFormat.KANTECH: [0xFF, 0xFFFF, 0, 0],
+            HIDFormat.WIE32: [0xFFF, 0xFFFF, 0, 0],
+            HIDFormat.D10202: [0x7F, 0xFFFFFF, 0, 0],
+            HIDFormat.H10306: [0xFFFF, 0xFFFF, 0, 0],
+            HIDFormat.N10002: [0xFFFF, 0xFFFF, 0, 0],
+            HIDFormat.OPTUS34: [0x3FF, 0xFFFF, 0, 0],
+            HIDFormat.SMP34: [0x3FF, 0xFFFF, 0x7, 0],
+            HIDFormat.BQT34: [0xFF, 0xFFFFFF, 0, 0],
+            HIDFormat.C1K35S: [0xFFF, 0xFFFFF, 0, 0],
+            HIDFormat.C15001: [0xFF, 0xFFFF, 0, 0x3FF],
+            HIDFormat.S12906: [0xFF, 0xFFFFFF, 0x3, 0],
+            HIDFormat.SIE36: [0x3FFFF, 0xFFFF, 0, 0],
+            HIDFormat.H10320: [0, 99999999, 0, 0],
+            HIDFormat.H10302: [0, 0x7FFFFFFFF, 0, 0],
+            HIDFormat.H10304: [0xFFFF, 0x7FFFF, 0, 0],
+            HIDFormat.P10004: [0x1FFF, 0x3FFFF, 0, 0],
+            HIDFormat.HGEN37: [0, 0xFFFFFFFF, 0, 0],
+            HIDFormat.MDI37: [0xF, 0x1FFFFFFF, 0, 0],
+        }
+        limit = limits.get(HIDFormat(format))
+        if limit is None:
+            return True
+        if fc is not None and fc > limit[0]:
+            raise ArgsParserError(f"{HIDFormat(format)}: Facility Code must between 0 to {limit[0]}")
+        if cn is not None and cn > limit[1]:
+            raise ArgsParserError(f"{HIDFormat(format)}: Card Number must between 0 to {limit[1]}")
+        if il is not None and il > limit[2]:
+            raise ArgsParserError(f"{HIDFormat(format)}: Issue Level must between 0 to {limit[2]}")
+        if oem is not None and oem > limit[3]:
+            raise ArgsParserError(f"{HIDFormat(format)}: OEM must between 0 to {limit[3]}")
+
+        """
+        HIDFormat.: [0xFFF, 0x3FFFF, 0x7, 0],
+        HIDFormat.: [0x3FF, 0xFFFFFF, 0, 0x7],
+        HIDFormat.: [0xFFFF, 0xFFFFF, 0, 0],
+        HIDFormat.: [0xFFF, 0xFFFF, 0, 0],
+        HIDFormat.: [0, 0xFFFFFFFFFF, 0, 0],
+        HIDFormat.: [0xFFF, 0xFFFFF, 0, 0x7F],
+        HIDFormat.: [0x3FFF, 0x3FFFFFFF, 0, 0],
+        HIDFormat.: [0x003FFFFF, 0x007FFFFF, 0, 0],
+        HIDFormat.: [0xFFFFF, 0x3FFFFFFFF, 0, 0],
+        HIDFormat.: [0xFFFFFF, 0xFFFFFFFF, 0, 0],
+        """
+
+    def before_exec(self, args: argparse.Namespace):
+        if super().before_exec(args):
+            format = HIDFormat.H10301.value
+            if args.format is not None:
+                format = HIDFormat[args.format].value
+            LFHIDIdArgsUnit.check_limits(format, args.fc, args.cn, args.il, args.oem)
+            return True
+        return False
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        raise NotImplementedError()
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError()
+
+class LFHIDIdReadArgsUnit(DeviceRequiredUnit):
+    @staticmethod
+    def add_card_arg(parser: ArgumentParserNoExit, required=False):
+        formats = [x.name for x in HIDFormat]
+        parser.add_argument("-f", "--format", type=str, required=False, help="HIDProx card format hint", metavar="", choices=formats)
+        return parser
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        raise NotImplementedError()
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError()
 
 class TagTypeArgsUnit(DeviceRequiredUnit):
     @staticmethod
@@ -439,6 +536,8 @@ hf_mfu = hf.subgroup('mfu', 'MIFARE Ultralight / NTAG commands')
 lf = root.subgroup('lf', 'Low Frequency commands')
 lf_em = lf.subgroup('em', 'EM commands')
 lf_em_410x = lf_em.subgroup('410x', 'EM410x commands')
+lf_hid = lf.subgroup('hid', 'HID commands')
+lf_hid_prox = lf_hid.subgroup('prox', 'HID Prox commands')
 
 
 @root.command('clear')
@@ -3026,8 +3125,8 @@ class LFEMRead(ReaderRequiredUnit):
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        id = self.cmd.em410x_scan()
-        print(f" - EM410x ID(10H): {CG}{id.hex()}{C0}")
+        data = self.cmd.em410x_scan()
+        print(f"{TagSpecificType(data[0])}: {CG}{data[1].hex()}{C0}")
 
 
 @lf_em_410x.command('write')
@@ -3037,16 +3136,97 @@ class LFEM410xWriteT55xx(LFEMIdArgsUnit, ReaderRequiredUnit):
         parser.description = 'Write em410x id to t55xx'
         return self.add_card_arg(parser, required=True)
 
-    def before_exec(self, args: argparse.Namespace):
-        b1 = super(LFEMIdArgsUnit, self).before_exec(args)
-        b2 = super(ReaderRequiredUnit, self).before_exec(args)
-        return b1 and b2
-
     def on_exec(self, args: argparse.Namespace):
         id_hex = args.id
         id_bytes = bytes.fromhex(id_hex)
         self.cmd.em410x_write_to_t55xx(id_bytes)
         print(f" - EM410x ID(10H): {id_hex} write done.")
+
+
+@lf_hid_prox.command('read')
+class LFHIDProxRead(LFHIDIdReadArgsUnit, ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Scan hid prox tag and print card format, facility code, card number, issue level and OEM code'
+        return self.add_card_arg(parser, required=True)
+
+    def on_exec(self, args: argparse.Namespace):
+        format = 0
+        if args.format is not None:
+            format = HIDFormat[args.format].value
+        (format, fc, cn1, cn2, il, oem) = self.cmd.hidprox_scan(format)
+        cn = (cn1 << 32) + cn2
+        print(f"HIDProx/{HIDFormat(format)}")
+        if fc > 0:
+            print(f" FC: {CG}{fc}{C0}")
+        if il > 0:
+            print(f" IL: {CG}{il}{C0}")
+        if oem > 0:
+            print(f" OEM: {CG}{oem}{C0}")
+        print(f" CN: {CG}{cn}{C0}")
+
+@lf_hid_prox.command("write")
+class LFHIDProxWriteT55xx(LFHIDIdArgsUnit, ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Write hidprox card data to t55xx"
+        return self.add_card_arg(parser, required=True)
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.fc is None:
+            args.fc = 0
+        if args.il is None:
+            args.il = 0
+        if args.oem is None:
+            args.oem = 0
+        format = HIDFormat[args.format]
+        id = struct.pack(">BIBIBH", format.value, args.fc, (args.cn >> 32), args.cn & 0xffffffff, args.il, args.oem)
+        self.cmd.hidprox_write_to_t55xx(id)
+        print(f"HIDProx/{format}")
+        if args.fc > 0:
+            print(f" FC: {args.fc}")
+        if args.il > 0:
+            print(f" IL: {args.il}")
+        if args.oem > 0:
+            print(f" OEM: {args.oem}")
+        print(f" CN: {args.cn}")
+        print(f"write done.")
+
+@lf_hid_prox.command('econfig')
+class LFHIDProxEconfig(SlotIndexArgsAndGoUnit, LFHIDIdArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Set emulated hidprox card id'
+        self.add_slot_args(parser)
+        self.add_card_arg(parser)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.cn is not None:
+            if args.fc is None:
+                args.fc = 0
+            if args.il is None:
+                args.il = 0
+            if args.oem is None:
+                args.oem = 0
+            if args.format is None:
+                format = HIDFormat.H10301
+            format = HIDFormat[args.format]
+            id = struct.pack(">BIBIBH", format.value, args.fc, (args.cn >> 32), args.cn & 0xffffffff, args.il, args.oem)
+            self.cmd.hidprox_set_emu_id(id)
+            print(' - Set hidprox tag id success.')
+        else:
+            (format, fc, cn1, cn2, il, oem) = self.cmd.hidprox_get_emu_id()
+            cn = (cn1 << 32) + cn2
+            print(' - Get hidprox tag id success.')
+            print(f" - HIDProx/{HIDFormat(format)}")
+            if fc > 0:
+                print(f"   FC: {CG}{fc}{C0}")
+            if il > 0:
+                print(f"   IL: {CG}{il}{C0}")
+            if oem > 0:
+                print(f"   OEM: {CG}{oem}{C0}")
+            print(f"   CN: {CG}{cn}{C0}")
 
 
 @hw_slot.command('list')
@@ -3074,6 +3254,7 @@ class HWSlotList(DeviceRequiredUnit):
         current = selected
         enabled = self.cmd.get_enabled_slots()
         maxnamelength = 0
+
         slotnames = []
         all_nicks = self.cmd.get_all_slot_nicks()
         for slot_data in all_nicks:
@@ -3082,6 +3263,7 @@ class HWSlotList(DeviceRequiredUnit):
             m = max(hfn['baselen'], lfn['baselen'])
             maxnamelength = m if m > maxnamelength else maxnamelength
             slotnames.append({'hf': hfn, 'lf': lfn})
+
         for slot in SlotNumber:
             fwslot = SlotNumber.to_fw(slot)
             hf_tag_type = TagSpecificType(slotinfo[fwslot]['hf'])
@@ -3153,9 +3335,20 @@ class HWSlotList(DeviceRequiredUnit):
                 if current != slot:
                     self.cmd.set_active_slot(slot)
                     current = slot
-                id = self.cmd.em410x_get_emu_id()
-                # print('    - EM 410X emulator settings:')
-                print(f'      {"ID:":40}{CY}{id.hex().upper()}{C0}')
+                if lf_tag_type == TagSpecificType.EM410X:
+                    id = self.cmd.em410x_get_emu_id()
+                    print(f'      {"ID:":40}{CY}{id.hex().upper()}{C0}')
+                if lf_tag_type == TagSpecificType.HIDProx:
+                    (format, fc, cn1, cn2, il, oem) = self.cmd.hidprox_get_emu_id()
+                    cn = (cn1 << 32) + cn2
+                    print(f'      {"Format:":40}{CY}{HIDFormat(format)}{C0}')
+                    if fc > 0:
+                        print(f'      {"FC:":40}{CY}{fc}{C0}')
+                    if il > 0:
+                        print(f'      {"IL:":40}{CY}{il}{C0}')
+                    if oem > 0:
+                        print(f'      {"OEM:":40}{CY}{oem}{C0}')
+                    print(f'      {"CN:":40}{CY}{cn}{C0}')
         if current != selected:
             self.cmd.set_active_slot(selected)
 
@@ -3278,7 +3471,7 @@ class HWSlotDisable(SlotIndexArgsUnit, SenseTypeArgsUnit):
 class LFEM410xEconfig(SlotIndexArgsAndGoUnit, LFEMIdArgsUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = 'Set simulated em410x card id'
+        parser.description = 'Set emulated em410x card id'
         self.add_slot_args(parser)
         self.add_card_arg(parser)
         return parser

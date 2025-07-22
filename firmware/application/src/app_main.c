@@ -363,7 +363,7 @@ static void system_off_enter(void) {
         // Set the reason for Reset. After restarting, you need to get this reason to avoid misjudgment from the source of wake up.
         sd_power_gpregret_clr(1, GPREGRET_CLEAR_VALUE_DEFAULT);
         sd_power_gpregret_set(1, RESET_ON_LF_FIELD_EXISTS_Msk);
-        // Trigger the RESET awakening system, restart the simulation process
+        // Trigger the RESET awakening system, restart the emulation process
         nrf_pwr_mgmt_shutdown(NRF_PWR_MGMT_SHUTDOWN_RESET);
         return;
     };
@@ -453,7 +453,7 @@ static void check_wakeup_src(void) {
             }
         }
 
-        // It is currently the wake -up system of the simulation card event, we can make the strong lights on the field first
+        // It is currently the wake-up system of the emulation card event, we can make the strong lights on the field first
         TAG_FIELD_LED_ON();
 
         uint8_t animation_config = settings_get_animation_config();
@@ -611,7 +611,7 @@ static void btn_fn_copy_ic_uid(void) {
 
     switch (tag_types.tag_lf) {
         case TAG_TYPE_EM410X:
-            status = PcdScanEM410X(id_buffer);
+            status = scan_em410x(id_buffer);
 
             if (status == STATUS_LF_TAG_OK) {
                 tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
@@ -853,7 +853,7 @@ int main(void) {
     on_data_frame_complete(on_data_frame_received);
 
     check_wakeup_src();       // Detect wake-up source and decide BLE broadcast and subsequent hibernation action according to the wake-up source
-    tag_mode_enter();         // Enter card simulation mode by default
+    tag_mode_enter();         // Enter card emulation mode by default
 
     // usbd event listener
     APP_ERROR_CHECK(app_usbd_power_events_enable());

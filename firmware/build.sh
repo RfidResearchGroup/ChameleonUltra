@@ -1,4 +1,4 @@
-#!/bin/env bash
+#!env bash
 
 if [[ $BASH_SOURCE = */* ]]; then
   cd -- "${BASH_SOURCE%/*}/" || exit

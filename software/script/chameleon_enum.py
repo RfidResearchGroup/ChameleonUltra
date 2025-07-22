@@ -76,6 +76,8 @@ class Command(enum.IntEnum):
 
     EM410X_SCAN = 3000
     EM410X_WRITE_TO_T55XX = 3001
+    HIDPROX_SCAN = 3002
+    HIDPROX_WRITE_TO_T55XX = 3003
 
     MF1_WRITE_EMU_BLOCK_DATA = 4000
     HF14A_SET_ANTI_COLL_DATA = 4001
@@ -116,24 +118,30 @@ class Command(enum.IntEnum):
 
     EM410X_SET_EMU_ID = 5000
     EM410X_GET_EMU_ID = 5001
+    HIDPROX_SET_EMU_ID = 5002
+    HIDPROX_GET_EMU_ID = 5003
 
 
 @enum.unique
 class Status(enum.IntEnum):
-    HF_TAG_OK = 0x00     # IC card operation is successful
-    HF_TAG_NO = 0x01     # IC card not found
-    HF_ERR_STAT = 0x02    # Abnormal IC card communication
-    HF_ERR_CRC = 0x03     # IC card communication verification abnormal
+    HF_TAG_OK = 0x00  # IC card operation is successful
+    HF_TAG_NO = 0x01  # IC card not found
+    HF_ERR_STAT = 0x02  # Abnormal IC card communication
+    HF_ERR_CRC = 0x03  # IC card communication verification abnormal
     HF_COLLISION = 0x04  # IC card conflict
-    HF_ERR_BCC = 0x05     # IC card BCC error
-    MF_ERR_AUTH = 0x06    # MF card verification failed
+    HF_ERR_BCC = 0x05  # IC card BCC error
+    MF_ERR_AUTH = 0x06  # MF card verification failed
     HF_ERR_PARITY = 0x07  # IC card parity error
-    HF_ERR_ATS = 0x08     # ATS should be present but card NAKed, or ATS too large
+    HF_ERR_ATS = 0x08  # ATS should be present but card NAKed, or ATS too large
 
     # Some operations with low frequency cards succeeded!
     LF_TAG_OK = 0x40
-    # Unable to search for a valid EM410X label
+    # Unable to search for a valid EM410X tag
     EM410X_TAG_NO_FOUND = 0x41
+    # Unable to search for a valid LF tag
+    LF_TAG_NO_FOUND = 0x42
+    # Unable to search for a valid HIDProx tag
+    HIDPROX_TAG_NO_FOUND = 0x43
 
     # The parameters passed by the BLE instruction are wrong, or the parameters passed
     # by calling some functions are wrong
@@ -170,6 +178,10 @@ class Status(enum.IntEnum):
             return "LF tag operation succeeded"
         elif self == Status.EM410X_TAG_NO_FOUND:
             return "EM410x tag no found"
+        elif self == Status.LF_TAG_NO_FOUND:
+            return "LF tag not found"
+        elif self == Status.HIDPROX_TAG_NO_FOUND:
+            return "HIDProx tag no found"
         elif self == Status.PAR_ERR:
             return "API request fail, param error"
         elif self == Status.DEVICE_MODE_ERROR:
@@ -241,6 +253,9 @@ class TagSpecificType(enum.IntEnum):
     # ASK Tag-Talk-First      100
     # EM410x
     EM410X = 100
+    EM410X_16 = 101
+    EM410X_32 = 102
+    EM410X_64 = 103
     # FDX-B
     # securakey
     # gallagher
@@ -252,7 +267,7 @@ class TagSpecificType(enum.IntEnum):
     # Jablotron
 
     # FSK Tag-Talk-First      200
-    # HID Prox
+    HIDProx = 200
     # ioProx
     # AWID
     # Paradox
@@ -277,6 +292,7 @@ class TagSpecificType(enum.IntEnum):
     MIFARE_1024 = 1001
     MIFARE_2048 = 1002
     MIFARE_4096 = 1003
+
     # MFUL / NTAG series     1100
     NTAG_213 = 1100
     NTAG_215 = 1101
@@ -296,26 +312,43 @@ class TagSpecificType(enum.IntEnum):
 
     @staticmethod
     def list(exclude_meta=True):
-        return [t for t in TagSpecificType
-                if (t > TagSpecificType.OLD_TAG_TYPES_END and
-                    t != TagSpecificType.TAG_TYPES_LF_END)
-                or not exclude_meta]
+        return [
+            t
+            for t in TagSpecificType
+            if (
+                t > TagSpecificType.OLD_TAG_TYPES_END
+                and t != TagSpecificType.TAG_TYPES_LF_END
+            )
+            or not exclude_meta
+        ]
 
     @staticmethod
     def list_hf():
-        return [t for t in TagSpecificType.list()
-                if (t > TagSpecificType.TAG_TYPES_LF_END)]
+        return [
+            t for t in TagSpecificType.list() if (t > TagSpecificType.TAG_TYPES_LF_END)
+        ]
 
     @staticmethod
     def list_lf():
-        return [t for t in TagSpecificType.list()
-                if (TagSpecificType.UNDEFINED < t < TagSpecificType.TAG_TYPES_LF_END)]
+        return [
+            t
+            for t in TagSpecificType.list()
+            if (TagSpecificType.UNDEFINED < t < TagSpecificType.TAG_TYPES_LF_END)
+        ]
 
     def __str__(self):
         if self == TagSpecificType.UNDEFINED:
             return "Undefined"
         elif self == TagSpecificType.EM410X:
             return "EM410X"
+        elif self == TagSpecificType.EM410X_16:
+            return "EM410X/16"
+        elif self == TagSpecificType.EM410X_32:
+            return "EM410X/32"
+        elif self == TagSpecificType.EM410X_64:
+            return "EM410X/64"
+        elif self == TagSpecificType.HIDProx:
+            return "HIDProx"
         elif self == TagSpecificType.MIFARE_Mini:
             return "Mifare Mini"
         elif self == TagSpecificType.MIFARE_1024:
@@ -362,9 +395,11 @@ class MifareClassicWriteMode(enum.IntEnum):
 
     @staticmethod
     def list(exclude_meta=True):
-        return [m for m in MifareClassicWriteMode
-                if m != MifareClassicWriteMode.SHADOW_REQ
-                or not exclude_meta]
+        return [
+            m
+            for m in MifareClassicWriteMode
+            if m != MifareClassicWriteMode.SHADOW_REQ or not exclude_meta
+        ]
 
     def __str__(self):
         if self == MifareClassicWriteMode.NORMAL:
@@ -395,9 +430,11 @@ class MifareUltralightWriteMode(enum.IntEnum):
 
     @staticmethod
     def list(exclude_meta=True):
-        return [m for m in MifareUltralightWriteMode
-                if m != MifareUltralightWriteMode.SHADOW_REQ
-                or not exclude_meta]
+        return [
+            m
+            for m in MifareUltralightWriteMode
+            if m != MifareUltralightWriteMode.SHADOW_REQ or not exclude_meta
+        ]
 
     def __str__(self):
         if self == MifareUltralightWriteMode.NORMAL:
@@ -475,8 +512,8 @@ class AnimationMode(enum.IntEnum):
 
 @enum.unique
 class ButtonType(enum.IntEnum):
-    A = ord('A')
-    B = ord('B')
+    A = ord("A")
+    B = ord("B")
 
 
 @enum.unique
@@ -512,3 +549,74 @@ class MfcValueBlockOperator(enum.IntEnum):
     DECREMENT = 0xC0
     INCREMENT = 0xC1
     RESTORE = 0xC2
+
+@enum.unique
+class HIDFormat(enum.IntEnum):
+    H10301 = 1
+    IND26 = 2
+    IND27 = 3
+    INDASC27 = 4
+    TECOM27 = 5
+    W2804 = 6
+    IND29 = 7
+    ATSW30 = 8
+    ADT31 = 9
+    HCP32 = 10
+    HPP32 = 11
+    KASTLE = 12
+    KANTECH = 13
+    WIE32 = 14
+    D10202 = 15
+    H10306 = 16
+    N10002 = 17
+    OPTUS34 = 18
+    SMP34 = 19
+    BQT34 = 20
+    C1K35S = 21
+    C15001 = 22
+    S12906 = 23
+    SIE36 = 24
+    H10320 = 25
+    H10302 = 26
+    H10304 = 27
+    P10004 = 28
+    HGEN37 = 29
+    MDI37 = 30
+
+    def __str__(self):
+        descriptions = {
+            HIDFormat.H10301: "HID H10301 26-bit",
+            HIDFormat.IND26: "Indala 26-bit",
+            HIDFormat.IND27: "Indala 27-bit",
+            HIDFormat.INDASC27: "Indala ASC 27-bit",
+            HIDFormat.TECOM27: "Tecom 27-bit",
+            HIDFormat.W2804: "2804 Wiegand 28-bit",
+            HIDFormat.IND29: "Indala 29-bit",
+            HIDFormat.ATSW30: "ATS Wiegand 30-bit",
+            HIDFormat.ADT31: "HID ADT 31-bit",
+            HIDFormat.HCP32: "HID Check Point 32-bit",
+            HIDFormat.HPP32: "HID Hewlett-Packard 32-bit",
+            HIDFormat.KASTLE: "Kastle 32-bit",
+            HIDFormat.KANTECH: "Indala/Kantech KFS 32-bit",
+            HIDFormat.WIE32: "Wiegand 32-bit",
+            HIDFormat.D10202: "HID D10202 33-bit",
+            HIDFormat.H10306: "HID H10306 34-bit",
+            HIDFormat.N10002: "Honeywell/Northern N10002 34-bit",
+            HIDFormat.OPTUS34: "Indala Optus 34-bit",
+            HIDFormat.SMP34: "Cardkey Smartpass 34-bit",
+            HIDFormat.BQT34: "BQT 34-bit",
+            HIDFormat.C1K35S: "HID Corporate 1000 35-bit Std",
+            HIDFormat.C15001: "HID KeyScan 36-bit",
+            HIDFormat.S12906: "HID Simplex 36-bit",
+            HIDFormat.SIE36: "HID 36-bit Siemens",
+            HIDFormat.H10320: "HID H10320 37-bit BCD",
+            HIDFormat.H10302: "HID H10302 37-bit huge ID",
+            HIDFormat.H10304: "HID H10304 37-bit",
+            HIDFormat.P10004: "HID P10004 37-bit PCSC",
+            HIDFormat.HGEN37: "HID Generic 37-bit",
+            HIDFormat.MDI37: "PointGuard MDI 37-bit",
+        }
+        if self in descriptions:
+            return descriptions[self]
+        return "Invalid"
+

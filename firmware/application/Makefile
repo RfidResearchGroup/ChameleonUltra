@@ -18,6 +18,7 @@ SRC_FILES += \
   $(PROJ_DIR)/bsp/bsp_delay.c \
   $(PROJ_DIR)/bsp/bsp_time.c \
   $(PROJ_DIR)/bsp/bsp_wdt.c \
+  $(PROJ_DIR)/rfid/byte_mirror.c \
   $(PROJ_DIR)/rfid/crc_utils.c \
   $(PROJ_DIR)/rfid/hex_utils.c \
   $(PROJ_DIR)/rfid/mf1_crapto1.c \
@@ -212,6 +213,7 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/pwr_mgmt \
   $(SDK_ROOT)/components/ble/ble_dtm \
   $(SDK_ROOT)/components/toolchain/cmsis/include \
+  $(SDK_ROOT)/components/toolchain/cmsis/dsp/include \
   $(SDK_ROOT)/components/ble/ble_services/ble_rscs_c \
   $(SDK_ROOT)/components/ble/common \
   $(SDK_ROOT)/components/ble/ble_services/ble_lls \
@@ -329,17 +331,24 @@ ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
   SRC_FILES +=\
     $(PROJ_DIR)/rfid/reader/hf/mf1_toolbox.c \
     $(PROJ_DIR)/rfid/reader/hf/rc522.c \
-    $(PROJ_DIR)/rfid/reader/lf/data_utils.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_125khz_radio.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_em410x_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_reader_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_reader_main.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_t55xx_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_hidprox_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/utils/fskdemod.c \
+    $(PROJ_DIR)/rfid/reader/lf/utils/circular_buffer.c \
+    $(PROJ_DIR)/rfid/reader/lf/utils/manchester.c \
+    $(PROJ_DIR)/rfid/reader/lf/protocols/em410x.c \
+    $(PROJ_DIR)/rfid/reader/lf/protocols/hidprox.c \
+    $(PROJ_DIR)/rfid/reader/lf/protocols/wiegand.c \
 
   INC_FOLDERS +=\
     ${PROJ_DIR}/rfid/reader/ \
     ${PROJ_DIR}/rfid/reader/hf \
     ${PROJ_DIR}/rfid/reader/lf \
+    ${PROJ_DIR}/rfid/reader/lf/utils \
 
   CFLAGS += -DPROJECT_CHAMELEON_ULTRA
 

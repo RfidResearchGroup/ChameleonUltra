@@ -27,7 +27,7 @@ void reader_mode_enter(void) {
         nrf_gpio_pin_clear(HF_ANT_SEL);     // hf ant switch to reader mode
 
         // init reader
-        lf_125khz_radio_init();
+        lf_125khz_radio_gpiote_init();
         pcd_14a_reader_init();
         pcd_14a_reader_reset();
     }
@@ -110,10 +110,10 @@ uint8_t get_color_by_slot(uint8_t slot) {
     bool enabled_lf = tag_emulation_slot_is_enabled(slot, TAG_SENSE_LF);
     bool enabled_hf = tag_emulation_slot_is_enabled(slot, TAG_SENSE_HF);
     if (tag_types.tag_hf != TAG_TYPE_UNDEFINED && tag_types.tag_lf != TAG_TYPE_UNDEFINED && enabled_hf && enabled_lf) {
-        return 0;   // Dual -frequency card simulation, return R, indicate a dual -frequency card
-    } else if (tag_types.tag_hf != TAG_TYPE_UNDEFINED && enabled_hf) {   //High -frequency simulation, return G
+        return 0;   // Dual -frequency card emulation, return R, indicate a dual -frequency card
+    } else if (tag_types.tag_hf != TAG_TYPE_UNDEFINED && enabled_hf) {   //High -frequency emulation, return G
         return 1;
-    } else {    // Low -frequency simulation, return B
+    } else {    // Low -frequency emulation, return B
         return 2;
     }
 }
