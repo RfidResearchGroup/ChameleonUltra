@@ -19,5 +19,6 @@ int lf_tag_viking_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffe
 bool lf_tag_viking_data_factory(uint8_t slot, tag_specific_type_t tag_type);
 void lf_tag_125khz_viking_sense_switch(bool enable);
 uint64_t viking_id_to_memory64(uint8_t id[4]);
+void viking_encoder(uint8_t *pData, uint8_t *pOut);
 
 #endif

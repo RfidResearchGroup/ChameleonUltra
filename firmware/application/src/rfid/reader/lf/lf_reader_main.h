@@ -5,7 +5,9 @@
 
 
 #include "lf_em410x_data.h"
+#include "lf_tag_em.h"
 #include "lf_viking_data.h"
+#include "lf_tag_viking.h"
 #include "lf_t55xx_data.h"
 #include "app_status.h"
 

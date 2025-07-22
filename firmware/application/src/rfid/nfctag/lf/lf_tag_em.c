@@ -196,6 +196,30 @@ uint64_t em410x_id_to_memory64(uint8_t id[5]) {
     return memory.u64;
 }
 
+/**
+* Code the EM410X card number
+* @param: pData card number - ID, fixed 5 length byte
+* @param: pOut Output buffer, fixed 8 -length byte
+*/
+void em410x_encoder(uint8_t *pData, uint8_t *pOut) {
+    uint64_t data = em410x_id_to_memory64(pData);
+    // Reverse 64-bit number and assign to array.
+    data = ((data >> 1)  & 0x5555555555555555ULL) | ((data & 0x5555555555555555ULL) << 1);
+    data = ((data >> 2)  & 0x3333333333333333ULL) | ((data & 0x3333333333333333ULL) << 2);
+    data = ((data >> 4)  & 0x0F0F0F0F0F0F0F0FULL) | ((data & 0x0F0F0F0F0F0F0F0FULL) << 4);
+    data = ((data >> 8)  & 0x00FF00FF00FF00FFULL) | ((data & 0x00FF00FF00FF00FFULL) << 8);
+    data = ((data >> 16) & 0x0000FFFF0000FFFFULL) | ((data & 0x0000FFFF0000FFFFULL) << 16);
+    data = (data >> 32) | (data << 32);
+    pOut[0] = (data >> 56) & 0xFF;
+    pOut[1] = (data >> 48) & 0xFF;
+    pOut[2] = (data >> 40) & 0xFF;
+    pOut[3] = (data >> 32) & 0xFF;
+    pOut[4] = (data >> 24) & 0xFF;
+    pOut[5] = (data >> 16) & 0xFF;
+    pOut[6] = (data >> 8) & 0xFF;
+    pOut[7] = data & 0xFF;
+}
+
 static void timer_ce_handler(nrf_timer_event_t event_type, void *p_context) {
     bool mod;
     switch (event_type) {
