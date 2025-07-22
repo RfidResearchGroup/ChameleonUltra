@@ -9,6 +9,7 @@
 #include "lf_viking_data.h"
 #include "lf_125khz_radio.h"
 #include "lf_manchester.h"
+#include "lf_tag_viking.h"
 
 #define NRF_LOG_MODULE_NAME viking
 #include "nrf_log.h"
@@ -83,14 +84,22 @@ uint8_t viking_decoder(uint8_t *pData, uint8_t size, uint8_t *pOut) {
 * @param: pOut Output buffer, fixed 8 -length byte
 */
 void viking_encoder(uint8_t *pData, uint8_t *pOut) {
-    pOut[0] = 0xF2;
-    pOut[1] = 0x00;
-    pOut[2] = 0x00;
-    pOut[3] = pData[0];
-    pOut[4] = pData[1];
-    pOut[5] = pData[2];
-    pOut[6] = pData[3];
-    pOut[7] = pOut[3] ^ pOut[4] ^ pOut[5] ^ pOut[6] ^ 0x5A;
+    uint64_t data = viking_id_to_memory64(pData);
+    // Reverse 64-bit number and assign to array.
+    data = ((data >> 1)  & 0x5555555555555555ULL) | ((data & 0x5555555555555555ULL) << 1);
+    data = ((data >> 2)  & 0x3333333333333333ULL) | ((data & 0x3333333333333333ULL) << 2);
+    data = ((data >> 4)  & 0x0F0F0F0F0F0F0F0FULL) | ((data & 0x0F0F0F0F0F0F0F0FULL) << 4);
+    data = ((data >> 8)  & 0x00FF00FF00FF00FFULL) | ((data & 0x00FF00FF00FF00FFULL) << 8);
+    data = ((data >> 16) & 0x0000FFFF0000FFFFULL) | ((data & 0x0000FFFF0000FFFFULL) << 16);
+    data = (data >> 32) | (data << 32);
+    pOut[0] = (data >> 56) & 0xFF;
+    pOut[1] = (data >> 48) & 0xFF;
+    pOut[2] = (data >> 40) & 0xFF;
+    pOut[3] = (data >> 32) & 0xFF;
+    pOut[4] = (data >> 24) & 0xFF;
+    pOut[5] = (data >> 16) & 0xFF;
+    pOut[6] = (data >> 8) & 0xFF;
+    pOut[7] = data & 0xFF;
 }
 
 // Reading the card function, you need to stop calling, return 0 to read the card, 1 is to read

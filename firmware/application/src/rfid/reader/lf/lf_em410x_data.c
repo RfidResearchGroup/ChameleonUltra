@@ -7,6 +7,7 @@
 #include "lf_reader_data.h"
 #include "lf_em410x_data_i.h"
 #include "lf_em410x_data.h"
+#include "lf_tag_em.h"
 #include "lf_125khz_radio.h"
 #include "lf_manchester.h"
 
@@ -115,98 +116,22 @@ uint8_t em410x_decoder(uint8_t *pData, uint8_t size, uint8_t *pOut) {
 * @param: pOut Output buffer, fixed 8 -length byte
 */
 void em410x_encoder(uint8_t *pData, uint8_t *pOut) {
-    //#define EM410X_Encoder_NRF_LOG_INFO
-
-    // In order to save code space, we can limit the length of the dead data in the law
-    // In other words, the overall loop cannot exceed more 0 - 127 Bit
-    // Of course, for the serious EM410, the number of this cycle is enough
-    int8_t i, j;
-
-    // Some data can actually change the space through time
-    // But this space is too small, it is better to keep the time to change time
-    // So don't change it.
-    uint8_t pos, bit, count1;
-
-    pOut[0] = 0xFF; // There are 9 1 of the front guide code, so we are limited to the first byte first as a 11111111
-    pOut[1] = 0x80; // Nothing to say, the second Byte MSB is also one 1 Then it's enough 1 * 9 Code
-
-    //Reset the data as empty
-    for (i = 2; i < 8; i++) {
-        pOut[i] = 0x00;
-    }
-
-    // Bit is 9, because there is 0 - 8 In total 9 Ahead ( 1 * 9 )
-    pos = 9;
-    // Reset the BIT count
-    count1 = 0;
-
-    // X -aid iteration 5 Byte's card number, put together Bit to the buffer and calculate the puppet school inspection
-    for (i = 0; i < 5; i++) {
-        // Iteration processing each bit
-        for (j = 7; j >= 0; j--) {
-            // Take out a single BIT
-            bit = ((pData[i] >> j) & 0x01);
-
-#ifdef EM410X_Encoder_NRF_LOG_INFO
-            NRF_LOG_INFO("%d ", bit);
-#endif // EM410X_Encoder_NRF_LOG_INFO
-
-            // Put the native data into the output buffer
-            pOut[pos / 8] |= (bit << (7 - pos % 8));
-            pos += 1;
-
-            // Statistical occasional verification calculation
-            if (bit) {
-                count1 += 1;
-            }
-
-            // Putting the inspection of the coupling school into the output buffer
-            if (j == 4 || j == 0) {
-
-#ifdef EM410X_Encoder_NRF_LOG_INFO
-                NRF_LOG_INFO(" <- Bit raw : Qi Dian verification -> %d\n", count1 % 2);
-#endif // EM410X_Encoder_NRF_LOG_INFO
-
-                // Needless to say, it must be placed in a bit's strange school test.
-                pOut[pos / 8] |= ((count1 % 2) << (7 - pos % 8));
-                pos += 1;
-                count1 = 0;
-            }
-        }
-    }
-
-#ifdef EM410X_Encoder_NRF_LOG_INFO
-    NRF_LOG_INFO("\n");
-#endif // EM410X_Encoder_NRF_LOG_INFO
-
-    // Y axis iteration 5 BYTE card numbers, generate 4 BIT's puppet school inspection
-    for (i = 0; i < 4; i++) {
-        count1 = 0;
-        for (j = 0; j < 5; j++) {
-            // High -level count
-            bit = ((pData[j] >> (7 - i)) & 0x01);
-            if (bit) {
-                count1 += 1;
-            }
-            // Low count
-            bit = ((pData[j] >> (3 - i)) & 0x01);
-            if (bit) {
-                count1 += 1;
-            }
-        }
-
-        // The y -axis calculation is completed, and placed in the final BIT output buffer
-        pOut[pos / 8] |= ((count1 % 2) << (7 - pos % 8));
-        pos += 1;
-
-#ifdef EM410X_Encoder_NRF_LOG_INFO
-        NRF_LOG_INFO("%d ", count1 % 2);
-#endif // EM410X_Encoder_NRF_LOG_INFO
-    }
-
-#ifdef EM410X_Encoder_NRF_LOG_INFO
-    NRF_LOG_INFO(" <- Qi Dian verification : Tail code  -> 0\n\n");
-#endif // EM410X_Encoder_NRF_LOG_INFO
+    uint64_t data = em410x_id_to_memory64(pData);
+    // Reverse 64-bit number and assign to array.
+    data = ((data >> 1)  & 0x5555555555555555ULL) | ((data & 0x5555555555555555ULL) << 1);
+    data = ((data >> 2)  & 0x3333333333333333ULL) | ((data & 0x3333333333333333ULL) << 2);
+    data = ((data >> 4)  & 0x0F0F0F0F0F0F0F0FULL) | ((data & 0x0F0F0F0F0F0F0F0FULL) << 4);
+    data = ((data >> 8)  & 0x00FF00FF00FF00FFULL) | ((data & 0x00FF00FF00FF00FFULL) << 8);
+    data = ((data >> 16) & 0x0000FFFF0000FFFFULL) | ((data & 0x0000FFFF0000FFFFULL) << 16);
+    data = (data >> 32) | (data << 32);
+    pOut[0] = (data >> 56) & 0xFF;
+    pOut[1] = (data >> 48) & 0xFF;
+    pOut[2] = (data >> 40) & 0xFF;
+    pOut[3] = (data >> 32) & 0xFF;
+    pOut[4] = (data >> 24) & 0xFF;
+    pOut[5] = (data >> 16) & 0xFF;
+    pOut[6] = (data >> 8) & 0xFF;
+    pOut[7] = data & 0xFF;
 }
 
 // Reading the card function, you need to stop calling, return 0 to read the card, 1 is to read

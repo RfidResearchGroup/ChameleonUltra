@@ -21,5 +21,6 @@ void lf_tag_125khz_em_sense_switch(bool enable);
 int lf_tag_em410x_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 int lf_tag_em410x_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 bool lf_tag_em410x_data_factory(uint8_t slot, tag_specific_type_t tag_type);
+uint64_t em410x_id_to_memory64(uint8_t id[5]);
 
 #endif
