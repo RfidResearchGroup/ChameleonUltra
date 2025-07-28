@@ -2254,7 +2254,7 @@ class HFMFUVERSION(DeviceRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         value, no_tearing = self.cmd.mfu_read_emu_counter_data(args.counter)
-        print(f" - Value: {value:06x}")
+        print(f" - Value: {value:06x} ({value})")
         if no_tearing:
             print(f" - Tearing: {CG}not set{C0}")
         else:

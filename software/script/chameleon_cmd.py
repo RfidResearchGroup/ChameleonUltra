@@ -678,7 +678,7 @@ class ChameleonCMD:
         data = struct.pack('!B', index)
         resp = self.device.send_cmd_sync(Command.MF0_NTAG_GET_COUNTER_DATA, data)
         if resp.status == Status.SUCCESS:
-            resp.parsed = (((resp.data[0] << 16) | (resp.data[1] << 8) | resp.data[2]), resp.data[3] == 0xBD)
+            resp.parsed = (((resp.data[2] << 16) | (resp.data[1] << 8) | resp.data[0]), resp.data[3] == 0xBD)
         return resp
 
     @expect_response(Status.SUCCESS)
@@ -687,7 +687,7 @@ class ChameleonCMD:
             Sets data for selected counter
         """
         data = struct.pack('!BBBB', index | (int(reset_tearing) << 7),
-                           (value >> 16) & 0xFF, (value >> 8) & 0xFF, value & 0xFF)
+                           value & 0xFF, (value >> 8) & 0xFF, (value >> 16) & 0xFF)
         resp = self.device.send_cmd_sync(Command.MF0_NTAG_SET_COUNTER_DATA, data)
         return resp
 
