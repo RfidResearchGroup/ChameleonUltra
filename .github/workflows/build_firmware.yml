@@ -1,92 +1,30 @@
-name: Firmware build
+name: Build ChameleonUltra Firmware DFU
 
 on:
-  workflow_call:
-    inputs:
-      checkout-sha:
-        required: false
-        type: string
+  push:
+    branches: [ lf-viking-support ]
 
 jobs:
-  build_fw_builder:
-    name: Build and push fw-builder Docker image
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      packages: write
-      contents: read
-    outputs:
-      image_hash: ${{ steps.push.outputs.digest }}
     steps:
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      - name: Check out the repo
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.checkout-sha == null && github.sha || inputs.checkout-sha }}
-          fetch-depth: 0
-      - name: ghcr.io login
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v4
-        with:
-          images: ghcr.io/${{ github.repository }}-fw-builder
-      - name: Build and push Docker images
-        id: push
-        uses: docker/build-push-action@v4
-        with:
-          context: firmware
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-  build_fw:
-    name: Build firmware
-    runs-on: ubuntu-latest
-    needs: build_fw_builder
-    strategy:
-      matrix:
-        device_type: [ultra, lite]
-    steps:
-      - name: Check out the repo
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.checkout-sha == null && github.sha || inputs.checkout-sha }}
-          fetch-depth: 0
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y gcc-arm-none-eabi cmake make libusb-1.0-0-dev
+
+      - name: Checkout source
+        uses: actions/checkout@v3
+
       - name: Build firmware
-        env:
-          repo: ${{ github.repository }}
         run: |
-          docker run --rm -v ${PWD}:/workdir -e CURRENT_DEVICE_TYPE=${{ matrix.device_type }} ghcr.io/${repo,,}-fw-builder@${{ needs.build_fw_builder.outputs.image_hash }} firmware/build.sh
-      - name: Upload built binaries
-        uses: actions/upload-artifact@v4
+          mkdir build
+          cd build
+          cmake ..
+          make
+
+      - name: Upload firmware DFU
+        uses: actions/upload-artifact@v3
         with:
-          name: ${{ matrix.device_type }}-firmware
-          path: firmware/objects/*.hex
-      - name: Unzip dfu images
-        run: |
-          sudo chown -R $USER:$USER firmware/objects
-          mkdir firmware/objects/${{ matrix.device_type }}-dfu-app
-          mkdir firmware/objects/${{ matrix.device_type }}-dfu-full
-          unzip firmware/objects/${{ matrix.device_type }}-dfu-app.zip -d firmware/objects/${{ matrix.device_type }}-dfu-app
-          unzip firmware/objects/${{ matrix.device_type }}-dfu-full.zip -d firmware/objects/${{ matrix.device_type }}-dfu-full
-      - name: Upload dfu app image
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.device_type }}-dfu-app
-          path: firmware/objects/${{ matrix.device_type }}-dfu-app/*
-      - name: Upload dfu full image
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.device_type }}-dfu-full
-          path: firmware/objects/${{ matrix.device_type }}-dfu-full/*
-      - name: Upload release artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-artifacts-${{ matrix.device_type }}
-          path: firmware/objects/*.zip
+          name: Firmware .ultra APP DFU Package
+          path: build/app_chameleon_ultra*.dfu
