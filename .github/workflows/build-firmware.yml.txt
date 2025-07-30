@@ -1,0 +1,19 @@
+name: Build ChameleonUltra Firmware DFU
+
+on:
+  push:
+    branches: [ lf-viking-support ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: |
+          sudo apt update && sudo apt install -y gcc-arm-none-eabi cmake make libusb-1.0-0-dev
+          mkdir build && cd build
+          cmake .. && make
+      - uses: actions/upload-artifact@v3
+        with:
+          name: Firmware .ultra APP DFU Package
+          path: build/app_chameleon_ultra*.dfu
