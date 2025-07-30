@@ -24,7 +24,7 @@ jobs:
           make
 
       - name: Upload firmware DFU
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Firmware .ultra APP DFU Package
           path: build/app_chameleon_ultra*.dfu
