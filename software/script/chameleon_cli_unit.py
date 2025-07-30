@@ -1347,7 +1347,7 @@ class HFMFStaticEncryptedNested(ReaderRequiredUnit):
         parser = ArgumentParserNoExit()
         parser.description = 'Mifare Classic static encrypted recover key via backdoor'
         parser.add_argument(
-            '--key', '-k', help='Backdoor key (as hex[12] format), currently known: A396EFA4E24F (default), A31667A8CEC1, 518B3354E760. See https://eprint.iacr.org/2024/1275', metavar='<hex>', type=str, nargs='*')
+            '--key', '-k', help='Backdoor key (as hex[12] format), currently known: A396EFA4E24F (default), A31667A8CEC1, 518B3354E760. See https://eprint.iacr.org/2024/1275', metavar='<hex>', type=str)
         parser.add_argument('--sectors', '-s', type=int, metavar="<dec>", help="Sector count")
         parser.add_argument('--starting-sector', type=int, metavar="<dec>", help="Start recovery from this sector")
         parser.set_defaults(sectors=16)
