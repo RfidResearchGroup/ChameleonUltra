@@ -76,6 +76,7 @@ class Command(enum.IntEnum):
 
     EM410X_SCAN = 3000
     EM410X_WRITE_TO_T55XX = 3001
+    DATA_CMD_LF_READ = 3010
 
     MF1_WRITE_EMU_BLOCK_DATA = 4000
     HF14A_SET_ANTI_COLL_DATA = 4001
@@ -134,6 +135,8 @@ class Status(enum.IntEnum):
     LF_TAG_OK = 0x40
     # Unable to search for a valid EM410X label
     EM410X_TAG_NO_FOUND = 0x41
+    # Unable to search for a valid LF tag
+    LF_TAG_NO_FOUND = 0x42
 
     # The parameters passed by the BLE instruction are wrong, or the parameters passed
     # by calling some functions are wrong
@@ -170,6 +173,8 @@ class Status(enum.IntEnum):
             return "LF tag operation succeeded"
         elif self == Status.EM410X_TAG_NO_FOUND:
             return "EM410x tag no found"
+        elif self == Status.LF_TAG_NO_FOUND:
+            return "LF tag not found"
         elif self == Status.PAR_ERR:
             return "API request fail, param error"
         elif self == Status.DEVICE_MODE_ERROR:
