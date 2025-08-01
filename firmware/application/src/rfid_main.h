@@ -10,6 +10,7 @@
 #include "nfc_mf1.h"
 #include "nfc_mf0_ntag.h"
 #include "lf_tag_em.h"
+#include "lf/lf_tag_viking.h"
 #include "tag_emulation.h"
 
 

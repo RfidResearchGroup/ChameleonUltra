@@ -5,8 +5,10 @@
 #include "bsp_time.h"
 #include "bsp_delay.h"
 #include "lf_reader_data.h"
+#include "lf_em410x_data_i.h"
 #include "lf_em410x_data.h"
 #include "lf_125khz_radio.h"
+#include "lf_manchester.h"
 
 #define NRF_LOG_MODULE_NAME em410x
 #include "nrf_log.h"
@@ -17,68 +19,11 @@ NRF_LOG_MODULE_REGISTER();
 
 static RAWBUF_TYPE_S carddata;
 static volatile uint8_t dataindex = 0;          //Record changes along the number of times
-uint8_t cardbufbyte[CARD_BUF_BYTES_SIZE];   //Card data
+static uint8_t cardbufbyte[CARD_BUF_BYTES_SIZE];   //Card data
 
 #ifdef debug410x
-uint8_t datatest[256] = { 0x00 };
+static uint8_t datatest[256] = { 0x00 };
 #endif
-
-
-//Process card data, enter raw Buffer's starting position 2 position (21111 ...)
-//After processing the card data, put cardbuf, return 5 normal analysis
-//pdata is rawbuffer
-uint8_t mcst(RAWBUF_TYPE_S *Pdata) {
-    uint8_t sync = 1;      //After the current interval process is processed, is it on the judgment line
-    uint8_t cardindex = 0; //Record change number
-    for (int i = Pdata->startbit; i < RAW_BUF_SIZE * 8; i++) {
-        uint8_t thisbit = readbit(Pdata->rawa, Pdata->rawb, i);
-        switch (sync) {
-            case 1: //Synchronous state
-                switch (thisbit) {
-                    case 0: //TheSynchronousState1T,Add1Digit0,StillSynchronize
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 0);
-                        cardindex++;
-                        break;
-                    case 1: // Synchronous status 1.5T, add 1 digit 1, switch to non -synchronized state
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 1);
-                        cardindex++;
-                        sync = 0;
-                        break;
-                    case 2: //Synchronous2T,Add2Digits10,StillSynchronize
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 1);
-                        cardindex++;
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 0);
-                        cardindex++;
-                        break;
-                    default:
-                        return 0;
-                }
-                break;
-            case 0: //Non -synchronous state
-                switch (thisbit) {
-                    case 0: //1TInNonSynchronousState,Add1Digit1,StillNonSynchronous
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 1);
-                        cardindex++;
-                        break;
-                    case 1: // In non -synchronous status 1.5T, add 2 digits 10, switch to the synchronous state
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 1);
-                        cardindex++;
-                        writebit(Pdata->hexbuf, Pdata->hexbuf, cardindex, 0);
-                        cardindex++;
-                        sync = 1;
-                        break;
-                    case 2: //The2TOfTheNonSynchronousState,ItIsImpossibleToOccur,ReportAnError
-                        return 0;
-                    default:
-                        return 0;
-                }
-                break;
-        }
-        if (cardindex >= CARD_BUF_SIZE * 8)
-            break;
-    }
-    return 1;
-}
 
 //Process card, find school inspection and determine whether it is normal
 uint8_t em410x_decoder(uint8_t *pData, uint8_t size, uint8_t *pOut) {
@@ -164,106 +109,6 @@ uint8_t em410x_decoder(uint8_t *pData, uint8_t size, uint8_t *pOut) {
     return 1;
 }
 
-/**
-* Code the EM410X card number
-* @param: pData card number - ID, fixed 5 length byte
-* @param: pOut Output buffer, fixed 8 -length byte
-*/
-void em410x_encoder(uint8_t *pData, uint8_t *pOut) {
-    //#define EM410X_Encoder_NRF_LOG_INFO
-
-    // In order to save code space, we can limit the length of the dead data in the law
-    // In other words, the overall loop cannot exceed more 0 - 127 Bit
-    // Of course, for the serious EM410, the number of this cycle is enough
-    int8_t i, j;
-
-    // Some data can actually change the space through time
-    // But this space is too small, it is better to keep the time to change time
-    // So don't change it.
-    uint8_t pos, bit, count1;
-
-    pOut[0] = 0xFF; // There are 9 1 of the front guide code, so we are limited to the first byte first as a 11111111
-    pOut[1] = 0x80; // Nothing to say, the second Byte MSB is also one 1 Then it's enough 1 * 9 Code
-
-    //Reset the data as empty
-    for (i = 2; i < 8; i++) {
-        pOut[i] = 0x00;
-    }
-
-    // Bit is 9, because there is 0 - 8 In total 9 Ahead ( 1 * 9 )
-    pos = 9;
-    // Reset the BIT count
-    count1 = 0;
-
-    // X -aid iteration 5 Byte's card number, put together Bit to the buffer and calculate the puppet school inspection
-    for (i = 0; i < 5; i++) {
-        // Iteration processing each bit
-        for (j = 7; j >= 0; j--) {
-            // Take out a single BIT
-            bit = ((pData[i] >> j) & 0x01);
-
-#ifdef EM410X_Encoder_NRF_LOG_INFO
-            NRF_LOG_INFO("%d ", bit);
-#endif // EM410X_Encoder_NRF_LOG_INFO
-
-            // Put the native data into the output buffer
-            pOut[pos / 8] |= (bit << (7 - pos % 8));
-            pos += 1;
-
-            // Statistical occasional verification calculation
-            if (bit) {
-                count1 += 1;
-            }
-
-            // Putting the inspection of the coupling school into the output buffer
-            if (j == 4 || j == 0) {
-
-#ifdef EM410X_Encoder_NRF_LOG_INFO
-                NRF_LOG_INFO(" <- Bit raw : Qi Dian verification -> %d\n", count1 % 2);
-#endif // EM410X_Encoder_NRF_LOG_INFO
-
-                // Needless to say, it must be placed in a bit's strange school test.
-                pOut[pos / 8] |= ((count1 % 2) << (7 - pos % 8));
-                pos += 1;
-                count1 = 0;
-            }
-        }
-    }
-
-#ifdef EM410X_Encoder_NRF_LOG_INFO
-    NRF_LOG_INFO("\n");
-#endif // EM410X_Encoder_NRF_LOG_INFO
-
-    // Y axis iteration 5 BYTE card numbers, generate 4 BIT's puppet school inspection
-    for (i = 0; i < 4; i++) {
-        count1 = 0;
-        for (j = 0; j < 5; j++) {
-            // High -level count
-            bit = ((pData[j] >> (7 - i)) & 0x01);
-            if (bit) {
-                count1 += 1;
-            }
-            // Low count
-            bit = ((pData[j] >> (3 - i)) & 0x01);
-            if (bit) {
-                count1 += 1;
-            }
-        }
-
-        // The y -axis calculation is completed, and placed in the final BIT output buffer
-        pOut[pos / 8] |= ((count1 % 2) << (7 - pos % 8));
-        pos += 1;
-
-#ifdef EM410X_Encoder_NRF_LOG_INFO
-        NRF_LOG_INFO("%d ", count1 % 2);
-#endif // EM410X_Encoder_NRF_LOG_INFO
-    }
-
-#ifdef EM410X_Encoder_NRF_LOG_INFO
-    NRF_LOG_INFO(" <- Qi Dian verification : Tail code  -> 0\n\n");
-#endif // EM410X_Encoder_NRF_LOG_INFO
-}
-
 // Reading the card function, you need to stop calling, return 0 to read the card, 1 is to read
 uint8_t em410x_acquire(void) {
     if (dataindex >= RAW_BUF_SIZE * 8) {
@@ -299,7 +144,7 @@ uint8_t em410x_acquire(void) {
         if (carddata.startbit != 255 && carddata.startbit < (RAW_BUF_SIZE * 8) - 64) {
             //Guarantee card data can be fully analyzed
             //NRF_LOG_INFO("do mac,start: %d\r\n",startbit);
-            if (mcst(&carddata) == 1) {
+            if (mcst(carddata.rawa, carddata.rawb, carddata.hexbuf, carddata.startbit, RAW_BUF_SIZE, 1) == 1) {
                 //Card normal analysis
 #ifdef debug410x
                 {
@@ -329,7 +174,7 @@ uint8_t em410x_acquire(void) {
 }
 
 //GPIO interrupt recovery function is used to detect the descending edge
-void GPIO_INT0_callback(void) {
+static void GPIO_INT0_callback(void) {
     static uint32_t thistimelen = 0;
     thistimelen = get_lf_counter_value();
     if (thistimelen > 47) {
