@@ -76,6 +76,29 @@ typedef struct {
     mf1_key_t keys[40][2]; // 6 bytes * 2 keys * 40 sectors = 480 bytes
 } PACKED mf1_toolbox_check_keys_of_sectors_out_t;
 
+typedef struct {
+    uint8_t block;
+    uint8_t key_type;
+    uint8_t keys_len;
+    mf1_key_t *keys;
+} mf1_toolbox_check_keys_on_block_in_t;
+
+typedef struct {
+    uint8_t found;
+    mf1_key_t key;
+} PACKED mf1_toolbox_check_keys_on_block_out_t;
+
+typedef struct {
+    uint8_t nt_first_half[2];
+    uint8_t nt_par_err;
+    uint8_t nt_enc[4];
+} PACKED mf1_static_nonce_keytype_t;
+
+typedef struct {
+    mf1_static_nonce_keytype_t key_a;
+    mf1_static_nonce_keytype_t key_b;
+} PACKED mf1_static_nonce_sector_t;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -113,13 +136,20 @@ uint8_t check_std_mifare_nt_support();
 void antenna_switch_delay(uint32_t delay_ms);
 uint16_t auth_key_use_522_hw(uint8_t block, uint8_t type, uint8_t *key);
 
-uint16_t mf1_toolbox_check_keys_of_sectors (
+uint16_t mf1_toolbox_check_keys_of_sectors(
     mf1_toolbox_check_keys_of_sectors_in_t *in,
     mf1_toolbox_check_keys_of_sectors_out_t *out
 );
 
-uint8_t mf1_hardnested_nonces_acquire(bool slow, uint8_t blkKnown, uint8_t typKnown, uint64_t keyKnown, 
-    uint8_t targetBlk, uint8_t targetTyp, uint8_t* nonces, uint16_t noncesMax, uint8_t* num_nonces);
+uint16_t mf1_toolbox_check_keys_on_block(
+    mf1_toolbox_check_keys_on_block_in_t *in,
+    mf1_toolbox_check_keys_on_block_out_t *out
+);
+
+uint8_t mf1_hardnested_nonces_acquire(bool slow, uint8_t blkKnown, uint8_t typKnown, uint64_t keyKnown,
+                                      uint8_t targetBlk, uint8_t targetTyp, uint8_t *nonces, uint16_t noncesMax, uint8_t *num_nonces);
+
+uint8_t mf1_static_encrypted_nonces_acquire(uint64_t keyKnown, uint8_t sector_count, uint8_t starting_sector, uint8_t sector_data[40][sizeof(mf1_static_nonce_sector_t)], uint8_t *sectors_acquired, uint32_t *cardUid);
 
 #ifdef __cplusplus
 }

@@ -13,6 +13,7 @@ class Command(enum.IntEnum):
 
     SET_SLOT_TAG_NICK = 1007
     GET_SLOT_TAG_NICK = 1008
+    GET_ALL_SLOT_NICKS = 1038
 
     SLOT_DATA_CONFIG_SAVE = 1009
 
@@ -69,7 +70,9 @@ class Command(enum.IntEnum):
     HF14A_RAW = 2010
     MF1_MANIPULATE_VALUE_BLOCK = 2011
     MF1_CHECK_KEYS_OF_SECTORS = 2012
-    DATA_CMD_MF1_HARDNESTED_ACQUIRE = 2013
+    MF1_HARDNESTED_ACQUIRE = 2013
+    MF1_ENC_NESTED_ACQUIRE = 2014
+    MF1_CHECK_KEYS_ON_BLOCK = 2015
 
     EM410X_SCAN = 3000
     EM410X_WRITE_TO_T55XX = 3001
@@ -376,6 +379,7 @@ class MifareClassicWriteMode(enum.IntEnum):
             return "Shadow requested"
         return "None"
 
+
 @enum.unique
 class MifareUltralightWriteMode(enum.IntEnum):
     # Normal write
@@ -407,6 +411,7 @@ class MifareUltralightWriteMode(enum.IntEnum):
         elif self == MifareUltralightWriteMode.SHADOW_REQ:
             return "Shadow requested"
         return "None"
+
 
 @enum.unique
 class MifareClassicPrngType(enum.IntEnum):
@@ -500,6 +505,7 @@ class ButtonPressFunction(enum.IntEnum):
         elif self == ButtonPressFunction.BATTERY:
             return "Show Battery Level"
         return "None"
+
 
 @enum.unique
 class MfcValueBlockOperator(enum.IntEnum):

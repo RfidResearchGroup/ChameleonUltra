@@ -4,7 +4,7 @@
  * and open the template in the editor.
  */
 
-/* 
+/*
  * File:   tables.h
  * Author: vk496
  *
@@ -21,7 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
-#include <../../xz/src/liblzma/api/lzma.h>
+#include <lzma.h>
 #include "../cmdhfmfhard.h"
 
 typedef struct bitflip_info {

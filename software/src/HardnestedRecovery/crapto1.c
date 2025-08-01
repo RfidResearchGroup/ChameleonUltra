@@ -181,8 +181,8 @@ bool validate_prng_nonce(uint32_t nonce) {
 }
 
 static uint32_t fastfwd[2][8] = {
-        { 0, 0x4BC53, 0xECB1, 0x450E2, 0x25E29, 0x6E27A, 0x2B298, 0x60ECB},
-        { 0, 0x1D962, 0x4BC53, 0x56531, 0xECB1, 0x135D3, 0x450E2, 0x58980}
+    { 0, 0x4BC53, 0xECB1, 0x450E2, 0x25E29, 0x6E27A, 0x2B298, 0x60ECB},
+    { 0, 0x1D962, 0x4BC53, 0x56531, 0xECB1, 0x135D3, 0x450E2, 0x58980}
 };
 
 /** lfsr_prefix_ks
@@ -283,7 +283,7 @@ struct Crypto1State *lfsr_common_prefix(uint32_t pfx, uint32_t rr, uint8_t ks[8]
             }
 
     s->odd = s->even = 0;
-    out:
+out:
     free(odd);
     free(even);
     return statelist;

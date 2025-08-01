@@ -622,7 +622,7 @@ uint8_t pcd_14a_reader_bytes_transfer_flags(uint8_t Command, uint8_t *pIn, uint8
 * @param  :tag: tag info buffer
 * @retval : if return STATUS_HF_TAG_OK, the tag is selected.
 */
-uint8_t pcd_14a_reader_fast_select(picc_14a_tag_t *tag) { 
+uint8_t pcd_14a_reader_fast_select(picc_14a_tag_t *tag) {
     uint8_t dat_buff[9] = { 0x00 };
     uint8_t status = STATUS_HF_TAG_OK;
     uint8_t cascade_level = 0;
@@ -1144,14 +1144,14 @@ uint8_t pcd_14a_reader_mf1_manipulate_value_block(uint8_t operator, uint8_t addr
 
     // 2. Transfer the operand to complete the value block manipulation
     status = pcd_14a_reader_bytes_transfer_flags(
-        PCD_TRANSCEIVE, 
-        dat_buff, 
-        6, 
-        dat_buff, 
-        &dat_len, 
-        U8ARR_BIT_LEN(dat_buff), 
-        PCD_TRANSMIT_FLAG_NO_RESET_MF_CRYPTO1_ON);
-    
+                 PCD_TRANSCEIVE,
+                 dat_buff,
+                 6,
+                 dat_buff,
+                 &dat_len,
+                 U8ARR_BIT_LEN(dat_buff),
+                 PCD_TRANSMIT_FLAG_NO_RESET_MF_CRYPTO1_ON);
+
     // Operand Part of Increment/Decrement/Restore does not acknowledge, so Timeout means success
     if (status != STATUS_HF_TAG_NO || dat_len != 0) {
         return status == STATUS_HF_TAG_OK ? STATUS_HF_ERR_STAT : status;

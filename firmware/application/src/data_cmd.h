@@ -45,6 +45,7 @@
 #define DATA_CMD_GET_DEVICE_CAPABILITIES        (1035)
 #define DATA_CMD_GET_BLE_PAIRING_ENABLE         (1036)
 #define DATA_CMD_SET_BLE_PAIRING_ENABLE         (1037)
+#define DATA_CMD_GET_ALL_SLOT_NICKS             (1038)
 
 //
 // ******************************************************************
@@ -69,6 +70,8 @@
 #define DATA_CMD_MF1_MANIPULATE_VALUE_BLOCK     (2011)
 #define DATA_CMD_MF1_CHECK_KEYS_OF_SECTORS      (2012)
 #define DATA_CMD_MF1_HARDNESTED_ACQUIRE         (2013)
+#define DATA_CMD_MF1_ENC_NESTED_ACQUIRE         (2014)
+#define DATA_CMD_MF1_CHECK_KEYS_ON_BLOCK        (2015)
 
 //
 // ******************************************************************

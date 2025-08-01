@@ -142,10 +142,10 @@ unsigned int __builtin_popcountl(unsigned long long x) {
 #endif
 
 #ifdef _MSC_VER
-    #include <Windows.h>
-    #define atomic_add(num, val) (InterlockedExchangeAdd(num, val) + val)
+#include <Windows.h>
+#define atomic_add(num, val) (InterlockedExchangeAdd(num, val) + val)
 #else
-    #define atomic_add __sync_fetch_and_add
+#define atomic_add __sync_fetch_and_add
 #endif
 
 #define MALLOC_BITARRAY malloc_bitarray_NOSIMD

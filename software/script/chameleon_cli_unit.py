@@ -1,4 +1,6 @@
 import binascii
+import glob
+import math
 import os
 import tempfile
 import re
@@ -7,7 +9,6 @@ import argparse
 import timeit
 import sys
 import time
-from datetime import datetime
 import serial.tools.list_ports
 import threading
 import struct
@@ -20,7 +21,8 @@ import hardnested_utils
 
 import chameleon_com
 import chameleon_cmd
-from chameleon_utils import ArgumentParserNoExit, ArgsParserError, UnexpectedResponseError
+from chameleon_utils import ArgumentParserNoExit, ArgsParserError, UnexpectedResponseError, execute_tool, \
+    tqdm_if_exists, print_key_table
 from chameleon_utils import CLITree
 from chameleon_utils import CR, CG, CB, CC, CY, C0
 from chameleon_utils import print_mem_dump
@@ -45,6 +47,7 @@ type_id_SAK_dict = {0x00: "MIFARE Ultralight Classic/C/EV1/Nano | NTAG 2xx",
 
 default_cwd = Path.cwd() / Path(__file__).with_name("bin")
 
+
 def load_key_file(import_key, keys):
     """
     Load key file and append its content to the provided set of keys.
@@ -54,11 +57,14 @@ def load_key_file(import_key, keys):
         keys.update(line.encode('utf-8') for line in file.read().decode('utf-8').splitlines())
     return keys
 
+
 def load_dic_file(import_dic, keys):
     return keys
-    
+
+
 def check_tools():
-    tools = ['staticnested', 'nested', 'darkside', 'mfkey32v2']
+    tools = ['staticnested', 'nested', 'darkside', 'mfkey32v2', 'staticnested_1nt',
+             'staticnested_2x1nt_rf08s', 'staticnested_2x1nt_rf08s_1key']
     if sys.platform == "win32":
         tools = [x+'.exe' for x in tools]
     missing_tools = [tool for tool in tools if not (default_cwd / tool).exists()]
@@ -348,14 +354,14 @@ class MFUAuthArgsUnit(ReaderRequiredUnit):
                 key = bytes.fromhex(key)
             except:
                 raise ValueError("Key should be a hex string")
-            
+
             if len(key) not in [4, 16]:
                 raise ValueError("Key should either be 4 or 16 bytes long")
             elif len(key) == 16:
                 raise ValueError("Ultralight-C authentication isn't supported yet")
 
             return key
-        
+
         parser.add_argument(
             '-k', '--key', type=key_parser, metavar="<hex>", help="Authentication key (EV1/NTAG 4 bytes)."
         )
@@ -736,7 +742,7 @@ class HFMFNested(ReaderRequiredUnit):
         """
         # check nt level, we can run static or nested auto...
         nt_level = self.cmd.mf1_detect_prng()
-        print(f" - NT vulnerable: {CY}{ self.from_nt_level_code_to_str(nt_level) }{C0}")
+        print(f" - NT vulnerable: {CY}{self.from_nt_level_code_to_str(nt_level)}{C0}")
         if nt_level == 2:
             print(" [!] HardNested has not been implemented yet.")
             return None
@@ -892,6 +898,7 @@ class HFMFDarkside(ReaderRequiredUnit):
             print(" - Key recover fail.")
         return
 
+
 @hf_mf.command('hardnested')
 class HFMFHardNested(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -933,15 +940,15 @@ class HFMFHardNested(ReaderRequiredUnit):
         :return: Recovered key as a hex string, or None if not found.
         """
         print(f" - Starting HardNested attack...")
-        nonces_buffer = bytearray() # This will hold the final data for the file
-        uid_bytes = b'' # To store UID from the successful attempt
+        nonces_buffer = bytearray()  # This will hold the final data for the file
+        uid_bytes = b''  # To store UID from the successful attempt
 
         # --- Outer loop for acquisition attempts ---
-        acquisition_success = False # Flag to indicate if any attempt was successful
+        acquisition_success = False  # Flag to indicate if any attempt was successful
         for attempt in range(max_attempts):
             print(f"\n--- Starting Acquisition Attempt {attempt + 1}/{max_attempts} ---")
-            total_raw_nonces_bytes = bytearray() # Accumulator for raw nonces for THIS attempt
-            nonces_buffer.clear() # Clear buffer for each new attempt
+            total_raw_nonces_bytes = bytearray()  # Accumulator for raw nonces for THIS attempt
+            nonces_buffer.clear()  # Clear buffer for each new attempt
 
             # --- MSB Tracking Initialization (Reset for each attempt) ---
             seen_msbs = [False] * 256
@@ -967,7 +974,7 @@ class HFMFHardNested(ReaderRequiredUnit):
                 if attempt + 1 < max_attempts:
                     print(f"{CY}   Retrying scan in 1 second...{C0}")
                     time.sleep(1)
-                    continue # Retry the outer loop (next attempt)
+                    continue  # Retry the outer loop (next attempt)
                 else:
                     print(f"{CR}   Maximum attempts reached without finding tag. Attack failed.{C0}")
                     return None
@@ -977,7 +984,7 @@ class HFMFHardNested(ReaderRequiredUnit):
                 return None
 
             tag_info = scan_resp[0]
-            uid_bytes = tag_info['uid'] # Store UID for later verification
+            uid_bytes = tag_info['uid']  # Store UID for later verification
             uid_len = len(uid_bytes)
             uid_for_file = b''
             if uid_len == 4:
@@ -985,16 +992,15 @@ class HFMFHardNested(ReaderRequiredUnit):
             elif uid_len == 7:
                 uid_for_file = uid_bytes[3: 7]
             elif uid_len == 10:
-                 uid_for_file = uid_bytes[6: 10]
+                uid_for_file = uid_bytes[6: 10]
             else:
-                 print(f"{CR}   Error: Unexpected UID length ({uid_len} bytes). Cannot create nonce file header.{C0}")
-                 return None # Fail if UID length is unexpected
+                print(f"{CR}   Error: Unexpected UID length ({uid_len} bytes). Cannot create nonce file header.{C0}")
+                return None  # Fail if UID length is unexpected
             print(f"   Tag found with UID: {uid_bytes.hex().upper()}")
             # Prepare header in the main buffer for this attempt
             nonces_buffer.extend(uid_for_file)
             nonces_buffer.extend(struct.pack('!BB', block_target, type_target.value & 0x01))
             print(f"   Nonce file header prepared: {nonces_buffer.hex().upper()}")
-
 
             # 2. Acquire nonces dynamically based on MSB criteria (Inner loop for runs)
             print(f"   Acquiring nonces (slow mode: {slow_mode}, max runs: {max_runs}). This may take a while...")
@@ -1006,8 +1012,8 @@ class HFMFHardNested(ReaderRequiredUnit):
                     current_scan = self.cmd.hf14a_scan()
                     if current_scan is None or len(current_scan) == 0 or current_scan[0]['uid'] != uid_bytes:
                         print(f"{CR}   Error: Tag lost or changed before run {run_count}. Stopping acquisition attempt.{C0}")
-                        acquisition_goal_met = False # Mark as failed
-                        break # Exit inner run loop for this attempt
+                        acquisition_goal_met = False  # Mark as failed
+                        break  # Exit inner run loop for this attempt
 
                     # Acquire nonces for this run
                     raw_nonces_bytes_this_run = self.cmd.mf1_hard_nested_acquire(
@@ -1016,7 +1022,7 @@ class HFMFHardNested(ReaderRequiredUnit):
 
                     if not raw_nonces_bytes_this_run:
                         print(f"{CY}   Run {run_count}: No nonces acquired in this run. Continuing...{C0}")
-                        time.sleep(0.1) # Small delay before retrying
+                        time.sleep(0.1)  # Small delay before retrying
                         continue
 
                     # Append successfully acquired nonces to the total buffer for this attempt
@@ -1024,7 +1030,8 @@ class HFMFHardNested(ReaderRequiredUnit):
 
                     # --- Process acquired nonces for MSB tracking ---
                     num_pairs_this_run = len(raw_nonces_bytes_this_run) // 9
-                    print(f"   Run {run_count}: Acquired {num_pairs_this_run * 2} nonces ({len(raw_nonces_bytes_this_run)} bytes raw). Processing MSBs...")
+                    print(
+                        f"   Run {run_count}: Acquired {num_pairs_this_run * 2} nonces ({len(raw_nonces_bytes_this_run)} bytes raw). Processing MSBs...")
 
                     new_msbs_found_this_run = 0
                     for i in range(num_pairs_this_run):
@@ -1043,10 +1050,11 @@ class HFMFHardNested(ReaderRequiredUnit):
                             new_msbs_found_this_run += 1
                             parity_bit = hardnested_utils.evenparity32((nt_enc & 0xff000000) | (par & 0x08))
                             msb_parity_sum += parity_bit
-                            print(f"\r   Unique MSBs: {unique_msb_count}/256 | Current Sum: {msb_parity_sum}   ", end="")
+                            print(
+                                f"\r   Unique MSBs: {unique_msb_count}/256 | Current Sum: {msb_parity_sum}   ", end="")
 
                     if new_msbs_found_this_run > 0:
-                        print() # Print a newline after progress update
+                        print()  # Print a newline after progress update
 
                     # --- Check termination condition ---
                     if unique_msb_count == 256:
@@ -1054,32 +1062,33 @@ class HFMFHardNested(ReaderRequiredUnit):
                         if msb_parity_sum in hardnested_utils.hardnested_sums:
                             print(f"   {CG}Parity sum {msb_parity_sum} is VALID. Stopping acquisition runs.{C0}")
                             acquisition_goal_met = True
-                            acquisition_success = True # Mark attempt as successful
-                            break # Exit the inner run loop successfully
+                            acquisition_success = True  # Mark attempt as successful
+                            break  # Exit the inner run loop successfully
                         else:
-                            print(f"   {CR}Parity sum {msb_parity_sum} is INVALID (Expected one of {hardnested_utils.hardnested_sums}).{C0}")
-                            acquisition_goal_met = False # Mark as failed
+                            print(
+                                f"   {CR}Parity sum {msb_parity_sum} is INVALID (Expected one of {hardnested_utils.hardnested_sums}).{C0}")
+                            acquisition_goal_met = False  # Mark as failed
                             acquisition_success = False
-                            break # Exit the inner run loop to restart the attempt
+                            break  # Exit the inner run loop to restart the attempt
 
                 except chameleon_com.CMDInvalidException:
-                     print(f"{CR}   Error: Hardnested command not supported by this firmware version.{C0}")
-                     return None # Cannot proceed at all
+                    print(f"{CR}   Error: Hardnested command not supported by this firmware version.{C0}")
+                    return None  # Cannot proceed at all
                 except UnexpectedResponseError as e:
                     print(f"{CR}   Error acquiring nonces during run {run_count}: {e}{C0}")
                     print(f"{CY}   Stopping acquisition runs for this attempt...{C0}")
                     acquisition_goal_met = False
-                    break # Exit inner run loop
+                    break  # Exit inner run loop
                 except TimeoutError:
                     print(f"{CR}   Error: Timeout during nonce acquisition run {run_count}.{C0}")
                     print(f"{CY}   Stopping acquisition runs for this attempt...{C0}")
                     acquisition_goal_met = False
-                    break # Exit inner run loop
+                    break  # Exit inner run loop
                 except Exception as e:
                     print(f"{CR}   Unexpected error during acquisition run {run_count}: {e}{C0}")
                     print(f"{CY}   Stopping acquisition runs for this attempt...{C0}")
                     acquisition_goal_met = False
-                    break # Exit inner run loop
+                    break  # Exit inner run loop
             # --- End of inner run loop (while run_count < max_runs) ---
 
             # --- Post-Acquisition Summary for this attempt ---
@@ -1088,42 +1097,44 @@ class HFMFHardNested(ReaderRequiredUnit):
                 print(f"   {CG}Successfully acquired nonces meeting the MSB sum criteria in {run_count} runs.{C0}")
                 # Append collected raw nonces to the main buffer for the file
                 nonces_buffer.extend(total_raw_nonces_bytes)
-                break # Exit the outer attempt loop successfully
+                break  # Exit the outer attempt loop successfully
             elif unique_msb_count == 256 and not acquisition_goal_met:
-                 print(f"   {CR}Found all 256 MSBs, but the parity sum was invalid.{C0}")
-                 if attempt + 1 < max_attempts:
-                     print(f"   {CY}Restarting acquisition process...{C0}")
-                     time.sleep(1) # Small delay before restarting
-                     continue # Continue to the next iteration of the outer attempt loop
-                 else:
-                     print(f"   {CR}Maximum attempts ({max_attempts}) reached with invalid sum. Attack failed.{C0}")
-                     return None # Failed after max attempts
+                print(f"   {CR}Found all 256 MSBs, but the parity sum was invalid.{C0}")
+                if attempt + 1 < max_attempts:
+                    print(f"   {CY}Restarting acquisition process...{C0}")
+                    time.sleep(1)  # Small delay before restarting
+                    continue  # Continue to the next iteration of the outer attempt loop
+                else:
+                    print(f"   {CR}Maximum attempts ({max_attempts}) reached with invalid sum. Attack failed.{C0}")
+                    return None  # Failed after max attempts
             elif run_count >= max_runs:
-                print(f"   {CY}Warning: Reached max runs ({max_runs}) for attempt {attempt + 1}. Found {unique_msb_count}/256 unique MSBs.{C0}")
+                print(
+                    f"   {CY}Warning: Reached max runs ({max_runs}) for attempt {attempt + 1}. Found {unique_msb_count}/256 unique MSBs.{C0}")
                 if attempt + 1 < max_attempts:
                     print(f"   {CY}Restarting acquisition process...{C0}")
                     time.sleep(1)
-                    continue # Continue to the next iteration of the outer attempt loop
+                    continue  # Continue to the next iteration of the outer attempt loop
                 else:
                     print(f"   {CR}Maximum attempts ({max_attempts}) reached without meeting criteria. Attack failed.{C0}")
-                    return None # Failed after max attempts
-            else: # Acquisition stopped due to error or tag loss
-                 print(f"   {CR}Acquisition attempt {attempt + 1} stopped prematurely due to an error after {run_count} runs.{C0}")
-                 # Decide if we should retry or fail completely. Let's fail for now.
-                 print(f"   {CR}Attack failed due to error during acquisition.{C0}")
-                 return None # Failed due to error
+                    return None  # Failed after max attempts
+            else:  # Acquisition stopped due to error or tag loss
+                print(f"   {CR}Acquisition attempt {attempt + 1} stopped prematurely due to an error after {run_count} runs.{C0}")
+                # Decide if we should retry or fail completely. Let's fail for now.
+                print(f"   {CR}Attack failed due to error during acquisition.{C0}")
+                return None  # Failed due to error
 
         # --- End of outer attempt loop ---
 
         # If we exited the loop successfully (acquisition_success is True)
         if not acquisition_success:
-             # This case should ideally be caught within the loop, but as a safeguard:
-             print(f"{CR}   Error: Acquisition failed after {max_attempts} attempts.{C0}")
-             return None
+            # This case should ideally be caught within the loop, but as a safeguard:
+            print(f"{CR}   Error: Acquisition failed after {max_attempts} attempts.{C0}")
+            return None
 
         # --- Proceed with the rest of the attack using the successfully collected nonces ---
-        total_nonce_pairs = len(total_raw_nonces_bytes) // 9 # Use data from the successful attempt
-        print(f"\n   Proceeding with attack using {total_nonce_pairs * 2} nonces ({len(total_raw_nonces_bytes)} bytes raw).")
+        total_nonce_pairs = len(total_raw_nonces_bytes) // 9  # Use data from the successful attempt
+        print(
+            f"\n   Proceeding with attack using {total_nonce_pairs * 2} nonces ({len(total_raw_nonces_bytes)} bytes raw).")
         print(f"   Total nonce file size will be {len(nonces_buffer)} bytes.")
 
         if total_nonce_pairs == 0:
@@ -1133,10 +1144,10 @@ class HFMFHardNested(ReaderRequiredUnit):
         # 3. Save nonces to a temporary file
         nonce_file_path = None
         temp_nonce_file = None
-        temp_output_file = None # For hardnested output
-        process = None # Define process here for finally block
-        output_str = "" # To store the output read from the file
-        output_log_path = "" # To store the path of the output log
+        temp_output_file = None  # For hardnested output
+        process = None  # Define process here for finally block
+        output_str = ""  # To store the output read from the file
+        output_log_path = ""  # To store the path of the output log
 
         try:
             # --- Nonce File Handling ---
@@ -1146,12 +1157,13 @@ class HFMFHardNested(ReaderRequiredUnit):
                 suffix=".bin", prefix="hardnested_nonces_", delete=False,
                 mode='wb', dir='.'
             )
-            temp_nonce_file.write(nonces_buffer) # Write the buffer from the successful attempt
+            temp_nonce_file.write(nonces_buffer)  # Write the buffer from the successful attempt
             temp_nonce_file.flush()
             nonce_file_path = temp_nonce_file.name
-            temp_nonce_file.close() # Close it so hardnested can access it
-            temp_nonce_file = None # Clear variable after closing
-            print(f"   Nonces saved to {'temporary ' if delete_nonce_on_close else ''}file: {os.path.abspath(nonce_file_path)}")
+            temp_nonce_file.close()  # Close it so hardnested can access it
+            temp_nonce_file = None  # Clear variable after closing
+            print(
+                f"   Nonces saved to {'temporary ' if delete_nonce_on_close else ''}file: {os.path.abspath(nonce_file_path)}")
 
             # --- Output File Handling ---
             # Create a temporary file to capture hardnested's output
@@ -1160,9 +1172,8 @@ class HFMFHardNested(ReaderRequiredUnit):
                 suffix=".log", prefix="hardnested_output_", delete=False,
                 mode='w+', encoding='utf-8', errors='replace', dir='.'
             )
-            output_log_path = temp_output_file.name # Store path for potential error messages
+            output_log_path = temp_output_file.name  # Store path for potential error messages
             print(f"   Redirecting hardnested output to temporary log file: {os.path.abspath(output_log_path)}")
-
 
             # 4. Prepare and run the external hardnested tool, redirecting output
             tool_name = "hardnested"
@@ -1181,21 +1192,21 @@ class HFMFHardNested(ReaderRequiredUnit):
             # Run the process, redirecting stdout and stderr to the output file
             process = subprocess.Popen(
                 cmd_recover_list,
-                cwd=default_cwd, # Run from the bin directory
-                stdout=temp_output_file, # Redirect stdout to file
-                stderr=subprocess.STDOUT, # Redirect stderr to the same file as stdout
+                cwd=default_cwd,  # Run from the bin directory
+                stdout=temp_output_file,  # Redirect stdout to file
+                stderr=subprocess.STDOUT,  # Redirect stderr to the same file as stdout
             )
 
             # Wait for the process to complete
-            ret_code = process.wait() # This blocks until the tool finishes
+            ret_code = process.wait()  # This blocks until the tool finishes
 
             print(f"{CC}--- Hardnested Tool Finished (Exit Code: {ret_code}) ---{C0}")
 
             # 5. Read the output from the temporary log file
-            temp_output_file.seek(0) # Go back to the start of the file
-            output_str = temp_output_file.read() # Read the entire content
-            temp_output_file.close() # Close the file
-            temp_output_file = None # Clear the variable
+            temp_output_file.seek(0)  # Go back to the start of the file
+            output_str = temp_output_file.read()  # Read the entire content
+            temp_output_file.close()  # Close the file
+            temp_output_file = None  # Clear the variable
 
             # Optional: Print the captured output if needed for debugging
             # print(f"{CY}--- Captured Hardnested Output ---{C0}\n{output_str}\n{CY}--- End Captured Output ---{C0}")
@@ -1208,9 +1219,9 @@ class HFMFHardNested(ReaderRequiredUnit):
                 return None
 
             key_list = []
-            key_prefix = "Key found: " # Define the specific prefix to look for
+            key_prefix = "Key found: "  # Define the specific prefix to look for
             for line in output_str.splitlines():
-                line_stripped = line.strip() # Remove leading/trailing whitespace
+                line_stripped = line.strip()  # Remove leading/trailing whitespace
                 if line_stripped.startswith(key_prefix):
                     # Found the target line, now extract the key using regex
                     # Regex now looks for 12 hex chars specifically after the prefix
@@ -1227,7 +1238,7 @@ class HFMFHardNested(ReaderRequiredUnit):
             # 7. Verify Keys (Same as before)
             print(f"   [{len(key_list)} candidate key(s) found in output. Verifying...]")
             # Use the UID from the successful acquisition attempt
-            uid_bytes_for_verify = uid_bytes # From the last successful scan in the outer loop
+            uid_bytes_for_verify = uid_bytes  # From the last successful scan in the outer loop
 
             for key_hex in key_list:
                 key_bytes = bytes.fromhex(key_hex)
@@ -1237,11 +1248,11 @@ class HFMFHardNested(ReaderRequiredUnit):
                     scan_check = self.cmd.hf14a_scan()
                     if scan_check is None or len(scan_check) == 0 or scan_check[0]['uid'] != uid_bytes_for_verify:
                         print(f" {CR}Tag lost or changed during verification. Cannot verify.{C0}")
-                        return None # Stop verification if tag is gone
+                        return None  # Stop verification if tag is gone
 
                     if self.cmd.mf1_auth_one_key_block(block_target, type_target, key_bytes):
                         print(f" {CG}Success!{C0}")
-                        return key_hex # Return the verified key
+                        return key_hex  # Return the verified key
                     else:
                         print(f" {CR}Auth failed.{C0}")
                 except UnexpectedResponseError as e:
@@ -1276,34 +1287,32 @@ class HFMFHardNested(ReaderRequiredUnit):
                         print(f"{CR}   Error deleting temporary nonce file {nonce_file_path}: {e}{C0}")
 
             # Ensure output file is closed and deleted if an error occurred before its closure
-            if temp_output_file: # If it wasn't closed and cleared in the try block
+            if temp_output_file:  # If it wasn't closed and cleared in the try block
                 try:
                     temp_output_file.close()
                 except Exception:
-                    pass # Ignore errors during cleanup close
+                    pass  # Ignore errors during cleanup close
 
             # Delete the output log file unless an error occurred and we want to keep it
             if output_log_path and os.path.exists(output_log_path):
-                 # Keep log if hardnested failed (ret_code != 0) or if verification failed?
-                 # For now, let's always delete it unless there was an exception *before* reading it.
-                 # If ret_code != 0, the path was already printed.
-                 try:
-                     os.remove(output_log_path)
-                 except OSError as e:
-                     print(f"{CR}   Error deleting temporary output log file {output_log_path}: {e}{C0}")
-
+                # Keep log if hardnested failed (ret_code != 0) or if verification failed?
+                # For now, let's always delete it unless there was an exception *before* reading it.
+                # If ret_code != 0, the path was already printed.
+                try:
+                    os.remove(output_log_path)
+                except OSError as e:
+                    print(f"{CR}   Error deleting temporary output log file {output_log_path}: {e}{C0}")
 
             # Ensure process is terminated if something went wrong
             if process and process.poll() is None:
                 try:
                     print(f"{CY}   Terminating hardnested process...{C0}")
-                    process.terminate() # Try graceful termination
-                    process.wait(timeout=0.5) # Wait briefly
+                    process.terminate()  # Try graceful termination
+                    process.wait(timeout=0.5)  # Wait briefly
                     if process.poll() is None:
-                        process.kill() # Force kill if still running
+                        process.kill()  # Force kill if still running
                 except Exception as kill_err:
                     print(f"{CR}   Error terminating process: {kill_err}{C0}")
-
 
     def on_exec(self, args: argparse.Namespace):
         block_known = args.blk
@@ -1332,29 +1341,131 @@ class HFMFHardNested(ReaderRequiredUnit):
             print(f"{CR} - HardNested attack failed to recover the key.{C0}")
 
 
+@hf_mf.command('senested')
+class HFMFStaticEncryptedNested(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Mifare Classic static encrypted recover key via backdoor'
+        parser.add_argument(
+            '--key', '-k', help='Backdoor key (as hex[12] format), currently known: A396EFA4E24F (default), A31667A8CEC1, 518B3354E760. See https://eprint.iacr.org/2024/1275', metavar='<hex>', type=str)
+        parser.add_argument('--sectors', '-s', type=int, metavar="<dec>", help="Sector count")
+        parser.add_argument('--starting-sector', type=int, metavar="<dec>", help="Start recovery from this sector")
+        parser.set_defaults(sectors=16)
+        parser.set_defaults(starting_sector=0)
+        parser.set_defaults(key='A396EFA4E24F')
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        acquire_datas = self.cmd.mf1_static_encrypted_nested_acquire(
+            bytes.fromhex(args.key), args.sectors, args.starting_sector)
+
+        if not acquire_datas:
+            print('Failed to collect nonces, is card present and has backdoor?')
+
+        uid = format(acquire_datas['uid'], 'x')
+
+        key_map = {'A': {}, 'B': {}}
+
+        check_speed = 1.95  # sec per 64 keys
+
+        for sector in range(args.starting_sector, args.sectors):
+            sector_name = str(sector).zfill(2)
+            print('Recovering', sector, 'sector...')
+            execute_tool('staticnested_1nt', [uid, sector_name, format(acquire_datas['nts']['a'][sector]['nt'], 'x').zfill(8), format(
+                acquire_datas['nts']['a'][sector]['nt_enc'], 'x').zfill(8), str(acquire_datas['nts']['a'][sector]['parity']).zfill(4)])
+            execute_tool('staticnested_1nt', [uid, sector_name, format(acquire_datas['nts']['b'][sector]['nt'], 'x').zfill(8), format(
+                acquire_datas['nts']['b'][sector]['nt_enc'], 'x').zfill(8), str(acquire_datas['nts']['b'][sector]['parity']).zfill(4)])
+            a_key_dic = f"keys_{uid}_{sector_name}_{format(acquire_datas['nts']['a'][sector]['nt'], 'x').zfill(8)}.dic"
+            b_key_dic = f"keys_{uid}_{sector_name}_{format(acquire_datas['nts']['b'][sector]['nt'], 'x').zfill(8)}.dic"
+            execute_tool('staticnested_2x1nt_rf08s', [a_key_dic, b_key_dic])
+
+            keys = open(os.path.join(tempfile.gettempdir(), b_key_dic.replace('.dic', '_filtered.dic'))).readlines()
+            keys_bytes = []
+            for key in keys:
+                keys_bytes.append(bytes.fromhex(key.strip()))
+
+            key = None
+
+            print('Start checking possible B keys, will take up to', math.floor(
+                len(keys_bytes) / 64 * check_speed), 'seconds for', len(keys_bytes), 'keys')
+            for i in tqdm_if_exists(range(0, len(keys_bytes), 64)):
+                data = self.cmd.mf1_check_keys_on_block(sector * 4 + 3, 0x61, keys_bytes[i:i + 64])
+                if data:
+                    key = data.hex().zfill(12)
+                    key_map['B'][sector] = key
+                    print('Found B key', key)
+                    break
+
+            if key:
+                a_key = execute_tool('staticnested_2x1nt_rf08s_1key', [format(
+                    acquire_datas['nts']['b'][sector]['nt'], 'x').zfill(8), key, a_key_dic])
+                keys_bytes = []
+                for key in a_key.split('\n'):
+                    keys_bytes.append(bytes.fromhex(key.strip()))
+                data = self.cmd.mf1_check_keys_on_block(sector * 4 + 3, 0x60, keys_bytes)
+                if data:
+                    key = data.hex().zfill(12)
+                    print('Found A key', key)
+                    key_map['A'][sector] = key
+                    continue
+                else:
+                    print('Failed to find A key by fast method, trying all possible keys')
+                    keys = open(os.path.join(tempfile.gettempdir(), a_key_dic.replace('.dic', '_filtered.dic'))).readlines()
+                    keys_bytes = []
+                    for key in keys:
+                        keys_bytes.append(bytes.fromhex(key.strip()))
+
+                    print('Start checking possible A keys, will take up to', math.floor(
+                        len(keys_bytes) / 64 * check_speed), 'seconds for', len(keys_bytes), 'keys')
+                    for i in tqdm_if_exists(range(0, len(keys_bytes), 64)):
+                        data = self.cmd.mf1_check_keys_on_block(sector * 4 + 3, 0x60, keys_bytes[i:i + 64])
+                        if data:
+                            key = data.hex().zfill(12)
+                            print('Found A key', key)
+                            key_map['A'][sector] = key
+                            break
+            else:
+                print('Failed to find key')
+
+        for file in glob.glob(tempfile.gettempdir() + '/keys_*.dic'):
+            os.remove(file)
+
+        print_key_table(key_map)
+
+
 @hf_mf.command('fchk')
 class HFMFFCHK(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
+        parser.description = 'Mifare Classic fast key check on sectors'
 
         mifare_type_group = parser.add_mutually_exclusive_group()
-        mifare_type_group.add_argument('--mini', help='MIFARE Classic Mini / S20', action='store_const', dest='maxSectors', const=5)
-        mifare_type_group.add_argument('--1k', help='MIFARE Classic 1k / S50 (default)', action='store_const', dest='maxSectors', const=16)
-        mifare_type_group.add_argument('--2k', help='MIFARE Classic/Plus 2k', action='store_const', dest='maxSectors', const=32)
-        mifare_type_group.add_argument('--4k', help='MIFARE Classic 4k / S70', action='store_const', dest='maxSectors', const=40)
+        mifare_type_group.add_argument('--mini', help='MIFARE Classic Mini / S20',
+                                       action='store_const', dest='maxSectors', const=5)
+        mifare_type_group.add_argument('--1k', help='MIFARE Classic 1k / S50 (default)',
+                                       action='store_const', dest='maxSectors', const=16)
+        mifare_type_group.add_argument('--2k', help='MIFARE Classic/Plus 2k',
+                                       action='store_const', dest='maxSectors', const=32)
+        mifare_type_group.add_argument('--4k', help='MIFARE Classic 4k / S70',
+                                       action='store_const', dest='maxSectors', const=40)
 
         parser.add_argument(dest='keys', help='Key (as hex[12] format)', metavar='<hex>', type=str, nargs='*')
-        parser.add_argument('--key', dest='import_key', type=argparse.FileType('rb'), help='Read keys from .key format file')
-        parser.add_argument('--dic', dest='import_dic', type=argparse.FileType('r', encoding='utf8'), help='Read keys from .dic format file')
+        parser.add_argument('--key', dest='import_key', type=argparse.FileType('rb'),
+                            help='Read keys from .key format file')
+        parser.add_argument('--dic', dest='import_dic', type=argparse.FileType('r',
+                            encoding='utf8'), help='Read keys from .dic format file')
 
-        parser.add_argument('--export-key', type=argparse.FileType('wb'), help=f'Export result as .key format, file will be {CR}OVERWRITTEN{C0} if exists')
-        parser.add_argument('--export-dic', type=argparse.FileType('w', encoding='utf8'), help=f'Export result as .dic format, file will be {CR}OVERWRITTEN{C0} if exists')
+        parser.add_argument('--export-key', type=argparse.FileType('wb'),
+                            help=f'Export result as .key format, file will be {CR}OVERWRITTEN{C0} if exists')
+        parser.add_argument('--export-dic', type=argparse.FileType('w', encoding='utf8'),
+                            help=f'Export result as .dic format, file will be {CR}OVERWRITTEN{C0} if exists')
 
-        parser.add_argument('-m', '--mask', help='Which sectorKey to be skip, 1 bit per sectorKey. `0b1` represent to skip to check. (in hex[20] format)', type=str, default='00000000000000000000', metavar='<hex>')
+        parser.add_argument(
+            '-m', '--mask', help='Which sectorKey to be skip, 1 bit per sectorKey. `0b1` represent to skip to check. (in hex[20] format)', type=str, default='00000000000000000000', metavar='<hex>')
 
         parser.set_defaults(maxSectors=16)
         return parser
-    
+
     def check_keys(self, mask: bytearray, keys: list[bytes], chunkSize=20):
         sectorKeys = dict()
 
@@ -1482,18 +1593,24 @@ class HFMFWRBL(MF1AuthArgsUnit):
         else:
             print(f" - {CR}Write fail.{C0}")
 
+
 @hf_mf.command('view')
 class HFMFView(MF1AuthArgsUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Display content from tag memory or dump file'
         mifare_type_group = parser.add_mutually_exclusive_group()
-        mifare_type_group.add_argument('--mini', help='MIFARE Classic Mini / S20', action='store_const', dest='maxSectors', const=5)
-        mifare_type_group.add_argument('--1k', help='MIFARE Classic 1k / S50 (default)', action='store_const', dest='maxSectors', const=16)
-        mifare_type_group.add_argument('--2k', help='MIFARE Classic/Plus 2k', action='store_const', dest='maxSectors', const=32)
-        mifare_type_group.add_argument('--4k', help='MIFARE Classic 4k / S70', action='store_const', dest='maxSectors', const=40)
+        mifare_type_group.add_argument('--mini', help='MIFARE Classic Mini / S20',
+                                       action='store_const', dest='maxSectors', const=5)
+        mifare_type_group.add_argument('--1k', help='MIFARE Classic 1k / S50 (default)',
+                                       action='store_const', dest='maxSectors', const=16)
+        mifare_type_group.add_argument('--2k', help='MIFARE Classic/Plus 2k',
+                                       action='store_const', dest='maxSectors', const=32)
+        mifare_type_group.add_argument('--4k', help='MIFARE Classic 4k / S70',
+                                       action='store_const', dest='maxSectors', const=40)
         parser.add_argument('-d', '--dump-file', required=False, type=argparse.FileType("rb"), help="Dump file to read")
-        parser.add_argument('-k', '--key-file', required=False, type=argparse.FileType("r"), help="File containing keys of tag to write (exported with fchk --export)")
+        parser.add_argument('-k', '--key-file', required=False, type=argparse.FileType("r"),
+                            help="File containing keys of tag to write (exported with fchk --export)")
         parser.set_defaults(maxSectors=16)
         return parser
 
@@ -1527,7 +1644,8 @@ class HFMFView(MF1AuthArgsUnit):
                 data.extend(resp)
         else:
             raise ArgsParserError("Missing args. Specify --dump-file (-d) or --key-file (-k)")
-        print_mem_dump(data,16)
+        print_mem_dump(data, 16)
+
 
 @hf_mf.command('value')
 class HFMFVALUE(ReaderRequiredUnit):
@@ -1538,12 +1656,13 @@ class HFMFVALUE(ReaderRequiredUnit):
         operator_group = parser.add_mutually_exclusive_group()
         operator_group.add_argument('--get', action='store_true', help="get value from src block")
         operator_group.add_argument('--set', type=int, required=False, metavar="<dec>",
-                            help="set value X (-2147483647 ~ 2147483647) to src block")
+                                    help="set value X (-2147483647 ~ 2147483647) to src block")
         operator_group.add_argument('--inc', type=int, required=False, metavar="<dec>",
-                            help="increment value by X (0 ~ 2147483647) from src to dst")
+                                    help="increment value by X (0 ~ 2147483647) from src to dst")
         operator_group.add_argument('--dec', type=int, required=False, metavar="<dec>",
-                            help="decrement value by X (0 ~ 2147483647) from src to dst")
-        operator_group.add_argument('--res', '--cp', action='store_true', help="copy value from src to dst (Restore and Transfer)")
+                                    help="decrement value by X (0 ~ 2147483647) from src to dst")
+        operator_group.add_argument('--res', '--cp', action='store_true',
+                                    help="copy value from src to dst (Restore and Transfer)")
 
         parser.add_argument('--blk', '--src-block', type=int, required=True, metavar="<dec>",
                             help="block number of src")
@@ -1589,7 +1708,7 @@ class HFMFVALUE(ReaderRequiredUnit):
             return
         dst_key = bytearray.fromhex(dst_key)
         # print(dst_blk, dst_type, dst_key)
-        
+
         if args.inc is not None:
             self.inc_value(src_blk, src_type, src_key, args.inc, dst_blk, dst_type, dst_key)
             return
@@ -1630,7 +1749,7 @@ class HFMFVALUE(ReaderRequiredUnit):
         if value < 0 or value > 2147483647:
             raise ArgsParserError(f"Increment value must be between 0 and 2147483647. Got {value}")
         resp = self.cmd.mf1_manipulate_value_block(
-            src_blk, src_type, src_key, 
+            src_blk, src_type, src_key,
             MfcValueBlockOperator.INCREMENT, value,
             dst_blk, dst_type, dst_key
         )
@@ -1639,12 +1758,12 @@ class HFMFVALUE(ReaderRequiredUnit):
             self.get_value(dst_blk, dst_type, dst_key)
         else:
             print(f" - {CR}Increment fail.{C0}")
-    
+
     def dec_value(self, src_blk, src_type, src_key, value, dst_blk, dst_type, dst_key):
         if value < 0 or value > 2147483647:
             raise ArgsParserError(f"Decrement value must be between 0 and 2147483647. Got {value}")
         resp = self.cmd.mf1_manipulate_value_block(
-            src_blk, src_type, src_key, 
+            src_blk, src_type, src_key,
             MfcValueBlockOperator.DECREMENT, value,
             dst_blk, dst_type, dst_key
         )
@@ -1656,7 +1775,7 @@ class HFMFVALUE(ReaderRequiredUnit):
 
     def res_value(self, src_blk, src_type, src_key, dst_blk, dst_type, dst_key):
         resp = self.cmd.mf1_manipulate_value_block(
-            src_blk, src_type, src_key, 
+            src_blk, src_type, src_key,
             MfcValueBlockOperator.RESTORE, 0,
             dst_blk, dst_type, dst_key
         )
@@ -1937,6 +2056,7 @@ class HFMFESave(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
                 fd.write(data)
         print("\n - Read success")
 
+
 @hf_mf.command('eview')
 class HFMFEView(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -1944,12 +2064,12 @@ class HFMFEView(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
         parser.description = 'View data from emulator memory'
         self.add_slot_args(parser)
         return parser
-    
+
     def on_exec(self, args: argparse.Namespace):
         selected_slot = self.cmd.get_active_slot()
         slot_info = self.cmd.get_slot_info()
-        tag_type = TagSpecificType(slot_info[selected_slot]['hf'])      
-        
+        tag_type = TagSpecificType(slot_info[selected_slot]['hf'])
+
         if tag_type == TagSpecificType.MIFARE_Mini:
             block_count = 20
         elif tag_type == TagSpecificType.MIFARE_1024:
@@ -1969,7 +2089,8 @@ class HFMFEView(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
             data.extend(self.cmd.mf1_read_emu_block_data(index, chunk_count))
             index += chunk_count
             block_count -= chunk_count
-        print_mem_dump(data,16)
+        print_mem_dump(data, 16)
+
 
 @hf_mf.command('econfig')
 class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredUnit):
@@ -2133,7 +2254,7 @@ class HFMFUVERSION(DeviceRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         value, no_tearing = self.cmd.mfu_read_emu_counter_data(args.counter)
-        print(f" - Value: {value:06x}")
+        print(f" - Value: {value:06x} ({value})")
         if no_tearing:
             print(f" - Tearing: {CG}not set{C0}")
         else:
@@ -2144,7 +2265,7 @@ class HFMFUVERSION(DeviceRequiredUnit):
 class HFMFUVERSION(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = 'Read MIFARE Ultralight / NTAG counter value.'
+        parser.description = 'Write MIFARE Ultralight / NTAG counter value.'
         parser.add_argument('-c', '--counter', type=int, required=True, help="Counter index.")
         parser.add_argument('-v', '--value', type=int, required=True, help="Counter value (24-bit).")
         parser.add_argument('-t', '--reset-tearing', action='store_true', help="Reset tearing event flag.")
@@ -2237,7 +2358,7 @@ class HFMFUWRPG(MFUAuthArgsUnit):
             'keep_rf_field': 0,
             'check_response_crc': 0,
         }
-        
+
         if param.key is not None:
             options['keep_rf_field'] = 1
             options['check_response_crc'] = 1
@@ -2256,9 +2377,10 @@ class HFMFUWRPG(MFUAuthArgsUnit):
             options['check_response_crc'] = 0
         else:
             failed_auth = False
-        
+
         if not failed_auth:
-            resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0xA2, args.page)+data)
+            resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200,
+                                      data=struct.pack('!BB', 0xA2, args.page)+data)
 
             if resp[0] == 0x0A:
                 print(f" - Ok")
@@ -2297,7 +2419,7 @@ class HFMFUEVIEW(DeviceRequiredUnit):
             count = min(nr_pages - page, 16)
             data = self.cmd.mfu_read_emu_page_data(page, count)
             for i in range(0, len(data), 4):
-                print(f"#{page+(i>>2):02x}: {data[i:i+4].hex()}")
+                print(f"#{page+(i >> 2):02x}: {data[i:i+4].hex()}")
             page += count
 
 
@@ -2328,7 +2450,7 @@ class HFMFUELOAD(DeviceRequiredUnit):
                 file_type = 'hex'
             else:
                 file_type = 'bin'
-        
+
         if file_type == 'hex':
             with open(args.file, 'r') as f:
                 data = f.read()
@@ -2349,7 +2471,7 @@ class HFMFUELOAD(DeviceRequiredUnit):
             return
         elif len(data) < size:
             print(f"{CY}Dump file is smaller than the current slot's memory ({len(data)} < {size}).{C0}")
-        
+
         nr_pages = len(data) >> 2
         page = 0
         while page < nr_pages:
@@ -2360,10 +2482,10 @@ class HFMFUELOAD(DeviceRequiredUnit):
                 page_data = bytes.fromhex("00000000") * cur_count
             else:
                 page_data = data[offset:offset + 4 * cur_count]
-            
+
             self.cmd.mfu_write_emu_page_data(page, page_data)
             page += cur_count
-        
+
         print(f" - Ok")
 
 
@@ -2409,7 +2531,7 @@ class HFMFUESAVE(DeviceRequiredUnit):
             nr_pages = self.cmd.mfu_get_emu_pages_count()
 
             fd.truncate(0)
-            
+
             # write version and signature as comments if saving as .eml
             if save_as_eml:
                 try:
@@ -2417,29 +2539,29 @@ class HFMFUESAVE(DeviceRequiredUnit):
 
                     fd.write(f"# Version: {version.hex()}\n")
                 except:
-                    pass # slot does not have version data
-                
+                    pass  # slot does not have version data
+
                 try:
                     signature = self.cmd.mf0_ntag_get_signature_data()
 
                     if signature != b"\x00" * 32:
                         fd.write(f"# Signature: {signature.hex()}\n")
                 except:
-                    pass # slot does not have signature data
-            
+                    pass  # slot does not have signature data
+
             page = 0
             while page < nr_pages:
                 cur_count = min(32, nr_pages - page)
-                
+
                 data = self.cmd.mfu_read_emu_page_data(page, cur_count)
                 if save_as_eml:
                     for i in range(0, len(data), 4):
                         fd.write(data[i:i+4].hex() + "\n")
                 else:
                     fd.write(data)
-                
+
                 page += cur_count
-        
+
         print(f" - Ok")
 
 
@@ -2463,7 +2585,7 @@ class HFMFURCNT(MFUAuthArgsUnit):
             'keep_rf_field': 0,
             'check_response_crc': 1,
         }
-        
+
         if param.key is not None:
             options['keep_rf_field'] = 1
             try:
@@ -2480,7 +2602,7 @@ class HFMFURCNT(MFUAuthArgsUnit):
             options['auto_select'] = 0
         else:
             failed_auth = False
-        
+
         if not failed_auth:
             resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x39, args.counter))
             print(f" - Data: {resp[:3].hex()}")
@@ -2504,16 +2626,16 @@ class HFMFUDUMP(MFUAuthArgsUnit):
                             help="Manually set number of pages to dump")
         parser.add_argument('-f', '--file', type=str, required=False, default="",
                             help="Specify a filename for dump file")
-        parser.add_argument('-t', '--type', type=str, required=False, choices=['bin', 'hex'], 
+        parser.add_argument('-t', '--type', type=str, required=False, choices=['bin', 'hex'],
                             help="Force writing as either raw binary or hex.")
         return parser
-    
+
     def do_dump(self, args: argparse.Namespace, param, fd, save_as_eml):
         if args.qty is not None:
             stop_page = min(args.page + args.qty, 256)
         else:
             stop_page = None
-        
+
         tags = self.cmd.hf14a_scan()
         if len(tags) > 1:
             print(f'- {CR}Collision detected, leave only one tag.{C0}')
@@ -2522,9 +2644,10 @@ class HFMFUDUMP(MFUAuthArgsUnit):
             print(f'- {CR}No tag detected.{C0}')
             return
         elif tags[0]['atqa'] != b'\x44\x00' or tags[0]['sak'] != b'\x00':
-            print(f'- {CR}Tag is not Mifare Ultralight compatible (ATQA {tags[0]["atqa"].hex()} SAK {tags[0]["sak"].hex()}).{C0}')
+            print(
+                f'- {CR}Tag is not Mifare Ultralight compatible (ATQA {tags[0]["atqa"].hex()} SAK {tags[0]["sak"].hex()}).{C0}')
             return
-        
+
         options = {
             'activate_rf_field': 0,
             'wait_response': 1,
@@ -2533,7 +2656,7 @@ class HFMFUDUMP(MFUAuthArgsUnit):
             'keep_rf_field': 1,
             'check_response_crc': 1,
         }
-        
+
         # if stop page isn't set manually, try autodetection
         if stop_page is None:
             tag_name = None
@@ -2545,13 +2668,14 @@ class HFMFUDUMP(MFUAuthArgsUnit):
                     version = None
             except:
                 version = None
-            
+
             # try sending AUTHENTICATE command and observe the result
             try:
-                supports_auth = len(self.cmd.hf14a_raw(options=options, resp_timeout_ms=100, data=struct.pack('!B', 0x1A))) != 0
+                supports_auth = len(self.cmd.hf14a_raw(
+                    options=options, resp_timeout_ms=100, data=struct.pack('!B', 0x1A))) != 0
             except:
                 supports_auth = False
-            
+
             if version is not None and not supports_auth:
                 # either ULEV1 or NTAG
                 assert len(version) == 8
@@ -2574,7 +2698,7 @@ class HFMFUDUMP(MFUAuthArgsUnit):
                     }
                 else:
                     size_map = {}
-                
+
                 if version[6] in size_map:
                     tag_name, stop_page = size_map[version[6]]
             elif version is None and supports_auth:
@@ -2595,14 +2719,14 @@ class HFMFUDUMP(MFUAuthArgsUnit):
             else:
                 # This is probably Ultralight AES, but we don't support this one yet.
                 pass
-            
+
             if tag_name is not None:
                 print(f' - Detected tag type as {tag_name}.')
 
             if stop_page is None:
                 print(f' - {CY}Couldn\'t autodetect the expected card size, reading until first error.{C0}')
                 stop_page = 256
-        
+
         needs_stop = False
 
         if param.key is not None:
@@ -2617,7 +2741,7 @@ class HFMFUDUMP(MFUAuthArgsUnit):
                 needs_stop = True
 
             options['auto_select'] = 0
-        
+
         # this handles auth failure
         if needs_stop:
             print(f" - {CR}Auth failed{C0}")
@@ -2631,7 +2755,7 @@ class HFMFUDUMP(MFUAuthArgsUnit):
                 resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.key)
                 options['auto_select'] = 0  # prevent resets
                 pack = resp[:2].hex()
-            
+
             # disable the rf field after the last command
             if i == (stop_page - 1) or needs_stop:
                 options['keep_rf_field'] = 0
@@ -2662,7 +2786,7 @@ class HFMFUDUMP(MFUAuthArgsUnit):
                     fd.write(data.hex()+'\n')
                 else:
                     fd.write(data)
-        
+
         if needs_stop and stop_page != 256:
             print(f' - {CY}Dump is shorter than expected.{C0}')
         if args.file != '':
@@ -2748,21 +2872,24 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
         uid_magic_group = parser.add_mutually_exclusive_group()
         uid_magic_group.add_argument('--enable-uid-magic', action='store_true', help="Enable UID magic mode")
         uid_magic_group.add_argument('--disable-uid-magic', action='store_true', help="Disable UID magic mode")
-        
+
         # Add this new write mode parameter
         write_names = [w.name for w in MifareUltralightWriteMode.list()]
         help_str = "Write Mode: " + ", ".join(write_names)
         parser.add_argument('--write', type=str, help=help_str, metavar="MODE", choices=write_names)
-        
-        parser.add_argument('--set-version', type=bytes.fromhex, help="Set data to be returned by the GET_VERSION command.")
-        parser.add_argument('--set-signature', type=bytes.fromhex, help="Set data to be returned by the READ_SIG command.")
-        parser.add_argument('--reset-auth-cnt', action='store_true', help="Resets the counter of unsuccessful authentication attempts.")
+
+        parser.add_argument('--set-version', type=bytes.fromhex,
+                            help="Set data to be returned by the GET_VERSION command.")
+        parser.add_argument('--set-signature', type=bytes.fromhex,
+                            help="Set data to be returned by the READ_SIG command.")
+        parser.add_argument('--reset-auth-cnt', action='store_true',
+                            help="Resets the counter of unsuccessful authentication attempts.")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
         aux_data_changed = False
         aux_data_change_requested = False
-        
+
         if args.set_version is not None:
             aux_data_change_requested = True
             aux_data_changed = True
@@ -2770,7 +2897,7 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
             if len(args.set_version) != 8:
                 print(f"{CR}Version data should be 8 bytes long.{C0}")
                 return
-            
+
             try:
                 self.cmd.mf0_ntag_set_version_data(args.set_version)
             except:
@@ -2784,13 +2911,13 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
             if len(args.set_signature) != 32:
                 print(f"{CR}Signature data should be 32 bytes long.{C0}")
                 return
-            
+
             try:
                 self.cmd.mf0_ntag_set_signature_data(args.set_signature)
             except:
                 print(f"{CR}Tag type does not support READ_SIG command.{C0}")
                 return
-        
+
         if args.reset_auth_cnt:
             aux_data_change_requested = True
             old_value = self.cmd.mfu_reset_auth_cnt()
@@ -2835,7 +2962,7 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
             magic_mode = False
         else:
             magic_mode = self.cmd.mf0_ntag_get_uid_magic_mode()
-            
+
         # Add this new write mode handling
         write_mode = None
         if args.write is not None:
@@ -2862,13 +2989,13 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
             print(f'- {"SAK:":40}{CY}{sak.hex().upper()}{C0}')
             if len(ats) > 0:
                 print(f'- {"ATS:":40}{CY}{ats.hex().upper()}{C0}')
-            
+
             # Display UID Magic status
-            if magic_mode: 
+            if magic_mode:
                 print(f'- {"UID Magic:":40}{CY}enabled{C0}')
             else:
                 print(f'- {"UID Magic:":40}{CY}disabled{C0}')
-            
+
             # Add this to display write mode if available
             try:
                 write_mode = self.cmd.mf0_ntag_get_write_mode()
@@ -2876,14 +3003,14 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
             except:
                 # Write mode not supported in current firmware
                 pass
-            
+
             # Existing version/signature display code
             try:
                 version = self.cmd.mf0_ntag_get_version_data()
                 print(f'- {"Version:":40}{CY}{version.hex().upper()}{C0}')
             except:
                 pass
-            
+
             try:
                 signature = self.cmd.mf0_ntag_get_signature_data()
                 print(f'- {"Signature:":40}{CY}{signature.hex().upper()}{C0}')
@@ -2948,9 +3075,10 @@ class HWSlotList(DeviceRequiredUnit):
         enabled = self.cmd.get_enabled_slots()
         maxnamelength = 0
         slotnames = []
-        for slot in SlotNumber:
-            hfn = self.get_slot_name(slot, TagSenseType.HF)
-            lfn = self.get_slot_name(slot, TagSenseType.LF)
+        all_nicks = self.cmd.get_all_slot_nicks()
+        for slot_data in all_nicks:
+            hfn = {'baselen': len(slot_data['hf']), 'metalen': len(CC+C0), 'name': f'{CC}{slot_data["hf"]}{C0}'}
+            lfn = {'baselen': len(slot_data['lf']), 'metalen': len(CC+C0), 'name': f'{CC}{slot_data["lf"]}{C0}'}
             m = max(hfn['baselen'], lfn['baselen'])
             maxnamelength = m if m > maxnamelength else maxnamelength
             slotnames.append({'hf': hfn, 'lf': lfn})
@@ -3450,7 +3578,7 @@ class HWSettingsBLEKey(DeviceRequiredUnit):
                 self.cmd.set_ble_connect_key(args.key)
                 print(" - Successfully set ble connect key to :", end='')
                 print(f"{CG}"
-                      f" { args.key }"
+                      f" {args.key}"
                       f"{C0}"
                       )
                 print(f"{CY}Do not forget to store your settings in flash!{C0}")
