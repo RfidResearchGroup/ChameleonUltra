@@ -11,7 +11,7 @@ APP_TIMER_DEF(m_app_sleep_timer);       //The timer for equipment sleep
 static volatile bool m_system_off_enter = false;
 
 extern bool g_is_ble_connected; //Link to log in BLE
-extern bool g_is_tag_emulating; //The status of the logo simulation card
+extern bool g_is_tag_emulating; //The status of the logo emulation card
 
 
 /** @brief Equipment sleep timer event
@@ -48,7 +48,7 @@ void sleep_timer_start(uint32_t time_ms) {
     sleep_timer_stop();
     // Non -USB power supply status
     if (nrfx_power_usbstatus_get() == NRFX_POWER_USB_STATE_DISCONNECTED) {
-        // If Bluetooth is still connected, or is still in the state of simulation card, you don't need to start sleep
+        // If Bluetooth is still connected, or is still in the state of emulation card, you don't need to start sleep
         if (g_is_ble_connected == false && g_is_tag_emulating == false) {
             // Start the timer
             ret_code_t err_code = app_timer_start(m_app_sleep_timer, APP_TIMER_TICKS(time_ms), NULL);

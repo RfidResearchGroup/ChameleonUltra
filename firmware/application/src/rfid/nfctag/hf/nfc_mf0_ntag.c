@@ -130,7 +130,7 @@ static nfc_tag_mf0_ntag_information_t *m_tag_information = NULL;
 static nfc_tag_14a_coll_res_reference_t m_shadow_coll_res;
 //Define and use MF0/NTAG special communication buffer
 static nfc_tag_mf0_ntag_tx_buffer_t m_tag_tx_buffer;
-// Save the specific type of MF0/NTAG currently being simulated
+// Save the specific type of MF0/NTAG currently being emulated
 static tag_specific_type_t m_tag_type;
 static bool m_tag_authenticated = false;
 static bool m_did_first_read = false;
@@ -1086,7 +1086,7 @@ int nfc_tag_mf0_ntag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *bu
     if (buffer->length >= info_size) {
         // Convert the data buffer to MF0/NTAG structure type
         m_tag_information = (nfc_tag_mf0_ntag_information_t *)buffer->buffer;
-        // The specific type of MF0/NTAG tag that is simulated by the cache
+        // The specific type of MF0/NTAG tag that is emulated by the cache
         m_tag_type = type;
         // Register 14A communication management interface
         nfc_tag_14a_handler_t handler_for_14a = {

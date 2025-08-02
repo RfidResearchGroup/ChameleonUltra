@@ -188,7 +188,7 @@ static nfc_tag_14a_coll_res_reference_t m_shadow_coll_res;
 static nfc_tag_mf1_trailer_info_t *m_tag_trailer_info = NULL;
 // Define and use MF1 special communication buffer
 static nfc_tag_mf1_tx_buffer_t m_tag_tx_buffer;
-//Save the specific type of MF1 currently being simulated
+//Save the specific type of MF1 currently being emulated
 static tag_specific_type_t m_tag_type;
 
 // Fast simulate is enable, we use internal crypto1 instance from 'mf1_crypto1.c'
@@ -500,7 +500,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                                 BlockEnd = BlockStart + 4 - 1;
                             }
 
-                            // The type of current simulation card is not enough to support the access of the card reader
+                            // The type of current emulation card is not enough to support the access of the card reader
                             if (check_block_max_overflow(BlockAuth)) {
                                 break;
                             }
@@ -805,7 +805,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                                 BlockEnd = BlockStart + 4 - 1;
                             }
 
-                            // The type of current simulation card is not enough to support the access of the card reader
+                            // The type of current emulation card is not enough to support the access of the card reader
                             if (check_block_max_overflow(BlockAuth)) {
                                 break;
                             }
@@ -1016,7 +1016,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
  * @brief Provide the necessary anti -conflict resources for the MiFare label (only pointer provides pointers)
  */
 nfc_tag_14a_coll_res_reference_t *get_mifare_coll_res() {
-    //According to the current interoperability configuration, selectively return the configuration data to selectively, assuming that the data interoperability is turned on, then we also need to ensure that the current simulation card is 4BYTE
+    //According to the current interoperability configuration, selectively return the configuration data to selectively, assuming that the data interoperability is turned on, then we also need to ensure that the current emulation card is 4BYTE
     if (m_tag_information->config.use_mf1_coll_res && m_tag_information->res_coll.size == NFC_TAG_14A_UID_SINGLE_SIZE) {
         // Manufacturer information obtained by the data area
         nfc_tag_mf1_factory_info_t *block0_factory_info = (nfc_tag_mf1_factory_info_t *)m_tag_information->memory[0];
@@ -1102,7 +1102,7 @@ int nfc_tag_mf1_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer)
     if (buffer->length >= info_size) {
         //Convert the data buffer to MF1 structure type
         m_tag_information = (nfc_tag_mf1_information_t *)buffer->buffer;
-        // The specific type of MF1 that is simulated by the cache
+        // The specific type of MF1 that is emulated by the cache
         m_tag_type = type;
         // Register 14A communication management interface
         nfc_tag_14a_handler_t handler_for_14a = {

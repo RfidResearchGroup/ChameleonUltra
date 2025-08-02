@@ -408,7 +408,7 @@ static ret_code_t block_dev_qspi_init(nrf_block_dev_t const * p_blk_dev,
 
     if (p_work->ev_handler)
     {
-        /*Asynchronous operation (simulation)*/
+        /*Asynchronous operation (emulation)*/
         const nrf_block_dev_event_t ev = {
                 NRF_BLOCK_DEV_EVT_INIT,
                 NRF_BLOCK_DEV_RESULT_SUCCESS,
