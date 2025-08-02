@@ -175,7 +175,7 @@ INC_FOLDERS += \
   ${PROJ_DIR}/rfid/nfctag/ \
   ${PROJ_DIR}/rfid/nfctag/hf \
   ${PROJ_DIR}/rfid/nfctag/lf \
-  ${PROJ_DIR}/rfid/reader/lf/utils \
+  ${PROJ_DIR}/rfid/nfctag/lf/utils \
   $(SDK_ROOT)/components/nfc/ndef/generic/message \
   $(SDK_ROOT)/components/nfc/t2t_lib \
   $(SDK_ROOT)/components/nfc/t4t_parser/hl_detection_procedure \
