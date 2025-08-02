@@ -1,7 +1,7 @@
 #pragma once
 
 #include "protocols.h"
-#include "utils/fskdemod.h"
+#include "fskdemod.h"
 #include "wiegand.h"
 
 #define HIDPROX_DATA_SIZE (16)

@@ -3,8 +3,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "arm_math.h"
+#include "math.h"
 
+#define PI 3.14159265358979f
 #define GOERTZEL(FREQ, SAMPLE_RATE) (2.0 * cos((2.0 * PI * FREQ) / (SAMPLE_RATE)))
 
 float goertzel_mag(float coef, uint16_t samples[], int n) {

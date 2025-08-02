@@ -213,7 +213,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/pwr_mgmt \
   $(SDK_ROOT)/components/ble/ble_dtm \
   $(SDK_ROOT)/components/toolchain/cmsis/include \
-  $(SDK_ROOT)/components/toolchain/cmsis/dsp/include \
   $(SDK_ROOT)/components/ble/ble_services/ble_rscs_c \
   $(SDK_ROOT)/components/ble/common \
   $(SDK_ROOT)/components/ble/ble_services/ble_lls \
