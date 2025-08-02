@@ -783,274 +783,42 @@ static wiegand_card_t *unpack_mdi37(uint64_t hi, uint64_t lo) {
     return d;
 }
 
-/*
-static bool Pack_bqt38(wiegand_card_t *card) {
-    packed->Length = 38;  // Set number of bits
-    set_linear_field(packed, card->FacilityCode, 24, 13);
-    set_linear_field(packed, card->CardNumber, 1, 19);
-    set_linear_field(packed, card->IssueLevel, 20, 4);
-
-    set_bit_by_position(packed,
-                        evenparity32(get_linear_field(packed, 1, 18)), 0);
-    set_bit_by_position(packed,
-                        oddparity32(get_linear_field(packed, 19, 18)), 37);
-    return true;
-}
-
-static bool Unpack_bqt38(wiegand_message_t *packed, wiegand_card_t *card) {
-    card->FacilityCode = get_linear_field(packed, 24, 13);
-    card->CardNumber = get_linear_field(packed, 1, 19);
-    card->IssueLevel = get_linear_field(packed, 20, 4);
-
-    card->ParityValid =
-        (get_bit_by_position(packed, 0) == evenparity32(get_linear_field(packed, 1, 18))) &&
-        (get_bit_by_position(packed, 37) == oddparity32(get_linear_field(packed, 19, 18)));
-    return true;
-}
-
-static bool Pack_iscs38(wiegand_card_t *card) {
-    packed->Length = 38;  // Set number of bits
-
-    set_linear_field(packed, card->FacilityCode, 5, 10);
-    set_linear_field(packed, card->CardNumber, 15, 22);
-    set_linear_field(packed, card->OEM, 1, 4);
-
-    set_bit_by_position(packed,
-                        evenparity32(get_linear_field(packed, 1, 18)), 0);
-    set_bit_by_position(packed,
-                        oddparity32(get_linear_field(packed, 19, 18)), 37);
-    return true;
-}
-
-static bool Unpack_iscs38(wiegand_message_t *packed, wiegand_card_t *card) {
-    card->FacilityCode = get_linear_field(packed, 5, 10);
-    card->CardNumber = get_linear_field(packed, 15, 22);
-    card->OEM = get_linear_field(packed, 1, 4);
-    card->ParityValid =
-        (get_bit_by_position(packed, 0) == evenparity32(get_linear_field(packed, 1, 18))) &&
-        (get_bit_by_position(packed, 37) == oddparity32(get_linear_field(packed, 19, 18)));
-    return true;
-}
-
-static bool Pack_pw39(wiegand_card_t *card) {
-    packed->Length = 39;  // Set number of bits
-    set_linear_field(packed, card->FacilityCode, 1, 17);
-    set_linear_field(packed, card->CardNumber, 18, 20);
-
-    set_bit_by_position(packed,
-                        evenparity32(get_linear_field(packed, 1, 18)), 0);
-    set_bit_by_position(packed,
-                        oddparity32(get_linear_field(packed, 19, 19)), 38);
-    return true;
-}
-
-static bool Unpack_pw39(wiegand_message_t *packed, wiegand_card_t *card) {
-    card->FacilityCode = get_linear_field(packed, 1, 17);
-    card->CardNumber = get_linear_field(packed, 18, 20);
-
-    card->ParityValid =
-        (get_bit_by_position(packed, 0) == evenparity32(get_linear_field(packed, 1, 18))) &&
-        (get_bit_by_position(packed, 38) == oddparity32(get_linear_field(packed, 19, 19)));
-    return true;
-}
-
-static bool Pack_P10001(wiegand_card_t *card) {
-    memset(packed, 0, sizeof(wiegand_message_t));
-
-    if (!validate_card_limit(format_idx, card)) return false;
-
-    packed->Length = 40;  // Set number of bits
-    set_linear_field(packed, 0xF, 0, 4);
-    set_linear_field(packed, card->FacilityCode, 4, 12);
-    set_linear_field(packed, card->CardNumber, 16, 16);
-    set_linear_field(packed,
-                     get_linear_field(packed, 0, 8) ^
-                         get_linear_field(packed, 8, 8) ^
-                         get_linear_field(packed, 16, 8) ^
-                         get_linear_field(packed, 24, 8),
-                     32, 8);
-    return true;
-}
-
-static bool Unpack_P10001(wiegand_message_t *packed, wiegand_card_t *card) {
-    card->CardNumber = get_linear_field(packed, 16, 16);
-    card->FacilityCode = get_linear_field(packed, 4, 12);
-    card->ParityValid = (get_linear_field(packed, 0, 8) ^
-                         get_linear_field(packed, 8, 8) ^
-                         get_linear_field(packed, 16, 8) ^
-                         get_linear_field(packed, 24, 8)) == get_linear_field(packed, 32, 8);
-    return true;
-}
-
-static bool pack_casi_rusco40(wiegand_card_t *card) {
-    packed->Length = 40;  // Set number of bits
-    set_linear_field(packed, card->CardNumber, 1, 38);
-    return true;
-}
-
-static bool unpack_casi_rusco40(wiegand_message_t *packed, wiegand_card_t *card) {
-    card->CardNumber = get_linear_field(packed, 1, 38);
-    return true;
-}
-
-static bool Pack_bc40(wiegand_card_t *card) {
-    packed->Length = 40;  // Set number of bits
-    set_linear_field(packed, card->OEM, 0, 7);
-    // cost center 12
-    set_linear_field(packed, card->FacilityCode, 7, 12);
-    set_linear_field(packed, card->CardNumber, 19, 19);
-    set_bit_by_position(packed,
-                        oddparity32(get_linear_field(packed, 19, 19)), 39);
-    return true;
-}
-
-static bool Unpack_bc40(wiegand_message_t *packed, wiegand_card_t *card) {
-    card->OEM = get_linear_field(packed, 0, 7);
-    card->FacilityCode = get_linear_field(packed, 7, 12);
-    card->CardNumber = get_linear_field(packed, 19, 19);
-    card->ParityValid =
-        (get_bit_by_position(packed, 39) == oddparity32(get_linear_field(packed, 19, 19)));
-    return true;
-}
-
-static bool Pack_H800002(wiegand_card_t *card) {
-    int even_parity = 0;
-    memset(packed, 0, sizeof(wiegand_message_t));
-
-    packed->Length = 46;
-    set_linear_field(packed, card->FacilityCode, 1, 14);
-    set_linear_field(packed, card->CardNumber, 15, 30);
-
-    // Parity over 44 bits
-    even_parity = evenparity32((packed->Bot >> 1) ^ (packed->Mid & 0x1fff));
-    set_bit_by_position(packed, even_parity, 0);
-    // Invert parity for setting odd parity
-    set_bit_by_position(packed, even_parity ^ 1, 45);
-    return true;
-}
-
-static bool Unpack_H800002(wiegand_message_t *packed, wiegand_card_t *card) {
-    int even_parity = 0;
-    memset(card, 0, sizeof(wiegand_card_t));
-
-    card->FacilityCode = get_linear_field(packed, 1, 14);
-    card->CardNumber = get_linear_field(packed, 15, 30);
-    even_parity = evenparity32((packed->Bot >> 1) ^ (packed->Mid & 0x1fff));
-    card->ParityValid = get_bit_by_position(packed, 0) == even_parity;
-    // Invert logic to compare against oddparity
-    card->ParityValid &= get_bit_by_position(packed, 45) != even_parity;
-    return true;
-}
-
-static bool Pack_C1k48s(wiegand_card_t *card) {
-    packed->Length = 48;  // Set number of bits
-    packed->Bot |= (card->CardNumber & 0x007FFFFF) << 1;
-    packed->Bot |= (card->FacilityCode & 0x000000FF) << 24;
-    packed->Mid |= (card->FacilityCode & 0x003FFF00) >> 8;
-    packed->Mid |= (evenparity32((packed->Mid & 0x00001B6D) ^ (packed->Bot & 0xB6DB6DB6))) << 14;
-    packed->Bot |= (oddparity32((packed->Mid & 0x000036DB) ^ (packed->Bot & 0x6DB6DB6C)));
-    packed->Mid |= (oddparity32((packed->Mid & 0x00007FFF) ^ (packed->Bot & 0xFFFFFFFF))) << 15;
-
-    return true;
-}
-
-static bool Unpack_C1k48s(wiegand_message_t *packed, wiegand_card_t *card) {
-    card->CardNumber = (packed->Bot >> 1) & 0x007FFFFF;
-    card->FacilityCode = ((packed->Mid & 0x00003FFF) << 8) | ((packed->Bot >> 24));
-    card->ParityValid =
-        (evenparity32((packed->Mid & 0x00001B6D) ^ (packed->Bot & 0xB6DB6DB6)) == ((packed->Mid >> 14) & 1)) &&
-        (oddparity32((packed->Mid & 0x000036DB) ^ (packed->Bot & 0x6DB6DB6C)) == ((packed->Bot >> 0) & 1)) &&
-        (oddparity32((packed->Mid & 0x00007FFF) ^ (packed->Bot & 0xFFFFFFFF)) == ((packed->Mid >> 15) & 1));
-    return true;
-}
-
-static bool Pack_Avig56(wiegand_card_t *card) {
-    packed->Length = 56;
-    set_linear_field(packed, card->FacilityCode, 1, 20);
-    set_linear_field(packed, card->CardNumber, 21, 34);
-
-    bool even_parity_valid = step_parity_check(packed, 0, 28, true);
-    set_bit_by_position(packed, !even_parity_valid, 0);
-
-    bool odd_parity_valid = step_parity_check(packed, 28, 28, false);
-    set_bit_by_position(packed, !odd_parity_valid, 55);
-    return true;
-}
-
-static bool Unpack_Avig56(wiegand_message_t *packed, wiegand_card_t *card) {
-    card->FacilityCode = get_linear_field(packed, 1, 20);
-    card->CardNumber = get_linear_field(packed, 21, 34);
-
-    // Check step parity for every 2 bits
-    bool even_parity_valid = step_parity_check(packed, 0, 28, true);
-    bool odd_parity_valid = step_parity_check(packed, 28, 28, false);
-
-    card->ParityValid = even_parity_valid && odd_parity_valid;
-    return true;
-}
-
-static uint64_t pack_ir56(wiegand_card_t *card) {
-    packed->Length = 56;
-    packed->Bot = card->CardNumber;
-    packed->Mid = card->FacilityCode;
-    return true;
-}
-
-static wiegand_card_t *unpack_ir56(uint64_t hi, uint64_t lo) {
-    card->FacilityCode = packed->Mid;
-    card->CardNumber = packed->Bot;
-    return true;
-}
-*/
-
 // ref:
 // https://github.com/TeCHiScy/proxmark3/blob/d83196fb3549f236c0a58a309fdbd89c0487085c/client/src/wiegand_formats.c#L1457
 // https://github.com/Proxmark/proxmark3/blob/master/client/hidcardformats.c
 // https://acre.my.site.com/knowledgearticles/s/article/x107
 // https://www.everythingid.com.au/hid-card-formats-i-15?srsltid=AfmBOor2UAGlvB7R6Zmj7B7rtL-LExfBjh7I3ZEyoLLbg7Pk7UbC1za-
 static const card_format_table_t formats[] = {
-    {H10301, pack_h10301, unpack_h10301, 26, {1, 0xFF, 0xFFFF, 0, 0}},           // HID H10301 26-bit ✅
-    {IND26, pack_ind26, unpack_ind26, 26, {1, 0xFFF, 0xFFF, 0, 0}},              // Indala 26-bit ✅
-    {IND27, pack_ind27, unpack_ind27, 27, {0, 0x1FFF, 0x3FFF, 0, 0}},            // Indala 27-bit ✅
-    {INDASC27, pack_indasc27, unpack_indasc27, 27, {0, 0x1FFF, 0x3FFF, 0, 0}},   // Indala ASC 27-bit ✅
-    {TECOM27, pack_tecom27, unpack_tecom27, 27, {0, 0x7FF, 0xFFFF, 0, 0}},       // Tecom 27-bit ✅
-    {W2804, pack_2804w, unpack_2804w, 28, {1, 0xFF, 0x7FFF, 0, 0}},              // 2804 Wiegand 28-bit ✅
-    {IND29, pack_ind29, unpack_ind29, 29, {0, 0x1FFF, 0xFFFF, 0, 0}},            // Indala 29-bit ✅
-    {ATSW30, pack_atsw30, unpack_atsw30, 30, {1, 0xFFF, 0xFFFF, 0, 0}},          // ATS Wiegand 30-bit ✅
-    {ADT31, pack_adt31, unpack_adt31, 31, {0, 0xF, 0x7FFFFF, 0, 0}},             // HID ADT 31-bit ✅
-    {HCP32, pack_hcp32, unpack_hcp32, 32, {0, 0, 0x3FFF, 0, 0}},                 // HID Check Point 32-bit ✅ ❓
-    {HPP32, pack_hpp32, unpack_hpp32, 32, {0, 0xFFF, 0x7FFFF, 0, 0}},            // HID Hewlett-Packard 32-bit ✅ ❓
-    {KASTLE, pack_kastle, unpack_kastle, 32, {1, 0xFF, 0xFFFF, 0x1F, 0}},        // Kastle 32-bit ✅
-    {KANTECH, pack_kantech, unpack_kantech, 32, {0, 0xFF, 0xFFFF, 0, 0}},        // Indala/Kantech KFS 32-bit ✅
-    {WIE32, pack_wie32, unpack_wie32, 32, {0, 0xFFF, 0xFFFF, 0, 0}},             // Wiegand 32-bit ✅
-    {D10202, pack_d10202, unpack_d10202, 33, {1, 0x7F, 0xFFFFFF, 0, 0}},         // HID D10202 33-bit ✅
-    {H10306, pack_h10306, unpack_h10306, 34, {1, 0xFFFF, 0xFFFF, 0, 0}},         // HID H10306 34-bit ✅
-    {N10002, pack_n10002, unpack_n10002, 34, {1, 0xFFFF, 0xFFFF, 0, 0}},         // Honeywell/Northern N10002 34-bit ✅
-    {OPTUS34, pack_optus, unpack_optus, 34, {0, 0x3FF, 0xFFFF, 0, 0}},           // Indala Optus 34-bit ✅
-    {SMP34, pack_smartpass, unpack_smartpass, 34, {0, 0x3FF, 0xFFFF, 0x7, 0}},   // Cardkey Smartpass 34-bit ✅
-    {BQT34, pack_bqt34, unpack_bqt34, 34, {1, 0xFF, 0xFFFFFF, 0, 0}},            // BQT 34-bit ✅
-    {C1K35S, pack_c1k35s, unpack_c1k35s, 35, {1, 0xFFF, 0xFFFFF, 0, 0}},         // HID Corporate 1000 35-bit Std ✅
-    {C15001, pack_c15001, unpack_c15001, 36, {1, 0xFF, 0xFFFF, 0, 0x3FF}},       // HID KeyScan 36-bit ✅
-    {S12906, pack_s12906, unpack_s12906, 36, {1, 0xFF, 0xFFFFFF, 0x3, 0}},       // HID Simplex 36-bit ✅
-    {SIE36, pack_sie36, unpack_sie36, 36, {1, 0x3FFFF, 0xFFFF, 0, 0}},           // HID 36-bit Siemens ✅
-    {H10320, pack_h10320, unpack_h10320, 37, {1, 0, 99999999, 0, 0}},            // HID H10320 37-bit BCD ✅
-    {H10302, pack_h10302, unpack_h10302, 37, {1, 0, 0x7FFFFFFFF, 0, 0}},         // HID H10302 37-bit huge ID ✅
-    {H10304, pack_h10304, unpack_h10304, 37, {1, 0xFFFF, 0x7FFFF, 0, 0}},        // HID H10304 37-bit ✅
-    {P10004, pack_p10004, unpack_p10004, 37, {0, 0x1FFF, 0x3FFFF, 0, 0}},        // HID P10004 37-bit PCSC ✅
-    {HGEN37, pack_hgeneric37, unpack_hgeneric37, 37, {1, 0, 0xFFFFFFFF, 0, 0}},  // HID Generic 37-bit ✅
-    {MDI37, pack_mdi37, unpack_mdi37, 37, {1, 0xF, 0x1FFFFFFF, 0, 0}},           // PointGuard MDI 37-bit ✅
-    /*
-    {BQT38, Pack_bqt38, Unpack_bqt38, 38, {1, 0xFFF, 0x3FFFF, 0x7, 0}},                // BQT 38-bit
-    {ISCS, Pack_iscs38, Unpack_iscs38, 38, {1, 0x3FF, 0xFFFFFF, 0, 0x7}},              // ISCS 38-bit
-    {PW39, Pack_pw39, Unpack_pw39, 39, {1, 0xFFFF, 0xFFFFF, 0, 0}},                    // Pyramid 39-bit wiegand format
-    {P10001, Pack_P10001, Unpack_P10001, 40, {0, 0xFFF, 0xFFFF, 0, 0}},                // HID P10001 Honeywell 40-bit
-    {CASI40, pack_casi_rusco40, unpack_casi_rusco40, 40, {0, 0, 0xFFFFFFFFFF, 0, 0}},  // Casi-Rusco 40-bit
-    {BC40, Pack_bc40, Unpack_bc40, 40, {1, 0xFFF, 0xFFFFF, 0, 0x7F}},                  // Bundy TimeClock 40-bit
-    {H800002, Pack_H800002, Unpack_H800002, 46, {1, 0x3FFF, 0x3FFFFFFF, 0, 0}},        // HID H800002 46-bit
-    {C1K48S, Pack_C1k48s, Unpack_C1k48s, 48, {1, 0x003FFFFF, 0x007FFFFF, 0, 0}},       // HID Corporate 1000 48-bit std
-    {AVIG56, Pack_Avig56, Unpack_Avig56, 56, {1, 0xFFFFF, 0x3FFFFFFFF, 0, 0}},         // Avigilon 56-bit
-    {IR56, pack_ir56, unpack_ir56, 56, {0, 0xFFFFFF, 0xFFFFFFFF, 0, 0}},               // Inner Range 56-bit
-    */
+    {H10301, pack_h10301, unpack_h10301, 26, {1, 0xFF, 0xFFFF, 0, 0}},           // HID H10301 26-bit
+    {IND26, pack_ind26, unpack_ind26, 26, {1, 0xFFF, 0xFFF, 0, 0}},              // Indala 26-bit
+    {IND27, pack_ind27, unpack_ind27, 27, {0, 0x1FFF, 0x3FFF, 0, 0}},            // Indala 27-bit
+    {INDASC27, pack_indasc27, unpack_indasc27, 27, {0, 0x1FFF, 0x3FFF, 0, 0}},   // Indala ASC 27-bit
+    {TECOM27, pack_tecom27, unpack_tecom27, 27, {0, 0x7FF, 0xFFFF, 0, 0}},       // Tecom 27-bit
+    {W2804, pack_2804w, unpack_2804w, 28, {1, 0xFF, 0x7FFF, 0, 0}},              // 2804 Wiegand 28-bit
+    {IND29, pack_ind29, unpack_ind29, 29, {0, 0x1FFF, 0xFFFF, 0, 0}},            // Indala 29-bit
+    {ATSW30, pack_atsw30, unpack_atsw30, 30, {1, 0xFFF, 0xFFFF, 0, 0}},          // ATS Wiegand 30-bit
+    {ADT31, pack_adt31, unpack_adt31, 31, {0, 0xF, 0x7FFFFF, 0, 0}},             // HID ADT 31-bit
+    {HCP32, pack_hcp32, unpack_hcp32, 32, {0, 0, 0x3FFF, 0, 0}},                 // HID Check Point 32-bit
+    {HPP32, pack_hpp32, unpack_hpp32, 32, {0, 0xFFF, 0x7FFFF, 0, 0}},            // HID Hewlett-Packard 32-bit
+    {KASTLE, pack_kastle, unpack_kastle, 32, {1, 0xFF, 0xFFFF, 0x1F, 0}},        // Kastle 32-bit
+    {KANTECH, pack_kantech, unpack_kantech, 32, {0, 0xFF, 0xFFFF, 0, 0}},        // Indala/Kantech KFS 32-bit
+    {WIE32, pack_wie32, unpack_wie32, 32, {0, 0xFFF, 0xFFFF, 0, 0}},             // Wiegand 32-bit
+    {D10202, pack_d10202, unpack_d10202, 33, {1, 0x7F, 0xFFFFFF, 0, 0}},         // HID D10202 33-bit
+    {H10306, pack_h10306, unpack_h10306, 34, {1, 0xFFFF, 0xFFFF, 0, 0}},         // HID H10306 34-bit
+    {N10002, pack_n10002, unpack_n10002, 34, {1, 0xFFFF, 0xFFFF, 0, 0}},         // Honeywell/Northern N10002 34-bit
+    {OPTUS34, pack_optus, unpack_optus, 34, {0, 0x3FF, 0xFFFF, 0, 0}},           // Indala Optus 34-bit
+    {SMP34, pack_smartpass, unpack_smartpass, 34, {0, 0x3FF, 0xFFFF, 0x7, 0}},   // Cardkey Smartpass 34-bit
+    {BQT34, pack_bqt34, unpack_bqt34, 34, {1, 0xFF, 0xFFFFFF, 0, 0}},            // BQT 34-bit
+    {C1K35S, pack_c1k35s, unpack_c1k35s, 35, {1, 0xFFF, 0xFFFFF, 0, 0}},         // HID Corporate 1000 35-bit Std
+    {C15001, pack_c15001, unpack_c15001, 36, {1, 0xFF, 0xFFFF, 0, 0x3FF}},       // HID KeyScan 36-bit
+    {S12906, pack_s12906, unpack_s12906, 36, {1, 0xFF, 0xFFFFFF, 0x3, 0}},       // HID Simplex 36-bit
+    {SIE36, pack_sie36, unpack_sie36, 36, {1, 0x3FFFF, 0xFFFF, 0, 0}},           // HID 36-bit Siemens
+    {H10320, pack_h10320, unpack_h10320, 37, {1, 0, 99999999, 0, 0}},            // HID H10320 37-bit BCD
+    {H10302, pack_h10302, unpack_h10302, 37, {1, 0, 0x7FFFFFFFF, 0, 0}},         // HID H10302 37-bit huge ID
+    {H10304, pack_h10304, unpack_h10304, 37, {1, 0xFFFF, 0x7FFFF, 0, 0}},        // HID H10304 37-bit
+    {P10004, pack_p10004, unpack_p10004, 37, {0, 0x1FFF, 0x3FFFF, 0, 0}},        // HID P10004 37-bit PCSC
+    {HGEN37, pack_hgeneric37, unpack_hgeneric37, 37, {1, 0, 0xFFFFFFFF, 0, 0}},  // HID Generic 37-bit
+    {MDI37, pack_mdi37, unpack_mdi37, 37, {1, 0xF, 0x1FFFFFFF, 0, 0}},           // PointGuard MDI 37-bit
 };
 
 uint64_t pack(wiegand_card_t *card) {
