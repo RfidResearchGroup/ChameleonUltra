@@ -84,6 +84,8 @@
 //
 #define DATA_CMD_EM410X_SCAN                    (3000)
 #define DATA_CMD_EM410X_WRITE_TO_T55XX          (3001)
+#define DATA_CMD_HIDPROX_SCAN                   (3002)
+#define DATA_CMD_HIDPROX_WRITE_TO_T55XX         (3003)
 //
 // ******************************************************************
 
@@ -140,5 +142,7 @@
 // ******************************************************************
 #define DATA_CMD_EM410X_SET_EMU_ID              (5000)
 #define DATA_CMD_EM410X_GET_EMU_ID              (5001)
+#define DATA_CMD_HIDPROX_SET_EMU_ID             (5002)
+#define DATA_CMD_HIDPROX_GET_EMU_ID             (5003)
 
 #endif

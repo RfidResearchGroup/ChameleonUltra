@@ -62,7 +62,7 @@
     RC522 theDefaultTimerTimeoutConfiguration,ThisValueCanBeAdjustedDynamically,Through PcdSetTimeout function
     operationStandardM1CardMaximumWaitingTime 25ms
     weCanIncreaseTimeoutToCompatibleWithSomeDullCards
-    forExample,SomeBraceletSimulationCards,SuchAsSomeOtherHardwareSimulationCards,SuchAsColorChangingDragons
+    forExample,SomeBraceletemulationCards,SuchAsSomeOtherHardwareemulationCards,SuchAsColorChangingDragons
     ifTheTimeoutValueIsTooSmall,YouMayNotBeAbleToReadTheUid (gen1A)Card!
 */
 #define DEF_COM_TIMEOUT         25

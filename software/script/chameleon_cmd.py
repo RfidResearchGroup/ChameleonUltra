@@ -10,6 +10,8 @@ from chameleon_enum import MfcKeyType, MfcValueBlockOperator
 
 CURRENT_VERSION_SETTINGS = 5
 
+new_key = b'\x20\x20\x66\x66'
+old_keys = [b'\x51\x24\x36\x48', b'\x19\x92\x04\x27']
 
 class ChameleonCMD:
     """
@@ -431,7 +433,8 @@ class ChameleonCMD:
         :return:
         """
         resp = self.device.send_cmd_sync(Command.EM410X_SCAN)
-        resp.parsed = resp.data
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = struct.unpack('!h5s', resp.data[0:7]) # card type + uid
         return resp
 
     @expect_response(Status.LF_TAG_OK)
@@ -442,17 +445,41 @@ class ChameleonCMD:
         :param id_bytes: ID card number
         :return:
         """
-        new_key = b'\x20\x20\x66\x66'
-        old_keys = [b'\x51\x24\x36\x48', b'\x19\x92\x04\x27']
         if len(id_bytes) != 5:
             raise ValueError("The id bytes length must equal 5")
         data = struct.pack(f'!5s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.EM410X_WRITE_TO_T55XX, data)
 
+    @expect_response(Status.LF_TAG_OK)
+    def hidprox_scan(self, format: int):
+        """
+        Read the length, facility code and card number of HID Prox.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.HIDPROX_SCAN, struct.pack('!B', format))
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = struct.unpack('>BIBIBH', resp.data[:13])
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def hidprox_write_to_t55xx(self, id_bytes: bytes):
+        """
+        Write HID Prox card number into T55XX.
+
+        :param id_bytes: ID card number
+        :return:
+        """
+        if len(id_bytes) != 13:
+            raise ValueError("The id bytes length must equal 13")
+        data = struct.pack(f'!13s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.HIDPROX_WRITE_TO_T55XX, data)
+
+
     @expect_response(Status.SUCCESS)
     def get_slot_info(self):
         """
-            Get slots info.
+        Get slots info.
 
         :return:
         """
@@ -465,7 +492,7 @@ class ChameleonCMD:
     @expect_response(Status.SUCCESS)
     def get_active_slot(self):
         """
-            Get selected slot.
+        Get selected slot.
 
         :return:
         """
@@ -477,7 +504,7 @@ class ChameleonCMD:
     @expect_response(Status.SUCCESS)
     def set_active_slot(self, slot_index: SlotNumber):
         """
-            Set the card slot currently active for use.
+        Set the card slot currently active for use.
 
         :param slot_index: Card slot index
         :return:
@@ -489,7 +516,7 @@ class ChameleonCMD:
     @expect_response(Status.SUCCESS)
     def set_slot_tag_type(self, slot_index: SlotNumber, tag_type: TagSpecificType):
         """
-        Set the label type of the simulated card of the current card slot
+        Set the label type of the emulated card of the current card slot
         Note: This operation will not change the data in the flash,
         and the change of the data in the flash will only be updated at the next save.
 
@@ -504,7 +531,7 @@ class ChameleonCMD:
     @expect_response(Status.SUCCESS)
     def delete_slot_sense_type(self, slot_index: SlotNumber, sense_type: TagSenseType):
         """
-            Delete a sense type for a specific slot.
+        Delete a sense type for a specific slot.
 
         :param slot_index: Slot index
         :param sense_type: Sense type to disable
@@ -516,7 +543,7 @@ class ChameleonCMD:
     @expect_response(Status.SUCCESS)
     def set_slot_data_default(self, slot_index: SlotNumber, tag_type: TagSpecificType):
         """
-        Set the data of the simulated card in the specified card slot as the default data
+        Set the data of the emulated card in the specified card slot as the default data
         Note: This API will set the data in the flash together.
 
         :param slot_index: Card slot number
@@ -543,7 +570,7 @@ class ChameleonCMD:
     @expect_response(Status.SUCCESS)
     def em410x_set_emu_id(self, id: bytes):
         """
-        Set the card number simulated by EM410x.
+        Set the card number emulated by EM410x.
 
         :param id_bytes: byte of the card number
         :return:
@@ -556,10 +583,32 @@ class ChameleonCMD:
     @expect_response(Status.SUCCESS)
     def em410x_get_emu_id(self):
         """
-            Get the simulated EM410x card id
+        Get the emulated EM410x card id
         """
         resp = self.device.send_cmd_sync(Command.EM410X_GET_EMU_ID)
         resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def hidprox_set_emu_id(self, id: bytes):
+        """
+        Set the card number emulated by HID Prox.
+
+        :param id_bytes: byte of the card number
+        :return:
+        """
+        if len(id) != 13:
+            raise ValueError("The id bytes length must equal 13")
+        return self.device.send_cmd_sync(Command.HIDPROX_SET_EMU_ID, id)
+
+    @expect_response(Status.SUCCESS)
+    def hidprox_get_emu_id(self):
+        """
+        Get the emulated HID Prox card id
+        """
+        resp = self.device.send_cmd_sync(Command.HIDPROX_GET_EMU_ID)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = struct.unpack('>BIBIBH', resp.data[:13])
         return resp
 
     @expect_response(Status.SUCCESS)
@@ -671,7 +720,7 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
-    def mfu_read_emu_counter_data(self, index: int) -> (int, bool):
+    def mfu_read_emu_counter_data(self, index: int) -> tuple[int, bool]:
         """
             Gets data for selected counter
         """
