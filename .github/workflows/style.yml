@@ -1,0 +1,21 @@
+name: Code style
+
+on:
+  pull_request: null
+
+jobs:
+  prettier:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - run: sudo apt update && sudo apt install -y astyle python3-pip && sudo python3 -m pip install ruff
+      - run: REWRITE_TABS=true ./resource/tools/make_style.sh
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'Format code'
+          commit_author: 'GitHub Action <actions@github.com>'
+          commit_user_email: 'action@github.com'
