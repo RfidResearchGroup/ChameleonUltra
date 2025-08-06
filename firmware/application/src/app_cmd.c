@@ -602,7 +602,7 @@ static data_frame_tx_t *cmd_processor_mf1_manipulate_value_block(uint16_t cmd, u
 }
 
 static data_frame_tx_t *cmd_processor_em410x_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t card_buffer[16] = { 0x00 };
+    uint8_t card_buffer[7] = {0x00};
     status = scan_em410x(card_buffer);
     if (status != STATUS_LF_TAG_OK) {
         return data_frame_make(cmd, status, 0, NULL);
@@ -647,7 +647,7 @@ static data_frame_tx_t *cmd_processor_hidprox_write_to_t55xx(uint16_t cmd, uint1
 }
 
 static data_frame_tx_t *cmd_processor_hidprox_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t card_data[16] = { 0x00 };
+    uint8_t card_data[16] = {0x00};
     status = scan_hidprox(card_data, data[0]);
     if (status != STATUS_LF_TAG_OK) {
         return data_frame_make(cmd, status, 0, NULL);

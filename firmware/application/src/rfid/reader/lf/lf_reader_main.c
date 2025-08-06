@@ -4,8 +4,7 @@
 #include "bsp_time.h"
 #include "hex_utils.h"
 #include "lf_125khz_radio.h"
-#include "lf_em410x_data.h"
-#include "lf_hidprox_data.h"
+#include "lf_reader_data.h"
 #include "protocols/em410x.h"
 #include "protocols/hidprox.h"
 #include "protocols/t55xx.h"
@@ -26,25 +25,17 @@ uint8_t scan_em410x(uint8_t *uid) {
     if (em410x_read(uid, g_timeout_readem_ms)) {
         return STATUS_LF_TAG_OK;
     }
-    return STATUS_EM410X_TAG_NO_FOUND;
+    return STATUS_LF_TAG_NO_FOUND;
 }
 
 /**
  * Search HID Prox tag
  */
-uint8_t scan_hidprox(uint8_t *data, uint8_t format) {
-    if (hidprox_read(data, format, g_timeout_readem_ms)) {
+uint8_t scan_hidprox(uint8_t *data, uint8_t format_hint) {
+    if (hidprox_read(data, format_hint, g_timeout_readem_ms)) {
         return STATUS_LF_TAG_OK;
     }
-    return STATUS_HIDPROX_TAG_NO_FOUND;
-}
-
-/**
- * Debug HIDProx
- */
-uint8_t debug_hidprox(uint8_t *data) {
-    hidprox_debug(data, g_timeout_readem_ms);
-    return STATUS_SUCCESS;
+    return STATUS_LF_TAG_NO_FOUND;
 }
 
 /**

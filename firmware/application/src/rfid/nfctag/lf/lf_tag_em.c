@@ -30,7 +30,7 @@ static volatile bool m_is_lf_emulating = false;
 // Cache tag type
 static tag_specific_type_t m_tag_type = TAG_TYPE_UNDEFINED;
 
-// The pwm to broadcast FSK2a modulated card id
+// The pwm to broadcast modulated card id
 const nrfx_pwm_t m_broadcast = NRFX_PWM_INSTANCE(0);
 const nrf_pwm_sequence_t *m_pwm_seq = NULL;
 
@@ -135,7 +135,7 @@ static void pwm_init(void) {
 
 static void lf_sense_enable(void) {
     lpcomp_init();
-    pwm_init();  // use precise hardware timer to broadcast card id
+    pwm_init();  // use precise hardware pwm to broadcast card id
     if (is_lf_field_exists()) {
         lpcomp_event_handler(NRF_LPCOMP_EVENT_UP);
     }
@@ -163,21 +163,18 @@ void lf_tag_125khz_sense_switch(bool enable) {
     // turn off mod, otherwise its hard to judge RSSI
     ANT_NO_MOD();
 
-    // forTheFirstTimeOrDisabled,OnlyInitializationIsAllowed
-    if (m_lf_sense_state == LF_SENSE_STATE_NONE || m_lf_sense_state == LF_SENSE_STATE_DISABLE) {
-        if (enable) {
-            m_lf_sense_state = LF_SENSE_STATE_ENABLE;
-            lf_sense_enable();
-        }
-    } else {  // inOtherCases,OnlyAntiInitializationIsAllowed
-        if (!enable) {
-            m_lf_sense_state = LF_SENSE_STATE_DISABLE;
-            lf_sense_disable();
-        }
+    if ((m_lf_sense_state == LF_SENSE_STATE_NONE || m_lf_sense_state == LF_SENSE_STATE_DISABLE) && enable) {
+        // switch from disable -> enable
+        m_lf_sense_state = LF_SENSE_STATE_ENABLE;
+        lf_sense_enable();
+    } else if (m_lf_sense_state == LF_SENSE_STATE_ENABLE && !enable) {
+        // switch from enable -> disable
+        m_lf_sense_state = LF_SENSE_STATE_DISABLE;
+        lf_sense_disable();
     }
 }
 
-/** @brief lf card load data
+/** @brief lf card data loader
  * @param type     Refined tag type
  * @param buffer   Data buffer
  */

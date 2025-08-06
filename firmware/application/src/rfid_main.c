@@ -27,7 +27,7 @@ void reader_mode_enter(void) {
         nrf_gpio_pin_clear(HF_ANT_SEL);     // hf ant switch to reader mode
 
         // init reader
-        lf_125khz_radio_gpiote_init();
+        lf_125khz_radio_init();
         pcd_14a_reader_init();
         pcd_14a_reader_reset();
     }

@@ -164,6 +164,9 @@ tag_sense_type_t get_sense_type_from_tag_type(tag_specific_type_t type) {
  * Get buffer data according to tag type.
  */
 tag_data_buffer_t *get_buffer_by_tag_type(tag_specific_type_t type) {
+    if (type == TAG_TYPE_UNDEFINED) {
+        return NULL;
+    }
     for (int i = 0; i < ARRAY_SIZE(tag_base_map); i++) {
         if (tag_base_map[i].tag_type == type) {
             return tag_base_map[i].data_buffer;
@@ -647,7 +650,7 @@ uint8_t tag_emulation_slot_find_prev(uint8_t slot_now) {
 }
 
 /**
- *Set the card specified by the specified card slot card slot card type card to the specified type
+ * Set the card specified by the specified card slot card slot card type card to the specified type
  */
 void tag_emulation_change_type(uint8_t slot, tag_specific_type_t tag_type) {
     tag_sense_type_t sense_type = get_sense_type_from_tag_type(tag_type);
@@ -673,8 +676,8 @@ void tag_emulation_change_type(uint8_t slot, tag_specific_type_t tag_type) {
 }
 
 /**
- * @briefThe factory initialization function of the emulation card
- * Some data that can be used to initialize the default factory factory
+ * The factory initialization function of the card emulation.
+ * Defaults to a dual-frequency card in slot 1, a hf M1 card in slot 2, and a lf em410x card in slot 3.
  */
 void tag_emulation_factory_init(void) {
     fds_slot_record_map_t map_info;
