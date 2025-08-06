@@ -432,9 +432,13 @@ class ChameleonCMD:
 
         :return:
         """
-        resp = self.device.send_cmd_sync(Command.EM410X_SCAN)
+        data = struct.pack("B", 0x01)
+        resp = self.device.send_cmd_sync(Command.EM410X_SCAN, data)
         if resp.status == Status.LF_TAG_OK:
-            resp.parsed = struct.unpack('!h5s', resp.data[0:7]) # card type + uid
+            if len(resp.data) == 5:
+                resp.parsed = struct.unpack('!5s', resp.data) # uid
+            else:
+                resp.parsed = struct.unpack('!5sh', resp.data) # uid + tag type
         return resp
 
     @expect_response(Status.LF_TAG_OK)
@@ -474,7 +478,6 @@ class ChameleonCMD:
             raise ValueError("The id bytes length must equal 13")
         data = struct.pack(f'!13s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.HIDPROX_WRITE_TO_T55XX, data)
-
 
     @expect_response(Status.SUCCESS)
     def get_slot_info(self):

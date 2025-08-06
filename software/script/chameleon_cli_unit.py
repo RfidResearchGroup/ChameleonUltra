@@ -466,19 +466,6 @@ class LFHIDIdArgsUnit(DeviceRequiredUnit):
         if oem is not None and oem > limit[3]:
             raise ArgsParserError(f"{HIDFormat(format)}: OEM must between 0 to {limit[3]}")
 
-        """
-        HIDFormat.: [0xFFF, 0x3FFFF, 0x7, 0],
-        HIDFormat.: [0x3FF, 0xFFFFFF, 0, 0x7],
-        HIDFormat.: [0xFFFF, 0xFFFFF, 0, 0],
-        HIDFormat.: [0xFFF, 0xFFFF, 0, 0],
-        HIDFormat.: [0, 0xFFFFFFFFFF, 0, 0],
-        HIDFormat.: [0xFFF, 0xFFFFF, 0, 0x7F],
-        HIDFormat.: [0x3FFF, 0x3FFFFFFF, 0, 0],
-        HIDFormat.: [0x003FFFFF, 0x007FFFFF, 0, 0],
-        HIDFormat.: [0xFFFFF, 0x3FFFFFFFF, 0, 0],
-        HIDFormat.: [0xFFFFFF, 0xFFFFFFFF, 0, 0],
-        """
-
     def before_exec(self, args: argparse.Namespace):
         if super().before_exec(args):
             format = HIDFormat.H10301.value
@@ -3126,7 +3113,10 @@ class LFEMRead(ReaderRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         data = self.cmd.em410x_scan()
-        print(f"{TagSpecificType(data[0])}: {CG}{data[1].hex()}{C0}")
+        if len(data) == 1:
+            print(f"{TagSpecificType.EM410X}: {CG}{data[0].hex()}{C0}")
+        else:
+            print(f"{TagSpecificType(data[1])}: {CG}{data[0].hex()}{C0}")
 
 
 @lf_em_410x.command('write')
@@ -3209,9 +3199,9 @@ class LFHIDProxEconfig(SlotIndexArgsAndGoUnit, LFHIDIdArgsUnit):
                 args.il = 0
             if args.oem is None:
                 args.oem = 0
-            if args.format is None:
-                format = HIDFormat.H10301
-            format = HIDFormat[args.format]
+            format = HIDFormat.H10301
+            if args.format is not None:
+                format = HIDFormat[args.format]
             id = struct.pack(">BIBIBH", format.value, args.fc, (args.cn >> 32), args.cn & 0xffffffff, args.il, args.oem)
             self.cmd.hidprox_set_emu_id(id)
             print(' - Set hidprox tag id success.')

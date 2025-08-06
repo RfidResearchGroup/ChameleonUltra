@@ -1,4 +1,4 @@
-#include "lf_em410x_data.h"
+#include "lf_reader_data.h"
 
 #include "bsp_delay.h"
 #include "bsp_time.h"
@@ -13,6 +13,8 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 NRF_LOG_MODULE_REGISTER();
+
+#define EM410X_BUFFER_SIZE (128)
 
 static circular_buffer cb;
 
@@ -29,12 +31,13 @@ void gpio_int0_cb(void) {
     clear_lf_counter_value();
 }
 
-void init_em410x_hw(void) {
+static void init_em410x_hw(void) {
     register_rio_callback(gpio_int0_cb);
-    lf_125khz_radio_gpiote_init();
+    lf_125khz_radio_gpiote_enable();
 }
 
-void uninit_em410x_hw(void) {
+static void uninit_em410x_hw(void) {
+    lf_125khz_radio_gpiote_disable();
     unregister_rio_callback();
 }
 
@@ -59,9 +62,9 @@ bool em410x_read(uint8_t *data, uint32_t timeout_ms) {
                 if (!p->decoder.feed(codecs[i], val)) {
                     continue;
                 }
-                data[0] = p->tag_type >> 8;
-                data[1] = p->tag_type;
-                memcpy(data + 2, p->get_data(codecs[i]), p->data_size);
+                memcpy(data, p->get_data(codecs[i]), p->data_size);
+                data[p->data_size] = p->tag_type >> 8;
+                data[p->data_size + 1] = p->tag_type;
                 ok = true;
                 break;
             }
