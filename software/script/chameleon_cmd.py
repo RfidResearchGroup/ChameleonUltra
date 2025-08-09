@@ -432,13 +432,9 @@ class ChameleonCMD:
 
         :return:
         """
-        data = struct.pack("B", 0x01)
-        resp = self.device.send_cmd_sync(Command.EM410X_SCAN, data)
+        resp = self.device.send_cmd_sync(Command.EM410X_SCAN)
         if resp.status == Status.LF_TAG_OK:
-            if len(resp.data) == 5:
-                resp.parsed = struct.unpack('!5s', resp.data) # uid
-            else:
-                resp.parsed = struct.unpack('!5sh', resp.data) # uid + tag type
+            resp.parsed = struct.unpack('!h5s', resp.data) # tag type + uid
         return resp
 
     @expect_response(Status.LF_TAG_OK)

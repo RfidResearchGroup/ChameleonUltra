@@ -62,9 +62,9 @@ bool em410x_read(uint8_t *data, uint32_t timeout_ms) {
                 if (!p->decoder.feed(codecs[i], val)) {
                     continue;
                 }
-                memcpy(data, p->get_data(codecs[i]), p->data_size);
-                data[p->data_size] = p->tag_type >> 8;
-                data[p->data_size + 1] = p->tag_type;
+                data[0] = p->tag_type >> 8;
+                data[1] = p->tag_type;
+                memcpy(data + 2, p->get_data(codecs[i]), p->data_size);
                 ok = true;
                 break;
             }

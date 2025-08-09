@@ -3113,10 +3113,7 @@ class LFEMRead(ReaderRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         data = self.cmd.em410x_scan()
-        if len(data) == 1:
-            print(f"{TagSpecificType.EM410X}: {CG}{data[0].hex()}{C0}")
-        else:
-            print(f"{TagSpecificType(data[1])}: {CG}{data[0].hex()}{C0}")
+        print(f"{TagSpecificType(data[0])}: {CG}{data[1].hex()}{C0}")
 
 
 @lf_em_410x.command('write')

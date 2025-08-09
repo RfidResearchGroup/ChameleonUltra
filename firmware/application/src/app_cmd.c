@@ -602,13 +602,12 @@ static data_frame_tx_t *cmd_processor_mf1_manipulate_value_block(uint16_t cmd, u
 }
 
 static data_frame_tx_t *cmd_processor_em410x_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t card_buffer[10] = {0x00};
-    bool with_bitrate = length > 0 && data[0] == 1;
+    uint8_t card_buffer[7] = {0x00};
     status = scan_em410x(card_buffer);
     if (status != STATUS_LF_TAG_OK) {
         return data_frame_make(cmd, status, 0, NULL);
     }
-    return data_frame_make(cmd, STATUS_LF_TAG_OK, with_bitrate ? 7 : 5, card_buffer);
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_buffer), card_buffer);
 }
 
 static data_frame_tx_t *cmd_processor_em410x_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {

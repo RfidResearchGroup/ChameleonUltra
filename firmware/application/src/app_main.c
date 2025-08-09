@@ -596,14 +596,17 @@ static void btn_fn_copy_lf(uint8_t slot, tag_specific_type_t type) {
     size_t size = 0;
     uint8_t id_buffer[16] = {0x00};
     uint8_t status = STATUS_LF_TAG_NO_FOUND;
+    uint8_t *data = NULL;
     switch (type) {
         case TAG_TYPE_HID_PROX:
             status = scan_hidprox(id_buffer, 0);
             size = LF_HIDPROX_TAG_ID_SIZE;
+            data = id_buffer;
             break;
         case TAG_TYPE_EM410X:
             status = scan_em410x(id_buffer);
             size = LF_EM410X_TAG_ID_SIZE;
+            data = id_buffer + 2; // skip tag type
             break;
         default:
             NRF_LOG_ERROR("Unsupported LF tag type")
@@ -611,7 +614,7 @@ static void btn_fn_copy_lf(uint8_t slot, tag_specific_type_t type) {
     }
 
     if (status == STATUS_LF_TAG_OK) {
-        memcpy(buffer->buffer, id_buffer, size);
+        memcpy(buffer->buffer, data, size);
         tag_emulation_load_by_buffer(type, false);
         NRF_LOG_INFO("Offline lf tag copied")
 
