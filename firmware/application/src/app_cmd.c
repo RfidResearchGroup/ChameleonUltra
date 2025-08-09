@@ -426,7 +426,7 @@ static data_frame_tx_t *cmd_processor_mf1_hardnested_nonces_acquire(uint16_t cmd
     payload_t *payload = (payload_t *)data;
 
     // It is enough to collect 110 nonces at a time. The total transmitted data payload is 495 + 1 bytes
-    // Then, the total length can be controlled within 512, so that when encountering a BLE host that supports large packets, one communication can be completed.
+    // Then, the total length can be controlled within 4096, so that when encountering a BLE host that supports large packets, one communication can be completed.
     // There is no need to send or receive packets in separate packets, which improves communication speed.
     uint8_t nonces[500] = { 0x00 };
     if (length < 11) {
