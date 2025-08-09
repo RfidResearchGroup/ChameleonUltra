@@ -1,9 +1,7 @@
 #include "bsp_delay.h"
 #include "hex_utils.h"
 #include "lf_125khz_radio.h"
-#include "lf_reader_data.h"
 #include "nrf_gpio.h"
-#include "nrf_sdh_soc.h"
 #include "protocols/t55xx.h"
 #include "timeslot.h"
 
@@ -110,7 +108,7 @@ void t55xx_send_cmd(uint8_t opcode, uint32_t *passwd, uint8_t lock_bit, uint32_t
     t55xx_cmd.blk_addr = blk_addr;
 
     // request timing, and wait for the order operation to complete
-    request_timeslot(37 * 1000, t55xx_timeslot_callback, true);
+    request_timeslot(37 * 1000, t55xx_timeslot_callback);
 
     if (opcode != 0) {
         bsp_delay_ms(6);  // Maybe continue to write a card next time, you need to wait more for a while
@@ -120,10 +118,11 @@ void t55xx_send_cmd(uint8_t opcode, uint32_t *passwd, uint8_t lock_bit, uint32_t
 }
 
 /**
- * @brief T55XX Write into HIDProx data
+ * @brief generic t55xx write data
  *
- * @param passwd The password for the final encryption (also the current password of the card) (is a pointer, 4 -byte width small end byte sequence storage)
- * @param data After the data of EM410X, you need to call the EM410X_ENCODER calculation
+ * @param passwd the password for the final encryption (also the current password of the card)
+ * @param blks the blocks data to write
+ * @param blk_count the number of blocks to write
  */
 void t55xx_write_data(uint32_t passwd, uint32_t *blks, uint8_t blk_count) {
     // write control bits (blk0) & data (w/wo passwd)
@@ -131,7 +130,6 @@ void t55xx_write_data(uint32_t passwd, uint32_t *blks, uint8_t blk_count) {
         t55xx_send_cmd(T5577_OPCODE_PAGE0, &passwd, 0, &blks[i], i);
         t55xx_send_cmd(T5577_OPCODE_PAGE0, NULL, 0, &blks[i], i);
     }
-
     t55xx_send_cmd(T5577_OPCODE_RESET, NULL, 0, NULL, 0);
 }
 

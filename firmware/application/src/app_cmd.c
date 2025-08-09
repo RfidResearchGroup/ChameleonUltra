@@ -602,7 +602,7 @@ static data_frame_tx_t *cmd_processor_mf1_manipulate_value_block(uint16_t cmd, u
 }
 
 static data_frame_tx_t *cmd_processor_em410x_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t card_buffer[16] = { 0x00 };
+    uint8_t card_buffer[7] = {0x00};
     status = scan_em410x(card_buffer);
     if (status != STATUS_LF_TAG_OK) {
         return data_frame_make(cmd, status, 0, NULL);
@@ -647,7 +647,7 @@ static data_frame_tx_t *cmd_processor_hidprox_write_to_t55xx(uint16_t cmd, uint1
 }
 
 static data_frame_tx_t *cmd_processor_hidprox_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t card_data[16] = { 0x00 };
+    uint8_t card_data[16] = {0x00};
     status = scan_hidprox(card_data, data[0]);
     if (status != STATUS_LF_TAG_OK) {
         return data_frame_make(cmd, status, 0, NULL);
@@ -735,7 +735,7 @@ static data_frame_tx_t *cmd_processor_set_slot_enable(uint16_t cmd, uint16_t sta
     uint8_t slot_now = payload->slot_index;
     tag_emulation_slot_set_enable(slot_now, payload->sense_type, payload->enabled);
     if ((!payload->enabled) &&
-            (!tag_emulation_slot_is_enabled(slot_now, payload->sense_type == TAG_SENSE_HF ? TAG_SENSE_LF : TAG_SENSE_HF))) {
+            (!is_slot_enabled(slot_now, payload->sense_type == TAG_SENSE_HF ? TAG_SENSE_LF : TAG_SENSE_HF))) {
         // HF and LF disabled, need to change slot
         uint8_t slot_prev = tag_emulation_slot_find_next(slot_now);
         NRF_LOG_INFO("slot_now = %d, slot_prev = %d", slot_now, slot_prev);
@@ -1311,8 +1311,8 @@ static data_frame_tx_t *cmd_processor_get_enabled_slots(uint16_t cmd, uint16_t s
         uint8_t enabled_lf;
     } PACKED payload[8];
     for (uint8_t slot = 0; slot < 8; slot++) {
-        payload[slot].enabled_hf = tag_emulation_slot_is_enabled(slot, TAG_SENSE_HF);
-        payload[slot].enabled_lf = tag_emulation_slot_is_enabled(slot, TAG_SENSE_LF);
+        payload[slot].enabled_hf = is_slot_enabled(slot, TAG_SENSE_HF);
+        payload[slot].enabled_lf = is_slot_enabled(slot, TAG_SENSE_LF);
     }
     return data_frame_make(cmd, STATUS_SUCCESS, sizeof(payload), (uint8_t *)&payload);
 }

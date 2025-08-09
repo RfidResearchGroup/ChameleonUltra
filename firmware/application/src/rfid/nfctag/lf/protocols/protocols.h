@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "nrf_pwm.h"
+#include "tag_base_type.h"
 
 typedef void* (*codec_alloc)(void);
 typedef void (*codec_free)(void* codec);
@@ -21,7 +22,7 @@ typedef struct {
 } decoder_t;
 
 typedef struct {
-    uint16_t tag_type;
+    tag_specific_type_t tag_type;
     const size_t data_size;
     codec_alloc alloc;
     codec_free free;

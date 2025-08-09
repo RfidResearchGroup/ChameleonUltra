@@ -90,16 +90,16 @@ nrf_radio_signal_callback_return_param_t *radio_callback(uint8_t signal_type) {
 }
 
 /**
- * Request a sequence for high -precision operation
+ * Request a sequence for high-precision operation
  */
-void request_timeslot(uint32_t time_us, timeslot_callback_t callback, bool wait_end) {
+void request_timeslot(uint32_t time_us, timeslot_callback_t callback) {
     ret_code_t err_code;
 
     // Make sure there is only one at the same time
     APP_ERROR_CHECK_BOOL(!m_is_timeslot_running);
     m_is_timeslot_running = true;
 
-    m_slot_length = time_us;    //The time for configuration application
+    m_slot_length = time_us;    // The time for configuration application
     m_callback    = callback;   // The configuration time application is applied to the operation after execution
 
     // Open the session
@@ -134,7 +134,7 @@ void request_timeslot(uint32_t time_us, timeslot_callback_t callback, bool wait_
     NVIC_EnableIRQ(RTC1_IRQn);
     NVIC_EnableIRQ(MWU_IRQn);
 
-    //Close the session and wait for the closure to complete
+    // Close the session and wait for the closure to complete
     err_code = sd_radio_session_close();
     APP_ERROR_CHECK(err_code);
     while (m_is_timeslot_working) {
@@ -143,8 +143,6 @@ void request_timeslot(uint32_t time_us, timeslot_callback_t callback, bool wait_
 
     // The task process is completed and the ending work
     m_is_timeslot_running = false;
-
-    //NRF_LOG_INFO("request timeslot done.");
 }
 
 /**
@@ -183,7 +181,7 @@ void timeslot_start(uint32_t time_us) {
 }
 
 /**
- * Stop high -precision operation
+ * Stop high-precision operation
  */
 void timeslot_stop(void) {
     ret_code_t err_code;
@@ -206,5 +204,4 @@ void timeslot_stop(void) {
 
     // The task process is completed and the ending work
     m_is_timeslot_running = false;
-    //NRF_LOG_INFO("timeslot stop.");
 }
