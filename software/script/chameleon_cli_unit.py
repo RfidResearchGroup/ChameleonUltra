@@ -376,7 +376,6 @@ class MFUAuthArgsUnit(ReaderRequiredUnit):
         if key is not None and args.swap_endian:
             key = bytearray(key)
             for i in range(len(key)):
-                tmp = key[i]
                 key[i] = key[len(key) - 1 - i]
             key = bytes(key)
 
@@ -843,7 +842,7 @@ class HFMFNested(ReaderRequiredUnit):
         nt_level = self.cmd.mf1_detect_prng()
         print(f" - NT vulnerable: {CY}{self.from_nt_level_code_to_str(nt_level)}{C0}")
         if nt_level == 2:
-            print(" [!] HardNested has not been implemented yet.")
+            print(" [!] Use hf mf hardnested")
             return None
 
         # acquire
@@ -1038,7 +1037,7 @@ class HFMFHardNested(ReaderRequiredUnit):
         :param max_attempts: Maximum number of full acquisition attempts.
         :return: Recovered key as a hex string, or None if not found.
         """
-        print(f" - Starting HardNested attack...")
+        print(" - Starting HardNested attack...")
         nonces_buffer = bytearray()  # This will hold the final data for the file
         uid_bytes = b''  # To store UID from the successful attempt
 
@@ -2344,7 +2343,7 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
 
 
 @hf_mfu.command('ercnt')
-class HFMFUVERSION(DeviceRequiredUnit):
+class HFMFUERCNT(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Read MIFARE Ultralight / NTAG counter value.'
@@ -2361,7 +2360,7 @@ class HFMFUVERSION(DeviceRequiredUnit):
 
 
 @hf_mfu.command('ewcnt')
-class HFMFUVERSION(DeviceRequiredUnit):
+class HFMFUEWCNT(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Write MIFARE Ultralight / NTAG counter value.'
@@ -2409,7 +2408,7 @@ class HFMFURDPG(MFUAuthArgsUnit):
                 failed_auth = len(resp) < 2
                 if not failed_auth:
                     print(f" - PACK: {resp[:2].hex()}")
-            except Exception as e:
+            except Exception:
                 # failed auth may cause tags to be lost
                 failed_auth = True
 
@@ -2467,7 +2466,7 @@ class HFMFUWRPG(MFUAuthArgsUnit):
                 failed_auth = len(resp) < 2
                 if not failed_auth:
                     print(f" - PACK: {resp[:2].hex()}")
-            except Exception as e:
+            except Exception:
                 # failed auth may cause tags to be lost
                 failed_auth = True
 
@@ -2482,7 +2481,7 @@ class HFMFUWRPG(MFUAuthArgsUnit):
                                       data=struct.pack('!BB', 0xA2, args.page)+data)
 
             if resp[0] == 0x0A:
-                print(f" - Ok")
+                print(" - Ok")
             else:
                 print(f"{CR}Write failed ({resp[0]:#04x}).{C0}")
         else:
@@ -2502,16 +2501,7 @@ class HFMFUEVIEW(DeviceRequiredUnit):
         parser.description = 'MIFARE Ultralight / NTAG view emulator data'
         return parser
 
-    def get_param(self, args):
-        class Param:
-            def __init__(self):
-                pass
-
-        return Param()
-
     def on_exec(self, args: argparse.Namespace):
-        param = self.get_param(args)
-
         nr_pages = self.cmd.mfu_get_emu_pages_count()
         page = 0
         while page < nr_pages:
@@ -2585,7 +2575,7 @@ class HFMFUELOAD(DeviceRequiredUnit):
             self.cmd.mfu_write_emu_page_data(page, page_data)
             page += cur_count
 
-        print(f" - Ok")
+        print(" - Ok")
 
 
 @hf_mfu.command('esave')
@@ -2661,7 +2651,7 @@ class HFMFUESAVE(DeviceRequiredUnit):
 
                 page += cur_count
 
-        print(f" - Ok")
+        print(" - Ok")
 
 
 @hf_mfu.command('rcnt')
@@ -2693,7 +2683,7 @@ class HFMFURCNT(MFUAuthArgsUnit):
                 failed_auth = len(resp) < 2
                 if not failed_auth:
                     print(f" - PACK: {resp[:2].hex()}")
-            except Exception as e:
+            except Exception:
                 # failed auth may cause tags to be lost
                 failed_auth = True
 
@@ -2835,7 +2825,7 @@ class HFMFUDUMP(MFUAuthArgsUnit):
                 needs_stop = len(resp) < 2
                 if not needs_stop:
                     print(f" - PACK: {resp[:2].hex()}")
-            except Exception as e:
+            except Exception:
                 # failed auth may cause tags to be lost
                 needs_stop = True
 
@@ -2853,7 +2843,6 @@ class HFMFUDUMP(MFUAuthArgsUnit):
             if param.key is not None and not needs_stop:
                 resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!B', 0x1B)+param.key)
                 options['auto_select'] = 0  # prevent resets
-                pack = resp[:2].hex()
 
             # disable the rf field after the last command
             if i == (stop_page - 1) or needs_stop:
@@ -3190,7 +3179,7 @@ class LFHIDProxWriteT55xx(LFHIDIdArgsUnit, ReaderRequiredUnit):
         if args.oem > 0:
             print(f" OEM: {args.oem}")
         print(f" CN: {args.cn}")
-        print(f"write done.")
+        print("write done.")
 
 @lf_hid_prox.command('econfig')
 class LFHIDProxEconfig(SlotIndexArgsAndGoUnit, LFHIDIdArgsUnit):
