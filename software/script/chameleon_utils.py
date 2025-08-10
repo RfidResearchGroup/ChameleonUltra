@@ -164,7 +164,7 @@ def prng_successor(x, n):
 
 
 def reconstruct_full_nt(response_data, offset):
-    nt = int.from_bytes(response_data[offset: offset + 2])
+    nt = int.from_bytes(response_data[offset: offset + 2], byteorder='big')
 
     return (nt << 16) | prng_successor(nt, 16)
 

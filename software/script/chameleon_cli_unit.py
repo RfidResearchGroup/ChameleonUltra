@@ -421,7 +421,7 @@ class LFHIDIdArgsUnit(DeviceRequiredUnit):
         return parser
 
     @staticmethod
-    def check_limits(format: int, fc: int | None, cn: int | None, il: int | None, oem: int | None):
+    def check_limits(format: int, fc: Union[int, None], cn: Union[int, None], il: Union[int, None], oem: Union[int, None]):
         limits = {
             HIDFormat.H10301: [0xFF, 0xFFFF, 0, 0],
             HIDFormat.IND26: [0xFFF, 0xFFF, 0, 0],

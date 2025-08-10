@@ -409,7 +409,7 @@ class ChameleonCMD:
                 resp.parsed['nts']['a'].append(
                     {
                         'nt': reconstruct_full_nt(resp.data, i),
-                        'nt_enc': int.from_bytes(resp.data[i + 3: i + 7]),
+                        'nt_enc': int.from_bytes(resp.data[i + 3: i + 7], byteorder='big'),
                         'parity': parity_to_str(resp.data[i + 2])
                     }
                 )
@@ -417,7 +417,7 @@ class ChameleonCMD:
                 resp.parsed['nts']['b'].append(
                     {
                         'nt': reconstruct_full_nt(resp.data, i + 7),
-                        'nt_enc': int.from_bytes(resp.data[i + 10: i + 14]),
+                        'nt_enc': int.from_bytes(resp.data[i + 10: i + 14], byteorder='big'),
                         'parity': parity_to_str(resp.data[i + 9])
                     }
                 )
