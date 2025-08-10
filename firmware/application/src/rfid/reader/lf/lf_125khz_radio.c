@@ -11,7 +11,7 @@
 #include "rfid_main.h"
 
 static bool m_reader_inited = false;
-nrfx_pwm_t m_pwm = NRFX_PWM_INSTANCE(0);
+nrfx_pwm_t m_pwm = NRFX_PWM_INSTANCE(1);
 nrfx_timer_t m_pwm_timer_counter = NRFX_TIMER_INSTANCE(2);
 nrf_ppi_channel_t m_pwm_saadc_sample_ppi_channel;
 nrf_ppi_channel_t m_pwm_timer_count_ppi_channel;

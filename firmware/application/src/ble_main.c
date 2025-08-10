@@ -680,17 +680,14 @@ static void peer_manager_init(void) {
 
 /**@brief Function for handling the ADC interrupt.
  *
- * @details  This function will fetch the conversion result from the ADC, convert the value into
- *           percentage and send it to peer.
+ * @details  This function fetchs conversion result from the ADC, then callback lf with samples.
  */
 void saadc_event_handler(nrfx_saadc_evt_t const *p_event) {
     if (p_event->type == NRFX_SAADC_EVT_DONE && m_lf_adc_callback != NULL) {
         ret_code_t err_code;
-
         err_code = nrfx_saadc_buffer_convert(&adc_buf[next_free_buf_index()][0], ADC_BUF_SIZE);
         APP_ERROR_CHECK(err_code);
 
-        // callback lf with samples
         m_lf_adc_callback(p_event->data.done.p_buffer, p_event->data.done.size);
     }
 }
@@ -726,6 +723,8 @@ static void battery_level_meas_timeout_handler(void *p_context) {
         return;
     }
 
+    // Here we fetch the conversion result from the ADC, convert the value into
+    // percentage and send it to peer.
     ret_code_t err_code;
     nrf_saadc_value_t adc_result;
     err_code = nrfx_saadc_sample_convert(ADC_CHANNEL, &adc_result);
