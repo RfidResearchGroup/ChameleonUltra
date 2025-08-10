@@ -66,18 +66,17 @@ Source: NXP: MF1S50YYX Product data sheet
 
 Access conditions for the sector trailer
 
-Access bits     Access condition for                   Remark
-            KEYA         Access bits  KEYB
-C1 C2 C3        read  write  read  write  read  write
-0  0  0         never key A  key A never  key A key A  Key B may be read[1]
-0  1  0         never never  key A never  key A never  Key B may be read[1]
-1  0  0         never key B  keyA|B never never key B
-1  1  0         never never  keyA|B never never never
-0  0  1         never key A  key A  key A key A key A  Key B may be read,
-                                                       transport configuration[1]
-0  1  1         never key B  keyA|B key B never key B
-1  0  1         never never  keyA|B key B never never
-1  1  1         never never  keyA|B never never never
+Access bits     Access condition for                    Remark
+                KEY A        Access bits   KEY B
+C1 C2 C3        read  write  read   write  read  write
+0  0  0         never key A  key A  never  key A key A  Key B may be read[1]
+1  0  0         never key B  keyA|B never  never key B
+0  1  0         never never  key A  never  key A never  Key B may be read[1]
+1  1  0         never never  keyA|B never  never never
+0  0  1         never key A  key A  key A  key A key A  Key B may be read, transport configuration[1]
+1  0  1         never never  keyA|B key B  never never
+0  1  1         never key B  keyA|B key B  never key B
+1  1  1         never never  keyA|B never  never never
 
 [1] For this access condition key B is readable and may be used for data
 */
@@ -92,19 +91,18 @@ C1 C2 C3        read  write  read  write  read  write
 
 /*
 Access conditions for data blocks
-Access bits Access condition for                 Application
-C1 C2 C3     read     write     increment     decrement,
+Access bits Access condition for                            Application
+C1 C2 C3      read      write     increment     decrement,
                                                 transfer,
                                                 restore
-
-0 0 0         key A|B key A|B key A|B     key A|B     transport configuration
-0 1 0         key A|B never     never         never         read/write block
-1 0 0         key A|B key B     never         never         read/write block
-1 1 0         key A|B key B     key B         key A|B     value block
-0 0 1         key A|B never     never         key A|B     value block
-0 1 1         key B     key B     never         never         read/write block
-1 0 1         key B     never     never         never         read/write block
-1 1 1         never     never     never         never         read/write block
+0  0  0       key A|B   key A|B   key A|B       key A|B     transport configuration
+1  0  0       key A|B   key B     never         never       read/write block
+0  1  0       key A|B   never     never         never       read/write block
+1  1  0       key A|B   key B     key B         key A|B     value block
+0  0  1       key A|B   never     never         key A|B     value block
+1  0  1       key B     never     never         never       read/write block
+0  1  1       key B     key B     never         never       read/write block
+1  1  1       never     never     never         never       read/write block
 
 */
 #define ACC_BLOCK_READ      0x01
@@ -121,7 +119,7 @@ static const uint8_t abTrailerAccessConditions[8][2] = {
     /* 0  0  0 RdKA:never WrKA:key A  RdAcc:key A WrAcc:never  RdKB:key A WrKB:key A      Key B may be read[1] */
     {
         /* Access with Key A */
-        ACC_TRAILER_WRITE_KEYA | ACC_TRAILER_READ_ACC | ACC_TRAILER_WRITE_ACC | ACC_TRAILER_READ_KEYB | ACC_TRAILER_WRITE_KEYB,
+        ACC_TRAILER_WRITE_KEYA | ACC_TRAILER_READ_ACC | ACC_TRAILER_READ_KEYB | ACC_TRAILER_WRITE_KEYB,
         /* Access with Key B */
         0
     },
@@ -153,13 +151,6 @@ static const uint8_t abTrailerAccessConditions[8][2] = {
         /* Access with Key B */
         0
     },
-    /* 0  1  1         never key B  keyA|B key B never key B */
-    {
-        /* Access with Key A */
-        ACC_TRAILER_READ_ACC,
-        /* Access with Key B */
-        ACC_TRAILER_WRITE_KEYA | ACC_TRAILER_READ_ACC | ACC_TRAILER_WRITE_ACC | ACC_TRAILER_WRITE_KEYB
-    },
     /* 1  0  1         never never  keyA|B key B never never */
     {
         /* Access with Key A */
@@ -167,12 +158,70 @@ static const uint8_t abTrailerAccessConditions[8][2] = {
         /* Access with Key B */
         ACC_TRAILER_READ_ACC | ACC_TRAILER_WRITE_ACC
     },
+    /* 0  1  1         never key B  keyA|B key B never key B */
+    {
+        /* Access with Key A */
+        ACC_TRAILER_READ_ACC,
+        /* Access with Key B */
+        ACC_TRAILER_WRITE_KEYA | ACC_TRAILER_READ_ACC | ACC_TRAILER_WRITE_ACC | ACC_TRAILER_WRITE_KEYB
+    },
     /* 1  1  1         never never  keyA|B never never never */
     {
         /* Access with Key A */
         ACC_TRAILER_READ_ACC,
         /* Access with Key B */
         ACC_TRAILER_READ_ACC
+    },
+};
+
+static const uint8_t abDataAccessConditions[8][2] = {
+    { // 0 0 0    key A|B key A|B key A|B key A|B 
+        /* Access with Key A */
+        ACC_BLOCK_READ | ACC_BLOCK_WRITE | ACC_BLOCK_INCREMENT | ACC_BLOCK_DECREMENT,
+        /* Access with Key B */
+        ACC_BLOCK_READ | ACC_BLOCK_WRITE | ACC_BLOCK_INCREMENT | ACC_BLOCK_DECREMENT
+    },
+    { // 1 0 0    key A|B key B never never
+        /* Access with Key A */
+        ACC_BLOCK_READ,
+        /* Access with Key B */
+        ACC_BLOCK_READ | ACC_BLOCK_WRITE,
+    },
+    { // 0 1 0    key A|B never never never
+        /* Access with Key A */
+        ACC_BLOCK_READ,
+        /* Access with Key B */
+        ACC_BLOCK_READ
+    },
+    { // 1 1 0    key A|B key B key B key A|B
+        /* Access with Key A */
+        ACC_BLOCK_READ | ACC_BLOCK_DECREMENT,
+        /* Access with Key B */
+        ACC_BLOCK_READ | ACC_BLOCK_WRITE | ACC_BLOCK_INCREMENT | ACC_BLOCK_DECREMENT
+    },
+    { // 0 0 1    key A|B never never key A|B
+        /* Access with Key A */
+        ACC_BLOCK_READ | ACC_BLOCK_DECREMENT,
+        /* Access with Key B */
+        ACC_BLOCK_READ | ACC_BLOCK_DECREMENT
+    },
+    { // 1 0 1    key B never never never
+        /* Access with Key A */
+        0,
+        /* Access with Key B */
+        ACC_BLOCK_READ
+    },
+    { // 0 1 1    key B key B never never
+        /* Access with Key A */
+        0,
+        /* Access with Key B */
+        ACC_BLOCK_READ | ACC_BLOCK_WRITE
+    },
+    { // 1 1 1    never never never never
+        /* Access with Key A */
+        0,
+        /* Access with Key B */
+        0
     },
 };
 
@@ -210,6 +259,7 @@ static uint8_t CardResponse[4];
 static uint8_t ReaderResponse[4];
 static uint8_t CurrentAddress;
 static uint8_t KeyInUse;
+static uint8_t AuthenticatedSector;
 static uint8_t m_data_block_buffer[MEM_BYTES_PER_BLOCK];
 
 // MifareClassic crypto1 setup use fixed uid by cascade level
@@ -304,6 +354,26 @@ void ValueToBlock(uint8_t *Block, uint32_t Value) {
     Block[9] = Block[1];
     Block[10] = Block[2];
     Block[11] = Block[3];
+}
+
+static uint8_t blockToSector(uint8_t block) {
+    if (block < 128) {
+        return block / 4;
+    } else {
+        return 32 + (block - 128) / 16;
+    }
+}
+
+static uint8_t sectorToBlock(uint8_t sector) {
+    if (sector < 32) {
+        return sector * 4;
+    } else {
+        return 128 + (sector - 32) * 16;
+    }
+}
+
+static inline bool isSectorTrailer(uint8_t block) {
+    return (block < 128 && (block & 3) == 3) || ((block & 15) == 15);
 }
 
 /** @brief MF1 Get a random number
@@ -485,25 +555,15 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                         case CMD_AUTH_B: {
                             uint8_t BlockAuth = p_data[1];
                             uint8_t CardNonce[4];
-                            uint8_t BlockStart;
-                            uint8_t BlockEnd;
-
-                            // Get the starting block of the corresponding sector that is visited, keep in mind: 4K cards have large sectors, and 16 blocks are used as one sector unit
-                            // Calculate ideas: x = (y / n) * n, x = starting block of the sector, y = verified block, n = y's number of blocks where the sector is located
-                            // Thinking analysis: First do divisions to get the current sector, and then multiply to obtain the number of blocks in the sector
-                            if (BlockAuth >= 128) {
-                                BlockStart = (BlockAuth / 16) * 16;
-                                BlockEnd = BlockStart + 16 - 1;
-                            } else {
-                                // Non -4K card, step by step with a small sector
-                                BlockStart = (BlockAuth / 4) * 4;
-                                BlockEnd = BlockStart + 4 - 1;
-                            }
 
                             // The type of current emulation card is not enough to support the access of the card reader
                             if (check_block_max_overflow(BlockAuth)) {
                                 break;
                             }
+
+                            // Determine the last block number of the authenticated sector
+                            AuthenticatedSector = blockToSector(BlockAuth);
+                            uint8_t BlockEnd = sectorToBlock(AuthenticatedSector + 1) - 1;
 
                             // Set KeyInUse as global use to retain information about identity verification
                             KeyInUse = p_data[0] & 1;
@@ -651,8 +711,12 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                 crypto1_word(pcs, nr, 1);
                 num_to_bytes(ar ^ crypto1_word(pcs, 0, 0), 4, &p_data[4]);
 #endif
+                uint8_t Acc = abTrailerAccessConditions[ GetAccessCondition(3) ][ KEY_A ];
                 // Was the random number of the return of the card reader was sent by us
-                if ((p_data[4] == ReaderResponse[0]) && (p_data[5] == ReaderResponse[1]) && (p_data[6] == ReaderResponse[2]) && (p_data[7] == ReaderResponse[3])) {
+                // Also prevent authentication with Key B if it is readable using Key A
+                if ((p_data[4] == ReaderResponse[0]) && (p_data[5] == ReaderResponse[1]) && (p_data[6] == ReaderResponse[2]) && (p_data[7] == ReaderResponse[3])
+                    && (KeyInUse != KEY_B || (Acc & ACC_TRAILER_READ_KEYB) == 0)
+                ) {
                     // The reader has passed the authentication.The estimated calculation card response data and generating the puppet test position.
                     m_tag_tx_buffer.tx_raw_buffer[0] = CardResponse[0];
                     m_tag_tx_buffer.tx_raw_buffer[1] = CardResponse[1];
@@ -698,33 +762,43 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                         case CMD_READ: {
                             // Save the block address of the current operation
                             CurrentAddress = p_data[1];
+
+                            // Reject if the requested block is outside the authenticated sector
+                            if (blockToSector(CurrentAddress) != AuthenticatedSector) {
+                                mf1_response_4bit_auto_encrypt(NAK_INVALID_OPERATION_TBIV);
+                                nfc_tag_mf1_reset_handler();
+                                return;
+                            }
+
                             // Generate access control, for data access control below
-                            uint8_t Acc = abTrailerAccessConditions[ GetAccessCondition(CurrentAddress) ][ KeyInUse ];
+                            uint8_t Acc = GetAccessCondition(CurrentAddress);
                             // Read the command.Read data from memory and add CRCA.Note: Reading operations are limited by the control bit, but at present we only restrict the reading of the control bit
-                            if ((CurrentAddress < 128 && (CurrentAddress & 3) == 3) || ((CurrentAddress & 15) == 15)) {
+                            if (isSectorTrailer(CurrentAddress)) {
+                                Acc = abTrailerAccessConditions[ Acc ][ KeyInUse ];
                                 // Clear the buffer to avoid the cache data that affect the follow -up operation
                                 memset(m_tag_tx_buffer.tx_raw_buffer, 0x00, sizeof(m_tag_tx_buffer.tx_raw_buffer));
                                 // Make this data area into the type of tail blocks we need
                                 nfc_tag_mf1_trailer_info_t *respTrailerInfo = (nfc_tag_mf1_trailer_info_t *)m_tag_tx_buffer.tx_raw_buffer;
                                 // The reading of the tail block has the following conditions:
-                                // 1. Always copy GPB (Global Public Byte), which is the last byte of the control bit
-                                // 2. Secret A can never be read!
-                                // 3. Make the restrictions of the control position reading according to the access conditions of the read during authentication!
-                                respTrailerInfo->acs[3] = m_tag_trailer_info->acs[3];
-                                // Determine whether the control position itself allows reading
-                                if (Acc & ACC_TRAILER_READ_ACC) {
-                                    respTrailerInfo->acs[0] = m_tag_trailer_info->acs[0];
-                                    respTrailerInfo->acs[1] = m_tag_trailer_info->acs[1];
-                                    respTrailerInfo->acs[2] = m_tag_trailer_info->acs[2];
-                                }
-                                // In a few cases, the Secret B is readable
+                                // 1. Key A can never be read
+                                // 2. Always copy ACS bytes
+                                // 3. Key B can be read depending on access conditions
+                                memcpy(respTrailerInfo->acs, m_tag_trailer_info->acs, 4);
                                 if (Acc & ACC_TRAILER_READ_KEYB) {
                                     memcpy(respTrailerInfo->key_b, m_tag_trailer_info->key_b, 6);
                                 }
                             } else {
-                                // For data, just return to the corresponding location sector
-                                memcpy(m_tag_tx_buffer.tx_raw_buffer, m_tag_information->memory[CurrentAddress], 16);
+                                Acc = abDataAccessConditions[ Acc ][ KeyInUse ];
+                                if (Acc & ACC_BLOCK_READ) {
+                                    // For data, just return to the corresponding location sector
+                                    memcpy(m_tag_tx_buffer.tx_raw_buffer, m_tag_information->memory[CurrentAddress], 16);
+                                } else {
+                                    mf1_response_4bit_auto_encrypt(NAK_INVALID_OPERATION_TBIV);
+                                    nfc_tag_mf1_reset_handler();
+                                    return;
+                                }
                             }
+
                             // In any case, the data of the reply must be calculated CRC
                             nfc_tag_14a_append_crc(m_tag_tx_buffer.tx_raw_buffer, NFC_TAG_MF1_DATA_SIZE);
                             // Reply and calculate the coupling school inspection to reply to the card reader
@@ -740,43 +814,86 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                             return;
                         }
                         case CMD_WRITE: {
-                            //  Normal cards are not allowed to write block0, otherwise it will be recognized by CUID firewall
-                            if (p_data[1] == 0x00 && !m_tag_information->config.mode_gen2_magic) {
-                                // This operation is not allowed
-                                mf1_response_4bit_auto_encrypt(NAK_INVALID_OPERATION_TBIV);
-                                nfc_tag_mf1_reset_handler();
+                            uint8_t status;
+                            // Save the block address of the current operation
+                            CurrentAddress = p_data[1];
+                            uint8_t Acc = GetAccessCondition(CurrentAddress);
+
+                            if (blockToSector(CurrentAddress) != AuthenticatedSector) {
+                                // Reject if the requested block is outside the authenticated sector
+                                status = NAK_INVALID_OPERATION_TBIV;
+                            } else if (p_data[1] == 0x00 && !m_tag_information->config.mode_gen2_magic) {
+                                // Normal cards are not allowed to write block0, otherwise it will be recognized by CUID firewall
+                                status = NAK_INVALID_OPERATION_TBIV;
+                            } else if (isSectorTrailer(CurrentAddress)) {
+                                // Sector trailer write command.
+                                Acc = abTrailerAccessConditions[ Acc ][ KeyInUse ];
+                                status = (Acc & (ACC_TRAILER_WRITE_ACC | ACC_TRAILER_WRITE_KEYA | ACC_TRAILER_WRITE_KEYB)) ? ACK_VALUE : NAK_INVALID_OPERATION_TBIV;
                             } else {
-                                // Normally write command.Store the address and prepare to receive the upcoming data.
-                                CurrentAddress = p_data[1];
-                                m_mf1_state = MF1_STATE_WRITE;
-                                // Take ACK response, inform the reading head we are ready
-                                mf1_response_4bit_auto_encrypt(ACK_VALUE);
+                                // Normally write command.
+                                Acc = abDataAccessConditions[ Acc ][ KeyInUse ];
+                                status = (Acc & ACC_BLOCK_WRITE) ? ACK_VALUE : NAK_INVALID_OPERATION_TBIV;
+                            }
+
+                            m_mf1_state = MF1_STATE_WRITE;
+                            // Take ACK response, inform the reading head we are ready
+                            mf1_response_4bit_auto_encrypt(status);
+                            if (status != ACK_VALUE) {
+                                nfc_tag_mf1_reset_handler();
                             }
                             return;
                         }
                         // Although I think the following three case code is a bit stupid. Except for the different other ones, the space is the same, but the space is changed (psychological comfort)
                         case CMD_DECREMENT: {
+                            uint8_t status = ACK_VALUE;
                             CurrentAddress = p_data[1];
+                            uint8_t Acc = abDataAccessConditions[ GetAccessCondition(CurrentAddress) ][ KeyInUse ];
+                            if (blockToSector(CurrentAddress) != AuthenticatedSector || isSectorTrailer(CurrentAddress) || (Acc & ACC_BLOCK_DECREMENT) == 0) {
+                                status = NAK_INVALID_OPERATION_TBIV;
+                            }
                             m_mf1_state = MF1_STATE_DECREMENT;
-                            mf1_response_4bit_auto_encrypt(ACK_VALUE);
+                            mf1_response_4bit_auto_encrypt(status);
+                            if (status != ACK_VALUE) {
+                                nfc_tag_mf1_reset_handler();
+                            }
                             break;
                         }
                         case CMD_INCREMENT: {
+                            uint8_t status = ACK_VALUE;
                             CurrentAddress = p_data[1];
+                            uint8_t Acc = abDataAccessConditions[ GetAccessCondition(CurrentAddress) ][ KeyInUse ];
+                            if (blockToSector(CurrentAddress) != AuthenticatedSector || isSectorTrailer(CurrentAddress) || (Acc & ACC_BLOCK_INCREMENT) == 0) {
+                                status = NAK_INVALID_OPERATION_TBIV;
+                            }
                             m_mf1_state = MF1_STATE_INCREMENT;
-                            mf1_response_4bit_auto_encrypt(ACK_VALUE);
+                            mf1_response_4bit_auto_encrypt(status);
+                            if (status != ACK_VALUE) {
+                                nfc_tag_mf1_reset_handler();
+                            }
                             break;
                         }
                         case CMD_RESTORE: {
+                            uint8_t status = ACK_VALUE;
                             CurrentAddress = p_data[1];
+                            uint8_t Acc = abDataAccessConditions[ GetAccessCondition(CurrentAddress) ][ KeyInUse ];
+                            if (blockToSector(CurrentAddress) != AuthenticatedSector || isSectorTrailer(CurrentAddress) || (Acc & ACC_BLOCK_DECREMENT) == 0) {
+                                status = NAK_INVALID_OPERATION_TBIV;
+                            }
                             m_mf1_state = MF1_STATE_RESTORE;
-                            mf1_response_4bit_auto_encrypt(ACK_VALUE);
+                            mf1_response_4bit_auto_encrypt(status);
+                            if (status != ACK_VALUE) {
+                                nfc_tag_mf1_reset_handler();
+                            }
                             break;
                         }
                         case CMD_TRANSFER: {
                             uint8_t status;
-                            // Do not judge the current writing mode here to control the writing mode
-                            if (m_tag_information->config.mode_block_write == NFC_TAG_MF1_WRITE_DENIED) {
+                            CurrentAddress = p_data[1];
+                            uint8_t Acc = abDataAccessConditions[ GetAccessCondition(CurrentAddress) ][ KeyInUse ];
+                            if (blockToSector(CurrentAddress) != AuthenticatedSector || isSectorTrailer(CurrentAddress) || (Acc & ACC_BLOCK_DECREMENT) == 0) {
+                                status = NAK_INVALID_OPERATION_TBIV;
+                            } else if (m_tag_information->config.mode_block_write == NFC_TAG_MF1_WRITE_DENIED) {
+                                // Do not judge the current writing mode here to control the writing mode
                                 // Under this mode directly reject operation
                                 status = NAK_INVALID_OPERATION_TBIV;
                             } else if (m_tag_information->config.mode_block_write == NFC_TAG_MF1_WRITE_DECEIVE) {
@@ -784,7 +901,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                                 status = ACK_VALUE;
                             } else {
                                 // Write the block address specified by the global buffer back in the instruction parameter
-                                memcpy(m_tag_information->memory[p_data[1]], m_data_block_buffer, MEM_BYTES_PER_BLOCK);
+                                memcpy(m_tag_information->memory[CurrentAddress], m_data_block_buffer, MEM_BYTES_PER_BLOCK);
                                 status = ACK_VALUE;
                             }
                             mf1_response_4bit_auto_encrypt(status);
@@ -798,25 +915,15 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                             // The second verification request when it has been encrypted is the process of nested verification
                             uint8_t BlockAuth = p_data[1];
                             uint8_t CardNonce[4];
-                            uint8_t BlockStart;
-                            uint8_t BlockEnd;
-
-                            // The starting block of the corresponding sector that is visited, keep in mind: 4K cards have large sectors, with 16 blocks as one sector unit
-                            // Calculate ideas: x = (y / n) * n, x = starting block of the sector, y = verified block, n = y's number of blocks where the sector is located
-                            // Thinking analysis: First do divisions to get the current sector, and then multiply to obtain the number of blocks in the sector
-                            if (BlockAuth >= 128) {
-                                BlockStart = (BlockAuth / 16) * 16;
-                                BlockEnd = BlockStart + 16 - 1;
-                            } else {
-                                //Non -4K card, step by step with a small sector
-                                BlockStart = (BlockAuth / 4) * 4;
-                                BlockEnd = BlockStart + 4 - 1;
-                            }
 
                             // The type of current emulation card is not enough to support the access of the card reader
                             if (check_block_max_overflow(BlockAuth)) {
                                 break;
                             }
+
+                            // Determine the last block number of the authenticated sector
+                            AuthenticatedSector = blockToSector(BlockAuth);
+                            uint8_t BlockEnd = sectorToBlock(AuthenticatedSector + 1) - 1;
 
                             // Set KeyInUse as global use to retain information about identity verification
                             KeyInUse = p_data[0] & 1;
@@ -946,6 +1053,20 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                         status = ACK_VALUE;
                     } else {
                         // Other remaining modes can be updated to the labeled RAM
+                        if (isSectorTrailer(CurrentAddress)) {
+                            // Verify access conditions; restore original trailer fields that are not writable with the current key
+                            uint8_t Acc = abTrailerAccessConditions[ GetAccessCondition(CurrentAddress) ][ KeyInUse ];
+                            nfc_tag_mf1_trailer_info_t *writeTrailerInfo = (nfc_tag_mf1_trailer_info_t *)p_data;
+                            if ((Acc & ACC_TRAILER_WRITE_KEYA) == 0) {
+                                memcpy(writeTrailerInfo->key_a, m_tag_trailer_info->key_a, MEM_KEY_SIZE);
+                            }
+                            if ((Acc & ACC_TRAILER_WRITE_ACC) == 0) {
+                                memcpy(writeTrailerInfo->acs, m_tag_trailer_info->acs, MEM_ACC_GPB_SIZE);
+                            }
+                            if ((Acc & ACC_TRAILER_WRITE_KEYB) == 0) {
+                                memcpy(writeTrailerInfo->key_b, m_tag_trailer_info->key_b, MEM_KEY_SIZE);
+                            }
+                        }
                         memcpy(m_tag_information->memory[CurrentAddress], p_data, NFC_TAG_MF1_DATA_SIZE);
                         status = ACK_VALUE;
                     }
