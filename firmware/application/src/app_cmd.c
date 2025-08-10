@@ -1419,6 +1419,54 @@ static data_frame_tx_t *cmd_processor_mf0_ntag_set_write_mode(uint16_t cmd, uint
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
+static data_frame_tx_t *cmd_processor_mf0_ntag_set_detection_enable(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 1 || data[0] > 1) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    nfc_tag_mf0_ntag_detection_log_clear();
+    nfc_tag_mf0_ntag_set_detection_enable(data[0]);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_get_detection_enable(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t is_enable = nfc_tag_mf0_ntag_is_detection_enable();
+    return data_frame_make(cmd, STATUS_SUCCESS, 1, (uint8_t *)(&is_enable));
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_get_detection_count(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint32_t count = nfc_tag_mf0_ntag_detection_log_count();
+    if (count == 0xFFFFFFFF) {
+        count = 0;
+    }
+    uint32_t payload = U32HTONL(count);
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(uint32_t), (uint8_t *)&payload);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_get_detection_log(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint32_t count;
+    uint32_t index;
+    uint8_t *resp = NULL;
+    nfc_tag_mf0_ntag_auth_log_t *logs = mf0_get_auth_log(&count);
+    if (length != 4 || count == 0xFFFFFFFF) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    index = U32NTOHL(*(uint32_t *)data);
+    if (index >= count) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    resp = (uint8_t *)(logs + index);
+    length = MIN(count - index, NETDATA_MAX_DATA_LENGTH / sizeof(nfc_tag_mf0_ntag_auth_log_t)) * sizeof(nfc_tag_mf0_ntag_auth_log_t);
+    return data_frame_make(cmd, STATUS_SUCCESS, length, resp);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_get_emulator_config(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t mf0_info[3] = {};
+    mf0_info[0] = nfc_tag_mf0_ntag_is_detection_enable();
+    mf0_info[1] = nfc_tag_mf0_ntag_get_uid_mode();
+    mf0_info[2] = nfc_tag_mf0_ntag_get_write_mode();
+    return data_frame_make(cmd, STATUS_SUCCESS, 3, mf0_info);
+}
+
 /**
  * (cmd -> processor) function map, the map struct is:
  *       cmd code                               before process               cmd processor                                after process
@@ -1490,9 +1538,10 @@ static cmd_data_map_t m_data_cmd_map[] = {
 
 #endif
 
-    {    DATA_CMD_MF1_WRITE_EMU_BLOCK_DATA,     NULL,                        cmd_processor_mf1_write_emu_block_data,      NULL                   },
+    {    DATA_CMD_HF14A_GET_ANTI_COLL_DATA,     NULL,                        cmd_processor_hf14a_get_anti_coll_data,      NULL                   },
     {    DATA_CMD_HF14A_SET_ANTI_COLL_DATA,     NULL,                        cmd_processor_hf14a_set_anti_coll_data,      NULL                   },
 
+    {    DATA_CMD_MF1_WRITE_EMU_BLOCK_DATA,     NULL,                        cmd_processor_mf1_write_emu_block_data,      NULL                   },
     {    DATA_CMD_MF1_SET_DETECTION_ENABLE,     NULL,                        cmd_processor_mf1_set_detection_enable,      NULL                   },
     {    DATA_CMD_MF1_GET_DETECTION_COUNT,      NULL,                        cmd_processor_mf1_get_detection_count,       NULL                   },
     {    DATA_CMD_MF1_GET_DETECTION_LOG,        NULL,                        cmd_processor_mf1_get_detection_log,         NULL                   },
@@ -1507,25 +1556,31 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_SET_BLOCK_ANTI_COLL_MODE, NULL,                        cmd_processor_mf1_set_block_anti_coll_mode,  NULL                   },
     {    DATA_CMD_MF1_GET_WRITE_MODE,           NULL,                        cmd_processor_mf1_get_write_mode,            NULL                   },
     {    DATA_CMD_MF1_SET_WRITE_MODE,           NULL,                        cmd_processor_mf1_set_write_mode,            NULL                   },
-    {    DATA_CMD_HF14A_GET_ANTI_COLL_DATA,     NULL,                        cmd_processor_hf14a_get_anti_coll_data,      NULL                   },
-    {    DATA_CMD_MF0_NTAG_GET_UID_MAGIC_MODE,  NULL,                        cmd_processor_mf0_ntag_get_uid_mode,         NULL                   },
-    {    DATA_CMD_MF0_NTAG_SET_UID_MAGIC_MODE,  NULL,                        cmd_processor_mf0_ntag_set_uid_mode,         NULL                   },
-    {    DATA_CMD_MF0_NTAG_READ_EMU_PAGE_DATA,  NULL,                        cmd_processor_mf0_ntag_read_emu_page_data,   NULL                   },
-    {    DATA_CMD_MF0_NTAG_WRITE_EMU_PAGE_DATA, NULL,                        cmd_processor_mf0_ntag_write_emu_page_data,  NULL                   },
-    {    DATA_CMD_MF0_NTAG_GET_VERSION_DATA,    NULL,                        cmd_processor_mf0_ntag_get_version_data,     NULL                   },
-    {    DATA_CMD_MF0_NTAG_SET_VERSION_DATA,    NULL,                        cmd_processor_mf0_ntag_set_version_data,     NULL                   },
-    {    DATA_CMD_MF0_NTAG_GET_SIGNATURE_DATA,  NULL,                        cmd_processor_mf0_ntag_get_signature_data,   NULL                   },
-    {    DATA_CMD_MF0_NTAG_SET_SIGNATURE_DATA,  NULL,                        cmd_processor_mf0_ntag_set_signature_data,   NULL                   },
-    {    DATA_CMD_MF0_NTAG_GET_COUNTER_DATA,    NULL,                        cmd_processor_mf0_ntag_get_counter_data,     NULL                   },
-    {    DATA_CMD_MF0_NTAG_SET_COUNTER_DATA,    NULL,                        cmd_processor_mf0_ntag_set_counter_data,     NULL                   },
-    {    DATA_CMD_MF0_NTAG_RESET_AUTH_CNT,      NULL,                        cmd_processor_mf0_ntag_reset_auth_cnt,       NULL                   },
-    {    DATA_CMD_MF0_NTAG_GET_PAGE_COUNT,      NULL,                        cmd_processor_mf0_ntag_get_emu_page_count,   NULL                   },
-    {    DATA_CMD_MF0_NTAG_GET_WRITE_MODE,      NULL,                        cmd_processor_mf0_ntag_get_write_mode,       NULL                   },
-    {    DATA_CMD_MF0_NTAG_SET_WRITE_MODE,      NULL,                        cmd_processor_mf0_ntag_set_write_mode,       NULL                   },
-    {    DATA_CMD_EM410X_SET_EMU_ID,            NULL,                        cmd_processor_em410x_set_emu_id,             NULL                   },
-    {    DATA_CMD_EM410X_GET_EMU_ID,            NULL,                        cmd_processor_em410x_get_emu_id,             NULL                   },
-    {    DATA_CMD_HIDPROX_SET_EMU_ID,           NULL,                        cmd_processor_hidprox_set_emu_id,            NULL                   },
-    {    DATA_CMD_HIDPROX_GET_EMU_ID,           NULL,                        cmd_processor_hidprox_get_emu_id,            NULL                   },
+
+    {    DATA_CMD_MF0_NTAG_GET_UID_MAGIC_MODE,    NULL,                      cmd_processor_mf0_ntag_get_uid_mode,         NULL                   },
+    {    DATA_CMD_MF0_NTAG_SET_UID_MAGIC_MODE,    NULL,                      cmd_processor_mf0_ntag_set_uid_mode,         NULL                   },
+    {    DATA_CMD_MF0_NTAG_READ_EMU_PAGE_DATA,    NULL,                      cmd_processor_mf0_ntag_read_emu_page_data,   NULL                   },
+    {    DATA_CMD_MF0_NTAG_WRITE_EMU_PAGE_DATA,   NULL,                      cmd_processor_mf0_ntag_write_emu_page_data,  NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_VERSION_DATA,      NULL,                      cmd_processor_mf0_ntag_get_version_data,     NULL                   },
+    {    DATA_CMD_MF0_NTAG_SET_VERSION_DATA,      NULL,                      cmd_processor_mf0_ntag_set_version_data,     NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_SIGNATURE_DATA,    NULL,                      cmd_processor_mf0_ntag_get_signature_data,   NULL                   },
+    {    DATA_CMD_MF0_NTAG_SET_SIGNATURE_DATA,    NULL,                      cmd_processor_mf0_ntag_set_signature_data,   NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_COUNTER_DATA,      NULL,                      cmd_processor_mf0_ntag_get_counter_data,     NULL                   },
+    {    DATA_CMD_MF0_NTAG_SET_COUNTER_DATA,      NULL,                      cmd_processor_mf0_ntag_set_counter_data,     NULL                   },
+    {    DATA_CMD_MF0_NTAG_RESET_AUTH_CNT,        NULL,                      cmd_processor_mf0_ntag_reset_auth_cnt,       NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_PAGE_COUNT,        NULL,                      cmd_processor_mf0_ntag_get_emu_page_count,   NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_WRITE_MODE,        NULL,                      cmd_processor_mf0_ntag_get_write_mode,       NULL                   },
+    {    DATA_CMD_MF0_NTAG_SET_WRITE_MODE,        NULL,                      cmd_processor_mf0_ntag_set_write_mode,       NULL                   },
+    {    DATA_CMD_MF0_NTAG_SET_DETECTION_ENABLE,  NULL,                      cmd_processor_mf0_ntag_set_detection_enable, NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_DETECTION_COUNT,   NULL,                      cmd_processor_mf0_ntag_get_detection_count,  NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_DETECTION_LOG,     NULL,                      cmd_processor_mf0_ntag_get_detection_log,    NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_DETECTION_ENABLE,  NULL,                      cmd_processor_mf0_ntag_get_detection_enable, NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_EMULATOR_CONFIG,   NULL,                      cmd_processor_mf0_get_emulator_config,       NULL                   },
+
+    {    DATA_CMD_EM410X_SET_EMU_ID,              NULL,                      cmd_processor_em410x_set_emu_id,             NULL                   },
+    {    DATA_CMD_EM410X_GET_EMU_ID,              NULL,                      cmd_processor_em410x_get_emu_id,             NULL                   },
+    {    DATA_CMD_HIDPROX_SET_EMU_ID,             NULL,                      cmd_processor_hidprox_set_emu_id,            NULL                   },
+    {    DATA_CMD_HIDPROX_GET_EMU_ID,             NULL,                      cmd_processor_hidprox_get_emu_id,            NULL                   },
 };
 
 data_frame_tx_t *cmd_processor_get_device_capabilities(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {

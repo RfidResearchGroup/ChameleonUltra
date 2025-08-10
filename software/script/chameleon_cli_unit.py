@@ -2983,6 +2983,12 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
                             help="Set data to be returned by the READ_SIG command.")
         parser.add_argument('--reset-auth-cnt', action='store_true',
                             help="Resets the counter of unsuccessful authentication attempts.")
+
+        detection_group = parser.add_mutually_exclusive_group()
+        detection_group.add_argument('--enable-log', action='store_true',
+                                   help="Enable password authentication logging")
+        detection_group.add_argument('--disable-log', action='store_true',
+                                   help="Disable password authentication logging")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
@@ -3078,6 +3084,30 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
             except:
                 print(f"{CR}Failed to set write mode. Check if device firmware supports this feature.{C0}")
 
+        detection = self.cmd.mf0_ntag_get_detection_enable()
+        if args.enable_log:
+            change_requested = True
+            if detection is not None:
+                if not detection:
+                    detection = True
+                    self.cmd.mf0_ntag_set_detection_enable(detection)
+                    change_done = True
+                else:
+                    print(f'{CY}Requested logging of MFU authentication data already enabled{C0}')
+            else:
+                print(f'{CR}Detection functionality not available in this firmware{C0}')
+        elif args.disable_log:
+            change_requested = True
+            if detection is not None:
+                if detection:
+                    detection = False
+                    self.cmd.mf0_ntag_set_detection_enable(detection)
+                    change_done = True
+                else:
+                    print(f'{CY}Requested logging of MFU authentication data already disabled{C0}')
+            else:
+                print(f'{CR}Detection functionality not available in this firmware{C0}')
+
         if change_done or aux_data_changed:
             print(' - MFU/NTAG Emulator settings updated')
         if not (change_requested or aux_data_change_requested):
@@ -3115,6 +3145,55 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
                 print(f'- {"Signature:":40}{CY}{signature.hex().upper()}{C0}')
             except:
                 pass
+
+            try:
+                detection = self.cmd.mf0_ntag_get_detection_enable()
+                print(
+                    f'- {"Log (password) mode:":40}{f"{CG}enabled{C0}" if detection else f"{CR}disabled{C0}"}')
+            except:
+                pass
+
+@hf_mfu.command('edetect')
+class HFMFUEDetect(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Get Mifare Ultralight / NTAG emulator detection logs'
+        self.add_slot_args(parser)
+        parser.add_argument('--count', type=int, help="Number of log entries to retrieve", metavar="COUNT")
+        parser.add_argument('--index', type=int, default=0, help="Starting index (default: 0)", metavar="INDEX")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        detection_enabled = self.cmd.mf0_ntag_get_detection_enable()
+        if not detection_enabled:
+            print(f"{CY}Detection logging is disabled for this slot{C0}")
+            return
+
+        total_count = self.cmd.mf0_ntag_get_detection_count()
+        print(f"Total detection log entries: {total_count}")
+
+        if total_count == 0:
+            print(f"{CY}No detection logs available{C0}")
+            return
+
+        if args.count is not None:
+            entries_to_get = min(args.count, total_count - args.index)
+        else:
+            entries_to_get = total_count - args.index
+
+        if entries_to_get <= 0:
+            print(f"{CY}No entries available from index {args.index}{C0}")
+            return
+
+        logs = self.cmd.mf0_ntag_get_detection_log(args.index)
+
+        print(f"\nPassword detection logs (showing {len(logs)} entries from index {args.index}):")
+        print("-" * 50)
+
+        for i, log_entry in enumerate(logs):
+            actual_index = args.index + i
+            password = log_entry['password']
+            print(f"{actual_index:3d}: {CY}{password.upper()}{C0}")
 
 
 @lf_em_410x.command('read')
