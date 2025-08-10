@@ -578,6 +578,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                                 nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_raw_buffer, NFC_TAG_MF1_DATA_SIZE, true);
                             } else {
                                 nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+                                nfc_tag_mf1_reset_handler();
                             }
                             break;
                         }
@@ -591,6 +592,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                                 nfc_tag_14a_tx_nbit(ACK_VALUE, 4);
                             } else {
                                 nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+                                nfc_tag_mf1_reset_handler();
                             }
                             break;
                         }
@@ -598,12 +600,14 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                             // When the state is not verified, read and write cards directly when the back door mode is turned on
                             // In addition to initiating verification instructions, the others can do nothing
                             nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+                            nfc_tag_mf1_reset_handler();
                             break;
                         }
                     }
                 } else {
                     // CRC verification abnormal
                     nfc_tag_14a_tx_nbit(NAK_CRC_PARITY_ERROR_TBIV, 4);
+                    nfc_tag_mf1_reset_handler();
                     return;
                 }
             } else {
@@ -619,11 +623,12 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                     } else {
                         // The transmitted CRC verification is abnormal, and you cannot continue writing
                         nfc_tag_14a_tx_nbit(NAK_CRC_PARITY_ERROR_TBIV, 4);
+                        nfc_tag_mf1_reset_handler();
                     }
                 } else {
                     // If you wait for the instruction status to the non -4BYTE instruction, it is considered abnormal
                     // At this time, you need to reset the state machine
-                    nfc_tag_14a_set_state(NFC_TAG_STATE_14A_IDLE);
+                    nfc_tag_mf1_reset_handler();
                 }
             }
             break;
@@ -661,6 +666,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
 #endif
                     // The verification is successful, and you need to enter the state that has been successfully verified
                     m_mf1_state = MF1_STATE_AUTHENTICATED;
+                    nfc_tag_14a_set_state(NFC_TAG_STATE_14A_PROPRIETARY);
                     // Package, stitch the Qiqi school inspection, return
                     m_tag_tx_buffer.tx_frame_bit_size = nfc_tag_14a_wrap_frame(m_tag_tx_buffer.tx_raw_buffer, 32, m_tag_tx_buffer.tx_bit_parity, m_tag_tx_buffer.tx_warp_frame);
                     nfc_tag_14a_tx_bits(m_tag_tx_buffer.tx_warp_frame, m_tag_tx_buffer.tx_frame_bit_size);
@@ -668,12 +674,12 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                     // Temporary only stored verification failed logs
                     append_mf1_auth_log_step3(false);
                     // Verification failure, reset the status machine
-                    nfc_tag_14a_set_state(NFC_TAG_STATE_14A_IDLE);
+                    nfc_tag_mf1_reset_handler();
                 }
             } else {
                 // The length of the data sent by the reading head during the verification process is wrong, it must be a problem
                 // We can only reset the status machine and wait for the operation instructions to re -initiate
-                nfc_tag_14a_set_state(NFC_TAG_STATE_14A_IDLE);
+                nfc_tag_mf1_reset_handler();
             }
             break;
         }
@@ -736,10 +742,9 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                         case CMD_WRITE: {
                             //  Normal cards are not allowed to write block0, otherwise it will be recognized by CUID firewall
                             if (p_data[1] == 0x00 && !m_tag_information->config.mode_gen2_magic) {
-                                // Reset the 14A state machine directly, let the label sleep
-                                nfc_tag_14a_set_state(NFC_TAG_STATE_14A_HALTED);
-                                // Tell me to read the head. This operation is not allowed to be allowed
+                                // This operation is not allowed
                                 mf1_response_4bit_auto_encrypt(NAK_INVALID_OPERATION_TBIV);
+                                nfc_tag_mf1_reset_handler();
                             } else {
                                 // Normally write command.Store the address and prepare to receive the upcoming data.
                                 CurrentAddress = p_data[1];
@@ -783,6 +788,9 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                                 status = ACK_VALUE;
                             }
                             mf1_response_4bit_auto_encrypt(status);
+                            if (status != ACK_VALUE) {
+                                nfc_tag_mf1_reset_handler();
+                            }
                             break;
                         }
                         case CMD_AUTH_A:
@@ -892,24 +900,26 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                             } else {
                                 mf1_response_4bit_auto_encrypt(NAK_INVALID_OPERATION_TBIV);
                             }
+                            nfc_tag_mf1_reset_handler();
                             break;
                         }
                         default: {
                             // If you read your hair, you don't know what ghost instructions, we can't handle it,
                             // Therefore, the task is abnormal, and the status needs to be reset, and the response to the reading head will not support this instruction
-                            nfc_tag_14a_set_state(NFC_TAG_STATE_14A_IDLE);
                             mf1_response_4bit_auto_encrypt(NAK_INVALID_OPERATION_TBIV);
+                            nfc_tag_mf1_reset_handler();
                             break;
                         }
                     }
                 } else {
                     // CRC is wrong, return the error code notification
-                    mf1_response_4bit_auto_encrypt(NAK_INVALID_OPERATION_TBIV);
+                    mf1_response_4bit_auto_encrypt(NAK_CRC_PARITY_ERROR_TBIV);
+                    nfc_tag_mf1_reset_handler();
                     break;
                 }
             } else {
                 // It has been verified that the secrets are idle but did not receive the normal 4BYTE instructions, we need to reset the status machine
-                nfc_tag_14a_set_state(NFC_TAG_STATE_14A_IDLE);
+                nfc_tag_mf1_reset_handler();
                 break;
             }
             break;
@@ -948,6 +958,9 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
             // In any case, after the operation, the label will be allowed to return to the verification idle state
             m_mf1_state = MF1_STATE_AUTHENTICATED;
             mf1_response_4bit_auto_encrypt(status);
+            if (status != ACK_VALUE) {
+                nfc_tag_mf1_reset_handler();
+            }
             break;
         }
 
@@ -999,8 +1012,8 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                 // The length is wrong, but it is counted in the CRC error
                 status = NAK_CRC_PARITY_ERROR_TBIV;
             }
-            m_mf1_state = MF1_STATE_AUTHENTICATED;
             mf1_response_4bit_auto_encrypt(status);
+            nfc_tag_mf1_reset_handler();
             break;
         }
 
@@ -1054,6 +1067,7 @@ nfc_tag_14a_coll_res_reference_t *get_saved_mifare_coll_res() {
 void nfc_tag_mf1_reset_handler() {
     m_mf1_state = MF1_STATE_UNAUTHENTICATED;
     m_gen1a_state = GEN1A_STATE_DISABLE;
+    nfc_tag_14a_set_state(NFC_TAG_STATE_14A_IDLE);
 
 #ifndef NFC_MF1_FAST_SIM
     // Must to reset pcs handler

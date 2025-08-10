@@ -238,6 +238,9 @@ void ledblink3(uint8_t led_down, uint8_t color_led_down, uint8_t led_up, uint8_t
             light_level --;
         }
     }
+    for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
+        nrf_gpio_pin_clear(led_pins[i]);
+    }
     if (led_up >= 0 && led_up <= 7) {
         //Treatment
         pwm_config.output_pins[0] = led_pins[led_up];
