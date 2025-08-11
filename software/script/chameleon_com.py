@@ -50,7 +50,7 @@ class ChameleonCom:
         Communication and Data frame implemented
     """
     data_frame_sof = 0x11
-    data_max_length = 512
+    data_max_length = 4096
     commands = []
 
     def __init__(self):

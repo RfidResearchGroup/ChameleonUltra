@@ -32,7 +32,7 @@ def test_hardnested_acquire():
 
     # ------------------------ SET DEVICE MODE ------------------------
     print("Setting device mode to HF Reader...")
-    status = cml_cmd.set_device_reader_mode()
+    cml_cmd.set_device_reader_mode()
 
     # ------------------------     append tag info     ------------------------
 
@@ -63,7 +63,7 @@ def test_hardnested_acquire():
             acquire_count += 1
             print(f"Acquire success, count: {acquire_count}")
         else:
-            raise Exception(f"acquire failed")
+            raise Exception("acquire failed")
         # 2. check data
         data_check_index = 0
         while data_check_index < len(acquire_datas):

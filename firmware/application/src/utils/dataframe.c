@@ -40,7 +40,7 @@ data_frame_tx_t *data_frame_make(uint16_t cmd, uint16_t status, uint16_t data_le
         NRF_LOG_ERROR("data_frame_make error, null pointer.");
         return NULL;
     }
-    if (data_length > 512) {
+    if (data_length > 4096) {
         NRF_LOG_ERROR("data_frame_make error, too much data.");
         return NULL;
     }
