@@ -357,7 +357,7 @@ static void system_off_enter(void) {
     app_timer_stop_all();
 
     // Check whether there are low -frequency fields, solving very strong field signals during dormancy have always caused the comparator to be at a high level input state, so that the problem of uprising the rising edge cannot be awakened.
-    if (lf_is_field_exists()) {
+    if (is_lf_field_exists()) {
         // Close the comparator
         nrf_drv_lpcomp_disable();
         // Set the reason for Reset. After restarting, you need to get this reason to avoid misjudgment from the source of wake up.

@@ -110,4 +110,4 @@ uint8_t write_hidprox_to_t55xx(uint8_t format, uint32_t fc, uint64_t cn, uint32_
 /**
  * Set the LF card scanning timeout value (in milliseconds).
  */
-void SetScanTagTimeout(uint32_t ms) { g_timeout_readem_ms = ms; }
+void set_scan_tag_timeout(uint32_t ms) { g_timeout_readem_ms = ms; }

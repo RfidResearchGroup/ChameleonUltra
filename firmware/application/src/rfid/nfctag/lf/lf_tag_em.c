@@ -48,7 +48,7 @@ static void lf_field_lost(void) {
 /**
  * @brief Judge field status
  */
-bool lf_is_field_exists(void) {
+bool is_lf_field_exists(void) {
     nrfx_lpcomp_enable();
     bsp_delay_us(30);  // Display for a period of time and sampling to avoid misjudgment
     nrf_lpcomp_task_trigger(NRF_LPCOMP_TASK_SAMPLE);
@@ -109,7 +109,7 @@ static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
     bsp_delay_ms(1);
     // We don't need any events, but only need to detect the state of the field
     NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
-    if (lf_is_field_exists()) {
+    if (is_lf_field_exists()) {
         nrfx_lpcomp_disable();
         nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, LF_125KHZ_BROADCAST_MAX, NRFX_PWM_FLAG_STOP);
     } else {
@@ -136,7 +136,7 @@ static void pwm_init(void) {
 static void lf_sense_enable(void) {
     lpcomp_init();
     pwm_init();  // use precise hardware timer to broadcast card id
-    if (lf_is_field_exists()) {
+    if (is_lf_field_exists()) {
         lpcomp_event_handler(NRF_LPCOMP_EVENT_UP);
     }
 }

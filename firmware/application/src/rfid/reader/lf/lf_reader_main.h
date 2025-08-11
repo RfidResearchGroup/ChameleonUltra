@@ -8,7 +8,7 @@
 #include "lf_125khz_radio.h"
 #include "lf_em410x_data.h"
 
-void SetScanTagTimeout(uint32_t ms);
+void set_scan_tag_timeout(uint32_t ms);
 
 uint8_t scan_em410x(uint8_t *uid);
 uint8_t write_em410x_to_t55xx(uint8_t *uid, uint8_t *newkey, uint8_t *old_keys, uint8_t old_key_count);
