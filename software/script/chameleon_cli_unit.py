@@ -354,7 +354,7 @@ class MFUAuthArgsUnit(ReaderRequiredUnit):
         def key_parser(key: str) -> bytes:
             try:
                 key = bytes.fromhex(key)
-            except:
+            except ValueError:
                 raise ValueError("Key should be a hex string")
 
             if len(key) not in [4, 16]:

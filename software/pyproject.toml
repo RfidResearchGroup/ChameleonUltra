@@ -12,7 +12,8 @@ dependencies = [
 
 [tool.pyrefly]
 project-includes = ["**/*"]
-project-excludes = ['**/*venv/**\*']
+project-excludes = ["**/.venv"]
+search-path = ["script"]
 
 [dependency-groups]
 dev = [

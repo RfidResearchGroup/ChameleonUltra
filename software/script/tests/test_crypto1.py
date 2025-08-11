@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-import os, sys, unittest
+import os
+import sys
+import unittest
+from crypto1 import Crypto1
 
 CURRENT_DIR = os.path.split(os.path.abspath(__file__))[0]
 config_path = CURRENT_DIR.rsplit(os.sep, 1)[0]
 sys.path.append(config_path)
 print(config_path)
-from crypto1 import Crypto1
 
 class TestCrypto1(unittest.TestCase):
 
