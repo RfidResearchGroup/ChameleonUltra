@@ -1292,6 +1292,7 @@ uint16_t mf1_toolbox_check_keys_on_block(
 
     struct Crypto1State mpcs = {0, 0};
     struct Crypto1State *pcs = &mpcs;
+    uint16_t status = STATUS_HF_TAG_OK;
     uint32_t cuid = 0;
     bool have_uid = false;
 
@@ -1299,25 +1300,30 @@ uint16_t mf1_toolbox_check_keys_on_block(
         mf1_toolbox_report_healthy();
 
         if (have_uid == false) {
-            if (pcd_14a_reader_scan_auto(p_tag_info) != STATUS_HF_TAG_OK) {
-                return STATUS_HF_TAG_NO;
+            status = pcd_14a_reader_scan_auto(p_tag_info);
+            if (status != STATUS_HF_TAG_OK) {
+                return status;
             }
             cuid = get_u32_tag_uid(p_tag_info);
             have_uid = true;
         } else {
-            if (pcd_14a_reader_fast_select(p_tag_info) != STATUS_HF_TAG_OK) {
-                return STATUS_HF_TAG_NO;
+            status = pcd_14a_reader_fast_select(p_tag_info);
+            if (status != STATUS_HF_TAG_OK) {
+                return status;
             }
         }
 
         uint32_t nt1 = 0;
         uint64_t key_u64 = bytes_to_num(in->keys[i].key, 6);
-        if (authex(pcs, cuid, in->block, in->key_type, key_u64, AUTH_FIRST, &nt1) == STATUS_HF_TAG_OK) {
-            out->found = 1;
-            out->key = in->keys[i];
-            return STATUS_HF_TAG_OK;
+        status = authex(pcs, cuid, in->block, in->key_type, key_u64, AUTH_FIRST, &nt1);
+        if (status != STATUS_HF_TAG_OK) {
+            if (status == STATUS_HF_TAG_NO) return STATUS_HF_TAG_NO;
+            continue;
         }
+        out->found = 1;
+        out->key = in->keys[i];
+        return STATUS_HF_TAG_OK;
     }
 
-    return STATUS_HF_TAG_NO;
+    return STATUS_MF_ERR_AUTH;
 }

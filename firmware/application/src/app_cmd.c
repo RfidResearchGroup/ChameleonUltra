@@ -390,7 +390,7 @@ static data_frame_tx_t *cmd_processor_mf1_check_keys_of_sectors(uint16_t cmd, ui
 }
 
 static data_frame_tx_t *cmd_processor_mf1_check_keys_on_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    if (length < 3 || (length - 3) % 6 != 0) {
+    if (length < 9 || data[2] * 6 + 3 != length) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
@@ -400,10 +400,6 @@ static data_frame_tx_t *cmd_processor_mf1_check_keys_on_block(uint16_t cmd, uint
         .keys_len = data[2],
         .keys = (mf1_key_t *) &data[3]
     };
-
-    if ((length - 3) / 6 != in.keys_len) {
-        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
-    }
 
     mf1_toolbox_check_keys_on_block_out_t out;
     status = mf1_toolbox_check_keys_on_block(&in, &out);
