@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Added UV, formatter and linter. Contribution guidelines.
  - Extend max packet data size from 512 to 4096 bytes (@Foxushka)
  - HID Prox support (@TeCHiScy)
  - Added cmd for fetching all slots nicks (@Foxushka)

@@ -1,0 +1,56 @@
+name: Lint (pyrefly + ruff)
+
+on:
+  pull_request:
+    paths:
+      - "software/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: software
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+          cache-dependency-path: |
+            software/pyproject.toml
+            software/uv.lock
+            software/script/requirements.txt
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install dependencies with uv (if lockfile present)
+        if: ${{ hashFiles('software/uv.lock') != '' }}
+        run: uv sync --dev
+
+      - name: Install tools with pip (fallback)
+        if: ${{ hashFiles('software/uv.lock') == '' }}
+        run: |
+          python -m pip install --upgrade pip
+          # Try project requirements if present
+          if [ -f script/requirements.txt ]; then pip install -r script/requirements.txt || true; fi
+          # Ensure ruff and pyrefly are available
+          pip install ruff pyrefly
+
+      - name: Ruff check
+        run: |
+          set -e
+          (uv run ruff --version && uv run ruff check .) || ruff check .
+
+      - name: Pyrefly check
+        run: |
+          set -e
+          (uv run pyrefly --help >/dev/null 2>&1 && uv run pyrefly check) || pyrefly check
