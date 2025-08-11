@@ -784,10 +784,10 @@ static wiegand_card_t *unpack_mdi37(uint64_t hi, uint64_t lo) {
 }
 
 // ref:
-// https://github.com/TeCHiScy/proxmark3/blob/d83196fb3549f236c0a58a309fdbd89c0487085c/client/src/wiegand_formats.c#L1457
+// https://github.com/RfidResearchGroup/proxmark3/blob/master/client/src/wiegand_formats.c
 // https://github.com/Proxmark/proxmark3/blob/master/client/hidcardformats.c
 // https://acre.my.site.com/knowledgearticles/s/article/x107
-// https://www.everythingid.com.au/hid-card-formats-i-15?srsltid=AfmBOor2UAGlvB7R6Zmj7B7rtL-LExfBjh7I3ZEyoLLbg7Pk7UbC1za-
+// https://www.everythingid.com.au/hid-card-formats-i-15
 static const card_format_table_t formats[] = {
     {H10301, pack_h10301, unpack_h10301, 26, {1, 0xFF, 0xFFFF, 0, 0}},           // HID H10301 26-bit
     {IND26, pack_ind26, unpack_ind26, 26, {1, 0xFFF, 0xFFF, 0, 0}},              // Indala 26-bit
