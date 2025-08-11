@@ -110,7 +110,7 @@ void t55xx_send_cmd(uint8_t opcode, uint32_t *passwd, uint8_t lock_bit, uint32_t
     t55xx_cmd.blk_addr = blk_addr;
 
     // request timing, and wait for the order operation to complete
-    request_timeslot(37 * 1000, t55xx_timeslot_callback, true);
+    request_timeslot(37 * 1000, t55xx_timeslot_callback);
 
     if (opcode != 0) {
         bsp_delay_ms(6);  // Maybe continue to write a card next time, you need to wait more for a while

@@ -92,7 +92,7 @@ nrf_radio_signal_callback_return_param_t *radio_callback(uint8_t signal_type) {
 /**
  * Request a sequence for high -precision operation
  */
-void request_timeslot(uint32_t time_us, timeslot_callback_t callback, bool wait_end) {
+void request_timeslot(uint32_t time_us, timeslot_callback_t callback) {
     ret_code_t err_code;
 
     // Make sure there is only one at the same time
