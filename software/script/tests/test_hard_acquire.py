@@ -69,8 +69,8 @@ def test_hardnested_acquire():
         while data_check_index < len(acquire_datas):
             # Memory Layout: nt_enc1(4byte) - nt_enc2(4byte) - par(1byte)...
             # To integer
-            nt_enc1 = int.from_bytes(acquire_datas[data_check_index + 0:  data_check_index + 0 + 4])
-            nt_enc2 = int.from_bytes(acquire_datas[data_check_index + 4:  data_check_index + 4 + 4])
+            nt_enc1 = int.from_bytes(acquire_datas[data_check_index + 0:  data_check_index + 0 + 4], byteorder='big')
+            nt_enc2 = int.from_bytes(acquire_datas[data_check_index + 4:  data_check_index + 4 + 4], byteorder='big')
             par_enc = acquire_datas[data_check_index + 8]
             # check unique and sum
             hardnested_utils.check_nonce_unique_sum(nt_enc1, par_enc >> 4)
