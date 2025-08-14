@@ -6,6 +6,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Added UV, formatter and linter. Contribution guidelines.
  - Extend max packet data size from 512 to 4096 bytes (@Foxushka)
  - HID Prox support (@TeCHiScy)
+ - `hf mf elog --decrypt` skip records with found keys (@taichunmin)
  - Added cmd for fetching all slots nicks (@Foxushka)
  - Added `hf mf senested` for recovering keys from static encrypted cards via backdoor (https://eprint.iacr.org/2024/1275) (@Foxushka)
  - Added cmd for faster bulk key checking on one block (~33 keys per second) (@Foxushka)
