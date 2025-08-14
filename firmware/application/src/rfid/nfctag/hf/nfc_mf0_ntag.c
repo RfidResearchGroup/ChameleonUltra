@@ -135,6 +135,12 @@ static tag_specific_type_t m_tag_type;
 static bool m_tag_authenticated = false;
 static bool m_did_first_read = false;
 
+#define MF0_NTAG_AUTH_LOG_MAX 32
+static __attribute__((section(".noinit_mf0"))) struct nfc_tag_mf0_auth_log_buffer {
+    nfc_tag_mf0_ntag_auth_log_t logs[MF0_NTAG_AUTH_LOG_MAX];
+    uint32_t count;
+} m_auth_log = {.count = 0};
+
 int nfc_tag_mf0_ntag_get_nr_pages_by_tag_type(tag_specific_type_t tag_type) {
     int nr_pages = -1;
 
@@ -924,6 +930,14 @@ static void handle_pwd_auth_command(uint8_t *p_data) {
 
     uint32_t pwd = *(uint32_t *)m_tag_information->memory[first_cfg_page + CONF_PWD_PAGE_OFFSET];
     uint32_t supplied_pwd = *(uint32_t *)&p_data[1];
+
+    if (m_tag_information->config.detection_enable && m_auth_log.count < MF0_NTAG_AUTH_LOG_MAX) {
+        memcpy(m_auth_log.logs[m_auth_log.count].pwd, &p_data[1], 4);
+        m_auth_log.count++;
+        NRF_LOG_INFO("NTAG password: %02x%02x%02x%02x", 
+                     p_data[1], p_data[2], p_data[3], p_data[4]);
+    }
+    
     if (pwd != supplied_pwd) {
         if (auth_lim) {
             cnt_data[MF0_NTAG_AUTHLIM_OFF_IN_CTR] &= ~MF0_NTAG_AUTHLIM_MASK_IN_CTR;
@@ -1238,6 +1252,7 @@ bool nfc_tag_mf0_ntag_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     // default ntag config
     p_ntag_information->config.mode_uid_magic = false;
     p_ntag_information->config.mode_block_write = NFC_TAG_MF0_NTAG_WRITE_NORMAL;
+    p_ntag_information->config.detection_enable = false;
 
     // save data to flash
     tag_sense_type_t sense_type = get_sense_type_from_tag_type(tag_type);
@@ -1281,4 +1296,27 @@ nfc_tag_mf0_ntag_write_mode_t nfc_tag_mf0_ntag_get_write_mode(void) {
         return NFC_TAG_MF0_NTAG_WRITE_NORMAL;
 
     return m_tag_information->config.mode_block_write;
+}
+
+nfc_tag_mf0_ntag_auth_log_t *mf0_get_auth_log(uint32_t *count) {
+    *count = m_auth_log.count;
+    return m_auth_log.logs;
+}
+
+void nfc_tag_mf0_ntag_set_detection_enable(bool enable) {
+    if (m_tag_type == TAG_TYPE_UNDEFINED || m_tag_information == NULL) return;
+    m_tag_information->config.detection_enable = enable;
+}
+
+bool nfc_tag_mf0_ntag_is_detection_enable(void) {
+    if (m_tag_type == TAG_TYPE_UNDEFINED || m_tag_information == NULL) return false;
+    return m_tag_information->config.detection_enable;
+}
+
+void nfc_tag_mf0_ntag_detection_log_clear(void) {
+    m_auth_log.count = 0;
+}
+
+uint32_t nfc_tag_mf0_ntag_detection_log_count(void) {
+    return m_auth_log.count;
 }

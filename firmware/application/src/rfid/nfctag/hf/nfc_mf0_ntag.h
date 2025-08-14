@@ -56,12 +56,19 @@ typedef enum {
     NFC_TAG_MF0_NTAG_WRITE_SHADOW_REQ =   4u,
 } nfc_tag_mf0_ntag_write_mode_t;
 
+// M0/NTAG password authentication log for key collection
+typedef struct {
+    uint8_t pwd[4];     // Password used in authentication
+} PACKED nfc_tag_mf0_ntag_auth_log_t;
+
 typedef struct {
     uint8_t mode_uid_magic: 1;
     // New field for write mode
     nfc_tag_mf0_ntag_write_mode_t mode_block_write: 3;
+    // Enable key detection (password logging)
+    uint8_t detection_enable: 1;
     // reserve remaining bits
-    uint8_t reserved1: 4;
+    uint8_t reserved1: 3;
     uint8_t reserved2;
     uint8_t reserved3;
 } nfc_tag_mf0_ntag_configure_t;
@@ -92,5 +99,11 @@ int nfc_tag_mf0_ntag_get_uid_mode(void);
 bool nfc_tag_mf0_ntag_set_uid_mode(bool enabled);
 void nfc_tag_mf0_ntag_set_write_mode(nfc_tag_mf0_ntag_write_mode_t write_mode);
 nfc_tag_mf0_ntag_write_mode_t nfc_tag_mf0_ntag_get_write_mode(void);
+
+nfc_tag_mf0_ntag_auth_log_t *mf0_get_auth_log(uint32_t *count);
+void nfc_tag_mf0_ntag_set_detection_enable(bool enable);
+bool nfc_tag_mf0_ntag_is_detection_enable(void);
+void nfc_tag_mf0_ntag_detection_log_clear(void);
+uint32_t nfc_tag_mf0_ntag_detection_log_count(void);
 
 #endif
