@@ -1230,10 +1230,7 @@ class HFMFHardNested(ReaderRequiredUnit):
         # 3. Save nonces to a temporary file
         nonce_file_path = None
         temp_nonce_file = None
-        temp_output_file = None  # For hardnested output
-        process = None  # Define process here for finally block
         output_str = ""  # To store the output read from the file
-        output_log_path = ""  # To store the path of the output log
 
         try:
             # --- Nonce File Handling ---
@@ -1251,59 +1248,15 @@ class HFMFHardNested(ReaderRequiredUnit):
             print(
                 f"   Nonces saved to {'temporary ' if delete_nonce_on_close else ''}file: {os.path.abspath(nonce_file_path)}")
 
-            # --- Output File Handling ---
-            # Create a temporary file to capture hardnested's output
-            # Keep it open while the subprocess runs, use delete=False for manual cleanup
-            temp_output_file = tempfile.NamedTemporaryFile(
-                suffix=".log", prefix="hardnested_output_", delete=False,
-                mode='w+', encoding='utf-8', errors='replace', dir='.'
-            )
-            output_log_path = temp_output_file.name  # Store path for potential error messages
-            print(f"   Redirecting hardnested output to temporary log file: {os.path.abspath(output_log_path)}")
-
             # 4. Prepare and run the external hardnested tool, redirecting output
-            tool_name = "hardnested"
-            if sys.platform == "win32":
-                tool_executable = f"{tool_name}.exe"
-            else:
-                tool_executable = f"./{tool_name}"
-
-            tool_path = os.path.join(default_cwd, tool_executable)
-            # Use list for Popen, ensure paths are correct
-            cmd_recover_list = [tool_path, os.path.abspath(nonce_file_path)]
-
-            print(f"   Executing: {' '.join(cmd_recover_list)}")
             print(f"{CC}--- Running Hardnested Tool (Output redirected) ---{C0}")
 
-            # Run the process, redirecting stdout and stderr to the output file
-            process = subprocess.Popen(
-                cmd_recover_list,
-                cwd=default_cwd,  # Run from the bin directory
-                stdout=temp_output_file,  # Redirect stdout to file
-                stderr=subprocess.STDOUT,  # Redirect stderr to the same file as stdout
-            )
+            output_str = execute_tool('hardnested', [os.path.abspath(nonce_file_path)])
 
-            # Wait for the process to complete
-            ret_code = process.wait()  # This blocks until the tool finishes
-
-            print(f"{CC}--- Hardnested Tool Finished (Exit Code: {ret_code}) ---{C0}")
+            print(f"{CC}--- Hardnested Tool Finished ---{C0}")
 
             # 5. Read the output from the temporary log file
-            temp_output_file.seek(0)  # Go back to the start of the file
-            output_str = temp_output_file.read()  # Read the entire content
-            temp_output_file.close()  # Close the file
-            temp_output_file = None  # Clear the variable
-
-            # Optional: Print the captured output if needed for debugging
-            # print(f"{CY}--- Captured Hardnested Output ---{C0}\n{output_str}\n{CY}--- End Captured Output ---{C0}")
-
             # 6. Process the result (using output_str read from the file)
-            if ret_code != 0:
-                print(f"{CR}   Error: Hardnested exited with code {ret_code}. Check log: {os.path.abspath(output_log_path)}{C0}")
-                if output_str:
-                    print(f"{CR}   Output captured:\n{output_str}{C0}")
-                return None
-
             key_list = []
             key_prefix = "Key found: "  # Define the specific prefix to look for
             for line in output_str.splitlines():
@@ -1371,34 +1324,6 @@ class HFMFHardNested(ReaderRequiredUnit):
                         # print(f"   Temporary nonce file deleted: {nonce_file_path}") # Optional confirmation
                     except OSError as e:
                         print(f"{CR}   Error deleting temporary nonce file {nonce_file_path}: {e}{C0}")
-
-            # Ensure output file is closed and deleted if an error occurred before its closure
-            if temp_output_file:  # If it wasn't closed and cleared in the try block
-                try:
-                    temp_output_file.close()
-                except Exception:
-                    pass  # Ignore errors during cleanup close
-
-            # Delete the output log file unless an error occurred and we want to keep it
-            if output_log_path and os.path.exists(output_log_path):
-                # Keep log if hardnested failed (ret_code != 0) or if verification failed?
-                # For now, let's always delete it unless there was an exception *before* reading it.
-                # If ret_code != 0, the path was already printed.
-                try:
-                    os.remove(output_log_path)
-                except OSError as e:
-                    print(f"{CR}   Error deleting temporary output log file {output_log_path}: {e}{C0}")
-
-            # Ensure process is terminated if something went wrong
-            if process and process.poll() is None:
-                try:
-                    print(f"{CY}   Terminating hardnested process...{C0}")
-                    process.terminate()  # Try graceful termination
-                    process.wait(timeout=0.5)  # Wait briefly
-                    if process.poll() is None:
-                        process.kill()  # Force kill if still running
-                except Exception as kill_err:
-                    print(f"{CR}   Error terminating process: {kill_err}{C0}")
 
     def on_exec(self, args: argparse.Namespace):
         block_known = args.blk
