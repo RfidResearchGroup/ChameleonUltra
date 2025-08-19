@@ -201,7 +201,7 @@ static struct Crypto1State *pcs = &mpcs;
 // Define the buffer of the data that stored the detected data
 // Place this data in a dormant RAM to save time and space to write into Flash
 #define MF1_AUTH_LOG_MAX_SIZE   1000
-static __attribute__((section(".noinit"))) struct nfc_tag_mf1_auth_log_buffer {
+static __attribute__((section(".noinit_mf1"))) struct nfc_tag_mf1_auth_log_buffer {
     uint32_t count;
     nfc_tag_mf1_auth_log_t logs[MF1_AUTH_LOG_MAX_SIZE];
 } m_auth_log;

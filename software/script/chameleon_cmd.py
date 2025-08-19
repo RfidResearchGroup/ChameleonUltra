@@ -663,6 +663,64 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
+    def mf0_ntag_get_detection_enable(self):
+        """
+        Get whether NTAG password detection is enabled.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_GET_DETECTION_ENABLE)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = struct.unpack('!B', resp.data)[0] == 1
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mf0_ntag_set_detection_enable(self, enabled: bool):
+        """
+        Set whether to enable NTAG password detection.
+
+        :param enable: Whether to enable
+        :return:
+        """
+        data = struct.pack('!B', enabled)
+        return self.device.send_cmd_sync(Command.MF0_NTAG_SET_DETECTION_ENABLE, data)
+
+    @expect_response(Status.SUCCESS)
+    def mf0_ntag_get_detection_count(self):
+        """
+        Get the statistics of the current NTAG password detection records.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_GET_DETECTION_COUNT)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = struct.unpack('!I', resp.data)[0]
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mf0_ntag_get_detection_log(self, index: int):
+        """
+        Get NTAG password detection logs from the specified index position.
+
+        :param index: start index
+        :return:
+        """
+        data = struct.pack('!I', index)
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_GET_DETECTION_LOG, data)
+        if resp.status == Status.SUCCESS:
+            # convert - each log entry is just a 4-byte password
+            result_list = []
+            pos = 0
+            while pos < len(resp.data):
+                password = resp.data[pos:pos+4]
+                result_list.append({
+                    'password': password.hex()
+                })
+                pos += 4
+            resp.parsed = result_list
+        return resp
+
+    @expect_response(Status.SUCCESS)
     def mf1_write_emu_block_data(self, block_start: int, block_data: bytes):
         """
         Set the block data of the analog card of MF1.
