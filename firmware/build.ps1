@@ -27,7 +27,7 @@ switch ($device_type) {
 
 Write-Host "Building firmware for $device_type (hw_version=$hw_version)"
 
-Remove-Item -Recurse -Force "objects" -ErrorAction SilentlyContinue
+Remove-Item -Confirm:$false -Recurse -Force "objects" -ErrorAction SilentlyContinue
 
 Push-Location "bootloader"
 Invoke-Expression "make -j"
@@ -70,16 +70,16 @@ Copy-Item "../nrf52_sdk/components/softdevice/$softdevice/hex/${softdevice}_nrf5
   --output fullimage.hex
 
 $tmp_dir = New-TemporaryFile | Split-Path
-$tmp_dir = Join-Path (Split-Path $tmp_dir) ("cu_binaries_" + -join ((65..90) + (97..122) | Get-Random -Count 10 | % {[char]$_}))
+$tmp_dir = Join-Path $tmp_dir ("cu_binaries_" + -join ((65..90) + (97..122) | Get-Random -Count 10 | % {[char]$_}))
 New-Item -ItemType Directory -Path $tmp_dir | Out-Null
 
 Copy-Item *.hex $tmp_dir
-Remove-Item "$tmp_dir\application.hex"
+Remove-Item -Confirm:$false "$tmp_dir\application.hex"
 Move-Item "$tmp_dir\application_merged.hex" "$tmp_dir\application.hex"
-Remove-Item "$tmp_dir\settings.hex"
+Remove-Item -Confirm:$false "$tmp_dir\settings.hex"
 
 Compress-Archive -Path "$tmp_dir\*.hex" -DestinationPath "${device_type}-binaries.zip"
 
-Remove-Item -Recurse -Force $tmp_dir
+Remove-Item -Confirm:$false -Recurse -Force $tmp_dir
 
 Pop-Location
