@@ -314,11 +314,11 @@ static void system_off_enter(void) {
                     color = 2;
                 }
             }
-            if (m_system_off_processing) ledblink5(color, slot, dir ? 7 : 0);
-            if (m_system_off_processing) ledblink4(color, dir, 7, 99, 75);
-            if (m_system_off_processing) ledblink4(color, !dir, 7, 75, 50);
-            if (m_system_off_processing) ledblink4(color, dir, 7, 50, 25);
-            if (m_system_off_processing) ledblink4(color, !dir, 7, 25, 0);
+            if (m_system_off_processing) rgb_marquee_sweep_from_to(color, slot, dir ? 7 : 0);
+            if (m_system_off_processing) rgb_marquee_sweep_fade(color, dir, 7, 99, 75);
+            if (m_system_off_processing) rgb_marquee_sweep_fade(color, !dir, 7, 75, 50);
+            if (m_system_off_processing) rgb_marquee_sweep_fade(color, dir, 7, 50, 25);
+            if (m_system_off_processing) rgb_marquee_sweep_fade(color, !dir, 7, 25, 0);
         }
         rgb_marquee_stop();
         if (!m_system_off_processing) {
@@ -460,11 +460,11 @@ static void check_wakeup_src(void) {
         // Button wake-up boot animation
         uint8_t animation_config = settings_get_animation_config();
         if (animation_config == SettingsAnimationModeFull) {
-            ledblink2(color, !dir, 11);
-            ledblink2(color, dir, 11);
-            ledblink2(color, !dir, dir ? slot : 7 - slot);
+            rgb_marquee_sweep_to(color, !dir, 11);
+            rgb_marquee_sweep_to(color, dir, 11);
+            rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
         } else if (animation_config == SettingsAnimationModeMinimal) {
-            ledblink2(color, !dir, dir ? slot : 7 - slot);
+            rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
         } else {
             set_slot_light_color(color);
         }
@@ -497,7 +497,7 @@ static void check_wakeup_src(void) {
         uint8_t animation_config = settings_get_animation_config();
         if (animation_config == SettingsAnimationModeFull) {
             // In the case of field wake-up, only one round of RGB is swept as the power-on animation
-            ledblink2(color, !dir, dir ? slot : 7 - slot);
+            rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
         }
         set_slot_light_color(color);
         light_up_by_slot();
@@ -526,9 +526,9 @@ static void check_wakeup_src(void) {
         tag_emulation_factory_init();
 
         // RGB
-        ledblink2(0, !dir, 11);
-        ledblink2(1, dir, 11);
-        ledblink2(2, !dir, 11);
+        rgb_marquee_sweep_to(0, !dir, 11);
+        rgb_marquee_sweep_to(1, dir, 11);
+        rgb_marquee_sweep_to(2, !dir, 11);
 
         // Show RGB for slot.
         set_slot_light_color(color);
@@ -924,12 +924,12 @@ static void blink_usb_led_status(void) {
         }
     } else {
         // The light effect is enabled and can be displayed
-        if (is_rgb_marquee_enable()) {
+        if (rgb_marquee_is_enabled()) {
             is_working = true;
             if (g_usb_port_opened) {
-                ledblink1(color, dir);
+                rgb_marquee_usb_open_sweep(color, dir);
             } else {
-                ledblink6();
+                rgb_marquee_usb_idle();
             }
         } else {
             if (is_working) {
