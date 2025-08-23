@@ -301,24 +301,26 @@ static void system_off_enter(void) {
         for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
             nrf_gpio_pin_clear(p_led_array[i]);
         }
+        // Power off animation
         uint8_t animation_config = settings_get_animation_config();
-        if (animation_config == SettingsAnimationModeFull) {
-            uint8_t slot = tag_emulation_get_slot();
-            // Power off animation
-            uint8_t dir = slot > 3 ? 1 : 0;
-            uint8_t color = get_color_by_slot(slot);
-            if (m_reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) {
-                if (m_reset_source & NRF_POWER_RESETREAS_NFC_MASK) {
-                    color = 1;
-                } else {
-                    color = 2;
-                }
+        uint8_t slot = tag_emulation_get_slot();
+        uint8_t dir = slot > 3 ? 1 : 0;
+        uint8_t color = get_color_by_slot(slot);
+        if (m_reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) {
+            if (m_reset_source & NRF_POWER_RESETREAS_NFC_MASK) {
+                color = 1;
+            } else {
+                color = 2;
             }
+        }
+        if (animation_config == SettingsAnimationModeFull) {
             if (m_system_off_processing) rgb_marquee_sweep_from_to(color, slot, dir ? 7 : 0);
             if (m_system_off_processing) rgb_marquee_sweep_fade(color, dir, 7, 99, 75);
             if (m_system_off_processing) rgb_marquee_sweep_fade(color, !dir, 7, 75, 50);
             if (m_system_off_processing) rgb_marquee_sweep_fade(color, dir, 7, 50, 25);
             if (m_system_off_processing) rgb_marquee_sweep_fade(color, !dir, 7, 25, 0);
+        } else if (animation_config == SettingsAnimationModeMinimal) {
+            if (m_system_off_processing) rgb_marquee_sweep_from_to(color, slot, !dir ? 7 : 0);
         }
         rgb_marquee_stop();
         if (!m_system_off_processing) {
@@ -526,9 +528,16 @@ static void check_wakeup_src(void) {
         tag_emulation_factory_init();
 
         // RGB
-        rgb_marquee_sweep_to(0, !dir, 11);
-        rgb_marquee_sweep_to(1, dir, 11);
-        rgb_marquee_sweep_to(2, !dir, 11);
+        uint8_t animation_config = settings_get_animation_config();
+        if (animation_config == SettingsAnimationModeFull) {
+            rgb_marquee_sweep_to(0, !dir, 11);
+            rgb_marquee_sweep_to(1, dir, 11);
+            rgb_marquee_sweep_to(2, !dir, 11);
+        } else if (animation_config == SettingsAnimationModeMinimal) {
+            rgb_marquee_sweep_from_to(0, 0, 2);
+            rgb_marquee_sweep_from_to(1, 2, 5);
+            rgb_marquee_sweep_from_to(2, 5, 7);
+        }
 
         // Show RGB for slot.
         set_slot_light_color(color);
