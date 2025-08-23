@@ -347,7 +347,7 @@ void rgb_marquee_sweep_fade(uint8_t color, uint8_t dir, uint8_t end, uint8_t sta
 //start Start the lamp position
 //stop Stop lamp position
 void rgb_marquee_sweep_from_to(uint8_t color, uint8_t start, uint8_t stop) {
-    uint8_t setled = start;
+    int8_t setled = start;
     uint32_t *led_pins = hw_get_led_array();
     //Set the brightness
     pwm_sequ_val.channel_3 = 0;
@@ -356,7 +356,7 @@ void rgb_marquee_sweep_from_to(uint8_t color, uint8_t start, uint8_t stop) {
     pwm_sequ_val.channel_0 = get_pwmduty(99);
     //Adjust the color
     set_slot_light_color(color);
-    while (setled < (start < stop ? stop + 1 : stop - 1)) {
+    while (start < stop ? (setled < stop + 1) : (setled > (int8_t)stop - 1)) {
         //Close all channels
         pwm_config.output_pins[0] = NRF_DRV_PWM_PIN_NOT_USED;
         pwm_config.output_pins[1] = NRF_DRV_PWM_PIN_NOT_USED;
