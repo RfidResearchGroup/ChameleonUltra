@@ -34,7 +34,7 @@ nrf_drv_pwm_config_t pwm_config = {//PWM configuration structure
 static autotimer *timer;
 static uint8_t rgb_marquee_usb_idle_step = 0;
 static uint8_t rgb_marquee_usb_idle_color = RGB_RED;
-static uint8_t rgb_marquee_usb_open_sweep_step = 0;
+static uint8_t rgb_marquee_usb_open_step = 0;
 extern bool g_usb_led_marquee_enable;
 
 
@@ -46,13 +46,13 @@ void rgb_marquee_stop(void) {
     nrfx_pwm_stop(&pwm0_ins, true);
     nrfx_pwm_uninit(&pwm0_ins);//turn off pwm output
     rgb_marquee_usb_idle_step = 0;
-    rgb_marquee_usb_open_sweep_step = 0;
+    rgb_marquee_usb_open_step = 0;
 }
 
 // reset RGB state machines to force a refresh of the LED color
 void rgb_marquee_reset(void) {
     rgb_marquee_usb_idle_step = 0;
-    rgb_marquee_usb_open_sweep_step = 0;
+    rgb_marquee_usb_open_step = 0;
 }
 
 // Brightness to PWM value
@@ -67,7 +67,7 @@ void rgb_marquee_usb_open_sweep(uint8_t color, uint8_t dir) {
     static uint8_t setled = 0;
     uint32_t *led_pins_arr;
 
-    if (!g_usb_led_marquee_enable && rgb_marquee_usb_open_sweep_step != 0) {
+    if (!g_usb_led_marquee_enable && rgb_marquee_usb_open_step != 0) {
         startled = 0;
         setled = 0;
         rgb_marquee_stop();
@@ -81,7 +81,7 @@ void rgb_marquee_usb_open_sweep(uint8_t color, uint8_t dir) {
         led_pins_arr = hw_get_led_reversal_array();
     }
 
-    if (rgb_marquee_usb_open_sweep_step == 0) {
+    if (rgb_marquee_usb_open_step == 0) {
         //Adjust the color
         set_slot_light_color(color);
         pwm_sequ_val.channel_0 = 1;
@@ -89,13 +89,13 @@ void rgb_marquee_usb_open_sweep(uint8_t color, uint8_t dir) {
         pwm_sequ_val.channel_2 = 1;
         pwm_sequ_val.channel_3 = 1;
         bsp_set_timer(timer, 0);
-        rgb_marquee_usb_open_sweep_step = 1;
+        rgb_marquee_usb_open_step = 1;
 
         // Reset the state of the light when the USB is turned on to open the communication
         rgb_marquee_usb_idle_step = 0;
     }
 
-    if (rgb_marquee_usb_open_sweep_step == 1) {
+    if (rgb_marquee_usb_open_step == 1) {
         setled = startled;
         for (uint8_t i = 0; i < 4; i++) {
             pwm_config.output_pins[i] = led_pins_arr[setled];
@@ -109,12 +109,61 @@ void rgb_marquee_usb_open_sweep(uint8_t color, uint8_t dir) {
         nrf_drv_pwm_simple_playback(&pwm0_ins, &seq, 1, NRF_DRV_PWM_FLAG_LOOP);
 
         bsp_set_timer(timer, 0);
-        rgb_marquee_usb_open_sweep_step = 2;
+        rgb_marquee_usb_open_step = 2;
     }
 
-    if (rgb_marquee_usb_open_sweep_step == 2) {
+    if (rgb_marquee_usb_open_step == 2) {
         if (!(NO_TIMEOUT_1MS(timer, 80))) {
-            rgb_marquee_usb_open_sweep_step = 1;
+            rgb_marquee_usb_open_step = 1;
+        }
+    }
+}
+
+void rgb_marquee_usb_open_symmetric(uint8_t color) {
+    static uint8_t startled = 0;
+    static uint8_t setled = 0;
+    uint32_t *led_pins_arr = hw_get_led_array();
+
+    if (!g_usb_led_marquee_enable && rgb_marquee_usb_open_step != 0) {
+        startled = 0;
+        setled = 0;
+        rgb_marquee_stop();
+        return;
+    }
+
+    if (rgb_marquee_usb_open_step == 0) {
+        //Adjust the color
+        set_slot_light_color(color);
+        pwm_sequ_val.channel_0 = 1;
+        pwm_sequ_val.channel_1 = 1;
+        pwm_sequ_val.channel_2 = 1;
+        pwm_sequ_val.channel_3 = 1;
+        bsp_set_timer(timer, 0);
+        rgb_marquee_usb_open_step = 1;
+
+        // Reset the state of the light when the USB is turned on to open the communication
+        rgb_marquee_usb_idle_step = 0;
+    }
+
+    if (rgb_marquee_usb_open_step == 1) {
+        setled = startled < 4 ? startled : (4 - (startled - 3));
+        pwm_config.output_pins[0] = led_pins_arr[setled];
+        pwm_config.output_pins[1] = led_pins_arr[7 - setled];
+        pwm_config.output_pins[2] = NRF_DRV_PWM_PIN_NOT_USED;
+        pwm_config.output_pins[3] = NRF_DRV_PWM_PIN_NOT_USED;
+        startled++;
+        if (startled > 7)startled = 0;
+        nrfx_pwm_uninit(&pwm0_ins);
+        nrf_drv_pwm_init(&pwm0_ins, &pwm_config, NULL);
+        nrf_drv_pwm_simple_playback(&pwm0_ins, &seq, 1, NRF_DRV_PWM_FLAG_LOOP);
+
+        bsp_set_timer(timer, 0);
+        rgb_marquee_usb_open_step = 2;
+    }
+
+    if (rgb_marquee_usb_open_step == 2) {
+        if (!(NO_TIMEOUT_1MS(timer, 100))) {
+            rgb_marquee_usb_open_step = 1;
         }
     }
 }
@@ -404,7 +453,7 @@ void rgb_marquee_usb_idle(void) {
         rgb_marquee_usb_idle_step = 1;
 
         // Reset the state of the lamp when the USB is not turned on
-        rgb_marquee_usb_open_sweep_step = 0;
+        rgb_marquee_usb_open_step = 0;
     }
 
     if (rgb_marquee_usb_idle_step == 1) {
@@ -483,6 +532,126 @@ void rgb_marquee_usb_idle(void) {
             for (; new_color == rgb_marquee_usb_idle_color; new_color = rand() % 6);
             rgb_marquee_usb_idle_color = new_color;
         }
+    }
+}
+
+void rgb_marquee_symmetric_out(uint8_t color, uint8_t slot) {
+    uint32_t *led_pins = hw_get_led_array();
+
+    //Adjust the color
+    set_slot_light_color(color);
+    pwm_sequ_val.channel_3 = 950;
+    pwm_sequ_val.channel_2 = 770;
+    pwm_sequ_val.channel_1 = 770;
+    pwm_sequ_val.channel_0 = 950;
+
+    const uint8_t half_leds = 4;
+    const uint8_t slide_leds = 2;
+    const uint8_t solid_leds = 6;
+    for (uint8_t step = 0; step < slide_leds + solid_leds + half_leds + slide_leds; step++) {
+        //Close all channels
+        pwm_config.output_pins[0] = NRF_DRV_PWM_PIN_NOT_USED;
+        pwm_config.output_pins[1] = NRF_DRV_PWM_PIN_NOT_USED;
+        pwm_config.output_pins[2] = NRF_DRV_PWM_PIN_NOT_USED;
+        pwm_config.output_pins[3] = NRF_DRV_PWM_PIN_NOT_USED;
+        for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
+            nrf_gpio_pin_clear(led_pins[i]);
+        }
+
+        const uint8_t length = slide_leds + solid_leds + slide_leds;
+        for (uint8_t offset = 0; offset < length; offset++) {
+            if (step < offset || step >= (offset + half_leds)) continue;
+            switch (offset) {
+            case 0:
+            case length - 1:
+                pwm_config.output_pins[0] = led_pins[3 - step + offset];
+                pwm_config.output_pins[3] = led_pins[4 + step - offset];
+                break;
+            case 1:
+            case length - 2:
+                pwm_config.output_pins[1] = led_pins[3 - step + offset];
+                pwm_config.output_pins[2] = led_pins[4 + step - offset];
+                break;
+            default:
+                nrf_gpio_pin_set(led_pins[3 - step + offset]);
+                nrf_gpio_pin_set(led_pins[4 + step - offset]);
+            }
+        }
+
+        if ((slot <= 3 && slot > (3 - step + slide_leds)) ||
+            (slot >= 4 && slot < (4 + step - slide_leds))) {
+            nrf_gpio_pin_set(led_pins[slot]);
+            for (uint8_t j = 0; j < 4; j++) {
+                if (pwm_config.output_pins[j] == led_pins[slot]) {
+                    pwm_config.output_pins[j] = NRF_DRV_PWM_PIN_NOT_USED;
+                }
+            }
+        }
+
+        nrfx_pwm_uninit(&pwm0_ins);
+        nrf_drv_pwm_init(&pwm0_ins, &pwm_config, NULL);
+        nrf_drv_pwm_simple_playback(&pwm0_ins, &seq, 1, NRF_DRV_PWM_FLAG_LOOP);
+        bsp_delay_ms(60);
+    }
+}
+
+void rgb_marquee_symmetric_in(uint8_t color, uint8_t slot) {
+    uint32_t *led_pins = hw_get_led_array();
+
+    //Adjust the color
+    set_slot_light_color(color);
+    pwm_sequ_val.channel_3 = 950;
+    pwm_sequ_val.channel_2 = 770;
+    pwm_sequ_val.channel_1 = 770;
+    pwm_sequ_val.channel_0 = 950;
+
+    const uint8_t half_leds = 4;
+    const uint8_t slide_leds = 2;
+    const uint8_t solid_leds = 6;
+    for (uint8_t step = 0; step < slide_leds + solid_leds + half_leds + slide_leds; step++) {
+        //Close all channels
+        pwm_config.output_pins[0] = NRF_DRV_PWM_PIN_NOT_USED;
+        pwm_config.output_pins[1] = NRF_DRV_PWM_PIN_NOT_USED;
+        pwm_config.output_pins[2] = NRF_DRV_PWM_PIN_NOT_USED;
+        pwm_config.output_pins[3] = NRF_DRV_PWM_PIN_NOT_USED;
+        for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
+            nrf_gpio_pin_clear(led_pins[i]);
+        }
+
+        const uint8_t length = slide_leds + solid_leds + slide_leds;
+        for (uint8_t offset = 0; offset < length; offset++) {
+            if (step < offset || step >= (offset + half_leds)) continue;
+            switch (offset) {
+            case 0:
+            case length - 1:
+                pwm_config.output_pins[0] = led_pins[0 + step - offset];
+                pwm_config.output_pins[3] = led_pins[7 - step + offset];
+                break;
+            case 1:
+            case length - 2:
+                pwm_config.output_pins[1] = led_pins[0 + step - offset];
+                pwm_config.output_pins[2] = led_pins[7 - step + offset];
+                break;
+            default:
+                nrf_gpio_pin_set(led_pins[0 + step - offset]);
+                nrf_gpio_pin_set(led_pins[7 - step + offset]);
+            }
+        }
+
+        if ((slot <= 3 && slot > (0 + step - slide_leds)) ||
+            (slot >= 4 && slot < (7 - step + slide_leds))) {
+            nrf_gpio_pin_set(led_pins[slot]);
+            for (uint8_t j = 0; j < 4; j++) {
+                if (pwm_config.output_pins[j] == led_pins[slot]) {
+                    pwm_config.output_pins[j] = NRF_DRV_PWM_PIN_NOT_USED;
+                }
+            }
+        }
+
+        nrfx_pwm_uninit(&pwm0_ins);
+        nrf_drv_pwm_init(&pwm0_ins, &pwm_config, NULL);
+        nrf_drv_pwm_simple_playback(&pwm0_ins, &seq, 1, NRF_DRV_PWM_FLAG_LOOP);
+        bsp_delay_ms(60);
     }
 }
 

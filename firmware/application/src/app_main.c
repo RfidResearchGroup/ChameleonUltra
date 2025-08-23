@@ -321,6 +321,8 @@ static void system_off_enter(void) {
             if (m_system_off_processing) rgb_marquee_sweep_fade(color, !dir, 7, 25, 0);
         } else if (animation_config == SettingsAnimationModeMinimal) {
             if (m_system_off_processing) rgb_marquee_sweep_from_to(color, slot, !dir ? 7 : 0);
+        } else if (animation_config == SettingsAnimationModeSymmetric) {
+            if (m_system_off_processing) rgb_marquee_symmetric_in(color, slot);
         }
         rgb_marquee_stop();
         if (!m_system_off_processing) {
@@ -467,6 +469,8 @@ static void check_wakeup_src(void) {
             rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
         } else if (animation_config == SettingsAnimationModeMinimal) {
             rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
+        } else if (animation_config == SettingsAnimationModeSymmetric) {
+            rgb_marquee_symmetric_out(color, slot);
         } else {
             set_slot_light_color(color);
         }
@@ -500,8 +504,11 @@ static void check_wakeup_src(void) {
         if (animation_config == SettingsAnimationModeFull) {
             // In the case of field wake-up, only one round of RGB is swept as the power-on animation
             rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
+        } else if (animation_config == SettingsAnimationModeSymmetric) {
+            rgb_marquee_symmetric_out(color, slot);
+        } else {
+            set_slot_light_color(color);
         }
-        set_slot_light_color(color);
         light_up_by_slot();
 
         // We can only run tag emulation at field wakeup source.
@@ -537,6 +544,10 @@ static void check_wakeup_src(void) {
             rgb_marquee_sweep_from_to(0, 0, 2);
             rgb_marquee_sweep_from_to(1, 2, 5);
             rgb_marquee_sweep_from_to(2, 5, 7);
+        } else if (animation_config == SettingsAnimationModeSymmetric) {
+            rgb_marquee_symmetric_out(0, ~0);
+            rgb_marquee_symmetric_in(1, ~0);
+            rgb_marquee_symmetric_out(2, ~0);
         }
 
         // Show RGB for slot.
@@ -936,7 +947,12 @@ static void blink_usb_led_status(void) {
         if (rgb_marquee_is_enabled()) {
             is_working = true;
             if (g_usb_port_opened) {
-                rgb_marquee_usb_open_sweep(color, dir);
+                uint8_t animation_config = settings_get_animation_config();
+                if (animation_config == SettingsAnimationModeSymmetric) {
+                    rgb_marquee_usb_open_symmetric(color);
+                } else {
+                    rgb_marquee_usb_open_sweep(color, dir);
+                }
             } else {
                 rgb_marquee_usb_idle();
             }
