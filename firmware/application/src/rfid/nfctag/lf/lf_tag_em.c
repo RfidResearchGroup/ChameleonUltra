@@ -9,6 +9,7 @@
 #include "nrfx_pwm.h"
 #include "protocols/em410x.h"
 #include "protocols/hidprox.h"
+#include "protocols/viking.h"
 #include "syssleep.h"
 #include "tag_emulation.h"
 #include "tag_persistence.h"
@@ -198,6 +199,16 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
         NRF_LOG_INFO("load lf hidprox data finish.");
         return LF_HIDPROX_TAG_ID_SIZE;
     }
+
+    if (type == TAG_TYPE_VIKING && buffer->length >= LF_VIKING_TAG_ID_SIZE) {
+        m_tag_type = type;
+        void *codec = viking.alloc();
+        m_pwm_seq = viking.modulator(codec, buffer->buffer);
+        viking.free(codec);
+        NRF_LOG_INFO("load lf viking data finish.");
+        return LF_VIKING_TAG_ID_SIZE;
+    }
+
     NRF_LOG_ERROR("no valid data exists in buffer for tag type: %d.", type);
     return 0;
 }
@@ -222,6 +233,17 @@ int lf_tag_hidprox_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buff
     // Make sure to load this tag before allowing saving
     // Just save the original card package directly
     return m_tag_type == TAG_TYPE_HID_PROX ? LF_HIDPROX_TAG_ID_SIZE : 0;
+}
+
+/** @brief Id card deposit card number before callback
+ * @param type      Refined tag type
+ * @param buffer    Data buffer
+ * @return The length of the data that needs to be saved is that it does not save when 0
+ */
+int lf_tag_viking_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    // Make sure to load this tag before allowing saving
+    // Just save the original card package directly
+    return m_tag_type == TAG_TYPE_VIKING ? LF_VIKING_TAG_ID_SIZE : 0;
 }
 
 bool lf_tag_data_factory(uint8_t slot, tag_specific_type_t tag_type, uint8_t *tag_id, uint16_t length) {
@@ -258,5 +280,16 @@ bool lf_tag_em410x_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
 bool lf_tag_hidprox_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     // default id, must to align(4), more word...
     uint8_t tag_id[13] = {0x01, 0x00, 0x00, 0x00, 0x64, 0x00, 0x00, 0x00, 0x51, 0x45, 0x00, 0x00, 0x00};
+    return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
+}
+
+/** @brief Id card deposit card number before callback
+ * @param slot      Card slot number
+ * @param tag_type  Refined tag type
+ * @return Whether the format is successful, if the formatting is successful, it will return to True, otherwise False will be returned
+ */
+bool lf_tag_viking_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    // default id
+    uint8_t tag_id[4] = {0xDE, 0xAD, 0xBE, 0xEF};
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
 }
