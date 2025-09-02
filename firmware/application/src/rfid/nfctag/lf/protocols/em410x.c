@@ -57,8 +57,7 @@ typedef struct {
     manchester *modem;
 } em410x_codec;
 
-uint64_t em410x_raw_data(uint8_t *uid)
-{
+uint64_t em410x_raw_data(uint8_t *uid) {
     uint64_t raw = EM_HEADER;
     uint8_t pc = 0x00;  // column parity
     // 10 rows, each row is 4 bits data + 1 bit parity
@@ -66,8 +65,7 @@ uint64_t em410x_raw_data(uint8_t *uid)
         uint8_t data;
         if (i % 2) {
             data = uid[i >> 1] & 0x0f;
-        }
-        else {
+        } else {
             data = (uid[i >> 1] >> EM_COLUMN_COUNT) & 0x0f;
         }
         pc ^= data;
@@ -82,14 +80,12 @@ uint64_t em410x_raw_data(uint8_t *uid)
     return raw;
 }
 
-bool em410x_get_time(uint16_t divisor, uint8_t interval, uint8_t base)
-{
-    return interval >= (base - EM_READ_JITTER_TIME_BASE) / divisor
-           && interval <= (base + EM_READ_JITTER_TIME_BASE) / divisor;
+bool em410x_get_time(uint16_t divisor, uint8_t interval, uint8_t base) {
+    return interval >= (base - EM_READ_JITTER_TIME_BASE) / divisor &&
+           interval <= (base + EM_READ_JITTER_TIME_BASE) / divisor;
 }
 
-uint8_t em410x_period(uint16_t divisor, uint8_t interval)
-{
+uint8_t em410x_period(uint16_t divisor, uint8_t interval) {
     if (em410x_get_time(divisor, interval, EM_READ_TIME1_BASE)) {
         return 0;
     }
@@ -102,47 +98,40 @@ uint8_t em410x_period(uint16_t divisor, uint8_t interval)
     return 3;
 }
 
-uint8_t em410x_64_period(uint8_t interval)
-{
+uint8_t em410x_64_period(uint8_t interval) {
     return em410x_period(1, interval);  // clock_per_bit = 64, divisor = 1
 }
 
-uint8_t em410x_32_period(uint8_t interval)
-{
+uint8_t em410x_32_period(uint8_t interval) {
     return em410x_period(2, interval);  // clock_per_bit = 32, divisor = 2
 }
 
-uint8_t em410x_16_period(uint8_t interval)
-{
+uint8_t em410x_16_period(uint8_t interval) {
     return em410x_period(4, interval);  // clock_per_bit = 16, divisor = 4
 }
 
-em410x_codec *em410x_64_alloc(void)
-{
+em410x_codec *em410x_64_alloc(void) {
     em410x_codec *codec = malloc(sizeof(em410x_codec));
     codec->modem = malloc(sizeof(manchester));
     codec->modem->rp = em410x_64_period;
     return codec;
 };
 
-em410x_codec *em410x_32_alloc(void)
-{
+em410x_codec *em410x_32_alloc(void) {
     em410x_codec *codec = malloc(sizeof(em410x_codec));
     codec->modem = malloc(sizeof(manchester));
     codec->modem->rp = em410x_32_period;
     return codec;
 };
 
-em410x_codec *em410x_16_alloc(void)
-{
+em410x_codec *em410x_16_alloc(void) {
     em410x_codec *codec = malloc(sizeof(em410x_codec));
     codec->modem = malloc(sizeof(manchester));
     codec->modem->rp = em410x_16_period;
     return codec;
 };
 
-void em410x_free(em410x_codec *d)
-{
+void em410x_free(em410x_codec *d) {
     if (d->modem) {
         free(d->modem);
         d->modem = NULL;
@@ -152,16 +141,14 @@ void em410x_free(em410x_codec *d)
 
 uint8_t *em410x_get_data(em410x_codec *d) { return d->data; };
 
-void em410x_decoder_start(em410x_codec *d, uint8_t format)
-{
+void em410x_decoder_start(em410x_codec *d, uint8_t format) {
     memset(d->data, 0, EM_DATA_SIZE);
     d->raw = 0;
     d->raw_length = 0;
     manchester_reset(d->modem);
 };
 
-bool em410x_decode_feed(em410x_codec *d, bool bit)
-{
+bool em410x_decode_feed(em410x_codec *d, bool bit) {
     d->raw <<= 1;
     d->raw_length++;
     if (bit) {
@@ -201,16 +188,14 @@ bool em410x_decode_feed(em410x_codec *d, bool bit)
 
         if (i % 2) {
             d->data[i >> 1] |= data;
-        }
-        else {
+        } else {
             d->data[i >> 1] = data << 4;
         }
     }
     return pc == 0x00;  // column parity
 }
 
-bool em410x_decoder_feed(em410x_codec *d, uint16_t interval)
-{
+bool em410x_decoder_feed(em410x_codec *d, uint16_t interval) {
     bool bits[2] = {0};
     int8_t bitlen = 0;
     manchester_feed(d->modem, (uint8_t)interval, bits, &bitlen);
@@ -227,8 +212,7 @@ bool em410x_decoder_feed(em410x_codec *d, uint16_t interval)
     return false;
 };
 
-const nrf_pwm_sequence_t *em410x_modulator(em410x_codec *d, uint8_t *buf)
-{
+const nrf_pwm_sequence_t *em410x_modulator(em410x_codec *d, uint8_t *buf) {
     uint64_t lo = em410x_raw_data(buf);
     for (int i = 0; i < EM_RAW_SIZE; i++) {
         uint16_t msb = 0x00;
@@ -287,8 +271,7 @@ const protocol em410x_16 = {
 };
 
 // Encode EM410X card number to T55xx blocks.
-uint8_t em410x_t55xx_writer(uint8_t *uid, uint32_t *blks)
-{
+uint8_t em410x_t55xx_writer(uint8_t *uid, uint32_t *blks) {
     uint64_t raw = em410x_raw_data(uid);
     blks[0] = T5577_EM410X_64_CONFIG;
     blks[1] = raw >> 32;

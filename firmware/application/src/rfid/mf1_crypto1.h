@@ -1,8 +1,8 @@
 #ifndef CRYPTO1_H
 #define CRYPTO1_H
 
-#include <stdbool.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 // debug to use
 void Crypto1GetState(uint8_t *pEven, uint8_t *pOdd);
@@ -39,4 +39,4 @@ void Crypto1EncryptWithParity(uint8_t *Buffer, uint8_t BitCount);
 /* Encrypts buffer with LFSR feedback within reader nonce and considers parity bits */
 void Crypto1ReaderAuthWithParity(uint8_t PlainReaderAnswerWithParityBits[9]);
 
-#endif  // CRYPTO1_H
+#endif //CRYPTO1_H

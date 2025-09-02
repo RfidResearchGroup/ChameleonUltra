@@ -101,8 +101,7 @@ tag_data_buffer_t *get_buffer_by_tag_type(tag_specific_type_t type);
 void tag_emulation_set_slot(uint8_t index);
 // Get the card slot currently used
 uint8_t tag_emulation_get_slot(void);
-// Switch the card slot to control whether the passing parameter control is closed during the switching period to listen
-// to
+// Switch the card slot to control whether the passing parameter control is closed during the switching period to listen to
 void tag_emulation_change_slot(uint8_t index, bool sense_disable);
 // Get the card slot to enable the state
 bool is_slot_enabled(uint8_t slot, tag_sense_type_t sense_type);

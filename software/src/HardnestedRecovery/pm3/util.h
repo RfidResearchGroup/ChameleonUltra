@@ -26,15 +26,15 @@
 
 // used for save/load files
 #ifndef FILE_PATH_SIZE
-#define FILE_PATH_SIZE 1000
+# define FILE_PATH_SIZE 1000
 #endif
 
 extern uint8_t g_debugMode;
 extern uint8_t g_printAndLog;
 
 #define PRINTANDLOG_PRINT 1
-#define PRINTANDLOG_LOG 2
+#define PRINTANDLOG_LOG   2
 
-int num_CPUs(void);  // number of logical CPUs
+int num_CPUs(void); // number of logical CPUs
 
 #endif

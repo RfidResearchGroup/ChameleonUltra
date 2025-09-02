@@ -3,8 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-bool cb_init(circular_buffer *cb, size_t capacity, size_t sz)
-{
+bool cb_init(circular_buffer *cb, size_t capacity, size_t sz) {
     cb->buffer = malloc(capacity * sz);
     if (cb->buffer == NULL) {
         return false;
@@ -18,16 +17,14 @@ bool cb_init(circular_buffer *cb, size_t capacity, size_t sz)
     return true;
 }
 
-void cb_free(circular_buffer *cb)
-{
+void cb_free(circular_buffer *cb) {
     if (cb != NULL && cb->buffer != NULL) {
         free(cb->buffer);
         cb->buffer = NULL;
     }
 }
 
-bool cb_push_back(circular_buffer *cb, const void *item)
-{
+bool cb_push_back(circular_buffer *cb, const void *item) {
     if (cb->buffer == NULL || cb->count == cb->capacity) {
         return false;
     }
@@ -40,8 +37,7 @@ bool cb_push_back(circular_buffer *cb, const void *item)
     return true;
 }
 
-bool cb_pop_front(circular_buffer *cb, void *item)
-{
+bool cb_pop_front(circular_buffer *cb, void *item) {
     if (cb->buffer == NULL || cb->count == 0) {
         return false;
     }

@@ -2,8 +2,8 @@
 #define APP_CMD_H
 
 #include <stdint.h>
-
 #include "dataframe.h"
+
 
 typedef data_frame_tx_t *(*cmd_processor)(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data);
 

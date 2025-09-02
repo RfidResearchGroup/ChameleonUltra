@@ -38,6 +38,8 @@
  *
  */
 
+
+
 #ifndef SDK_CONFIG_H
 #define SDK_CONFIG_H
 // <<< Use Configuration Wizard in Context Menu >>>\n
@@ -50,6 +52,7 @@
 //==========================================================
 // <q> BSP_BTN_BLE_ENABLED  - bsp_btn_ble - Button Control for BLE
 
+
 #ifndef BSP_BTN_BLE_ENABLED
 #define BSP_BTN_BLE_ENABLED 0
 #endif
@@ -61,6 +64,7 @@
 
 //==========================================================
 // <q> BLE_ADVERTISING_ENABLED  - ble_advertising - Advertising module
+
 
 #ifndef BLE_ADVERTISING_ENABLED
 #define BLE_ADVERTISING_ENABLED 1
@@ -146,12 +150,12 @@
 
 // <q> BLE_RACP_ENABLED  - ble_racp - Record Access Control Point library
 
+
 #ifndef BLE_RACP_ENABLED
 #define BLE_RACP_ENABLED 0
 #endif
 
-// <e> NRF_BLE_CONN_PARAMS_ENABLED - ble_conn_params - Initiating and executing a connection parameters negotiation
-// procedure
+// <e> NRF_BLE_CONN_PARAMS_ENABLED - ble_conn_params - Initiating and executing a connection parameters negotiation procedure
 //==========================================================
 #ifndef NRF_BLE_CONN_PARAMS_ENABLED
 #define NRF_BLE_CONN_PARAMS_ENABLED 1
@@ -163,9 +167,8 @@
 #define NRF_BLE_CONN_PARAMS_MAX_SLAVE_LATENCY_DEVIATION 499
 #endif
 
-// <o> NRF_BLE_CONN_PARAMS_MAX_SUPERVISION_TIMEOUT_DEVIATION - The largest acceptable deviation (in 10 ms units) in
-// supervision timeout. <i> The largest deviation (+ or -, in 10 ms units) from the requested supervision timeout that
-// will not be renegotiated.
+// <o> NRF_BLE_CONN_PARAMS_MAX_SUPERVISION_TIMEOUT_DEVIATION - The largest acceptable deviation (in 10 ms units) in supervision timeout.
+// <i> The largest deviation (+ or -, in 10 ms units) from the requested supervision timeout that will not be renegotiated.
 
 #ifndef NRF_BLE_CONN_PARAMS_MAX_SUPERVISION_TIMEOUT_DEVIATION
 #define NRF_BLE_CONN_PARAMS_MAX_SUPERVISION_TIMEOUT_DEVIATION 65535
@@ -180,6 +183,7 @@
 #endif
 // <q> NRF_BLE_GATT_MTU_EXCHANGE_INITIATION_ENABLED  - Enable GATT MTU exchange initiation
 
+
 #ifndef NRF_BLE_GATT_MTU_EXCHANGE_INITIATION_ENABLED
 #define NRF_BLE_GATT_MTU_EXCHANGE_INITIATION_ENABLED 1
 #endif
@@ -191,9 +195,7 @@
 #ifndef NRF_BLE_QWR_ENABLED
 #define NRF_BLE_QWR_ENABLED 1
 #endif
-// <o> NRF_BLE_QWR_MAX_ATTR - Maximum number of attribute handles that can be registered. This number must be adjusted
-// according to the number of attributes for which Queued Writes will be enabled. If it is zero, the module will reject
-// all Queued Write requests.
+// <o> NRF_BLE_QWR_MAX_ATTR - Maximum number of attribute handles that can be registered. This number must be adjusted according to the number of attributes for which Queued Writes will be enabled. If it is zero, the module will reject all Queued Write requests.
 #ifndef NRF_BLE_QWR_MAX_ATTR
 #define NRF_BLE_QWR_MAX_ATTR 0
 #endif
@@ -219,6 +221,7 @@
 
 // <q> PM_CENTRAL_ENABLED  - Enable/disable central-specific Peer Manager functionality.
 
+
 // <i> Enable/disable central-specific Peer Manager functionality.
 
 #ifndef PM_CENTRAL_ENABLED
@@ -226,6 +229,7 @@
 #endif
 
 // <q> PM_SERVICE_CHANGED_ENABLED  - Enable/disable the service changed management for GATT server in Peer Manager.
+
 
 // <i> If not using a GATT server, or using a server wihout a service changed characteristic,
 // <i> disable this to save code space.
@@ -236,6 +240,7 @@
 
 // <q> PM_PEER_RANKS_ENABLED  - Enable/disable the peer rank management in Peer Manager.
 
+
 // <i> Set this to false to save code space if not using the peer rank API.
 
 #ifndef PM_PEER_RANKS_ENABLED
@@ -244,8 +249,8 @@
 
 // <q> PM_LESC_ENABLED  - Enable/disable LESC support in Peer Manager.
 
-// <i> If set to true, you need to call nrf_ble_lesc_request_handler() in the main loop to respond to LESC-related BLE
-// events. If LESC support is not required, set this to false to save code space.
+
+// <i> If set to true, you need to call nrf_ble_lesc_request_handler() in the main loop to respond to LESC-related BLE events. If LESC support is not required, set this to false to save code space.
 
 #ifndef PM_LESC_ENABLED
 #define PM_LESC_ENABLED 1
@@ -261,14 +266,12 @@
 #define PM_RA_PROTECTION_TRACKED_PEERS_NUM 8
 #endif
 
-// <o> PM_RA_PROTECTION_MIN_WAIT_INTERVAL - Minimum waiting interval (in ms) before a new pairing attempt can be
-// initiated.
+// <o> PM_RA_PROTECTION_MIN_WAIT_INTERVAL - Minimum waiting interval (in ms) before a new pairing attempt can be initiated.
 #ifndef PM_RA_PROTECTION_MIN_WAIT_INTERVAL
 #define PM_RA_PROTECTION_MIN_WAIT_INTERVAL 4000
 #endif
 
-// <o> PM_RA_PROTECTION_MAX_WAIT_INTERVAL - Maximum waiting interval (in ms) before a new pairing attempt can be
-// initiated.
+// <o> PM_RA_PROTECTION_MAX_WAIT_INTERVAL - Maximum waiting interval (in ms) before a new pairing attempt can be initiated.
 #ifndef PM_RA_PROTECTION_MAX_WAIT_INTERVAL
 #define PM_RA_PROTECTION_MAX_WAIT_INTERVAL 64000
 #endif
@@ -296,12 +299,13 @@
 //==========================================================
 // <q> NRF_BLE_LESC_ENABLED  - Enable LESC Module
 
+
 #ifndef NRF_BLE_LESC_ENABLED
 #define NRF_BLE_LESC_ENABLED 1
 #endif
 
-// <q> NRF_BLE_LESC_GENERATE_NEW_KEYS  - Generate new LESC keys after every pairing attempt. Keys are generated on the
-// auth status event
+// <q> NRF_BLE_LESC_GENERATE_NEW_KEYS  - Generate new LESC keys after every pairing attempt. Keys are generated on the auth status event
+
 
 #ifndef NRF_BLE_LESC_GENERATE_NEW_KEYS
 #define NRF_BLE_LESC_GENERATE_NEW_KEYS 1
@@ -318,17 +322,20 @@
 //==========================================================
 // <q> BLE_ANCS_C_ENABLED  - ble_ancs_c - Apple Notification Service Client
 
+
 #ifndef BLE_ANCS_C_ENABLED
 #define BLE_ANCS_C_ENABLED 0
 #endif
 
 // <q> BLE_ANS_C_ENABLED  - ble_ans_c - Alert Notification Service Client
 
+
 #ifndef BLE_ANS_C_ENABLED
 #define BLE_ANS_C_ENABLED 0
 #endif
 
 // <q> BLE_BAS_C_ENABLED  - ble_bas_c - Battery Service Client
+
 
 #ifndef BLE_BAS_C_ENABLED
 #define BLE_BAS_C_ENABLED 0
@@ -394,11 +401,13 @@
 
 // <q> BLE_CSCS_ENABLED  - ble_cscs - Cycling Speed and Cadence Service
 
+
 #ifndef BLE_CSCS_ENABLED
 #define BLE_CSCS_ENABLED 0
 #endif
 
 // <q> BLE_CTS_C_ENABLED  - ble_cts_c - Current Time Service Client
+
 
 #ifndef BLE_CTS_C_ENABLED
 #define BLE_CTS_C_ENABLED 0
@@ -406,11 +415,13 @@
 
 // <q> BLE_DIS_ENABLED  - ble_dis - Device Information Service
 
+
 #ifndef BLE_DIS_ENABLED
 #define BLE_DIS_ENABLED 0
 #endif
 
 // <q> BLE_GLS_ENABLED  - ble_gls - Glucose Service
+
 
 #ifndef BLE_GLS_ENABLED
 #define BLE_GLS_ENABLED 0
@@ -418,11 +429,13 @@
 
 // <q> BLE_HIDS_ENABLED  - ble_hids - Human Interface Device Service
 
+
 #ifndef BLE_HIDS_ENABLED
 #define BLE_HIDS_ENABLED 0
 #endif
 
 // <q> BLE_HRS_C_ENABLED  - ble_hrs_c - Heart Rate Service Client
+
 
 #ifndef BLE_HRS_C_ENABLED
 #define BLE_HRS_C_ENABLED 0
@@ -430,17 +443,20 @@
 
 // <q> BLE_HRS_ENABLED  - ble_hrs - Heart Rate Service
 
+
 #ifndef BLE_HRS_ENABLED
 #define BLE_HRS_ENABLED 0
 #endif
 
 // <q> BLE_HTS_ENABLED  - ble_hts - Health Thermometer Service
 
+
 #ifndef BLE_HTS_ENABLED
 #define BLE_HTS_ENABLED 0
 #endif
 
 // <q> BLE_IAS_C_ENABLED  - ble_ias_c - Immediate Alert Service Client
+
 
 #ifndef BLE_IAS_C_ENABLED
 #define BLE_IAS_C_ENABLED 0
@@ -506,11 +522,13 @@
 
 // <q> BLE_LBS_C_ENABLED  - ble_lbs_c - Nordic LED Button Service Client
 
+
 #ifndef BLE_LBS_C_ENABLED
 #define BLE_LBS_C_ENABLED 0
 #endif
 
 // <q> BLE_LBS_ENABLED  - ble_lbs - LED Button Service
+
 
 #ifndef BLE_LBS_ENABLED
 #define BLE_LBS_ENABLED 0
@@ -518,11 +536,13 @@
 
 // <q> BLE_LLS_ENABLED  - ble_lls - Link Loss Service
 
+
 #ifndef BLE_LLS_ENABLED
 #define BLE_LLS_ENABLED 0
 #endif
 
 // <q> BLE_NUS_C_ENABLED  - ble_nus_c - Nordic UART Central Service
+
 
 #ifndef BLE_NUS_C_ENABLED
 #define BLE_NUS_C_ENABLED 0
@@ -588,17 +608,20 @@
 
 // <q> BLE_RSCS_C_ENABLED  - ble_rscs_c - Running Speed and Cadence Client
 
+
 #ifndef BLE_RSCS_C_ENABLED
 #define BLE_RSCS_C_ENABLED 0
 #endif
 
 // <q> BLE_RSCS_ENABLED  - ble_rscs - Running Speed and Cadence Service
 
+
 #ifndef BLE_RSCS_ENABLED
 #define BLE_RSCS_ENABLED 0
 #endif
 
 // <q> BLE_TPS_ENABLED  - ble_tps - TX Power Service
+
 
 #ifndef BLE_TPS_ENABLED
 #define BLE_TPS_ENABLED 0
@@ -616,6 +639,7 @@
 #define NRF_MPU_LIB_ENABLED 0
 #endif
 // <q> NRF_MPU_LIB_CLI_CMDS  - Enable CLI commands specific to the module.
+
 
 #ifndef NRF_MPU_LIB_CLI_CMDS
 #define NRF_MPU_LIB_CLI_CMDS 0
@@ -658,10 +682,13 @@
 #endif
 // <o> NRF_CRYPTO_ALLOCATOR  - Memory allocator
 
-// <i> Choose memory allocator used by nrf_crypto. Default is alloca if possible or nrf_malloc otherwise. If 'User
-// macros' are selected, the user has to create 'nrf_crypto_allocator.h' file that contains NRF_CRYPTO_ALLOC,
-// NRF_CRYPTO_FREE, and NRF_CRYPTO_ALLOC_ON_STACK. <0=> Default <1=> User macros <2=> On stack (alloca) <3=> C dynamic
-// memory (malloc) <4=> SDK Memory Manager (nrf_malloc)
+
+// <i> Choose memory allocator used by nrf_crypto. Default is alloca if possible or nrf_malloc otherwise. If 'User macros' are selected, the user has to create 'nrf_crypto_allocator.h' file that contains NRF_CRYPTO_ALLOC, NRF_CRYPTO_FREE, and NRF_CRYPTO_ALLOC_ON_STACK.
+// <0=> Default
+// <1=> User macros
+// <2=> On stack (alloca)
+// <3=> C dynamic memory (malloc)
+// <4=> SDK Memory Manager (nrf_malloc)
 
 #ifndef NRF_CRYPTO_ALLOCATOR
 #define NRF_CRYPTO_ALLOCATOR 0
@@ -669,13 +696,13 @@
 
 // <e> NRF_CRYPTO_BACKEND_CC310_BL_ENABLED - Enable the ARM Cryptocell CC310 reduced backend.
 
-// <i> The CC310 hardware-accelerated cryptography backend with reduced functionality and footprint (only available on
-// nRF52840).
+// <i> The CC310 hardware-accelerated cryptography backend with reduced functionality and footprint (only available on nRF52840).
 //==========================================================
 #ifndef NRF_CRYPTO_BACKEND_CC310_BL_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_BL_ENABLED 0
 #endif
 // <q> NRF_CRYPTO_BACKEND_CC310_BL_ECC_SECP224R1_ENABLED  - Enable the secp224r1 elliptic curve support using CC310_BL.
+
 
 #ifndef NRF_CRYPTO_BACKEND_CC310_BL_ECC_SECP224R1_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_BL_ECC_SECP224R1_ENABLED 0
@@ -683,11 +710,13 @@
 
 // <q> NRF_CRYPTO_BACKEND_CC310_BL_ECC_SECP256R1_ENABLED  - Enable the secp256r1 elliptic curve support using CC310_BL.
 
+
 #ifndef NRF_CRYPTO_BACKEND_CC310_BL_ECC_SECP256R1_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_BL_ECC_SECP256R1_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_CC310_BL_HASH_SHA256_ENABLED  - CC310_BL SHA-256 hash functionality.
+
 
 // <i> CC310_BL backend implementation for hardware-accelerated SHA-256.
 
@@ -695,11 +724,10 @@
 #define NRF_CRYPTO_BACKEND_CC310_BL_HASH_SHA256_ENABLED 1
 #endif
 
-// <q> NRF_CRYPTO_BACKEND_CC310_BL_HASH_AUTOMATIC_RAM_BUFFER_ENABLED  - nrf_cc310_bl buffers to RAM before running hash
-// operation
+// <q> NRF_CRYPTO_BACKEND_CC310_BL_HASH_AUTOMATIC_RAM_BUFFER_ENABLED  - nrf_cc310_bl buffers to RAM before running hash operation
 
-// <i> Enabling this makes hashing of addresses in FLASH range possible. Size of buffer allocated for hashing is set by
-// NRF_CRYPTO_BACKEND_CC310_BL_HASH_AUTOMATIC_RAM_BUFFER_SIZE
+
+// <i> Enabling this makes hashing of addresses in FLASH range possible. Size of buffer allocated for hashing is set by NRF_CRYPTO_BACKEND_CC310_BL_HASH_AUTOMATIC_RAM_BUFFER_SIZE
 
 #ifndef NRF_CRYPTO_BACKEND_CC310_BL_HASH_AUTOMATIC_RAM_BUFFER_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_BL_HASH_AUTOMATIC_RAM_BUFFER_ENABLED 0
@@ -714,8 +742,8 @@
 
 // <q> NRF_CRYPTO_BACKEND_CC310_BL_INTERRUPTS_ENABLED  - Enable Interrupts while support using CC310 bl.
 
-// <i> Select a library version compatible with the configuration. When interrupts are disable, a version named _noint
-// must be used
+
+// <i> Select a library version compatible with the configuration. When interrupts are disable, a version named _noint must be used
 
 #ifndef NRF_CRYPTO_BACKEND_CC310_BL_INTERRUPTS_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_BL_INTERRUPTS_ENABLED 1
@@ -732,11 +760,13 @@
 #endif
 // <q> NRF_CRYPTO_BACKEND_CC310_AES_CBC_ENABLED  - Enable the AES CBC mode using CC310.
 
+
 #ifndef NRF_CRYPTO_BACKEND_CC310_AES_CBC_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_AES_CBC_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_CC310_AES_CTR_ENABLED  - Enable the AES CTR mode using CC310.
+
 
 #ifndef NRF_CRYPTO_BACKEND_CC310_AES_CTR_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_AES_CTR_ENABLED 1
@@ -744,11 +774,13 @@
 
 // <q> NRF_CRYPTO_BACKEND_CC310_AES_ECB_ENABLED  - Enable the AES ECB mode using CC310.
 
+
 #ifndef NRF_CRYPTO_BACKEND_CC310_AES_ECB_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_AES_ECB_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_CC310_AES_CBC_MAC_ENABLED  - Enable the AES CBC_MAC mode using CC310.
+
 
 #ifndef NRF_CRYPTO_BACKEND_CC310_AES_CBC_MAC_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_AES_CBC_MAC_ENABLED 1
@@ -756,11 +788,13 @@
 
 // <q> NRF_CRYPTO_BACKEND_CC310_AES_CMAC_ENABLED  - Enable the AES CMAC mode using CC310.
 
+
 #ifndef NRF_CRYPTO_BACKEND_CC310_AES_CMAC_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_AES_CMAC_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_CC310_AES_CCM_ENABLED  - Enable the AES CCM mode using CC310.
+
 
 #ifndef NRF_CRYPTO_BACKEND_CC310_AES_CCM_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_AES_CCM_ENABLED 1
@@ -768,11 +802,13 @@
 
 // <q> NRF_CRYPTO_BACKEND_CC310_AES_CCM_STAR_ENABLED  - Enable the AES CCM* mode using CC310.
 
+
 #ifndef NRF_CRYPTO_BACKEND_CC310_AES_CCM_STAR_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_AES_CCM_STAR_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_CC310_CHACHA_POLY_ENABLED  - Enable the CHACHA-POLY mode using CC310.
+
 
 #ifndef NRF_CRYPTO_BACKEND_CC310_CHACHA_POLY_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_CHACHA_POLY_ENABLED 1
@@ -780,11 +816,13 @@
 
 // <q> NRF_CRYPTO_BACKEND_CC310_ECC_SECP160R1_ENABLED  - Enable the secp160r1 elliptic curve support using CC310.
 
+
 #ifndef NRF_CRYPTO_BACKEND_CC310_ECC_SECP160R1_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_ECC_SECP160R1_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_CC310_ECC_SECP160R2_ENABLED  - Enable the secp160r2 elliptic curve support using CC310.
+
 
 #ifndef NRF_CRYPTO_BACKEND_CC310_ECC_SECP160R2_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_ECC_SECP160R2_ENABLED 1
@@ -792,11 +830,13 @@
 
 // <q> NRF_CRYPTO_BACKEND_CC310_ECC_SECP192R1_ENABLED  - Enable the secp192r1 elliptic curve support using CC310.
 
+
 #ifndef NRF_CRYPTO_BACKEND_CC310_ECC_SECP192R1_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_ECC_SECP192R1_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_CC310_ECC_SECP224R1_ENABLED  - Enable the secp224r1 elliptic curve support using CC310.
+
 
 #ifndef NRF_CRYPTO_BACKEND_CC310_ECC_SECP224R1_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_ECC_SECP224R1_ENABLED 1
@@ -804,11 +844,13 @@
 
 // <q> NRF_CRYPTO_BACKEND_CC310_ECC_SECP256R1_ENABLED  - Enable the secp256r1 elliptic curve support using CC310.
 
+
 #ifndef NRF_CRYPTO_BACKEND_CC310_ECC_SECP256R1_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_ECC_SECP256R1_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_CC310_ECC_SECP384R1_ENABLED  - Enable the secp384r1 elliptic curve support using CC310.
+
 
 #ifndef NRF_CRYPTO_BACKEND_CC310_ECC_SECP384R1_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_ECC_SECP384R1_ENABLED 1
@@ -816,11 +858,13 @@
 
 // <q> NRF_CRYPTO_BACKEND_CC310_ECC_SECP521R1_ENABLED  - Enable the secp521r1 elliptic curve support using CC310.
 
+
 #ifndef NRF_CRYPTO_BACKEND_CC310_ECC_SECP521R1_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_ECC_SECP521R1_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_CC310_ECC_SECP160K1_ENABLED  - Enable the secp160k1 elliptic curve support using CC310.
+
 
 #ifndef NRF_CRYPTO_BACKEND_CC310_ECC_SECP160K1_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_ECC_SECP160K1_ENABLED 1
@@ -828,11 +872,13 @@
 
 // <q> NRF_CRYPTO_BACKEND_CC310_ECC_SECP192K1_ENABLED  - Enable the secp192k1 elliptic curve support using CC310.
 
+
 #ifndef NRF_CRYPTO_BACKEND_CC310_ECC_SECP192K1_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_ECC_SECP192K1_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_CC310_ECC_SECP224K1_ENABLED  - Enable the secp224k1 elliptic curve support using CC310.
+
 
 #ifndef NRF_CRYPTO_BACKEND_CC310_ECC_SECP224K1_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_ECC_SECP224K1_ENABLED 1
@@ -840,11 +886,13 @@
 
 // <q> NRF_CRYPTO_BACKEND_CC310_ECC_SECP256K1_ENABLED  - Enable the secp256k1 elliptic curve support using CC310.
 
+
 #ifndef NRF_CRYPTO_BACKEND_CC310_ECC_SECP256K1_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_ECC_SECP256K1_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_CC310_ECC_CURVE25519_ENABLED  - Enable the Curve25519 curve support using CC310.
+
 
 #ifndef NRF_CRYPTO_BACKEND_CC310_ECC_CURVE25519_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_ECC_CURVE25519_ENABLED 1
@@ -852,11 +900,13 @@
 
 // <q> NRF_CRYPTO_BACKEND_CC310_ECC_ED25519_ENABLED  - Enable the Ed25519 curve support using CC310.
 
+
 #ifndef NRF_CRYPTO_BACKEND_CC310_ECC_ED25519_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_ECC_ED25519_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_CC310_HASH_SHA256_ENABLED  - CC310 SHA-256 hash functionality.
+
 
 // <i> CC310 backend implementation for hardware-accelerated SHA-256.
 
@@ -866,6 +916,7 @@
 
 // <q> NRF_CRYPTO_BACKEND_CC310_HASH_SHA512_ENABLED  - CC310 SHA-512 hash functionality
 
+
 // <i> CC310 backend implementation for SHA-512 (in software).
 
 #ifndef NRF_CRYPTO_BACKEND_CC310_HASH_SHA512_ENABLED
@@ -873,6 +924,7 @@
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_CC310_HMAC_SHA256_ENABLED  - CC310 HMAC using SHA-256
+
 
 // <i> CC310 backend implementation for HMAC using hardware-accelerated SHA-256.
 
@@ -882,6 +934,7 @@
 
 // <q> NRF_CRYPTO_BACKEND_CC310_HMAC_SHA512_ENABLED  - CC310 HMAC using SHA-512
 
+
 // <i> CC310 backend implementation for HMAC using SHA-512 (in software).
 
 #ifndef NRF_CRYPTO_BACKEND_CC310_HMAC_SHA512_ENABLED
@@ -890,14 +943,15 @@
 
 // <q> NRF_CRYPTO_BACKEND_CC310_RNG_ENABLED  - Enable RNG support using CC310.
 
+
 #ifndef NRF_CRYPTO_BACKEND_CC310_RNG_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_RNG_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_CC310_INTERRUPTS_ENABLED  - Enable Interrupts while support using CC310.
 
-// <i> Select a library version compatible with the configuration. When interrupts are disable, a version named _noint
-// must be used
+
+// <i> Select a library version compatible with the configuration. When interrupts are disable, a version named _noint must be used
 
 #ifndef NRF_CRYPTO_BACKEND_CC310_INTERRUPTS_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_INTERRUPTS_ENABLED 1
@@ -912,6 +966,7 @@
 #endif
 // <q> NRF_CRYPTO_BACKEND_CIFRA_AES_EAX_ENABLED  - Enable the AES EAX mode using Cifra.
 
+
 #ifndef NRF_CRYPTO_BACKEND_CIFRA_AES_EAX_ENABLED
 #define NRF_CRYPTO_BACKEND_CIFRA_AES_EAX_ENABLED 1
 #endif
@@ -925,11 +980,13 @@
 #endif
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_AES_CBC_ENABLED  - Enable the AES CBC mode mbed TLS.
 
+
 #ifndef NRF_CRYPTO_BACKEND_MBEDTLS_AES_CBC_ENABLED
 #define NRF_CRYPTO_BACKEND_MBEDTLS_AES_CBC_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_AES_CTR_ENABLED  - Enable the AES CTR mode using mbed TLS.
+
 
 #ifndef NRF_CRYPTO_BACKEND_MBEDTLS_AES_CTR_ENABLED
 #define NRF_CRYPTO_BACKEND_MBEDTLS_AES_CTR_ENABLED 1
@@ -937,11 +994,13 @@
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_AES_CFB_ENABLED  - Enable the AES CFB mode using mbed TLS.
 
+
 #ifndef NRF_CRYPTO_BACKEND_MBEDTLS_AES_CFB_ENABLED
 #define NRF_CRYPTO_BACKEND_MBEDTLS_AES_CFB_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_AES_ECB_ENABLED  - Enable the AES ECB mode using mbed TLS.
+
 
 #ifndef NRF_CRYPTO_BACKEND_MBEDTLS_AES_ECB_ENABLED
 #define NRF_CRYPTO_BACKEND_MBEDTLS_AES_ECB_ENABLED 1
@@ -949,11 +1008,13 @@
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_AES_CBC_MAC_ENABLED  - Enable the AES CBC MAC mode using mbed TLS.
 
+
 #ifndef NRF_CRYPTO_BACKEND_MBEDTLS_AES_CBC_MAC_ENABLED
 #define NRF_CRYPTO_BACKEND_MBEDTLS_AES_CBC_MAC_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_AES_CMAC_ENABLED  - Enable the AES CMAC mode using mbed TLS.
+
 
 #ifndef NRF_CRYPTO_BACKEND_MBEDTLS_AES_CMAC_ENABLED
 #define NRF_CRYPTO_BACKEND_MBEDTLS_AES_CMAC_ENABLED 1
@@ -961,17 +1022,20 @@
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_AES_CCM_ENABLED  - Enable the AES CCM mode using mbed TLS.
 
+
 #ifndef NRF_CRYPTO_BACKEND_MBEDTLS_AES_CCM_ENABLED
 #define NRF_CRYPTO_BACKEND_MBEDTLS_AES_CCM_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_AES_GCM_ENABLED  - Enable the AES GCM mode using mbed TLS.
 
+
 #ifndef NRF_CRYPTO_BACKEND_MBEDTLS_AES_GCM_ENABLED
 #define NRF_CRYPTO_BACKEND_MBEDTLS_AES_GCM_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_ECC_SECP192R1_ENABLED  - Enable secp192r1 (NIST 192-bit) curve
+
 
 // <i> Enable this setting if you need secp192r1 (NIST 192-bit) support using MBEDTLS
 
@@ -981,6 +1045,7 @@
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_ECC_SECP224R1_ENABLED  - Enable secp224r1 (NIST 224-bit) curve
 
+
 // <i> Enable this setting if you need secp224r1 (NIST 224-bit) support using MBEDTLS
 
 #ifndef NRF_CRYPTO_BACKEND_MBEDTLS_ECC_SECP224R1_ENABLED
@@ -988,6 +1053,7 @@
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_ECC_SECP256R1_ENABLED  - Enable secp256r1 (NIST 256-bit) curve
+
 
 // <i> Enable this setting if you need secp256r1 (NIST 256-bit) support using MBEDTLS
 
@@ -997,6 +1063,7 @@
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_ECC_SECP384R1_ENABLED  - Enable secp384r1 (NIST 384-bit) curve
 
+
 // <i> Enable this setting if you need secp384r1 (NIST 384-bit) support using MBEDTLS
 
 #ifndef NRF_CRYPTO_BACKEND_MBEDTLS_ECC_SECP384R1_ENABLED
@@ -1004,6 +1071,7 @@
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_ECC_SECP521R1_ENABLED  - Enable secp521r1 (NIST 521-bit) curve
+
 
 // <i> Enable this setting if you need secp521r1 (NIST 521-bit) support using MBEDTLS
 
@@ -1013,6 +1081,7 @@
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_ECC_SECP192K1_ENABLED  - Enable secp192k1 (Koblitz 192-bit) curve
 
+
 // <i> Enable this setting if you need secp192k1 (Koblitz 192-bit) support using MBEDTLS
 
 #ifndef NRF_CRYPTO_BACKEND_MBEDTLS_ECC_SECP192K1_ENABLED
@@ -1020,6 +1089,7 @@
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_ECC_SECP224K1_ENABLED  - Enable secp224k1 (Koblitz 224-bit) curve
+
 
 // <i> Enable this setting if you need secp224k1 (Koblitz 224-bit) support using MBEDTLS
 
@@ -1029,6 +1099,7 @@
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_ECC_SECP256K1_ENABLED  - Enable secp256k1 (Koblitz 256-bit) curve
 
+
 // <i> Enable this setting if you need secp256k1 (Koblitz 256-bit) support using MBEDTLS
 
 #ifndef NRF_CRYPTO_BACKEND_MBEDTLS_ECC_SECP256K1_ENABLED
@@ -1036,6 +1107,7 @@
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_ECC_BP256R1_ENABLED  - Enable bp256r1 (Brainpool 256-bit) curve
+
 
 // <i> Enable this setting if you need bp256r1 (Brainpool 256-bit) support using MBEDTLS
 
@@ -1045,6 +1117,7 @@
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_ECC_BP384R1_ENABLED  - Enable bp384r1 (Brainpool 384-bit) curve
 
+
 // <i> Enable this setting if you need bp384r1 (Brainpool 384-bit) support using MBEDTLS
 
 #ifndef NRF_CRYPTO_BACKEND_MBEDTLS_ECC_BP384R1_ENABLED
@@ -1052,6 +1125,7 @@
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_ECC_BP512R1_ENABLED  - Enable bp512r1 (Brainpool 512-bit) curve
+
 
 // <i> Enable this setting if you need bp512r1 (Brainpool 512-bit) support using MBEDTLS
 
@@ -1061,6 +1135,7 @@
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_ECC_CURVE25519_ENABLED  - Enable Curve25519 curve
 
+
 // <i> Enable this setting if you need Curve25519 support using MBEDTLS
 
 #ifndef NRF_CRYPTO_BACKEND_MBEDTLS_ECC_CURVE25519_ENABLED
@@ -1068,6 +1143,7 @@
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_HASH_SHA256_ENABLED  - Enable mbed TLS SHA-256 hash functionality.
+
 
 // <i> mbed TLS backend implementation for SHA-256.
 
@@ -1077,6 +1153,7 @@
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_HASH_SHA512_ENABLED  - Enable mbed TLS SHA-512 hash functionality.
 
+
 // <i> mbed TLS backend implementation for SHA-512.
 
 #ifndef NRF_CRYPTO_BACKEND_MBEDTLS_HASH_SHA512_ENABLED
@@ -1085,6 +1162,7 @@
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_HMAC_SHA256_ENABLED  - Enable mbed TLS HMAC using SHA-256.
 
+
 // <i> mbed TLS backend implementation for HMAC using SHA-256.
 
 #ifndef NRF_CRYPTO_BACKEND_MBEDTLS_HMAC_SHA256_ENABLED
@@ -1092,6 +1170,7 @@
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_MBEDTLS_HMAC_SHA512_ENABLED  - Enable mbed TLS HMAC using SHA-512.
+
 
 // <i> mbed TLS backend implementation for HMAC using SHA-512.
 
@@ -1108,6 +1187,7 @@
 #endif
 // <q> NRF_CRYPTO_BACKEND_MICRO_ECC_ECC_SECP192R1_ENABLED  - Enable secp192r1 (NIST 192-bit) curve
 
+
 // <i> Enable this setting if you need secp192r1 (NIST 192-bit) support using micro-ecc
 
 #ifndef NRF_CRYPTO_BACKEND_MICRO_ECC_ECC_SECP192R1_ENABLED
@@ -1115,6 +1195,7 @@
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_MICRO_ECC_ECC_SECP224R1_ENABLED  - Enable secp224r1 (NIST 224-bit) curve
+
 
 // <i> Enable this setting if you need secp224r1 (NIST 224-bit) support using micro-ecc
 
@@ -1124,6 +1205,7 @@
 
 // <q> NRF_CRYPTO_BACKEND_MICRO_ECC_ECC_SECP256R1_ENABLED  - Enable secp256r1 (NIST 256-bit) curve
 
+
 // <i> Enable this setting if you need secp256r1 (NIST 256-bit) support using micro-ecc
 
 #ifndef NRF_CRYPTO_BACKEND_MICRO_ECC_ECC_SECP256R1_ENABLED
@@ -1131,6 +1213,7 @@
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_MICRO_ECC_ECC_SECP256K1_ENABLED  - Enable secp256k1 (Koblitz 256-bit) curve
+
 
 // <i> Enable this setting if you need secp256k1 (Koblitz 256-bit) support using micro-ecc
 
@@ -1149,8 +1232,8 @@
 #endif
 // <q> NRF_CRYPTO_BACKEND_NRF_HW_RNG_MBEDTLS_CTR_DRBG_ENABLED  - Enable mbed TLS CTR-DRBG algorithm.
 
-// <i> Enable mbed TLS CTR-DRBG standardized by NIST (NIST SP 800-90A Rev. 1). The nRF HW RNG is used as an entropy
-// source for seeding.
+
+// <i> Enable mbed TLS CTR-DRBG standardized by NIST (NIST SP 800-90A Rev. 1). The nRF HW RNG is used as an entropy source for seeding.
 
 #ifndef NRF_CRYPTO_BACKEND_NRF_HW_RNG_MBEDTLS_CTR_DRBG_ENABLED
 #define NRF_CRYPTO_BACKEND_NRF_HW_RNG_MBEDTLS_CTR_DRBG_ENABLED 1
@@ -1166,6 +1249,7 @@
 #define NRF_CRYPTO_BACKEND_NRF_SW_ENABLED 0
 #endif
 // <q> NRF_CRYPTO_BACKEND_NRF_SW_HASH_SHA256_ENABLED  - nRF SW hash backend support for SHA-256
+
 
 // <i> The nRF SW backend provide access to nRF SDK legacy hash implementation of SHA-256.
 
@@ -1184,11 +1268,13 @@
 #endif
 // <q> NRF_CRYPTO_BACKEND_OBERON_CHACHA_POLY_ENABLED  - Enable the CHACHA-POLY mode using Oberon.
 
+
 #ifndef NRF_CRYPTO_BACKEND_OBERON_CHACHA_POLY_ENABLED
 #define NRF_CRYPTO_BACKEND_OBERON_CHACHA_POLY_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_OBERON_ECC_SECP256R1_ENABLED  - Enable secp256r1 curve
+
 
 // <i> Enable this setting if you need secp256r1 curve support using Oberon library
 
@@ -1198,6 +1284,7 @@
 
 // <q> NRF_CRYPTO_BACKEND_OBERON_ECC_CURVE25519_ENABLED  - Enable Curve25519 ECDH
 
+
 // <i> Enable this setting if you need Curve25519 ECDH support using Oberon library
 
 #ifndef NRF_CRYPTO_BACKEND_OBERON_ECC_CURVE25519_ENABLED
@@ -1205,6 +1292,7 @@
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_OBERON_ECC_ED25519_ENABLED  - Enable Ed25519 signature scheme
+
 
 // <i> Enable this setting if you need Ed25519 support using Oberon library
 
@@ -1214,6 +1302,7 @@
 
 // <q> NRF_CRYPTO_BACKEND_OBERON_HASH_SHA256_ENABLED  - Oberon SHA-256 hash functionality
 
+
 // <i> Oberon backend implementation for SHA-256.
 
 #ifndef NRF_CRYPTO_BACKEND_OBERON_HASH_SHA256_ENABLED
@@ -1221,6 +1310,7 @@
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_OBERON_HASH_SHA512_ENABLED  - Oberon SHA-512 hash functionality
+
 
 // <i> Oberon backend implementation for SHA-512.
 
@@ -1230,6 +1320,7 @@
 
 // <q> NRF_CRYPTO_BACKEND_OBERON_HMAC_SHA256_ENABLED  - Oberon HMAC using SHA-256
 
+
 // <i> Oberon backend implementation for HMAC using SHA-256.
 
 #ifndef NRF_CRYPTO_BACKEND_OBERON_HMAC_SHA256_ENABLED
@@ -1237,6 +1328,7 @@
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_OBERON_HMAC_SHA512_ENABLED  - Oberon HMAC using SHA-512
+
 
 // <i> Oberon backend implementation for HMAC using SHA-512.
 
@@ -1255,6 +1347,7 @@
 #endif
 // <q> NRF_CRYPTO_BACKEND_OPTIGA_RNG_ENABLED  - Optiga backend support for RNG
 
+
 // <i> The Optiga backend provide external chip RNG.
 
 #ifndef NRF_CRYPTO_BACKEND_OPTIGA_RNG_ENABLED
@@ -1262,6 +1355,7 @@
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_OPTIGA_ECC_SECP256R1_ENABLED  - Optiga backend support for ECC secp256r1
+
 
 // <i> The Optiga backend provide external chip ECC using secp256r1.
 
@@ -1272,6 +1366,7 @@
 // </e>
 
 // <q> NRF_CRYPTO_CURVE25519_BIG_ENDIAN_ENABLED  - Big-endian byte order in raw Curve25519 data
+
 
 // <i> Enable big-endian byte order in Curve25519 API, if set to 1. Use little-endian, if set to 0.
 
@@ -1286,16 +1381,15 @@
 //==========================================================
 // <q> NRF_CRYPTO_RNG_STATIC_MEMORY_BUFFERS_ENABLED  - Use static memory buffers for context and temporary init buffer.
 
-// <i> Always recommended when using the nRF HW RNG as the context and temporary buffers are small. Consider disabling
-// if using the CC310 RNG in a RAM constrained application. In this case, memory must be provided to
-// nrf_crypto_rng_init, or it can be allocated internally provided that NRF_CRYPTO_ALLOCATOR does not allocate memory on
-// the stack.
+
+// <i> Always recommended when using the nRF HW RNG as the context and temporary buffers are small. Consider disabling if using the CC310 RNG in a RAM constrained application. In this case, memory must be provided to nrf_crypto_rng_init, or it can be allocated internally provided that NRF_CRYPTO_ALLOCATOR does not allocate memory on the stack.
 
 #ifndef NRF_CRYPTO_RNG_STATIC_MEMORY_BUFFERS_ENABLED
 #define NRF_CRYPTO_RNG_STATIC_MEMORY_BUFFERS_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_RNG_AUTO_INIT_ENABLED  - Initialize the RNG module automatically when nrf_crypto is initialized.
+
 
 // <i> Automatic initialization is only supported with static or internally allocated context and temporary memory.
 
@@ -1317,11 +1411,13 @@
 //==========================================================
 // <q> BLE_DFU_ENABLED  - Enable DFU Service.
 
+
 #ifndef BLE_DFU_ENABLED
 #define BLE_DFU_ENABLED 0
 #endif
 
 // <q> NRF_DFU_BLE_BUTTONLESS_SUPPORTS_BONDS  - Buttonless DFU supports bonds.
+
 
 #ifndef NRF_DFU_BLE_BUTTONLESS_SUPPORTS_BONDS
 #define NRF_DFU_BLE_BUTTONLESS_SUPPORTS_BONDS 0
@@ -1409,6 +1505,7 @@
 
 // <o> COMP_CONFIG_IRQ_PRIORITY  - Interrupt priority
 
+
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
 // <1=> 1
@@ -1427,6 +1524,7 @@
 
 // <q> EGU_ENABLED  - nrf_drv_swi - SWI(EGU) peripheral driver - legacy layer
 
+
 #ifndef EGU_ENABLED
 #define EGU_ENABLED 0
 #endif
@@ -1442,6 +1540,7 @@
 #endif
 
 // <o> GPIOTE_CONFIG_IRQ_PRIORITY  - Interrupt priority
+
 
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
@@ -1466,11 +1565,13 @@
 #endif
 // <o> I2S_CONFIG_SCK_PIN - SCK pin  <0-31>
 
+
 #ifndef I2S_CONFIG_SCK_PIN
 #define I2S_CONFIG_SCK_PIN 31
 #endif
 
 // <o> I2S_CONFIG_LRCK_PIN - LRCK pin  <1-31>
+
 
 #ifndef I2S_CONFIG_LRCK_PIN
 #define I2S_CONFIG_LRCK_PIN 30
@@ -1483,11 +1584,13 @@
 
 // <o> I2S_CONFIG_SDOUT_PIN - SDOUT pin  <0-31>
 
+
 #ifndef I2S_CONFIG_SDOUT_PIN
 #define I2S_CONFIG_SDOUT_PIN 29
 #endif
 
 // <o> I2S_CONFIG_SDIN_PIN - SDIN pin  <0-31>
+
 
 #ifndef I2S_CONFIG_SDIN_PIN
 #define I2S_CONFIG_SDIN_PIN 28
@@ -1583,6 +1686,7 @@
 #endif
 
 // <o> I2S_CONFIG_IRQ_PRIORITY  - Interrupt priority
+
 
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
@@ -1707,11 +1811,13 @@
 
 // <q> LPCOMP_CONFIG_HYST  - Hysteresis
 
+
 #ifndef LPCOMP_CONFIG_HYST
 #define LPCOMP_CONFIG_HYST 0
 #endif
 
 // <o> LPCOMP_CONFIG_IRQ_PRIORITY  - Interrupt priority
+
 
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
@@ -2038,11 +2144,13 @@
 #endif
 // <o> NRFX_I2S_CONFIG_SCK_PIN - SCK pin  <0-31>
 
+
 #ifndef NRFX_I2S_CONFIG_SCK_PIN
 #define NRFX_I2S_CONFIG_SCK_PIN 31
 #endif
 
 // <o> NRFX_I2S_CONFIG_LRCK_PIN - LRCK pin  <1-31>
+
 
 #ifndef NRFX_I2S_CONFIG_LRCK_PIN
 #define NRFX_I2S_CONFIG_LRCK_PIN 30
@@ -2055,11 +2163,13 @@
 
 // <o> NRFX_I2S_CONFIG_SDOUT_PIN - SDOUT pin  <0-31>
 
+
 #ifndef NRFX_I2S_CONFIG_SDOUT_PIN
 #define NRFX_I2S_CONFIG_SDOUT_PIN 29
 #endif
 
 // <o> NRFX_I2S_CONFIG_SDIN_PIN - SDIN pin  <0-31>
+
 
 #ifndef NRFX_I2S_CONFIG_SDIN_PIN
 #define NRFX_I2S_CONFIG_SDIN_PIN 28
@@ -2277,6 +2387,7 @@
 #endif
 
 // <q> NRFX_LPCOMP_CONFIG_HYST  - Hysteresis
+
 
 #ifndef NRFX_LPCOMP_CONFIG_HYST
 #define NRFX_LPCOMP_CONFIG_HYST 0
@@ -2546,6 +2657,7 @@
 
 // <q> NRFX_POWER_CONFIG_DEFAULT_DCDCEN  - The default configuration of main DCDC regulator
 
+
 // <i> This settings means only that components for DCDC regulator are installed and it can be enabled.
 
 #ifndef NRFX_POWER_CONFIG_DEFAULT_DCDCEN
@@ -2553,6 +2665,7 @@
 #endif
 
 // <q> NRFX_POWER_CONFIG_DEFAULT_DCDCENHV  - The default configuration of High Voltage DCDC regulator
+
 
 // <i> This settings means only that components for DCDC regulator are installed and it can be enabled.
 
@@ -2627,11 +2740,13 @@
 #endif
 // <q> NRFX_PRS_BOX_0_ENABLED  - Enables box 0 in the module.
 
+
 #ifndef NRFX_PRS_BOX_0_ENABLED
 #define NRFX_PRS_BOX_0_ENABLED 0
 #endif
 
 // <q> NRFX_PRS_BOX_1_ENABLED  - Enables box 1 in the module.
+
 
 #ifndef NRFX_PRS_BOX_1_ENABLED
 #define NRFX_PRS_BOX_1_ENABLED 0
@@ -2639,17 +2754,20 @@
 
 // <q> NRFX_PRS_BOX_2_ENABLED  - Enables box 2 in the module.
 
+
 #ifndef NRFX_PRS_BOX_2_ENABLED
 #define NRFX_PRS_BOX_2_ENABLED 0
 #endif
 
 // <q> NRFX_PRS_BOX_3_ENABLED  - Enables box 3 in the module.
 
+
 #ifndef NRFX_PRS_BOX_3_ENABLED
 #define NRFX_PRS_BOX_3_ENABLED 0
 #endif
 
 // <q> NRFX_PRS_BOX_4_ENABLED  - Enables box 4 in the module.
+
 
 #ifndef NRFX_PRS_BOX_4_ENABLED
 #define NRFX_PRS_BOX_4_ENABLED 1
@@ -2715,11 +2833,13 @@
 #endif
 // <q> NRFX_PWM0_ENABLED  - Enable PWM0 instance
 
+
 #ifndef NRFX_PWM0_ENABLED
 #define NRFX_PWM0_ENABLED 1
 #endif
 
 // <q> NRFX_PWM1_ENABLED  - Enable PWM1 instance
+
 
 #ifndef NRFX_PWM1_ENABLED
 #define NRFX_PWM1_ENABLED 0
@@ -2727,11 +2847,13 @@
 
 // <q> NRFX_PWM2_ENABLED  - Enable PWM2 instance
 
+
 #ifndef NRFX_PWM2_ENABLED
 #define NRFX_PWM2_ENABLED 0
 #endif
 
 // <o> NRFX_PWM_DEFAULT_CONFIG_OUT0_PIN - Out0 pin  <0-31>
+
 
 #ifndef NRFX_PWM_DEFAULT_CONFIG_OUT0_PIN
 #define NRFX_PWM_DEFAULT_CONFIG_OUT0_PIN 31
@@ -2739,17 +2861,20 @@
 
 // <o> NRFX_PWM_DEFAULT_CONFIG_OUT1_PIN - Out1 pin  <0-31>
 
+
 #ifndef NRFX_PWM_DEFAULT_CONFIG_OUT1_PIN
 #define NRFX_PWM_DEFAULT_CONFIG_OUT1_PIN 31
 #endif
 
 // <o> NRFX_PWM_DEFAULT_CONFIG_OUT2_PIN - Out2 pin  <0-31>
 
+
 #ifndef NRFX_PWM_DEFAULT_CONFIG_OUT2_PIN
 #define NRFX_PWM_DEFAULT_CONFIG_OUT2_PIN 31
 #endif
 
 // <o> NRFX_PWM_DEFAULT_CONFIG_OUT3_PIN - Out3 pin  <0-31>
+
 
 #ifndef NRFX_PWM_DEFAULT_CONFIG_OUT3_PIN
 #define NRFX_PWM_DEFAULT_CONFIG_OUT3_PIN 31
@@ -2937,17 +3062,20 @@
 
 // <o> NRFX_QDEC_CONFIG_PIO_A - A pin  <0-31>
 
+
 #ifndef NRFX_QDEC_CONFIG_PIO_A
 #define NRFX_QDEC_CONFIG_PIO_A 31
 #endif
 
 // <o> NRFX_QDEC_CONFIG_PIO_B - B pin  <0-31>
 
+
 #ifndef NRFX_QDEC_CONFIG_PIO_B
 #define NRFX_QDEC_CONFIG_PIO_B 31
 #endif
 
 // <o> NRFX_QDEC_CONFIG_PIO_LED - LED pin  <0-31>
+
 
 #ifndef NRFX_QDEC_CONFIG_PIO_LED
 #define NRFX_QDEC_CONFIG_PIO_LED 31
@@ -2969,11 +3097,13 @@
 
 // <q> NRFX_QDEC_CONFIG_DBFEN  - Debouncing enable
 
+
 #ifndef NRFX_QDEC_CONFIG_DBFEN
 #define NRFX_QDEC_CONFIG_DBFEN 0
 #endif
 
 // <q> NRFX_QDEC_CONFIG_SAMPLE_INTEN  - Sample ready interrupt enable
+
 
 #ifndef NRFX_QDEC_CONFIG_SAMPLE_INTEN
 #define NRFX_QDEC_CONFIG_SAMPLE_INTEN 0
@@ -3054,6 +3184,7 @@
 #endif
 // <q> NRFX_RNG_CONFIG_ERROR_CORRECTION  - Error correction
 
+
 #ifndef NRFX_RNG_CONFIG_ERROR_CORRECTION
 #define NRFX_RNG_CONFIG_ERROR_CORRECTION 1
 #endif
@@ -3133,17 +3264,20 @@
 #endif
 // <q> NRFX_RTC0_ENABLED  - Enable RTC0 instance
 
+
 #ifndef NRFX_RTC0_ENABLED
 #define NRFX_RTC0_ENABLED 0
 #endif
 
 // <q> NRFX_RTC1_ENABLED  - Enable RTC1 instance
 
+
 #ifndef NRFX_RTC1_ENABLED
 #define NRFX_RTC1_ENABLED 0
 #endif
 
 // <q> NRFX_RTC2_ENABLED  - Enable RTC2 instance
+
 
 #ifndef NRFX_RTC2_ENABLED
 #define NRFX_RTC2_ENABLED 0
@@ -3156,11 +3290,13 @@
 
 // <o> NRFX_RTC_DEFAULT_CONFIG_FREQUENCY - Frequency  <16-32768>
 
+
 #ifndef NRFX_RTC_DEFAULT_CONFIG_FREQUENCY
 #define NRFX_RTC_DEFAULT_CONFIG_FREQUENCY 32768
 #endif
 
 // <q> NRFX_RTC_DEFAULT_CONFIG_RELIABLE  - Ensures safe compare event triggering
+
 
 #ifndef NRFX_RTC_DEFAULT_CONFIG_RELIABLE
 #define NRFX_RTC_DEFAULT_CONFIG_RELIABLE 0
@@ -3268,6 +3404,7 @@
 
 // <q> NRFX_SAADC_CONFIG_LP_MODE  - Enabling low power mode
 
+
 #ifndef NRFX_SAADC_CONFIG_LP_MODE
 #define NRFX_SAADC_CONFIG_LP_MODE 0
 #endif
@@ -3347,17 +3484,20 @@
 #endif
 // <q> NRFX_SPIM0_ENABLED  - Enable SPIM0 instance
 
+
 #ifndef NRFX_SPIM0_ENABLED
 #define NRFX_SPIM0_ENABLED 0
 #endif
 
 // <q> NRFX_SPIM1_ENABLED  - Enable SPIM1 instance
 
+
 #ifndef NRFX_SPIM1_ENABLED
 #define NRFX_SPIM1_ENABLED 0
 #endif
 
 // <q> NRFX_SPIM2_ENABLED  - Enable SPIM2 instance
+
 
 #ifndef NRFX_SPIM2_ENABLED
 #define NRFX_SPIM2_ENABLED 0
@@ -3441,6 +3581,7 @@
 
 // <q> NRFX_SPIM_NRF52_ANOMALY_109_WORKAROUND_ENABLED  - Enables nRF52 anomaly 109 workaround for SPIM.
 
+
 // <i> The workaround uses interrupts to wake up the CPU by catching
 // <i> a start event of zero-length transmission to start the clock. This
 // <i> ensures that the DMA transfer will be executed without issues and
@@ -3461,17 +3602,20 @@
 #endif
 // <q> NRFX_SPIS0_ENABLED  - Enable SPIS0 instance
 
+
 #ifndef NRFX_SPIS0_ENABLED
 #define NRFX_SPIS0_ENABLED 0
 #endif
 
 // <q> NRFX_SPIS1_ENABLED  - Enable SPIS1 instance
 
+
 #ifndef NRFX_SPIS1_ENABLED
 #define NRFX_SPIS1_ENABLED 0
 #endif
 
 // <q> NRFX_SPIS2_ENABLED  - Enable SPIS2 instance
+
 
 #ifndef NRFX_SPIS2_ENABLED
 #define NRFX_SPIS2_ENABLED 0
@@ -3494,11 +3638,13 @@
 
 // <o> NRFX_SPIS_DEFAULT_DEF - SPIS default DEF character  <0-255>
 
+
 #ifndef NRFX_SPIS_DEFAULT_DEF
 #define NRFX_SPIS_DEFAULT_DEF 255
 #endif
 
 // <o> NRFX_SPIS_DEFAULT_ORC - SPIS default ORC character  <0-255>
+
 
 #ifndef NRFX_SPIS_DEFAULT_ORC
 #define NRFX_SPIS_DEFAULT_ORC 255
@@ -3557,6 +3703,7 @@
 
 // <q> NRFX_SPIS_NRF52_ANOMALY_109_WORKAROUND_ENABLED  - Enables nRF52 Anomaly 109 workaround for SPIS.
 
+
 // <i> The workaround uses a GPIOTE channel to generate interrupts
 // <i> on falling edges detected on the CSN line. This will make
 // <i> the CPU active for the moment when SPIS starts DMA transfers,
@@ -3577,17 +3724,20 @@
 #endif
 // <q> NRFX_SPI0_ENABLED  - Enable SPI0 instance
 
+
 #ifndef NRFX_SPI0_ENABLED
 #define NRFX_SPI0_ENABLED 1
 #endif
 
 // <q> NRFX_SPI1_ENABLED  - Enable SPI1 instance
 
+
 #ifndef NRFX_SPI1_ENABLED
 #define NRFX_SPI1_ENABLED 0
 #endif
 
 // <q> NRFX_SPI2_ENABLED  - Enable SPI2 instance
+
 
 #ifndef NRFX_SPI2_ENABLED
 #define NRFX_SPI2_ENABLED 0
@@ -3678,11 +3828,13 @@
 #endif
 // <q> NRFX_EGU_ENABLED  - Enable EGU support
 
+
 #ifndef NRFX_EGU_ENABLED
 #define NRFX_EGU_ENABLED 0
 #endif
 
 // <q> NRFX_SWI0_DISABLED  - Exclude SWI0 from being utilized by the driver
+
 
 #ifndef NRFX_SWI0_DISABLED
 #define NRFX_SWI0_DISABLED 0
@@ -3690,11 +3842,13 @@
 
 // <q> NRFX_SWI1_DISABLED  - Exclude SWI1 from being utilized by the driver
 
+
 #ifndef NRFX_SWI1_DISABLED
 #define NRFX_SWI1_DISABLED 0
 #endif
 
 // <q> NRFX_SWI2_DISABLED  - Exclude SWI2 from being utilized by the driver
+
 
 #ifndef NRFX_SWI2_DISABLED
 #define NRFX_SWI2_DISABLED 0
@@ -3702,17 +3856,20 @@
 
 // <q> NRFX_SWI3_DISABLED  - Exclude SWI3 from being utilized by the driver
 
+
 #ifndef NRFX_SWI3_DISABLED
 #define NRFX_SWI3_DISABLED 0
 #endif
 
 // <q> NRFX_SWI4_DISABLED  - Exclude SWI4 from being utilized by the driver
 
+
 #ifndef NRFX_SWI4_DISABLED
 #define NRFX_SWI4_DISABLED 0
 #endif
 
 // <q> NRFX_SWI5_DISABLED  - Exclude SWI5 from being utilized by the driver
+
 
 #ifndef NRFX_SWI5_DISABLED
 #define NRFX_SWI5_DISABLED 0
@@ -3778,11 +3935,13 @@
 #endif
 // <q> NRFX_TIMER0_ENABLED  - Enable TIMER0 instance
 
+
 #ifndef NRFX_TIMER0_ENABLED
 #define NRFX_TIMER0_ENABLED 0
 #endif
 
 // <q> NRFX_TIMER1_ENABLED  - Enable TIMER1 instance
+
 
 #ifndef NRFX_TIMER1_ENABLED
 #define NRFX_TIMER1_ENABLED 0
@@ -3790,17 +3949,20 @@
 
 // <q> NRFX_TIMER2_ENABLED  - Enable TIMER2 instance
 
+
 #ifndef NRFX_TIMER2_ENABLED
 #define NRFX_TIMER2_ENABLED 0
 #endif
 
 // <q> NRFX_TIMER3_ENABLED  - Enable TIMER3 instance
 
+
 #ifndef NRFX_TIMER3_ENABLED
 #define NRFX_TIMER3_ENABLED 1
 #endif
 
 // <q> NRFX_TIMER4_ENABLED  - Enable TIMER4 instance
+
 
 #ifndef NRFX_TIMER4_ENABLED
 #define NRFX_TIMER4_ENABLED 1
@@ -3918,11 +4080,13 @@
 #endif
 // <q> NRFX_TWIM0_ENABLED  - Enable TWIM0 instance
 
+
 #ifndef NRFX_TWIM0_ENABLED
 #define NRFX_TWIM0_ENABLED 0
 #endif
 
 // <q> NRFX_TWIM1_ENABLED  - Enable TWIM1 instance
+
 
 #ifndef NRFX_TWIM1_ENABLED
 #define NRFX_TWIM1_ENABLED 0
@@ -3939,6 +4103,7 @@
 #endif
 
 // <q> NRFX_TWIM_DEFAULT_CONFIG_HOLD_BUS_UNINIT  - Enables bus holding after uninit
+
 
 #ifndef NRFX_TWIM_DEFAULT_CONFIG_HOLD_BUS_UNINIT
 #define NRFX_TWIM_DEFAULT_CONFIG_HOLD_BUS_UNINIT 0
@@ -4012,6 +4177,7 @@
 
 // <q> NRFX_TWIM_NRF52_ANOMALY_109_WORKAROUND_ENABLED  - Enables nRF52 anomaly 109 workaround for TWIM.
 
+
 // <i> The workaround uses interrupts to wake up the CPU by catching
 // <i> the start event of zero-frequency transmission, clear the
 // <i> peripheral, set desired frequency, start the peripheral, and
@@ -4031,11 +4197,13 @@
 #endif
 // <q> NRFX_TWIS0_ENABLED  - Enable TWIS0 instance
 
+
 #ifndef NRFX_TWIS0_ENABLED
 #define NRFX_TWIS0_ENABLED 0
 #endif
 
 // <q> NRFX_TWIS1_ENABLED  - Enable TWIS1 instance
+
 
 #ifndef NRFX_TWIS1_ENABLED
 #define NRFX_TWIS1_ENABLED 0
@@ -4043,10 +4211,8 @@
 
 // <q> NRFX_TWIS_ASSUME_INIT_AFTER_RESET_ONLY  - Assume that any instance would be initialized only once
 
-// <i> Optimization flag. Registers used by TWIS are shared by other peripherals. Normally, during initialization driver
-// tries to clear all registers to known state before doing the initialization itself. This gives initialization safe
-// procedure, no matter when it would be called. If you activate TWIS only once and do never uninitialize it - set this
-// flag to 1 what gives more optimal code.
+
+// <i> Optimization flag. Registers used by TWIS are shared by other peripherals. Normally, during initialization driver tries to clear all registers to known state before doing the initialization itself. This gives initialization safe procedure, no matter when it would be called. If you activate TWIS only once and do never uninitialize it - set this flag to 1 what gives more optimal code.
 
 #ifndef NRFX_TWIS_ASSUME_INIT_AFTER_RESET_ONLY
 #define NRFX_TWIS_ASSUME_INIT_AFTER_RESET_ONLY 0
@@ -4054,9 +4220,8 @@
 
 // <q> NRFX_TWIS_NO_SYNC_MODE  - Remove support for synchronous mode
 
-// <i> Synchronous mode would be used in specific situations. And it uses some additional code and data memory to safely
-// process state machine by polling it in status functions. If this functionality is not required it may be disabled to
-// free some resources.
+
+// <i> Synchronous mode would be used in specific situations. And it uses some additional code and data memory to safely process state machine by polling it in status functions. If this functionality is not required it may be disabled to free some resources.
 
 #ifndef NRFX_TWIS_NO_SYNC_MODE
 #define NRFX_TWIS_NO_SYNC_MODE 0
@@ -4167,11 +4332,13 @@
 #endif
 // <q> NRFX_TWI0_ENABLED  - Enable TWI0 instance
 
+
 #ifndef NRFX_TWI0_ENABLED
 #define NRFX_TWI0_ENABLED 0
 #endif
 
 // <q> NRFX_TWI1_ENABLED  - Enable TWI1 instance
+
 
 #ifndef NRFX_TWI1_ENABLED
 #define NRFX_TWI1_ENABLED 0
@@ -4188,6 +4355,7 @@
 #endif
 
 // <q> NRFX_TWI_DEFAULT_CONFIG_HOLD_BUS_UNINIT  - Enables bus holding after uninit
+
 
 #ifndef NRFX_TWI_DEFAULT_CONFIG_HOLD_BUS_UNINIT
 #define NRFX_TWI_DEFAULT_CONFIG_HOLD_BUS_UNINIT 0
@@ -4521,6 +4689,7 @@
 
 // <o> NRFX_WDT_CONFIG_RELOAD_VALUE - Reload value in ms  <1-131072000>
 
+
 #ifndef NRFX_WDT_CONFIG_RELOAD_VALUE
 #define NRFX_WDT_CONFIG_RELOAD_VALUE 5000
 #endif
@@ -4621,11 +4790,13 @@
 
 // <q> CLOCK_CONFIG_LF_CAL_ENABLED  - Calibration enable for LF Clock Source
 
+
 #ifndef CLOCK_CONFIG_LF_CAL_ENABLED
 #define CLOCK_CONFIG_LF_CAL_ENABLED 0
 #endif
 
 // <o> CLOCK_CONFIG_IRQ_PRIORITY  - Interrupt priority
+
 
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
@@ -4678,6 +4849,7 @@
 
 // <o> PDM_CONFIG_IRQ_PRIORITY  - Interrupt priority
 
+
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
 // <1=> 1
@@ -4701,6 +4873,7 @@
 #endif
 // <o> POWER_CONFIG_IRQ_PRIORITY  - Interrupt priority
 
+
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
 // <1=> 1
@@ -4717,6 +4890,7 @@
 
 // <q> POWER_CONFIG_DEFAULT_DCDCEN  - The default configuration of main DCDC regulator
 
+
 // <i> This settings means only that components for DCDC regulator are installed and it can be enabled.
 
 #ifndef POWER_CONFIG_DEFAULT_DCDCEN
@@ -4724,6 +4898,7 @@
 #endif
 
 // <q> POWER_CONFIG_DEFAULT_DCDCENHV  - The default configuration of High Voltage DCDC regulator
+
 
 // <i> This settings means only that components for DCDC regulator are installed and it can be enabled.
 
@@ -4734,6 +4909,7 @@
 // </e>
 
 // <q> PPI_ENABLED  - nrf_drv_ppi - PPI peripheral driver - legacy layer
+
 
 #ifndef PPI_ENABLED
 #define PPI_ENABLED 1
@@ -4746,11 +4922,13 @@
 #endif
 // <o> PWM_DEFAULT_CONFIG_OUT0_PIN - Out0 pin  <0-31>
 
+
 #ifndef PWM_DEFAULT_CONFIG_OUT0_PIN
 #define PWM_DEFAULT_CONFIG_OUT0_PIN 31
 #endif
 
 // <o> PWM_DEFAULT_CONFIG_OUT1_PIN - Out1 pin  <0-31>
+
 
 #ifndef PWM_DEFAULT_CONFIG_OUT1_PIN
 #define PWM_DEFAULT_CONFIG_OUT1_PIN 31
@@ -4758,11 +4936,13 @@
 
 // <o> PWM_DEFAULT_CONFIG_OUT2_PIN - Out2 pin  <0-31>
 
+
 #ifndef PWM_DEFAULT_CONFIG_OUT2_PIN
 #define PWM_DEFAULT_CONFIG_OUT2_PIN 31
 #endif
 
 // <o> PWM_DEFAULT_CONFIG_OUT3_PIN - Out3 pin  <0-31>
+
 
 #ifndef PWM_DEFAULT_CONFIG_OUT3_PIN
 #define PWM_DEFAULT_CONFIG_OUT3_PIN 31
@@ -4819,6 +4999,7 @@
 
 // <o> PWM_DEFAULT_CONFIG_IRQ_PRIORITY  - Interrupt priority
 
+
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
 // <1=> 1
@@ -4835,17 +5016,20 @@
 
 // <q> PWM0_ENABLED  - Enable PWM0 instance
 
+
 #ifndef PWM0_ENABLED
 #define PWM0_ENABLED 1
 #endif
 
 // <q> PWM1_ENABLED  - Enable PWM1 instance
 
+
 #ifndef PWM1_ENABLED
 #define PWM1_ENABLED 1
 #endif
 
 // <q> PWM2_ENABLED  - Enable PWM2 instance
+
 
 #ifndef PWM2_ENABLED
 #define PWM2_ENABLED 0
@@ -4918,17 +5102,20 @@
 
 // <o> QDEC_CONFIG_PIO_A - A pin  <0-31>
 
+
 #ifndef QDEC_CONFIG_PIO_A
 #define QDEC_CONFIG_PIO_A 31
 #endif
 
 // <o> QDEC_CONFIG_PIO_B - B pin  <0-31>
 
+
 #ifndef QDEC_CONFIG_PIO_B
 #define QDEC_CONFIG_PIO_B 31
 #endif
 
 // <o> QDEC_CONFIG_PIO_LED - LED pin  <0-31>
+
 
 #ifndef QDEC_CONFIG_PIO_LED
 #define QDEC_CONFIG_PIO_LED 31
@@ -4950,17 +5137,20 @@
 
 // <q> QDEC_CONFIG_DBFEN  - Debouncing enable
 
+
 #ifndef QDEC_CONFIG_DBFEN
 #define QDEC_CONFIG_DBFEN 0
 #endif
 
 // <q> QDEC_CONFIG_SAMPLE_INTEN  - Sample ready interrupt enable
 
+
 #ifndef QDEC_CONFIG_SAMPLE_INTEN
 #define QDEC_CONFIG_SAMPLE_INTEN 0
 #endif
 
 // <o> QDEC_CONFIG_IRQ_PRIORITY  - Interrupt priority
+
 
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
@@ -4984,6 +5174,7 @@
 #define QSPI_ENABLED 0
 #endif
 // <o> QSPI_CONFIG_SCK_DELAY - tSHSL, tWHSL and tSHWL in number of 16 MHz periods (62.5 ns).  <0-255>
+
 
 #ifndef QSPI_CONFIG_SCK_DELAY
 #define QSPI_CONFIG_SCK_DELAY 1
@@ -5090,6 +5281,7 @@
 
 // <o> QSPI_CONFIG_IRQ_PRIORITY  - Interrupt priority
 
+
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
 // <1=> 1
@@ -5113,6 +5305,7 @@
 #endif
 // <q> RNG_CONFIG_ERROR_CORRECTION  - Error correction
 
+
 #ifndef RNG_CONFIG_ERROR_CORRECTION
 #define RNG_CONFIG_ERROR_CORRECTION 1
 #endif
@@ -5123,6 +5316,7 @@
 #endif
 
 // <o> RNG_CONFIG_IRQ_PRIORITY  - Interrupt priority
+
 
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
@@ -5147,17 +5341,20 @@
 #endif
 // <o> RTC_DEFAULT_CONFIG_FREQUENCY - Frequency  <16-32768>
 
+
 #ifndef RTC_DEFAULT_CONFIG_FREQUENCY
 #define RTC_DEFAULT_CONFIG_FREQUENCY 32768
 #endif
 
 // <q> RTC_DEFAULT_CONFIG_RELIABLE  - Ensures safe compare event triggering
 
+
 #ifndef RTC_DEFAULT_CONFIG_RELIABLE
 #define RTC_DEFAULT_CONFIG_RELIABLE 0
 #endif
 
 // <o> RTC_DEFAULT_CONFIG_IRQ_PRIORITY  - Interrupt priority
+
 
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
@@ -5175,17 +5372,20 @@
 
 // <q> RTC0_ENABLED  - Enable RTC0 instance
 
+
 #ifndef RTC0_ENABLED
 #define RTC0_ENABLED 0
 #endif
 
 // <q> RTC1_ENABLED  - Enable RTC1 instance
 
+
 #ifndef RTC1_ENABLED
 #define RTC1_ENABLED 0
 #endif
 
 // <q> RTC2_ENABLED  - Enable RTC2 instance
+
 
 #ifndef RTC2_ENABLED
 #define RTC2_ENABLED 0
@@ -5232,11 +5432,13 @@
 
 // <q> SAADC_CONFIG_LP_MODE  - Enabling low power mode
 
+
 #ifndef SAADC_CONFIG_LP_MODE
 #define SAADC_CONFIG_LP_MODE 0
 #endif
 
 // <o> SAADC_CONFIG_IRQ_PRIORITY  - Interrupt priority
+
 
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
@@ -5260,6 +5462,7 @@
 #define SPIS_ENABLED 0
 #endif
 // <o> SPIS_DEFAULT_CONFIG_IRQ_PRIORITY  - Interrupt priority
+
 
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
@@ -5297,11 +5500,13 @@
 
 // <o> SPIS_DEFAULT_DEF - SPIS default DEF character  <0-255>
 
+
 #ifndef SPIS_DEFAULT_DEF
 #define SPIS_DEFAULT_DEF 255
 #endif
 
 // <o> SPIS_DEFAULT_ORC - SPIS default ORC character  <0-255>
+
 
 #ifndef SPIS_DEFAULT_ORC
 #define SPIS_DEFAULT_ORC 255
@@ -5309,11 +5514,13 @@
 
 // <q> SPIS0_ENABLED  - Enable SPIS0 instance
 
+
 #ifndef SPIS0_ENABLED
 #define SPIS0_ENABLED 0
 #endif
 
 // <q> SPIS1_ENABLED  - Enable SPIS1 instance
+
 
 #ifndef SPIS1_ENABLED
 #define SPIS1_ENABLED 0
@@ -5321,11 +5528,13 @@
 
 // <q> SPIS2_ENABLED  - Enable SPIS2 instance
 
+
 #ifndef SPIS2_ENABLED
 #define SPIS2_ENABLED 0
 #endif
 
 // <q> SPIS_NRF52_ANOMALY_109_WORKAROUND_ENABLED  - Enables nRF52 Anomaly 109 workaround for SPIS.
+
 
 // <i> The workaround uses a GPIOTE channel to generate interrupts
 // <i> on falling edges detected on the CSN line. This will make
@@ -5346,6 +5555,7 @@
 #define SPI_ENABLED 1
 #endif
 // <o> SPI_DEFAULT_CONFIG_IRQ_PRIORITY  - Interrupt priority
+
 
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
@@ -5378,6 +5588,7 @@
 #endif
 // <q> SPI0_USE_EASY_DMA  - Use EasyDMA
 
+
 #ifndef SPI0_USE_EASY_DMA
 #define SPI0_USE_EASY_DMA 0
 #endif
@@ -5390,6 +5601,7 @@
 #define SPI1_ENABLED 0
 #endif
 // <q> SPI1_USE_EASY_DMA  - Use EasyDMA
+
 
 #ifndef SPI1_USE_EASY_DMA
 #define SPI1_USE_EASY_DMA 1
@@ -5404,6 +5616,7 @@
 #endif
 // <q> SPI2_USE_EASY_DMA  - Use EasyDMA
 
+
 #ifndef SPI2_USE_EASY_DMA
 #define SPI2_USE_EASY_DMA 1
 #endif
@@ -5411,6 +5624,7 @@
 // </e>
 
 // <q> SPIM_NRF52_ANOMALY_109_WORKAROUND_ENABLED  - Enables nRF52 anomaly 109 workaround for SPIM.
+
 
 // <i> The workaround uses interrupts to wake up the CPU by catching
 // <i> a start event of zero-length transmission to start the clock. This
@@ -5469,6 +5683,7 @@
 
 // <o> TIMER_DEFAULT_CONFIG_IRQ_PRIORITY  - Interrupt priority
 
+
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
 // <1=> 1
@@ -5485,11 +5700,13 @@
 
 // <q> TIMER0_ENABLED  - Enable TIMER0 instance
 
+
 #ifndef TIMER0_ENABLED
 #define TIMER0_ENABLED 0
 #endif
 
 // <q> TIMER1_ENABLED  - Enable TIMER1 instance
+
 
 #ifndef TIMER1_ENABLED
 #define TIMER1_ENABLED 0
@@ -5497,17 +5714,20 @@
 
 // <q> TIMER2_ENABLED  - Enable TIMER2 instance
 
+
 #ifndef TIMER2_ENABLED
 #define TIMER2_ENABLED 1
 #endif
 
 // <q> TIMER3_ENABLED  - Enable TIMER3 instance
 
+
 #ifndef TIMER3_ENABLED
 #define TIMER3_ENABLED 1
 #endif
 
 // <q> TIMER4_ENABLED  - Enable TIMER4 instance
+
 
 #ifndef TIMER4_ENABLED
 #define TIMER4_ENABLED 1
@@ -5522,11 +5742,13 @@
 #endif
 // <q> TWIS0_ENABLED  - Enable TWIS0 instance
 
+
 #ifndef TWIS0_ENABLED
 #define TWIS0_ENABLED 0
 #endif
 
 // <q> TWIS1_ENABLED  - Enable TWIS1 instance
+
 
 #ifndef TWIS1_ENABLED
 #define TWIS1_ENABLED 0
@@ -5534,10 +5756,8 @@
 
 // <q> TWIS_ASSUME_INIT_AFTER_RESET_ONLY  - Assume that any instance would be initialized only once
 
-// <i> Optimization flag. Registers used by TWIS are shared by other peripherals. Normally, during initialization driver
-// tries to clear all registers to known state before doing the initialization itself. This gives initialization safe
-// procedure, no matter when it would be called. If you activate TWIS only once and do never uninitialize it - set this
-// flag to 1 what gives more optimal code.
+
+// <i> Optimization flag. Registers used by TWIS are shared by other peripherals. Normally, during initialization driver tries to clear all registers to known state before doing the initialization itself. This gives initialization safe procedure, no matter when it would be called. If you activate TWIS only once and do never uninitialize it - set this flag to 1 what gives more optimal code.
 
 #ifndef TWIS_ASSUME_INIT_AFTER_RESET_ONLY
 #define TWIS_ASSUME_INIT_AFTER_RESET_ONLY 0
@@ -5545,9 +5765,8 @@
 
 // <q> TWIS_NO_SYNC_MODE  - Remove support for synchronous mode
 
-// <i> Synchronous mode would be used in specific situations. And it uses some additional code and data memory to safely
-// process state machine by polling it in status functions. If this functionality is not required it may be disabled to
-// free some resources.
+
+// <i> Synchronous mode would be used in specific situations. And it uses some additional code and data memory to safely process state machine by polling it in status functions. If this functionality is not required it may be disabled to free some resources.
 
 #ifndef TWIS_NO_SYNC_MODE
 #define TWIS_NO_SYNC_MODE 0
@@ -5585,6 +5804,7 @@
 
 // <o> TWIS_DEFAULT_CONFIG_IRQ_PRIORITY  - Interrupt priority
 
+
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
 // <1=> 1
@@ -5618,17 +5838,20 @@
 
 // <q> TWI_DEFAULT_CONFIG_CLR_BUS_INIT  - Enables bus clearing procedure during init
 
+
 #ifndef TWI_DEFAULT_CONFIG_CLR_BUS_INIT
 #define TWI_DEFAULT_CONFIG_CLR_BUS_INIT 0
 #endif
 
 // <q> TWI_DEFAULT_CONFIG_HOLD_BUS_UNINIT  - Enables bus holding after uninit
 
+
 #ifndef TWI_DEFAULT_CONFIG_HOLD_BUS_UNINIT
 #define TWI_DEFAULT_CONFIG_HOLD_BUS_UNINIT 0
 #endif
 
 // <o> TWI_DEFAULT_CONFIG_IRQ_PRIORITY  - Interrupt priority
+
 
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
@@ -5651,6 +5874,7 @@
 #endif
 // <q> TWI0_USE_EASY_DMA  - Use EasyDMA (if present)
 
+
 #ifndef TWI0_USE_EASY_DMA
 #define TWI0_USE_EASY_DMA 0
 #endif
@@ -5664,6 +5888,7 @@
 #endif
 // <q> TWI1_USE_EASY_DMA  - Use EasyDMA (if present)
 
+
 #ifndef TWI1_USE_EASY_DMA
 #define TWI1_USE_EASY_DMA 0
 #endif
@@ -5671,6 +5896,7 @@
 // </e>
 
 // <q> TWIM_NRF52_ANOMALY_109_WORKAROUND_ENABLED  - Enables nRF52 anomaly 109 workaround for TWIM.
+
 
 // <i> The workaround uses interrupts to wake up the CPU by catching
 // <i> the start event of zero-frequency transmission, clear the
@@ -5686,7 +5912,7 @@
 
 // <e> UART_ENABLED - nrf_drv_uart - UART/UARTE peripheral driver - legacy layer
 //==========================================================
-// Don't define it at all else it conflicts with NRFX
+//Don't define it at all else it conflicts with NRFX
 //#ifndef UART_ENABLED
 //#define UART_ENABLED 0
 //#endif
@@ -5733,6 +5959,7 @@
 
 // <o> UART_DEFAULT_CONFIG_IRQ_PRIORITY  - Interrupt priority
 
+
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
 // <1=> 1
@@ -5749,11 +5976,13 @@
 
 // <q> UART_EASY_DMA_SUPPORT  - Driver supporting EasyDMA
 
+
 #ifndef UART_EASY_DMA_SUPPORT
 #define UART_EASY_DMA_SUPPORT 1
 #endif
 
 // <q> UART_LEGACY_SUPPORT  - Driver supporting Legacy mode
+
 
 #ifndef UART_LEGACY_SUPPORT
 #define UART_LEGACY_SUPPORT 1
@@ -5765,6 +5994,7 @@
 #define UART0_ENABLED 1
 #endif
 // <q> UART0_CONFIG_USE_EASY_DMA  - Default setting for using EasyDMA
+
 
 #ifndef UART0_CONFIG_USE_EASY_DMA
 #define UART0_CONFIG_USE_EASY_DMA 1
@@ -5780,6 +6010,7 @@
 #define USBD_ENABLED 1
 #endif
 // <o> USBD_CONFIG_IRQ_PRIORITY  - Interrupt priority
+
 
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
@@ -5806,6 +6037,7 @@
 
 // <q> USBD_CONFIG_DMASCHEDULER_ISO_BOOST  - Give priority to isochronous transfers
 
+
 // <i> This option gives priority to isochronous transfers.
 // <i> Enabling it assures that isochronous transfers are always processed,
 // <i> even if multiple other transfers are pending.
@@ -5817,6 +6049,7 @@
 #endif
 
 // <q> USBD_CONFIG_ISO_IN_ZLP  - Respond to an IN token on ISO IN endpoint with ZLP when no data is ready
+
 
 // <i> If set, ISO IN endpoint will respond to an IN token with ZLP when no data is ready to be sent.
 // <i> Else, there will be no response.
@@ -5830,7 +6063,7 @@
 
 // <e> WDT_ENABLED - nrf_drv_wdt - WDT peripheral driver - legacy layer
 //==========================================================
-// Don't define it at all else it conflicts with NRFX
+//Don't define it at all else it conflicts with NRFX
 //#ifndef WDT_ENABLED
 //#define WDT_ENABLED 0
 //#endif
@@ -5847,11 +6080,13 @@
 
 // <o> WDT_CONFIG_RELOAD_VALUE - Reload value  <15-4294967295>
 
+
 #ifndef WDT_CONFIG_RELOAD_VALUE
 #define WDT_CONFIG_RELOAD_VALUE 2000
 #endif
 
 // <o> WDT_CONFIG_IRQ_PRIORITY  - Interrupt priority
+
 
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
@@ -5906,6 +6141,7 @@
 
 // <q> NRFX_USBD_CONFIG_DMASCHEDULER_ISO_BOOST  - Give priority to isochronous transfers
 
+
 // <i> This option gives priority to isochronous transfers.
 // <i> Enabling it assures that isochronous transfers are always processed,
 // <i> even if multiple other transfers are pending.
@@ -5918,6 +6154,7 @@
 
 // <q> NRFX_USBD_CONFIG_ISO_IN_ZLP  - Respond to an IN token on ISO IN endpoint with ZLP when no data is ready
 
+
 // <i> If set, ISO IN endpoint will respond to an IN token with ZLP when no data is ready to be sent.
 // <i> Else, there will be no response.
 
@@ -5926,6 +6163,7 @@
 #endif
 
 // <q> NRFX_USBD_USE_WORKAROUND_FOR_ANOMALY_211  - Use workaround for anomaly 211
+
 
 // <i> If set, workaround for anomaly 211 will be enabled.
 // <i> Anomaly 211 - Device remains in SUSPEND too long when host resumes
@@ -5945,6 +6183,7 @@
 //==========================================================
 // <q> NRF_TWI_SENSOR_ENABLED  - nrf_twi_sensor - nRF TWI Sensor module
 
+
 #ifndef NRF_TWI_SENSOR_ENABLED
 #define NRF_TWI_SENSOR_ENABLED 0
 #endif
@@ -5957,17 +6196,20 @@
 //==========================================================
 // <q> APP_FIFO_ENABLED  - app_fifo - Software FIFO implementation
 
+
 #ifndef APP_FIFO_ENABLED
 #define APP_FIFO_ENABLED 1
 #endif
 
 // <q> APP_GPIOTE_ENABLED  - app_gpiote - GPIOTE events dispatcher
 
+
 #ifndef APP_GPIOTE_ENABLED
 #define APP_GPIOTE_ENABLED 0
 #endif
 
 // <q> APP_PWM_ENABLED  - app_pwm - PWM functionality
+
 
 #ifndef APP_PWM_ENABLED
 #define APP_PWM_ENABLED 0
@@ -5980,11 +6222,13 @@
 #endif
 // <q> APP_SCHEDULER_WITH_PAUSE  - Enabling pause feature
 
+
 #ifndef APP_SCHEDULER_WITH_PAUSE
 #define APP_SCHEDULER_WITH_PAUSE 0
 #endif
 
 // <q> APP_SCHEDULER_WITH_PROFILER  - Enabling scheduler profiling
+
 
 #ifndef APP_SCHEDULER_WITH_PROFILER
 #define APP_SCHEDULER_WITH_PROFILER 0
@@ -6057,6 +6301,7 @@
 
 // <o> APP_TIMER_CONFIG_IRQ_PRIORITY  - Interrupt priority
 
+
 // <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
 // <0=> 0 (highest)
 // <1=> 1
@@ -6083,11 +6328,13 @@
 
 // <q> APP_TIMER_CONFIG_USE_SCHEDULER  - Enable scheduling app_timer events to app_scheduler
 
+
 #ifndef APP_TIMER_CONFIG_USE_SCHEDULER
 #define APP_TIMER_CONFIG_USE_SCHEDULER 0
 #endif
 
 // <q> APP_TIMER_KEEPS_RTC_ACTIVE  - Enable RTC always on
+
 
 // <i> If option is enabled RTC is kept running even if there is no active timers.
 // <i> This option can be used when app_timer is used for timestamping.
@@ -6112,11 +6359,13 @@
 //==========================================================
 // <q> APP_TIMER_WITH_PROFILER  - Enable app_timer profiling
 
+
 #ifndef APP_TIMER_WITH_PROFILER
 #define APP_TIMER_WITH_PROFILER 0
 #endif
 
 // <q> APP_TIMER_CONFIG_SWI_NUMBER  - Configure SWI instance used.
+
 
 #ifndef APP_TIMER_CONFIG_SWI_NUMBER
 #define APP_TIMER_CONFIG_SWI_NUMBER 0
@@ -6144,6 +6393,7 @@
 
 // <q> APP_USBD_AUDIO_ENABLED  - app_usbd_audio - USB AUDIO class
 
+
 #ifndef APP_USBD_AUDIO_ENABLED
 #define APP_USBD_AUDIO_ENABLED 0
 #endif
@@ -6155,6 +6405,7 @@
 #endif
 // <o> APP_USBD_VID - Vendor ID.  <0x0000-0xFFFF>
 
+
 // <i> Note: This value is not editable in Configuration Wizard.
 // <i> Vendor ID ordered from USB IF: http://www.usb.org/developers/vendor/
 
@@ -6163,6 +6414,7 @@
 #endif
 
 // <o> APP_USBD_PID - Product ID.  <0x0000-0xFFFF>
+
 
 // <i> Note: This value is not editable in Configuration Wizard.
 // <i> Selected Product ID
@@ -6173,6 +6425,7 @@
 
 // <o> APP_USBD_DEVICE_VER_MAJOR - Major device version  <0-99>
 
+
 // <i> Major device version, will be converted automatically to BCD notation. Use just decimal values.
 
 #ifndef APP_USBD_DEVICE_VER_MAJOR
@@ -6180,6 +6433,7 @@
 #endif
 
 // <o> APP_USBD_DEVICE_VER_MINOR - Minor device version  <0-9>
+
 
 // <i> Minor device version, will be converted automatically to BCD notation. Use just decimal values.
 
@@ -6189,6 +6443,7 @@
 
 // <o> APP_USBD_DEVICE_VER_SUB - Sub-minor device version  <0-9>
 
+
 // <i> Sub-minor device version, will be converted automatically to BCD notation. Use just decimal values.
 
 #ifndef APP_USBD_DEVICE_VER_SUB
@@ -6197,17 +6452,20 @@
 
 // <q> APP_USBD_CONFIG_SELF_POWERED  - Self-powered device, as opposed to bus-powered.
 
+
 #ifndef APP_USBD_CONFIG_SELF_POWERED
 #define APP_USBD_CONFIG_SELF_POWERED 1
 #endif
 
 // <o> APP_USBD_CONFIG_MAX_POWER - MaxPower field in configuration descriptor in milliamps.  <0-500>
 
+
 #ifndef APP_USBD_CONFIG_MAX_POWER
 #define APP_USBD_CONFIG_MAX_POWER 100
 #endif
 
 // <q> APP_USBD_CONFIG_POWER_EVENTS_PROCESS  - Process power events.
+
 
 // <i> Enable processing power events in USB event handler.
 
@@ -6218,15 +6476,15 @@
 // <e> APP_USBD_CONFIG_EVENT_QUEUE_ENABLE - Enable event queue.
 
 // <i> This is the default configuration when all the events are placed into internal queue.
-// <i> Disable it when an external queue is used like app_scheduler or if you wish to process all events inside
-// interrupts. <i> Processing all events from the interrupt level adds requirement not to call any functions that
-// modifies the USBD library state from the context higher than USB interrupt context. <i> Functions that modify USBD
-// state are functions for sleep, wakeup, start, stop, enable, and disable.
+// <i> Disable it when an external queue is used like app_scheduler or if you wish to process all events inside interrupts.
+// <i> Processing all events from the interrupt level adds requirement not to call any functions that modifies the USBD library state from the context higher than USB interrupt context.
+// <i> Functions that modify USBD state are functions for sleep, wakeup, start, stop, enable, and disable.
 //==========================================================
 #ifndef APP_USBD_CONFIG_EVENT_QUEUE_ENABLE
 #define APP_USBD_CONFIG_EVENT_QUEUE_ENABLE 1
 #endif
 // <o> APP_USBD_CONFIG_EVENT_QUEUE_SIZE - The size of the event queue.  <16-64>
+
 
 // <i> The size of the queue for the events that would be processed in the main loop.
 
@@ -6235,6 +6493,7 @@
 #endif
 
 // <o> APP_USBD_CONFIG_SOF_HANDLING_MODE  - Change SOF events handling mode.
+
 
 // <i> Normal queue   - SOF events are pushed normally into the event queue.
 // <i> Compress queue - SOF events are counted and binded with other events or executed when the queue is empty.
@@ -6250,8 +6509,8 @@
 
 // </e>
 
-// <q> APP_USBD_CONFIG_SOF_TIMESTAMP_PROVIDE  - Provide a function that generates timestamps for logs based on the
-// current SOF.
+// <q> APP_USBD_CONFIG_SOF_TIMESTAMP_PROVIDE  - Provide a function that generates timestamps for logs based on the current SOF.
+
 
 // <i> The function app_usbd_sof_timestamp_get is implemented if the logger is enabled.
 // <i> Use it when initializing the logger.
@@ -6265,6 +6524,7 @@
 
 // <o> APP_USBD_CONFIG_DESC_STRING_SIZE - Maximum size of the NULL-terminated string of the string descriptor.  <31-254>
 
+
 // <i> 31 characters can be stored in the internal USB buffer used for transfers.
 // <i> Any value higher than 31 creates an additional buffer just for descriptor strings.
 
@@ -6273,6 +6533,7 @@
 #endif
 
 // <q> APP_USBD_CONFIG_DESC_STRING_UTF_ENABLED  - Enable UTF8 conversion.
+
 
 // <i> Enable UTF8-encoded characters. In normal processing, only ASCII characters are available.
 
@@ -6295,8 +6556,8 @@
 #ifndef APP_USBD_STRING_ID_MANUFACTURER
 #define APP_USBD_STRING_ID_MANUFACTURER 1
 #endif
-// <q> APP_USBD_STRINGS_MANUFACTURER_EXTERN  - Define whether @ref APP_USBD_STRINGS_MANUFACTURER is created by macro or
-// declared as a global variable.
+// <q> APP_USBD_STRINGS_MANUFACTURER_EXTERN  - Define whether @ref APP_USBD_STRINGS_MANUFACTURER is created by macro or declared as a global variable.
+
 
 #ifndef APP_USBD_STRINGS_MANUFACTURER_EXTERN
 #define APP_USBD_STRINGS_MANUFACTURER_EXTERN 0
@@ -6309,9 +6570,9 @@
 // <i> Use @ref APP_USBD_STRING_DESC macro to create string descriptor from a NULL-terminated string.
 // <i> Use @ref APP_USBD_STRING_RAW8_DESC macro to create string descriptor from comma-separated uint8_t values.
 // <i> Use @ref APP_USBD_STRING_RAW16_DESC macro to create string descriptor from comma-separated uint16_t values.
-// <i> Alternatively, configure the macro to point to any internal variable pointer that already contains the
-// descriptor. <i> Setting string to NULL disables that string. <i> The order of manufacturer names must be the same
-// like in @ref APP_USBD_STRINGS_LANGIDS.
+// <i> Alternatively, configure the macro to point to any internal variable pointer that already contains the descriptor.
+// <i> Setting string to NULL disables that string.
+// <i> The order of manufacturer names must be the same like in @ref APP_USBD_STRINGS_LANGIDS.
 #ifndef APP_USBD_STRINGS_MANUFACTURER
 #define APP_USBD_STRINGS_MANUFACTURER APP_USBD_STRING_DESC("Proxgrind")
 #endif
@@ -6325,8 +6586,8 @@
 #ifndef APP_USBD_STRING_ID_PRODUCT
 #define APP_USBD_STRING_ID_PRODUCT 2
 #endif
-// <q> APP_USBD_STRINGS_PRODUCT_EXTERN  - Define whether @ref APP_USBD_STRINGS_PRODUCT is created by macro or declared
-// as a global variable.
+// <q> APP_USBD_STRINGS_PRODUCT_EXTERN  - Define whether @ref APP_USBD_STRINGS_PRODUCT is created by macro or declared as a global variable.
+
 
 #ifndef APP_USBD_STRINGS_PRODUCT_EXTERN
 #define APP_USBD_STRINGS_PRODUCT_EXTERN 1
@@ -6349,8 +6610,8 @@
 #ifndef APP_USBD_STRING_ID_SERIAL
 #define APP_USBD_STRING_ID_SERIAL 3
 #endif
-// <q> APP_USBD_STRING_SERIAL_EXTERN  - Define whether @ref APP_USBD_STRING_SERIAL is created by macro or declared as a
-// global variable.
+// <q> APP_USBD_STRING_SERIAL_EXTERN  - Define whether @ref APP_USBD_STRING_SERIAL is created by macro or declared as a global variable.
+
 
 #ifndef APP_USBD_STRING_SERIAL_EXTERN
 #define APP_USBD_STRING_SERIAL_EXTERN 0
@@ -6373,8 +6634,8 @@
 #ifndef APP_USBD_STRING_ID_CONFIGURATION
 #define APP_USBD_STRING_ID_CONFIGURATION 4
 #endif
-// <q> APP_USBD_STRING_CONFIGURATION_EXTERN  - Define whether @ref APP_USBD_STRINGS_CONFIGURATION is created by macro or
-// declared as global variable.
+// <q> APP_USBD_STRING_CONFIGURATION_EXTERN  - Define whether @ref APP_USBD_STRINGS_CONFIGURATION is created by macro or declared as global variable.
+
 
 #ifndef APP_USBD_STRING_CONFIGURATION_EXTERN
 #define APP_USBD_STRING_CONFIGURATION_EXTERN 0
@@ -6418,14 +6679,15 @@
 #endif
 // <o> APP_USBD_HID_DEFAULT_IDLE_RATE - Default idle rate for HID class.   <0-255>
 
-// <i> 0 means indefinite duration, any other value is multiplied by 4 milliseconds. Refer to Chapter 7.2.4 of HID 1.11
-// Specification.
+
+// <i> 0 means indefinite duration, any other value is multiplied by 4 milliseconds. Refer to Chapter 7.2.4 of HID 1.11 Specification.
 
 #ifndef APP_USBD_HID_DEFAULT_IDLE_RATE
 #define APP_USBD_HID_DEFAULT_IDLE_RATE 0
 #endif
 
 // <o> APP_USBD_HID_REPORT_IDLE_TABLE_SIZE - Size of idle rate table.   <1-255>
+
 
 // <i> Must be higher than the highest report ID used.
 
@@ -6437,11 +6699,13 @@
 
 // <q> APP_USBD_HID_GENERIC_ENABLED  - app_usbd_hid_generic - USB HID generic
 
+
 #ifndef APP_USBD_HID_GENERIC_ENABLED
 #define APP_USBD_HID_GENERIC_ENABLED 0
 #endif
 
 // <q> APP_USBD_HID_KBD_ENABLED  - app_usbd_hid_kbd - USB HID keyboard
+
 
 #ifndef APP_USBD_HID_KBD_ENABLED
 #define APP_USBD_HID_KBD_ENABLED 0
@@ -6449,11 +6713,13 @@
 
 // <q> APP_USBD_HID_MOUSE_ENABLED  - app_usbd_hid_mouse - USB HID mouse
 
+
 #ifndef APP_USBD_HID_MOUSE_ENABLED
 #define APP_USBD_HID_MOUSE_ENABLED 0
 #endif
 
 // <q> APP_USBD_MSC_ENABLED  - app_usbd_msc - USB MSC class
+
 
 #ifndef APP_USBD_MSC_ENABLED
 #define APP_USBD_MSC_ENABLED 0
@@ -6461,17 +6727,20 @@
 
 // <q> CRC16_ENABLED  - crc16 - CRC16 calculation routines
 
+
 #ifndef CRC16_ENABLED
 #define CRC16_ENABLED 0
 #endif
 
 // <q> CRC32_ENABLED  - crc32 - CRC32 calculation routines
 
+
 #ifndef CRC32_ENABLED
 #define CRC32_ENABLED 0
 #endif
 
 // <q> ECC_ENABLED  - ecc - Elliptic Curve Cryptography Library
+
 
 #ifndef ECC_ENABLED
 #define ECC_ENABLED 0
@@ -6488,15 +6757,15 @@
 //==========================================================
 // <o> FDS_VIRTUAL_PAGES - Number of virtual flash pages to use.
 // <i> One of the virtual pages is reserved by the system for garbage collection.
-// <i> Therefore, the minimum is two virtual pages: one page to store data and one page to be used by the system for
-// garbage collection. <i> The total amount of flash memory that is used by FDS amounts to @ref FDS_VIRTUAL_PAGES * @ref
-// FDS_VIRTUAL_PAGE_SIZE * 4 bytes.
+// <i> Therefore, the minimum is two virtual pages: one page to store data and one page to be used by the system for garbage collection.
+// <i> The total amount of flash memory that is used by FDS amounts to @ref FDS_VIRTUAL_PAGES * @ref FDS_VIRTUAL_PAGE_SIZE * 4 bytes.
 
 #ifndef FDS_VIRTUAL_PAGES
 #define FDS_VIRTUAL_PAGES 22
 #endif
 
 // <o> FDS_VIRTUAL_PAGE_SIZE  - The size of a virtual flash page.
+
 
 // <i> Expressed in number of 4-byte words.
 // <i> By default, a virtual page is the same size as a physical page.
@@ -6526,9 +6795,11 @@
 //==========================================================
 // <o> FDS_BACKEND  - FDS flash backend.
 
-// <i> NRF_FSTORAGE_SD uses the nrf_fstorage_sd backend implementation using the SoftDevice API. Use this if you have a
-// SoftDevice present. <i> NRF_FSTORAGE_NVMC uses the nrf_fstorage_nvmc implementation. Use this setting if you don't
-// use the SoftDevice. <1=> NRF_FSTORAGE_NVMC <2=> NRF_FSTORAGE_SD
+
+// <i> NRF_FSTORAGE_SD uses the nrf_fstorage_sd backend implementation using the SoftDevice API. Use this if you have a SoftDevice present.
+// <i> NRF_FSTORAGE_NVMC uses the nrf_fstorage_nvmc implementation. Use this setting if you don't use the SoftDevice.
+// <1=> NRF_FSTORAGE_NVMC
+// <2=> NRF_FSTORAGE_SD
 
 #ifndef FDS_BACKEND
 #define FDS_BACKEND 2
@@ -6564,6 +6835,7 @@
 #endif
 // <o> FDS_CRC_CHECK_ON_WRITE  - Perform a CRC check on newly written records.
 
+
 // <i> Perform a CRC check on newly written records.
 // <i> This setting can be used to make sure that the record data was not altered while being written to flash.
 // <1=> Enabled
@@ -6592,6 +6864,7 @@
 // </e>
 
 // <q> HARDFAULT_HANDLER_ENABLED  - hardfault_default - HardFault default handler for debugging and release
+
 
 #ifndef HARDFAULT_HANDLER_ENABLED
 #define HARDFAULT_HANDLER_ENABLED 0
@@ -6692,11 +6965,13 @@
 
 // <q> LED_SOFTBLINK_ENABLED  - led_softblink - led_softblink module
 
+
 #ifndef LED_SOFTBLINK_ENABLED
 #define LED_SOFTBLINK_ENABLED 0
 #endif
 
 // <q> LOW_POWER_PWM_ENABLED  - low_power_pwm - low_power_pwm module
+
 
 #ifndef LOW_POWER_PWM_ENABLED
 #define LOW_POWER_PWM_ENABLED 0
@@ -6708,6 +6983,7 @@
 #define MEM_MANAGER_ENABLED 0
 #endif
 // <o> MEMORY_MANAGER_SMALL_BLOCK_COUNT - Size of each memory blocks identified as 'small' block.  <0-255>
+
 
 #ifndef MEMORY_MANAGER_SMALL_BLOCK_COUNT
 #define MEMORY_MANAGER_SMALL_BLOCK_COUNT 1
@@ -6722,6 +6998,7 @@
 
 // <o> MEMORY_MANAGER_MEDIUM_BLOCK_COUNT - Size of each memory blocks identified as 'medium' block.  <0-255>
 
+
 #ifndef MEMORY_MANAGER_MEDIUM_BLOCK_COUNT
 #define MEMORY_MANAGER_MEDIUM_BLOCK_COUNT 0
 #endif
@@ -6734,6 +7011,7 @@
 #endif
 
 // <o> MEMORY_MANAGER_LARGE_BLOCK_COUNT - Size of each memory blocks identified as 'large' block.  <0-255>
+
 
 #ifndef MEMORY_MANAGER_LARGE_BLOCK_COUNT
 #define MEMORY_MANAGER_LARGE_BLOCK_COUNT 0
@@ -6748,6 +7026,7 @@
 
 // <o> MEMORY_MANAGER_XLARGE_BLOCK_COUNT - Size of each memory blocks identified as 'extra large' block.  <0-255>
 
+
 #ifndef MEMORY_MANAGER_XLARGE_BLOCK_COUNT
 #define MEMORY_MANAGER_XLARGE_BLOCK_COUNT 0
 #endif
@@ -6761,19 +7040,20 @@
 
 // <o> MEMORY_MANAGER_XXLARGE_BLOCK_COUNT - Size of each memory blocks identified as 'extra extra large' block.  <0-255>
 
+
 #ifndef MEMORY_MANAGER_XXLARGE_BLOCK_COUNT
 #define MEMORY_MANAGER_XXLARGE_BLOCK_COUNT 0
 #endif
 
 // <o> MEMORY_MANAGER_XXLARGE_BLOCK_SIZE -  Size of each memory blocks identified as 'extra extra large' block.
-// <i>  Size of each memory blocks identified as 'extra extra large' block. Memory block are recommended to be
-// word-sized.
+// <i>  Size of each memory blocks identified as 'extra extra large' block. Memory block are recommended to be word-sized.
 
 #ifndef MEMORY_MANAGER_XXLARGE_BLOCK_SIZE
 #define MEMORY_MANAGER_XXLARGE_BLOCK_SIZE 3444
 #endif
 
 // <o> MEMORY_MANAGER_XSMALL_BLOCK_COUNT - Size of each memory blocks identified as 'extra small' block.  <0-255>
+
 
 #ifndef MEMORY_MANAGER_XSMALL_BLOCK_COUNT
 #define MEMORY_MANAGER_XSMALL_BLOCK_COUNT 0
@@ -6788,13 +7068,13 @@
 
 // <o> MEMORY_MANAGER_XXSMALL_BLOCK_COUNT - Size of each memory blocks identified as 'extra extra small' block.  <0-255>
 
+
 #ifndef MEMORY_MANAGER_XXSMALL_BLOCK_COUNT
 #define MEMORY_MANAGER_XXSMALL_BLOCK_COUNT 0
 #endif
 
 // <o> MEMORY_MANAGER_XXSMALL_BLOCK_SIZE -  Size of each memory blocks identified as 'extra extra small' block.
-// <i>  Size of each memory blocks identified as 'extra extra small' block. Memory block are recommended to be
-// word-sized.
+// <i>  Size of each memory blocks identified as 'extra extra small' block. Memory block are recommended to be word-sized.
 
 #ifndef MEMORY_MANAGER_XXSMALL_BLOCK_SIZE
 #define MEMORY_MANAGER_XXSMALL_BLOCK_SIZE 32
@@ -6853,6 +7133,7 @@
 
 // <q> MEM_MANAGER_DISABLE_API_PARAM_CHECK  - Disable API parameter checks in the module.
 
+
 #ifndef MEM_MANAGER_DISABLE_API_PARAM_CHECK
 #define MEM_MANAGER_DISABLE_API_PARAM_CHECK 0
 #endif
@@ -6871,11 +7152,13 @@
 #endif
 // <o> NRF_BALLOC_CONFIG_HEAD_GUARD_WORDS - Number of words used as head guard.  <0-255>
 
+
 #ifndef NRF_BALLOC_CONFIG_HEAD_GUARD_WORDS
 #define NRF_BALLOC_CONFIG_HEAD_GUARD_WORDS 1
 #endif
 
 // <o> NRF_BALLOC_CONFIG_TAIL_GUARD_WORDS - Number of words used as tail guard.  <0-255>
+
 
 #ifndef NRF_BALLOC_CONFIG_TAIL_GUARD_WORDS
 #define NRF_BALLOC_CONFIG_TAIL_GUARD_WORDS 1
@@ -6883,11 +7166,13 @@
 
 // <q> NRF_BALLOC_CONFIG_BASIC_CHECKS_ENABLED  - Enables basic checks in this module.
 
+
 #ifndef NRF_BALLOC_CONFIG_BASIC_CHECKS_ENABLED
 #define NRF_BALLOC_CONFIG_BASIC_CHECKS_ENABLED 0
 #endif
 
 // <q> NRF_BALLOC_CONFIG_DOUBLE_FREE_CHECK_ENABLED  - Enables double memory free check in this module.
+
 
 #ifndef NRF_BALLOC_CONFIG_DOUBLE_FREE_CHECK_ENABLED
 #define NRF_BALLOC_CONFIG_DOUBLE_FREE_CHECK_ENABLED 0
@@ -6895,11 +7180,13 @@
 
 // <q> NRF_BALLOC_CONFIG_DATA_TRASHING_CHECK_ENABLED  - Enables free memory corruption check in this module.
 
+
 #ifndef NRF_BALLOC_CONFIG_DATA_TRASHING_CHECK_ENABLED
 #define NRF_BALLOC_CONFIG_DATA_TRASHING_CHECK_ENABLED 0
 #endif
 
 // <q> NRF_BALLOC_CLI_CMDS  - Enable CLI commands specific to the module
+
 
 #ifndef NRF_BALLOC_CLI_CMDS
 #define NRF_BALLOC_CLI_CMDS 0
@@ -6919,8 +7206,7 @@
 #define NRF_CSENSE_PAD_HYSTERESIS 15
 #endif
 
-// <o> NRF_CSENSE_PAD_DEVIATION - Minimum value measured on a pad required to take it into account while calculating the
-// step.
+// <o> NRF_CSENSE_PAD_DEVIATION - Minimum value measured on a pad required to take it into account while calculating the step.
 #ifndef NRF_CSENSE_PAD_DEVIATION
 #define NRF_CSENSE_PAD_DEVIATION 70
 #endif
@@ -6995,6 +7281,7 @@
 //==========================================================
 // <q> NRF_FSTORAGE_PARAM_CHECK_DISABLED  - Disable user input validation
 
+
 // <i> If selected, use ASSERT to validate user input.
 // <i> This effectively removes user input validation in production code.
 // <i> Recommended setting: OFF, only enable this setting if size is a major concern.
@@ -7027,9 +7314,9 @@
 
 // <o> NRF_FSTORAGE_SD_MAX_WRITE_SIZE - Maximum number of bytes to be written to flash in a single operation
 // <i> This value must be a multiple of four.
-// <i> Lowering this value can increase the chances of the SoftDevice being able to execute flash operations in between
-// radio activity. <i> This value is bound by the maximum number of bytes that can be written to flash in a single call
-// to @ref sd_flash_write. <i> That is 1024 bytes for nRF51 ICs and 4096 bytes for nRF52 ICs.
+// <i> Lowering this value can increase the chances of the SoftDevice being able to execute flash operations in between radio activity.
+// <i> This value is bound by the maximum number of bytes that can be written to flash in a single call to @ref sd_flash_write.
+// <i> That is 1024 bytes for nRF51 ICs and 4096 bytes for nRF52 ICs.
 
 #ifndef NRF_FSTORAGE_SD_MAX_WRITE_SIZE
 #define NRF_FSTORAGE_SD_MAX_WRITE_SIZE 4096
@@ -7042,11 +7329,13 @@
 
 // <q> NRF_GFX_ENABLED  - nrf_gfx - GFX module
 
+
 #ifndef NRF_GFX_ENABLED
 #define NRF_GFX_ENABLED 0
 #endif
 
 // <q> NRF_MEMOBJ_ENABLED  - nrf_memobj - Linked memory allocator module
+
 
 #ifndef NRF_MEMOBJ_ENABLED
 #define NRF_MEMOBJ_ENABLED 1
@@ -7108,6 +7397,7 @@
 
 // <q> NRF_PWR_MGMT_CONFIG_CPU_USAGE_MONITOR_ENABLED  - Enables CPU usage monitor.
 
+
 // <i> Module will trace percentage of CPU usage in one second intervals.
 
 #ifndef NRF_PWR_MGMT_CONFIG_CPU_USAGE_MONITOR_ENABLED
@@ -7130,17 +7420,20 @@
 
 // <q> NRF_PWR_MGMT_CONFIG_FPU_SUPPORT_ENABLED  - Enables FPU event cleaning.
 
+
 #ifndef NRF_PWR_MGMT_CONFIG_FPU_SUPPORT_ENABLED
 #define NRF_PWR_MGMT_CONFIG_FPU_SUPPORT_ENABLED 1
 #endif
 
 // <q> NRF_PWR_MGMT_CONFIG_AUTO_SHUTDOWN_RETRY  - Blocked shutdown procedure will be retried every second.
 
+
 #ifndef NRF_PWR_MGMT_CONFIG_AUTO_SHUTDOWN_RETRY
 #define NRF_PWR_MGMT_CONFIG_AUTO_SHUTDOWN_RETRY 0
 #endif
 
 // <q> NRF_PWR_MGMT_CONFIG_USE_SCHEDULER  - Module will use @ref app_scheduler.
+
 
 #ifndef NRF_PWR_MGMT_CONFIG_USE_SCHEDULER
 #define NRF_PWR_MGMT_CONFIG_USE_SCHEDULER 0
@@ -7162,6 +7455,7 @@
 #endif
 // <q> NRF_QUEUE_CLI_CMDS  - Enable CLI commands specific to the module
 
+
 #ifndef NRF_QUEUE_CLI_CMDS
 #define NRF_QUEUE_CLI_CMDS 0
 #endif
@@ -7170,11 +7464,13 @@
 
 // <q> NRF_SECTION_ITER_ENABLED  - nrf_section_iter - Section iterator
 
+
 #ifndef NRF_SECTION_ITER_ENABLED
 #define NRF_SECTION_ITER_ENABLED 1
 #endif
 
 // <q> NRF_SORTLIST_ENABLED  - nrf_sortlist - Sorted list
+
 
 #ifndef NRF_SORTLIST_ENABLED
 #define NRF_SORTLIST_ENABLED 1
@@ -7182,11 +7478,13 @@
 
 // <q> NRF_SPI_MNGR_ENABLED  - nrf_spi_mngr - SPI transaction manager
 
+
 #ifndef NRF_SPI_MNGR_ENABLED
 #define NRF_SPI_MNGR_ENABLED 0
 #endif
 
 // <q> NRF_STRERROR_ENABLED  - nrf_strerror - Library for converting error code to string.
+
 
 #ifndef NRF_STRERROR_ENABLED
 #define NRF_STRERROR_ENABLED 1
@@ -7194,17 +7492,20 @@
 
 // <q> NRF_TWI_MNGR_ENABLED  - nrf_twi_mngr - TWI transaction manager
 
+
 #ifndef NRF_TWI_MNGR_ENABLED
 #define NRF_TWI_MNGR_ENABLED 0
 #endif
 
 // <q> RETARGET_ENABLED  - retarget - Retargeting stdio functions
 
+
 #ifndef RETARGET_ENABLED
 #define RETARGET_ENABLED 0
 #endif
 
 // <q> SLIP_ENABLED  - slip - SLIP encoding and decoding
+
 
 #ifndef SLIP_ENABLED
 #define SLIP_ENABLED 0
@@ -7216,6 +7517,7 @@
 #define TASK_MANAGER_ENABLED 0
 #endif
 // <q> TASK_MANAGER_CLI_CMDS  - Enable CLI commands specific to the module
+
 
 #ifndef TASK_MANAGER_CLI_CMDS
 #define TASK_MANAGER_CLI_CMDS 0
@@ -7232,6 +7534,7 @@
 #endif
 
 // <q> TASK_MANAGER_CONFIG_STACK_PROFILER_ENABLED  - Enable stack profiling.
+
 
 #ifndef TASK_MANAGER_CONFIG_STACK_PROFILER_ENABLED
 #define TASK_MANAGER_CONFIG_STACK_PROFILER_ENABLED 1
@@ -7257,11 +7560,13 @@
 //==========================================================
 // <q> BUTTON_ENABLED  - Enables Button module
 
+
 #ifndef BUTTON_ENABLED
 #define BUTTON_ENABLED 0
 #endif
 
 // <q> BUTTON_HIGH_ACCURACY_ENABLED  - Enables GPIOTE high accuracy for buttons
+
 
 #ifndef BUTTON_HIGH_ACCURACY_ENABLED
 #define BUTTON_HIGH_ACCURACY_ENABLED 0
@@ -7275,15 +7580,16 @@
 //==========================================================
 // <q> APP_USBD_CDC_ACM_ENABLED  - Enabling USBD CDC ACM Class library
 
+
 #ifndef APP_USBD_CDC_ACM_ENABLED
 #define APP_USBD_CDC_ACM_ENABLED 1
 #endif
 
 // <q> APP_USBD_CDC_ACM_ZLP_ON_EPSIZE_WRITE  - Send ZLP on write with same size as endpoint
 
-// <i> If enabled, CDC ACM class will automatically send a zero length packet after transfer which has the same size as
-// endpoint. <i> This may limit throughput if a lot of binary data is sent, but in terminal mode operation it makes sure
-// that the data is always displayed right after it is sent.
+
+// <i> If enabled, CDC ACM class will automatically send a zero length packet after transfer which has the same size as endpoint.
+// <i> This may limit throughput if a lot of binary data is sent, but in terminal mode operation it makes sure that the data is always displayed right after it is sent.
 
 #ifndef APP_USBD_CDC_ACM_ZLP_ON_EPSIZE_WRITE
 #define APP_USBD_CDC_ACM_ZLP_ON_EPSIZE_WRITE 1
@@ -7297,6 +7603,7 @@
 //==========================================================
 // <q> NRF_CLI_ENABLED  - Enable/disable the CLI module.
 
+
 #ifndef NRF_CLI_ENABLED
 #define NRF_CLI_ENABLED 0
 #endif
@@ -7307,6 +7614,7 @@
 #endif
 
 // <q> NRF_CLI_BUILD_IN_CMDS_ENABLED  - CLI built-in commands.
+
 
 #ifndef NRF_CLI_BUILD_IN_CMDS_ENABLED
 #define NRF_CLI_BUILD_IN_CMDS_ENABLED 1
@@ -7319,17 +7627,20 @@
 
 // <q> NRF_CLI_ECHO_STATUS  - CLI echo status. If set, echo is ON.
 
+
 #ifndef NRF_CLI_ECHO_STATUS
 #define NRF_CLI_ECHO_STATUS 1
 #endif
 
 // <q> NRF_CLI_WILDCARD_ENABLED  - Enable wildcard functionality for CLI commands.
 
+
 #ifndef NRF_CLI_WILDCARD_ENABLED
 #define NRF_CLI_WILDCARD_ENABLED 0
 #endif
 
 // <q> NRF_CLI_METAKEYS_ENABLED  - Enable additional control keys for CLI commands like ctrl+a, ctrl+e, ctrl+w, ctrl+u
+
 
 #ifndef NRF_CLI_METAKEYS_ENABLED
 #define NRF_CLI_METAKEYS_ENABLED 0
@@ -7359,11 +7670,13 @@
 
 // <q> NRF_CLI_VT100_COLORS_ENABLED  - CLI VT100 colors.
 
+
 #ifndef NRF_CLI_VT100_COLORS_ENABLED
 #define NRF_CLI_VT100_COLORS_ENABLED 1
 #endif
 
 // <q> NRF_CLI_STATISTICS_ENABLED  - Enable CLI statistics.
+
 
 #ifndef NRF_CLI_STATISTICS_ENABLED
 #define NRF_CLI_STATISTICS_ENABLED 1
@@ -7371,11 +7684,13 @@
 
 // <q> NRF_CLI_LOG_BACKEND  - Enable logger backend interface.
 
+
 #ifndef NRF_CLI_LOG_BACKEND
 #define NRF_CLI_LOG_BACKEND 1
 #endif
 
 // <q> NRF_CLI_USES_TASK_MANAGER_ENABLED  - Enable CLI to use task_manager
+
 
 #ifndef NRF_CLI_USES_TASK_MANAGER_ENABLED
 #define NRF_CLI_USES_TASK_MANAGER_ENABLED 0
@@ -7389,17 +7704,20 @@
 //==========================================================
 // <q> NRF_FPRINTF_ENABLED  - Enable/disable fprintf module.
 
+
 #ifndef NRF_FPRINTF_ENABLED
 #define NRF_FPRINTF_ENABLED 1
 #endif
 
 // <q> NRF_FPRINTF_FLAG_AUTOMATIC_CR_ON_LF_ENABLED  - For each printed LF, function will add CR.
 
+
 #ifndef NRF_FPRINTF_FLAG_AUTOMATIC_CR_ON_LF_ENABLED
 #define NRF_FPRINTF_FLAG_AUTOMATIC_CR_ON_LF_ENABLED 1
 #endif
 
 // <q> NRF_FPRINTF_DOUBLE_ENABLED  - Enable IEEE-754 double precision formatting.
+
 
 #ifndef NRF_FPRINTF_DOUBLE_ENABLED
 #define NRF_FPRINTF_DOUBLE_ENABLED 0
@@ -7480,6 +7798,7 @@
 
 // <q> NRF_LOG_ALLOW_OVERFLOW  - Configures behavior when circular buffer is full.
 
+
 // <i> If set then oldest logs are overwritten. Otherwise a
 // <i> marker is injected informing about overflow.
 
@@ -7488,6 +7807,7 @@
 #endif
 
 // <o> NRF_LOG_BUFSIZE  - Size of the buffer for storing logs (in bytes).
+
 
 // <i> Must be power of 2 and multiple of 4.
 // <i> If NRF_LOG_DEFERRED = 0 then buffer size can be reduced to minimum.
@@ -7505,6 +7825,7 @@
 #endif
 
 // <q> NRF_LOG_CLI_CMDS  - Enable CLI commands for the module.
+
 
 #ifndef NRF_LOG_CLI_CMDS
 #define NRF_LOG_CLI_CMDS 0
@@ -7524,6 +7845,7 @@
 
 // <q> NRF_LOG_DEFERRED  - Enable deffered logger.
 
+
 // <i> Log data is buffered and can be processed in idle.
 
 #ifndef NRF_LOG_DEFERRED
@@ -7532,12 +7854,13 @@
 
 // <q> NRF_LOG_FILTERS_ENABLED  - Enable dynamic filtering of logs.
 
+
 #ifndef NRF_LOG_FILTERS_ENABLED
 #define NRF_LOG_FILTERS_ENABLED 0
 #endif
 
-// <q> NRF_LOG_NON_DEFFERED_CRITICAL_REGION_ENABLED  - Enable use of critical region for non deffered mode when flushing
-// logs.
+// <q> NRF_LOG_NON_DEFFERED_CRITICAL_REGION_ENABLED  - Enable use of critical region for non deffered mode when flushing logs.
+
 
 // <i> When enabled NRF_LOG_FLUSH is called from critical section when non deffered mode is used.
 // <i> Log output will never be corrupted as access to the log backend is exclusive
@@ -8370,6 +8693,7 @@
 
 // <q> RNG_CONFIG_RANDOM_NUMBER_LOG_ENABLED  - Enables logging of random numbers.
 
+
 #ifndef RNG_CONFIG_RANDOM_NUMBER_LOG_ENABLED
 #define RNG_CONFIG_RANDOM_NUMBER_LOG_ENABLED 0
 #endif
@@ -8911,6 +9235,7 @@
 
 // <o> APP_BUTTON_CONFIG_INITIAL_LOG_LEVEL  - Initial severity level if dynamic filtering is enabled.
 
+
 // <i> If module generates a lot of logs, initial log level can
 // <i> be decreased to prevent flooding. Severity level can be
 // <i> increased on instance basis.
@@ -8976,6 +9301,7 @@
 #endif
 
 // <o> APP_TIMER_CONFIG_INITIAL_LOG_LEVEL  - Initial severity level if dynamic filtering is enabled.
+
 
 // <i> If module generates a lot of logs, initial log level can
 // <i> be decreased to prevent flooding. Severity level can be
@@ -9360,6 +9686,7 @@
 #endif
 
 // <o> NRF_BALLOC_CONFIG_INITIAL_LOG_LEVEL  - Initial severity level if dynamic filtering is enabled.
+
 
 // <i> If module generates a lot of logs, initial log level can
 // <i> be decreased to prevent flooding. Severity level can be
@@ -10390,6 +10717,7 @@
 
 // <q> NRF_LOG_STR_FORMATTER_TIMESTAMP_FORMAT_ENABLED  - nrf_log_str_formatter - Log string formatter
 
+
 #ifndef NRF_LOG_STR_FORMATTER_TIMESTAMP_FORMAT_ENABLED
 #define NRF_LOG_STR_FORMATTER_TIMESTAMP_FORMAT_ENABLED 1
 #endif
@@ -10402,11 +10730,13 @@
 //==========================================================
 // <q> NFC_AC_REC_ENABLED  - nfc_ac_rec - NFC NDEF Alternative Carrier record encoder
 
+
 #ifndef NFC_AC_REC_ENABLED
 #define NFC_AC_REC_ENABLED 0
 #endif
 
 // <q> NFC_AC_REC_PARSER_ENABLED  - nfc_ac_rec_parser - Alternative Carrier record parser
+
 
 #ifndef NFC_AC_REC_PARSER_ENABLED
 #define NFC_AC_REC_PARSER_ENABLED 0
@@ -10417,8 +10747,7 @@
 #ifndef NFC_BLE_OOB_ADVDATA_ENABLED
 #define NFC_BLE_OOB_ADVDATA_ENABLED 0
 #endif
-// <o> ADVANCED_ADVDATA_SUPPORT  - Non-mandatory AD types for BLE OOB pairing are encoded inside the NDEF message (e.g.
-// service UUIDs)
+// <o> ADVANCED_ADVDATA_SUPPORT  - Non-mandatory AD types for BLE OOB pairing are encoded inside the NDEF message (e.g. service UUIDs)
 
 // <1=> Enabled
 // <0=> Disabled
@@ -10430,6 +10759,7 @@
 // </e>
 
 // <q> NFC_BLE_OOB_ADVDATA_PARSER_ENABLED  - nfc_ble_oob_advdata_parser - BLE OOB pairing AD data parser
+
 
 #ifndef NFC_BLE_OOB_ADVDATA_PARSER_ENABLED
 #define NFC_BLE_OOB_ADVDATA_PARSER_ENABLED 0
@@ -10503,12 +10833,13 @@
 #endif
 // <q> BLE_NFC_SEC_PARAM_KDIST_OWN_ENC  - Enables Long Term Key and Master Identification distribution by device.
 
+
 #ifndef BLE_NFC_SEC_PARAM_KDIST_OWN_ENC
 #define BLE_NFC_SEC_PARAM_KDIST_OWN_ENC 1
 #endif
 
-// <q> BLE_NFC_SEC_PARAM_KDIST_OWN_ID  - Enables Identity Resolving Key and Identity Address Information distribution by
-// device.
+// <q> BLE_NFC_SEC_PARAM_KDIST_OWN_ID  - Enables Identity Resolving Key and Identity Address Information distribution by device.
+
 
 #ifndef BLE_NFC_SEC_PARAM_KDIST_OWN_ID
 #define BLE_NFC_SEC_PARAM_KDIST_OWN_ID 1
@@ -10516,12 +10847,13 @@
 
 // <q> BLE_NFC_SEC_PARAM_KDIST_PEER_ENC  - Enables Long Term Key and Master Identification distribution by peer.
 
+
 #ifndef BLE_NFC_SEC_PARAM_KDIST_PEER_ENC
 #define BLE_NFC_SEC_PARAM_KDIST_PEER_ENC 1
 #endif
 
-// <q> BLE_NFC_SEC_PARAM_KDIST_PEER_ID  - Enables Identity Resolving Key and Identity Address Information distribution
-// by peer.
+// <q> BLE_NFC_SEC_PARAM_KDIST_PEER_ID  - Enables Identity Resolving Key and Identity Address Information distribution by peer.
+
 
 #ifndef BLE_NFC_SEC_PARAM_KDIST_PEER_ID
 #define BLE_NFC_SEC_PARAM_KDIST_PEER_ID 1
@@ -10570,11 +10902,13 @@
 
 // <q> NFC_BLE_PAIR_MSG_ENABLED  - nfc_ble_pair_msg - NDEF message for OOB pairing encoder
 
+
 #ifndef NFC_BLE_PAIR_MSG_ENABLED
 #define NFC_BLE_PAIR_MSG_ENABLED 0
 #endif
 
 // <q> NFC_CH_COMMON_ENABLED  - nfc_ble_pair_common - OOB pairing common data
+
 
 #ifndef NFC_CH_COMMON_ENABLED
 #define NFC_CH_COMMON_ENABLED 0
@@ -10582,11 +10916,13 @@
 
 // <q> NFC_EP_OOB_REC_ENABLED  - nfc_ep_oob_rec - EP record for BLE pairing encoder
 
+
 #ifndef NFC_EP_OOB_REC_ENABLED
 #define NFC_EP_OOB_REC_ENABLED 0
 #endif
 
 // <q> NFC_HS_REC_ENABLED  - nfc_hs_rec - Handover Select NDEF record encoder
+
 
 #ifndef NFC_HS_REC_ENABLED
 #define NFC_HS_REC_ENABLED 0
@@ -10594,25 +10930,27 @@
 
 // <q> NFC_LE_OOB_REC_ENABLED  - nfc_le_oob_rec - LE record for BLE pairing encoder
 
+
 #ifndef NFC_LE_OOB_REC_ENABLED
 #define NFC_LE_OOB_REC_ENABLED 0
 #endif
 
 // <q> NFC_LE_OOB_REC_PARSER_ENABLED  - nfc_le_oob_rec_parser - LE record parser
 
+
 #ifndef NFC_LE_OOB_REC_PARSER_ENABLED
 #define NFC_LE_OOB_REC_PARSER_ENABLED 0
 #endif
 
-// <q> NFC_NDEF_LAUNCHAPP_MSG_ENABLED  - nfc_launchapp_msg - Encoding data for NDEF Application Launching message for
-// NFC Tag
+// <q> NFC_NDEF_LAUNCHAPP_MSG_ENABLED  - nfc_launchapp_msg - Encoding data for NDEF Application Launching message for NFC Tag
+
 
 #ifndef NFC_NDEF_LAUNCHAPP_MSG_ENABLED
 #define NFC_NDEF_LAUNCHAPP_MSG_ENABLED 0
 #endif
 
-// <q> NFC_NDEF_LAUNCHAPP_REC_ENABLED  - nfc_launchapp_rec - Encoding data for NDEF Application Launching record for NFC
-// Tag
+// <q> NFC_NDEF_LAUNCHAPP_REC_ENABLED  - nfc_launchapp_rec - Encoding data for NDEF Application Launching record for NFC Tag
+
 
 #ifndef NFC_NDEF_LAUNCHAPP_REC_ENABLED
 #define NFC_NDEF_LAUNCHAPP_REC_ENABLED 0
@@ -10678,6 +11016,7 @@
 
 // <q> NFC_NDEF_RECORD_ENABLED  - nfc_ndef_record - NFC NDEF Record generator module
 
+
 #ifndef NFC_NDEF_RECORD_ENABLED
 #define NFC_NDEF_RECORD_ENABLED 0
 #endif
@@ -10726,17 +11065,20 @@
 
 // <q> NFC_NDEF_TEXT_RECORD_ENABLED  - nfc_text_rec - Encoding data for a text record for NFC Tag
 
+
 #ifndef NFC_NDEF_TEXT_RECORD_ENABLED
 #define NFC_NDEF_TEXT_RECORD_ENABLED 0
 #endif
 
 // <q> NFC_NDEF_URI_MSG_ENABLED  - nfc_uri_msg - Encoding data for NDEF message with URI record for NFC Tag
 
+
 #ifndef NFC_NDEF_URI_MSG_ENABLED
 #define NFC_NDEF_URI_MSG_ENABLED 0
 #endif
 
 // <q> NFC_NDEF_URI_REC_ENABLED  - nfc_uri_rec - Encoding data for a URI record for NFC Tag
+
 
 #ifndef NFC_NDEF_URI_REC_ENABLED
 #define NFC_NDEF_URI_REC_ENABLED 0
@@ -10926,8 +11268,7 @@
 
 // </e>
 
-// <e> NFC_T4T_HL_DETECTION_PROCEDURES_ENABLED - nfc_t4t_hl_detection_procedures - NDEF Detection Procedure for Type 4
-// Tag
+// <e> NFC_T4T_HL_DETECTION_PROCEDURES_ENABLED - nfc_t4t_hl_detection_procedures - NDEF Detection Procedure for Type 4 Tag
 //==========================================================
 #ifndef NFC_T4T_HL_DETECTION_PROCEDURES_ENABLED
 #define NFC_T4T_HL_DETECTION_PROCEDURES_ENABLED 0
@@ -11055,6 +11396,7 @@
 
 // <o> SEGGER_RTT_CONFIG_DEFAULT_MODE  - RTT behavior if the buffer is full.
 
+
 // <i> The following modes are supported:
 // <i> - SKIP  - Do not block, output nothing.
 // <i> - TRIM  - Do not block, output as much as fits.
@@ -11083,11 +11425,11 @@
 #endif
 // <h> BLE Stack configuration - Stack configuration parameters
 
-// <i> The SoftDevice handler will configure the stack with these parameters when calling @ref
-// nrf_sdh_ble_default_cfg_set. <i> Other libraries might depend on these values; keep them up-to-date even if you are
-// not explicitely calling @ref nrf_sdh_ble_default_cfg_set.
+// <i> The SoftDevice handler will configure the stack with these parameters when calling @ref nrf_sdh_ble_default_cfg_set.
+// <i> Other libraries might depend on these values; keep them up-to-date even if you are not explicitely calling @ref nrf_sdh_ble_default_cfg_set.
 //==========================================================
 // <o> NRF_SDH_BLE_GAP_DATA_LENGTH   <27-251>
+
 
 // <i> Requested BLE GAP data length to be negotiated.
 
@@ -11135,6 +11477,7 @@
 #endif
 
 // <q> NRF_SDH_BLE_SERVICE_CHANGED  - Include the Service Changed characteristic in the Attribute Table.
+
 
 #ifndef NRF_SDH_BLE_SERVICE_CHANGED
 #define NRF_SDH_BLE_SERVICE_CHANGED 0
@@ -11553,6 +11896,7 @@
 // </h>
 //==========================================================
 
+
 // </e>
 
 // <e> NRF_SDH_ENABLED - nrf_sdh - SoftDevice handler
@@ -11565,6 +11909,7 @@
 // <i> This setting configures how Stack events are dispatched to the application.
 //==========================================================
 // <o> NRF_SDH_DISPATCH_MODEL
+
 
 // <i> NRF_SDH_DISPATCH_MODEL_INTERRUPT: SoftDevice events are passed to the application from the interrupt context.
 // <i> NRF_SDH_DISPATCH_MODEL_APPSH: SoftDevice events are scheduled using @ref app_scheduler.
@@ -11648,13 +11993,13 @@
 #endif
 
 // <o> NRF_SDH_STACK_OBSERVER_PRIO_LEVELS - Total number of priority levels for stack event observers.
-// <i> This setting configures the number of priority levels available for the SoftDevice stack event handlers (ANT,
-// BLE, SoC). <i> The priority level of a handler determines the order in which it receives events, with respect to
-// other handlers.
+// <i> This setting configures the number of priority levels available for the SoftDevice stack event handlers (ANT, BLE, SoC).
+// <i> The priority level of a handler determines the order in which it receives events, with respect to other handlers.
 
 #ifndef NRF_SDH_STACK_OBSERVER_PRIO_LEVELS
 #define NRF_SDH_STACK_OBSERVER_PRIO_LEVELS 2
 #endif
+
 
 // <h> State Observers priorities - Invididual priorities
 
@@ -11687,27 +12032,27 @@
 
 //==========================================================
 // <o> NRF_SDH_ANT_STACK_OBSERVER_PRIO
-// <i> This setting configures the priority with which ANT events are processed with respect to other events coming from
-// the stack. <i> Modify this setting if you need to have ANT events dispatched before or after other stack events, such
-// as BLE or SoC. <i> Zero is the highest priority.
+// <i> This setting configures the priority with which ANT events are processed with respect to other events coming from the stack.
+// <i> Modify this setting if you need to have ANT events dispatched before or after other stack events, such as BLE or SoC.
+// <i> Zero is the highest priority.
 
 #ifndef NRF_SDH_ANT_STACK_OBSERVER_PRIO
 #define NRF_SDH_ANT_STACK_OBSERVER_PRIO 0
 #endif
 
 // <o> NRF_SDH_BLE_STACK_OBSERVER_PRIO
-// <i> This setting configures the priority with which BLE events are processed with respect to other events coming from
-// the stack. <i> Modify this setting if you need to have BLE events dispatched before or after other stack events, such
-// as ANT or SoC. <i> Zero is the highest priority.
+// <i> This setting configures the priority with which BLE events are processed with respect to other events coming from the stack.
+// <i> Modify this setting if you need to have BLE events dispatched before or after other stack events, such as ANT or SoC.
+// <i> Zero is the highest priority.
 
 #ifndef NRF_SDH_BLE_STACK_OBSERVER_PRIO
 #define NRF_SDH_BLE_STACK_OBSERVER_PRIO 0
 #endif
 
 // <o> NRF_SDH_SOC_STACK_OBSERVER_PRIO
-// <i> This setting configures the priority with which SoC events are processed with respect to other events coming from
-// the stack. <i> Modify this setting if you need to have SoC events dispatched before or after other stack events, such
-// as ANT or BLE. <i> Zero is the highest priority.
+// <i> This setting configures the priority with which SoC events are processed with respect to other events coming from the stack.
+// <i> Modify this setting if you need to have SoC events dispatched before or after other stack events, such as ANT or BLE.
+// <i> Zero is the highest priority.
 
 #ifndef NRF_SDH_SOC_STACK_OBSERVER_PRIO
 #define NRF_SDH_SOC_STACK_OBSERVER_PRIO 0
@@ -11718,6 +12063,7 @@
 
 // </h>
 //==========================================================
+
 
 // </e>
 
@@ -11767,10 +12113,12 @@
 // </h>
 //==========================================================
 
+
 // </e>
 
 // </h>
 //==========================================================
 
 // <<< end of configuration section >>>
-#endif  // SDK_CONFIG_H
+#endif //SDK_CONFIG_H
+

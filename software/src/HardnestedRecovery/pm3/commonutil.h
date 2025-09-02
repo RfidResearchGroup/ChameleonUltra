@@ -33,20 +33,20 @@
 #endif
 #else
 #ifndef BSWAP_16
-#define BSWAP_16(x) (((((x)&0xFF00) >> 8)) | ((((x)&0x00FF) << 8)))
+# define BSWAP_16(x) ((( ((x) & 0xFF00 ) >> 8))| ( (((x) & 0x00FF) << 8)))
 #endif
 #endif
 #endif
 
 #ifndef BITMASK
-#define BITMASK(X) (1 << (X))
+# define BITMASK(X) (1 << (X))
 #endif
 #ifndef ARRAYLEN
-#define ARRAYLEN(x) (sizeof(x) / sizeof((x)[0]))
+# define ARRAYLEN(x) (sizeof(x)/sizeof((x)[0]))
 #endif
 
 #ifndef NTIME
-#define NTIME(n) for (int _index = 0; _index < n; _index++)
+# define NTIME(n) for (int _index = 0; _index < n; _index++)
 #endif
 
 uint64_t bytes_to_num(uint8_t *src, size_t len);

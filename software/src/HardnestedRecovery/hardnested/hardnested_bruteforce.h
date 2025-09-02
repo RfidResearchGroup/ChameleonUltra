@@ -17,10 +17,10 @@
 #ifndef HARDNESTED_BRUTEFORCE_H__
 #define HARDNESTED_BRUTEFORCE_H__
 
-#include <stdbool.h>
 #include <stdint.h>
+#include <stdbool.h>
 
-#define NUM_SUMS 19  // number of possible sum property values
+#define NUM_SUMS 19 // number of possible sum property values
 
 typedef struct guess_sum_a8 {
     float prob;
@@ -54,8 +54,7 @@ typedef struct {
 } statelist_t;
 
 void prepare_bf_test_nonces(noncelist_t *nonces, uint8_t best_first_byte);
-bool brute_force_bs(float *bf_rate, statelist_t *candidates, uint32_t cuid, uint32_t num_acquired_nonces,
-                    uint64_t maximum_states, noncelist_t *nonces, uint8_t *best_first_bytes, uint64_t *found_key);
+bool brute_force_bs(float *bf_rate, statelist_t *candidates, uint32_t cuid, uint32_t num_acquired_nonces, uint64_t maximum_states, noncelist_t *nonces, uint8_t *best_first_bytes, uint64_t *found_key);
 float brute_force_benchmark(void);
 uint8_t trailing_zeros(uint8_t byte);
 bool verify_key(uint32_t cuid, noncelist_t *nonces, const uint8_t *best_first_bytes, uint32_t odd, uint32_t even);

@@ -1,19 +1,17 @@
-#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <inttypes.h>
 #include "common.h"
 #include "nested_util.h"
 
-int main(int argc, char *const argv[])
-{
+int main(int argc, char *const argv[]) {
     NtpKs1 *pNK = NULL;
     uint32_t i, j, m;
     uint32_t nt1, nt2, nttest, ks1, dist;
 
-    uint32_t authuid = atoui(argv[1]);       // uid
-    uint8_t type = (uint8_t)atoui(argv[2]);  // target key type
+    uint32_t authuid = atoui(argv[1]);   // uid
+    uint8_t type = (uint8_t)atoui(argv[2]); // target key type
 
     // process all args.
     bool check_st_level_at_first_run = false;
@@ -27,23 +25,18 @@ int main(int argc, char *const argv[])
             if (nt1 == 0x01200145) {
                 // There is no loophole in this generation.
                 // This tag can be decrypted with the default parameter value 160!
-                dist = 160;  // st gen1
-            }
-            else if (nt1 == 0x009080A2) {  // st gen2
-                // We found that the gen2 tag is vulnerable too but parameter must be adapted depending on the attacked
-                // key
+                dist = 160; // st gen1
+            } else if (nt1 == 0x009080A2) {   // st gen2
+                // We found that the gen2 tag is vulnerable too but parameter must be adapted depending on the attacked key
                 if (type == 0x61) {
                     dist = 161;
-                }
-                else if (type == 0x60) {
+                } else if (type == 0x60) {
                     dist = 160;
-                }
-                else {
+                } else {
                     // can't be here!!!
                     goto error;
                 }
-            }
-            else {
+            } else {
                 // can't be here!!!
                 goto error;
             }

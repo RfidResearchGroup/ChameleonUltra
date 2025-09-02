@@ -23,8 +23,7 @@ typedef enum {
     SettingsButtonCycleSlot = 1U,
     // Card slot number sequence decreases after pressing
     SettingsButtonCycleSlotDec = 2U,
-    // Read the UID card number immediately after pressing, continue searching, and simulate immediately after reading
-    // the card
+    // Read the UID card number immediately after pressing, continue searching, and simulate immediately after reading the card
     SettingsButtonCloneIcUid = 3U,
     SettingsButtonShowBattery = 4U,
 } settings_button_function_t;
@@ -35,7 +34,7 @@ typedef struct ALIGN_U32 {
     // 1 byte
     uint8_t animation_config : 2;
     uint8_t ble_pairing_enable : 1;
-    uint8_t reserved0 : 5;  // If you are add switch field, reallocating me.
+    uint8_t reserved0 : 5; // If you are add switch field, reallocating me.
 
     // 1 byte
     uint8_t button_a_press : 4;
@@ -49,7 +48,7 @@ typedef struct ALIGN_U32 {
     uint8_t ble_connect_key[6];
 
     // 1 byte
-    uint8_t reserved1;  // see bottom.
+    uint8_t reserved1; // see bottom.
 
     /*
      * Warning !!!!!!!!!!!!!!!!!!!!!! <-------------

@@ -17,14 +17,12 @@
 #include "crapto1.h"
 
 #include <stdlib.h>
-
 #include "parity.h"
 
 /** update_contribution
  * helper, calculates the partial linear feedback contributions and puts in MSB
  */
-static inline void update_contribution(uint32_t *item, const uint32_t mask1, const uint32_t mask2)
-{
+static inline void update_contribution(uint32_t *item, const uint32_t mask1, const uint32_t mask2) {
     uint32_t p = *item >> 25;
 
     p = p << 1 | (evenparity32(*item & mask1));
@@ -35,50 +33,44 @@ static inline void update_contribution(uint32_t *item, const uint32_t mask1, con
 /** extend_table
  * using a bit of the keystream extend the table of possible lfsr states
  */
-static inline void extend_table(uint32_t *tbl, uint32_t **end, int bit, int m1, int m2, uint32_t in)
-{
+static inline void extend_table(uint32_t *tbl, uint32_t **end, int bit, int m1, int m2, uint32_t in) {
     in <<= 24;
     for (*tbl <<= 1; tbl <= *end; *++tbl <<= 1)
         if (filter(*tbl) ^ filter(*tbl | 1)) {
             *tbl |= filter(*tbl) ^ bit;
             update_contribution(tbl, m1, m2);
             *tbl ^= in;
-        }
-        else if (filter(*tbl) == bit) {
+        } else if (filter(*tbl) == bit) {
             *++*end = tbl[1];
             tbl[1] = tbl[0] | 1;
             update_contribution(tbl, m1, m2);
             *tbl++ ^= in;
             update_contribution(tbl, m1, m2);
             *tbl ^= in;
-        }
-        else
+        } else
             *tbl-- = *(*end)--;
 }
 /** extend_table_simple
  * using a bit of the keystream extend the table of possible lfsr states
  */
-static inline void extend_table_simple(uint32_t *tbl, uint32_t **end, int bit)
-{
+static inline void extend_table_simple(uint32_t *tbl, uint32_t **end, int bit) {
     for (*tbl <<= 1; tbl <= *end; *++tbl <<= 1) {
-        if (filter(*tbl) ^ filter(*tbl | 1)) {  // replace
+        if (filter(*tbl) ^ filter(*tbl | 1)) { // replace
             *tbl |= filter(*tbl) ^ bit;
-        }
-        else if (filter(*tbl) == bit) {  // insert
+        } else if (filter(*tbl) == bit) {     // insert
             *++*end = *++tbl;
             *tbl = tbl[-1] | 1;
-        }
-        else {  // drop
+        } else {                              // drop
             *tbl-- = *(*end)--;
         }
     }
 }
 
+
 /** lfsr_rollback_bit
  * Rollback the shift register in order to get previous states
  */
-uint8_t lfsr_rollback_bit(struct Crypto1State *s, uint32_t in, int fb)
-{
+uint8_t lfsr_rollback_bit(struct Crypto1State *s, uint32_t in, int fb) {
     int out;
     uint8_t ret;
     uint32_t t;
@@ -98,8 +90,7 @@ uint8_t lfsr_rollback_bit(struct Crypto1State *s, uint32_t in, int fb)
 /** lfsr_rollback_byte
  * Rollback the shift register in order to get previous states
  */
-uint8_t lfsr_rollback_byte(struct Crypto1State *s, uint32_t in, int fb)
-{
+uint8_t lfsr_rollback_byte(struct Crypto1State *s, uint32_t in, int fb) {
     uint8_t ret = 0;
     ret |= lfsr_rollback_bit(s, BIT(in, 7), fb) << 7;
     ret |= lfsr_rollback_bit(s, BIT(in, 6), fb) << 6;
@@ -114,8 +105,8 @@ uint8_t lfsr_rollback_byte(struct Crypto1State *s, uint32_t in, int fb)
 /** lfsr_rollback_word
  * Rollback the shift register in order to get previous states
  */
-uint32_t lfsr_rollback_word(struct Crypto1State *s, uint32_t in, int fb)
-{
+uint32_t lfsr_rollback_word(struct Crypto1State *s, uint32_t in, int fb) {
+
     uint32_t ret = 0;
     // note: xor args have been swapped because some compilers emit a warning
     // for 10^x and 2^x as possible misuses for exponentiation. No comment.
@@ -161,12 +152,12 @@ uint32_t lfsr_rollback_word(struct Crypto1State *s, uint32_t in, int fb)
  * x,y valid tag nonces, then prng_successor(x, nonce_distance(x, y)) = y
  */
 static uint16_t *dist = 0;
-int nonce_distance(uint32_t from, uint32_t to)
-{
+int nonce_distance(uint32_t from, uint32_t to) {
     if (!dist) {
         // allocation 2bytes * 0xFFFF times.
-        dist = calloc(2 << 16, sizeof(uint8_t));
-        if (!dist) return -1;
+        dist = calloc(2 << 16,  sizeof(uint8_t));
+        if (!dist)
+            return -1;
         uint16_t x = 1;
         for (uint16_t i = 1; i; ++i) {
             dist[(x & 0xff) << 8 | x >> 8] = i;
@@ -182,15 +173,17 @@ int nonce_distance(uint32_t from, uint32_t to)
  *   true = weak prng
  *   false = hardend prng
  */
-bool validate_prng_nonce(uint32_t nonce)
-{
+bool validate_prng_nonce(uint32_t nonce) {
     // init prng table:
-    if (nonce_distance(nonce, nonce) == -1) return false;
+    if (nonce_distance(nonce, nonce) == -1)
+        return false;
     return ((65535 - dist[nonce >> 16] + dist[nonce & 0xffff]) % 65535) == 16;
 }
 
-static uint32_t fastfwd[2][8] = {{0, 0x4BC53, 0xECB1, 0x450E2, 0x25E29, 0x6E27A, 0x2B298, 0x60ECB},
-                                 {0, 0x1D962, 0x4BC53, 0x56531, 0xECB1, 0x135D3, 0x450E2, 0x58980}};
+static uint32_t fastfwd[2][8] = {
+    { 0, 0x4BC53, 0xECB1, 0x450E2, 0x25E29, 0x6E27A, 0x2B298, 0x60ECB},
+    { 0, 0x1D962, 0x4BC53, 0x56531, 0xECB1, 0x135D3, 0x450E2, 0x58980}
+};
 
 /** lfsr_prefix_ks
  *
@@ -201,8 +194,7 @@ static uint32_t fastfwd[2][8] = {{0, 0x4BC53, 0xECB1, 0x450E2, 0x25E29, 0x6E27A,
  * encrypt the NACK which is observed when varying only the 3 last bits of Nr
  * only correct iff [NR_3] ^ NR_3 does not depend on Nr_3
  */
-uint32_t *lfsr_prefix_ks(const uint8_t ks[8], int isodd)
-{
+uint32_t *lfsr_prefix_ks(const uint8_t ks[8], int isodd) {
     uint32_t *candidates = calloc(4 << 10, sizeof(uint8_t));
     if (!candidates) return 0;
 
@@ -215,7 +207,8 @@ uint32_t *lfsr_prefix_ks(const uint8_t ks[8], int isodd)
             good &= (BIT(ks[c], isodd) == filter(entry >> 1));
             good &= (BIT(ks[c], isodd + 2) == filter(entry));
         }
-        if (good) candidates[size++] = i;
+        if (good)
+            candidates[size++] = i;
     }
 
     candidates[size] = -1;
@@ -226,9 +219,7 @@ uint32_t *lfsr_prefix_ks(const uint8_t ks[8], int isodd)
 /** check_pfx_parity
  * helper function which eliminates possible secret states using parity bits
  */
-static struct Crypto1State *check_pfx_parity(uint32_t prefix, uint32_t rresp, uint8_t parities[8][8], uint32_t odd,
-                                             uint32_t even, struct Crypto1State *sl, uint32_t no_par)
-{
+static struct Crypto1State *check_pfx_parity(uint32_t prefix, uint32_t rresp, uint8_t parities[8][8], uint32_t odd, uint32_t even, struct Crypto1State *sl, uint32_t no_par) {
     uint32_t good = 1;
 
     for (uint32_t c = 0; good && c < 8; ++c) {
@@ -242,23 +233,23 @@ static struct Crypto1State *check_pfx_parity(uint32_t prefix, uint32_t rresp, ui
         uint32_t ks2 = lfsr_rollback_word(sl, 0, 0);
         uint32_t ks1 = lfsr_rollback_word(sl, prefix | c << 5, 1);
 
-        if (no_par) break;
+        if (no_par)
+            break;
 
         uint32_t nr = ks1 ^ (prefix | c << 5);
         uint32_t rr = ks2 ^ rresp;
 
         good &= evenparity32(nr & 0x000000ff) ^ parities[c][3] ^ BIT(ks2, 24);
         good &= evenparity32(rr & 0xff000000) ^ parities[c][4] ^ BIT(ks2, 16);
-        good &= evenparity32(rr & 0x00ff0000) ^ parities[c][5] ^ BIT(ks2, 8);
-        good &= evenparity32(rr & 0x0000ff00) ^ parities[c][6] ^ BIT(ks2, 0);
+        good &= evenparity32(rr & 0x00ff0000) ^ parities[c][5] ^ BIT(ks2,  8);
+        good &= evenparity32(rr & 0x0000ff00) ^ parities[c][6] ^ BIT(ks2,  0);
         good &= evenparity32(rr & 0x000000ff) ^ parities[c][7] ^ ks3;
     }
 
     return sl + good;
 }
 
-#if !defined(__arm__) || defined(__linux__) || defined(_WIN32) \
-    || defined(__APPLE__)  // bare metal ARM Proxmark lacks malloc()/free()
+#if !defined(__arm__) || defined(__linux__) || defined(_WIN32) || defined(__APPLE__) // bare metal ARM Proxmark lacks malloc()/free()
 /** lfsr_common_prefix
  * Implementation of the common prefix attack.
  * Requires the 28 bit constant prefix used as reader nonce (pfx)
@@ -269,15 +260,14 @@ static struct Crypto1State *check_pfx_parity(uint32_t prefix, uint32_t rresp, ui
  * tag nonce was fed in
  */
 
-struct Crypto1State *lfsr_common_prefix(uint32_t pfx, uint32_t rr, uint8_t ks[8], uint8_t par[8][8], uint32_t no_par)
-{
+struct Crypto1State *lfsr_common_prefix(uint32_t pfx, uint32_t rr, uint8_t ks[8], uint8_t par[8][8], uint32_t no_par) {
     struct Crypto1State *statelist, *s;
     uint32_t *odd, *even, *o, *e, top;
 
     odd = lfsr_prefix_ks(ks, 1);
     even = lfsr_prefix_ks(ks, 0);
 
-    s = statelist = calloc(1, (sizeof *statelist) << 24);  // was << 20. Need more for no_par special attack. Enough???
+    s = statelist = calloc(1, (sizeof * statelist) << 24); // was << 20. Need more for no_par special attack. Enough???
     if (!s || !odd || !even) {
         free(statelist);
         statelist = 0;

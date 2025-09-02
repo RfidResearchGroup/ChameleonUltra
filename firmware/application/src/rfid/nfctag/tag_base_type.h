@@ -92,25 +92,28 @@ typedef enum {
 
 } tag_specific_type_t;
 
-#define TAG_SPECIFIC_TYPE_OLD2NEW_LF_VALUES  \
-    {                                        \
-        OLD_TAG_TYPE_EM410X, TAG_TYPE_EM410X \
+#define TAG_SPECIFIC_TYPE_OLD2NEW_LF_VALUES \
+    {OLD_TAG_TYPE_EM410X, TAG_TYPE_EM410X}
+
+#define TAG_SPECIFIC_TYPE_OLD2NEW_HF_VALUES               \
+    {OLD_TAG_TYPE_MIFARE_Mini, TAG_TYPE_MIFARE_Mini},     \
+        {OLD_TAG_TYPE_MIFARE_1024, TAG_TYPE_MIFARE_1024}, \
+        {OLD_TAG_TYPE_MIFARE_2048, TAG_TYPE_MIFARE_2048}, \
+        {OLD_TAG_TYPE_MIFARE_4096, TAG_TYPE_MIFARE_4096}, \
+        {OLD_TAG_TYPE_NTAG_213, TAG_TYPE_NTAG_213},       \
+        {OLD_TAG_TYPE_NTAG_215, TAG_TYPE_NTAG_215}, {     \
+        OLD_TAG_TYPE_NTAG_216, TAG_TYPE_NTAG_216          \
     }
 
-#define TAG_SPECIFIC_TYPE_OLD2NEW_HF_VALUES                                                                 \
-    {OLD_TAG_TYPE_MIFARE_Mini, TAG_TYPE_MIFARE_Mini}, {OLD_TAG_TYPE_MIFARE_1024, TAG_TYPE_MIFARE_1024},     \
-        {OLD_TAG_TYPE_MIFARE_2048, TAG_TYPE_MIFARE_2048}, {OLD_TAG_TYPE_MIFARE_4096, TAG_TYPE_MIFARE_4096}, \
-        {OLD_TAG_TYPE_NTAG_213, TAG_TYPE_NTAG_213}, {OLD_TAG_TYPE_NTAG_215, TAG_TYPE_NTAG_215},             \
-    {                                                                                                       \
-        OLD_TAG_TYPE_NTAG_216, TAG_TYPE_NTAG_216                                                            \
-    }
+#define TAG_SPECIFIC_TYPE_LF_VALUES \
+    TAG_TYPE_EM410X, TAG_TYPE_HID_PROX, TAG_TYPE_VIKING
 
-#define TAG_SPECIFIC_TYPE_LF_VALUES TAG_TYPE_EM410X, TAG_TYPE_HID_PROX, TAG_TYPE_VIKING
-
-#define TAG_SPECIFIC_TYPE_HF_VALUES                                                                                   \
-    TAG_TYPE_MIFARE_Mini, TAG_TYPE_MIFARE_1024, TAG_TYPE_MIFARE_2048, TAG_TYPE_MIFARE_4096, TAG_TYPE_NTAG_213,        \
-        TAG_TYPE_NTAG_215, TAG_TYPE_NTAG_216, TAG_TYPE_MF0ICU1, TAG_TYPE_MF0ICU2, TAG_TYPE_MF0UL11, TAG_TYPE_MF0UL21, \
-        TAG_TYPE_NTAG_210, TAG_TYPE_NTAG_212
+#define TAG_SPECIFIC_TYPE_HF_VALUES                                   \
+    TAG_TYPE_MIFARE_Mini, TAG_TYPE_MIFARE_1024, TAG_TYPE_MIFARE_2048, \
+        TAG_TYPE_MIFARE_4096, TAG_TYPE_NTAG_213, TAG_TYPE_NTAG_215,   \
+        TAG_TYPE_NTAG_216, TAG_TYPE_MF0ICU1, TAG_TYPE_MF0ICU2,        \
+        TAG_TYPE_MF0UL11, TAG_TYPE_MF0UL21, TAG_TYPE_NTAG_210,        \
+        TAG_TYPE_NTAG_212
 
 typedef struct {
     tag_specific_type_t tag_hf;

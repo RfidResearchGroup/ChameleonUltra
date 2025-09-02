@@ -24,26 +24,26 @@
 #include <windows.h>
 #endif
 
+#include "util_posix.h"
 #include <stdint.h>
 #include <time.h>
 
-#include "util_posix.h"
 
 // Timer functions
-#if !defined(_WIN32)
+#if !defined (_WIN32)
 #include <errno.h>
 
-static void nsleep(uint64_t n)
-{
+static void nsleep(uint64_t n) {
     struct timespec timeout;
     timeout.tv_sec = n / 1000000000;
     timeout.tv_nsec = n % 1000000000;
-    while (nanosleep(&timeout, &timeout) && errno == EINTR)
-        ;
+    while (nanosleep(&timeout, &timeout) && errno == EINTR);
 }
 
-void msleep(uint32_t n) { nsleep(1000000 * (uint64_t)n); }
-#endif  // _WIN32
+void msleep(uint32_t n) {
+    nsleep(1000000 * (uint64_t)n);
+}
+#endif // _WIN32
 
 #ifdef __APPLE__
 
@@ -54,16 +54,15 @@ void msleep(uint32_t n) { nsleep(1000000 * (uint64_t)n); }
 #define CLOCK_REALTIME (2)
 #endif
 
+#include <sys/time.h>
 #include <mach/clock.h>
 #include <mach/mach.h>
 #include <mach/mach_time.h>
-#include <sys/time.h>
 
 /* clock_gettime is not implemented on OSX prior to 10.12 */
 int _civet_clock_gettime(int clk_id, struct timespec *t);
 
-int _civet_clock_gettime(int clk_id, struct timespec *t)
-{
+int _civet_clock_gettime(int clk_id, struct timespec *t) {
     memset(t, 0, sizeof(*t));
     if (clk_id == CLOCK_REALTIME) {
         struct timeval now;
@@ -74,25 +73,28 @@ int _civet_clock_gettime(int clk_id, struct timespec *t)
         t->tv_sec = now.tv_sec;
         t->tv_nsec = now.tv_usec * 1000;
         return 0;
-    }
-    else if (clk_id == CLOCK_MONOTONIC) {
+
+    } else if (clk_id == CLOCK_MONOTONIC) {
         static uint64_t clock_start_time = 0;
         static mach_timebase_info_data_t timebase_info = {0, 0};
 
         uint64_t now = mach_absolute_time();
 
         if (clock_start_time == 0) {
+
             mach_timebase_info(&timebase_info);
             clock_start_time = now;
         }
 
-        now = (uint64_t)((double)(now - clock_start_time) * (double)timebase_info.numer / (double)timebase_info.denom);
+        now = (uint64_t)((double)(now - clock_start_time)
+                         * (double)timebase_info.numer
+                         / (double)timebase_info.denom);
 
         t->tv_sec = now / 1000000000;
         t->tv_nsec = now % 1000000000;
         return 0;
     }
-    return -1;  // EINVAL - Clock ID is unknown
+    return -1; // EINVAL - Clock ID is unknown
 }
 
 /* if clock_gettime is declared, then __CLOCK_AVAILABILITY will be defined */
@@ -101,8 +103,7 @@ int _civet_clock_gettime(int clk_id, struct timespec *t)
  * but it may be NULL at runtime. So we need to check before using it. */
 int _civet_safe_clock_gettime(int clk_id, struct timespec *t);
 
-int _civet_safe_clock_gettime(int clk_id, struct timespec *t)
-{
+int _civet_safe_clock_gettime(int clk_id, struct timespec *t) {
     if (clock_gettime) {
         return clock_gettime(clk_id, t);
     }
@@ -115,9 +116,9 @@ int _civet_safe_clock_gettime(int clk_id, struct timespec *t)
 
 #endif
 
+
 // a milliseconds timer for performance measurement
-uint64_t msclock(void)
-{
+uint64_t msclock(void) {
 #if defined(_WIN32)
     LARGE_INTEGER count, frequency;
     if (!QueryPerformanceFrequency(&frequency)) {
@@ -135,3 +136,4 @@ uint64_t msclock(void)
     return (1000 * (uint64_t)t.tv_sec + t.tv_nsec / 1000000);
 #endif
 }
+

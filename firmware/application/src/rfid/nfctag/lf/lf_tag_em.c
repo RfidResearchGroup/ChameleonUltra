@@ -35,14 +35,12 @@ static tag_specific_type_t m_tag_type = TAG_TYPE_UNDEFINED;
 const nrfx_pwm_t m_broadcast = NRFX_PWM_INSTANCE(0);
 const nrf_pwm_sequence_t *m_pwm_seq = NULL;
 
-static void lf_field_lost(void)
-{
+static void lf_field_lost(void) {
     // Open the incident interruption, so that the next event can be in and out normally
     g_is_tag_emulating = false;  // Reset the flag in the emulation
     m_is_lf_emulating = false;
     TAG_FIELD_LED_OFF()  // Make sure the indicator light of the LF field status
-    NRF_LPCOMP->INTENSET
-        = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
+    NRF_LPCOMP->INTENSET = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
     // call sleep_timer_start *after* unsetting g_is_tag_emulating
     sleep_timer_start(SLEEP_DELAY_MS_FIELD_125KHZ_LOST);  // Start the timer to enter the sleep
     NRF_LOG_INFO("LF FIELD LOST");
@@ -51,8 +49,7 @@ static void lf_field_lost(void)
 /**
  * @brief Judge field status
  */
-bool is_lf_field_exists(void)
-{
+bool is_lf_field_exists(void) {
     nrfx_lpcomp_enable();
     bsp_delay_us(30);  // Display for a period of time and sampling to avoid misjudgment
     nrf_lpcomp_task_trigger(NRF_LPCOMP_TASK_SAMPLE);
@@ -67,8 +64,7 @@ bool is_lf_field_exists(void)
  * It is also not allowed to call soft device functions from it (if LPCOMP IRQ
  * priority is set to APP_IRQ_PRIORITY_HIGH).
  */
-static void lpcomp_event_handler(nrf_lpcomp_event_t event)
-{
+static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // Only when the lf -frequency emulation is not launched, and the analog card is started
     if (m_is_lf_emulating || event != NRF_LPCOMP_EVENT_UP) {
         return;
@@ -93,8 +89,7 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event)
     NRF_LOG_INFO("LF FIELD DETECTED");
 }
 
-static void lpcomp_init(void)
-{
+static void lpcomp_init(void) {
     nrfx_lpcomp_config_t cfg = NRFX_LPCOMP_DEFAULT_CONFIG;
     cfg.input = LF_RSSI;
     cfg.hal.reference = NRF_LPCOMP_REF_SUPPLY_1_16;
@@ -105,8 +100,7 @@ static void lpcomp_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
-static void pwm_handler(nrfx_pwm_evt_type_t event_type)
-{
+static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
     if (event_type != NRFX_PWM_EVT_STOPPED) {
         return;
     }
@@ -115,19 +109,16 @@ static void pwm_handler(nrfx_pwm_evt_type_t event_type)
     ANT_NO_MOD();
     bsp_delay_ms(1);
     // We don't need any events, but only need to detect the state of the field
-    NRF_LPCOMP->INTENCLR
-        = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
+    NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
     if (is_lf_field_exists()) {
         nrfx_lpcomp_disable();
         nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, LF_125KHZ_BROADCAST_MAX, NRFX_PWM_FLAG_STOP);
-    }
-    else {
+    } else {
         lf_field_lost();
     }
 }
 
-static void pwm_init(void)
-{
+static void pwm_init(void) {
     nrfx_pwm_config_t cfg = NRFX_PWM_DEFAULT_CONFIG;
     cfg.output_pins[0] = LF_MOD;
     for (uint8_t i = 1; i < NRF_PWM_CHANNEL_COUNT; i++) {
@@ -143,8 +134,7 @@ static void pwm_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
-static void lf_sense_enable(void)
-{
+static void lf_sense_enable(void) {
     lpcomp_init();
     pwm_init();  // use precise hardware pwm to broadcast card id
     if (is_lf_field_exists()) {
@@ -152,8 +142,7 @@ static void lf_sense_enable(void)
     }
 }
 
-static void lf_sense_disable(void)
-{
+static void lf_sense_disable(void) {
     nrfx_pwm_uninit(&m_broadcast);
     nrfx_lpcomp_uninit();
     m_pwm_seq = NULL;
@@ -164,14 +153,12 @@ static enum {
     LF_SENSE_STATE_NONE,
     LF_SENSE_STATE_DISABLE,
     LF_SENSE_STATE_ENABLE,
-} m_lf_sense_state
-    = LF_SENSE_STATE_NONE;
+} m_lf_sense_state = LF_SENSE_STATE_NONE;
 
 /**
  * @brief switchLfFieldInductionToEnableTheState
  */
-void lf_tag_125khz_sense_switch(bool enable)
-{
+void lf_tag_125khz_sense_switch(bool enable) {
     // init modulation PIN as output PIN
     nrf_gpio_cfg_output(LF_MOD);
     // turn off mod, otherwise its hard to judge RSSI
@@ -181,8 +168,7 @@ void lf_tag_125khz_sense_switch(bool enable)
         // switch from disable -> enable
         m_lf_sense_state = LF_SENSE_STATE_ENABLE;
         lf_sense_enable();
-    }
-    else if (m_lf_sense_state == LF_SENSE_STATE_ENABLE && !enable) {
+    } else if (m_lf_sense_state == LF_SENSE_STATE_ENABLE && !enable) {
         // switch from enable -> disable
         m_lf_sense_state = LF_SENSE_STATE_DISABLE;
         lf_sense_disable();
@@ -193,8 +179,7 @@ void lf_tag_125khz_sense_switch(bool enable)
  * @param type     Refined tag type
  * @param buffer   Data buffer
  */
-int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer)
-{
+int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     // ensure buffer size is large enough for specific tag type,
     // so that tag data (e.g., card numbers) can be converted to corresponding pwm sequence here.
     if (type == TAG_TYPE_EM410X && buffer->length >= LF_EM410X_TAG_ID_SIZE) {
@@ -233,8 +218,7 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer)
  * @param buffer    Data buffer
  * @return The length of the data that needs to be saved is that it does not save when 0
  */
-int lf_tag_em410x_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer)
-{
+int lf_tag_em410x_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     // Make sure to load this tag before allowing saving
     // Just save the original card package directly
     return m_tag_type == TAG_TYPE_EM410X ? LF_EM410X_TAG_ID_SIZE : 0;
@@ -245,8 +229,7 @@ int lf_tag_em410x_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffe
  * @param buffer    Data buffer
  * @return The length of the data that needs to be saved is that it does not save when 0
  */
-int lf_tag_hidprox_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer)
-{
+int lf_tag_hidprox_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     // Make sure to load this tag before allowing saving
     // Just save the original card package directly
     return m_tag_type == TAG_TYPE_HID_PROX ? LF_HIDPROX_TAG_ID_SIZE : 0;
@@ -257,26 +240,22 @@ int lf_tag_hidprox_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buff
  * @param buffer    Data buffer
  * @return The length of the data that needs to be saved is that it does not save when 0
  */
-int lf_tag_viking_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer)
-{
+int lf_tag_viking_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     // Make sure to load this tag before allowing saving
     // Just save the original card package directly
     return m_tag_type == TAG_TYPE_VIKING ? LF_VIKING_TAG_ID_SIZE : 0;
 }
 
-bool lf_tag_data_factory(uint8_t slot, tag_specific_type_t tag_type, uint8_t *tag_id, uint16_t length)
-{
+bool lf_tag_data_factory(uint8_t slot, tag_specific_type_t tag_type, uint8_t *tag_id, uint16_t length) {
     // write data to flash
     tag_sense_type_t sense_type = get_sense_type_from_tag_type(tag_type);
     fds_slot_record_map_t map_info;  // Get the special card slot FDS record information
     get_fds_map_by_slot_sense_type_for_dump(slot, sense_type, &map_info);
-    // Call the blocked FDS to write the function, and write the data of the specified field type of the card slot into
-    // the Flash
+    // Call the blocked FDS to write the function, and write the data of the specified field type of the card slot into the Flash
     bool ret = fds_write_sync(map_info.id, map_info.key, sizeof(tag_id), (uint8_t *)tag_id);
     if (ret) {
         NRF_LOG_INFO("Factory slot data success.");
-    }
-    else {
+    } else {
         NRF_LOG_ERROR("Factory slot data error.");
     }
     return ret;
@@ -285,11 +264,9 @@ bool lf_tag_data_factory(uint8_t slot, tag_specific_type_t tag_type, uint8_t *ta
 /** @brief Id card deposit card number before callback
  * @param slot      Card slot number
  * @param tag_type  Refined tag type
- * @return Whether the format is successful, if the formatting is successful, it will return to True, otherwise False
- * will be returned
+ * @return Whether the format is successful, if the formatting is successful, it will return to True, otherwise False will be returned
  */
-bool lf_tag_em410x_data_factory(uint8_t slot, tag_specific_type_t tag_type)
-{
+bool lf_tag_em410x_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     // default id, must to align(4), more word...
     uint8_t tag_id[5] = {0xDE, 0xAD, 0xBE, 0xEF, 0x88};
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
@@ -298,11 +275,9 @@ bool lf_tag_em410x_data_factory(uint8_t slot, tag_specific_type_t tag_type)
 /** @brief Id card deposit card number before callback
  * @param slot      Card slot number
  * @param tag_type  Refined tag type
- * @return Whether the format is successful, if the formatting is successful, it will return to True, otherwise False
- * will be returned
+ * @return Whether the format is successful, if the formatting is successful, it will return to True, otherwise False will be returned
  */
-bool lf_tag_hidprox_data_factory(uint8_t slot, tag_specific_type_t tag_type)
-{
+bool lf_tag_hidprox_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     // default id, must to align(4), more word...
     uint8_t tag_id[13] = {0x01, 0x00, 0x00, 0x00, 0x64, 0x00, 0x00, 0x00, 0x51, 0x45, 0x00, 0x00, 0x00};
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
@@ -311,11 +286,9 @@ bool lf_tag_hidprox_data_factory(uint8_t slot, tag_specific_type_t tag_type)
 /** @brief Id card deposit card number before callback
  * @param slot      Card slot number
  * @param tag_type  Refined tag type
- * @return Whether the format is successful, if the formatting is successful, it will return to True, otherwise False
- * will be returned
+ * @return Whether the format is successful, if the formatting is successful, it will return to True, otherwise False will be returned
  */
-bool lf_tag_viking_data_factory(uint8_t slot, tag_specific_type_t tag_type)
-{
+bool lf_tag_viking_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     // default id
     uint8_t tag_id[4] = {0xDE, 0xAD, 0xBE, 0xEF};
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));

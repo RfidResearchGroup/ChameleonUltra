@@ -22,8 +22,7 @@ static uint32_t g_timeout_readem_ms = 500;
 /**
  * Search EM410X tag
  */
-uint8_t scan_em410x(uint8_t *uid)
-{
+uint8_t scan_em410x(uint8_t *uid) {
     if (em410x_read(uid, g_timeout_readem_ms)) {
         return STATUS_LF_TAG_OK;
     }
@@ -33,8 +32,7 @@ uint8_t scan_em410x(uint8_t *uid)
 /**
  * Search HID Prox tag
  */
-uint8_t scan_hidprox(uint8_t *data, uint8_t format_hint)
-{
+uint8_t scan_hidprox(uint8_t *data, uint8_t format_hint) {
     if (hidprox_read(data, format_hint, g_timeout_readem_ms)) {
         return STATUS_LF_TAG_OK;
     }
@@ -44,8 +42,7 @@ uint8_t scan_hidprox(uint8_t *data, uint8_t format_hint)
 /**
  * Search Viking tag
  */
-uint8_t scan_viking(uint8_t *uid)
-{
+uint8_t scan_viking(uint8_t *uid) {
     if (viking_read(uid, g_timeout_readem_ms)) {
         return STATUS_LF_TAG_OK;
     }
@@ -55,8 +52,7 @@ uint8_t scan_viking(uint8_t *uid)
 /**
  * Try reset t55XX tag passwords by enumerating old passwords.
  */
-static void try_reset_t55xx_passwd(uint32_t new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count)
-{
+static void try_reset_t55xx_passwd(uint32_t new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     for (uint8_t i = 0; i < old_passwd_count; i++) {
         uint32_t old_passwd = bytes_to_num(old_passwds + i * 4, 4);
         t55xx_reset_passwd(old_passwd, new_passwd);
@@ -67,9 +63,7 @@ static void try_reset_t55xx_passwd(uint32_t new_passwd, uint8_t *old_passwds, ui
 /**
  * Write card data to t55xx
  */
-static uint8_t write_t55xx(uint32_t *blks, uint8_t blk_count, uint8_t *new_passwd, uint8_t *old_passwds,
-                           uint8_t old_passwd_count)
-{
+static uint8_t write_t55xx(uint32_t *blks, uint8_t blk_count, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     uint32_t passwd = bytes_to_num(new_passwd, 4);
 
     start_lf_125khz_radio();
@@ -87,8 +81,7 @@ static uint8_t write_t55xx(uint32_t *blks, uint8_t blk_count, uint8_t *new_passw
 /**
  * Write em410x card data to t55xx
  */
-uint8_t write_em410x_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count)
-{
+uint8_t write_em410x_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = em410x_t55xx_writer(uid, blks);
     if (blk_count == 0) {
@@ -100,9 +93,7 @@ uint8_t write_em410x_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_pa
 /**
  * Write hidprox card data to t55xx
  */
-uint8_t write_hidprox_to_t55xx(uint8_t format, uint32_t fc, uint64_t cn, uint32_t il, uint32_t oem, uint8_t *new_passwd,
-                               uint8_t *old_passwds, uint8_t old_passwd_count)
-{
+uint8_t write_hidprox_to_t55xx(uint8_t format, uint32_t fc, uint64_t cn, uint32_t il, uint32_t oem, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     wiegand_card_t card = {
         .format = format,
         .card_number = cn,
@@ -121,8 +112,7 @@ uint8_t write_hidprox_to_t55xx(uint8_t format, uint32_t fc, uint64_t cn, uint32_
 /**
  * Write viking card data to t55xx
  */
-uint8_t write_viking_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count)
-{
+uint8_t write_viking_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = viking_t55xx_writer(uid, blks);
     if (blk_count == 0) {

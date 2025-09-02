@@ -12,17 +12,16 @@
 //
 //  Doegox, 2024, cf https://eprint.iacr.org/2024/1275 for more info
 
-#include <inttypes.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
+#include <inttypes.h>
 
 uint16_t i_lfsr16[1 << 16] = {0};
 uint16_t s_lfsr16[1 << 16] = {0};
 
-static void init_lfsr16_table(void)
-{
+static void init_lfsr16_table(void) {
     uint16_t x = 1;
     for (uint16_t i = 1; i; ++i) {
         i_lfsr16[(x & 0xff) << 8 | x >> 8] = i;
@@ -41,20 +40,17 @@ static void init_lfsr16_table(void)
 //     return s_lfsr16[i];
 // }
 
-static uint16_t prev_lfsr16(uint16_t nonce)
-{
+static uint16_t prev_lfsr16(uint16_t nonce) {
     uint16_t i = i_lfsr16[nonce];
     if (i == 1) {
         i = 0xffff;
-    }
-    else {
+    } else {
         i--;
     }
     return s_lfsr16[i];
 }
 
-static uint16_t compute_seednt16_nt32(uint32_t nt32, uint64_t key)
-{
+static uint16_t compute_seednt16_nt32(uint32_t nt32, uint64_t key) {
     uint8_t a[] = {0, 8, 9, 4, 6, 11, 1, 15, 12, 5, 2, 13, 10, 14, 3, 7};
     uint8_t b[] = {0, 13, 1, 14, 4, 10, 15, 7, 5, 3, 8, 6, 9, 2, 12, 11};
     uint16_t nt = nt32 >> 16;
@@ -69,8 +65,7 @@ static uint16_t compute_seednt16_nt32(uint32_t nt32, uint64_t key)
         if (odd) {
             nt ^= (a[(key >> i) & 0xF]);
             nt ^= (b[(key >> i >> 4) & 0xF]) << 4;
-        }
-        else {
+        } else {
             nt ^= (b[(key >> i) & 0xF]);
             nt ^= (a[(key >> i >> 4) & 0xF]) << 4;
         }
@@ -83,13 +78,12 @@ static uint16_t compute_seednt16_nt32(uint32_t nt32, uint64_t key)
     return nt;
 }
 
-int main(int argc, char *const argv[])
-{
+int main(int argc, char *const argv[]) {
+
     if (argc != 3) {
-        printf(
-            "Usage:\n  %s keys_<uid:08x>_<sector:02>_<nt1:08x>.dic keys_<uid:08x>_<sector:02>_<nt2:08x>.dic\n"
-            "  where both dict files are produced by staticnested_1nt *for the same UID and same sector*\n",
-            argv[0]);
+        printf("Usage:\n  %s keys_<uid:08x>_<sector:02>_<nt1:08x>.dic keys_<uid:08x>_<sector:02>_<nt2:08x>.dic\n"
+               "  where both dict files are produced by staticnested_1nt *for the same UID and same sector*\n",
+               argv[0]);
         return 1;
     }
 
@@ -136,6 +130,7 @@ int main(int argc, char *const argv[])
 
     fptr = fopen(filename1, "r");
     if (fptr != NULL) {
+
         uint64_t buffer;
         while (fscanf(fptr, "%012" PRIx64, &buffer) == 1) {
             keycount1++;
@@ -159,14 +154,14 @@ int main(int argc, char *const argv[])
             }
         }
         fclose(fptr);
-    }
-    else {
+    } else {
         fprintf(stderr, "Warning: Cannot open %s\n", filename1);
         goto end;
     }
 
     fptr = fopen(filename2, "r");
     if (fptr != NULL) {
+
         uint64_t buffer;
         while (fscanf(fptr, "%012" PRIx64, &buffer) == 1) {
             keycount2++;
@@ -190,8 +185,7 @@ int main(int argc, char *const argv[])
             }
         }
         fclose(fptr);
-    }
-    else {
+    } else {
         fprintf(stderr, "Warning: Cannot open %s\n", filename2);
         goto end;
     }
@@ -213,7 +207,7 @@ int main(int argc, char *const argv[])
         uint16_t seednt2 = compute_seednt16_nt32(nt2, keys2[j]);
         for (uint32_t i = 0; i < keycount1; i++) {
             if (seednt2 == seednt1[i]) {
-                //                printf("MATCH: key1=%012" PRIx64 " key2=%012" PRIx64 "\n", keys1[i], keys2[j]);
+//                printf("MATCH: key1=%012" PRIx64 " key2=%012" PRIx64 "\n", keys1[i], keys2[j]);
                 filter_keys1[i] = 1;
                 filter_keys2[j] = 1;
             }
@@ -226,6 +220,7 @@ int main(int argc, char *const argv[])
 
     fptr = fopen(filter_filename1, "w");
     if (fptr != NULL) {
+
         for (uint32_t j = 0; j < keycount1; j++) {
             if (filter_keys1[j]) {
                 filter_keycount1++;
@@ -233,8 +228,8 @@ int main(int argc, char *const argv[])
             }
         }
         fclose(fptr);
-    }
-    else {
+
+    } else {
         fprintf(stderr, "Warning: Cannot save keys in %s\n", filter_filename1);
     }
 
@@ -244,6 +239,7 @@ int main(int argc, char *const argv[])
 
     fptr = fopen(filter_filename2, "w");
     if (fptr != NULL) {
+
         for (uint32_t j = 0; j < keycount2; j++) {
             if (filter_keys2[j]) {
                 filter_keycount2++;
@@ -251,8 +247,8 @@ int main(int argc, char *const argv[])
             }
         }
         fclose(fptr);
-    }
-    else {
+
+    } else {
         fprintf(stderr, "Warning: Cannot save keys in %s\n", filter_filename2);
     }
     printf("%s: %u keys saved\n", filter_filename1, filter_keycount1);

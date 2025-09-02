@@ -19,8 +19,8 @@
 #ifndef UI_H__
 #define UI_H__
 
-#include "../pm3/ansi.h"
 #include "common.h"
+#include "../pm3/ansi.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,20 +28,15 @@ extern "C" {
 
 #define _USE_MATH_DEFINES
 
-typedef enum { STYLE_BAR, STYLE_MIXED, STYLE_VALUE } barMode_t;
-typedef enum logLevel { NORMAL, SUCCESS, INFO, FAILED, WARNING, ERR, DEBUG, INPLACE, HINT } logLevel_t;
-typedef enum emojiMode { EMO_ALIAS, EMO_EMOJI, EMO_ALTTEXT, EMO_NONE } emojiMode_t;
-typedef enum clientdebugLevel { cdbOFF, cdbSIMPLE, cdbFULL } clientdebugLevel_t;
+typedef enum {STYLE_BAR, STYLE_MIXED, STYLE_VALUE} barMode_t;
+typedef enum logLevel {NORMAL, SUCCESS, INFO, FAILED, WARNING, ERR, DEBUG, INPLACE, HINT} logLevel_t;
+typedef enum emojiMode {EMO_ALIAS, EMO_EMOJI, EMO_ALTTEXT, EMO_NONE} emojiMode_t;
+typedef enum clientdebugLevel {cdbOFF, cdbSIMPLE, cdbFULL} clientdebugLevel_t;
 // typedef enum devicedebugLevel {ddbOFF, ddbERROR, ddbINFO, ddbDEBUG, ddbEXTENDED} devicedebugLevel_t;
 
 // last item spItemCount used to auto map to number of files
-typedef enum savePaths { spDefault, spDump, spTrace, spItemCount } savePaths_t;
-typedef struct {
-    int x;
-    int y;
-    int h;
-    int w;
-} qtWindow_t;
+typedef enum savePaths {spDefault, spDump, spTrace, spItemCount} savePaths_t;
+typedef struct {int x; int y; int h; int w;} qtWindow_t;
 
 typedef struct {
     bool preferences_loaded;
@@ -53,15 +48,15 @@ typedef struct {
     bool help_dump_mode;
     bool show_hints;
     bool dense_output;
-    bool window_changed;  // track if plot/overlay pos/size changed to save on exit
+    bool window_changed; // track if plot/overlay pos/size changed to save on exit
     qtWindow_t plot;
     qtWindow_t overlay;
     bool overlay_sliders;
     bool incognito;
-    char *defaultPaths[spItemCount];  // Array should allow loop searching for files
+    char *defaultPaths[spItemCount]; // Array should allow loop searching for files
     clientdebugLevel_t client_debug_level;
     barMode_t bar_mode;
-    //    uint8_t device_debug_level;
+//    uint8_t device_debug_level;
     uint16_t client_exe_delay;
     char *history_path;
 } session_arg_t;

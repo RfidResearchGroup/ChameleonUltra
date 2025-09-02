@@ -10,23 +10,20 @@
 // MIFARE Darkside hack
 //-----------------------------------------------------------------------------
 #include "mfkey.h"
-
 #include "crapto1.h"
 
 // MIFARE
 extern int compare_uint64(const void *a, const void *b);
-int inline compare_uint64(const void *a, const void *b)
-{
+int inline compare_uint64(const void *a, const void *b) {
     if (*(uint64_t *)b == *(uint64_t *)a) return 0;
-    if (*(uint64_t *)b < *(uint64_t *)a) return 1;
+    if (*(uint64_t *)b < * (uint64_t *)a) return 1;
     return -1;
 }
 
-// create the intersection (common members) of two sorted lists. Lists are terminated by -1. Result will be in list1.
-// Number of elements is returned.
-uint32_t intersection(uint64_t *listA, uint64_t *listB)
-{
-    if (listA == NULL || listB == NULL) return 0;
+// create the intersection (common members) of two sorted lists. Lists are terminated by -1. Result will be in list1. Number of elements is returned.
+uint32_t intersection(uint64_t *listA, uint64_t *listB) {
+    if (listA == NULL || listB == NULL)
+        return 0;
 
     uint64_t *p1, *p2, *p3;
     p1 = p3 = listA;
@@ -36,8 +33,7 @@ uint32_t intersection(uint64_t *listA, uint64_t *listB)
         if (compare_uint64(p1, p2) == 0) {
             *p3++ = *p1++;
             p2++;
-        }
-        else {
+        } else {
             while (compare_uint64(p1, p2) < 0) ++p1;
             while (compare_uint64(p1, p2) > 0) ++p2;
         }
@@ -48,9 +44,7 @@ uint32_t intersection(uint64_t *listA, uint64_t *listB)
 
 // Darkside attack (hf mf mifare)
 // if successful it will return a list of keys, not just one.
-uint32_t nonce2key(uint32_t uid, uint32_t nt, uint32_t nr, uint32_t ar, uint64_t par_info, uint64_t ks_info,
-                   uint64_t **keys)
-{
+uint32_t nonce2key(uint32_t uid, uint32_t nt, uint32_t nr, uint32_t ar, uint64_t par_info, uint64_t ks_info, uint64_t **keys) {
     union {
         struct Crypto1State *states;
         uint64_t *keylist;

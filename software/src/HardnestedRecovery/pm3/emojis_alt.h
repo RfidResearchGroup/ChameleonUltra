@@ -22,6 +22,9 @@ typedef struct emoji_alt_s {
 } emoji_alt_t;
 // emoji_alt_t array are expected to be NULL terminated
 
-static emoji_alt_t EmojiAltTable[] = {{":wink:", ";)"}, {NULL, NULL}};
+static emoji_alt_t EmojiAltTable[] = {
+    {":wink:", ";)"},
+    {NULL, NULL}
+};
 
 #endif

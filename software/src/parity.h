@@ -16,12 +16,18 @@
 
 extern const uint8_t OddByteParity[256];
 
-static inline bool oddparity8(const uint8_t x) { return OddByteParity[x]; }
 
-static inline bool evenparity8(const uint8_t x) { return !OddByteParity[x]; }
+static inline bool oddparity8(const uint8_t x) {
+    return OddByteParity[x];
+}
 
-static inline bool evenparity32(uint32_t x)
-{
+
+static inline bool evenparity8(const uint8_t x) {
+    return !OddByteParity[x];
+}
+
+
+static inline bool evenparity32(uint32_t x) {
 #if !defined __GNUC__
     x ^= x >> 16;
     x ^= x >> 8;
@@ -31,8 +37,8 @@ static inline bool evenparity32(uint32_t x)
 #endif
 }
 
-static inline bool oddparity32(uint32_t x)
-{
+
+static inline bool oddparity32(uint32_t x) {
 #if !defined __GNUC__
     x ^= x >> 16;
     x ^= x >> 8;

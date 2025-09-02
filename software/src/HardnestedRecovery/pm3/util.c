@@ -18,14 +18,14 @@
 
 #include "util.h"
 
-#ifdef _WIN32  // Only compile this block on Windows
+#ifdef _WIN32 // Only compile this block on Windows
 
-#include <stdint.h>   // <-- Add this line to include standard integer types
-#include <windows.h>  // Include the necessary Windows header
+#include <windows.h> // Include the necessary Windows header
+#include <stdint.h>  // <-- Add this line to include standard integer types
+
 
 // Function to return milliseconds since some arbitrary point in time
-uint64_t msclock(void)
-{
+uint64_t msclock(void) {
     // Static variable to store the frequency; initialized only once.
     static LARGE_INTEGER frequency = {0};
     LARGE_INTEGER counter;
@@ -45,7 +45,7 @@ uint64_t msclock(void)
     return (uint64_t)((counter.QuadPart * 1000) / frequency.QuadPart);
 }
 
-#endif  // _WIN32
+#endif // _WIN32
 
 // global client debug variable
 uint8_t g_debugMode = 0;
@@ -60,8 +60,7 @@ uint8_t g_printAndLog = PRINTANDLOG_PRINT | PRINTANDLOG_LOG;
 #endif
 
 // determine number of logical CPU cores (use for multithreaded functions)
-int num_CPUs(void)
-{
+int num_CPUs(void) {
 #if defined(_WIN32)
 #include <sysinfoapi.h>
     SYSTEM_INFO sysinfo;
@@ -69,7 +68,8 @@ int num_CPUs(void)
     return sysinfo.dwNumberOfProcessors;
 #else
     int count = sysconf(_SC_NPROCESSORS_ONLN);
-    if (count <= 0) count = 1;
+    if (count <= 0)
+        count = 1;
     return count;
 #endif
 }

@@ -1,13 +1,13 @@
-#include <ctype.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
-#include "common.h"
+#include "parity.h"
 #include "crapto1.h"
 #include "mfkey.h"
-#include "parity.h"
+#include "common.h"
 
 typedef struct {
     uint32_t nt;
@@ -18,8 +18,8 @@ typedef struct {
     uint64_t ks_list;
 } DarksideParam;
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
+
     if (((argc - 2) % 5) != 0) {
         printf("Unexpected param count\n");
         return EXIT_FAILURE;
@@ -81,18 +81,16 @@ int main(int argc, char *argv[])
                 continue;
             }
         }
-        uint8_t key_tmp[6] = {0};
+        uint8_t key_tmp[6] = { 0 };
         if (keycount > 0) {
             no_key_recover = false;
             for (j = 0; j < keycount; j++) {
                 if (par_list == 0) {
                     num_to_bytes(last_keylist[j], 6, key_tmp);
-                }
-                else {
+                } else {
                     num_to_bytes(keylist[j], 6, key_tmp);
                 }
-                printf("Key%d: %02X%02X%02X%02X%02X%02X\r\n", j + 1, key_tmp[0], key_tmp[1], key_tmp[2], key_tmp[3],
-                       key_tmp[4], key_tmp[5]);
+                printf("Key%d: %02X%02X%02X%02X%02X%02X\r\n", j + 1, key_tmp[0], key_tmp[1], key_tmp[2], key_tmp[3], key_tmp[4], key_tmp[5]);
             }
         }
     }
@@ -103,8 +101,7 @@ int main(int argc, char *argv[])
 
     if (last_keylist == keylist && last_keylist != NULL) {
         free(keylist);
-    }
-    else {
+    } else {
         if (last_keylist) {
             free(last_keylist);
         }

@@ -2,13 +2,11 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-
+#include <stdlib.h>
 #include "crapto1.h"
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     struct Crypto1State *revstate;
     uint64_t key;     // recovered key
     uint32_t uid;     // serial number
@@ -51,7 +49,7 @@ int main(int argc, char *argv[])
 
     for (int i = 0; i < encc; i++) {
         *(enclen + i) = strlen(argv[i + 6]) / 2;
-        for (int i2 = 0; i2 < *(enclen + i); i2++) {
+        for (int i2 = 0; i2 < * (enclen + i); i2++) {
             sscanf(argv[i + 6] + i2 * 2, "%2hhx", &enc[i][i2]);
         }
     }
@@ -101,7 +99,8 @@ int main(int argc, char *argv[])
             }
             printf("\n");
         }
-        for (int i = 0; i < rollb; i++) lfsr_rollback_byte(revstate, 0, 0);
+        for (int i = 0; i < rollb; i++)
+            lfsr_rollback_byte(revstate, 0, 0);
     }
 
     lfsr_rollback_word(revstate, 0, 0);
