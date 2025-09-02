@@ -475,6 +475,31 @@ class ChameleonCMD:
         data = struct.pack(f'!13s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.HIDPROX_WRITE_TO_T55XX, data)
 
+    @expect_response(Status.LF_TAG_OK)
+    def viking_scan(self):
+        """
+        Read the card number of Viking.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.VIKING_SCAN)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data # uid
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def viking_write_to_t55xx(self, id_bytes: bytes):
+        """
+        Write Viking card number into T55XX.
+
+        :param id_bytes: ID card number
+        :return:
+        """
+        if len(id_bytes) != 4:
+            raise ValueError("The id bytes length must equal 4")
+        data = struct.pack(f'!4s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.VIKING_WRITE_TO_T55XX, data)
+
     @expect_response(Status.SUCCESS)
     def get_slot_info(self):
         """
@@ -608,6 +633,28 @@ class ChameleonCMD:
         resp = self.device.send_cmd_sync(Command.HIDPROX_GET_EMU_ID)
         if resp.status == Status.SUCCESS:
             resp.parsed = struct.unpack('>BIBIBH', resp.data[:13])
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def viking_set_emu_id(self, id: bytes):
+        """
+        Set the card number emulated by Viking.
+
+        :param id_bytes: byte of the card number
+        :return:
+        """
+        if len(id) != 4:
+            raise ValueError("The id bytes length must equal 4")
+        data = struct.pack('4s', id)
+        return self.device.send_cmd_sync(Command.VIKING_SET_EMU_ID, data)
+
+    @expect_response(Status.SUCCESS)
+    def viking_get_emu_id(self):
+        """
+        Get the emulated Viking card id
+        """
+        resp = self.device.send_cmd_sync(Command.VIKING_GET_EMU_ID)
+        resp.parsed = resp.data
         return resp
 
     @expect_response(Status.SUCCESS)

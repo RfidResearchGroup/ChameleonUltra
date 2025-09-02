@@ -86,6 +86,9 @@
 #define DATA_CMD_EM410X_WRITE_TO_T55XX          (3001)
 #define DATA_CMD_HIDPROX_SCAN                   (3002)
 #define DATA_CMD_HIDPROX_WRITE_TO_T55XX         (3003)
+#define DATA_CMD_VIKING_SCAN                    (3004)
+#define DATA_CMD_VIKING_WRITE_TO_T55XX          (3005)
+
 //
 // ******************************************************************
 
@@ -149,5 +152,7 @@
 #define DATA_CMD_EM410X_GET_EMU_ID              (5001)
 #define DATA_CMD_HIDPROX_SET_EMU_ID             (5002)
 #define DATA_CMD_HIDPROX_GET_EMU_ID             (5003)
+#define DATA_CMD_VIKING_SET_EMU_ID              (5004)
+#define DATA_CMD_VIKING_GET_EMU_ID              (5005)
 
 #endif

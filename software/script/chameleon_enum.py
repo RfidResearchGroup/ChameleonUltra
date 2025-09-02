@@ -78,6 +78,8 @@ class Command(enum.IntEnum):
     EM410X_WRITE_TO_T55XX = 3001
     HIDPROX_SCAN = 3002
     HIDPROX_WRITE_TO_T55XX = 3003
+    VIKING_SCAN = 3004
+    VIKING_WRITE_TO_T55XX = 3005
 
     MF1_WRITE_EMU_BLOCK_DATA = 4000
     HF14A_SET_ANTI_COLL_DATA = 4001
@@ -126,6 +128,8 @@ class Command(enum.IntEnum):
     EM410X_GET_EMU_ID = 5001
     HIDPROX_SET_EMU_ID = 5002
     HIDPROX_GET_EMU_ID = 5003
+    VIKING_SET_EMU_ID = 5004
+    VIKING_GET_EMU_ID = 5005
 
 
 @enum.unique
@@ -260,7 +264,7 @@ class TagSpecificType(enum.IntEnum):
     # PAC/Stanley
     # Presco
     # Visa2000
-    # Viking
+    Viking = 170
     # Noralsy
     # Jablotron
 
@@ -347,6 +351,8 @@ class TagSpecificType(enum.IntEnum):
             return "EM410X/64"
         elif self == TagSpecificType.HIDProx:
             return "HIDProx"
+        elif self == TagSpecificType.Viking:
+            return "Viking"
         elif self == TagSpecificType.MIFARE_Mini:
             return "Mifare Mini"
         elif self == TagSpecificType.MIFARE_1024:

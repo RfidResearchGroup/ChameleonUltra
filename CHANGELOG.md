@@ -4,7 +4,9 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 
 ## [unreleased][unreleased]
  - Fix for static nested key recovery (@jekkos)
- - Added UV, formatter and linter. Contribution guidelines.
+
+## [v2.1.0][2025-09-02]
+ - Added UV, formatter and linter. Contribution guidelines. (@GameTec-live)
  - Extend max packet data size from 512 to 4096 bytes (@Foxushka)
  - HID Prox support (@TeCHiScy)
  - `hf mf elog --decrypt` skip records with found keys (@taichunmin)

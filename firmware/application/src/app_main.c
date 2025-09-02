@@ -608,6 +608,11 @@ static void btn_fn_copy_lf(uint8_t slot, tag_specific_type_t type) {
             size = LF_EM410X_TAG_ID_SIZE;
             data = id_buffer + 2; // skip tag type
             break;
+        case TAG_TYPE_VIKING:
+            status = scan_viking(id_buffer);
+            size = LF_VIKING_TAG_ID_SIZE;
+            data = id_buffer;
+            break;
         default:
             NRF_LOG_ERROR("Unsupported LF tag type")
             offline_status_error();
