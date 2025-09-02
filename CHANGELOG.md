@@ -4,7 +4,8 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 
 ## [unreleased][unreleased]
  - Added clang formatter (@GameTec-live)
- 
+ - Fix for static nested key recovery (@jekkos)
+
 ## [v2.1.0][2025-09-02]
  - Added UV, formatter and linter. Contribution guidelines. (@GameTec-live)
  - Extend max packet data size from 512 to 4096 bytes (@Foxushka)
