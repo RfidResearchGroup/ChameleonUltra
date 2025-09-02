@@ -1,0 +1,35 @@
+name: clang-format Check
+on:
+  pull_request:
+    paths:
+      - '**.c'
+      - '**.h'
+      - '**.cpp'
+  workflow_dispatch:
+
+jobs:
+  check-format:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install clang-format
+      run: sudo apt install -y clang-format
+
+    - name: Get files and check format
+      run: |
+        exit_code=0
+        while IFS= read -r -d '' f; do
+          if ! diff -u "$f" <(clang-format "$f"); then
+            echo "Formatting issue in $f"
+            exit_code=1
+          fi
+        done < <(find . -type f \( -name '*.c' -o -name '*.h' \) ! -path './firmware/nrf52_sdk/*' ! -path './firmware/nrf52_sdk/**' -print0)
+
+        if [ $exit_code -ne 0 ]; then
+          echo "Clang-format check failed."
+          exit 1
+        else
+          echo "All files are properly formatted."
+        fi

@@ -5,6 +5,7 @@ on:
     paths:
       - "software/**"
       - ".github/workflows/**"
+      - "**.py"
   workflow_dispatch:
 
 jobs:
