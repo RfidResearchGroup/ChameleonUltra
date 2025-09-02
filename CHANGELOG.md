@@ -3,7 +3,9 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
- - Added UV, formatter and linter. Contribution guidelines.
+
+## [v2.1.0][2025-09-02]
+ - Added UV, formatter and linter. Contribution guidelines. (@GameTec-live)
  - Extend max packet data size from 512 to 4096 bytes (@Foxushka)
  - HID Prox support (@TeCHiScy)
  - `hf mf elog --decrypt` skip records with found keys (@taichunmin)
