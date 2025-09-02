@@ -341,7 +341,7 @@ class ChameleonCMD:
             })
         return resp
 
-    @expect_response([Status.HF_TAG_OK, Status.HF_TAG_NO])
+    @expect_response([Status.HF_TAG_OK, Status.HF_TAG_NO, Status.MF_ERR_AUTH])
     def mf1_check_keys_on_block(self, block: int, key_type: int, keys: list[bytes]):
         if key_type not in [0x60, 0x61]:
             raise ValueError("Wrong key type")
