@@ -1,32 +1,32 @@
+#include <errno.h>  // For error handling
+#include <inttypes.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include <string.h>
-#include <stdbool.h>
-#include <inttypes.h>
-#include <errno.h> // For error handling
 
 #include "cmdhfmfhard.h"
 #include "crapto1.h"
 #include "parity.h"
 
-
 typedef enum {
-    KEY_A = 0, // Matches the binary file format (0 for A)
-    KEY_B = 1  // Matches the binary file format (1 for B)
+    KEY_A = 0,  // Matches the binary file format (0 for A)
+    KEY_B = 1   // Matches the binary file format (1 for B)
 } key_type_t;
 
-
-bool read_uint32_le(FILE *f, uint32_t *value) {
+bool read_uint32_le(FILE *f, uint32_t *value)
+{
     uint8_t bytes[4];
     size_t read_count = fread(bytes, 1, 4, f);
     if (read_count != 4) {
         if (feof(f)) {
-            return false; // Clean EOF
-        } else {
+            return false;  // Clean EOF
+        }
+        else {
             perror("fread uint32_le failed");
             fprintf(stderr, "Read only %zu bytes\n", read_count);
-            return false; // Error
+            return false;  // Error
         }
     }
     // Construct Little-Endian value
@@ -34,16 +34,18 @@ bool read_uint32_le(FILE *f, uint32_t *value) {
     return true;
 }
 
-bool read_uint32_be(FILE *f, uint32_t *value) {
+bool read_uint32_be(FILE *f, uint32_t *value)
+{
     uint8_t bytes[4];
     size_t read_count = fread(bytes, 1, 4, f);
     if (read_count != 4) {
         if (feof(f)) {
-            return false; // Clean EOF
-        } else {
+            return false;  // Clean EOF
+        }
+        else {
             perror("fread uint32_be failed");
             fprintf(stderr, "Read only %zu bytes\n", read_count);
-            return false; // Error
+            return false;  // Error
         }
     }
     // Construct Big-Endian value
@@ -51,23 +53,24 @@ bool read_uint32_be(FILE *f, uint32_t *value) {
     return true;
 }
 
-
-bool read_uint8(FILE *f, uint8_t *value) {
+bool read_uint8(FILE *f, uint8_t *value)
+{
     size_t read_count = fread(value, sizeof(uint8_t), 1, f);
     if (read_count != 1) {
         if (feof(f)) {
-            return false; // Clean EOF
-        } else {
+            return false;  // Clean EOF
+        }
+        else {
             perror("fread uint8 failed");
             fprintf(stderr, "Read only %zu bytes\n", read_count);
-            return false; // Error
+            return false;  // Error
         }
     }
     return true;
 }
 
-
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
     if (argc != 2) {
         // Updated usage message for the new binary input
         fprintf(stderr, "Usage: %s <binary_nonce_file_path.bin>\n", argv[0]);
@@ -77,7 +80,7 @@ int main(int argc, char *argv[]) {
     char *binary_file_path = argv[1];
 
     // --- Open binary input file ---
-    FILE *bin_fp = fopen(binary_file_path, "rb"); // Open in binary read mode
+    FILE *bin_fp = fopen(binary_file_path, "rb");  // Open in binary read mode
     if (bin_fp == NULL) {
         perror("Error opening binary nonce file");
         return 1;
@@ -123,20 +126,19 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    printf("Read Header -> UID: %08x, Sector: %u, Key type: %c\n",
-           uid, sector, (key_type == KEY_A) ? 'A' : 'B');
+    printf("Read Header -> UID: %08x, Sector: %u, Key type: %c\n", uid, sector, (key_type == KEY_A) ? 'A' : 'B');
     printf("Reading nonce data from binary file: %s\n", binary_file_path);
 
     // --- Read binary file (nonce data) and write to temp text file ---
     uint32_t nt_enc1, nt_enc2;
     uint8_t par_packed;
     uint8_t par_enc1, par_enc2;
-    size_t nonces_processed = 0; // Counts pairs of nonces (nt1, nt2)
+    size_t nonces_processed = 0;  // Counts pairs of nonces (nt1, nt2)
 
     while (true) {
         // *** Use Big-Endian reader for nonces ***
         if (!read_uint32_be(bin_fp, &nt_enc1)) {
-            if (feof(bin_fp)) break; // Expected EOF after last full chunk
+            if (feof(bin_fp)) break;  // Expected EOF after last full chunk
             fprintf(stderr, "Error reading nt_enc1 (BE) from binary file body.\n");
             fclose(bin_fp);
             fclose(temp_fp);
@@ -188,7 +190,7 @@ int main(int argc, char *argv[]) {
     }
 
     fclose(bin_fp);
-    fclose(temp_fp); // Close temp file so mfnestedhard can read it
+    fclose(temp_fp);  // Close temp file so mfnestedhard can read it
 
     printf("Processed %zu nonce pairs (total %zu nonces) from binary file.\n", nonces_processed, nonces_processed * 2);
 
@@ -207,16 +209,15 @@ int main(int argc, char *argv[]) {
     if (result == 1) {
         printf("Key found: %012" PRIx64 "\n", foundkey);
         // Original code prints UID/Sector/KeyType here too, which is good for clarity
-        printf("Details -> UID: %08x, Sector: %u, Key type: %c\n",
-               uid, sector, (key_type == KEY_A) ? 'A' : 'B');
-    } else {
+        printf("Details -> UID: %08x, Sector: %u, Key type: %c\n", uid, sector, (key_type == KEY_A) ? 'A' : 'B');
+    }
+    else {
         printf("Key not found.\n");
-        printf("Details -> UID: %08x, Sector: %u, Key type: %c\n",
-               uid, sector, (key_type == KEY_A) ? 'A' : 'B');
+        printf("Details -> UID: %08x, Sector: %u, Key type: %c\n", uid, sector, (key_type == KEY_A) ? 'A' : 'B');
     }
 
     // --- Cleanup ---
     remove(temp_file);
 
-    return (result == 1) ? 0 : 1; // Return 0 on success (key found), 1 otherwise
+    return (result == 1) ? 0 : 1;  // Return 0 on success (key found), 1 otherwise
 }

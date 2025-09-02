@@ -1,4 +1,5 @@
 #include "dataframe.h"
+
 #include "netdata.h"
 
 #define NRF_LOG_MODULE_NAME data_frame
@@ -10,7 +11,7 @@ NRF_LOG_MODULE_REGISTER();
 static netdata_frame_raw_t m_netdata_frame_rx_buf;
 static netdata_frame_raw_t m_netdata_frame_tx_buf;
 static data_frame_tx_t m_frame_tx_buf_info = {
-    .buffer = (uint8_t *) &m_netdata_frame_tx_buf,  // default buffer
+    .buffer = (uint8_t *)&m_netdata_frame_tx_buf,  // default buffer
 };
 static uint16_t m_data_rx_position = 0;
 static uint16_t m_data_cmd;
@@ -20,7 +21,8 @@ static uint8_t *m_data_buffer;
 static volatile bool m_data_completed = false;
 static data_frame_cbk_t m_frame_process_cbk = NULL;
 
-static uint8_t compute_lrc(uint8_t *buf, uint16_t bufsize) {
+static uint8_t compute_lrc(uint8_t *buf, uint16_t bufsize)
+{
     uint8_t lrc = 0x00;
     for (uint16_t i = 0; i < bufsize; i++) {
         lrc += buf[i];
@@ -29,13 +31,15 @@ static uint8_t compute_lrc(uint8_t *buf, uint16_t bufsize) {
 }
 
 /**
- * @brief: create a packet, put the created data packet into the buffer, and wait for the post to set up a non busy state
+ * @brief: create a packet, put the created data packet into the buffer, and wait for the post to set up a non busy
+ * state
  * @param cmd: instructionResponse
  * @param status:responseStatus
  * @param length: answerDataLength
  * @param data: answerData
  */
-data_frame_tx_t *data_frame_make(uint16_t cmd, uint16_t status, uint16_t data_length, uint8_t *data) {
+data_frame_tx_t *data_frame_make(uint16_t cmd, uint16_t status, uint16_t data_length, uint8_t *data)
+{
     if (data_length > 0 && data == NULL) {
         NRF_LOG_ERROR("data_frame_make error, null pointer.");
         return NULL;
@@ -44,16 +48,20 @@ data_frame_tx_t *data_frame_make(uint16_t cmd, uint16_t status, uint16_t data_le
         NRF_LOG_ERROR("data_frame_make error, too much data.");
         return NULL;
     }
-    NRF_LOG_INFO("TX Data frame: cmd = 0x%04x (%i), status = 0x%04x, length = %d%s", cmd, cmd, status, data_length, data_length > 0 ? ", data =" : "");
+    NRF_LOG_INFO("TX Data frame: cmd = 0x%04x (%i), status = 0x%04x, length = %d%s", cmd, cmd, status, data_length,
+                 data_length > 0 ? ", data =" : "");
     if (data_length > 0) {
         NRF_LOG_HEXDUMP_INFO(data, data_length);
     }
 
-    netdata_frame_postamble_t *tx_post = (netdata_frame_postamble_t *)((uint8_t *)&m_netdata_frame_tx_buf + sizeof(netdata_frame_preamble_t) + data_length);
+    netdata_frame_postamble_t *tx_post
+        = (netdata_frame_postamble_t *)((uint8_t *)&m_netdata_frame_tx_buf + sizeof(netdata_frame_preamble_t)
+                                        + data_length);
     // sof
     m_netdata_frame_tx_buf.pre.sof = NETDATA_FRAME_SOF;
     // sof lrc
-    m_netdata_frame_tx_buf.pre.lrc1 = compute_lrc((uint8_t *)&m_netdata_frame_tx_buf.pre, offsetof(netdata_frame_preamble_t, lrc1));
+    m_netdata_frame_tx_buf.pre.lrc1
+        = compute_lrc((uint8_t *)&m_netdata_frame_tx_buf.pre, offsetof(netdata_frame_preamble_t, lrc1));
     // cmd
     m_netdata_frame_tx_buf.pre.cmd = U16HTONS(cmd);
     // status
@@ -61,7 +69,8 @@ data_frame_tx_t *data_frame_make(uint16_t cmd, uint16_t status, uint16_t data_le
     // data_length
     m_netdata_frame_tx_buf.pre.len = U16HTONS(data_length);
     // head lrc
-    m_netdata_frame_tx_buf.pre.lrc2 = compute_lrc((uint8_t *)&m_netdata_frame_tx_buf.pre, offsetof(netdata_frame_preamble_t, lrc2));
+    m_netdata_frame_tx_buf.pre.lrc2
+        = compute_lrc((uint8_t *)&m_netdata_frame_tx_buf.pre, offsetof(netdata_frame_preamble_t, lrc2));
     // data
     if (data_length > 0) {
         memcpy(&m_netdata_frame_tx_buf.data, data, data_length);
@@ -76,16 +85,15 @@ data_frame_tx_t *data_frame_make(uint16_t cmd, uint16_t status, uint16_t data_le
 /**
  * @brief Data frame reset
  */
-void data_frame_reset(void) {
-    m_data_rx_position = 0;
-}
+void data_frame_reset(void) { m_data_rx_position = 0; }
 
 /**
  * @brief Package receiving, which is used to receive the sent from the data packet and perform splicing processing
  * @param data: Receive byte array
  * @param length:The length of the receiving byte array
  */
-void data_frame_receive(uint8_t *data, uint16_t length) {
+void data_frame_receive(uint8_t *data, uint16_t length)
+{
     // buffer wait process
     if (m_data_completed) {
         NRF_LOG_ERROR("Data frame wait process.");
@@ -108,15 +116,19 @@ void data_frame_receive(uint8_t *data, uint16_t length) {
                 data_frame_reset();
                 return;
             }
-        } else if (m_data_rx_position == offsetof(netdata_frame_preamble_t, lrc1)) {
-            if (m_netdata_frame_rx_buf.pre.lrc1 != compute_lrc((uint8_t *)&m_netdata_frame_rx_buf.pre, offsetof(netdata_frame_preamble_t, lrc1))) {
+        }
+        else if (m_data_rx_position == offsetof(netdata_frame_preamble_t, lrc1)) {
+            if (m_netdata_frame_rx_buf.pre.lrc1
+                != compute_lrc((uint8_t *)&m_netdata_frame_rx_buf.pre, offsetof(netdata_frame_preamble_t, lrc1))) {
                 // not sof lrc byte
                 NRF_LOG_ERROR("Data frame sof lrc error.");
                 data_frame_reset();
                 return;
             }
-        } else if (m_data_rx_position == offsetof(netdata_frame_preamble_t, lrc2)) {  // frame head lrc
-            if (m_netdata_frame_rx_buf.pre.lrc2 != compute_lrc((uint8_t *)&m_netdata_frame_rx_buf.pre, offsetof(netdata_frame_preamble_t, lrc2))) {
+        }
+        else if (m_data_rx_position == offsetof(netdata_frame_preamble_t, lrc2)) {  // frame head lrc
+            if (m_netdata_frame_rx_buf.pre.lrc2
+                != compute_lrc((uint8_t *)&m_netdata_frame_rx_buf.pre, offsetof(netdata_frame_preamble_t, lrc2))) {
                 // frame head lrc error
                 NRF_LOG_ERROR("Data frame head lrc error.");
                 data_frame_reset();
@@ -133,20 +145,25 @@ void data_frame_receive(uint8_t *data, uint16_t length) {
                 data_frame_reset();
                 return;
             }
-        } else if (m_data_rx_position >= offsetof(netdata_frame_raw_t, data)) {   // frame data
+        }
+        else if (m_data_rx_position >= offsetof(netdata_frame_raw_t, data)) {  // frame data
             // check all data ready.
             if (m_data_rx_position == (sizeof(netdata_frame_preamble_t) + m_data_len)) {
-                netdata_frame_postamble_t *rx_post = (netdata_frame_postamble_t *)((uint8_t *)&m_netdata_frame_rx_buf + sizeof(netdata_frame_preamble_t) + m_data_len);
+                netdata_frame_postamble_t *rx_post
+                    = (netdata_frame_postamble_t *)((uint8_t *)&m_netdata_frame_rx_buf
+                                                    + sizeof(netdata_frame_preamble_t) + m_data_len);
                 if (rx_post->lrc3 == compute_lrc((uint8_t *)&m_netdata_frame_rx_buf.data, m_data_len)) {
                     // ok, lrc for data is check success.
                     // and we are receive completed
                     m_data_buffer = m_data_len > 0 ? (uint8_t *)&m_netdata_frame_rx_buf.data : NULL;
                     m_data_completed = true;
-                    NRF_LOG_INFO("RX Data frame: cmd = 0x%04x (%i), status = 0x%04x, length = %d%s", m_data_cmd, m_data_cmd, m_data_status, m_data_len, m_data_len > 0 ? ", data =" : "");
+                    NRF_LOG_INFO("RX Data frame: cmd = 0x%04x (%i), status = 0x%04x, length = %d%s", m_data_cmd,
+                                 m_data_cmd, m_data_status, m_data_len, m_data_len > 0 ? ", data =" : "");
                     if (m_data_len > 0) {
                         NRF_LOG_HEXDUMP_INFO(m_data_buffer, m_data_len);
                     }
-                } else {
+                }
+                else {
                     // data frame lrc error
                     NRF_LOG_ERROR("Data frame finally lrc error.");
                     data_frame_reset();
@@ -161,10 +178,12 @@ void data_frame_receive(uint8_t *data, uint16_t length) {
 
 /**
  * @brief After the data packet processing, when the received data forms a complete frame,
- *         This function will be distributed processing tasks through this function, which will be adjusted to notify the data processing of the data
- * If the data processing is time -consuming operation, you need to put this function in the main loop to call
+ *         This function will be distributed processing tasks through this function, which will be adjusted to notify
+ * the data processing of the data If the data processing is time -consuming operation, you need to put this function in
+ * the main loop to call
  */
-void data_frame_process(void) {
+void data_frame_process(void)
+{
     // check if data frame
     if (m_data_completed) {
         // to process data frame
@@ -180,6 +199,4 @@ void data_frame_process(void) {
 /**
  * @brief Package processing registration registration
  */
-void on_data_frame_complete(data_frame_cbk_t callback) {
-    m_frame_process_cbk = callback;
-}
+void on_data_frame_complete(data_frame_cbk_t callback) { m_frame_process_cbk = callback; }

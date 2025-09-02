@@ -20,25 +20,28 @@
  */
 
 #include "ui.h"
-#include "commonutil.h"  // ARRAYLEN
-#include <stdio.h> // for Mingw readline
+
 #include <stdarg.h>
+#include <stdio.h>  // for Mingw readline
 #include <stdlib.h>
 
+#include "commonutil.h"  // ARRAYLEN
+
 #if defined(HAVE_READLINE)
-//Load readline after stdio.h
+// Load readline after stdio.h
 #include <readline/readline.h>
 #endif
 
 #include "util.h"
 
 #ifdef _WIN32
-# include <direct.h>    // _mkdir
+#include <direct.h>  // _mkdir
 #endif
+
+#include <string.h>
 
 #include "emojis.h"
 #include "emojis_alt.h"
-#include <string.h>
 
 session_arg_t g_session;
 
@@ -55,27 +58,24 @@ static void fPrintAndLog(FILE *stream, const char *fmt, ...);
 
 static uint8_t PrintAndLogEx_spinidx = 0;
 
-void PrintAndLogEx(logLevel_t level, const char *fmt, ...) {
-
+void PrintAndLogEx(logLevel_t level, const char *fmt, ...)
+{
     // skip debug messages if client debugging is turned off i.e. 'DATA SETDEBUG -0'
-    if (g_debugMode == 0 && level == DEBUG)
-        return;
+    if (g_debugMode == 0 && level == DEBUG) return;
 
     // skip HINT messages if client has hints turned off i.e. 'HINT 0'
-    if (g_session.show_hints == false && level == HINT)
-        return;
+    if (g_session.show_hints == false && level == HINT) return;
 
     char prefix[40] = {0};
     char buffer[MAX_PRINT_BUFFER] = {0};
     char buffer2[MAX_PRINT_BUFFER + sizeof(prefix)] = {0};
     char *token = NULL;
-    char *tmp_ptr = NULL; // Save pointer for strtok_r/strtok_s
+    char *tmp_ptr = NULL;  // Save pointer for strtok_r/strtok_s
     FILE *stream = stdout;
     const char *spinner[] = {_YELLOW_("[\\]"), _YELLOW_("[|]"), _YELLOW_("[/]"), _YELLOW_("[-]")};
-    const char *spinner_emoji[] = {" :clock1: ", " :clock2: ", " :clock3: ", " :clock4: ", " :clock5: ", " :clock6: ",
-                                   " :clock7: ", " :clock8: ", " :clock9: ", " :clock10: ", " :clock11: ",
-                                   " :clock12: "
-                                  };
+    const char *spinner_emoji[]
+        = {" :clock1: ", " :clock2: ", " :clock3: ", " :clock4: ",  " :clock5: ",  " :clock6: ",
+           " :clock7: ", " :clock8: ", " :clock9: ", " :clock10: ", " :clock11: ", " :clock12: "};
     switch (level) {
         case ERR:
             if (g_session.emoji_mode == EMO_EMOJI)
@@ -112,13 +112,12 @@ void PrintAndLogEx(logLevel_t level, const char *fmt, ...) {
             if (g_session.emoji_mode == EMO_EMOJI) {
                 strncpy(prefix, spinner_emoji[PrintAndLogEx_spinidx], sizeof(prefix) - 1);
                 PrintAndLogEx_spinidx++;
-                if (PrintAndLogEx_spinidx >= ARRAYLEN(spinner_emoji))
-                    PrintAndLogEx_spinidx = 0;
-            } else {
+                if (PrintAndLogEx_spinidx >= ARRAYLEN(spinner_emoji)) PrintAndLogEx_spinidx = 0;
+            }
+            else {
                 strncpy(prefix, spinner[PrintAndLogEx_spinidx], sizeof(prefix) - 1);
                 PrintAndLogEx_spinidx++;
-                if (PrintAndLogEx_spinidx >= ARRAYLEN(spinner))
-                    PrintAndLogEx_spinidx = 0;
+                if (PrintAndLogEx_spinidx >= ARRAYLEN(spinner)) PrintAndLogEx_spinidx = 0;
             }
             break;
         case NORMAL:
@@ -138,22 +137,19 @@ void PrintAndLogEx(logLevel_t level, const char *fmt, ...) {
     }
 
     if (strchr(buffer, '\n')) {
-
         const char delim[2] = "\n";
 
         // line starts with newline
-        if (buffer[0] == '\n')
-            fPrintAndLog(stream, "");
+        if (buffer[0] == '\n') fPrintAndLog(stream, "");
 
-        // Use platform-specific strtok
+            // Use platform-specific strtok
 #if defined(_WIN32) && defined(_MSC_VER)
-        token = strtok_s(buffer, delim, &tmp_ptr); // Use strtok_s for MSVC
+        token = strtok_s(buffer, delim, &tmp_ptr);  // Use strtok_s for MSVC
 #else
-        token = strtok_r(buffer, delim, &tmp_ptr); // Use strtok_r for POSIX
+        token = strtok_r(buffer, delim, &tmp_ptr);    // Use strtok_r for POSIX
 #endif
 
         while (token != NULL) {
-
             size_t size = strlen(buffer2);
 
             if (strlen(token))
@@ -161,15 +157,16 @@ void PrintAndLogEx(logLevel_t level, const char *fmt, ...) {
             else
                 snprintf(buffer2 + size, sizeof(buffer2) - size, "\n");
 
-            // Use platform-specific strtok for subsequent calls
+                // Use platform-specific strtok for subsequent calls
 #if defined(_WIN32) && defined(_MSC_VER)
-            token = strtok_s(NULL, delim, &tmp_ptr); // Use strtok_s for MSVC
+            token = strtok_s(NULL, delim, &tmp_ptr);  // Use strtok_s for MSVC
 #else
-            token = strtok_r(NULL, delim, &tmp_ptr); // Use strtok_r for POSIX
+            token = strtok_r(NULL, delim, &tmp_ptr);  // Use strtok_r for POSIX
 #endif
         }
         fPrintAndLog(stream, "%s", buffer2);
-    } else {
+    }
+    else {
         snprintf(buffer2, sizeof(buffer2), "%s%s", prefix, buffer);
         if (level == INPLACE) {
             char buffer3[sizeof(buffer2)] = {0};
@@ -178,24 +175,25 @@ void PrintAndLogEx(logLevel_t level, const char *fmt, ...) {
             memcpy_filter_emoji(buffer4, buffer3, sizeof(buffer3), g_session.emoji_mode);
             fprintf(stream, "\r%s", buffer4);
             fflush(stream);
-        } else {
+        }
+        else {
             fPrintAndLog(stream, "%s", buffer2);
         }
     }
 }
 
-static void fPrintAndLog(FILE *stream, const char *fmt, ...) {
+static void fPrintAndLog(FILE *stream, const char *fmt, ...)
+{
     va_list argptr;
     static FILE *logfile = NULL;
-    static int logging = 1; // TODO: This is immediately set to 0 below, review logging logic
+    static int logging = 1;  // TODO: This is immediately set to 0 below, review logging logic
     char buffer[MAX_PRINT_BUFFER] = {0};
     char buffer2[MAX_PRINT_BUFFER] = {0};
     char buffer3[MAX_PRINT_BUFFER] = {0};
     // lock this section to avoid interlacing prints from different threads
     bool linefeed = true;
 
-    logging = 0; // TODO: This disables file logging. Is this intended?
-
+    logging = 0;  // TODO: This disables file logging. Is this intended?
 
 // If there is an incoming message from the hardware (eg: lf hid read) in
 // the background (while the prompt is displayed and accepting user input),
@@ -203,8 +201,8 @@ static void fPrintAndLog(FILE *stream, const char *fmt, ...) {
 #ifdef RL_STATE_READCMD
     // We are using GNU readline. libedit (OSX) doesn't support this flag.
     int need_hack = (rl_readline_state & RL_STATE_READCMD) > 0;
-    char *saved_line = NULL; // Initialize to NULL
-    int saved_point = 0;     // Initialize to 0
+    char *saved_line = NULL;  // Initialize to NULL
+    int saved_point = 0;      // Initialize to 0
 
     if (need_hack) {
         saved_point = rl_point;
@@ -227,8 +225,7 @@ static void fPrintAndLog(FILE *stream, const char *fmt, ...) {
     if (g_printAndLog & PRINTANDLOG_PRINT) {
         memcpy_filter_emoji(buffer3, buffer2, sizeof(buffer2), g_session.emoji_mode);
         fprintf(stream, "%s", buffer3);
-        if (linefeed)
-            fprintf(stream, "\n");
+        if (linefeed) fprintf(stream, "\n");
     }
 
 #ifdef RL_STATE_READCMD
@@ -238,36 +235,36 @@ static void fPrintAndLog(FILE *stream, const char *fmt, ...) {
         rl_replace_line(saved_line, 0);
         rl_point = saved_point;
         rl_redisplay();
-        free(saved_line); // Free the copied text
+        free(saved_line);  // Free the copied text
     }
 #endif
 
     // TODO: Review logging logic. 'logging' is always 0 here.
     if ((g_printAndLog & PRINTANDLOG_LOG) && logging && logfile) {
         memcpy_filter_emoji(buffer3, buffer2, sizeof(buffer2), EMO_ALTTEXT);
-        if (filter_ansi) { // already done
+        if (filter_ansi) {  // already done
             fprintf(logfile, "%s", buffer3);
-        } else {
+        }
+        else {
             memcpy_filter_ansi(buffer, buffer3, sizeof(buffer3), true);
             fprintf(logfile, "%s", buffer);
         }
-        if (linefeed)
-            fprintf(logfile, "\n");
+        if (linefeed) fprintf(logfile, "\n");
         fflush(logfile);
     }
 
-    if (flushAfterWrite)
-        fflush(stdout);
+    if (flushAfterWrite) fflush(stdout);
 }
 
-void memcpy_filter_ansi(void *dest, const void *src, size_t n, bool filter) {
-    if (!dest || !src) return; // Basic null check
+void memcpy_filter_ansi(void *dest, const void *src, size_t n, bool filter)
+{
+    if (!dest || !src) return;  // Basic null check
 
     if (filter) {
         // Filter out ANSI sequences on these OS
-        uint8_t *rdest = (uint8_t *) dest;
-        const uint8_t *rsrc = (const uint8_t *) src; // Use const for source
-        size_t si = 0; // Use size_t for index
+        uint8_t *rdest = (uint8_t *)dest;
+        const uint8_t *rsrc = (const uint8_t *)src;  // Use const for source
+        size_t si = 0;                               // Use size_t for index
         size_t i = 0;
 
         // Ensure we don't write past the destination buffer boundary 'n'
@@ -276,8 +273,8 @@ void memcpy_filter_ansi(void *dest, const void *src, size_t n, bool filter) {
             if (rsrc[i] == '\x1b') {
                 // Check for Control Sequence Introducer (CSI) '[', or other single-char sequences
                 if (i + 1 < n) {
-                    if (rsrc[i + 1] == '[') { // CSI sequence
-                        i += 2; // Skip ESC and '['
+                    if (rsrc[i + 1] == '[') {  // CSI sequence
+                        i += 2;                // Skip ESC and '['
                         // Skip parameter bytes (0x30-0x3F)
                         while (i < n && rsrc[i] >= 0x30 && rsrc[i] <= 0x3F) {
                             i++;
@@ -288,8 +285,8 @@ void memcpy_filter_ansi(void *dest, const void *src, size_t n, bool filter) {
                         }
                         // Check for final byte (0x40-0x7E)
                         if (i < n && rsrc[i] >= 0x40 && rsrc[i] <= 0x7E) {
-                            i++; // Skip the final byte
-                            continue; // Continue to next character after sequence
+                            i++;       // Skip the final byte
+                            continue;  // Continue to next character after sequence
                         }
                         // If sequence is incomplete or invalid, backtrack 'i' to avoid skipping valid chars
                         // This part is tricky; for simplicity, we might just copy the partial sequence
@@ -298,21 +295,24 @@ void memcpy_filter_ansi(void *dest, const void *src, size_t n, bool filter) {
                         // and let the rest be copied if it doesn't match the pattern.
                         // If we reached here, the sequence was malformed after '['.
                         // We already skipped ESC and '[', so just continue processing from current 'i'.
-
-                    } else if (rsrc[i + 1] >= 0x40 && rsrc[i + 1] <= 0x5F) { // Single char sequence after ESC
-                        i += 2; // Skip ESC and the command character
-                        continue; // Continue to next character
-                    } else {
+                    }
+                    else if (rsrc[i + 1] >= 0x40 && rsrc[i + 1] <= 0x5F) {  // Single char sequence after ESC
+                        i += 2;                                             // Skip ESC and the command character
+                        continue;                                           // Continue to next character
+                    }
+                    else {
                         // Not a recognized sequence start after ESC, copy ESC and continue
                         if (si < n) rdest[si++] = rsrc[i];
                         i++;
                     }
-                } else {
+                }
+                else {
                     // ESC at the very end of the buffer, copy it
                     if (si < n) rdest[si++] = rsrc[i];
                     i++;
                 }
-            } else {
+            }
+            else {
                 // Not an ESC character, copy normally
                 if (si < n) rdest[si++] = rsrc[i];
                 i++;
@@ -321,48 +321,46 @@ void memcpy_filter_ansi(void *dest, const void *src, size_t n, bool filter) {
         // Null-terminate if there's space, assuming dest is a string buffer
         if (si < n) {
             rdest[si] = '\0';
-        } else if (n > 0) {
-            rdest[n - 1] = '\0'; // Ensure null termination even if truncated
         }
-
-    } else {
+        else if (n > 0) {
+            rdest[n - 1] = '\0';  // Ensure null termination even if truncated
+        }
+    }
+    else {
         memcpy(dest, src, n);
     }
 }
 
-
-static bool
-emojify_token(const char *token, uint8_t token_length, const char **emojified_token, uint8_t *emojified_token_length,
-              emojiMode_t mode) {
+static bool emojify_token(const char *token, uint8_t token_length, const char **emojified_token,
+                          uint8_t *emojified_token_length, emojiMode_t mode)
+{
     // Basic null checks
     if (!token || !emojified_token || !emojified_token_length) return false;
 
     // Iterate through the EmojiTable
-    for (int i = 0; EmojiTable[i].alias != NULL; ++i) { // Check alias for NULL
+    for (int i = 0; EmojiTable[i].alias != NULL; ++i) {  // Check alias for NULL
         // Check if alias length matches and content is the same
-        if ((strlen(EmojiTable[i].alias) == token_length) &&
-                (memcmp(EmojiTable[i].alias, token, token_length) == 0)) {
-
+        if ((strlen(EmojiTable[i].alias) == token_length) && (memcmp(EmojiTable[i].alias, token, token_length) == 0)) {
             switch (mode) {
                 case EMO_EMOJI: {
-                    if (EmojiTable[i].emoji) { // Check emoji for NULL
+                    if (EmojiTable[i].emoji) {  // Check emoji for NULL
                         *emojified_token = EmojiTable[i].emoji;
                         *emojified_token_length = strlen(EmojiTable[i].emoji);
                         return true;
                     }
-                    break; // Should not happen if table is well-formed, but good practice
+                    break;  // Should not happen if table is well-formed, but good practice
                 }
                 case EMO_ALTTEXT: {
-                    *emojified_token_length = 0; // Default to 0 if not found in AltTable
+                    *emojified_token_length = 0;  // Default to 0 if not found in AltTable
                     // Search in EmojiAltTable
-                    for (int j = 0; EmojiAltTable[j].alias != NULL; ++j) { // Check alias for NULL
-                        if ((strlen(EmojiAltTable[j].alias) == token_length) &&
-                                (memcmp(EmojiAltTable[j].alias, token, token_length) == 0)) {
-                            if (EmojiAltTable[j].alttext) { // Check alttext for NULL
+                    for (int j = 0; EmojiAltTable[j].alias != NULL; ++j) {  // Check alias for NULL
+                        if ((strlen(EmojiAltTable[j].alias) == token_length)
+                            && (memcmp(EmojiAltTable[j].alias, token, token_length) == 0)) {
+                            if (EmojiAltTable[j].alttext) {  // Check alttext for NULL
                                 *emojified_token = EmojiAltTable[j].alttext;
                                 *emojified_token_length = strlen(EmojiAltTable[j].alttext);
                             }
-                            return true; // Found alias, return even if alttext is NULL (length will be 0)
+                            return true;  // Found alias, return even if alttext is NULL (length will be 0)
                         }
                     }
                     // Alias found in EmojiTable but not EmojiAltTable, return true with length 0
@@ -370,10 +368,10 @@ emojify_token(const char *token, uint8_t token_length, const char **emojified_to
                 }
                 case EMO_NONE: {
                     *emojified_token_length = 0;
-                    return true; // Alias found, but mode is NONE
+                    return true;  // Alias found, but mode is NONE
                 }
-                case EMO_ALIAS: { // This mode means "do nothing", should not be handled here
-                    return false; // Indicate no replacement happened
+                case EMO_ALIAS: {  // This mode means "do nothing", should not be handled here
+                    return false;  // Indicate no replacement happened
                 }
             }
             // If we fall through the switch (e.g., EMO_EMOJI but emoji is NULL), return false
@@ -384,8 +382,8 @@ emojify_token(const char *token, uint8_t token_length, const char **emojified_to
     return false;
 }
 
-
-static bool token_charset(uint8_t c) {
+static bool token_charset(uint8_t c)
+{
     if ((c >= '0') && (c <= '9')) return true;
     if ((c >= 'a') && (c <= 'z')) return true;
     if ((c >= 'A') && (c <= 'Z')) return true;
@@ -393,8 +391,9 @@ static bool token_charset(uint8_t c) {
     return false;
 }
 
-void memcpy_filter_emoji(void *dest, const void *src, size_t n, emojiMode_t mode) {
-    if (!dest || !src) return; // Basic null check
+void memcpy_filter_emoji(void *dest, const void *src, size_t n, emojiMode_t mode)
+{
+    if (!dest || !src) return;  // Basic null check
 
     if (mode == EMO_ALIAS) {
         // If mode is ALIAS, just copy the source to destination
@@ -409,11 +408,11 @@ void memcpy_filter_emoji(void *dest, const void *src, size_t n, emojiMode_t mode
     // tokenize emoji
     const char *emojified_token = NULL;
     uint8_t emojified_token_length = 0;
-    const char *current_token_start = NULL; // Use const char* for source pointers
+    const char *current_token_start = NULL;  // Use const char* for source pointers
     uint8_t current_token_length = 0;
-    char *rdest = (char *) dest;
-    const char *rsrc = (const char *) src; // Use const char* for source pointers
-    size_t si = 0; // Use size_t for destination index
+    char *rdest = (char *)dest;
+    const char *rsrc = (const char *)src;  // Use const char* for source pointers
+    size_t si = 0;                         // Use size_t for destination index
 
     for (size_t i = 0; i < n && si < n; /* i incremented inside loop */) {
         char current_char = rsrc[i];
@@ -425,22 +424,26 @@ void memcpy_filter_emoji(void *dest, const void *src, size_t n, emojiMode_t mode
                 current_token_start = rsrc + i;
                 current_token_length = 1;
                 i++;
-            } else {
+            }
+            else {
                 // Regular character, copy to destination
                 if (si < n) rdest[si++] = current_char;
                 i++;
             }
-        } else {
+        }
+        else {
             // Currently inside a potential emoji token (started with ':')
             if (current_char == ':') {
                 // End of a potential token
-                current_token_length++; // Include the closing ':'
-                if (emojify_token(current_token_start, current_token_length, &emojified_token, &emojified_token_length, mode)) {
+                current_token_length++;  // Include the closing ':'
+                if (emojify_token(current_token_start, current_token_length, &emojified_token, &emojified_token_length,
+                                  mode)) {
                     // Valid emoji token found, copy replacement (or nothing if length is 0)
-                    if (si + emojified_token_length <= n) { // Check bounds before copying
+                    if (si + emojified_token_length <= n) {  // Check bounds before copying
                         memcpy(rdest + si, emojified_token, emojified_token_length);
                         si += emojified_token_length;
-                    } else {
+                    }
+                    else {
                         // Not enough space for the replacement, copy what fits
                         size_t fits = n - si;
                         memcpy(rdest + si, emojified_token, fits);
@@ -448,47 +451,52 @@ void memcpy_filter_emoji(void *dest, const void *src, size_t n, emojiMode_t mode
                         // Buffer full, break loop
                         break;
                     }
-                } else {
+                }
+                else {
                     // Not a valid emoji token (e.g., "::" or ":invalid:"), copy original token
-                    if (si + current_token_length <= n) { // Check bounds
+                    if (si + current_token_length <= n) {  // Check bounds
                         memcpy(rdest + si, current_token_start, current_token_length);
                         si += current_token_length;
-                    } else {
+                    }
+                    else {
                         size_t fits = n - si;
                         memcpy(rdest + si, current_token_start, fits);
                         si += fits;
-                        break; // Buffer full
+                        break;  // Buffer full
                     }
                 }
                 // Reset token state
                 current_token_length = 0;
                 current_token_start = NULL;
-                i++; // Move past the closing ':'
-            } else if (token_charset(current_char)) {
+                i++;  // Move past the closing ':'
+            }
+            else if (token_charset(current_char)) {
                 // Character is valid within an emoji token, extend current token
                 current_token_length++;
                 i++;
-            } else {
+            }
+            else {
                 // Invalid character within a potential token (e.g., ":abc def:")
                 // Copy the token so far (including the starting ':') and the invalid char
-                if (si + current_token_length + 1 <= n) { // Check bounds
+                if (si + current_token_length + 1 <= n) {  // Check bounds
                     memcpy(rdest + si, current_token_start, current_token_length);
                     si += current_token_length;
-                    rdest[si++] = current_char; // Copy the invalid character
-                } else {
+                    rdest[si++] = current_char;  // Copy the invalid character
+                }
+                else {
                     // Not enough space, copy what fits from token and potentially the char
                     size_t fits_token = (n - si > current_token_length) ? current_token_length : n - si;
                     memcpy(rdest + si, current_token_start, fits_token);
                     si += fits_token;
-                    if (si < n) { // If there's still space for the invalid char
+                    if (si < n) {  // If there's still space for the invalid char
                         rdest[si++] = current_char;
                     }
-                    break; // Buffer full
+                    break;  // Buffer full
                 }
                 // Reset token state
                 current_token_length = 0;
                 current_token_start = NULL;
-                i++; // Move past the invalid character
+                i++;  // Move past the invalid character
             }
         }
     }
@@ -503,8 +511,8 @@ void memcpy_filter_emoji(void *dest, const void *src, size_t n, emojiMode_t mode
     // Null-terminate the destination buffer if there's space
     if (si < n) {
         rdest[si] = '\0';
-    } else if (n > 0) {
-        rdest[n - 1] = '\0'; // Ensure null termination even if truncated
+    }
+    else if (n > 0) {
+        rdest[n - 1] = '\0';  // Ensure null termination even if truncated
     }
 }
-

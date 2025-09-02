@@ -13,67 +13,72 @@
     MA  02110-1301, US
     Copyright (C) 2008-2008 bla <blapost@gmail.com>
 */
-#include <stdlib.h>
 #include "mf1_crapto1.h"
+
+#include <stdlib.h>
+
 #include "parity.h"
 
 #ifdef __OPTIMIZE_SIZE__
-uint32_t filter(uint32_t const x) {
+uint32_t filter(uint32_t const x)
+{
     uint32_t f;
 
-    f  = 0xf22c0 >> (x       & 0xf) & 16;
-    f |= 0x6c9c0 >> (x >>  4 & 0xf) &  8;
-    f |= 0x3c8b0 >> (x >>  8 & 0xf) &  4;
-    f |= 0x1e458 >> (x >> 12 & 0xf) &  2;
-    f |= 0x0d938 >> (x >> 16 & 0xf) &  1;
+    f = 0xf22c0 >> (x & 0xf) & 16;
+    f |= 0x6c9c0 >> (x >> 4 & 0xf) & 8;
+    f |= 0x3c8b0 >> (x >> 8 & 0xf) & 4;
+    f |= 0x1e458 >> (x >> 12 & 0xf) & 2;
+    f |= 0x0d938 >> (x >> 16 & 0xf) & 1;
     return BIT(0xEC57E80A, f);
 }
 #endif
 
-#define SWAPENDIAN(x)\
-    (x = (x >> 8 & 0xff00ff) | (x & 0xff00ff) << 8, x = x >> 16 | x << 16)
+#define SWAPENDIAN(x) (x = (x >> 8 & 0xff00ff) | (x & 0xff00ff) << 8, x = x >> 16 | x << 16)
 
-void crypto1_init(struct Crypto1State *state, uint64_t key) {
-    if (state == NULL)
-        return;
+void crypto1_init(struct Crypto1State *state, uint64_t key)
+{
+    if (state == NULL) return;
     state->odd = 0;
     state->even = 0;
     for (int i = 47; i > 0; i -= 2) {
-        state->odd  = state->odd  << 1 | BIT(key, (i - 1) ^ 7);
+        state->odd = state->odd << 1 | BIT(key, (i - 1) ^ 7);
         state->even = state->even << 1 | BIT(key, i ^ 7);
     }
 }
 
-void inline crypto1_deinit(struct Crypto1State *state) {
+void inline crypto1_deinit(struct Crypto1State *state)
+{
     state->odd = 0;
     state->even = 0;
 }
 
-#if defined(__arm__) || defined(__linux__) || defined(_WIN32) || defined(__APPLE__) // bare metal ARM Proxmark lacks calloc()/free()
-struct Crypto1State *crypto1_create(uint64_t key) {
+#if defined(__arm__) || defined(__linux__) || defined(_WIN32) \
+    || defined(__APPLE__)  // bare metal ARM Proxmark lacks calloc()/free()
+struct Crypto1State *crypto1_create(uint64_t key)
+{
     struct Crypto1State *state = calloc(sizeof(*state), sizeof(uint8_t));
     if (!state) return NULL;
     crypto1_init(state, key);
     return state;
 }
 
-void crypto1_destroy(struct Crypto1State *state) {
-    free(state);
-}
+void crypto1_destroy(struct Crypto1State *state) { free(state); }
 #endif
 
-void crypto1_get_lfsr(struct Crypto1State *state, uint64_t *lfsr) {
+void crypto1_get_lfsr(struct Crypto1State *state, uint64_t *lfsr)
+{
     int i;
     for (*lfsr = 0, i = 23; i >= 0; --i) {
         *lfsr = *lfsr << 1 | BIT(state->odd, i ^ 3);
         *lfsr = *lfsr << 1 | BIT(state->even, i ^ 3);
     }
 }
-uint8_t crypto1_bit(struct Crypto1State *s, uint8_t in, int is_encrypted) {
+uint8_t crypto1_bit(struct Crypto1State *s, uint8_t in, int is_encrypted)
+{
     uint32_t feedin, t;
     uint8_t ret = filter(s->odd);
 
-    feedin  = ret & (!!is_encrypted);
+    feedin = ret & (!!is_encrypted);
     feedin ^= !!in;
     feedin ^= LF_POLY_ODD & s->odd;
     feedin ^= LF_POLY_EVEN & s->even;
@@ -85,7 +90,8 @@ uint8_t crypto1_bit(struct Crypto1State *s, uint8_t in, int is_encrypted) {
 
     return ret;
 }
-uint8_t crypto1_byte(struct Crypto1State *s, uint8_t in, int is_encrypted) {
+uint8_t crypto1_byte(struct Crypto1State *s, uint8_t in, int is_encrypted)
+{
     uint8_t ret = 0;
     ret |= crypto1_bit(s, BIT(in, 0), is_encrypted) << 0;
     ret |= crypto1_bit(s, BIT(in, 1), is_encrypted) << 1;
@@ -97,7 +103,8 @@ uint8_t crypto1_byte(struct Crypto1State *s, uint8_t in, int is_encrypted) {
     ret |= crypto1_bit(s, BIT(in, 7), is_encrypted) << 7;
     return ret;
 }
-uint32_t crypto1_word(struct Crypto1State *s, uint32_t in, int is_encrypted) {
+uint32_t crypto1_word(struct Crypto1State *s, uint32_t in, int is_encrypted)
+{
     uint32_t ret = 0;
     // note: xor args have been swapped because some compilers emit a warning
     // for 10^x and 2^x as possible misuses for exponentiation. No comment.
@@ -144,12 +151,12 @@ uint32_t crypto1_word(struct Crypto1State *s, uint32_t in, int is_encrypted) {
 /* prng_successor
  * helper used to obscure the keystream during authentication
  */
-uint32_t prng_successor(uint32_t x, uint32_t n) {
+uint32_t prng_successor(uint32_t x, uint32_t n)
+{
     // SWAPENDIAN(x);
     x = __REV(x);
 
-    while (n--)
-        x = x >> 1 | (x >> 16 ^ x >> 18 ^ x >> 19 ^ x >> 21) << 31;
+    while (n--) x = x >> 1 | (x >> 16 ^ x >> 18 ^ x >> 19 ^ x >> 21) << 31;
 
     // return SWAPENDIAN(x);
     return __REV(x);

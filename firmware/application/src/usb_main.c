@@ -1,12 +1,12 @@
 #include "usb_main.h"
-#include "syssleep.h"
-#include "dataframe.h"
 
 #include "app_usbd.h"
 #include "app_usbd_cdc_acm.h"
 #include "app_usbd_core.h"
 #include "app_usbd_serial_num.h"
 #include "app_usbd_string_desc.h"
+#include "dataframe.h"
+#include "syssleep.h"
 
 #define NRF_LOG_MODULE_NAME usb_cdc
 #include "nrf_log.h"
@@ -25,13 +25,8 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst, app_usb
 #define CDC_ACM_DATA_EPOUT NRF_DRV_USBD_EPOUT1
 
 /** @brief CDC_ACM class instance */
-APP_USBD_CDC_ACM_GLOBAL_DEF(m_app_cdc_acm,
-                            cdc_acm_user_ev_handler,
-                            CDC_ACM_COMM_INTERFACE,
-                            CDC_ACM_DATA_INTERFACE,
-                            CDC_ACM_COMM_EPIN,
-                            CDC_ACM_DATA_EPIN,
-                            CDC_ACM_DATA_EPOUT,
+APP_USBD_CDC_ACM_GLOBAL_DEF(m_app_cdc_acm, cdc_acm_user_ev_handler, CDC_ACM_COMM_INTERFACE, CDC_ACM_DATA_INTERFACE,
+                            CDC_ACM_COMM_EPIN, CDC_ACM_DATA_EPIN, CDC_ACM_DATA_EPOUT,
                             APP_USBD_CDC_COMM_PROTOCOL_AT_V250);
 
 // USB DEFINES END
@@ -42,14 +37,18 @@ volatile bool g_usb_port_opened = false;
 volatile bool g_usb_led_marquee_enable = true;
 
 /** @brief User event handler @ref app_usbd_cdc_acm_user_ev_handler_t */
-static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst, app_usbd_cdc_acm_user_event_t event) {
+static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst, app_usbd_cdc_acm_user_event_t event)
+{
     static uint8_t cdc_data_buffer[1];
     // app_usbd_cdc_acm_t const *p_cdc_acm = app_usbd_cdc_acm_class_get(p_inst);
 
     switch (event) {
         case APP_USBD_CDC_ACM_USER_EVT_PORT_OPEN: {
             /*
-             *theProbabilityOfTheEntireUsbReceivingDataIsTheAppUsbdCdcAcmRead *AppUsbdCdcAcmReadFunctionIsNotASeriousReception,ItIsGivenAPointer,AndThenWaitForTheUsbBuffer *SoYouNeedToInitializeTheHeadPointerFirstWhenTheAppUsbdCdcAcmUserEvtPortOpenIsInitialized *IfTheAppUsbdCdcAcmUserEvtRxDoneUsesASubscribed0ToAccessTheBuffer,ItWillCauseTheFirstByteToLoseTheFirstSendEssence
+             *theProbabilityOfTheEntireUsbReceivingDataIsTheAppUsbdCdcAcmRead
+             **AppUsbdCdcAcmReadFunctionIsNotASeriousReception,ItIsGivenAPointer,AndThenWaitForTheUsbBuffer
+             **SoYouNeedToInitializeTheHeadPointerFirstWhenTheAppUsbdCdcAcmUserEvtPortOpenIsInitialized
+             **IfTheAppUsbdCdcAcmUserEvtRxDoneUsesASubscribed0ToAccessTheBuffer,ItWillCauseTheFirstByteToLoseTheFirstSendEssence
              */
             ret_code_t ret = app_usbd_cdc_acm_read(&m_app_cdc_acm, cdc_data_buffer, 1);
             UNUSED_VARIABLE(ret);
@@ -69,7 +68,7 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst, app_usb
 
         case APP_USBD_CDC_ACM_USER_EVT_RX_DONE: {
             ret_code_t ret;
-            //Take out the first byte first
+            // Take out the first byte first
             data_frame_receive(cdc_data_buffer, 1);
             do {
                 ret = app_usbd_cdc_acm_read(&m_app_cdc_acm, cdc_data_buffer, 1);
@@ -85,7 +84,8 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst, app_usb
     }
 }
 
-static void usbd_user_ev_handler(app_usbd_event_type_t event) {
+static void usbd_user_ev_handler(app_usbd_event_type_t event)
+{
     switch (event) {
         case APP_USBD_EVT_DRV_SUSPEND:
             NRF_LOG_INFO("USB SUSPEND");
@@ -135,11 +135,10 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event) {
 
 // USB CODE END
 
-void usb_cdc_init(void) {
+void usb_cdc_init(void)
+{
     ret_code_t ret;
-    static const app_usbd_config_t usbd_config = {
-        .ev_state_proc = usbd_user_ev_handler
-    };
+    static const app_usbd_config_t usbd_config = {.ev_state_proc = usbd_user_ev_handler};
 
     app_usbd_serial_num_generate();
 
@@ -151,7 +150,8 @@ void usb_cdc_init(void) {
     APP_ERROR_CHECK(ret);
 }
 
-void usb_cdc_write(const void *p_buf, uint16_t length) {
+void usb_cdc_write(const void *p_buf, uint16_t length)
+{
     ret_code_t err_code = app_usbd_cdc_acm_write(&m_app_cdc_acm, p_buf, length);
     APP_ERROR_CHECK(err_code);
 }
@@ -180,6 +180,4 @@ int fputc(int ch, FILE *f){
 }
 */
 
-bool is_usb_working(void) {
-    return g_usb_port_opened;
-}
+bool is_usb_working(void) { return g_usb_port_opened; }

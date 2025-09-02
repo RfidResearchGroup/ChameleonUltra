@@ -1,145 +1,156 @@
 #include "mf1_crypto1.h"
-#include "parity.h"
 
+#include "parity.h"
 
 #define __inline__ inline
 #define ODD_PARITY oddparity8
 
-
 // uncomment if platform is not avr
 #define NO_INLINE_ASM 1
 
-#define PRNG_MASK        0x002D0000UL
+#define PRNG_MASK 0x002D0000UL
 /* x^16 + x^14 + x^13 + x^11 + 1 */
 
-#define PRNG_SIZE        4 /* Bytes */
-#define NONCE_SIZE       4 /* Bytes */
+#define PRNG_SIZE 4  /* Bytes */
+#define NONCE_SIZE 4 /* Bytes */
 
-#define LFSR_MASK_EVEN   0x2010E1UL
-#define LFSR_MASK_ODD    0x3A7394UL
+#define LFSR_MASK_EVEN 0x2010E1UL
+#define LFSR_MASK_ODD 0x3A7394UL
 /* x^48 + x^43 + x^39 + x^38 + x^36 + x^34 + x^33 + x^31 + x^29 +
  * x^24 + x^23 + x^21 + x^19 + x^13 + x^9 + x^7 + x^6 + x^5 + 1 */
 
-#define LFSR_SIZE        6 /* Bytes */
+#define LFSR_SIZE 6 /* Bytes */
 
 // Functions fa, fb and fc in filter output network. Definitions taken from Timo Kasper's thesis
-#define FA(x3, x2, x1, x0) ( \
-    ( (x0 | x1) ^ (x0 & x3) ) ^ ( x2 & ( (x0 ^ x1) | x3 ) ) \
-)
+#define FA(x3, x2, x1, x0) (((x0 | x1) ^ (x0 & x3)) ^ (x2 & ((x0 ^ x1) | x3)))
 
-#define FB(x3, x2, x1, x0) ( \
-    ( (x0 & x1) | x2 ) ^ ( (x0 ^ x1) & (x2 | x3) ) \
-)
+#define FB(x3, x2, x1, x0) (((x0 & x1) | x2) ^ ((x0 ^ x1) & (x2 | x3)))
 
-#define FC(x4, x3, x2, x1, x0) ( \
-    ( x0 | ( (x1 | x4) & (x3 ^ x4) ) ) ^ ( ( x0 ^ (x1 & x3) ) & ( (x2 ^ x3) | (x1 & x4) ) ) \
-)
-
+#define FC(x4, x3, x2, x1, x0) ((x0 | ((x1 | x4) & (x3 ^ x4))) ^ ((x0 ^ (x1 & x3)) & ((x2 ^ x3) | (x1 & x4))))
 
 /* For AVR only */
 #ifndef NO_INLINE_ASM
-
 
 /* Special macros for optimized usage of the xmega */
 /* see http://rn-wissen.de/wiki/index.php?title=Inline-Assembler_in_avr-gcc */
 
 /* Split byte into odd and even nibbles- */
 /* Used for LFSR setup. */
-#define SPLIT_BYTE(__even, __odd, __byte) \
-    __asm__ __volatile__ ( \
-        "lsr %2"             "\n\t"   \
-        "ror %0"             "\n\t"   \
-        "lsr %2"             "\n\t"   \
-        "ror %1"             "\n\t"   \
-        "lsr %2"             "\n\t"   \
-        "ror %0"             "\n\t"   \
-        "lsr %2"             "\n\t"   \
-        "ror %1"             "\n\t"   \
-        "lsr %2"             "\n\t"   \
-        "ror %0"             "\n\t"   \
-        "lsr %2"             "\n\t"   \
-        "ror %1"             "\n\t"   \
-        "lsr %2"             "\n\t"   \
-        "ror %0"             "\n\t"   \
-        "lsr %2"             "\n\t"   \
-        "ror %1"                      \
-        : "+r" (__even),              \
-                  "+r" (__odd),       \
-          "+r" (__byte)               \
-                :                     \
-        : "r0" )
+#define SPLIT_BYTE(__even, __odd, __byte)         \
+    __asm__ __volatile__(                         \
+        "lsr %2"                                  \
+        "\n\t"                                    \
+        "ror %0"                                  \
+        "\n\t"                                    \
+        "lsr %2"                                  \
+        "\n\t"                                    \
+        "ror %1"                                  \
+        "\n\t"                                    \
+        "lsr %2"                                  \
+        "\n\t"                                    \
+        "ror %0"                                  \
+        "\n\t"                                    \
+        "lsr %2"                                  \
+        "\n\t"                                    \
+        "ror %1"                                  \
+        "\n\t"                                    \
+        "lsr %2"                                  \
+        "\n\t"                                    \
+        "ror %0"                                  \
+        "\n\t"                                    \
+        "lsr %2"                                  \
+        "\n\t"                                    \
+        "ror %1"                                  \
+        "\n\t"                                    \
+        "lsr %2"                                  \
+        "\n\t"                                    \
+        "ror %0"                                  \
+        "\n\t"                                    \
+        "lsr %2"                                  \
+        "\n\t"                                    \
+        "ror %1"                                  \
+        : "+r"(__even), "+r"(__odd), "+r"(__byte) \
+        :                                         \
+        : "r0")
 
 /* Shift half LFSR state stored in three registers */
 /* Input is bit 0 of __in */
-#define SHIFT24(__b0, __b1, __b2, __in) \
-    __asm__ __volatile__ (              \
-        "lsr %3"    "\n\t"              \
-        "ror %2"    "\n\t"              \
-        "ror %1"    "\n\t"              \
-        "ror %0"                        \
-        : "+r" (__b0),                  \
-          "+r" (__b1),                  \
-          "+r" (__b2),                  \
-          "+r" (__in)                   \
-        :                               \
-        :   )
+#define SHIFT24(__b0, __b1, __b2, __in)                  \
+    __asm__ __volatile__(                                \
+        "lsr %3"                                         \
+        "\n\t"                                           \
+        "ror %2"                                         \
+        "\n\t"                                           \
+        "ror %1"                                         \
+        "\n\t"                                           \
+        "ror %0"                                         \
+        : "+r"(__b0), "+r"(__b1), "+r"(__b2), "+r"(__in) \
+        :                                                \
+        :)
 
 /* Shift half LFSR state stored in three registers    */
 /* Input is bit 0 of __in                             */
 /* decrypt with __stream if bit 0 of __decrypt is set */
 #define SHIFT24_COND_DECRYPT(__b0, __b1, __b2, __in, __stream, __decrypt) \
-    __asm__ __volatile__ ( \
-        "sbrc %5, 0"  "\n\t"    \
-        "eor  %3, %4" "\n\t"    \
-        "lsr  %3"     "\n\t"    \
-        "ror  %2"     "\n\t"    \
-        "ror  %1"     "\n\t"    \
-        "ror  %0"               \
-        : "+r" (__b0),          \
-          "+r" (__b1),          \
-          "+r" (__b2),          \
-          "+r" (__in)           \
-        : "r"  (__stream),      \
-          "r"  (__decrypt)      \
-        : "r0" )
+    __asm__ __volatile__(                                                 \
+        "sbrc %5, 0"                                                      \
+        "\n\t"                                                            \
+        "eor  %3, %4"                                                     \
+        "\n\t"                                                            \
+        "lsr  %3"                                                         \
+        "\n\t"                                                            \
+        "ror  %2"                                                         \
+        "\n\t"                                                            \
+        "ror  %1"                                                         \
+        "\n\t"                                                            \
+        "ror  %0"                                                         \
+        : "+r"(__b0), "+r"(__b1), "+r"(__b2), "+r"(__in)                  \
+        : "r"(__stream), "r"(__decrypt)                                   \
+        : "r0")
 
 /* Shift a byte with input from an other byte  */
 /* Input is bit 0 of __in */
-#define SHIFT8(__byte, __in) \
-        __asm__ __volatile__ (  \
-        "lsr %1"    "\n\t"      \
-        "ror %0"                \
-        : "+r" (__byte),        \
-          "+r"  (__in)          \
-                :               \
-        : "r0" )
+#define SHIFT8(__byte, __in)       \
+    __asm__ __volatile__(          \
+        "lsr %1"                   \
+        "\n\t"                     \
+        "ror %0"                   \
+        : "+r"(__byte), "+r"(__in) \
+        :                          \
+        : "r0")
 /* End AVR specific */
 #else
 
 /* Platform independent code */
 
-#define SPLIT_BYTE(__even, __odd, __byte) \
-    __even = (__even >> 1) | (__byte<<7); __byte>>=1; \
-    __odd  = (__odd  >> 1) | (__byte<<7); __byte>>=1; \
-    __even = (__even >> 1) | (__byte<<7); __byte>>=1; \
-    __odd  = (__odd  >> 1) | (__byte<<7); __byte>>=1; \
-    __even = (__even >> 1) | (__byte<<7); __byte>>=1; \
-    __odd  = (__odd  >> 1) | (__byte<<7); __byte>>=1; \
-    __even = (__even >> 1) | (__byte<<7); __byte>>=1; \
-    __odd  = (__odd  >> 1) | (__byte<<7)
+#define SPLIT_BYTE(__even, __odd, __byte)   \
+    __even = (__even >> 1) | (__byte << 7); \
+    __byte >>= 1;                           \
+    __odd = (__odd >> 1) | (__byte << 7);   \
+    __byte >>= 1;                           \
+    __even = (__even >> 1) | (__byte << 7); \
+    __byte >>= 1;                           \
+    __odd = (__odd >> 1) | (__byte << 7);   \
+    __byte >>= 1;                           \
+    __even = (__even >> 1) | (__byte << 7); \
+    __byte >>= 1;                           \
+    __odd = (__odd >> 1) | (__byte << 7);   \
+    __byte >>= 1;                           \
+    __even = (__even >> 1) | (__byte << 7); \
+    __byte >>= 1;                           \
+    __odd = (__odd >> 1) | (__byte << 7)
 
 #define SHIFT24(__b0, __b1, __b2, __in) \
-               __b0 = (__b0>>1) | (__b1<<7); \
-               __b1 = (__b1>>1) | (__b2<<7); \
-               __b2 = (__b2>>1) | ((__in)<<7)
+    __b0 = (__b0 >> 1) | (__b1 << 7);   \
+    __b1 = (__b1 >> 1) | (__b2 << 7);   \
+    __b2 = (__b2 >> 1) | ((__in) << 7)
 
 #define SHIFT24_COND_DECRYPT(__b0, __b1, __b2, __in, __stream, __decrypt) \
-               __b0 = (__b0>>1) | (__b1<<7); \
-               __b1 = (__b1>>1) | (__b2<<7); \
-               __b2 = (__b2>>1) | (((__in)^((__stream)&(__decrypt)))<<7)
+    __b0 = (__b0 >> 1) | (__b1 << 7);                                     \
+    __b1 = (__b1 >> 1) | (__b2 << 7);                                     \
+    __b2 = (__b2 >> 1) | (((__in) ^ ((__stream) & (__decrypt))) << 7)
 
-#define SHIFT8(__byte, __in)  __byte = (__byte>>1) | ((__in)<<7)
-
+#define SHIFT8(__byte, __in) __byte = (__byte >> 1) | ((__in) << 7)
 
 #endif
 
@@ -151,166 +162,97 @@
 /* Table of the filter A/B output per byte */
 static const uint8_t abFilterTable[3][256] = {
     /* for Odd[0] */
-    {
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01
-    },
+    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01,
+     0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+     0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+     0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01,
+     0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+     0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+     0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+     0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01},
     /* for Odd[1] */
-    {
-        0x00, 0x00, 0x00, 0x02, 0x02, 0x00, 0x00, 0x02,
-        0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00, 0x02,
-        0x00, 0x00, 0x00, 0x02, 0x02, 0x00, 0x00, 0x02,
-        0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00, 0x02,
-        0x00, 0x00, 0x00, 0x02, 0x02, 0x00, 0x00, 0x02,
-        0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00, 0x02,
-        0x04, 0x04, 0x04, 0x06, 0x06, 0x04, 0x04, 0x06,
-        0x04, 0x06, 0x06, 0x06, 0x06, 0x04, 0x04, 0x06,
-        0x04, 0x04, 0x04, 0x06, 0x06, 0x04, 0x04, 0x06,
-        0x04, 0x06, 0x06, 0x06, 0x06, 0x04, 0x04, 0x06,
-        0x00, 0x00, 0x00, 0x02, 0x02, 0x00, 0x00, 0x02,
-        0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00, 0x02,
-        0x00, 0x00, 0x00, 0x02, 0x02, 0x00, 0x00, 0x02,
-        0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00, 0x02,
-        0x04, 0x04, 0x04, 0x06, 0x06, 0x04, 0x04, 0x06,
-        0x04, 0x06, 0x06, 0x06, 0x06, 0x04, 0x04, 0x06,
-        0x00, 0x00, 0x00, 0x02, 0x02, 0x00, 0x00, 0x02,
-        0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00, 0x02,
-        0x04, 0x04, 0x04, 0x06, 0x06, 0x04, 0x04, 0x06,
-        0x04, 0x06, 0x06, 0x06, 0x06, 0x04, 0x04, 0x06,
-        0x04, 0x04, 0x04, 0x06, 0x06, 0x04, 0x04, 0x06,
-        0x04, 0x06, 0x06, 0x06, 0x06, 0x04, 0x04, 0x06,
-        0x04, 0x04, 0x04, 0x06, 0x06, 0x04, 0x04, 0x06,
-        0x04, 0x06, 0x06, 0x06, 0x06, 0x04, 0x04, 0x06,
-        0x04, 0x04, 0x04, 0x06, 0x06, 0x04, 0x04, 0x06,
-        0x04, 0x06, 0x06, 0x06, 0x06, 0x04, 0x04, 0x06,
-        0x00, 0x00, 0x00, 0x02, 0x02, 0x00, 0x00, 0x02,
-        0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00, 0x02,
-        0x00, 0x00, 0x00, 0x02, 0x02, 0x00, 0x00, 0x02,
-        0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00, 0x02,
-        0x04, 0x04, 0x04, 0x06, 0x06, 0x04, 0x04, 0x06,
-        0x04, 0x06, 0x06, 0x06, 0x06, 0x04, 0x04, 0x06
-    },
+    {0x00, 0x00, 0x00, 0x02, 0x02, 0x00, 0x00, 0x02, 0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
+     0x02, 0x02, 0x00, 0x00, 0x02, 0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x02, 0x00,
+     0x00, 0x02, 0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00, 0x02, 0x04, 0x04, 0x04, 0x06, 0x06, 0x04, 0x04, 0x06, 0x04,
+     0x06, 0x06, 0x06, 0x06, 0x04, 0x04, 0x06, 0x04, 0x04, 0x04, 0x06, 0x06, 0x04, 0x04, 0x06, 0x04, 0x06, 0x06, 0x06,
+     0x06, 0x04, 0x04, 0x06, 0x00, 0x00, 0x00, 0x02, 0x02, 0x00, 0x00, 0x02, 0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00,
+     0x02, 0x00, 0x00, 0x00, 0x02, 0x02, 0x00, 0x00, 0x02, 0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00, 0x02, 0x04, 0x04,
+     0x04, 0x06, 0x06, 0x04, 0x04, 0x06, 0x04, 0x06, 0x06, 0x06, 0x06, 0x04, 0x04, 0x06, 0x00, 0x00, 0x00, 0x02, 0x02,
+     0x00, 0x00, 0x02, 0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00, 0x02, 0x04, 0x04, 0x04, 0x06, 0x06, 0x04, 0x04, 0x06,
+     0x04, 0x06, 0x06, 0x06, 0x06, 0x04, 0x04, 0x06, 0x04, 0x04, 0x04, 0x06, 0x06, 0x04, 0x04, 0x06, 0x04, 0x06, 0x06,
+     0x06, 0x06, 0x04, 0x04, 0x06, 0x04, 0x04, 0x04, 0x06, 0x06, 0x04, 0x04, 0x06, 0x04, 0x06, 0x06, 0x06, 0x06, 0x04,
+     0x04, 0x06, 0x04, 0x04, 0x04, 0x06, 0x06, 0x04, 0x04, 0x06, 0x04, 0x06, 0x06, 0x06, 0x06, 0x04, 0x04, 0x06, 0x00,
+     0x00, 0x00, 0x02, 0x02, 0x00, 0x00, 0x02, 0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02,
+     0x02, 0x00, 0x00, 0x02, 0x00, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00, 0x02, 0x04, 0x04, 0x04, 0x06, 0x06, 0x04, 0x04,
+     0x06, 0x04, 0x06, 0x06, 0x06, 0x06, 0x04, 0x04, 0x06},
     /* for Odd[2] */
-    {
-        0x00, 0x08, 0x08, 0x08, 0x00, 0x00, 0x00, 0x08,
-        0x00, 0x00, 0x08, 0x00, 0x08, 0x08, 0x00, 0x08,
-        0x00, 0x08, 0x08, 0x08, 0x00, 0x00, 0x00, 0x08,
-        0x00, 0x00, 0x08, 0x00, 0x08, 0x08, 0x00, 0x08,
-        0x00, 0x08, 0x08, 0x08, 0x00, 0x00, 0x00, 0x08,
-        0x00, 0x00, 0x08, 0x00, 0x08, 0x08, 0x00, 0x08,
-        0x10, 0x18, 0x18, 0x18, 0x10, 0x10, 0x10, 0x18,
-        0x10, 0x10, 0x18, 0x10, 0x18, 0x18, 0x10, 0x18,
-        0x10, 0x18, 0x18, 0x18, 0x10, 0x10, 0x10, 0x18,
-        0x10, 0x10, 0x18, 0x10, 0x18, 0x18, 0x10, 0x18,
-        0x00, 0x08, 0x08, 0x08, 0x00, 0x00, 0x00, 0x08,
-        0x00, 0x00, 0x08, 0x00, 0x08, 0x08, 0x00, 0x08,
-        0x00, 0x08, 0x08, 0x08, 0x00, 0x00, 0x00, 0x08,
-        0x00, 0x00, 0x08, 0x00, 0x08, 0x08, 0x00, 0x08,
-        0x10, 0x18, 0x18, 0x18, 0x10, 0x10, 0x10, 0x18,
-        0x10, 0x10, 0x18, 0x10, 0x18, 0x18, 0x10, 0x18,
-        0x00, 0x08, 0x08, 0x08, 0x00, 0x00, 0x00, 0x08,
-        0x00, 0x00, 0x08, 0x00, 0x08, 0x08, 0x00, 0x08,
-        0x10, 0x18, 0x18, 0x18, 0x10, 0x10, 0x10, 0x18,
-        0x10, 0x10, 0x18, 0x10, 0x18, 0x18, 0x10, 0x18,
-        0x10, 0x18, 0x18, 0x18, 0x10, 0x10, 0x10, 0x18,
-        0x10, 0x10, 0x18, 0x10, 0x18, 0x18, 0x10, 0x18,
-        0x10, 0x18, 0x18, 0x18, 0x10, 0x10, 0x10, 0x18,
-        0x10, 0x10, 0x18, 0x10, 0x18, 0x18, 0x10, 0x18,
-        0x10, 0x18, 0x18, 0x18, 0x10, 0x10, 0x10, 0x18,
-        0x10, 0x10, 0x18, 0x10, 0x18, 0x18, 0x10, 0x18,
-        0x00, 0x08, 0x08, 0x08, 0x00, 0x00, 0x00, 0x08,
-        0x00, 0x00, 0x08, 0x00, 0x08, 0x08, 0x00, 0x08,
-        0x00, 0x08, 0x08, 0x08, 0x00, 0x00, 0x00, 0x08,
-        0x00, 0x00, 0x08, 0x00, 0x08, 0x08, 0x00, 0x08,
-        0x10, 0x18, 0x18, 0x18, 0x10, 0x10, 0x10, 0x18,
-        0x10, 0x10, 0x18, 0x10, 0x18, 0x18, 0x10, 0x18
-    }
-};
+    {0x00, 0x08, 0x08, 0x08, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x08, 0x00, 0x08, 0x08, 0x00, 0x08, 0x00, 0x08, 0x08,
+     0x08, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x08, 0x00, 0x08, 0x08, 0x00, 0x08, 0x00, 0x08, 0x08, 0x08, 0x00, 0x00,
+     0x00, 0x08, 0x00, 0x00, 0x08, 0x00, 0x08, 0x08, 0x00, 0x08, 0x10, 0x18, 0x18, 0x18, 0x10, 0x10, 0x10, 0x18, 0x10,
+     0x10, 0x18, 0x10, 0x18, 0x18, 0x10, 0x18, 0x10, 0x18, 0x18, 0x18, 0x10, 0x10, 0x10, 0x18, 0x10, 0x10, 0x18, 0x10,
+     0x18, 0x18, 0x10, 0x18, 0x00, 0x08, 0x08, 0x08, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x08, 0x00, 0x08, 0x08, 0x00,
+     0x08, 0x00, 0x08, 0x08, 0x08, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x08, 0x00, 0x08, 0x08, 0x00, 0x08, 0x10, 0x18,
+     0x18, 0x18, 0x10, 0x10, 0x10, 0x18, 0x10, 0x10, 0x18, 0x10, 0x18, 0x18, 0x10, 0x18, 0x00, 0x08, 0x08, 0x08, 0x00,
+     0x00, 0x00, 0x08, 0x00, 0x00, 0x08, 0x00, 0x08, 0x08, 0x00, 0x08, 0x10, 0x18, 0x18, 0x18, 0x10, 0x10, 0x10, 0x18,
+     0x10, 0x10, 0x18, 0x10, 0x18, 0x18, 0x10, 0x18, 0x10, 0x18, 0x18, 0x18, 0x10, 0x10, 0x10, 0x18, 0x10, 0x10, 0x18,
+     0x10, 0x18, 0x18, 0x10, 0x18, 0x10, 0x18, 0x18, 0x18, 0x10, 0x10, 0x10, 0x18, 0x10, 0x10, 0x18, 0x10, 0x18, 0x18,
+     0x10, 0x18, 0x10, 0x18, 0x18, 0x18, 0x10, 0x10, 0x10, 0x18, 0x10, 0x10, 0x18, 0x10, 0x18, 0x18, 0x10, 0x18, 0x00,
+     0x08, 0x08, 0x08, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x08, 0x00, 0x08, 0x08, 0x00, 0x08, 0x00, 0x08, 0x08, 0x08,
+     0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x08, 0x00, 0x08, 0x08, 0x00, 0x08, 0x10, 0x18, 0x18, 0x18, 0x10, 0x10, 0x10,
+     0x18, 0x10, 0x10, 0x18, 0x10, 0x18, 0x18, 0x10, 0x18}};
 
 /* Standard FC  table, feedback at bit 0 */
 static const uint8_t TableC0[32] = {
     /* fc with Input {4,3,2,1,0} = (0,0,0,0,0) to (1,1,1,1,1) */
-    FC(0, 0, 0, 0, 0), FC(0, 0, 0, 0, 1), FC(0, 0, 0, 1, 0), FC(0, 0, 0, 1, 1),
-    FC(0, 0, 1, 0, 0), FC(0, 0, 1, 0, 1), FC(0, 0, 1, 1, 0), FC(0, 0, 1, 1, 1),
-    FC(0, 1, 0, 0, 0), FC(0, 1, 0, 0, 1), FC(0, 1, 0, 1, 0), FC(0, 1, 0, 1, 1),
-    FC(0, 1, 1, 0, 0), FC(0, 1, 1, 0, 1), FC(0, 1, 1, 1, 0), FC(0, 1, 1, 1, 1),
-    FC(1, 0, 0, 0, 0), FC(1, 0, 0, 0, 1), FC(1, 0, 0, 1, 0), FC(1, 0, 0, 1, 1),
-    FC(1, 0, 1, 0, 0), FC(1, 0, 1, 0, 1), FC(1, 0, 1, 1, 0), FC(1, 0, 1, 1, 1),
-    FC(1, 1, 0, 0, 0), FC(1, 1, 0, 0, 1), FC(1, 1, 0, 1, 0), FC(1, 1, 0, 1, 1),
-    FC(1, 1, 1, 0, 0), FC(1, 1, 1, 0, 1), FC(1, 1, 1, 1, 0), FC(1, 1, 1, 1, 1)
-};
+    FC(0, 0, 0, 0, 0), FC(0, 0, 0, 0, 1), FC(0, 0, 0, 1, 0), FC(0, 0, 0, 1, 1), FC(0, 0, 1, 0, 0), FC(0, 0, 1, 0, 1),
+    FC(0, 0, 1, 1, 0), FC(0, 0, 1, 1, 1), FC(0, 1, 0, 0, 0), FC(0, 1, 0, 0, 1), FC(0, 1, 0, 1, 0), FC(0, 1, 0, 1, 1),
+    FC(0, 1, 1, 0, 0), FC(0, 1, 1, 0, 1), FC(0, 1, 1, 1, 0), FC(0, 1, 1, 1, 1), FC(1, 0, 0, 0, 0), FC(1, 0, 0, 0, 1),
+    FC(1, 0, 0, 1, 0), FC(1, 0, 0, 1, 1), FC(1, 0, 1, 0, 0), FC(1, 0, 1, 0, 1), FC(1, 0, 1, 1, 0), FC(1, 0, 1, 1, 1),
+    FC(1, 1, 0, 0, 0), FC(1, 1, 0, 0, 1), FC(1, 1, 0, 1, 0), FC(1, 1, 0, 1, 1), FC(1, 1, 1, 0, 0), FC(1, 1, 1, 0, 1),
+    FC(1, 1, 1, 1, 0), FC(1, 1, 1, 1, 1)};
 
 /* Special table for byte processing, feedback at bit 7 */
 static const uint8_t TableC7[32] = {
     /* fc with Input {4,3,2,1,0} = (0,0,0,0,0) to (1,1,1,1,1) */
     FC(0, 0, 0, 0, 0) << 7, FC(0, 0, 0, 0, 1) << 7, FC(0, 0, 0, 1, 0) << 7, FC(0, 0, 0, 1, 1) << 7,
-        FC(0, 0, 1, 0, 0) << 7, FC(0, 0, 1, 0, 1) << 7, FC(0, 0, 1, 1, 0) << 7, FC(0, 0, 1, 1, 1) << 7,
-            FC(0, 1, 0, 0, 0) << 7, FC(0, 1, 0, 0, 1) << 7, FC(0, 1, 0, 1, 0) << 7, FC(0, 1, 0, 1, 1) << 7,
-                FC(0, 1, 1, 0, 0) << 7, FC(0, 1, 1, 0, 1) << 7, FC(0, 1, 1, 1, 0) << 7, FC(0, 1, 1, 1, 1) << 7,
-                    FC(1, 0, 0, 0, 0) << 7, FC(1, 0, 0, 0, 1) << 7, FC(1, 0, 0, 1, 0) << 7, FC(1, 0, 0, 1, 1) << 7,
-                        FC(1, 0, 1, 0, 0) << 7, FC(1, 0, 1, 0, 1) << 7, FC(1, 0, 1, 1, 0) << 7, FC(1, 0, 1, 1, 1) << 7,
-                            FC(1, 1, 0, 0, 0) << 7, FC(1, 1, 0, 0, 1) << 7, FC(1, 1, 0, 1, 0) << 7, FC(1, 1, 0, 1, 1) << 7,
-                                FC(1, 1, 1, 0, 0) << 7, FC(1, 1, 1, 0, 1) << 7, FC(1, 1, 1, 1, 0) << 7, FC(1, 1, 1, 1, 1) << 7
-};
+    FC(0, 0, 1, 0, 0) << 7, FC(0, 0, 1, 0, 1) << 7, FC(0, 0, 1, 1, 0) << 7, FC(0, 0, 1, 1, 1) << 7,
+    FC(0, 1, 0, 0, 0) << 7, FC(0, 1, 0, 0, 1) << 7, FC(0, 1, 0, 1, 0) << 7, FC(0, 1, 0, 1, 1) << 7,
+    FC(0, 1, 1, 0, 0) << 7, FC(0, 1, 1, 0, 1) << 7, FC(0, 1, 1, 1, 0) << 7, FC(0, 1, 1, 1, 1) << 7,
+    FC(1, 0, 0, 0, 0) << 7, FC(1, 0, 0, 0, 1) << 7, FC(1, 0, 0, 1, 0) << 7, FC(1, 0, 0, 1, 1) << 7,
+    FC(1, 0, 1, 0, 0) << 7, FC(1, 0, 1, 0, 1) << 7, FC(1, 0, 1, 1, 0) << 7, FC(1, 0, 1, 1, 1) << 7,
+    FC(1, 1, 0, 0, 0) << 7, FC(1, 1, 0, 0, 1) << 7, FC(1, 1, 0, 1, 0) << 7, FC(1, 1, 0, 1, 1) << 7,
+    FC(1, 1, 1, 0, 0) << 7, FC(1, 1, 1, 0, 1) << 7, FC(1, 1, 1, 1, 0) << 7, FC(1, 1, 1, 1, 1) << 7};
 
 /* Special table for nibble processing (e.g. ack), feedback at bit 3 */
 static const uint8_t TableC3[32] = {
     /* fc with Input {4,3,2,1,0} = (0,0,0,0,0) to (1,1,1,1,1) */
     FC(0, 0, 0, 0, 0) << 3, FC(0, 0, 0, 0, 1) << 3, FC(0, 0, 0, 1, 0) << 3, FC(0, 0, 0, 1, 1) << 3,
-        FC(0, 0, 1, 0, 0) << 3, FC(0, 0, 1, 0, 1) << 3, FC(0, 0, 1, 1, 0) << 3, FC(0, 0, 1, 1, 1) << 3,
-            FC(0, 1, 0, 0, 0) << 3, FC(0, 1, 0, 0, 1) << 3, FC(0, 1, 0, 1, 0) << 3, FC(0, 1, 0, 1, 1) << 3,
-                FC(0, 1, 1, 0, 0) << 3, FC(0, 1, 1, 0, 1) << 3, FC(0, 1, 1, 1, 0) << 3, FC(0, 1, 1, 1, 1) << 3,
-                    FC(1, 0, 0, 0, 0) << 3, FC(1, 0, 0, 0, 1) << 3, FC(1, 0, 0, 1, 0) << 3, FC(1, 0, 0, 1, 1) << 3,
-                        FC(1, 0, 1, 0, 0) << 3, FC(1, 0, 1, 0, 1) << 3, FC(1, 0, 1, 1, 0) << 3, FC(1, 0, 1, 1, 1) << 3,
-                            FC(1, 1, 0, 0, 0) << 3, FC(1, 1, 0, 0, 1) << 3, FC(1, 1, 0, 1, 0) << 3, FC(1, 1, 0, 1, 1) << 3,
-                                FC(1, 1, 1, 0, 0) << 3, FC(1, 1, 1, 0, 1) << 3, FC(1, 1, 1, 1, 0) << 3, FC(1, 1, 1, 1, 1) << 3
-};
+    FC(0, 0, 1, 0, 0) << 3, FC(0, 0, 1, 0, 1) << 3, FC(0, 0, 1, 1, 0) << 3, FC(0, 0, 1, 1, 1) << 3,
+    FC(0, 1, 0, 0, 0) << 3, FC(0, 1, 0, 0, 1) << 3, FC(0, 1, 0, 1, 0) << 3, FC(0, 1, 0, 1, 1) << 3,
+    FC(0, 1, 1, 0, 0) << 3, FC(0, 1, 1, 0, 1) << 3, FC(0, 1, 1, 1, 0) << 3, FC(0, 1, 1, 1, 1) << 3,
+    FC(1, 0, 0, 0, 0) << 3, FC(1, 0, 0, 0, 1) << 3, FC(1, 0, 0, 1, 0) << 3, FC(1, 0, 0, 1, 1) << 3,
+    FC(1, 0, 1, 0, 0) << 3, FC(1, 0, 1, 0, 1) << 3, FC(1, 0, 1, 1, 0) << 3, FC(1, 0, 1, 1, 1) << 3,
+    FC(1, 1, 0, 0, 0) << 3, FC(1, 1, 0, 0, 1) << 3, FC(1, 1, 0, 1, 0) << 3, FC(1, 1, 0, 1, 1) << 3,
+    FC(1, 1, 1, 0, 0) << 3, FC(1, 1, 1, 0, 1) << 3, FC(1, 1, 1, 1, 0) << 3, FC(1, 1, 1, 1, 1) << 3};
 
 /* Filter Output Macros */
 /* Output at bit 7 for optimized byte processing */
-#define CRYPTO1_FILTER_OUTPUT_B7_24(__O0, __O1, __O2) TableC7[ abFilterTable[0][__O0] | \
-                    abFilterTable[1][__O1] | \
-                    abFilterTable[2][__O2]]
+#define CRYPTO1_FILTER_OUTPUT_B7_24(__O0, __O1, __O2) \
+    TableC7[abFilterTable[0][__O0] | abFilterTable[1][__O1] | abFilterTable[2][__O2]]
 
 /* Output at bit 3 for optimized nibble processing */
-#define CRYPTO1_FILTER_OUTPUT_B3_24(__O0, __O1, __O2) TableC3[ abFilterTable[0][__O0] | \
-                    abFilterTable[1][__O1] | \
-                    abFilterTable[2][__O2]]
+#define CRYPTO1_FILTER_OUTPUT_B3_24(__O0, __O1, __O2) \
+    TableC3[abFilterTable[0][__O0] | abFilterTable[1][__O1] | abFilterTable[2][__O2]]
 
 /* Output at bit 0 for general purpose */
-#define CRYPTO1_FILTER_OUTPUT_B0_24(__O0, __O1, __O2) TableC0[ abFilterTable[0][__O0] | \
-                    abFilterTable[1][__O1] | \
-                    abFilterTable[2][__O2]]
+#define CRYPTO1_FILTER_OUTPUT_B0_24(__O0, __O1, __O2) \
+    TableC0[abFilterTable[0][__O0] | abFilterTable[1][__O1] | abFilterTable[2][__O2]]
 
 /* Split Crypto1 state into even and odd bits            */
 /* to speed up the output filter network                 */
@@ -319,11 +261,11 @@ typedef struct {
     uint8_t Even[LFSR_SIZE / 2];
     uint8_t Odd[LFSR_SIZE / 2];
 } Crypto1LfsrState_t;
-static Crypto1LfsrState_t State = { { 0 }, { 0 } };
-
+static Crypto1LfsrState_t State = {{0}, {0}};
 
 /* Debug output of state */
-void Crypto1GetState(uint8_t *pEven, uint8_t *pOdd) {
+void Crypto1GetState(uint8_t *pEven, uint8_t *pOdd)
+{
     if (pEven) {
         pEven[0] = State.Even[0];
         pEven[1] = State.Even[1];
@@ -334,28 +276,19 @@ void Crypto1GetState(uint8_t *pEven, uint8_t *pOdd) {
         pOdd[1] = State.Odd[1];
         pOdd[2] = State.Odd[2];
     }
-
 }
 
 /* Proceed LFSR by one clock cycle */
 /* Prototype to force inlining */
-static __inline__ uint8_t Crypto1LFSRbyteFeedback(uint8_t E0,
-        uint8_t E1,
-        uint8_t E2,
-        uint8_t O0,
-        uint8_t O1,
-        uint8_t O2) __attribute__((always_inline));
-static uint8_t Crypto1LFSRbyteFeedback(uint8_t E0,
-                                       uint8_t E1,
-                                       uint8_t E2,
-                                       uint8_t O0,
-                                       uint8_t O1,
-                                       uint8_t O2) {
+static __inline__ uint8_t Crypto1LFSRbyteFeedback(uint8_t E0, uint8_t E1, uint8_t E2, uint8_t O0, uint8_t O1,
+                                                  uint8_t O2) __attribute__((always_inline));
+static uint8_t Crypto1LFSRbyteFeedback(uint8_t E0, uint8_t E1, uint8_t E2, uint8_t O0, uint8_t O1, uint8_t O2)
+{
     uint8_t Feedback;
 
     /* Calculate feedback according to LFSR taps. XOR all state bytes
      * into a single bit. */
-    Feedback  = E0 & (uint8_t)(LFSR_MASK_EVEN);
+    Feedback = E0 & (uint8_t)(LFSR_MASK_EVEN);
     Feedback ^= E1 & (uint8_t)(LFSR_MASK_EVEN >> 8);
     Feedback ^= E2 & (uint8_t)(LFSR_MASK_EVEN >> 16);
 
@@ -374,7 +307,8 @@ static uint8_t Crypto1LFSRbyteFeedback(uint8_t E0,
 /* Proceed LFSR by one clock cycle */
 /* Prototype to force inlining */
 static __inline__ void Crypto1LFSR(uint8_t In) __attribute__((always_inline));
-static void Crypto1LFSR(uint8_t In) {
+static void Crypto1LFSR(uint8_t In)
+{
     uint8_t Feedback;
     register uint8_t Temp0, Temp1, Temp2;
 
@@ -383,10 +317,9 @@ static void Crypto1LFSR(uint8_t In) {
     Temp1 = State.Even[1];
     Temp2 = State.Even[2];
 
-
     /* Calculate feedback according to LFSR taps. XOR all 6 state bytes
      * into a single bit. */
-    Feedback  = Temp0 & (uint8_t)(LFSR_MASK_EVEN >> 0);
+    Feedback = Temp0 & (uint8_t)(LFSR_MASK_EVEN >> 0);
     Feedback ^= Temp1 & (uint8_t)(LFSR_MASK_EVEN >> 8);
     Feedback ^= Temp2 & (uint8_t)(LFSR_MASK_EVEN >> 16);
 
@@ -406,7 +339,7 @@ static void Crypto1LFSR(uint8_t In) {
     SHIFT24(Temp0, Temp1, Temp2, Feedback);
 
     /* Convert even state back into byte array and swap odd/even state
-    * as explained above. */
+     * as explained above. */
     State.Even[0] = State.Odd[0];
     State.Even[1] = State.Odd[1];
     State.Even[2] = State.Odd[2];
@@ -416,16 +349,15 @@ static void Crypto1LFSR(uint8_t In) {
     State.Odd[2] = Temp2;
 }
 
-uint8_t Crypto1FilterOutput(void) {
-    return (CRYPTO1_FILTER_OUTPUT_B0_24(State.Odd[0], State.Odd[1], State.Odd[2]));
-}
+uint8_t Crypto1FilterOutput(void) { return (CRYPTO1_FILTER_OUTPUT_B0_24(State.Odd[0], State.Odd[1], State.Odd[2])); }
 
 /* Setup LFSR split into odd and even states, feed in uid ^nonce */
 /* Version for first (not nested) authentication.                 */
-void Crypto1Setup(uint8_t Key[6], uint8_t Uid[4], uint8_t CardNonce[4]) {
+void Crypto1Setup(uint8_t Key[6], uint8_t Uid[4], uint8_t CardNonce[4])
+{
     // state registers
     register uint8_t Even0 = 0x00, Even1 = 0x00, Even2 = 0x00;
-    register uint8_t Odd0 = 0x00,  Odd1 = 0x00,  Odd2 = 0x00;
+    register uint8_t Odd0 = 0x00, Odd1 = 0x00, Odd2 = 0x00;
     uint8_t KeyStream, Feedback, Out, In, ByteCount;
 
     KeyStream = *Key++;
@@ -446,7 +378,7 @@ void Crypto1Setup(uint8_t Key[6], uint8_t Uid[4], uint8_t CardNonce[4]) {
 
         Out = CRYPTO1_FILTER_OUTPUT_B0_24(Odd0, Odd1, Odd2);
         SHIFT8(KeyStream, Out);
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
         Feedback ^= In;
         SHIFT24(Even0, Even1, Even2, Feedback);
 
@@ -463,7 +395,7 @@ void Crypto1Setup(uint8_t Key[6], uint8_t Uid[4], uint8_t CardNonce[4]) {
         In >>= 1;
         Out = CRYPTO1_FILTER_OUTPUT_B0_24(Odd0, Odd1, Odd2);
         SHIFT8(KeyStream, Out);
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
         Feedback ^= In;
         SHIFT24(Even0, Even1, Even2, Feedback);
 
@@ -479,7 +411,7 @@ void Crypto1Setup(uint8_t Key[6], uint8_t Uid[4], uint8_t CardNonce[4]) {
         In >>= 1;
         Out = CRYPTO1_FILTER_OUTPUT_B0_24(Odd0, Odd1, Odd2);
         SHIFT8(KeyStream, Out);
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
         Feedback ^= In;
         SHIFT24(Even0, Even1, Even2, Feedback);
 
@@ -495,7 +427,7 @@ void Crypto1Setup(uint8_t Key[6], uint8_t Uid[4], uint8_t CardNonce[4]) {
         In >>= 1;
         Out = CRYPTO1_FILTER_OUTPUT_B0_24(Odd0, Odd1, Odd2);
         SHIFT8(KeyStream, Out);
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
         Feedback ^= In;
         SHIFT24(Even0, Even1, Even2, Feedback);
 
@@ -513,19 +445,20 @@ void Crypto1Setup(uint8_t Key[6], uint8_t Uid[4], uint8_t CardNonce[4]) {
     State.Even[0] = Even0;
     State.Even[1] = Even1;
     State.Even[2] = Even2;
-    State.Odd[0]  = Odd0;
-    State.Odd[1]  = Odd1;
-    State.Odd[2]  = Odd2;
+    State.Odd[0] = Odd0;
+    State.Odd[1] = Odd1;
+    State.Odd[2] = Odd2;
 }
 
 /* Setup LFSR split into odd and even states, feed in uid ^nonce    */
 /* Version for nested authentication.                               */
 /* Also generates encrypted parity bits at CardNonce[4]..[7]        */
 /* Use: Decrypt = false for the tag, Decrypt = true for the reader  */
-void Crypto1SetupNested(uint8_t Key[6], uint8_t Uid[4], uint8_t CardNonce[4], uint8_t NonceParity[4], bool Decrypt) {
+void Crypto1SetupNested(uint8_t Key[6], uint8_t Uid[4], uint8_t CardNonce[4], uint8_t NonceParity[4], bool Decrypt)
+{
     // state registers
     register uint8_t Even0 = 0x00, Even1 = 0x00, Even2 = 0x00;
-    register uint8_t Odd0 = 0x00,  Odd1 = 0x00,  Odd2 = 0x00;
+    register uint8_t Odd0 = 0x00, Odd1 = 0x00, Odd2 = 0x00;
     uint8_t KeyStream, Feedback, Out, In, ByteCount;
 
     KeyStream = *Key++;
@@ -549,7 +482,7 @@ void Crypto1SetupNested(uint8_t Key[6], uint8_t Uid[4], uint8_t CardNonce[4], ui
 
         /* we can reuse the filter output used to decrypt the parity bit! */
         SHIFT8(KeyStream, Out);
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
         Feedback ^= In;
         SHIFT24_COND_DECRYPT(Even0, Even1, Even2, Feedback, Out, Decrypt);
 
@@ -566,7 +499,7 @@ void Crypto1SetupNested(uint8_t Key[6], uint8_t Uid[4], uint8_t CardNonce[4], ui
         In >>= 1;
         Out = CRYPTO1_FILTER_OUTPUT_B0_24(Odd0, Odd1, Odd2);
         SHIFT8(KeyStream, Out);
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
         Feedback ^= In;
         SHIFT24_COND_DECRYPT(Even0, Even1, Even2, Feedback, Out, Decrypt);
 
@@ -582,7 +515,7 @@ void Crypto1SetupNested(uint8_t Key[6], uint8_t Uid[4], uint8_t CardNonce[4], ui
         In >>= 1;
         Out = CRYPTO1_FILTER_OUTPUT_B0_24(Odd0, Odd1, Odd2);
         SHIFT8(KeyStream, Out);
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
         Feedback ^= In;
         SHIFT24_COND_DECRYPT(Even0, Even1, Even2, Feedback, Out, Decrypt);
 
@@ -598,7 +531,7 @@ void Crypto1SetupNested(uint8_t Key[6], uint8_t Uid[4], uint8_t CardNonce[4], ui
         In >>= 1;
         Out = CRYPTO1_FILTER_OUTPUT_B0_24(Odd0, Odd1, Odd2);
         SHIFT8(KeyStream, Out);
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
         Feedback ^= In;
         SHIFT24_COND_DECRYPT(Even0, Even1, Even2, Feedback, Out, Decrypt);
 
@@ -615,7 +548,7 @@ void Crypto1SetupNested(uint8_t Key[6], uint8_t Uid[4], uint8_t CardNonce[4], ui
         In = *CardNonce;
         Feedback = ODD_PARITY(In);
         // Store parity bit to out buffer
-        *NonceParity++ = Out ^ Feedback;  /* Encrypted parity at Offset 4*/
+        *NonceParity++ = Out ^ Feedback; /* Encrypted parity at Offset 4*/
 
         /* Encrypt byte   */
         *CardNonce++ = In ^ KeyStream;
@@ -624,14 +557,15 @@ void Crypto1SetupNested(uint8_t Key[6], uint8_t Uid[4], uint8_t CardNonce[4], ui
     State.Even[0] = Even0;
     State.Even[1] = Even1;
     State.Even[2] = Even2;
-    State.Odd[0]  = Odd0;
-    State.Odd[1]  = Odd1;
-    State.Odd[2]  = Odd2;
+    State.Odd[0] = Odd0;
+    State.Odd[1] = Odd1;
+    State.Odd[2] = Odd2;
 }
 
 /* Crypto1Auth is similar to Crypto1Byte but */
 /* EncryptedReaderNonce is decrypted and fed back */
-void Crypto1Auth(uint8_t EncryptedReaderNonce[NONCE_SIZE]) {
+void Crypto1Auth(uint8_t EncryptedReaderNonce[NONCE_SIZE])
+{
     /* registers to hold temporary LFSR state */
     register uint8_t Even0, Even1, Even2;
     register uint8_t Odd0, Odd1, Odd2;
@@ -651,83 +585,68 @@ void Crypto1Auth(uint8_t EncryptedReaderNonce[NONCE_SIZE]) {
 
         /* Bit 0 */
         Feedback = CRYPTO1_FILTER_OUTPUT_B0_24(Odd0, Odd1, Odd2);
-        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2)
-                   ^ Feedback
-                   ^ In;
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2) ^ Feedback ^ In;
         In >>= 1;
         SHIFT24(Even0, Even1, Even2, Feedback);
 
         /* Bit 1 */
         /* remember Odd/Even swap has been omitted! */
         Feedback = CRYPTO1_FILTER_OUTPUT_B0_24(Even0, Even1, Even2);
-        Feedback = Crypto1LFSRbyteFeedback(Odd0, Odd1, Odd2, Even0, Even1, Even2)
-                   ^ Feedback
-                   ^ In;
+        Feedback = Crypto1LFSRbyteFeedback(Odd0, Odd1, Odd2, Even0, Even1, Even2) ^ Feedback ^ In;
         In >>= 1;
         SHIFT24(Odd0, Odd1, Odd2, Feedback);
 
         /* Bit 2 */
         Feedback = CRYPTO1_FILTER_OUTPUT_B0_24(Odd0, Odd1, Odd2);
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2)
-                    ^ Feedback
-                    ^ In;
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2) ^ Feedback ^ In;
         In >>= 1;
         SHIFT24(Even0, Even1, Even2, Feedback);
 
         /* Bit 3 */
         Feedback = CRYPTO1_FILTER_OUTPUT_B0_24(Even0, Even1, Even2);
-        Feedback = Crypto1LFSRbyteFeedback(Odd0, Odd1, Odd2, Even0, Even1, Even2)
-                   ^ Feedback
-                   ^ In;
+        Feedback = Crypto1LFSRbyteFeedback(Odd0, Odd1, Odd2, Even0, Even1, Even2) ^ Feedback ^ In;
         In >>= 1;
         SHIFT24(Odd0, Odd1, Odd2, Feedback);
 
         /* Bit 4 */
         Feedback = CRYPTO1_FILTER_OUTPUT_B0_24(Odd0, Odd1, Odd2);
-        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2)
-                   ^ Feedback
-                   ^ In;
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2) ^ Feedback ^ In;
         In >>= 1;
         SHIFT24(Even0, Even1, Even2, Feedback);
 
         /* Bit 5 */
         Feedback = CRYPTO1_FILTER_OUTPUT_B0_24(Even0, Even1, Even2);
-        Feedback = Crypto1LFSRbyteFeedback(Odd0, Odd1, Odd2, Even0, Even1, Even2)
-                   ^ Feedback
-                   ^ In;
+        Feedback = Crypto1LFSRbyteFeedback(Odd0, Odd1, Odd2, Even0, Even1, Even2) ^ Feedback ^ In;
         In >>= 1;
         SHIFT24(Odd0, Odd1, Odd2, Feedback);
 
         /* Bit 6 */
         Feedback = CRYPTO1_FILTER_OUTPUT_B0_24(Odd0, Odd1, Odd2);
-        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2)
-                   ^ Feedback
-                   ^ In;
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2) ^ Feedback ^ In;
         In >>= 1;
         SHIFT24(Even0, Even1, Even2, Feedback);
 
         /* Bit 7 */
         Feedback = CRYPTO1_FILTER_OUTPUT_B0_24(Even0, Even1, Even2);
-        Feedback = Crypto1LFSRbyteFeedback(Odd0, Odd1, Odd2, Even0, Even1, Even2)
-                   ^ Feedback
-                   ^ In;
+        Feedback = Crypto1LFSRbyteFeedback(Odd0, Odd1, Odd2, Even0, Even1, Even2) ^ Feedback ^ In;
         SHIFT24(Odd0, Odd1, Odd2, Feedback);
     }
     // save state
     State.Even[0] = Even0;
     State.Even[1] = Even1;
     State.Even[2] = Even2;
-    State.Odd[0]  = Odd0;
-    State.Odd[1]  = Odd1;
-    State.Odd[2]  = Odd2;
+    State.Odd[0] = Odd0;
+    State.Odd[1] = Odd1;
+    State.Odd[2] = Odd2;
 }
 
 /* Crypto1Nibble generates keystream for a nibble (4 bit) */
 /* no input to the LFSR  */
-uint8_t Crypto1Nibble(void) {
+uint8_t Crypto1Nibble(void)
+{
     /* state registers */
     register uint8_t Even0, Even1, Even2;
-    register uint8_t Odd0,  Odd1,  Odd2;
+    register uint8_t Odd0, Odd1, Odd2;
     uint8_t KeyStream, Feedback, Out;
 
     /* read state */
@@ -740,7 +659,7 @@ uint8_t Crypto1Nibble(void) {
 
     /* Bit 0, initialise keystream */
     KeyStream = CRYPTO1_FILTER_OUTPUT_B3_24(Odd0, Odd1, Odd2);
-    Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+    Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
     SHIFT24(Even0, Even1, Even2, Feedback);
 
     /* Bit 1 */
@@ -752,7 +671,7 @@ uint8_t Crypto1Nibble(void) {
     /* Bit 2 */
     Out = CRYPTO1_FILTER_OUTPUT_B3_24(Odd0, Odd1, Odd2);
     KeyStream = (KeyStream >> 1) | Out;
-    Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+    Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
     SHIFT24(Even0, Even1, Even2, Feedback);
 
     /* Bit 3 */
@@ -765,19 +684,20 @@ uint8_t Crypto1Nibble(void) {
     State.Even[0] = Even0;
     State.Even[1] = Even1;
     State.Even[2] = Even2;
-    State.Odd[0]  = Odd0;
-    State.Odd[1]  = Odd1;
-    State.Odd[2]  = Odd2;
+    State.Odd[0] = Odd0;
+    State.Odd[1] = Odd1;
+    State.Odd[2] = Odd2;
 
     return (KeyStream);
 }
 
 /* Crypto1Byte generates keystream for a byte (8 bit) */
 /* no input to the LFSR  */
-uint8_t Crypto1Byte(void) {
+uint8_t Crypto1Byte(void)
+{
     /* state registers */
     register uint8_t Even0, Even1, Even2;
-    register uint8_t Odd0,  Odd1,  Odd2;
+    register uint8_t Odd0, Odd1, Odd2;
     uint8_t KeyStream, Feedback, Out;
 
     /* read state */
@@ -790,7 +710,7 @@ uint8_t Crypto1Byte(void) {
 
     /* Bit 0, initialise keystream */
     KeyStream = CRYPTO1_FILTER_OUTPUT_B7_24(Odd0, Odd1, Odd2);
-    Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+    Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
     SHIFT24(Even0, Even1, Even2, Feedback);
 
     /* Bit 1 */
@@ -803,7 +723,7 @@ uint8_t Crypto1Byte(void) {
     /* Bit 2 */
     Out = CRYPTO1_FILTER_OUTPUT_B7_24(Odd0, Odd1, Odd2);
     KeyStream = (KeyStream >> 1) | Out;
-    Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+    Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
     SHIFT24(Even0, Even1, Even2, Feedback);
 
     /* Bit 3 */
@@ -816,7 +736,7 @@ uint8_t Crypto1Byte(void) {
     /* Bit 4 */
     Out = CRYPTO1_FILTER_OUTPUT_B7_24(Odd0, Odd1, Odd2);
     KeyStream = (KeyStream >> 1) | Out;
-    Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+    Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
     SHIFT24(Even0, Even1, Even2, Feedback);
 
     /* Bit 5 */
@@ -829,7 +749,7 @@ uint8_t Crypto1Byte(void) {
     /* Bit 6 */
     Out = CRYPTO1_FILTER_OUTPUT_B7_24(Odd0, Odd1, Odd2);
     KeyStream = (KeyStream >> 1) | Out;
-    Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+    Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
     SHIFT24(Even0, Even1, Even2, Feedback);
 
     /* Bit 7 */
@@ -843,9 +763,9 @@ uint8_t Crypto1Byte(void) {
     State.Even[0] = Even0;
     State.Even[1] = Even1;
     State.Even[2] = Even2;
-    State.Odd[0]  = Odd0;
-    State.Odd[1]  = Odd1;
-    State.Odd[2]  = Odd2;
+    State.Odd[0] = Odd0;
+    State.Odd[1] = Odd1;
+    State.Odd[2] = Odd2;
 
     return (KeyStream);
 }
@@ -854,10 +774,11 @@ uint8_t Crypto1Byte(void) {
 /* No input to the LFSR                                */
 /* Avoids load/store of the LFSR-state for each byte!  */
 /* Enhancement for the original function Crypto1Byte() */
-void Crypto1ByteArray(uint8_t *Buffer, uint8_t Count) {
+void Crypto1ByteArray(uint8_t *Buffer, uint8_t Count)
+{
     /* state registers */
     register uint8_t Even0, Even1, Even2;
-    register uint8_t Odd0,  Odd1,  Odd2;
+    register uint8_t Odd0, Odd1, Odd2;
     uint8_t KeyStream, Feedback, Out;
 
     /* read state */
@@ -871,7 +792,7 @@ void Crypto1ByteArray(uint8_t *Buffer, uint8_t Count) {
     while (Count--) {
         /* Bit 0, initialise keystream */
         KeyStream = CRYPTO1_FILTER_OUTPUT_B7_24(Odd0, Odd1, Odd2);
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
         SHIFT24(Even0, Even1, Even2, Feedback);
 
         /* Bit 1 */
@@ -884,7 +805,7 @@ void Crypto1ByteArray(uint8_t *Buffer, uint8_t Count) {
         /* Bit 2 */
         Out = CRYPTO1_FILTER_OUTPUT_B7_24(Odd0, Odd1, Odd2);
         KeyStream = (KeyStream >> 1) | Out;
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
         SHIFT24(Even0, Even1, Even2, Feedback);
 
         /* Bit 3 */
@@ -897,7 +818,7 @@ void Crypto1ByteArray(uint8_t *Buffer, uint8_t Count) {
         /* Bit 4 */
         Out = CRYPTO1_FILTER_OUTPUT_B7_24(Odd0, Odd1, Odd2);
         KeyStream = (KeyStream >> 1) | Out;
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
         SHIFT24(Even0, Even1, Even2, Feedback);
 
         /* Bit 5 */
@@ -910,7 +831,7 @@ void Crypto1ByteArray(uint8_t *Buffer, uint8_t Count) {
         /* Bit 6 */
         Out = CRYPTO1_FILTER_OUTPUT_B7_24(Odd0, Odd1, Odd2);
         KeyStream = (KeyStream >> 1) | Out;
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
         SHIFT24(Even0, Even1, Even2, Feedback);
 
         /* Bit 7 */
@@ -928,9 +849,9 @@ void Crypto1ByteArray(uint8_t *Buffer, uint8_t Count) {
     State.Even[0] = Even0;
     State.Even[1] = Even1;
     State.Even[2] = Even2;
-    State.Odd[0]  = Odd0;
-    State.Odd[1]  = Odd1;
-    State.Odd[2]  = Odd2;
+    State.Odd[0] = Odd0;
+    State.Odd[1] = Odd1;
+    State.Odd[2] = Odd2;
 }
 
 /* Crypto1ByteArrayWithParity encrypts an array of bytes   */
@@ -939,10 +860,11 @@ void Crypto1ByteArray(uint8_t *Buffer, uint8_t Count) {
 /* Avoids load/store of the LFSR-state for each byte!      */
 /* The filter output used to encrypt the parity is         */
 /* reused to encrypt bit 0 in the next byte.               */
-void Crypto1ByteArrayWithParity(uint8_t *Buffer, uint8_t *Parity, uint8_t Count) {
+void Crypto1ByteArrayWithParity(uint8_t *Buffer, uint8_t *Parity, uint8_t Count)
+{
     /* state registers */
     register uint8_t Even0, Even1, Even2;
-    register uint8_t Odd0,  Odd1,  Odd2;
+    register uint8_t Odd0, Odd1, Odd2;
     // KeyStream is direct to use, must to init.
     uint8_t KeyStream = 0x00, Feedback, Out;
 
@@ -960,7 +882,7 @@ void Crypto1ByteArrayWithParity(uint8_t *Buffer, uint8_t *Parity, uint8_t Count)
     while (Count--) {
         /* Bit 0, initialise keystream from parity */
         SHIFT8(KeyStream, Out);
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
         SHIFT24(Even0, Even1, Even2, Feedback);
 
         /* Bit 1 */
@@ -973,7 +895,7 @@ void Crypto1ByteArrayWithParity(uint8_t *Buffer, uint8_t *Parity, uint8_t Count)
         /* Bit 2 */
         Out = CRYPTO1_FILTER_OUTPUT_B7_24(Odd0, Odd1, Odd2);
         KeyStream = (KeyStream >> 1) | Out;
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
         SHIFT24(Even0, Even1, Even2, Feedback);
 
         /* Bit 3 */
@@ -986,7 +908,7 @@ void Crypto1ByteArrayWithParity(uint8_t *Buffer, uint8_t *Parity, uint8_t Count)
         /* Bit 4 */
         Out = CRYPTO1_FILTER_OUTPUT_B7_24(Odd0, Odd1, Odd2);
         KeyStream = (KeyStream >> 1) | Out;
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
         SHIFT24(Even0, Even1, Even2, Feedback);
 
         /* Bit 5 */
@@ -999,7 +921,7 @@ void Crypto1ByteArrayWithParity(uint8_t *Buffer, uint8_t *Parity, uint8_t Count)
         /* Bit 6 */
         Out = CRYPTO1_FILTER_OUTPUT_B7_24(Odd0, Odd1, Odd2);
         KeyStream = (KeyStream >> 1) | Out;
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2);
         SHIFT24(Even0, Even1, Even2, Feedback);
 
         /* Bit 7 */
@@ -1020,9 +942,9 @@ void Crypto1ByteArrayWithParity(uint8_t *Buffer, uint8_t *Parity, uint8_t Count)
     State.Even[0] = Even0;
     State.Even[1] = Even1;
     State.Even[2] = Even2;
-    State.Odd[0]  = Odd0;
-    State.Odd[1]  = Odd1;
-    State.Odd[2]  = Odd2;
+    State.Odd[0] = Odd0;
+    State.Odd[1] = Odd1;
+    State.Odd[2] = Odd2;
 }
 
 /* Crypto1ByteArrayWithParity encrypts an array of bytes   */
@@ -1031,10 +953,11 @@ void Crypto1ByteArrayWithParity(uint8_t *Buffer, uint8_t *Parity, uint8_t Count)
 /* Avoids load/store of the LFSR-state for each byte!      */
 /* The filter output used to encrypt the parity is         */
 /* reused to encrypt bit 0 in the next byte.               */
-void Crypto1ByteArrayWithParityHasIn(uint8_t *Buffer, uint8_t *Parity, uint8_t Count) {
+void Crypto1ByteArrayWithParityHasIn(uint8_t *Buffer, uint8_t *Parity, uint8_t Count)
+{
     /* state registers */
     register uint8_t Even0, Even1, Even2;
-    register uint8_t Odd0,  Odd1,  Odd2;
+    register uint8_t Odd0, Odd1, Odd2;
     // KeyStream is direct to use, must to init.
     uint8_t KeyStream = 0x00, Feedback, Out;
 
@@ -1054,7 +977,7 @@ void Crypto1ByteArrayWithParityHasIn(uint8_t *Buffer, uint8_t *Parity, uint8_t C
 
         /* Bit 0, initialise keystream from parity */
         SHIFT8(KeyStream, Out);
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2) ^ In;
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2) ^ In;
         In >>= 1;
         SHIFT24(Even0, Even1, Even2, Feedback);
 
@@ -1069,7 +992,7 @@ void Crypto1ByteArrayWithParityHasIn(uint8_t *Buffer, uint8_t *Parity, uint8_t C
         /* Bit 2 */
         Out = CRYPTO1_FILTER_OUTPUT_B7_24(Odd0, Odd1, Odd2);
         KeyStream = (KeyStream >> 1) | Out;
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2) ^ In;
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2) ^ In;
         In >>= 1;
         SHIFT24(Even0, Even1, Even2, Feedback);
 
@@ -1084,7 +1007,7 @@ void Crypto1ByteArrayWithParityHasIn(uint8_t *Buffer, uint8_t *Parity, uint8_t C
         /* Bit 4 */
         Out = CRYPTO1_FILTER_OUTPUT_B7_24(Odd0, Odd1, Odd2);
         KeyStream = (KeyStream >> 1) | Out;
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2) ^ In;
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2) ^ In;
         In >>= 1;
         SHIFT24(Even0, Even1, Even2, Feedback);
 
@@ -1099,7 +1022,7 @@ void Crypto1ByteArrayWithParityHasIn(uint8_t *Buffer, uint8_t *Parity, uint8_t C
         /* Bit 6 */
         Out = CRYPTO1_FILTER_OUTPUT_B7_24(Odd0, Odd1, Odd2);
         KeyStream = (KeyStream >> 1) | Out;
-        Feedback  = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2) ^ In;
+        Feedback = Crypto1LFSRbyteFeedback(Even0, Even1, Even2, Odd0, Odd1, Odd2) ^ In;
         In >>= 1;
         SHIFT24(Even0, Even1, Even2, Feedback);
 
@@ -1122,9 +1045,9 @@ void Crypto1ByteArrayWithParityHasIn(uint8_t *Buffer, uint8_t *Parity, uint8_t C
     State.Even[0] = Even0;
     State.Even[1] = Even1;
     State.Even[2] = Even2;
-    State.Odd[0]  = Odd0;
-    State.Odd[1]  = Odd1;
-    State.Odd[2]  = Odd2;
+    State.Odd[0] = Odd0;
+    State.Odd[1] = Odd1;
+    State.Odd[2] = Odd2;
 }
 
 /* Function Crypto1PRNG                                           */
@@ -1142,36 +1065,37 @@ void Crypto1ByteArrayWithParityHasIn(uint8_t *Buffer, uint8_t *Parity, uint8_t C
 /* Up tp 11 Bits can be calculated at once                        */
 /* Split into chunks of 11+11+10 = 32 bits                        */
 /* This avoids a calculated number of shifts                      */
-void Crypto1PRNG(uint8_t State[4], uint8_t ClockCount) {
+void Crypto1PRNG(uint8_t State[4], uint8_t ClockCount)
+{
     /* For ease of processing convert the state into a 32 bit integer first */
     uint32_t Temp;
     uint16_t Feedback;
 
-    Temp  = (uint32_t) State[0] << 0;
-    Temp |= (uint32_t) State[1] << 8;
-    Temp |= (uint32_t) State[2] << 16;
-    Temp |= (uint32_t) State[3] << 24;
+    Temp = (uint32_t)State[0] << 0;
+    Temp |= (uint32_t)State[1] << 8;
+    Temp |= (uint32_t)State[2] << 16;
+    Temp |= (uint32_t)State[3] << 24;
 
     /* PRNG is always a multiple of 32!        */
     /* Up tp 11 Bits can be calculated at once */
     /* Split into chunks of 11+11+10 = 32 bits */
     while (ClockCount >= 32) {
         Feedback = (uint16_t)(Temp >> 16);
-        Feedback ^= Feedback >> 3;   /* 2d = 101101,  fold 101 101 => 101 */
-        Feedback ^= Feedback >> 2;   /* fold 101 => 1 */
+        Feedback ^= Feedback >> 3; /* 2d = 101101,  fold 101 101 => 101 */
+        Feedback ^= Feedback >> 2; /* fold 101 => 1 */
         /* Cycle LFSR and feed back. */
         Temp = (Temp >> 11) | (((uint32_t)Feedback) << (32 - 11));
 
         /* Same for the next 11 Bits */
         Feedback = (uint16_t)(Temp >> 16);
-        Feedback ^= Feedback >> 3;   /* 2d = 101101,  fold 101 101 => 101 */
-        Feedback ^= Feedback >> 2;   /* fold 101 => 1 */
+        Feedback ^= Feedback >> 3; /* 2d = 101101,  fold 101 101 => 101 */
+        Feedback ^= Feedback >> 2; /* fold 101 => 1 */
         Temp = (Temp >> 11) | (((uint32_t)Feedback) << (32 - 11));
 
         /* Remaining 10 bits */
         Feedback = (uint16_t)(Temp >> 16);
-        Feedback ^= Feedback >> 3;   /* 2d = 101101,  fold 101 101 => 101 */
-        Feedback ^= Feedback >> 2;   /* fold 101 => 1 */
+        Feedback ^= Feedback >> 3; /* 2d = 101101,  fold 101 101 => 101 */
+        Feedback ^= Feedback >> 2; /* fold 101 => 1 */
         Temp = (Temp >> 10) | (((uint32_t)Feedback) << (32 - 10));
 
         /* Now 32 bits are fed back */
@@ -1188,35 +1112,33 @@ void Crypto1PRNG(uint8_t State[4], uint8_t ClockCount) {
 /* prng_successor
  * helper used to obscure the keystream during authentication
  */
-uint32_t Crypto1FreePRNG(uint32_t x, uint32_t n) {
+uint32_t Crypto1FreePRNG(uint32_t x, uint32_t n)
+{
     x = __builtin_bswap32(x);
 
-    while (n--)
-        x = x >> 1 | (x >> 16 ^ x >> 18 ^ x >> 19 ^ x >> 21) << 31;
+    while (n--) x = x >> 1 | (x >> 16 ^ x >> 18 ^ x >> 19 ^ x >> 21) << 31;
 
     return __builtin_bswap32(x);
 }
 
-
-void Crypto1EncryptWithParity(uint8_t *Buffer, uint8_t BitCount) {
+void Crypto1EncryptWithParity(uint8_t *Buffer, uint8_t BitCount)
+{
     uint8_t i = 0;
     while (i < BitCount) {
-        Buffer[i / 8] ^=
-            CRYPTO1_FILTER_OUTPUT_B0_24(State.Odd[0], State.Odd[1], State.Odd[2])
-            << (i % 8);
-        if (++i % 9 != 0) // only shift, if this was no parity bit
+        Buffer[i / 8] ^= CRYPTO1_FILTER_OUTPUT_B0_24(State.Odd[0], State.Odd[1], State.Odd[2]) << (i % 8);
+        if (++i % 9 != 0)  // only shift, if this was no parity bit
             Crypto1LFSR(0);
     }
 }
 
-void Crypto1ReaderAuthWithParity(uint8_t PlainReaderAnswerWithParityBits[9]) {
+void Crypto1ReaderAuthWithParity(uint8_t PlainReaderAnswerWithParityBits[9])
+{
     uint8_t i = 0, feedback;
     while (i < 72) {
         feedback = PlainReaderAnswerWithParityBits[i / 8] >> (i % 8);
-        PlainReaderAnswerWithParityBits[i / 8] ^=
-            CRYPTO1_FILTER_OUTPUT_B0_24(State.Odd[0], State.Odd[1], State.Odd[2])
-            << (i % 8);
-        if (++i % 9 != 0) { // only shift, if this was no parity bit
+        PlainReaderAnswerWithParityBits[i / 8] ^= CRYPTO1_FILTER_OUTPUT_B0_24(State.Odd[0], State.Odd[1], State.Odd[2])
+                                                  << (i % 8);
+        if (++i % 9 != 0) {  // only shift, if this was no parity bit
             if (i <= 36)
                 Crypto1LFSR(feedback & 1);
             else

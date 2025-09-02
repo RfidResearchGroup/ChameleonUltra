@@ -1,6 +1,6 @@
-#include <nrf_gpio.h>
 #include "hw_connect.h"
 
+#include <nrf_gpio.h>
 
 // Current project run on ultra or lite.
 const static chameleon_device_type_t m_device_type =
@@ -13,7 +13,6 @@ const static chameleon_device_type_t m_device_type =
 #endif
 
 char g_extern_product_str[sizeof(DEVICE_NAME_STR) + sizeof(": hw_v255, fw_v65535") + 1];
-
 
 uint32_t g_led_field;
 uint32_t g_led_1;
@@ -37,7 +36,6 @@ nrf_lpcomp_input_t g_lf_rssi;
 uint32_t g_bat_sense_pin;
 nrf_saadc_input_t g_bat_sense;
 
-
 #if defined(PROJECT_CHAMELEON_ULTRA)
 uint32_t g_lf_ant_driver;
 uint32_t g_lf_oa_out;
@@ -49,31 +47,27 @@ uint32_t g_hf_ant_sel;
 uint32_t g_reader_power;
 #endif
 
-
 uint32_t m_led_array[MAX_LED_NUM];
 uint32_t m_led_reversal_array[MAX_LED_NUM];
 #define INIT_LED_ARRAY(num, led)                        \
     if (RGB_LIST_NUM >= num) {                          \
         m_led_array[num - 1] = led;                     \
         m_led_reversal_array[RGB_LIST_NUM - num] = led; \
-    }                                                   \
-
+    }
 
 uint32_t m_rgb_array[MAX_RGB_NUM];
-#define INIT_RGB_ARRAY(num, rgb)     \
-    if (RGB_CTRL_NUM >= num) {       \
-        m_rgb_array[num - 1] = rgb;  \
-    }                                \
-
+#define INIT_RGB_ARRAY(num, rgb)    \
+    if (RGB_CTRL_NUM >= num) {      \
+        m_rgb_array[num - 1] = rgb; \
+    }
 
 static uint8_t m_hw_ver;
-
-
 
 /**
  * @brief Function for chameleon lite power set
  */
-void board_lite_high_voltage_set(void) {
+void board_lite_high_voltage_set(void)
+{
 #ifdef SOFTDEVICE_PRESENT
     sd_power_dcdc_mode_set(NRF_POWER_DCDC_DISABLE);
     sd_power_dcdc0_mode_set(NRF_POWER_DCDC_DISABLE);
@@ -85,16 +79,20 @@ void board_lite_high_voltage_set(void) {
     // default and that is not enough to turn the green and blue LEDs on. Increase GPIO voltage to 3.0 volts.
     if (((NRF_UICR->REGOUT0 & UICR_REGOUT0_VOUT_Msk) == (UICR_REGOUT0_VOUT_DEFAULT << UICR_REGOUT0_VOUT_Pos))) {
         NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Wen << NVMC_CONFIG_WEN_Pos;
-        while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
-        NRF_UICR->REGOUT0 = (NRF_UICR->REGOUT0 & ~((uint32_t)UICR_REGOUT0_VOUT_Msk)) | (UICR_REGOUT0_VOUT_3V3 << UICR_REGOUT0_VOUT_Pos);
+        while (NRF_NVMC->READY == NVMC_READY_READY_Busy)
+            ;
+        NRF_UICR->REGOUT0 = (NRF_UICR->REGOUT0 & ~((uint32_t)UICR_REGOUT0_VOUT_Msk))
+                            | (UICR_REGOUT0_VOUT_3V3 << UICR_REGOUT0_VOUT_Pos);
         NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Ren << NVMC_CONFIG_WEN_Pos;
-        while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
+        while (NRF_NVMC->READY == NVMC_READY_READY_Busy)
+            ;
         // a reset is required for changes to take effect
         NVIC_SystemReset();
     }
 }
 
-void hw_connect_init(void) {
+void hw_connect_init(void)
+{
 #if defined(PROJECT_CHAMELEON_LITE)
     board_lite_high_voltage_set();  // lite needs to turn off dcdc and raise the core voltage
 #endif
@@ -103,77 +101,75 @@ void hw_connect_init(void) {
     // You can directly rewrite this version number when testing
     m_hw_ver = 1;
 
-
 #if defined(PROJECT_CHAMELEON_ULTRA)
     if (m_hw_ver == 1) {
-        LED_FIELD       = (NRF_GPIO_PIN_MAP(1, 1));
-        LED_1           = (NRF_GPIO_PIN_MAP(0, 20));
-        LED_2           = (NRF_GPIO_PIN_MAP(0, 17));
-        LED_3           = (NRF_GPIO_PIN_MAP(0, 15));
-        LED_4           = (NRF_GPIO_PIN_MAP(0, 13));
-        LED_5           = (NRF_GPIO_PIN_MAP(0, 12));
-        LED_6           = (NRF_GPIO_PIN_MAP(1, 9));
-        LED_7           = (NRF_GPIO_PIN_MAP(0, 8));
-        LED_8           = (NRF_GPIO_PIN_MAP(0, 6));
-        LED_R           = (NRF_GPIO_PIN_MAP(0, 24));
-        LED_G           = (NRF_GPIO_PIN_MAP(0, 22));
-        LED_B           = (NRF_GPIO_PIN_MAP(1, 0));
-        RGB_LIST_NUM    = 8;
-        RGB_CTRL_NUM    = 3;
+        LED_FIELD = (NRF_GPIO_PIN_MAP(1, 1));
+        LED_1 = (NRF_GPIO_PIN_MAP(0, 20));
+        LED_2 = (NRF_GPIO_PIN_MAP(0, 17));
+        LED_3 = (NRF_GPIO_PIN_MAP(0, 15));
+        LED_4 = (NRF_GPIO_PIN_MAP(0, 13));
+        LED_5 = (NRF_GPIO_PIN_MAP(0, 12));
+        LED_6 = (NRF_GPIO_PIN_MAP(1, 9));
+        LED_7 = (NRF_GPIO_PIN_MAP(0, 8));
+        LED_8 = (NRF_GPIO_PIN_MAP(0, 6));
+        LED_R = (NRF_GPIO_PIN_MAP(0, 24));
+        LED_G = (NRF_GPIO_PIN_MAP(0, 22));
+        LED_B = (NRF_GPIO_PIN_MAP(1, 0));
+        RGB_LIST_NUM = 8;
+        RGB_CTRL_NUM = 3;
 
-        LF_MOD          = (NRF_GPIO_PIN_MAP(1, 13));
-        LF_RSSI_PIN     = (NRF_GPIO_PIN_MAP(0, 2));
-        LF_RSSI         = NRF_LPCOMP_INPUT_0;
+        LF_MOD = (NRF_GPIO_PIN_MAP(1, 13));
+        LF_RSSI_PIN = (NRF_GPIO_PIN_MAP(0, 2));
+        LF_RSSI = NRF_LPCOMP_INPUT_0;
 
-        BUTTON_1        = (NRF_GPIO_PIN_MAP(1, 2));
-        BUTTON_2        = (NRF_GPIO_PIN_MAP(0, 26));
+        BUTTON_1 = (NRF_GPIO_PIN_MAP(1, 2));
+        BUTTON_2 = (NRF_GPIO_PIN_MAP(0, 26));
 
-        BAT_SENSE_PIN   = (NRF_GPIO_PIN_MAP(0, 4));
-        BAT_SENSE       = NRF_SAADC_INPUT_AIN2;
+        BAT_SENSE_PIN = (NRF_GPIO_PIN_MAP(0, 4));
+        BAT_SENSE = NRF_SAADC_INPUT_AIN2;
 
         // Ultra only
-        LF_ANT_DRIVER   = (NRF_GPIO_PIN_MAP(0, 31));
-        LF_OA_OUT       = (NRF_GPIO_PIN_MAP(0, 29));
+        LF_ANT_DRIVER = (NRF_GPIO_PIN_MAP(0, 31));
+        LF_OA_OUT = (NRF_GPIO_PIN_MAP(0, 29));
 
-        HF_SPI_SELECT   = (NRF_GPIO_PIN_MAP(1, 6));
-        HF_SPI_MISO     = (NRF_GPIO_PIN_MAP(0, 11));
-        HF_SPI_MOSI     = (NRF_GPIO_PIN_MAP(1, 7));
-        HF_SPI_SCK      = (NRF_GPIO_PIN_MAP(1, 4));
-        HF_ANT_SEL      = (NRF_GPIO_PIN_MAP(1, 10));
+        HF_SPI_SELECT = (NRF_GPIO_PIN_MAP(1, 6));
+        HF_SPI_MISO = (NRF_GPIO_PIN_MAP(0, 11));
+        HF_SPI_MOSI = (NRF_GPIO_PIN_MAP(1, 7));
+        HF_SPI_SCK = (NRF_GPIO_PIN_MAP(1, 4));
+        HF_ANT_SEL = (NRF_GPIO_PIN_MAP(1, 10));
 
-        READER_POWER    = (NRF_GPIO_PIN_MAP(1, 15));
+        READER_POWER = (NRF_GPIO_PIN_MAP(1, 15));
     }
 #endif
 
 #if defined(PROJECT_CHAMELEON_LITE)
     if (m_hw_ver == 1) {
-        LED_FIELD       = (NRF_GPIO_PIN_MAP(1, 1));
-        LED_1           = (NRF_GPIO_PIN_MAP(0, 22));
-        LED_2           = (NRF_GPIO_PIN_MAP(0, 20));
-        LED_3           = (NRF_GPIO_PIN_MAP(0, 17));
-        LED_4           = (NRF_GPIO_PIN_MAP(0, 15));
-        LED_5           = (NRF_GPIO_PIN_MAP(0, 13));
-        LED_6           = (NRF_GPIO_PIN_MAP(0, 6));
-        LED_7           = (NRF_GPIO_PIN_MAP(0, 4));
-        LED_8           = (NRF_GPIO_PIN_MAP(0, 26));
-        LED_R           = (NRF_GPIO_PIN_MAP(0, 8));
-        LED_G           = (NRF_GPIO_PIN_MAP(0, 12));
-        LED_B           = (NRF_GPIO_PIN_MAP(1, 9));
-        RGB_LIST_NUM    = 8;
-        RGB_CTRL_NUM    = 3;
+        LED_FIELD = (NRF_GPIO_PIN_MAP(1, 1));
+        LED_1 = (NRF_GPIO_PIN_MAP(0, 22));
+        LED_2 = (NRF_GPIO_PIN_MAP(0, 20));
+        LED_3 = (NRF_GPIO_PIN_MAP(0, 17));
+        LED_4 = (NRF_GPIO_PIN_MAP(0, 15));
+        LED_5 = (NRF_GPIO_PIN_MAP(0, 13));
+        LED_6 = (NRF_GPIO_PIN_MAP(0, 6));
+        LED_7 = (NRF_GPIO_PIN_MAP(0, 4));
+        LED_8 = (NRF_GPIO_PIN_MAP(0, 26));
+        LED_R = (NRF_GPIO_PIN_MAP(0, 8));
+        LED_G = (NRF_GPIO_PIN_MAP(0, 12));
+        LED_B = (NRF_GPIO_PIN_MAP(1, 9));
+        RGB_LIST_NUM = 8;
+        RGB_CTRL_NUM = 3;
 
-        LF_MOD          = (NRF_GPIO_PIN_MAP(1, 4));
-        LF_RSSI_PIN     = (NRF_GPIO_PIN_MAP(0, 2));
-        LF_RSSI         = NRF_LPCOMP_INPUT_0;
+        LF_MOD = (NRF_GPIO_PIN_MAP(1, 4));
+        LF_RSSI_PIN = (NRF_GPIO_PIN_MAP(0, 2));
+        LF_RSSI = NRF_LPCOMP_INPUT_0;
 
-        BUTTON_1        = (NRF_GPIO_PIN_MAP(1, 2));
-        BUTTON_2        = (NRF_GPIO_PIN_MAP(1, 6));
+        BUTTON_1 = (NRF_GPIO_PIN_MAP(1, 2));
+        BUTTON_2 = (NRF_GPIO_PIN_MAP(1, 6));
 
-        BAT_SENSE_PIN   = (NRF_GPIO_PIN_MAP(0, 29));
-        BAT_SENSE       = NRF_SAADC_INPUT_AIN5;
+        BAT_SENSE_PIN = (NRF_GPIO_PIN_MAP(0, 29));
+        BAT_SENSE = NRF_SAADC_INPUT_AIN5;
     }
 #endif
-
 
     INIT_LED_ARRAY(1, LED_1);
     INIT_LED_ARRAY(2, LED_2);
@@ -192,28 +188,19 @@ void hw_connect_init(void) {
     sprintf(g_extern_product_str, "%s: hw_v%d, fw_v%d", DEVICE_NAME_STR, m_hw_ver, FW_VER_NUM);
 }
 
-uint32_t *hw_get_led_array(void) {
-    return m_led_array;
-}
+uint32_t *hw_get_led_array(void) { return m_led_array; }
 
-uint32_t *hw_get_led_reversal_array(void) {
-    return m_led_reversal_array;
-}
+uint32_t *hw_get_led_reversal_array(void) { return m_led_reversal_array; }
 
-uint32_t *hw_get_rgb_array(void) {
-    return m_rgb_array;
-}
+uint32_t *hw_get_rgb_array(void) { return m_rgb_array; }
 
-chameleon_device_type_t hw_get_device_type(void) {
-    return m_device_type;
-}
+chameleon_device_type_t hw_get_device_type(void) { return m_device_type; }
 
-uint8_t hw_get_version_code(void) {
-    return m_hw_ver;
-}
+uint8_t hw_get_version_code(void) { return m_hw_ver; }
 
 // Initialize the LED light beads of the device
-void init_leds(void) {
+void init_leds(void)
+{
     uint32_t *led_pins = hw_get_led_array();
     uint32_t *led_rgb_pins = hw_get_rgb_array();
 
@@ -238,7 +225,8 @@ void init_leds(void) {
  * @brief Function for enter tag emulation mode
  * @param color: 0 means r, 1 means g, 2 means b
  */
-void set_slot_light_color(chameleon_rgb_type_t color) {
+void set_slot_light_color(chameleon_rgb_type_t color)
+{
     nrf_gpio_pin_set(LED_R);
     nrf_gpio_pin_set(LED_G);
     nrf_gpio_pin_set(LED_B);

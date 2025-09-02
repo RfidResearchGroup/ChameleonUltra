@@ -1,19 +1,21 @@
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <inttypes.h>
+
 #include "common.h"
 #include "nested_util.h"
 
-int main(int argc, char *const argv[]) {
+int main(int argc, char *const argv[])
+{
     NtpKs1 *pNK = NULL;
     uint32_t i, j, m;
     uint32_t nt1, nt2, nttest, ks1, dist;
     uint8_t par_int;
-    uint8_t par_arr[3] = { 0x00 };
+    uint8_t par_arr[3] = {0x00};
 
-    uint32_t authuid = atoui(argv[1]);   // uid
-    dist = atoui(argv[2]);  // dist
+    uint32_t authuid = atoui(argv[1]);  // uid
+    dist = atoui(argv[2]);              // dist
 
     // process all args.
     for (i = 3, j = 0; i < argc; i += 3) {
@@ -25,7 +27,8 @@ int main(int argc, char *const argv[]) {
             for (m = 0; m < 3; m++) {
                 par_arr[m] = (par_int >> m) & 0x01;
             }
-        } else {
+        }
+        else {
             memset(par_arr, 0, 3);
         }
         // Try to recover the keystream1

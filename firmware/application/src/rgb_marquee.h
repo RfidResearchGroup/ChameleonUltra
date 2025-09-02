@@ -2,8 +2,8 @@
 #define RGB_MARQUEE_H
 
 #include <stdint.h>
-#include "nrf_drv_pwm.h"
 
+#include "nrf_drv_pwm.h"
 
 void rgb_marquee_init(void);
 void rgb_marquee_stop(void);

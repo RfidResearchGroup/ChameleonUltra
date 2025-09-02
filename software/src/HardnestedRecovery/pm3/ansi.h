@@ -19,13 +19,13 @@
 // Not ANSI but dirty trick to specify we don't want a \n
 #define NOLF "\xff"
 
-#define AEND  "\x1b[0m"
+#define AEND "\x1b[0m"
 
-#define _RED_(s)            "\x1b[31m" s AEND
-#define _GREEN_(s)          "\x1b[32m" s AEND
-#define _YELLOW_(s)         "\x1b[33m" s AEND
-#define _BLUE_(s)           "\x1b[34m" s AEND
-#define _CYAN_(s)           "\x1b[36m" s AEND
+#define _RED_(s) "\x1b[31m" s AEND
+#define _GREEN_(s) "\x1b[32m" s AEND
+#define _YELLOW_(s) "\x1b[33m" s AEND
+#define _BLUE_(s) "\x1b[34m" s AEND
+#define _CYAN_(s) "\x1b[36m" s AEND
 
 #if defined(HAVE_READLINE)
 // https://wiki.hackzine.org/development/misc/readline-color-prompt.html
@@ -36,6 +36,6 @@
 #define RL_ESC(a) "\001" a "\002"
 #else
 #define RL_ESC(a) a
-#endif // HAVE_READLINE
+#endif  // HAVE_READLINE
 
 #endif

@@ -22,13 +22,13 @@
 #include "common.h"
 
 #ifdef _WIN32
-# include <windows.h>
-# define sleep(n) Sleep(1000 *(n))
-# define msleep(n) Sleep((n))
+#include <windows.h>
+#define sleep(n) Sleep(1000 * (n))
+#define msleep(n) Sleep((n))
 #else
-void msleep(uint32_t n); // sleep n milliseconds
-#endif // _WIN32
+void msleep(uint32_t n);  // sleep n milliseconds
+#endif  // _WIN32
 
-uint64_t msclock(void);      // a milliseconds clock
+uint64_t msclock(void);  // a milliseconds clock
 
 #endif

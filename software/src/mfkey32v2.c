@@ -3,19 +3,21 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+
 #include "crapto1.h"
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
     struct Crypto1State *s, *t;
-    uint64_t key;     // recovered key
-    uint32_t uid;     // serial number
+    uint64_t key;      // recovered key
+    uint32_t uid;      // serial number
     uint32_t nt0;      // tag challenge first
     uint32_t nt1;      // tag challenge second
-    uint32_t nr0_enc; // first encrypted reader challenge
-    uint32_t ar0_enc; // first encrypted reader response
-    uint32_t nr1_enc; // second encrypted reader challenge
-    uint32_t ar1_enc; // second encrypted reader response
-    uint32_t ks2;     // keystream used to encrypt reader response
+    uint32_t nr0_enc;  // first encrypted reader challenge
+    uint32_t ar0_enc;  // first encrypted reader response
+    uint32_t nr1_enc;  // second encrypted reader challenge
+    uint32_t ar1_enc;  // second encrypted reader response
+    uint32_t ks2;      // keystream used to encrypt reader response
 
     printf("MIFARE Classic key recovery - based 32 bits of keystream  VERSION2\n");
     printf("Recover key from two 32-bit reader authentication answers only\n");

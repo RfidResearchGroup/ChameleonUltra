@@ -10,10 +10,11 @@
 //
 //  Doegox, 2024, cf https://eprint.iacr.org/2024/1275 for more info
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <inttypes.h>
+
 #include "common.h"
 #include "crapto1.h"
 #include "parity.h"
@@ -27,11 +28,10 @@ typedef struct {
     uint8_t nt_par_enc;
 } NtData;
 
-static uint32_t hex_to_uint32(const char *hex_str) {
-    return (uint32_t)strtoul(hex_str, NULL, 16);
-}
+static uint32_t hex_to_uint32(const char *hex_str) { return (uint32_t)strtoul(hex_str, NULL, 16); }
 
-static int bin_to_uint8_arr(const char *bin_str, uint8_t bit_arr[], uint8_t arr_size) {
+static int bin_to_uint8_arr(const char *bin_str, uint8_t bit_arr[], uint8_t arr_size)
+{
     if (strlen(bin_str) != arr_size) {
         fprintf(stderr, "Error: Binary string (%s) length does not match array size (%i).\n", bin_str, arr_size);
         return 1;
@@ -40,9 +40,11 @@ static int bin_to_uint8_arr(const char *bin_str, uint8_t bit_arr[], uint8_t arr_
     for (uint8_t i = 0; i < arr_size; i++) {
         if (bin_str[i] == '0') {
             bit_arr[i] = 0;
-        } else if (bin_str[i] == '1') {
+        }
+        else if (bin_str[i] == '1') {
             bit_arr[i] = 1;
-        } else {
+        }
+        else {
             fprintf(stderr, "Error: Invalid character '%c' in binary string.\n", bin_str[i]);
             return 1;
         }
@@ -50,8 +52,8 @@ static int bin_to_uint8_arr(const char *bin_str, uint8_t bit_arr[], uint8_t arr_
     return 0;
 }
 
-static uint64_t *generate_keys(uint64_t authuid, uint32_t nt, uint32_t nt_enc, uint32_t nt_par_enc, uint32_t *keyCount) {
-
+static uint64_t *generate_keys(uint64_t authuid, uint32_t nt, uint32_t nt_enc, uint32_t nt_par_enc, uint32_t *keyCount)
+{
     uint64_t *result_keys = (uint64_t *)calloc(1, KEY_SPACE_SIZE * sizeof(uint64_t));
     if (result_keys == NULL) {
         fprintf(stderr, "\nCalloc error in generate_and_intersect_keys!\n");
@@ -108,17 +110,18 @@ static uint64_t *generate_keys(uint64_t authuid, uint32_t nt, uint32_t nt_enc, u
     return result_keys;
 }
 
-int main(int argc, char *const argv[]) {
-
+int main(int argc, char *const argv[])
+{
     if (argc != 6) {
         int cmdlen = strlen(argv[0]);
-        printf("Usage:\n  %s <uid:hex> <sector:dec> <nt:hex> <nt_enc:hex> <nt_par_err:bin>\n"
-               "  parity example:  if for block 63 == sector 15, nt in trace is 7b! fc! 7a! 5b\n"
-               "                   then nt_enc is 7bfc7a5b and nt_par_err is 1110\n"
-               "Example:\n"
-               "  %*s a13e4902 15 d14191b3 2e9e49fc 1111\n"
-               "  %*s +uid     +s +nt      +nt_enc  +nt_par_err\n",
-               argv[0], cmdlen, argv[0], cmdlen, "");
+        printf(
+            "Usage:\n  %s <uid:hex> <sector:dec> <nt:hex> <nt_enc:hex> <nt_par_err:bin>\n"
+            "  parity example:  if for block 63 == sector 15, nt in trace is 7b! fc! 7a! 5b\n"
+            "                   then nt_enc is 7bfc7a5b and nt_par_err is 1110\n"
+            "Example:\n"
+            "  %*s a13e4902 15 d14191b3 2e9e49fc 1111\n"
+            "  %*s +uid     +s +nt      +nt_enc  +nt_par_err\n",
+            argv[0], cmdlen, argv[0], cmdlen, "");
         return 1;
     }
 
@@ -135,26 +138,14 @@ int main(int argc, char *const argv[]) {
         return 1;
     }
 
-    uint8_t nt_par_enc = ((nt_par_err_arr[0] ^ oddparity8((nt_enc >> 24) & 0xFF)) << 3) |
-                         ((nt_par_err_arr[1] ^ oddparity8((nt_enc >> 16) & 0xFF)) << 2) |
-                         ((nt_par_err_arr[2] ^ oddparity8((nt_enc >>  8) & 0xFF)) << 1) |
-                         ((nt_par_err_arr[3] ^ oddparity8((nt_enc >>  0) & 0xFF)) << 0);
+    uint8_t nt_par_enc = ((nt_par_err_arr[0] ^ oddparity8((nt_enc >> 24) & 0xFF)) << 3)
+                         | ((nt_par_err_arr[1] ^ oddparity8((nt_enc >> 16) & 0xFF)) << 2)
+                         | ((nt_par_err_arr[2] ^ oddparity8((nt_enc >> 8) & 0xFF)) << 1)
+                         | ((nt_par_err_arr[3] ^ oddparity8((nt_enc >> 0) & 0xFF)) << 0);
 
-    printf("uid=%08x nt=%08x nt_enc=%08x nt_par_err=%u%u%u%u nt_par_enc=%u%u%u%u ks1=%08x\n"
-           , authuid
-           , nt
-           , nt_enc
-           , nt_par_err_arr[0]
-           , nt_par_err_arr[1]
-           , nt_par_err_arr[2]
-           , nt_par_err_arr[3]
-           , (uint8_t)((nt_par_enc >> 3) & 1)
-           , (uint8_t)((nt_par_enc >> 2) & 1)
-           , (uint8_t)((nt_par_enc >> 1) & 1)
-           , (uint8_t)(nt_par_enc & 1)
-           , nt ^ nt_enc
-          );
-
+    printf("uid=%08x nt=%08x nt_enc=%08x nt_par_err=%u%u%u%u nt_par_enc=%u%u%u%u ks1=%08x\n", authuid, nt, nt_enc,
+           nt_par_err_arr[0], nt_par_err_arr[1], nt_par_err_arr[2], nt_par_err_arr[3], (uint8_t)((nt_par_enc >> 3) & 1),
+           (uint8_t)((nt_par_enc >> 2) & 1), (uint8_t)((nt_par_enc >> 1) & 1), (uint8_t)(nt_par_enc & 1), nt ^ nt_enc);
 
     printf("Finding key candidates...\n");
     keys = generate_keys(authuid, nt, nt_enc, nt_par_enc, &keyCount);
@@ -173,7 +164,8 @@ int main(int argc, char *const argv[]) {
             }
         }
         fclose(fptr);
-    } else {
+    }
+    else {
         fprintf(stderr, "Warning: Cannot save keys in %s\n", filename);
     }
 

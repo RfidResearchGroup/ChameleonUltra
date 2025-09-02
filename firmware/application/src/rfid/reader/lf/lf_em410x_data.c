@@ -1,5 +1,3 @@
-#include "lf_reader_data.h"
-
 #include "bsp_delay.h"
 #include "bsp_time.h"
 #include "circular_buffer.h"
@@ -19,29 +17,34 @@ NRF_LOG_MODULE_REGISTER();
 static circular_buffer cb;
 
 // GPIO interrupt recovery function is used to detect the descending edge
-void gpio_int0_cb(void) {
+void gpio_int0_cb(void)
+{
     uint32_t cntr = get_lf_counter_value();
     uint16_t val = 0;
     if (cntr > 0xff) {
         val = 0xff;
-    } else {
+    }
+    else {
         val = cntr & 0xff;
     }
     cb_push_back(&cb, &val);
     clear_lf_counter_value();
 }
 
-static void init_em410x_hw(void) {
+static void init_em410x_hw(void)
+{
     register_rio_callback(gpio_int0_cb);
     lf_125khz_radio_gpiote_enable();
 }
 
-static void uninit_em410x_hw(void) {
+static void uninit_em410x_hw(void)
+{
     lf_125khz_radio_gpiote_disable();
     unregister_rio_callback();
 }
 
-bool em410x_read(uint8_t *data, uint32_t timeout_ms) {
+bool em410x_read(uint8_t *data, uint32_t timeout_ms)
+{
     void **codecs = malloc(em410x_protocols_size * sizeof(void *));
     for (size_t i = 0; i < em410x_protocols_size; i++) {
         codecs[i] = em410x_protocols[i]->alloc();

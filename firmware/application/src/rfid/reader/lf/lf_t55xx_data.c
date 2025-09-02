@@ -24,29 +24,34 @@ static struct {
     uint8_t blk_addr;
 } t55xx_cmd;
 
-void t55xx_send_gap(uint32_t nus) {
+void t55xx_send_gap(uint32_t nus)
+{
     stop_lf_125khz_radio();  // turn off 125khz field
     bsp_delay_us(nus);
     start_lf_125khz_radio();  // turn on 125khz field
 }
 
-void t55xx_tx_bit(uint8_t data) {
+void t55xx_tx_bit(uint8_t data)
+{
     if (data & 0x01) {
         bsp_delay_us(gap_sep_one);
-    } else {
+    }
+    else {
         bsp_delay_us(gap_sep_zero);
     }
     t55xx_send_gap(write_gap);
 }
 
-void t55xx_tx_uint32_t(uint32_t data) {
+void t55xx_tx_uint32_t(uint32_t data)
+{
     for (uint8_t i = 0; i < 32; i++) {
         t55xx_tx_bit((data >> (31 - i)) & 1);
     }
 }
 
 // t55xx high-precision timing control function
-void t55xx_timeslot_callback() {
+void t55xx_timeslot_callback()
+{
     t55xx_send_gap(start_gap);
 
     // send instructions first
@@ -85,11 +90,13 @@ void t55xx_timeslot_callback() {
  *
  * @param opcode Operating code, should be 1* for normal operations, only the reset is 00.
  * @param passwd Password, send when not NULL, 32bit, start transmission from the bidding 0.
- * @param lock_bit Locking position may only be 1 or 0. Passing other values means not using LOCK bit (for password awakening mode)
+ * @param lock_bit Locking position may only be 1 or 0. Passing other values means not using LOCK bit (for password
+ * awakening mode)
  * @param data Data, 32 bits, transmitted from the lower bit 0
  * @param blk_addr Block number, 3 bit 0-7 yuan, input 255 means not using this bit (for password wake-up mode)
  */
-void t55xx_send_cmd(uint8_t opcode, uint32_t *passwd, uint8_t lock_bit, uint32_t *data, uint8_t blk_addr) {
+void t55xx_send_cmd(uint8_t opcode, uint32_t *passwd, uint8_t lock_bit, uint32_t *data, uint8_t blk_addr)
+{
     // Password reading mode,        2op(1+bck)  32pw    1(0)            3addr
     // Password writing mode,        2op(1+bck)  32pw    1l      32data  3addr
     // Password wake-up mode,        2op(1+0)    32pw
@@ -112,7 +119,8 @@ void t55xx_send_cmd(uint8_t opcode, uint32_t *passwd, uint8_t lock_bit, uint32_t
 
     if (opcode != 0) {
         bsp_delay_ms(6);  // Maybe continue to write a card next time, you need to wait more for a while
-    } else {
+    }
+    else {
         bsp_delay_ms(1);
     }
 }
@@ -124,7 +132,8 @@ void t55xx_send_cmd(uint8_t opcode, uint32_t *passwd, uint8_t lock_bit, uint32_t
  * @param blks the blocks data to write
  * @param blk_count the number of blocks to write
  */
-void t55xx_write_data(uint32_t passwd, uint32_t *blks, uint8_t blk_count) {
+void t55xx_write_data(uint32_t passwd, uint32_t *blks, uint8_t blk_count)
+{
     // write control bits (blk0) & data (w/wo passwd)
     for (uint8_t i = 0; i < blk_count; i++) {
         t55xx_send_cmd(T5577_OPCODE_PAGE0, &passwd, 0, &blks[i], i);
@@ -134,13 +143,17 @@ void t55xx_write_data(uint32_t passwd, uint32_t *blks, uint8_t blk_count) {
 }
 
 /**
- * @brief Reset the password function to set the card that is used to set the existing known password into a target password
+ * @brief Reset the password function to set the card that is used to set the existing known password into a target
+ * password
  *
  * @param old_passwd current card password (32bits)
  * @param new_passwd target card password (32bits)
  */
-void t55xx_reset_passwd(uint32_t old_passwd, uint32_t new_passwd) {
-    t55xx_send_cmd(T5577_OPCODE_PAGE0, &old_passwd, 0, &new_passwd, 7);  // 0 area 7 blocks to write new passwords (passwords)
-    t55xx_send_cmd(T5577_OPCODE_PAGE0, &old_passwd, 0, &new_passwd, 7);  // 0 area 7 blocks to write new passwords (passwords)
+void t55xx_reset_passwd(uint32_t old_passwd, uint32_t new_passwd)
+{
+    t55xx_send_cmd(T5577_OPCODE_PAGE0, &old_passwd, 0, &new_passwd,
+                   7);  // 0 area 7 blocks to write new passwords (passwords)
+    t55xx_send_cmd(T5577_OPCODE_PAGE0, &old_passwd, 0, &new_passwd,
+                   7);  // 0 area 7 blocks to write new passwords (passwords)
     t55xx_send_cmd(T5577_OPCODE_RESET, NULL, 0, NULL, 0);
 }

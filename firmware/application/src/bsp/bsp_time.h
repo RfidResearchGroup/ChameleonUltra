@@ -4,9 +4,9 @@
 #include <stdint.h>
 
 #ifndef NULL
-#define NULL        ((void *)0)
+#define NULL ((void *)0)
 #endif
-//Define the maximum number of timer that can be used at the same time
+// Define the maximum number of timer that can be used at the same time
 #define TIMER_BSP_COUNT 10
 
 // Define a structure
@@ -18,9 +18,8 @@ typedef struct {
     uint8_t busy;
 } autotimer;
 
-
 // Realize a grand definition of judgment timeout
-#define NO_TIMEOUT_1MS(timer, count)    ((((autotimer*)timer)->time <= (count))?  1: 0)
+#define NO_TIMEOUT_1MS(timer, count) ((((autotimer *)timer)->time <= (count)) ? 1 : 0)
 
 void bsp_timer_init(void);
 void bsp_timer_uninit(void);
@@ -30,6 +29,5 @@ void bsp_timer_stop(void);
 void bsp_return_timer(autotimer *timer);
 autotimer *bsp_obtain_timer(uint32_t start_value);
 uint8_t bsp_set_timer(autotimer *timer, uint32_t start_value);
-
 
 #endif

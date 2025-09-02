@@ -15,28 +15,29 @@
 // See LICENSE.txt for the text of the license.
 //-----------------------------------------------------------------------------
 #include <stdlib.h>
+
 #include "crapto1.h"
 #include "parity.h"
 
 #ifdef __OPTIMIZE_SIZE__
-int filter(uint32_t const x) {
+int filter(uint32_t const x)
+{
     uint32_t f;
 
-    f  = 0xf22c0 >> (x       & 0xf) & 16;
-    f |= 0x6c9c0 >> (x >>  4 & 0xf) &  8;
-    f |= 0x3c8b0 >> (x >>  8 & 0xf) &  4;
-    f |= 0x1e458 >> (x >> 12 & 0xf) &  2;
-    f |= 0x0d938 >> (x >> 16 & 0xf) &  1;
+    f = 0xf22c0 >> (x & 0xf) & 16;
+    f |= 0x6c9c0 >> (x >> 4 & 0xf) & 8;
+    f |= 0x3c8b0 >> (x >> 8 & 0xf) & 4;
+    f |= 0x1e458 >> (x >> 12 & 0xf) & 2;
+    f |= 0x0d938 >> (x >> 16 & 0xf) & 1;
     return BIT(0xEC57E80A, f);
 }
 #endif
 
-#define SWAPENDIAN(x)\
-    (x = (x >> 8 & 0xff00ff) | (x & 0xff00ff) << 8, x = x >> 16 | x << 16)
+#define SWAPENDIAN(x) (x = (x >> 8 & 0xff00ff) | (x & 0xff00ff) << 8, x = x >> 16 | x << 16)
 
-void crypto1_init(struct Crypto1State *state, uint64_t key) {
-    if (state == NULL)
-        return;
+void crypto1_init(struct Crypto1State *state, uint64_t key)
+{
+    if (state == NULL) return;
     state->odd = 0;
     state->even = 0;
     for (int i = 47; i > 0; i -= 2) {
@@ -45,27 +46,29 @@ void crypto1_init(struct Crypto1State *state, uint64_t key) {
     }
 }
 
-void crypto1_deinit(struct Crypto1State *state) {
+void crypto1_deinit(struct Crypto1State *state)
+{
     state->odd = 0;
     state->even = 0;
 }
 
-#if !defined(__arm__) || defined(__linux__) || defined(_WIN32) || defined(__APPLE__) // bare metal ARM Proxmark lacks calloc()/free()
+#if !defined(__arm__) || defined(__linux__) || defined(_WIN32) \
+    || defined(__APPLE__)  // bare metal ARM Proxmark lacks calloc()/free()
 
-struct Crypto1State *crypto1_create(uint64_t key) {
+struct Crypto1State *crypto1_create(uint64_t key)
+{
     struct Crypto1State *state = calloc(sizeof(*state), sizeof(uint8_t));
     if (!state) return NULL;
     crypto1_init(state, key);
     return state;
 }
 
-void crypto1_destroy(struct Crypto1State *state) {
-    free(state);
-}
+void crypto1_destroy(struct Crypto1State *state) { free(state); }
 
 #endif
 
-void crypto1_get_lfsr(struct Crypto1State *state, uint64_t *lfsr) {
+void crypto1_get_lfsr(struct Crypto1State *state, uint64_t *lfsr)
+{
     int i;
     for (*lfsr = 0, i = 23; i >= 0; --i) {
         *lfsr = *lfsr << 1 | BIT(state->odd, i ^ 3);
@@ -73,7 +76,8 @@ void crypto1_get_lfsr(struct Crypto1State *state, uint64_t *lfsr) {
     }
 }
 
-uint8_t crypto1_bit(struct Crypto1State *s, uint8_t in, int is_encrypted) {
+uint8_t crypto1_bit(struct Crypto1State *s, uint8_t in, int is_encrypted)
+{
     uint32_t feedin, t;
     uint8_t ret = filter(s->odd);
 
@@ -90,7 +94,8 @@ uint8_t crypto1_bit(struct Crypto1State *s, uint8_t in, int is_encrypted) {
     return ret;
 }
 
-uint8_t crypto1_byte(struct Crypto1State *s, uint8_t in, int is_encrypted) {
+uint8_t crypto1_byte(struct Crypto1State *s, uint8_t in, int is_encrypted)
+{
     uint8_t ret = 0;
     ret |= crypto1_bit(s, BIT(in, 0), is_encrypted) << 0;
     ret |= crypto1_bit(s, BIT(in, 1), is_encrypted) << 1;
@@ -103,7 +108,8 @@ uint8_t crypto1_byte(struct Crypto1State *s, uint8_t in, int is_encrypted) {
     return ret;
 }
 
-uint32_t crypto1_word(struct Crypto1State *s, uint32_t in, int is_encrypted) {
+uint32_t crypto1_word(struct Crypto1State *s, uint32_t in, int is_encrypted)
+{
     uint32_t ret = 0;
     // note: xor args have been swapped because some compilers emit a warning
     // for 10^x and 2^x as possible misuses for exponentiation. No comment.
@@ -148,18 +154,19 @@ uint32_t crypto1_word(struct Crypto1State *s, uint32_t in, int is_encrypted) {
 /* prng_successor
  * helper used to obscure the keystream during authentication
  */
-uint32_t prng_successor(uint32_t x, uint32_t n) {
+uint32_t prng_successor(uint32_t x, uint32_t n)
+{
     SWAPENDIAN(x);
-    while (n--)
-        x = x >> 1 | (x >> 16 ^ x >> 18 ^ x >> 19 ^ x >> 21) << 31;
+    while (n--) x = x >> 1 | (x >> 16 ^ x >> 18 ^ x >> 19 ^ x >> 21) << 31;
 
     return SWAPENDIAN(x);
 }
 
-int valid_nonce(uint32_t Nt, uint32_t NtEnc, uint32_t Ks1, const uint8_t *parity) {
-    return (
-               (oddparity8((Nt >> 24) & 0xFF) == ((parity[0]) ^ oddparity8((NtEnc >> 24) & 0xFF) ^ BIT(Ks1, 16))) && \
-               (oddparity8((Nt >> 16) & 0xFF) == ((parity[1]) ^ oddparity8((NtEnc >> 16) & 0xFF) ^ BIT(Ks1, 8))) && \
-               (oddparity8((Nt >> 8) & 0xFF) == ((parity[2]) ^ oddparity8((NtEnc >> 8) & 0xFF) ^ BIT(Ks1, 0)))
-           ) ? 1 : 0;
+int valid_nonce(uint32_t Nt, uint32_t NtEnc, uint32_t Ks1, const uint8_t *parity)
+{
+    return ((oddparity8((Nt >> 24) & 0xFF) == ((parity[0]) ^ oddparity8((NtEnc >> 24) & 0xFF) ^ BIT(Ks1, 16)))
+            && (oddparity8((Nt >> 16) & 0xFF) == ((parity[1]) ^ oddparity8((NtEnc >> 16) & 0xFF) ^ BIT(Ks1, 8)))
+            && (oddparity8((Nt >> 8) & 0xFF) == ((parity[2]) ^ oddparity8((NtEnc >> 8) & 0xFF) ^ BIT(Ks1, 0))))
+               ? 1
+               : 0;
 }

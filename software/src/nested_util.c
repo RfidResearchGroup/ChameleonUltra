@@ -1,9 +1,10 @@
+#include <ctype.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <inttypes.h>
-#include <ctype.h>
+
 #include "parity.h"
 
 #if WIN32
@@ -12,17 +13,15 @@
 #include "unistd.h"
 #endif
 
-#include "pthread.h"
 #include "nested_util.h"
+#include "pthread.h"
 
-
-#define MEM_CHUNK               10000
-#define TRY_KEYS                50
-
+#define MEM_CHUNK 10000
+#define TRY_KEYS 50
 
 typedef struct {
-    uint64_t       key;
-    int            count;
+    uint64_t key;
+    int count;
 } countKeys;
 
 typedef struct {
@@ -36,20 +35,19 @@ typedef struct {
     uint32_t endPos;
 } RecPar;
 
-
-inline static int compar_int(const void *a, const void *b) {
+inline static int compar_int(const void *a, const void *b)
+{
     if (*(uint64_t *)b == *(uint64_t *)a) return 0;
-    if (*(uint64_t *)b < * (uint64_t *)a) return 1;
+    if (*(uint64_t *)b < *(uint64_t *)a) return 1;
     return -1;
 }
 
 // Compare countKeys structure
-int compar_special_int(const void *a, const void *b) {
-    return (((countKeys *)b)->count - ((countKeys *)a)->count);
-}
+int compar_special_int(const void *a, const void *b) { return (((countKeys *)b)->count - ((countKeys *)a)->count); }
 
 // keys qsort and unique.
-countKeys *uniqsort(uint64_t *possibleKeys, uint32_t size) {
+countKeys *uniqsort(uint64_t *possibleKeys, uint32_t size)
+{
     unsigned int i, j = 0;
     int count = 0;
     countKeys *our_counts;
@@ -65,7 +63,8 @@ countKeys *uniqsort(uint64_t *possibleKeys, uint32_t size) {
     for (i = 0; i < size; i++) {
         if (possibleKeys[i + 1] == possibleKeys[i]) {
             count++;
-        } else {
+        }
+        else {
             our_counts[j].key = possibleKeys[i];
             our_counts[j].count = count;
             j++;
@@ -77,7 +76,8 @@ countKeys *uniqsort(uint64_t *possibleKeys, uint32_t size) {
 }
 
 // nested decrypt
-static void *nested_revover(void *args) {
+static void *nested_revover(void *args)
+{
     struct Crypto1State *revstate, *revstate_start = NULL;
     uint64_t lfsr = 0;
     uint32_t i, kcount = 0;
@@ -88,7 +88,7 @@ static void *nested_revover(void *args) {
     rp->keyCount = 0;
     rp->keys = NULL;
 
-    //printf("Start pos is %d, End pos is %d\r\n", rp->startPos, rp->endPos);
+    // printf("Start pos is %d, End pos is %d\r\n", rp->startPos, rp->endPos);
 
     for (i = rp->startPos; i < rp->endPos; i++) {
         uint32_t nt_probe = rp->pNK[i].ntp ^ rp->authuid;
@@ -140,18 +140,21 @@ static void *nested_revover(void *args) {
                 printf("Memory allocation error for pk->possibleKeys");
                 rp->keyCount = 0;
                 free(rp->keys);
-            } else {
+            }
+            else {
                 rp->keys = tmp;
             }
         }
-    } else {
+    }
+    else {
         rp->keyCount = 0;
         free(rp->keys);
     }
     return NULL;
 }
 
-uint64_t *nested(NtpKs1 *pNK, uint32_t sizePNK, uint32_t authuid, uint32_t *keyCount) {
+uint64_t *nested(NtpKs1 *pNK, uint32_t sizePNK, uint32_t authuid, uint32_t *keyCount)
+{
 #define THREAD_MAX 4
 
     *keyCount = 0;
@@ -165,7 +168,7 @@ uint64_t *nested(NtpKs1 *pNK, uint32_t sizePNK, uint32_t authuid, uint32_t *keyC
 
     // pthread handle
     pthread_t *threads = calloc(sizePNK, sizeof(pthread_t));
-    if (threads == NULL)  return NULL;
+    if (threads == NULL) return NULL;
 
     // Param
     RecPar *pRPs = calloc(sizePNK, sizeof(RecPar));
@@ -205,11 +208,7 @@ uint64_t *nested(NtpKs1 *pNK, uint32_t sizePNK, uint32_t authuid, uint32_t *keyC
                 if (pRPs[i].keyCount > 0) {
                     // printf("The thread %d recover %d keys.\r\n", i, pRPs[i].keyCount);
                     if (pRPs[i].keys != NULL) {
-                        memcpy(
-                            keys + j,
-                            pRPs[i].keys,
-                            pRPs[i].keyCount * sizeof(uint64_t)
-                        );
+                        memcpy(keys + j, pRPs[i].keys, pRPs[i].keyCount * sizeof(uint64_t));
                         j += pRPs[i].keyCount;
                         free(pRPs[i].keys);
                     }
@@ -231,17 +230,20 @@ uint64_t *nested(NtpKs1 *pNK, uint32_t sizePNK, uint32_t authuid, uint32_t *keyC
                         if (tmp != NULL) {
                             keys = tmp;
                             keys[*keyCount - 1] = ck[i].key;
-                        } else {
+                        }
+                        else {
                             printf("Cannot allocate memory for keys on merge.");
                             free(keys);
                             break;
                         }
                     }
                 }
-            } else {
+            }
+            else {
                 printf("Cannot allocate memory for ck on uniqsort.");
             }
-        } else {
+        }
+        else {
             printf("Cannot allocate memory to merge keys.\r\n");
         }
     }
@@ -250,10 +252,11 @@ uint64_t *nested(NtpKs1 *pNK, uint32_t sizePNK, uint32_t authuid, uint32_t *keyC
 }
 
 // Return 1 if the nonce is invalid else return 0
-uint8_t valid_nonce(uint32_t Nt, uint32_t NtEnc, uint32_t Ks1, uint8_t *parity) {
-    return (
-               (oddparity8((Nt >> 24) & 0xFF) == ((parity[0]) ^ oddparity8((NtEnc >> 24) & 0xFF) ^ BIT(Ks1, 16))) && \
-               (oddparity8((Nt >> 16) & 0xFF) == ((parity[1]) ^ oddparity8((NtEnc >> 16) & 0xFF) ^ BIT(Ks1, 8))) && \
-               (oddparity8((Nt >> 8) & 0xFF) == ((parity[2]) ^ oddparity8((NtEnc >> 8) & 0xFF) ^ BIT(Ks1, 0)))
-           ) ? 1 : 0;
+uint8_t valid_nonce(uint32_t Nt, uint32_t NtEnc, uint32_t Ks1, uint8_t *parity)
+{
+    return ((oddparity8((Nt >> 24) & 0xFF) == ((parity[0]) ^ oddparity8((NtEnc >> 24) & 0xFF) ^ BIT(Ks1, 16)))
+            && (oddparity8((Nt >> 16) & 0xFF) == ((parity[1]) ^ oddparity8((NtEnc >> 16) & 0xFF) ^ BIT(Ks1, 8)))
+            && (oddparity8((Nt >> 8) & 0xFF) == ((parity[2]) ^ oddparity8((NtEnc >> 8) & 0xFF) ^ BIT(Ks1, 0))))
+               ? 1
+               : 0;
 }

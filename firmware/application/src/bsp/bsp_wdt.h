@@ -12,4 +12,4 @@ void bsp_wdt_feed(void);
 }
 #endif
 
-#endif // __BSP_WDT_H__
+#endif  // __BSP_WDT_H__

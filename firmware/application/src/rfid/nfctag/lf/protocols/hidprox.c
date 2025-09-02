@@ -30,7 +30,8 @@ nrf_pwm_sequence_t m_hidprox_pwm_seq = {
     .end_delay = 0,
 };
 
-void decoder_reset(hidprox_codec *d) {
+void decoder_reset(hidprox_codec *d)
+{
     d->sof = 0;
     d->state = STATE_SOF;
     d->raw = 0;
@@ -38,20 +39,23 @@ void decoder_reset(hidprox_codec *d) {
     d->bit = false;
 }
 
-void hidprox_decoder_start(hidprox_codec *d, uint8_t format_hint) {
+void hidprox_decoder_start(hidprox_codec *d, uint8_t format_hint)
+{
     memset(d->data, 0, HIDPROX_DATA_SIZE);
     decoder_reset(d);
     d->format_hint = format_hint;
 }
 
-hidprox_codec *hidprox_codec_alloc(void) {
+hidprox_codec *hidprox_codec_alloc(void)
+{
     hidprox_codec *d = malloc(sizeof(hidprox_codec));
     d->card = NULL;
     d->modem = fsk_alloc();
     return d;
 }
 
-void hidprox_codec_free(hidprox_codec *d) {
+void hidprox_codec_free(hidprox_codec *d)
+{
     if (d->modem) {
         fsk_free(d->modem);
         d->modem = NULL;
@@ -63,8 +67,10 @@ void hidprox_codec_free(hidprox_codec *d) {
     free(d);
 }
 
-// ref: https://github.com/RfidResearchGroup/proxmark3/blob/810eaeac250f35eca8819aa9c23cb57c5276b3e6/client/src/wiegand_formatutils.c#L131
-static uint8_t hidprox_codec_get_length(hidprox_codec *d) {
+// ref:
+// https://github.com/RfidResearchGroup/proxmark3/blob/810eaeac250f35eca8819aa9c23cb57c5276b3e6/client/src/wiegand_formatutils.c#L131
+static uint8_t hidprox_codec_get_length(hidprox_codec *d)
+{
     //! TODO direct XOR check
     if (!(d->raw >> 37) && 0x01) {
         return 37;
@@ -78,7 +84,8 @@ static uint8_t hidprox_codec_get_length(hidprox_codec *d) {
     return length;
 }
 
-uint8_t *hidprox_get_data(hidprox_codec *d) {
+uint8_t *hidprox_get_data(hidprox_codec *d)
+{
     if (d->card == NULL) {
         return d->data;
     }
@@ -91,7 +98,8 @@ uint8_t *hidprox_get_data(hidprox_codec *d) {
     return d->data;
 };
 
-bool hidprox_decode_feed(hidprox_codec *d, bool bit) {
+bool hidprox_decode_feed(hidprox_codec *d, bool bit)
+{
     if (d->state == STATE_SOF) {
         d->sof <<= 1;
         if (bit) {
@@ -141,7 +149,8 @@ bool hidprox_decode_feed(hidprox_codec *d, bool bit) {
     return false;
 }
 
-bool hidprox_decoder_feed(hidprox_codec *d, uint16_t val) {
+bool hidprox_decoder_feed(hidprox_codec *d, uint16_t val)
+{
     bool bit = false;
     if (!fsk_feed(d->modem, val, &bit)) {
         return false;
@@ -149,7 +158,8 @@ bool hidprox_decoder_feed(hidprox_codec *d, uint16_t val) {
     return hidprox_decode_feed(d, bit);
 }
 
-void hidprox_raw_data(wiegand_card_t *card, uint32_t *hi, uint32_t *mid, uint32_t *bot) {
+void hidprox_raw_data(wiegand_card_t *card, uint32_t *hi, uint32_t *mid, uint32_t *bot)
+{
     *hi = 0;
     *mid = 0;
     *bot = 0;
@@ -162,22 +172,26 @@ void hidprox_raw_data(wiegand_card_t *card, uint32_t *hi, uint32_t *mid, uint32_
         uint32_t *blk;
         if (i < 12) {
             blk = hi;
-        } else if (i < 28) {
+        }
+        else if (i < 28) {
             blk = mid;
-        } else {
+        }
+        else {
             blk = bot;
         }
         *blk <<= 2;
         if ((data >> (43 - i)) & 0x01) {
             *blk |= 0x02;
-        } else {
+        }
+        else {
             *blk |= 0x01;
         }
     }
 }
 
 // fsk2a modulator
-const nrf_pwm_sequence_t *hidprox_modulator(hidprox_codec *d, uint8_t *buf) {
+const nrf_pwm_sequence_t *hidprox_modulator(hidprox_codec *d, uint8_t *buf)
+{
     uint64_t cn = buf[5];
     cn = (cn << 32) | (bytes_to_num(buf + 6, 4));
     wiegand_card_t card = {
@@ -195,9 +209,11 @@ const nrf_pwm_sequence_t *hidprox_modulator(hidprox_codec *d, uint8_t *buf) {
         bool bit = false;
         if (i < 32) {
             bit = (hi >> (31 - i)) & 1;
-        } else if (i < 64) {
+        }
+        else if (i < 64) {
             bit = (mid >> (63 - i)) & 1;
-        } else {
+        }
+        else {
             bit = (bot >> (95 - i)) & 1;
         }
         if (!bit) {
@@ -206,7 +222,8 @@ const nrf_pwm_sequence_t *hidprox_modulator(hidprox_codec *d, uint8_t *buf) {
                 m_hidprox_pwm_seq_vals[k].counter_top = LF_FSK2a_PWM_HI_FREQ_TOP_VALUE;
                 k++;
             }
-        } else {
+        }
+        else {
             for (int j = 0; j < LF_FSK2a_PWM_LO_FREQ_LOOP; j++) {
                 m_hidprox_pwm_seq_vals[k].channel_0 = LF_FSK2a_PWM_LO_FREQ_TOP_VALUE / 2;
                 m_hidprox_pwm_seq_vals[k].counter_top = LF_FSK2a_PWM_LO_FREQ_TOP_VALUE;
@@ -232,7 +249,8 @@ const protocol hidprox = {
         },
 };
 
-uint8_t hidprox_t55xx_writer(wiegand_card_t *card, uint32_t *blks) {
+uint8_t hidprox_t55xx_writer(wiegand_card_t *card, uint32_t *blks)
+{
     blks[0] = T5577_HIDPROX_CONFIG;
     hidprox_raw_data(card, &blks[1], &blks[2], &blks[3]);
     return HIDPROX_T55XX_BLOCK_COUNT;

@@ -17,7 +17,8 @@
 //-----------------------------------------------------------------------------
 #include "commonutil.h"
 
-uint64_t bytes_to_num(uint8_t *src, size_t len) {
+uint64_t bytes_to_num(uint8_t *src, size_t len)
+{
     uint64_t num = 0;
     while (len--) {
         num = (num << 8) | (*src);

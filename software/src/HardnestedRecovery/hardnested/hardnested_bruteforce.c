@@ -48,38 +48,40 @@ THE SOFTWARE.
 */
 
 #include "hardnested_bruteforce.h"
+
 #include <inttypes.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <pthread.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 
-#include "hardnested_bf_core.h"
-#include "../pm3/ui.h"
-#include "../pm3/util_posix.h"
+#include "../cmdhfmfhard.h"
 #include "../crapto1.h"
 #include "../parity.h"
-#include "../cmdhfmfhard.h"
+#include "../pm3/ui.h"
+#include "../pm3/util_posix.h"
 #include "hardnested_benchmark_data.h"
+#include "hardnested_bf_core.h"
 
-#define NUM_BRUTE_FORCE_THREADS         (num_CPUs())
+#define NUM_BRUTE_FORCE_THREADS (num_CPUs())
 #ifdef _WIN32
-#define NUM_BRUTE_FORCE_THREADS_ALLOC   128
+#define NUM_BRUTE_FORCE_THREADS_ALLOC 128
 #else
-#define NUM_BRUTE_FORCE_THREADS_ALLOC   (num_CPUs())
+#define NUM_BRUTE_FORCE_THREADS_ALLOC (num_CPUs())
 #endif
-#define DEFAULT_BRUTE_FORCE_RATE        (120000000.0) // if benchmark doesn't succeed
-#define TEST_BENCH_SIZE                 (6000)        // number of odd and even states for brute force benchmark
+#define DEFAULT_BRUTE_FORCE_RATE (120000000.0)  // if benchmark doesn't succeed
+#define TEST_BENCH_SIZE (6000)                  // number of odd and even states for brute force benchmark
 
 #ifdef _MSC_VER
 #include <Windows.h>
-#include <share.h>
-#include <io.h>
 #include <fcntl.h>
+#include <io.h>
+#include <share.h>
 #include <sys/stat.h>
 #define atomic_add(num, val) (InterlockedExchangeAdd64(num, val) + val)
-FILE *fmemopen(void *buf, size_t len, const char *type) {
+FILE *fmemopen(void *buf, size_t len, const char *type)
+{
     int fd;
     FILE *fp;
     char tp[MAX_PATH - 13];
@@ -87,41 +89,36 @@ FILE *fmemopen(void *buf, size_t len, const char *type) {
     int *pfd = &fd;
     int retner = -1;
     char tfname[] = "MemTF_";
-    if (!GetTempPathA(sizeof(tp), tp))
-        return NULL;
-    if (!GetTempFileNameA(tp, tfname, 0, fn))
-        return NULL;
-    retner = _sopen_s(pfd, fn, _O_CREAT | _O_SHORT_LIVED | _O_TEMPORARY | _O_RDWR | _O_BINARY | _O_NOINHERIT, _SH_DENYRW, _S_IREAD | _S_IWRITE);
-    if (retner != 0)
-        return NULL;
-    if (fd == -1)
-        return NULL;
+    if (!GetTempPathA(sizeof(tp), tp)) return NULL;
+    if (!GetTempFileNameA(tp, tfname, 0, fn)) return NULL;
+    retner = _sopen_s(pfd, fn, _O_CREAT | _O_SHORT_LIVED | _O_TEMPORARY | _O_RDWR | _O_BINARY | _O_NOINHERIT,
+                      _SH_DENYRW, _S_IREAD | _S_IWRITE);
+    if (retner != 0) return NULL;
+    if (fd == -1) return NULL;
     fp = _fdopen(fd, "wb+");
     if (!fp) {
         _close(fd);
         return NULL;
     }
-    /*File descriptors passed into _fdopen are owned by the returned FILE * stream.If _fdopen is successful, do not call _close on the file descriptor.Calling fclose on the returned FILE * also closes the file descriptor.*/
+    /*File descriptors passed into _fdopen are owned by the returned FILE * stream.If _fdopen is successful, do not call
+     * _close on the file descriptor.Calling fclose on the returned FILE * also closes the file descriptor.*/
     fwrite(buf, len, 1, fp);
     rewind(fp);
     return fp;
 }
 #else
 #define atomic_add __sync_fetch_and_add
-#ifdef _WIN32 // Non-MSVC Windows (MinGW, etc.)
+#ifdef _WIN32  // Non-MSVC Windows (MinGW, etc.)
 // Include the compatibility header provided via CMake
 #include "../../compat/fmemopen/libfmemopen.h"
-#endif // _WIN32 (Non-MSVC)
+#endif  // _WIN32 (Non-MSVC)
 
 #endif
 // debugging options
-#define DEBUG_KEY_ELIMINATION           1
+#define DEBUG_KEY_ELIMINATION 1
 // #define DEBUG_BRUTE_FORCE
 
-typedef enum {
-    EVEN_STATE = 0,
-    ODD_STATE = 1
-} odd_even_t;
+typedef enum { EVEN_STATE = 0, ODD_STATE = 1 } odd_even_t;
 
 static uint32_t nonces_to_bruteforce = 0;
 static uint32_t bf_test_nonce[256];
@@ -133,31 +130,22 @@ static uint32_t keys_found = 0;
 static uint64_t num_keys_tested;
 static uint64_t found_bs_key = 0;
 
-uint8_t trailing_zeros(uint8_t byte) {
+uint8_t trailing_zeros(uint8_t byte)
+{
     static const uint8_t trailing_zeros_LUT[256] = {
-        8, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        6, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        7, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        6, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0
-    };
+        8, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 5, 0, 1, 0, 2,
+        0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 6, 0, 1, 0, 2, 0, 1, 0, 3, 0,
+        1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1,
+        0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 7, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0,
+        2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3,
+        0, 1, 0, 2, 0, 1, 0, 6, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0,
+        1, 0, 5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0};
 
     return trailing_zeros_LUT[byte];
 }
 
-
-bool verify_key(uint32_t cuid, noncelist_t *nonces, const uint8_t *best_first_bytes, uint32_t odd, uint32_t even) {
+bool verify_key(uint32_t cuid, noncelist_t *nonces, const uint8_t *best_first_bytes, uint32_t odd, uint32_t even)
+{
     struct Crypto1State pcs;
     if (best_first_bytes == NULL) {
         return false;
@@ -169,11 +157,13 @@ bool verify_key(uint32_t cuid, noncelist_t *nonces, const uint8_t *best_first_by
             pcs.even = even;
             lfsr_rollback_byte(&pcs, (cuid >> 24) ^ best_first_bytes[0], true);
             for (int8_t byte_pos = 3; byte_pos >= 0; byte_pos--) {
-                uint8_t test_par_enc_bit = (test_nonce->par_enc >> byte_pos) & 0x01;     // the encoded parity bit
-                uint8_t test_byte_enc = (test_nonce->nonce_enc >> (8 * byte_pos)) & 0xff; // the encoded nonce byte
-                uint8_t test_byte_dec = crypto1_byte(&pcs, test_byte_enc /* ^ (cuid >> (8*byte_pos)) */, true) ^ test_byte_enc; // decode the nonce byte
-                uint8_t ks_par = filter(pcs.odd);                                        // the keystream bit to encode/decode the parity bit
-                uint8_t test_par_enc2 = ks_par ^ evenparity8(test_byte_dec);             // determine the decoded byte's parity and encode it
+                uint8_t test_par_enc_bit = (test_nonce->par_enc >> byte_pos) & 0x01;       // the encoded parity bit
+                uint8_t test_byte_enc = (test_nonce->nonce_enc >> (8 * byte_pos)) & 0xff;  // the encoded nonce byte
+                uint8_t test_byte_dec = crypto1_byte(&pcs, test_byte_enc /* ^ (cuid >> (8*byte_pos)) */, true)
+                                        ^ test_byte_enc;  // decode the nonce byte
+                uint8_t ks_par = filter(pcs.odd);         // the keystream bit to encode/decode the parity bit
+                uint8_t test_par_enc2
+                    = ks_par ^ evenparity8(test_byte_dec);  // determine the decoded byte's parity and encode it
                 if (test_par_enc_bit != test_par_enc2) {
                     return false;
                 }
@@ -186,10 +176,11 @@ bool verify_key(uint32_t cuid, noncelist_t *nonces, const uint8_t *best_first_by
 static void *
 #ifdef __has_attribute
 #if __has_attribute(force_align_arg_pointer)
-__attribute__((force_align_arg_pointer))
+    __attribute__((force_align_arg_pointer))
 #endif
 #endif
-crack_states_thread(void *x) {
+    crack_states_thread(void *x)
+{
     struct arg {
         bool silent;
         int thread_ID;
@@ -198,7 +189,7 @@ crack_states_thread(void *x) {
         uint64_t maximum_states;
         noncelist_t *nonces;
         uint8_t *best_first_bytes;
-    } *thread_arg;
+    } * thread_arg;
 
     thread_arg = (struct arg *)x;
     const int thread_id = thread_arg->thread_ID;
@@ -206,10 +197,13 @@ crack_states_thread(void *x) {
     while (current_bucket < bucket_count) {
         statelist_t *bucket = buckets[current_bucket];
         if (bucket) {
-#if defined (DEBUG_BRUTE_FORCE)
-            PrintAndLogEx(INFO, "Thread " _YELLOW_("%u") " starts working on bucket " _YELLOW_("%u") "\n", thread_id, current_bucket);
+#if defined(DEBUG_BRUTE_FORCE)
+            PrintAndLogEx(INFO, "Thread " _YELLOW_("%u") " starts working on bucket " _YELLOW_("%u") "\n", thread_id,
+                          current_bucket);
 #endif
-            const uint64_t key = crack_states_bitsliced(thread_arg->cuid, thread_arg->best_first_bytes, bucket, &keys_found, &num_keys_tested, nonces_to_bruteforce, bf_test_nonce_2nd_byte, thread_arg->nonces);
+            const uint64_t key = crack_states_bitsliced(thread_arg->cuid, thread_arg->best_first_bytes, bucket,
+                                                        &keys_found, &num_keys_tested, nonces_to_bruteforce,
+                                                        bf_test_nonce_2nd_byte, thread_arg->nonces);
             if (key != -1) {
                 atomic_add(&keys_found, 1);
                 atomic_add(&found_bs_key, key);
@@ -217,17 +211,24 @@ crack_states_thread(void *x) {
                 char progress_text[80];
                 char keystr[19];
                 snprintf(keystr, sizeof(keystr), "%012" PRIX64 "  ", key);
-                snprintf(progress_text, sizeof(progress_text), "Brute force phase completed.  Key found: " _GREEN_("%s"), keystr);
+                snprintf(progress_text, sizeof(progress_text),
+                         "Brute force phase completed.  Key found: " _GREEN_("%s"), keystr);
                 hardnested_print_progress(thread_arg->num_acquired_nonces, progress_text, 0.0, 0);
                 break;
-            } else if (keys_found) {
+            }
+            else if (keys_found) {
                 break;
-            } else {
+            }
+            else {
                 if (!thread_arg->silent) {
                     char progress_text[80];
-                    snprintf(progress_text, sizeof(progress_text), "Brute force phase: %6.02f%%", 100.0 * (float)num_keys_tested / (float)(thread_arg->maximum_states));
-                    float remaining_bruteforce = thread_arg->nonces[thread_arg->best_first_bytes[0]].expected_num_brute_force - (float)num_keys_tested / 2;
-                    hardnested_print_progress(thread_arg->num_acquired_nonces, progress_text, remaining_bruteforce, 5000);
+                    snprintf(progress_text, sizeof(progress_text), "Brute force phase: %6.02f%%",
+                             100.0 * (float)num_keys_tested / (float)(thread_arg->maximum_states));
+                    float remaining_bruteforce
+                        = thread_arg->nonces[thread_arg->best_first_bytes[0]].expected_num_brute_force
+                          - (float)num_keys_tested / 2;
+                    hardnested_print_progress(thread_arg->num_acquired_nonces, progress_text, remaining_bruteforce,
+                                              5000);
                 }
             }
         }
@@ -236,8 +237,8 @@ crack_states_thread(void *x) {
     return NULL;
 }
 
-
-void prepare_bf_test_nonces(noncelist_t *nonces, uint8_t best_first_byte) {
+void prepare_bf_test_nonces(noncelist_t *nonces, uint8_t best_first_byte)
+{
     // we do bitsliced brute forcing with best_first_bytes[0] only.
     // Extract the corresponding 2nd bytes
     noncelistentry_t *test_nonce = nonces[best_first_byte].first;
@@ -264,17 +265,21 @@ void prepare_bf_test_nonces(noncelist_t *nonces, uint8_t best_first_byte) {
             if (n2 != n1) {
                 for (uint32_t n3 = 0; n3 < nonces_to_bruteforce; n3++) {
                     if ((n3 != n2 && n3 != n1) || nonces_to_bruteforce < 3
-                            // && trailing_zeros(bf_test_nonce_2nd_byte[n1] ^ bf_test_nonce_2nd_byte[n2])
-                            // > trailing_zeros(bf_test_nonce_2nd_byte[n2] ^ bf_test_nonce_2nd_byte[n3])
-                       ) {
+                        // && trailing_zeros(bf_test_nonce_2nd_byte[n1] ^ bf_test_nonce_2nd_byte[n2])
+                        // > trailing_zeros(bf_test_nonce_2nd_byte[n2] ^ bf_test_nonce_2nd_byte[n3])
+                    ) {
                         for (uint32_t n4 = 0; n4 < nonces_to_bruteforce; n4++) {
                             if ((n4 != n3 && n4 != n2 && n4 != n1) || nonces_to_bruteforce < 4
-                                    // && trailing_zeros(bf_test_nonce_2nd_byte[n2] ^ bf_test_nonce_2nd_byte[n3])
-                                    // > trailing_zeros(bf_test_nonce_2nd_byte[n3] ^ bf_test_nonce_2nd_byte[n4])
-                               ) {
-                                int sum = nonces_to_bruteforce > 1 ? trailing_zeros(bf_test_nonce_2nd_byte[n1] ^ bf_test_nonce_2nd_byte[n2]) : 0.0
-                                          + nonces_to_bruteforce > 2 ? trailing_zeros(bf_test_nonce_2nd_byte[n2] ^ bf_test_nonce_2nd_byte[n3]) : 0.0
-                                          + nonces_to_bruteforce > 3 ? trailing_zeros(bf_test_nonce_2nd_byte[n3] ^ bf_test_nonce_2nd_byte[n4]) : 0.0;
+                                // && trailing_zeros(bf_test_nonce_2nd_byte[n2] ^ bf_test_nonce_2nd_byte[n3])
+                                // > trailing_zeros(bf_test_nonce_2nd_byte[n3] ^ bf_test_nonce_2nd_byte[n4])
+                            ) {
+                                int sum = nonces_to_bruteforce > 1
+                                              ? trailing_zeros(bf_test_nonce_2nd_byte[n1] ^ bf_test_nonce_2nd_byte[n2])
+                                          : 0.0 + nonces_to_bruteforce > 2
+                                              ? trailing_zeros(bf_test_nonce_2nd_byte[n2] ^ bf_test_nonce_2nd_byte[n3])
+                                          : 0.0 + nonces_to_bruteforce > 3
+                                              ? trailing_zeros(bf_test_nonce_2nd_byte[n3] ^ bf_test_nonce_2nd_byte[n4])
+                                              : 0.0;
                                 if (sum > sum_best) {
                                     sum_best = sum;
                                     best_4[0] = n1;
@@ -306,8 +311,10 @@ void prepare_bf_test_nonces(noncelist_t *nonces, uint8_t best_first_byte) {
     }
 }
 
-bool brute_force_bs(float *bf_rate, statelist_t *candidates, uint32_t cuid, uint32_t num_acquired_nonces, uint64_t maximum_states, noncelist_t *nonces, uint8_t *best_first_bytes, uint64_t *found_key) {
-#if defined (WRITE_BENCH_FILE)
+bool brute_force_bs(float *bf_rate, statelist_t *candidates, uint32_t cuid, uint32_t num_acquired_nonces,
+                    uint64_t maximum_states, noncelist_t *nonces, uint8_t *best_first_bytes, uint64_t *found_key)
+{
+#if defined(WRITE_BENCH_FILE)
     write_benchfile(candidates);
 #endif
     bool silent = (bf_rate != NULL);
@@ -329,9 +336,8 @@ bool brute_force_bs(float *bf_rate, statelist_t *candidates, uint32_t cuid, uint
 
     uint64_t start_time = msclock();
 
-#if defined(__linux__) ||  defined(__APPLE__)
-    if (NUM_BRUTE_FORCE_THREADS < 0)
-        return false;
+#if defined(__linux__) || defined(__APPLE__)
+    if (NUM_BRUTE_FORCE_THREADS < 0) return false;
 #endif
 
     pthread_t threads[NUM_BRUTE_FORCE_THREADS_ALLOC];
@@ -361,23 +367,22 @@ bool brute_force_bs(float *bf_rate, statelist_t *candidates, uint32_t cuid, uint
 
     uint64_t elapsed_time = msclock() - start_time;
 
-    if (bf_rate != NULL)
-        *bf_rate = (float)num_keys_tested / ((float)elapsed_time / 1000.0);
+    if (bf_rate != NULL) *bf_rate = (float)num_keys_tested / ((float)elapsed_time / 1000.0);
 
-    if (keys_found > 0)
-        *found_key = found_bs_key;
+    if (keys_found > 0) *found_key = found_bs_key;
 
     return (keys_found != 0);
 }
 
-
-static bool read_bench_data(statelist_t *test_candidates) {
+static bool read_bench_data(statelist_t *test_candidates)
+{
     size_t bytes_read = 0;
     uint32_t temp = 0;
     uint32_t num_states = 0;
     uint32_t states_read = 0;
 
-    FILE *benchfile = fmemopen(client_resources_hardnested_bf_bench_data_bin, client_resources_hardnested_bf_bench_data_bin_len, "rb");
+    FILE *benchfile = fmemopen(client_resources_hardnested_bf_bench_data_bin,
+                               client_resources_hardnested_bf_bench_data_bin_len, "rb");
     if (benchfile == NULL) {
         return false;
     }
@@ -436,8 +441,8 @@ static bool read_bench_data(statelist_t *test_candidates) {
     return true;
 }
 
-
-float brute_force_benchmark(void) {
+float brute_force_benchmark(void)
+{
     statelist_t test_candidates[NUM_BRUTE_FORCE_THREADS_ALLOC];
 
     test_candidates[0].states[ODD_STATE] = calloc(1, (TEST_BENCH_SIZE + 1) * sizeof(uint32_t));
@@ -472,5 +477,3 @@ float brute_force_benchmark(void) {
     test_candidates[0].len[EVEN_STATE] = 0;
     return bf_rate;
 }
-
-
