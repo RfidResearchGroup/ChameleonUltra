@@ -488,6 +488,35 @@ static data_frame_tx_t *cmd_processor_mf1_write_one_block(uint16_t cmd, uint16_t
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+#if defined(PROJECT_CHAMELEON_ULTRA)
+
+static data_frame_tx_t *cmd_processor_hf14a_set_field_on(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    device_mode_t mode = get_device_mode();
+    if (mode != DEVICE_MODE_READER) {
+        return data_frame_make(cmd, STATUS_DEVICE_MODE_ERROR, 0, NULL);
+    }
+    
+    // Reset and turn on the antenna
+    pcd_14a_reader_reset();
+    pcd_14a_reader_antenna_on();
+    
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_hf14a_set_field_off(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    device_mode_t mode = get_device_mode();
+    if (mode != DEVICE_MODE_READER) {
+        return data_frame_make(cmd, STATUS_DEVICE_MODE_ERROR, 0, NULL);
+    }
+    
+    // Turn off the antenna
+    pcd_14a_reader_antenna_off();
+    
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+#endif
+
 static data_frame_tx_t *cmd_processor_hf14a_raw(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     // Response Buffer
     uint8_t resp[DEF_FIFO_LENGTH] = { 0x00 };
@@ -1577,6 +1606,9 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_HIDPROX_WRITE_TO_T55XX,       before_reader_run,           cmd_processor_hidprox_write_to_t55xx,        NULL                   },
     {    DATA_CMD_VIKING_SCAN,                  before_reader_run,           cmd_processor_viking_scan,                   NULL                   },
     {    DATA_CMD_VIKING_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_viking_write_to_t55xx,         NULL                   },
+
+    {    DATA_CMD_HF14A_SET_FIELD_ON,           before_reader_run,           cmd_processor_hf14a_set_field_on,            NULL                   },
+    {    DATA_CMD_HF14A_SET_FIELD_OFF,          before_reader_run,           cmd_processor_hf14a_set_field_off,           NULL                   },
 
 #endif
 
