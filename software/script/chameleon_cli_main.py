@@ -10,7 +10,7 @@ import pathlib
 import prompt_toolkit
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.history import FileHistory
-from chameleon_utils import CR, CG, CY, C0
+from chameleon_utils import CR, CG, CY, color_string
 
 ULTRA = r"""
                                                                 ╦ ╦╦ ╔╦╗╦═╗╔═╗
@@ -68,10 +68,12 @@ class ChameleonCLI:
 
         :return: current cmd prompt
         """
-        device_string = f"{CG}USB" if self.device_com.isOpen(
-        ) else f"{CR}Offline"
-        status = f"[{device_string}{C0}] chameleon --> "
-        return status
+        if device_com.isOpen():
+            status = color_string((CG, 'USB'))
+        else:
+            status = color_string((CR, 'Offline'))
+
+        return ANSI(f"[{status}] chameleon --> ")
 
     @staticmethod
     def print_banner():
@@ -80,7 +82,7 @@ class ChameleonCLI:
 
         :return:
         """
-        print(f"{CY}{BANNER}{C0}")
+        print(color_string((CY, BANNER)))
 
     def exec_cmd(self, cmd_str):
         if cmd_str == '':
@@ -102,7 +104,7 @@ class ChameleonCLI:
             # Found tree node is a group without an implementation, print children
             print("".ljust(18, "-") + "".ljust(10) + "".ljust(30, "-"))
             for child in tree_node.children:
-                cmd_title = f"{CG}{child.name}{C0}"
+                cmd_title = color_string((CG, child.name))
                 if not child.cls:
                     help_line = (f" - {cmd_title}".ljust(37)) + f"{{ {child.help_text}... }}"
                 else:
@@ -123,7 +125,7 @@ class ChameleonCLI:
                 return
         except chameleon_utils.ArgsParserError as e:
             args.print_help()
-            print(f'{CY}'+str(e).strip()+f'{C0}', end="\n\n")
+            print(color_string((CY, str(e).strip())))
             return
         except chameleon_utils.ParserExitIntercept:
             # don't exit process.
@@ -144,10 +146,9 @@ class ChameleonCLI:
                 raise error
 
         except (chameleon_utils.UnexpectedResponseError, chameleon_utils.ArgsParserError) as e:
-            print(f"{CR}{str(e)}{C0}")
+            print(color_string((CR, str(e))))
         except Exception:
-            print(
-                f"CLI exception: {CR}{traceback.format_exc()}{C0}")
+            print(f"CLI exception: {color_string((CR, traceback.format_exc()))}")
 
     def startCLI(self):
         """
@@ -169,7 +170,7 @@ class ChameleonCLI:
                 # wait user input
                 try:
                     cmd_str = self.session.prompt(
-                        ANSI(self.get_prompt())).strip()
+                        self.get_prompt()).strip()
                     cmd_strs = cmd_str.replace(
                         "\r\n", "\n").replace("\r", "\n").split("\n")
                     cmd_str = cmd_strs.pop(0)
