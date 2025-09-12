@@ -26,6 +26,8 @@ typedef enum {
     // Read the UID card number immediately after pressing, continue searching, and simulate immediately after reading the card
     SettingsButtonCloneIcUid = 3U,
     SettingsButtonShowBattery = 4U,
+    // Toggle NFC field generator on/off (Ultra only, must be in reader mode)
+    SettingsButtonNfcFieldGenerator = 5U,
 } settings_button_function_t;
 
 typedef struct ALIGN_U32 {

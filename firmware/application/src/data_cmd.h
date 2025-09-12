@@ -73,6 +73,9 @@
 #define DATA_CMD_MF1_ENC_NESTED_ACQUIRE         (2014)
 #define DATA_CMD_MF1_CHECK_KEYS_ON_BLOCK        (2015)
 
+#define DATA_CMD_HF14A_SET_FIELD_ON             (2100)
+#define DATA_CMD_HF14A_SET_FIELD_OFF            (2101)
+
 //
 // ******************************************************************
 

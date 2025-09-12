@@ -2,11 +2,11 @@
 #include "rfid_main.h"
 #include "rgb_marquee.h"
 
-
-
 //The current mode of the device
 device_mode_t rfid_state = DEVICE_MODE_NONE;
 
+// External declaration for field state
+extern bool m_is_field_on;
 
 /**
  * @brief Function for enter tag reader mode
@@ -42,6 +42,12 @@ void tag_mode_enter(void) {
         rfid_state = DEVICE_MODE_TAG;
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
+        // Safety check: turn off field if it's on
+        if (m_is_field_on) {
+            pcd_14a_reader_antenna_off();
+            m_is_field_on = false;
+        }
+        
         // uninit reader
         lf_125khz_radio_uninit();
         pcd_14a_reader_uninit();

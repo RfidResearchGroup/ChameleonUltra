@@ -41,6 +41,10 @@ NRF_LOG_MODULE_REGISTER();
 #include "tag_persistence.h"
 #include "settings.h"
 
+#if defined(PROJECT_CHAMELEON_ULTRA)
+#include "rc522.h"
+#endif
+
 // Defining soft timers
 APP_TIMER_DEF(m_button_check_timer); // Timer for button debounce
 
@@ -55,6 +59,9 @@ static bool m_is_b_btn_release = false;
 static bool m_is_a_btn_release = false;
 
 static bool m_system_off_processing = false;
+
+// NFC field generator state
+volatile bool m_is_field_on = false;  
 
 // cpu reset reason
 static uint32_t m_reset_source;
@@ -139,12 +146,41 @@ static void gpio_te_init(void) {
     APP_ERROR_CHECK(err_code);
 }
 
+#if defined(PROJECT_CHAMELEON_ULTRA)
+static void field_generator_rainbow_loop(void) {
+    static uint8_t color_index = 0;
+    static uint32_t last_update = 0;
+    
+    if (!m_is_field_on) return;
+    
+    uint32_t now = app_timer_cnt_get();
+    
+    if (app_timer_cnt_diff_compute(now, last_update) < APP_TIMER_TICKS(100)) {
+        return;
+    }
+    last_update = now;
+    
+    // Rainbow colors
+    const uint8_t colors[] = {RGB_RED, RGB_YELLOW, RGB_GREEN, RGB_CYAN, RGB_BLUE, RGB_MAGENTA};
+    
+    set_slot_light_color(colors[color_index]);
+    uint32_t *led_pins = hw_get_led_array();
+    
+    // Light up all LEDs with current color
+    for (int i = 0; i < RGB_LIST_NUM; i++) {
+        nrf_gpio_pin_set(led_pins[i]);
+    }
+    
+    color_index = (color_index + 1) % 6;
+}
+#endif
+
 /**@brief Button Matrix Events
  */
 static void button_pin_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action) {
     device_mode_t mode = get_device_mode();
-    // Temporarily allow only the analog card mode to respond to button operations
-    if (mode == DEVICE_MODE_TAG) {
+    // Allow button operations in both tag and reader mode
+    if (mode == DEVICE_MODE_TAG || mode == DEVICE_MODE_READER) {
         static nrf_drv_gpiote_pin_t pin_static;                                  // Use static internal variables to store the GPIO where the current event occurred
         pin_static = pin;                                                        // Cache the button that currently triggers the event into an internal variable
         app_timer_start(m_button_check_timer, APP_TIMER_TICKS(50), &pin_static); // Start timer anti-shake
@@ -162,7 +198,9 @@ static void timer_button_event_handle(void *arg) {
         NRF_LOG_INFO("BUTTON press during shutdown");
         return;
     }
+    
     nrf_drv_gpiote_pin_t pin = *(nrf_drv_gpiote_pin_t *)arg;
+    
     // Check here if the current GPIO is at the pressed level
     if (nrf_gpio_pin_read(pin) == 1) {
         if (pin == BUTTON_1) {
@@ -757,13 +795,67 @@ static void run_button_function_by_settings(settings_button_function_t sbf) {
         case SettingsButtonCloneIcUid:
             btn_fn_copy_ic_uid();
             break;
+        case SettingsButtonNfcFieldGenerator:
+            if (!m_is_field_on) {
+                // Initialize reader hardware if not already in reader mode
+                device_mode_t current_mode = get_device_mode();
+                if (current_mode != DEVICE_MODE_READER) {
+                    // Temporarily init reader hardware just for the field
+                    nrf_gpio_cfg_output(READER_POWER);
+                    nrf_gpio_pin_set(READER_POWER);     // reader power enable
+                    nrf_gpio_cfg_output(HF_ANT_SEL);
+                    nrf_gpio_pin_clear(HF_ANT_SEL);     // hf ant switch to reader mode
+                    
+                    pcd_14a_reader_init();
+                    bsp_delay_ms(10);
+                }
+                
+                pcd_14a_reader_reset();
+                pcd_14a_reader_antenna_on();
+                m_is_field_on = true;
+                NRF_LOG_INFO("NFC field ON");
+                
+                // Set initial rainbow state
+                set_slot_light_color(RGB_RED);
+                uint32_t *led_pins = hw_get_led_array();
+                for (int i = 0; i < RGB_LIST_NUM; i++) {
+                    nrf_gpio_pin_set(led_pins[i]);
+                }
+
+                // Stop sleep timer while field is active
+                NRF_LOG_INFO("Stopping sleep timer for field generator");
+                sleep_timer_stop();
+                NRF_LOG_INFO("Sleep timer stopped");
+            } else {
+                pcd_14a_reader_antenna_off();
+                m_is_field_on = false;
+                NRF_LOG_INFO("NFC field OFF");
+                
+                // If we're not in reader mode, clean up the hardware
+                device_mode_t current_mode = get_device_mode();
+                if (current_mode != DEVICE_MODE_READER) {
+                    pcd_14a_reader_uninit();
+                    nrf_gpio_pin_clear(READER_POWER);   // reader power disable
+                    nrf_gpio_pin_set(HF_ANT_SEL);       // hf ant switch back to tag mode
+                }
+                
+                // Restore normal LED
+                light_up_by_slot();
+
+                // Restart sleep timer
+                NRF_LOG_INFO("Field off, restarting sleep timer");
+                sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
+                NRF_LOG_INFO("Sleep timer restarted");
+            }
+            break;
 #endif
 
         case SettingsButtonShowBattery:
             show_battery();
+            break;
 
         default:
-            NRF_LOG_ERROR("Unsupported button function")
+            NRF_LOG_ERROR("Unsupported button function");
             break;
     }
 }
@@ -792,8 +884,10 @@ static void button_press_process(void) {
         }
         // Disable led marquee for usb at button pressed.
         g_usb_led_marquee_enable = false;
-        // Re-delay into hibernation
-        sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
+        // Re-delay into hibernation (unless field is on)
+        if (!m_is_field_on) {
+            sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
+        }
     }
 }
 
@@ -887,8 +981,17 @@ int main(void) {
         lesc_event_process();
         // Button event process
         button_press_process();
-        // Led blink at usb status
-        blink_usb_led_status();
+        
+#if defined(PROJECT_CHAMELEON_ULTRA)
+        // Field generator rainbow animation
+        field_generator_rainbow_loop();
+#endif
+        
+        // Led blink at usb status (only if field generator is off)
+        if (!m_is_field_on) {
+            blink_usb_led_status();
+        }
+        
         // Data pack process
         data_frame_process();
         // Log print process

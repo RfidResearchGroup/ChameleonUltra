@@ -533,6 +533,7 @@ class ButtonPressFunction(enum.IntEnum):
     PREVSLOT = 2
     CLONE = 3
     BATTERY = 4
+    FIELDGEN = 5
 
     def __str__(self):
         if self == ButtonPressFunction.NONE:
@@ -545,8 +546,9 @@ class ButtonPressFunction(enum.IntEnum):
             return "Read then simulate the ID/UID card number"
         elif self == ButtonPressFunction.BATTERY:
             return "Show Battery Level"
+        elif self == ButtonPressFunction.FIELDGEN:
+            return "Toggle NFC Field Generator"
         return "None"
-
 
 @enum.unique
 class MfcValueBlockOperator(enum.IntEnum):
