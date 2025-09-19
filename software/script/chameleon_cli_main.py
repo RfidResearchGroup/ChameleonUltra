@@ -68,7 +68,7 @@ class ChameleonCLI:
 
         :return: current cmd prompt
         """
-        if device_com.isOpen():
+        if self.device_com.isOpen():
             status = color_string((CG, 'USB'))
         else:
             status = color_string((CR, 'Offline'))

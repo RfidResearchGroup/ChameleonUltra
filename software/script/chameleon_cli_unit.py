@@ -24,7 +24,7 @@ import chameleon_cmd
 from chameleon_utils import ArgumentParserNoExit, ArgsParserError, UnexpectedResponseError, execute_tool, \
     tqdm_if_exists, print_key_table
 from chameleon_utils import CLITree
-from chameleon_utils import CR, CG, CB, CC, CY, C0
+from chameleon_utils import CR, CG, CB, CC, CY, C0, color_string
 from chameleon_utils import print_mem_dump
 from chameleon_enum import Command, Status, SlotNumber, TagSenseType, TagSpecificType
 from chameleon_enum import MifareClassicWriteMode, MifareClassicPrngType, MifareClassicDarksideStatus, MfcKeyType
@@ -1216,7 +1216,7 @@ class HFMFHardNested(ReaderRequiredUnit):
                     time.sleep(1)  # Small delay before restarting
                     continue  # Continue to the next iteration of the outer attempt loop
                 else:
-            print(color_string((CR, f"   Maximum attempts ({max_attempts}) reached with invalid sum. Attack failed.")))
+                    print(color_string((CR, f"   Maximum attempts ({max_attempts}) reached with invalid sum. Attack failed.")))
                     return None  # Failed after max attempts
             elif run_count >= max_runs:
                 print(color_string((CY, f"   Warning: Reached max runs ({max_runs}) for attempt {attempt + 1}. Found {unique_msb_count}/256 unique MSBs.")))
@@ -3542,7 +3542,7 @@ class LFVikingEconfig(SlotIndexArgsAndGoUnit, LFVikingIdArgsUnit):
             selected = SlotNumber.from_fw(self.cmd.get_active_slot())
             lf_tag_type = TagSpecificType(slotinfo[selected - 1]['lf'])
             if lf_tag_type != TagSpecificType.Viking:
-                print(f"{color_string((CR, "WARNING"))}: Slot type not set to Viking.")
+                print(f"{color_string((CR, 'WARNING'))}: Slot type not set to Viking.")
             self.cmd.viking_set_emu_id(bytes.fromhex(args.id))
             print(' - Set Viking tag id success.')
         else:

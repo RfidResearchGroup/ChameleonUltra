@@ -219,10 +219,7 @@ class ChameleonCom:
                                 except ValueError:
                                     status_string = color_string((CR, f"{data_status:30x}"))
                                     response = data_response.hex() if data_response is not None else ""
-                                    print(f"<={color_string((CC, command_string.ljust(40)),
-                                                            (C0, status_string),
-                                                            (CY, response))}"
-                                           )
+                                    print(f"<={color_string((CC, command_string.ljust(40)), (C0, status_string), (CY, response))}")
                             if data_cmd in self.wait_response_map:
                                 # call processor
                                 if 'callback' in self.wait_response_map[data_cmd]:
