@@ -349,7 +349,7 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
                 m_tag_state_14a = NFC_TAG_STATE_14A_READY;
                 // After receiving the WUPA or REQA instruction, we need to reply to ATQA
                 nfc_tag_14a_tx_bytes(auto_coll_res->atqa, 2, false);
-                // NRF_LOG_INFO("ATQA reply.");
+                // NRF_LOG_INFO("ATQA reply: %02x%02x", auto_coll_res->atqa[0], auto_coll_res->atqa[1]);
             } else {
                 m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
                 NRF_LOG_INFO("Auto anti-collision resource no exists.");
@@ -570,6 +570,12 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
 
             TAG_FIELD_LED_OFF()
             m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
+
+            // Fix a bug where certain special conditions prevent triggering TX start events and actually transmit incorrect data to the card reader.
+            // After more more more testing, I found that simply going into sleep mode and restarting can restore work. 
+            // Therefore, I suspect that there may be some issues with the NFC peripheral that require a reset to resolve.
+            nrf_nfct_task_trigger(NRF_NFCT_TASK_DISABLE);
+            nrf_nfct_task_trigger(NRF_NFCT_TASK_ACTIVATE);
 
             NRF_LOG_INFO("HF FIELD LOST");
             break;
