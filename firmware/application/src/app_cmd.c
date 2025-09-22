@@ -996,7 +996,7 @@ static data_frame_tx_t *cmd_processor_mf1_write_emu_block_data(uint16_t cmd, uin
     uint8_t block_index = data[0];
     uint8_t block_count = (length - 1) / NFC_TAG_MF1_DATA_SIZE;
     if (block_index + block_count > NFC_TAG_MF1_BLOCK_MAX) {
-       return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+       return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_MIFARE_4096);
     nfc_tag_mf1_information_t *info = (nfc_tag_mf1_information_t *)buffer->buffer;
