@@ -1,16 +1,24 @@
-#!/usr/bin/env python3
 import argparse
 import sys
 import traceback
-import chameleon_com
 import colorama
-import chameleon_cli_unit
-import chameleon_utils
 import pathlib
 import prompt_toolkit
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.history import FileHistory
-from chameleon_utils import CR, CG, CY, C0
+from chameleon.utils import (
+    CR,
+    CG,
+    CY,
+    C0,
+    CLITree,
+    ArgsParserError,
+    ParserExitIntercept,
+    UnexpectedResponseError,
+    CustomNestedCompleter,
+)
+from chameleon.com import ChameleonCom
+from chameleon.unit import root, BaseCLIUnit, check_tools
 
 ULTRA = r"""
                                                                 ╦ ╦╦ ╔╦╗╦═╗╔═╗
@@ -37,15 +45,16 @@ BANNER = """
 
 class ChameleonCLI:
     """
-        CLI for chameleon
+    CLI for chameleon
     """
 
     def __init__(self):
         # new a device communication instance(only communication)
-        self.device_com = chameleon_com.ChameleonCom()
+        self.device_com = ChameleonCom()
 
-    def get_cmd_node(self, node: chameleon_utils.CLITree,
-                     cmdline: list[str]) -> tuple[chameleon_utils.CLITree, list[str]]:
+    def get_cmd_node(
+        self, node: CLITree, cmdline: list[str]
+    ) -> tuple[CLITree, list[str]]:
         """
         Recursively traverse the command line tree to get to the matching node
 
@@ -68,8 +77,7 @@ class ChameleonCLI:
 
         :return: current cmd prompt
         """
-        device_string = f"{CG}USB" if self.device_com.isOpen(
-        ) else f"{CR}Offline"
+        device_string = f"{CG}USB" if self.device_com.isOpen() else f"{CR}Offline"
         status = f"[{device_string}{C0}] chameleon --> "
         return status
 
@@ -83,34 +91,36 @@ class ChameleonCLI:
         print(f"{CY}{BANNER}{C0}")
 
     def exec_cmd(self, cmd_str):
-        if cmd_str == '':
+        if cmd_str == "":
             return
 
         # look for alternate exit
         if cmd_str in ["quit", "q", "e"]:
-            cmd_str = 'exit'
+            cmd_str = "exit"
 
         # look for alternate comments
         if cmd_str[0] in ";#%":
-            cmd_str = 'rem ' + cmd_str[1:].lstrip()
+            cmd_str = "rem " + cmd_str[1:].lstrip()
 
         # parse cmd
         argv = cmd_str.split()
 
-        tree_node, arg_list = self.get_cmd_node(chameleon_cli_unit.root, argv)
+        tree_node, arg_list = self.get_cmd_node(root, argv)
         if not tree_node.cls:
             # Found tree node is a group without an implementation, print children
             print("".ljust(18, "-") + "".ljust(10) + "".ljust(30, "-"))
             for child in tree_node.children:
                 cmd_title = f"{CG}{child.name}{C0}"
                 if not child.cls:
-                    help_line = (f" - {cmd_title}".ljust(37)) + f"{{ {child.help_text}... }}"
+                    help_line = (
+                        f" - {cmd_title}".ljust(37)
+                    ) + f"{{ {child.help_text}... }}"
                 else:
                     help_line = (f" - {cmd_title}".ljust(37)) + f"{child.help_text}"
                 print(help_line)
             return
 
-        unit: chameleon_cli_unit.BaseCLIUnit = tree_node.cls()
+        unit: BaseCLIUnit = tree_node.cls()
         unit.device_com = self.device_com
         args_parse_result = unit.args_parser()
 
@@ -121,11 +131,11 @@ class ChameleonCLI:
             args_parse_result = args.parse_args(arg_list)
             if args.help_requested:
                 return
-        except chameleon_utils.ArgsParserError as e:
+        except ArgsParserError as e:
             args.print_help()
-            print(f'{CY}'+str(e).strip()+f'{C0}', end="\n\n")
+            print(f"{CY}" + str(e).strip() + f"{C0}", end="\n\n")
             return
-        except chameleon_utils.ParserExitIntercept:
+        except ParserExitIntercept:
             # don't exit process.
             return
         try:
@@ -143,11 +153,13 @@ class ChameleonCLI:
             if error is not None:
                 raise error
 
-        except (chameleon_utils.UnexpectedResponseError, chameleon_utils.ArgsParserError) as e:
+        except (
+            UnexpectedResponseError,
+            ArgsParserError,
+        ) as e:
             print(f"{CR}{str(e)}{C0}")
         except Exception:
-            print(
-                f"CLI exception: {CR}{traceback.format_exc()}{C0}")
+            print(f"CLI exception: {CR}{traceback.format_exc()}{C0}")
 
     def startCLI(self):
         """
@@ -155,10 +167,11 @@ class ChameleonCLI:
 
         :return:
         """
-        self.completer = chameleon_utils.CustomNestedCompleter.from_clitree(chameleon_cli_unit.root)
-        self.session = prompt_toolkit.PromptSession(completer=self.completer,
-                                                    history=FileHistory(str(pathlib.Path.home() /
-                                                                            ".chameleon_history")))
+        self.completer = CustomNestedCompleter.from_clitree(root)
+        self.session = prompt_toolkit.PromptSession(
+            completer=self.completer,
+            history=FileHistory(str(pathlib.Path.home() / ".chameleon_history")),
+        )
 
         self.print_banner()
         cmd_strs = []
@@ -168,21 +181,26 @@ class ChameleonCLI:
             else:
                 # wait user input
                 try:
-                    cmd_str = self.session.prompt(
-                        ANSI(self.get_prompt())).strip()
-                    cmd_strs = cmd_str.replace(
-                        "\r\n", "\n").replace("\r", "\n").split("\n")
+                    cmd_str = self.session.prompt(ANSI(self.get_prompt())).strip()
+                    cmd_strs = (
+                        cmd_str.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+                    )
                     cmd_str = cmd_strs.pop(0)
                 except EOFError:
-                    cmd_str = 'exit'
+                    cmd_str = "exit"
                 except KeyboardInterrupt:
-                    cmd_str = 'exit'
+                    cmd_str = "exit"
             self.exec_cmd(cmd_str)
 
 
-if __name__ == '__main__':
+def main():
+    """Cli main entry point."""
     if sys.version_info < (3, 9):
         raise Exception("This script requires at least Python 3.9")
     colorama.init(autoreset=True)
-    chameleon_cli_unit.check_tools()
+    check_tools()
     ChameleonCLI().startCLI()
+
+
+if __name__ == "__main__":
+    main()

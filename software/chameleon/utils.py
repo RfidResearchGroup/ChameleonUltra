@@ -7,13 +7,14 @@ from pathlib import Path
 
 import colorama
 from functools import wraps
+
 # once Python3.10 is mainstream, we can replace Union[str, None] by str | None
 from typing import Union, Callable, Any
 from prompt_toolkit.completion import Completer, NestedCompleter, WordCompleter
 from prompt_toolkit.completion.base import Completion
 from prompt_toolkit.document import Document
 
-from chameleon_enum import Status
+from chameleon.enum import Status
 
 # Colorama shorthands
 CR = colorama.Fore.RED
@@ -43,8 +44,8 @@ class UnexpectedResponseError(Exception):
 
 class ArgumentParserNoExit(argparse.ArgumentParser):
     """
-        If arg ArgumentParser parse error, we can't exit process,
-        we must raise exception to stop parse
+    If arg ArgumentParser parse error, we can't exit process,
+    we must raise exception to stop parse
     """
 
     def __init__(self, *args, **kwargs):
@@ -58,8 +59,8 @@ class ArgumentParserNoExit(argparse.ArgumentParser):
             raise ParserExitIntercept(message)
 
     def error(self, message: str):
-        args = {'prog': self.prog, 'message': message}
-        raise ArgsParserError('%(prog)s: error: %(message)s\n' % args)
+        args = {"prog": self.prog, "message": message}
+        raise ArgsParserError("%(prog)s: error: %(message)s\n" % args)
 
     def print_help(self):
         """
@@ -68,62 +69,70 @@ class ArgumentParserNoExit(argparse.ArgumentParser):
         print("-" * 80)
         print(f"{CR}{self.prog}{C0}\n")
         lines = self.format_help().splitlines()
-        usage = lines[:lines.index('')]
-        assert usage[0].startswith('usage:')
-        usage[0] = usage[0].replace('usage:', f'{CG}usage:{C0}\n ')
-        usage[0] = usage[0].replace(self.prog, f'{CR}{self.prog}{C0}')
-        usage = [usage[0]] + [x[4:] for x in usage[1:]] + ['']
-        lines = lines[lines.index('')+1:]
-        desc = lines[:lines.index('')]
-        print(f'{CC}'+'\n'.join(desc)+f'{C0}\n')
-        print('\n'.join(usage))
-        lines = lines[lines.index('')+1:]
-        if '' in lines:
-            options = lines[:lines.index('')]
-            lines = lines[lines.index('')+1:]
+        usage = lines[: lines.index("")]
+        assert usage[0].startswith("usage:")
+        usage[0] = usage[0].replace("usage:", f"{CG}usage:{C0}\n ")
+        usage[0] = usage[0].replace(self.prog, f"{CR}{self.prog}{C0}")
+        usage = [usage[0]] + [x[4:] for x in usage[1:]] + [""]
+        lines = lines[lines.index("") + 1 :]
+        desc = lines[: lines.index("")]
+        print(f"{CC}" + "\n".join(desc) + f"{C0}\n")
+        print("\n".join(usage))
+        lines = lines[lines.index("") + 1 :]
+        if "" in lines:
+            options = lines[: lines.index("")]
+            lines = lines[lines.index("") + 1 :]
         else:
             options = lines
             lines = []
-        if len(options) > 0 and options[0].strip() == 'positional arguments:':
+        if len(options) > 0 and options[0].strip() == "positional arguments:":
             positional_args = options
-            positional_args[0] = positional_args[0].replace('positional arguments:', f'{CG}positional arguments:{C0}')
+            positional_args[0] = positional_args[0].replace(
+                "positional arguments:", f"{CG}positional arguments:{C0}"
+            )
             if len(positional_args) > 1:
-                positional_args.append('')
-            print('\n'.join(positional_args))
-            if '' in lines:
-                options = lines[:lines.index('')]
-                lines = lines[lines.index('')+1:]
+                positional_args.append("")
+            print("\n".join(positional_args))
+            if "" in lines:
+                options = lines[: lines.index("")]
+                lines = lines[lines.index("") + 1 :]
             else:
                 options = lines
                 lines = []
         if len(options) > 0:
             # 2 variants depending on Python version(?)
-            assert options[0].strip() in ['options:', 'optional arguments:']
-            options[0] = options[0].replace('options:', f'{CG}options:{C0}')
-            options[0] = options[0].replace('optional arguments:', f'{CG}optional arguments:{C0}')
+            assert options[0].strip() in ["options:", "optional arguments:"]
+            options[0] = options[0].replace("options:", f"{CG}options:{C0}")
+            options[0] = options[0].replace(
+                "optional arguments:", f"{CG}optional arguments:{C0}"
+            )
             if len(options) > 1:
-                options.append('')
-            print('\n'.join(options))
+                options.append("")
+            print("\n".join(options))
         if len(lines) > 0:
-            lines[0] = f'{CG}{lines[0]}{C0}'
-            print('\n'.join(lines))
-        print('')
+            lines[0] = f"{CG}{lines[0]}{C0}"
+            print("\n".join(lines))
+        print("")
         self.help_requested = True
 
 
 def print_mem_dump(bindata, blocksize):
+    hexadecimal_len = blocksize * 3 + 1
+    ascii_len = blocksize + 1
+    print(f"[=] ----+{hexadecimal_len * '-'}+{ascii_len * '-'}")
+    print(f"[=] blk | data{(hexadecimal_len - 5) * ' '}| ascii")
+    print(f"[=] ----+{hexadecimal_len * '-'}+{ascii_len * '-'}")
 
-    hexadecimal_len = blocksize*3+1
-    ascii_len = blocksize+1
-    print(f"[=] ----+{hexadecimal_len*'-'}+{ascii_len*'-'}")
-    print(f"[=] blk | data{(hexadecimal_len-5)*' '}| ascii")
-    print(f"[=] ----+{hexadecimal_len*'-'}+{ascii_len*'-'}")
-
-    blocks = [bindata[i:i+blocksize] for i in range(0, len(bindata), blocksize)]
+    blocks = [bindata[i : i + blocksize] for i in range(0, len(bindata), blocksize)]
     blk_index = 1
     for b in blocks:
-        hexstr = ' '.join(b.hex()[i:i+2] for i in range(0, len(b.hex()), 2))
-        asciistr = ''.join([chr(b[i]) if (b[i] > 31 and b[i] < 127) else '.' for i in range(0, len(b), 1)])
+        hexstr = " ".join(b.hex()[i : i + 2] for i in range(0, len(b.hex()), 2))
+        asciistr = "".join(
+            [
+                chr(b[i]) if (b[i] > 31 and b[i] < 127) else "."
+                for i in range(0, len(b), 1)
+            ]
+        )
         print(f"[=] {blk_index:3} | {hexstr.upper()} | {asciistr} ")
         blk_index += 1
 
@@ -135,9 +144,9 @@ def print_key_table(key_map):
         len("key A"),
         len("key B"),
     )
-    header_line = f"[=] {'-'*5}+{'-'*(key_width+2)}+{'-'*(key_width+2)}"
+    header_line = f"[=] {'-' * 5}+{'-' * (key_width + 2)}+{'-' * (key_width + 2)}"
     print(header_line)
-    print(f"[=]  sec | key A{' '*(key_width-5)} | key B{' '*(key_width-5)}")
+    print(f"[=]  sec | key A{' ' * (key_width - 5)} | key B{' ' * (key_width - 5)}")
     print(header_line)
     for sec, (a, b) in enumerate(zip(key_map["A"].values(), key_map["B"].values())):
         print(f"[=]  {sec:02d}  | {a:{key_width}} | {b:{key_width}}")
@@ -145,7 +154,7 @@ def print_key_table(key_map):
 
 
 def _swap_endian(x):
-    x = ((x >> 8) & 0x00ff00ff) | ((x & 0x00ff00ff) << 8)
+    x = ((x >> 8) & 0x00FF00FF) | ((x & 0x00FF00FF) << 8)
     x = (x >> 16) | (x << 16)
     return x & 0xFFFFFFFF
 
@@ -154,9 +163,7 @@ def prng_successor(x, n):
     x = _swap_endian(x)
 
     while n > 0:
-        x = (x >> 1) | (
-            (((x >> 16) ^ (x >> 18) ^ (x >> 19) ^ (x >> 21)) & 0x1) << 31
-        )
+        x = (x >> 1) | ((((x >> 16) ^ (x >> 18) ^ (x >> 19) ^ (x >> 21)) & 0x1) << 31)
         x = x & 0xFFFFFFFF
         n -= 1
 
@@ -164,7 +171,7 @@ def prng_successor(x, n):
 
 
 def reconstruct_full_nt(response_data, offset):
-    nt = int.from_bytes(response_data[offset: offset + 2], byteorder='big')
+    nt = int.from_bytes(response_data[offset : offset + 2], byteorder="big")
 
     return (nt << 16) | prng_successor(nt, 16)
 
@@ -193,8 +200,12 @@ def execute_tool(tool_name, args):
     # print(f"Executing: {' '.join(cmd_recover_list)}")
 
     temp_output_file = tempfile.NamedTemporaryFile(
-        suffix=".log", prefix="output_", delete=True,
-        mode='w+', encoding='utf-8', errors='replace'
+        suffix=".log",
+        prefix="output_",
+        delete=True,
+        mode="w+",
+        encoding="utf-8",
+        errors="replace",
     )
 
     process = subprocess.Popen(
@@ -208,7 +219,7 @@ def execute_tool(tool_name, args):
     temp_output_file.seek(0)
 
     if ret_code:
-        raise Exception('Failed to execute tool: ' + temp_output_file.read())
+        raise Exception("Failed to execute tool: " + temp_output_file.read())
 
     return temp_output_file.read()
 
@@ -216,6 +227,7 @@ def execute_tool(tool_name, args):
 def tqdm_if_exists(iterator):
     try:
         import tqdm
+
         return tqdm.tqdm(iterator)
     except ImportError:
         return iterator
@@ -237,7 +249,9 @@ def expect_response(accepted_responses: Union[int, list[int]]) -> Callable[..., 
                 try:
                     status_string = str(Status(ret.status))
                 except ValueError:
-                    status_string = f"Unexpected response and unknown status {ret.status}"
+                    status_string = (
+                        f"Unexpected response and unknown status {ret.status}"
+                    )
                 raise UnexpectedResponseError(status_string)
 
             return ret.parsed
@@ -257,8 +271,15 @@ class CLITree:
     :param cls: A BaseCLIUnit instance handling the command
     """
 
-    def __init__(self, name: str = "", help_text: Union[str, None] = None, fullname: Union[str, None] = None,
-                 children: Union[list["CLITree"], None] = None, cls=None, root=False) -> None:
+    def __init__(
+        self,
+        name: str = "",
+        help_text: Union[str, None] = None,
+        fullname: Union[str, None] = None,
+        children: Union[list["CLITree"], None] = None,
+        cls=None,
+        root=False,
+    ) -> None:
         self.name = name
         self.help_text = help_text
         self.fullname = fullname if fullname else name
@@ -280,8 +301,9 @@ class CLITree:
         """
         child = CLITree(
             name=name,
-            fullname=f'{self.fullname} {name}' if not self.root else f'{name}',
-            help_text=help_text)
+            fullname=f"{self.fullname} {name}" if not self.root else f"{name}",
+            help_text=help_text,
+        )
         self.children.append(child)
         return child
 
@@ -291,12 +313,17 @@ class CLITree:
 
         :param name: Name of the command
         """
+
         def decorator(cls):
-            self.children.append(CLITree(
-                name=name,
-                fullname=f'{self.fullname} {name}' if not self.root else f'{name}',
-                cls=cls))
+            self.children.append(
+                CLITree(
+                    name=name,
+                    fullname=f"{self.fullname} {name}" if not self.root else f"{name}",
+                    cls=cls,
+                )
+            )
             return cls
+
         return decorator
 
 
@@ -306,15 +333,15 @@ class CustomNestedCompleter(NestedCompleter):
     supports meta_dict for descriptions
     """
 
-    def __init__(
-        self, options, ignore_case: bool = True, meta_dict: dict = {}
-    ) -> None:
+    def __init__(self, options, ignore_case: bool = True, meta_dict: dict = {}) -> None:
         self.options = options
         self.ignore_case = ignore_case
         self.meta_dict = meta_dict
 
     def __repr__(self) -> str:
-        return f"CustomNestedCompleter({self.options!r}, ignore_case={self.ignore_case!r})"
+        return (
+            f"CustomNestedCompleter({self.options!r}, ignore_case={self.ignore_case!r})"
+        )
 
     @classmethod
     def from_clitree(cls, node):
@@ -325,7 +352,8 @@ class CustomNestedCompleter(NestedCompleter):
             if child_node.cls:
                 # CLITree is a standalone command with arguments
                 options[child_node.name] = ArgparseCompleter(
-                    child_node.cls().args_parser())
+                    child_node.cls().args_parser()
+                )
             else:
                 # CLITree is a command group
                 options[child_node.name] = cls.from_clitree(child_node)
@@ -345,7 +373,7 @@ class CustomNestedCompleter(NestedCompleter):
 
             # If we have a sub completer, use this for the completions.
             if completer is not None:
-                remaining_text = text[len(first_term):].lstrip()
+                remaining_text = text[len(first_term) :].lstrip()
                 move_cursor = len(text) - len(remaining_text) + stripped_len
 
                 new_document = Document(
@@ -358,7 +386,9 @@ class CustomNestedCompleter(NestedCompleter):
         # No space in the input: behave exactly like `WordCompleter`.
         else:
             completer = WordCompleter(
-                list(self.options.keys()), ignore_case=self.ignore_case, meta_dict=self.meta_dict
+                list(self.options.keys()),
+                ignore_case=self.ignore_case,
+                meta_dict=self.meta_dict,
             )
             yield from completer.get_completions(document, complete_event)
 
@@ -377,7 +407,7 @@ class ArgparseCompleter(Completer):
         suggestions = {}
 
         def check_arg(tokens):
-            return tokens and tokens[0].startswith('-')
+            return tokens and tokens[0].startswith("-")
 
         if not parsed and not unparsed:
             # No tokens detected, just show all flags
@@ -406,7 +436,8 @@ class ArgparseCompleter(Completer):
 
                         if check_arg(unparsed):
                             parsed, unparsed, suggestions = self.check_tokens(
-                                parsed, unparsed)
+                                parsed, unparsed
+                            )
 
                     else:
                         # Show all possible values
@@ -418,7 +449,8 @@ class ArgparseCompleter(Completer):
                     # No choices, process further arguments
                     if check_arg(unparsed):
                         parsed, unparsed, suggestions = self.check_tokens(
-                            parsed, unparsed)
+                            parsed, unparsed
+                        )
                     break
             elif any(opt.startswith(token) for opt in action.option_strings):
                 for opt in action.option_strings:
@@ -432,9 +464,11 @@ class ArgparseCompleter(Completer):
 
     def get_completions(self, document, complete_event):
         text = document.text_before_cursor
-        word_before_cursor = document.text_before_cursor.split(' ')[-1]
+        word_before_cursor = document.text_before_cursor.split(" ")[-1]
 
         _, _, suggestions = self.check_tokens(list(), text.split())
 
         for key, suggestion in suggestions.items():
-            yield Completion(key, -len(word_before_cursor), display=key, display_meta=suggestion)
+            yield Completion(
+                key, -len(word_before_cursor), display=key, display_meta=suggestion
+            )
