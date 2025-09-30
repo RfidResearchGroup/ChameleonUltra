@@ -34,8 +34,9 @@
             # Python dev tools
             pythonPackages.ipython
             pythonPackages.ipdb
+            pkgs.uv
             pkgs.ruff
-            pkgs.pyright
+            pkgs.pyrefly
           ];
           env = {
             # Make breakpoint() use ipdb instead of the builtin pdb
