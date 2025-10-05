@@ -4,7 +4,7 @@ import threading
 import time
 import serial
 from typing import Union
-from chameleon_utils import CR, CG, CC, CY, C0, color_string
+from chameleon_utils import CR, CG, CC, CY, color_string
 from chameleon_enum import Command, Status
 
 # each thread is waiting for its data for 100 ms before looping again
@@ -217,9 +217,9 @@ class ChameleonCom:
                                     else:
                                         status_string = color_string((CR, status_string.ljust(30)))
                                 except ValueError:
-                                    status_string = color_string((CR, f"{data_status:30x}"))
+                                    status_string = f"{data_status:30x}"
                                     response = data_response.hex() if data_response is not None else ""
-                                    print(f"<={color_string((CC, command_string.ljust(40)), (C0, status_string), (CY, response))}")
+                                    print(f"<={color_string((CC, command_string.ljust(40)), (CR, status_string), (CY, response))}")
                             if data_cmd in self.wait_response_map:
                                 # call processor
                                 if 'callback' in self.wait_response_map[data_cmd]:
