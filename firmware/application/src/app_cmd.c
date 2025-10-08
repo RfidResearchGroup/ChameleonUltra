@@ -703,6 +703,32 @@ static data_frame_tx_t *cmd_processor_viking_write_to_t55xx(uint16_t cmd, uint16
     status = write_viking_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
     return data_frame_make(cmd, status, 0, NULL);
 }
+
+#define GENERIC_READ_LEN 800
+#define GENERIC_READ_TIMEOUT_MS 500
+static data_frame_tx_t *cmd_processor_generic_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t *outdata = malloc(GENERIC_READ_LEN); 
+
+    if (outdata == NULL) {
+        return data_frame_make(cmd, STATUS_MEM_ERR, 0, NULL);
+    }
+
+    size_t outlen = 0;
+    if (!raw_read_to_buffer(outdata, GENERIC_READ_LEN, GENERIC_READ_TIMEOUT_MS, &outlen)) {
+        free(outdata);
+        return data_frame_make(cmd, STATUS_CMD_ERR, 0, NULL);
+    };
+    data_frame_tx_t *frame = data_frame_make(cmd, STATUS_LF_TAG_OK, outlen, outdata);
+
+    free(outdata);
+
+    if (frame == NULL) {
+        return data_frame_make(cmd, STATUS_CREATE_RESPONSE_ERR, 0, NULL);
+    }
+
+    return frame;
+}
+
 #endif
 
 
@@ -1606,6 +1632,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_HIDPROX_WRITE_TO_T55XX,       before_reader_run,           cmd_processor_hidprox_write_to_t55xx,        NULL                   },
     {    DATA_CMD_VIKING_SCAN,                  before_reader_run,           cmd_processor_viking_scan,                   NULL                   },
     {    DATA_CMD_VIKING_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_viking_write_to_t55xx,         NULL                   },
+    {    DATA_CMD_ADC_GENERIC_READ,             before_reader_run,           cmd_processor_generic_read,                  NULL                   },
 
     {    DATA_CMD_HF14A_SET_FIELD_ON,           before_reader_run,           cmd_processor_hf14a_set_field_on,            NULL                   },
     {    DATA_CMD_HF14A_SET_FIELD_OFF,          before_reader_run,           cmd_processor_hf14a_set_field_off,           NULL                   },

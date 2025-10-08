@@ -91,6 +91,9 @@
 #define DATA_CMD_HIDPROX_WRITE_TO_T55XX         (3003)
 #define DATA_CMD_VIKING_SCAN                    (3004)
 #define DATA_CMD_VIKING_WRITE_TO_T55XX          (3005)
+#define DATA_CMD_ADC_GENERIC_READ               (3006)
+#define DATA_CMD_GENERIC_READ                   (3007)
+#define DATA_CMD_CORR_GENERIC_READ              (3008)
 
 //
 // ******************************************************************
