@@ -3267,7 +3267,7 @@ class LFADCGenericRead(ReaderRequiredUnit):
             for i in range(0, len(resp), width):
                 chunk = resp[i : i + width]
                 hexpart = " ".join(f"{b:02x}" for b in chunk)
-                binpart = "".join('1' if b >= 0x5f else '0' for b in chunk)
+                binpart = "".join('1' if b >= 0xbf else '0' for b in chunk)
                 print(f"{i:04x} {hexpart:<{width * 3}} {binpart}")
 
             avg = 0

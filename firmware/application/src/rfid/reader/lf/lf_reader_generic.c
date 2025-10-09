@@ -45,7 +45,7 @@ bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_
     while (NO_TIMEOUT_1MS(p_at, timeout_ms) && *outlen < maxlen) {
         uint16_t val = 0;
         while (cb_pop_front(&cb, &val) && *outlen < maxlen) {
-            val = val >> 6; // 14 bit ADC to 8 bit value
+            val = val >> 5; // 14 bit ADC to 8 bit value and /2 range
             data[*outlen] = val > 0xff ? 0xff : val;
             ++(*outlen);
         }
