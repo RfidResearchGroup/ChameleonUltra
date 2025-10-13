@@ -24,7 +24,7 @@ import chameleon_cmd
 from chameleon_utils import ArgumentParserNoExit, ArgsParserError, UnexpectedResponseError, execute_tool, \
     tqdm_if_exists, print_key_table
 from chameleon_utils import CLITree
-from chameleon_utils import CR, CG, CB, CC, CY, C0
+from chameleon_utils import CR, CG, CB, CC, CY, C0, color_string
 from chameleon_utils import print_mem_dump
 from chameleon_enum import Command, Status, SlotNumber, TagSenseType, TagSpecificType
 from chameleon_enum import MifareClassicWriteMode, MifareClassicPrngType, MifareClassicDarksideStatus, MfcKeyType
@@ -65,14 +65,20 @@ def load_dic_file(import_dic, keys):
 
 
 def check_tools():
-    tools = ['staticnested', 'nested', 'darkside', 'mfkey32v2', 'staticnested_1nt',
-             'staticnested_2x1nt_rf08s', 'staticnested_2x1nt_rf08s_1key']
-    if sys.platform == "win32":
-        tools = [x+'.exe' for x in tools]
-    missing_tools = [tool for tool in tools if not (default_cwd / tool).exists()]
-    if len(missing_tools) > 0:
-        print(f'{CR}Warning, tools {", ".join(missing_tools)} not found. '
-              f'Corresponding commands will not work as intended.{C0}')
+    bin_dir = Path.cwd() / "bin"
+    missing_tools = []
+
+    for tool in ("staticnested", "nested", "darkside", "mfkey32v2", "staticnested_1nt",
+             "staticnested_2x1nt_rf08s", "staticnested_2x1nt_rf08s_1key"):
+        if any(bin_dir.glob(f"{tool}*")):
+            continue
+        else:
+            missing_tools.append(tool)
+
+    if missing_tools:
+        missing_tool_str = ", ".join(missing_tools)
+        warn_str = f"Warning, {missing_tool_str} not found. Corresponding commands will not work as intended."
+        print(color_string((CR, warn_str)))
 
 
 class BaseCLIUnit:
@@ -302,7 +308,7 @@ class HF14AAntiCollArgsUnit(DeviceRequiredUnit):
                 uid = new_uid
                 anti_coll_data_changed = True
             else:
-                print(f'{CY}Requested UID already set{C0}')
+                print(color_string((CY, "Requested UID already set")))
         if args.atqa is not None:
             change_requested = True
             atqa_str: str = args.atqa.strip()
@@ -314,7 +320,7 @@ class HF14AAntiCollArgsUnit(DeviceRequiredUnit):
                 atqa = new_atqa
                 anti_coll_data_changed = True
             else:
-                print(f'{CY}Requested ATQA already set{C0}')
+                print(color_string((CY, "Requested ATQA already set")))
         if args.sak is not None:
             change_requested = True
             sak_str: str = args.sak.strip()
@@ -326,7 +332,7 @@ class HF14AAntiCollArgsUnit(DeviceRequiredUnit):
                 sak = new_sak
                 anti_coll_data_changed = True
             else:
-                print(f'{CY}Requested SAK already set{C0}')
+                print(color_string((CY, "Requested SAK already set")))
         if (args.ats is not None) or args.delete_ats:
             change_requested = True
             if args.delete_ats:
@@ -341,7 +347,7 @@ class HF14AAntiCollArgsUnit(DeviceRequiredUnit):
                 ats = new_ats
                 anti_coll_data_changed = True
             else:
-                print(f'{CY}Requested ATS already set{C0}')
+                print(color_string((CY, "Requested ATS already set")))
         if anti_coll_data_changed:
             self.cmd.hf14a_set_anti_coll_data(uid, atqa, sak, ats)
         return change_requested, anti_coll_data_changed, uid, atqa, sak, ats
@@ -606,19 +612,19 @@ class RootDumpHelp(BaseCLIUnit):
             if dump_description:
                 p.print_help()
             else:
-                cmd_title = f"{CG}{cmd_node.fullname}{C0}"
+                cmd_title = color_string((CG, cmd_node.fullname))
                 print(f"{cmd_title}".ljust(col1_width), end="")
                 p.prog = " " * (visual_col1_width - len("usage: ") - 1)
                 usage = p.format_usage().removeprefix("usage: ").strip()
-                print(f"{CY}{usage}{C0}")
+                print(color_string((CY, usage)))
         else:
             if dump_cmd_groups and not cmd_node.root:
                 if dump_description:
                     print("=" * 80)
-                    print(f"{CR}{cmd_node.fullname}{C0}\n")
-                    print(f"{CC}{cmd_node.help_text}{C0}\n")
+                    print(color_string((CR, cmd_node.fullname)))
+                    print(color_string((CC, cmd_node.help_text)))
                 else:
-                    print(f"{CB}== {cmd_node.fullname} =={C0}")
+                    print(color_string((CB, f"== {cmd_node.fullname} ==")))
             for child in cmd_node.children:
                 RootDumpHelp.dump_help(child, depth + 1, dump_cmd_groups, dump_description)
 
@@ -675,7 +681,7 @@ class HWConnect(BaseCLIUnit):
             print(f" {{ Chameleon {model} connected: v{major}.{minor} }}")
 
         except Exception as e:
-            print(f"{CR}Chameleon Connect fail: {str(e)}{C0}")
+            print(color_string((CR, f"Chameleon Connect fail: {str(e)}")))
             self.device_com.close()
 
 
@@ -847,7 +853,7 @@ class HFMFNested(ReaderRequiredUnit):
         """
         # check nt level, we can run static or nested auto...
         nt_level = self.cmd.mf1_detect_prng()
-        print(f" - NT vulnerable: {CY}{self.from_nt_level_code_to_str(nt_level)}{C0}")
+        print(f" - NT vulnerable: {color_string((CY, self.from_nt_level_code_to_str(nt_level)))}")
         if nt_level == 2:
             print(" [!] Use hf mf hardnested")
             return None
@@ -918,14 +924,14 @@ class HFMFNested(ReaderRequiredUnit):
         # default to A
         type_target = MfcKeyType.B if args.tb else MfcKeyType.A
         if block_known == block_target and type_known == type_target:
-            print(f"{CR}Target key already known{C0}")
+            print(color_string((CR, "Target key already known")))
             return
-        print(f" - {C0}Nested recover one key running...{C0}")
+        print(f" - Nested recover one key running...")
         key = self.recover_a_key(block_known, type_known, key_known_bytes, block_target, type_target)
         if key is None:
-            print(f"{CY}No key found, you can retry.{C0}")
+            print(color_string((CY, "No key found, you can retry.")))
         else:
-            print(f" - Block {block_target} Type {type_target.name} Key Found: {CG}{key}{C0}")
+            print(f" - Block {block_target} Type {type_target.name} Key Found: {color_string((CG, key))}")
         return
 
 
@@ -1069,22 +1075,22 @@ class HFMFHardNested(ReaderRequiredUnit):
             try:
                 scan_resp = self.cmd.hf14a_scan()
             except Exception as e:
-                print(f"{CR}   Error scanning tag: {e}{C0}")
+                print(color_string((CR, f"   Error scanning tag: {e}")))
                 # Decide if we should retry or fail completely. Let's fail for now.
-                print(f"{CR}   Attack failed due to error during scanning.{C0}")
+                print(color_string((CR, "   Attack failed due to error during scanning.")))
                 return None
 
             if scan_resp is None or len(scan_resp) == 0:
-                print(f"{CR}   Error: No tag found.{C0}")
+                print(color_string((CR, "Error: No tag found.")))
                 if attempt + 1 < max_attempts:
-                    print(f"{CY}   Retrying scan in 1 second...{C0}")
+                    print(color_string((CY, "   Retrying scan in 1 second...")))
                     time.sleep(1)
                     continue  # Retry the outer loop (next attempt)
                 else:
-                    print(f"{CR}   Maximum attempts reached without finding tag. Attack failed.{C0}")
+                    print(color_string((CR, "   Maximum attempts reached without finding tag. Attack failed.")))
                     return None
             if len(scan_resp) > 1:
-                print(f"{CR}   Error: Multiple tags found. Please present only one tag.{C0}")
+                print(color_string((CR, "   Error: Multiple tags found. Please present only one tag.")))
                 # Fail immediately if multiple tags are present
                 return None
 
@@ -1099,7 +1105,7 @@ class HFMFHardNested(ReaderRequiredUnit):
             elif uid_len == 10:
                 uid_for_file = uid_bytes[6: 10]
             else:
-                print(f"{CR}   Error: Unexpected UID length ({uid_len} bytes). Cannot create nonce file header.{C0}")
+                print(color_string((CR, f"   Error: Unexpected UID length ({uid_len} bytes). Cannot create nonce file header.")))
                 return None  # Fail if UID length is unexpected
             print(f"   Tag found with UID: {uid_bytes.hex().upper()}")
             # Prepare header in the main buffer for this attempt
@@ -1116,7 +1122,7 @@ class HFMFHardNested(ReaderRequiredUnit):
                     # Check if tag is still present before each run
                     current_scan = self.cmd.hf14a_scan()
                     if current_scan is None or len(current_scan) == 0 or current_scan[0]['uid'] != uid_bytes:
-                        print(f"{CR}   Error: Tag lost or changed before run {run_count}. Stopping acquisition attempt.{C0}")
+                        print(color_string((CY, f"   Error: Tag lost or changed before run {run_count}. Stopping acquisition attempt.")))
                         acquisition_goal_met = False  # Mark as failed
                         break  # Exit inner run loop for this attempt
 
@@ -1126,7 +1132,7 @@ class HFMFHardNested(ReaderRequiredUnit):
                     )
 
                     if not raw_nonces_bytes_this_run:
-                        print(f"{CY}   Run {run_count}: No nonces acquired in this run. Continuing...{C0}")
+                        print(color_string((CY, f"   Run {run_count}: No nonces acquired in this run. Continuing...")))
                         time.sleep(0.1)  # Small delay before retrying
                         continue
 
@@ -1144,7 +1150,7 @@ class HFMFHardNested(ReaderRequiredUnit):
                         try:
                             nt, nt_enc, par = struct.unpack_from('!IIB', raw_nonces_bytes_this_run, offset)
                         except struct.error as unpack_err:
-                            print(f"{CR}   Error unpacking nonce data at offset {offset}: {unpack_err}. Skipping pair.{C0}")
+                            print(color_string((CR, f"   Error unpacking nonce data at offset {offset}: {unpack_err}. Skipping pair.")))
                             continue
 
                         msb = (nt_enc >> 24) & 0xFF
@@ -1163,35 +1169,35 @@ class HFMFHardNested(ReaderRequiredUnit):
 
                     # --- Check termination condition ---
                     if unique_msb_count == 256:
-                        print(f"\n   {CG}All 256 unique MSBs found.{C0} Final parity sum: {msb_parity_sum}")
+                        print()
+                        print(f"{color_string((CG, '   All 256 unique MSBs found.'))} Final parity sum: {msb_parity_sum}")
                         if msb_parity_sum in hardnested_utils.hardnested_sums:
-                            print(f"   {CG}Parity sum {msb_parity_sum} is VALID. Stopping acquisition runs.{C0}")
+                            print(color_string((CG, f"   Parity sum {msb_parity_sum} is VALID. Stopping acquisition runs.")))
                             acquisition_goal_met = True
                             acquisition_success = True  # Mark attempt as successful
                             break  # Exit the inner run loop successfully
                         else:
-                            print(
-                                f"   {CR}Parity sum {msb_parity_sum} is INVALID (Expected one of {hardnested_utils.hardnested_sums}).{C0}")
+                            print(color_string((CR, f"   Parity sum {msb_parity_sum} is INVALID (Expected one of {hardnested_utils.hardnested_sums}).")))
                             acquisition_goal_met = False  # Mark as failed
                             acquisition_success = False
                             break  # Exit the inner run loop to restart the attempt
 
                 except chameleon_com.CMDInvalidException:
-                    print(f"{CR}   Error: Hardnested command not supported by this firmware version.{C0}")
+                    print(color_string((CR, "   Error: Hardnested command not supported by this firmware version.")))
                     return None  # Cannot proceed at all
                 except UnexpectedResponseError as e:
-                    print(f"{CR}   Error acquiring nonces during run {run_count}: {e}{C0}")
-                    print(f"{CY}   Stopping acquisition runs for this attempt...{C0}")
+                    print(color_string((CR, f"   Error acquiring nonces during run {run_count}: {e}")))
+                    print(color_string((CY, "   Stopping acquisition runs for this attempt...")))
                     acquisition_goal_met = False
                     break  # Exit inner run loop
                 except TimeoutError:
-                    print(f"{CR}   Error: Timeout during nonce acquisition run {run_count}.{C0}")
-                    print(f"{CY}   Stopping acquisition runs for this attempt...{C0}")
+                    print(color_string((CR, f"   Error: Timeout during nonce acquisition run {run_count}.")))
+                    print(color_string((CY, "   Stopping acquisition runs for this attempt...")))
                     acquisition_goal_met = False
                     break  # Exit inner run loop
                 except Exception as e:
-                    print(f"{CR}   Unexpected error during acquisition run {run_count}: {e}{C0}")
-                    print(f"{CY}   Stopping acquisition runs for this attempt...{C0}")
+                    print(color_string((CR, f"   Unexpected error during acquisition run {run_count}: {e}")))
+                    print(color_string((CY, "   Stopping acquisition runs for this attempt...")))
                     acquisition_goal_met = False
                     break  # Exit inner run loop
             # --- End of inner run loop (while run_count < max_runs) ---
@@ -1199,33 +1205,32 @@ class HFMFHardNested(ReaderRequiredUnit):
             # --- Post-Acquisition Summary for this attempt ---
             print(f"\n   Finished acquisition phase for attempt {attempt + 1}.")
             if acquisition_success:
-                print(f"   {CG}Successfully acquired nonces meeting the MSB sum criteria in {run_count} runs.{C0}")
+                print(color_string((CG, f"   Successfully acquired nonces meeting the MSB sum criteria in {run_count} runs.")))
                 # Append collected raw nonces to the main buffer for the file
                 nonces_buffer.extend(total_raw_nonces_bytes)
                 break  # Exit the outer attempt loop successfully
             elif unique_msb_count == 256 and not acquisition_goal_met:
-                print(f"   {CR}Found all 256 MSBs, but the parity sum was invalid.{C0}")
+                print(color_string((CR, "   Found all 256 MSBs, but the parity sum was invalid.")))
                 if attempt + 1 < max_attempts:
-                    print(f"   {CY}Restarting acquisition process...{C0}")
+                    print(color_string((CY, "   Restarting acquisition process...")))
                     time.sleep(1)  # Small delay before restarting
                     continue  # Continue to the next iteration of the outer attempt loop
                 else:
-                    print(f"   {CR}Maximum attempts ({max_attempts}) reached with invalid sum. Attack failed.{C0}")
+                    print(color_string((CR, f"   Maximum attempts ({max_attempts}) reached with invalid sum. Attack failed.")))
                     return None  # Failed after max attempts
             elif run_count >= max_runs:
-                print(
-                    f"   {CY}Warning: Reached max runs ({max_runs}) for attempt {attempt + 1}. Found {unique_msb_count}/256 unique MSBs.{C0}")
+                print(color_string((CY, f"   Warning: Reached max runs ({max_runs}) for attempt {attempt + 1}. Found {unique_msb_count}/256 unique MSBs.")))
                 if attempt + 1 < max_attempts:
-                    print(f"   {CY}Restarting acquisition process...{C0}")
+                    print(color_string((CY, "   Restarting acquisition process...")))
                     time.sleep(1)
                     continue  # Continue to the next iteration of the outer attempt loop
                 else:
-                    print(f"   {CR}Maximum attempts ({max_attempts}) reached without meeting criteria. Attack failed.{C0}")
+                    print(color_string((CR, f"   Maximum attempts ({max_attempts}) reached without meeting criteria. Attack failed.")))
                     return None  # Failed after max attempts
             else:  # Acquisition stopped due to error or tag loss
-                print(f"   {CR}Acquisition attempt {attempt + 1} stopped prematurely due to an error after {run_count} runs.{C0}")
+                print(color_string((CR, f"Acquisition attempt {attempt + 1} stopped prematurely due to an error after {run_count} runs.")))
                 # Decide if we should retry or fail completely. Let's fail for now.
-                print(f"   {CR}Attack failed due to error during acquisition.{C0}")
+                print(color_string((CR, "Attack failed due to error during acquisition.")))
                 return None  # Failed due to error
 
         # --- End of outer attempt loop ---
@@ -1233,7 +1238,7 @@ class HFMFHardNested(ReaderRequiredUnit):
         # If we exited the loop successfully (acquisition_success is True)
         if not acquisition_success:
             # This case should ideally be caught within the loop, but as a safeguard:
-            print(f"{CR}   Error: Acquisition failed after {max_attempts} attempts.{C0}")
+            print(color_string((CR, f"   Error: Acquisition failed after {max_attempts} attempts.")))
             return None
 
         # --- Proceed with the rest of the attack using the successfully collected nonces ---
@@ -1243,7 +1248,7 @@ class HFMFHardNested(ReaderRequiredUnit):
         print(f"   Total nonce file size will be {len(nonces_buffer)} bytes.")
 
         if total_nonce_pairs == 0:
-            print(f"{CR}   Error: No nonces were successfully acquired in the final attempt.{C0}")
+            print(color_string((CR, "   Error: No nonces were successfully acquired in the final attempt.")))
             return None
 
         # 3. Save nonces to a temporary file
@@ -1268,11 +1273,11 @@ class HFMFHardNested(ReaderRequiredUnit):
                 f"   Nonces saved to {'temporary ' if delete_nonce_on_close else ''}file: {os.path.abspath(nonce_file_path)}")
 
             # 4. Prepare and run the external hardnested tool, redirecting output
-            print(f"{CC}--- Running Hardnested Tool (Output redirected) ---{C0}")
+            print(color_string((CC, "--- Running Hardnested Tool (Output redirected) ---")))
 
             output_str = execute_tool('hardnested', [os.path.abspath(nonce_file_path)])
 
-            print(f"{CC}--- Hardnested Tool Finished ---{C0}")
+            print(color_string((CC, "--- Hardnested Tool Finished ---")))
 
             # 5. Read the output from the temporary log file
             # 6. Process the result (using output_str read from the file)
@@ -1290,7 +1295,7 @@ class HFMFHardNested(ReaderRequiredUnit):
                         # break
 
             if not key_list:
-                print(f"{CY}   No line starting with '{key_prefix}' found in the output file.{C0}")
+                print(color_string((CY, f"   No line starting with '{key_prefix}' found in the output file.")))
                 return None
 
             # 7. Verify Keys (Same as before)
@@ -1305,22 +1310,22 @@ class HFMFHardNested(ReaderRequiredUnit):
                     # Check tag presence before auth attempt
                     scan_check = self.cmd.hf14a_scan()
                     if scan_check is None or len(scan_check) == 0 or scan_check[0]['uid'] != uid_bytes_for_verify:
-                        print(f" {CR}Tag lost or changed during verification. Cannot verify.{C0}")
+                        print(color_string((CR, " Tag lost or changed during verification. Cannot verify.")))
                         return None  # Stop verification if tag is gone
 
                     if self.cmd.mf1_auth_one_key_block(block_target, type_target, key_bytes):
-                        print(f" {CG}Success!{C0}")
+                        print(color_string((CG, " Success!")))
                         return key_hex  # Return the verified key
                     else:
-                        print(f" {CR}Auth failed.{C0}")
+                        print(color_string((CR, "Auth failed.")))
                 except UnexpectedResponseError as e:
-                    print(f" {CR}Verification error: {e}{C0}")
+                    print(color_string((CR, f" Verification error: {e}")))
                     # Consider if we should continue trying other keys or stop
                 except Exception as e:
-                    print(f" {CR}Unexpected error during verification: {e}{C0}")
+                    print(color_string((CR, f" Unexpected error during verification: {e}")))
                     # Consider stopping here
 
-            print(f"{CY}   Verification failed for all candidate keys.{C0}")
+            print(color_string((CY, "   Verification failed for all candidate keys.")))
             return None
 
         finally:
@@ -1335,14 +1340,14 @@ class HFMFHardNested(ReaderRequiredUnit):
                         os.replace(nonce_file_path, final_nonce_filename)
                         print(f"   Nonce file kept as: {os.path.abspath(final_nonce_filename)}")
                     except OSError as e:
-                        print(f"{CR}   Error renaming/replacing temporary nonce file to {final_nonce_filename}: {e}{C0}")
+                        print(color_string((CR, f"   Error renaming/replacing temporary nonce file to {final_nonce_filename}: {e}")))
                         print(f"   Temporary file might remain: {nonce_file_path}")
                 else:
                     try:
                         os.remove(nonce_file_path)
                         # print(f"   Temporary nonce file deleted: {nonce_file_path}") # Optional confirmation
                     except OSError as e:
-                        print(f"{CR}   Error deleting temporary nonce file {nonce_file_path}: {e}{C0}")
+                        print(color_string((CR, f"   Error deleting temporary nonce file {nonce_file_path}: {e}")))
 
     def on_exec(self, args: argparse.Namespace):
         block_known = args.blk
@@ -1356,7 +1361,7 @@ class HFMFHardNested(ReaderRequiredUnit):
         type_target = MfcKeyType.B if args.tb else MfcKeyType.A
 
         if block_known == block_target and type_known == type_target:
-            print(f"{CR}Target key is the same as the known key.{C0}")
+            print(color_string((CR, "Target key is the same as the known key.")))
             return
 
         # Pass the max_runs and max_attempts arguments
@@ -1366,9 +1371,9 @@ class HFMFHardNested(ReaderRequiredUnit):
         )
 
         if recovered_key:
-            print(f" - Key Found: Block {block_target} Type {type_target.name} Key = {CG}{recovered_key.upper()}{C0}")
+            print(f" - Key Found: Block {block_target} Type {type_target.name} Key = {color_string((CG, recovered_key.upper()))}")
         else:
-            print(f"{CR} - HardNested attack failed to recover the key.{C0}")
+            print(color_string((CR, " - HardNested attack failed to recover the key.")))
 
 
 @hf_mf.command('senested')
@@ -1486,9 +1491,9 @@ class HFMFFCHK(ReaderRequiredUnit):
                             encoding='utf8'), help='Read keys from .dic format file')
 
         parser.add_argument('--export-key', type=argparse.FileType('wb'),
-                            help=f'Export result as .key format, file will be {CR}OVERWRITTEN{C0} if exists')
+                            help=f'Export result as .key format, file will be {color_string((CR, "OVERWRITTEN"))} if exists')
         parser.add_argument('--export-dic', type=argparse.FileType('w', encoding='utf8'),
-                            help=f'Export result as .dic format, file will be {CR}OVERWRITTEN{C0} if exists')
+                            help=f'Export result as .dic format, file will be {color_string((CR, "OVERWRITTEN"))} if exists')
 
         parser.add_argument(
             '-m', '--mask', help='Which sectorKey to be skip, 1 bit per sectorKey. `0b1` represent to skip to check. (in hex[20] format)', type=str, default='00000000000000000000', metavar='<hex>')
@@ -1502,15 +1507,15 @@ class HFMFFCHK(ReaderRequiredUnit):
         for i in range(0, len(keys), chunkSize):
             # print("mask = {}".format(mask.hex(sep=' ', bytes_per_sep=1)))
             chunkKeys = keys[i:i+chunkSize]
-            print(f' - progress of checking keys... {CY}{i}{C0} / {len(keys)} ({CY}{100 * i / len(keys):.1f}{C0} %)')
+            print(f' - progress of checking keys... {color_string((CY, i))} / {len(keys)} ({color_string((CY, f"{100 * i / len(keys):.1f}"))} %)')
             resp = self.cmd.mf1_check_keys_of_sectors(mask, chunkKeys)
             # print(resp)
 
             if resp["status"] != Status.HF_TAG_OK:
-                print(f' - check interrupted, reason: {CR}{str(Status(resp["status"]))}{C0}')
+                print(f' - check interrupted, reason: {color_string((CR, Status(resp["status"])))}')
                 break
             elif 'sectorKeys' not in resp:
-                print(f' - check interrupted, reason: {CG}All sectorKey is found or masked{C0}')
+                print(f' - check interrupted, reason: {color_string((CG, "All sectorKey is found or masked"))}')
                 break
 
             for j in range(10):
@@ -1527,7 +1532,7 @@ class HFMFFCHK(ReaderRequiredUnit):
         # keys from args
         for key in args.keys:
             if not re.match(r'^[a-fA-F0-9]{12}$', key):
-                print(f' - {CR}Key should in hex[12] format, invalid key is ignored{C0}, key = "{key}"')
+                print(f' - {color_string((CR, "Key should in hex[12] format, invalid key is ignored"))}, key = "{key}"')
                 continue
             keys.add(bytes.fromhex(key))
 
@@ -1541,14 +1546,14 @@ class HFMFFCHK(ReaderRequiredUnit):
                 return
 
         if len(keys) == 0:
-            print(f' - {CR}No keys{C0}')
+            print(f' - {color_string((CR, "No keys"))}')
             return
 
-        print(f" - loaded {CG}{len(keys)}{C0} keys")
+        print(f" - loaded {color_string((CG, len(keys)))} keys")
 
         # mask
         if not re.match(r'^[a-fA-F0-9]{1,20}$', args.mask):
-            print(f' - {CR}mask should in hex[20] format{C0}, mask = "{args.mask}"')
+            print(f' - {color_string((CR, "mask should in hex[20] format"))}, mask = "{args.mask}"')
             return
         mask = bytearray.fromhex(f'{args.mask:0<20}')
         for i in range(args.maxSectors, 40):
@@ -1559,35 +1564,41 @@ class HFMFFCHK(ReaderRequiredUnit):
         sectorKeys = self.check_keys(mask, list(keys))
         endedAt = datetime.now()
         duration = endedAt - startedAt
-        print(f" - elapsed time: {CY}{duration.total_seconds():.3f}s{C0}")
+        print(f" - elapsed time: {color_string((CY, f'{duration.total_seconds():.3f}s'))}")
 
         if args.export_key is not None:
             unknownkey = bytes(6)
             for sectorNo in range(args.maxSectors):
                 args.export_key.write(sectorKeys.get(2 * sectorNo, unknownkey))
                 args.export_key.write(sectorKeys.get(2 * sectorNo + 1, unknownkey))
-            print(f" - result exported to: {CG}{args.export_key.name}{C0} (as .key format)")
+            print(f" - result exported to: {color_string((CG, args.export_key.name))} (as .key format)")
 
         if args.export_dic is not None:
             uniq_result = set(sectorKeys.values())
             for key in uniq_result:
                 args.export_dic.write(key.hex().upper() + '\n')
-            print(f" - result exported to: {CG}{args.export_dic.name}{C0} (as .dic format)")
+            print(f" - result exported to: {color_string((CG, args.export_dic.name))} (as .dic format)")
 
         # print sectorKeys
-        print(f"\n - {CG}result of key checking:{C0}\n")
+        print(f"\n - {color_string((CG, 'result of key checking:'))}\n")
         print("-----+-----+--------------+---+--------------+----")
         print(" Sec | Blk | key A        |res| key B        |res ")
         print("-----+-----+--------------+---+--------------+----")
         for sectorNo in range(args.maxSectors):
             blk = (sectorNo * 4 + 3) if sectorNo < 32 else (sectorNo * 16 - 369)
             keyA = sectorKeys.get(2 * sectorNo, None)
-            keyA = f"{CG}{keyA.hex().upper()}{C0} | {CG}1{C0}" if keyA else f"{CR}------------{C0} | {CR}0{C0}"
+            if keyA:
+                keyA = f"{color_string((CG, keyA.hex().upper()))} | {color_string((CG, '1'))}"
+            else:
+                keyA = f"{color_string((CR, '------------'))} | {color_string((CR, '0'))}"
             keyB = sectorKeys.get(2 * sectorNo + 1, None)
-            keyB = f"{CG}{keyB.hex().upper()}{C0} | {CG}1{C0}" if keyB else f"{CR}------------{C0} | {CR}0{C0}"
-            print(f" {CY}{sectorNo:03d}{C0} | {blk:03d} | {keyA} | {keyB} ")
+            if keyB:
+                keyB = f"{color_string((CG, keyB.hex().upper()))} | {color_string((CG, '1'))}"
+            else:
+                keyB = f"{color_string((CR, '------------'))} | {color_string((CR, '0'))}"
+            print(f" {color_string((CY, f'{sectorNo:03d}'))} | {blk:03d} | {keyA} | {keyB} ")
         print("-----+-----+--------------+---+--------------+----")
-        print(f"( {CR}0{C0}: Failed, {CG}1{C0}: Success )\n\n")
+        print(f"( {color_string((CR, '0'))}: Failed, {color_string((CG, '1'))}: Success )\n\n")
 
 
 @hf_mf.command('rdbl')
@@ -1619,9 +1630,9 @@ class HFMFWRBL(MF1AuthArgsUnit):
         data = bytearray.fromhex(args.data)
         resp = self.cmd.mf1_write_one_block(param.block, param.type, param.key, data)
         if resp:
-            print(f" - {CG}Write done.{C0}")
+            print(f" - {color_string((CG, 'Write done.'))}")
         else:
-            print(f" - {CR}Write fail.{C0}")
+            print(f" - {color_string((CR, 'Write fail.'))}")
 
 
 @hf_mf.command('view')
@@ -1756,12 +1767,12 @@ class HFMFVALUE(ReaderRequiredUnit):
         val1, val2, val3, adr1, adr2, adr3, adr4 = struct.unpack("<iiiBBBB", resp)
         # print(f"{val1}, {val2}, {val3}, {adr1}, {adr2}, {adr3}, {adr4}")
         if (val1 != val3) or (val1 + val2 != -1):
-            print(f" - {CR}Invalid value of value block: {resp.hex()}{C0}")
+            print(f" - {color_string((CR, f'Invalid value of value block: {resp.hex()}'))}")
             return
         if (adr1 != adr3) or (adr2 != adr4) or (adr1 + adr2 != 0xFF):
-            print(f" - {CR}Invalid address of value block: {resp.hex()}{C0}")
+            print(f" - {color_string((CR, f'Invalid address of value block: {resp.hex()}'))}")
             return
-        print(f" - block[{block}] = {CG}{{ value: {val1}, adr: {adr1} }}{C0}")
+        print(f" - block[{block}] = {color_string((CG, f'{{ value: {val1}, adr: {adr1} }}'))}")
 
     def set_value(self, block, type, key, value):
         if value < -2147483647 or value > 2147483647:
@@ -1770,10 +1781,10 @@ class HFMFVALUE(ReaderRequiredUnit):
         data = struct.pack("<iiiBBBB", value, -value - 1, value, block, adr_inverted, block, adr_inverted)
         resp = self.cmd.mf1_write_one_block(block, type, key, data)
         if resp:
-            print(f" - {CG}Set done.{C0}")
+            print(f" - {color_string((CG, 'Set done.'))}")
             self.get_value(block, type, key)
         else:
-            print(f" - {CR}Set fail.{C0}")
+            print(f" - {color_string((CR, 'Set fail.'))}")
 
     def inc_value(self, src_blk, src_type, src_key, value, dst_blk, dst_type, dst_key):
         if value < 0 or value > 2147483647:
@@ -1784,10 +1795,10 @@ class HFMFVALUE(ReaderRequiredUnit):
             dst_blk, dst_type, dst_key
         )
         if resp:
-            print(f" - {CG}Increment done.{C0}")
+            print(f" - {color_string((CG, 'Increment done.'))}")
             self.get_value(dst_blk, dst_type, dst_key)
         else:
-            print(f" - {CR}Increment fail.{C0}")
+            print(f" - {color_string((CR, 'Increment fail.'))}")
 
     def dec_value(self, src_blk, src_type, src_key, value, dst_blk, dst_type, dst_key):
         if value < 0 or value > 2147483647:
@@ -1798,10 +1809,10 @@ class HFMFVALUE(ReaderRequiredUnit):
             dst_blk, dst_type, dst_key
         )
         if resp:
-            print(f" - {CG}Decrement done.{C0}")
+            print(f" - {color_string((CG, 'Decrement done.'))}")
             self.get_value(dst_blk, dst_type, dst_key)
         else:
-            print(f" - {CR}Decrement fail.{C0}")
+            print(f" - {color_string((CR, 'Decrement fail.'))}")
 
     def res_value(self, src_blk, src_type, src_key, dst_blk, dst_type, dst_key):
         resp = self.cmd.mf1_manipulate_value_block(
@@ -1810,10 +1821,10 @@ class HFMFVALUE(ReaderRequiredUnit):
             dst_blk, dst_type, dst_key
         )
         if resp:
-            print(f" - {CG}Restore done.{C0}")
+            print(f" - {color_string((CG, 'Restore done.'))}")
             self.get_value(dst_blk, dst_type, dst_key)
         else:
-            print(f" - {CR}Restore fail.{C0}")
+            print(f" - {color_string((CR, 'Restore fail.'))}")
 
 
 _KEY = re.compile("[a-fA-F0-9]{12}", flags=re.MULTILINE)
@@ -2148,7 +2159,7 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
         # collect current settings
         anti_coll_data = self.cmd.hf14a_get_anti_coll_data()
         if anti_coll_data is None or len(anti_coll_data) == 0:
-            print(f"{CR}Slot {self.slot_num} does not contain any HF 14A config{C0}")
+            print(f"{color_string((CR, f'Slot {self.slot_num} does not contain any HF 14A config'))}")
             return
         uid = anti_coll_data['uid']
         atqa = anti_coll_data['atqa']
@@ -2163,7 +2174,7 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
             TagSpecificType.MIFARE_2048,
             TagSpecificType.MIFARE_4096,
         ]:
-            print(f"{CR}Slot {self.slot_num} not configured as MIFARE Classic{C0}")
+            print(f"{color_string((CR, f'Slot {self.slot_num} not configured as MIFARE Classic'))}")
             return
         mfc_config = self.cmd.mf1_get_emulator_config()
         gen1a_mode = mfc_config["gen1a_mode"]
@@ -2179,7 +2190,7 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 self.cmd.mf1_set_gen1a_mode(gen1a_mode)
                 change_done = True
             else:
-                print(f'{CY}Requested gen1a already enabled{C0}')
+                print(f'{color_string((CY, "Requested gen1a already enabled"))}')
         elif args.disable_gen1a:
             change_requested = True
             if gen1a_mode:
@@ -2187,7 +2198,7 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 self.cmd.mf1_set_gen1a_mode(gen1a_mode)
                 change_done = True
             else:
-                print(f'{CY}Requested gen1a already disabled{C0}')
+                print(f'{color_string((CY, "Requested gen1a already disabled"))}')
         if args.enable_gen2:
             change_requested = True
             if not gen2_mode:
@@ -2195,7 +2206,7 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 self.cmd.mf1_set_gen2_mode(gen2_mode)
                 change_done = True
             else:
-                print(f'{CY}Requested gen2 already enabled{C0}')
+                print(f'{color_string((CY, "Requested gen2 already enabled"))}')
         elif args.disable_gen2:
             change_requested = True
             if gen2_mode:
@@ -2203,7 +2214,7 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 self.cmd.mf1_set_gen2_mode(gen2_mode)
                 change_done = True
             else:
-                print(f'{CY}Requested gen2 already disabled{C0}')
+                print(f'{color_string((CY, "Requested gen2 already disabled"))}')
         if args.enable_block0:
             change_requested = True
             if not block_anti_coll_mode:
@@ -2211,7 +2222,7 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 self.cmd.mf1_set_block_anti_coll_mode(block_anti_coll_mode)
                 change_done = True
             else:
-                print(f'{CY}Requested block0 anti-coll mode already enabled{C0}')
+                print(f'{color_string((CY, "Requested block0 anti-coll mode already enabled"))}')
         elif args.disable_block0:
             change_requested = True
             if block_anti_coll_mode:
@@ -2219,7 +2230,7 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 self.cmd.mf1_set_block_anti_coll_mode(block_anti_coll_mode)
                 change_done = True
             else:
-                print(f'{CY}Requested block0 anti-coll mode already disabled{C0}')
+                print(f'{color_string((CY, "Requested block0 anti-coll mode already disabled"))}')
         if args.write is not None:
             change_requested = True
             new_write_mode = MifareClassicWriteMode[args.write]
@@ -2228,7 +2239,7 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 self.cmd.mf1_set_write_mode(write_mode)
                 change_done = True
             else:
-                print(f'{CY}Requested write mode already set{C0}')
+                print(f'{color_string((CY, "Requested write mode already set"))}')
         if args.enable_log:
             change_requested = True
             if not detection:
@@ -2236,7 +2247,7 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 self.cmd.mf1_set_detection_enable(detection)
                 change_done = True
             else:
-                print(f'{CY}Requested logging of MFC authentication data already enabled{C0}')
+                print(f'{color_string((CY, "Requested logging of MFC authentication data already enabled"))}')
         elif args.disable_log:
             change_requested = True
             if detection:
@@ -2244,31 +2255,33 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 self.cmd.mf1_set_detection_enable(detection)
                 change_done = True
             else:
-                print(f'{CY}Requested logging of MFC authentication data already disabled{C0}')
+                print(f'{color_string((CY, "Requested logging of MFC authentication data already disabled"))}')
 
         if change_done:
             print(' - MF1 Emulator settings updated')
         if not change_requested:
-            print(f'- {"Type:":40}{CY}{hf_tag_type}{C0}')
-            print(f'- {"UID:":40}{CY}{uid.hex().upper()}{C0}')
-            print(f'- {"ATQA:":40}{CY}{atqa.hex().upper()} '
-                  f'(0x{int.from_bytes(atqa, byteorder="little"):04x}){C0}')
-            print(f'- {"SAK:":40}{CY}{sak.hex().upper()}{C0}')
+            enabled_str = color_string((CG, "enabled"))
+            disabled_str = color_string((CR, "disabled"))
+            atqa_string = f"{atqa.hex().upper()} (0x{int.from_bytes(atqa, byteorder='little'):04x})"
+            print(f'- {"Type:":40}{color_string((CY, hf_tag_type))}')
+            print(f'- {"UID:":40}{color_string((CY, uid.hex().upper()))}')
+            print(f'- {"ATQA:":40}{color_string((CY, atqa_string))}')
+            print(f'- {"SAK:":40}{color_string((CY, sak.hex().upper()))}')
             if len(ats) > 0:
-                print(f'- {"ATS:":40}{CY}{ats.hex().upper()}{C0}')
+                print(f'- {"ATS:":40}{color_string((CY, ats.hex().upper()))}')
             print(
-                f'- {"Gen1A magic mode:":40}{f"{CG}enabled{C0}" if gen1a_mode else f"{CR}disabled{C0}"}')
+                f'- {"Gen1A magic mode:":40}{f"{enabled_str}" if gen1a_mode else f"{disabled_str}"}')
             print(
-                f'- {"Gen2 magic mode:":40}{f"{CG}enabled{C0}" if gen2_mode else f"{CR}disabled{C0}"}')
+                f'- {"Gen2 magic mode:":40}{f"{enabled_str}" if gen2_mode else f"{disabled_str}"}')
             print(
                 f'- {"Use anti-collision data from block 0:":40}'
-                f'{f"{CG}enabled{C0}" if block_anti_coll_mode else f"{CR}disabled{C0}"}')
+                f'{f"{enabled_str}" if block_anti_coll_mode else f"{disabled_str}"}')
             try:
-                print(f'- {"Write mode:":40}{CY}{MifareClassicWriteMode(write_mode)}{C0}')
+                print(f'- {"Write mode:":40}{color_string((CY, MifareClassicWriteMode(write_mode)))}')
             except ValueError:
-                print(f'- {"Write mode:":40}{CR}invalid value!{C0}')
+                print(f'- {"Write mode:":40}{color_string((CR, "invalid value!"))}')
             print(
-                f'- {"Log (mfkey32) mode:":40}{f"{CG}enabled{C0}" if detection else f"{CR}disabled{C0}"}')
+                f'- {"Log (mfkey32) mode:":40}{f"{enabled_str}" if detection else f"{disabled_str}"}')
 
 
 @hf_mfu.command('ercnt')
@@ -2283,9 +2296,9 @@ class HFMFUERCNT(DeviceRequiredUnit):
         value, no_tearing = self.cmd.mfu_read_emu_counter_data(args.counter)
         print(f" - Value: {value:06x} ({value})")
         if no_tearing:
-            print(f" - Tearing: {CG}not set{C0}")
+            print(f" - Tearing: {color_string((CG, 'not set'))}")
         else:
-            print(f" - Tearing: {CR}set{C0}")
+            print(f" - Tearing: {color_string((CR, 'set'))}")
 
 
 @hf_mfu.command('ewcnt')
@@ -2300,7 +2313,7 @@ class HFMFUEWCNT(DeviceRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         if args.value > 0xFFFFFF:
-            print(f"{CR}Counter value {args.value:#x} is too large.{C0}")
+            print(color_string((CR, f"Counter value {args.value:#x} is too large.")))
             return
 
         self.cmd.mfu_write_emu_counter_data(args.counter, args.value, args.reset_tearing)
@@ -2355,7 +2368,7 @@ class HFMFURDPG(MFUAuthArgsUnit):
             except:
                 # we may lose the tag again here
                 pass
-            print(f" {CR}- Auth failed{C0}")
+            print(color_string((CR, " - Auth failed")))
 
 
 @hf_mfu.command('wrpg')
@@ -2374,7 +2387,7 @@ class HFMFUWRPG(MFUAuthArgsUnit):
 
         data = args.data
         if len(data) != 4:
-            print(f"{CR}Page data should be a 4 byte (8 character) hex string{C0}")
+            print(color_string((CR, "Page data should be a 4 byte (8 character) hex string")))
             return
 
         options = {
@@ -2412,7 +2425,7 @@ class HFMFUWRPG(MFUAuthArgsUnit):
             if resp[0] == 0x0A:
                 print(" - Ok")
             else:
-                print(f"{CR}Write failed ({resp[0]:#04x}).{C0}")
+                print(color_string((CR, f"Write failed ({resp[0]:#04x}).")))
         else:
             # send a command just to disable the field. use read to avoid corrupting the data
             try:
@@ -2420,7 +2433,7 @@ class HFMFUWRPG(MFUAuthArgsUnit):
             except:
                 # we may lose the tag again here
                 pass
-            print(f" {CR}- Auth failed{C0}")
+            print(color_string((CR, " - Auth failed")))
 
 
 @hf_mfu.command('eview')
@@ -2482,13 +2495,13 @@ class HFMFUELOAD(DeviceRequiredUnit):
         nr_pages = self.cmd.mfu_get_emu_pages_count()
         size = nr_pages * 4
         if len(data) > size:
-            print(f"{CR}Dump file is too large for the current slot (expected {size} bytes).{C0}")
+            print(color_string((CR, f"Dump file is too large for the current slot (expected {size} bytes).")))
             return
         elif (len(data) % 4) > 0:
-            print(f"{CR}Dump file's length is not a multiple of 4 bytes.{C0}")
+            print(color_string((CR, "Dump file's length is not a multiple of 4 bytes.")))
             return
         elif len(data) < size:
-            print(f"{CY}Dump file is smaller than the current slot's memory ({len(data)} < {size}).{C0}")
+            print(color_string((CY, f"Dump file is smaller than the current slot's memory ({len(data)} < {size}).")))
 
         nr_pages = len(data) >> 2
         page = 0
@@ -2630,7 +2643,7 @@ class HFMFURCNT(MFUAuthArgsUnit):
             except:
                 # we may lose the tag again here
                 pass
-            print(f" {CR}- Auth failed{C0}")
+            print(color_string((CR, " - Auth failed")))
 
 
 @hf_mfu.command('dump')
@@ -2656,14 +2669,14 @@ class HFMFUDUMP(MFUAuthArgsUnit):
 
         tags = self.cmd.hf14a_scan()
         if len(tags) > 1:
-            print(f'- {CR}Collision detected, leave only one tag.{C0}')
+            print(f"- {color_string((CR, 'Collision detected, leave only one tag.'))}")
             return
         elif len(tags) == 0:
-            print(f'- {CR}No tag detected.{C0}')
+            print(f"- {color_string((CR, 'No tag detected.'))}")
             return
         elif tags[0]['atqa'] != b'\x44\x00' or tags[0]['sak'] != b'\x00':
-            print(
-                f'- {CR}Tag is not Mifare Ultralight compatible (ATQA {tags[0]["atqa"].hex()} SAK {tags[0]["sak"].hex()}).{C0}')
+            err = color_string((CR, f"Tag is not Mifare Ultralight compatible (ATQA {tags[0]['atqa'].hex()} SAK {tags[0]['sak'].hex()})."))
+            print(f"- {err}")
             return
 
         options = {
@@ -2728,7 +2741,7 @@ class HFMFUDUMP(MFUAuthArgsUnit):
                     # Invalid command returning a NAK means that's some old type of NTAG.
                     self.cmd.hf14a_raw(options=options, resp_timeout_ms=100, data=struct.pack('!B', 0xFF))
 
-                    print(f' - {CY}Tag is likely NTAG 20x, reading until first error.{C0}')
+                    print(color_string((CY, "Tag is likely NTAG 20x, reading until first error.")))
                     stop_page = 256
                 except:
                     # Regular Ultralight
@@ -2742,7 +2755,8 @@ class HFMFUDUMP(MFUAuthArgsUnit):
                 print(f' - Detected tag type as {tag_name}.')
 
             if stop_page is None:
-                print(f' - {CY}Couldn\'t autodetect the expected card size, reading until first error.{C0}')
+                err_str = "Couldn't autodetect the expected card size, reading until first error."
+                print(f"- {color_string((CY, err_str))}")
                 stop_page = 256
 
         needs_stop = False
@@ -2762,7 +2776,7 @@ class HFMFUDUMP(MFUAuthArgsUnit):
 
         # this handles auth failure
         if needs_stop:
-            print(f" - {CR}Auth failed{C0}")
+            print(color_string((CR, " - Auth failed")))
             if fd is not None:
                 fd.close()
                 fd = None
@@ -2805,9 +2819,9 @@ class HFMFUDUMP(MFUAuthArgsUnit):
                     fd.write(data)
 
         if needs_stop and stop_page != 256:
-            print(f' - {CY}Dump is shorter than expected.{C0}')
+            print(f"- {color_string((CY, 'Dump is shorter than expected.'))}")
         if args.file != '':
-            print(f" - {CG}Dump written in {args.file}.{C0}")
+            print(f"- {color_string((CG, f'Dump written in {args.file}.'))}")
 
     def on_exec(self, args: argparse.Namespace):
         param = self.get_param(args)
@@ -2918,13 +2932,13 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
             aux_data_changed = True
 
             if len(args.set_version) != 8:
-                print(f"{CR}Version data should be 8 bytes long.{C0}")
+                print(color_string((CR, "Version data should be 8 bytes long.")))
                 return
 
             try:
                 self.cmd.mf0_ntag_set_version_data(args.set_version)
             except:
-                print(f"{CR}Tag type does not support GET_VERSION command.{C0}")
+                print(color_string((CR, "Tag type does not support GET_VERSION command.")))
                 return
 
         if args.set_signature is not None:
@@ -2932,13 +2946,13 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
             aux_data_changed = True
 
             if len(args.set_signature) != 32:
-                print(f"{CR}Signature data should be 32 bytes long.{C0}")
+                print(color_string((CR, "Signature data should be 32 bytes long.")))
                 return
 
             try:
                 self.cmd.mf0_ntag_set_signature_data(args.set_signature)
             except:
-                print(f"{CR}Tag type does not support READ_SIG command.{C0}")
+                print(color_string((CR, "Tag type does not support READ_SIG command.")))
                 return
 
         if args.reset_auth_cnt:
@@ -2951,7 +2965,7 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
         # collect current settings
         anti_coll_data = self.cmd.hf14a_get_anti_coll_data()
         if len(anti_coll_data) == 0:
-            print(f"{CR}Slot {self.slot_num} does not contain any HF 14A config{C0}")
+            print(color_string((CR, f"Slot {self.slot_num} does not contain any HF 14A config")))
             return
         uid = anti_coll_data['uid']
         atqa = anti_coll_data['atqa']
@@ -2971,7 +2985,7 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
             TagSpecificType.NTAG_215,
             TagSpecificType.NTAG_216,
         ]:
-            print(f"{CR}Slot {self.slot_num} not configured as MIFARE Ultralight / NTAG{C0}")
+            print(color_string((CR, f"Slot {self.slot_num} not configured as MIFARE Ultralight / NTAG")))
             return
         change_requested, change_done, uid, atqa, sak, ats = self.update_hf14a_anticoll(args, uid, atqa, sak, ats)
 
@@ -2998,9 +3012,9 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
                     change_done = True
                     write_mode = new_write_mode
                 else:
-                    print(f'{CY}Requested write mode already set{C0}')
+                    print(color_string((CY, "Requested write mode already set")))
             except:
-                print(f"{CR}Failed to set write mode. Check if device firmware supports this feature.{C0}")
+                print(color_string((CR, "Failed to set write mode. Check if device firmware supports this feature.")))
 
         detection = self.cmd.mf0_ntag_get_detection_enable()
         if args.enable_log:
@@ -3011,9 +3025,9 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
                     self.cmd.mf0_ntag_set_detection_enable(detection)
                     change_done = True
                 else:
-                    print(f'{CY}Requested logging of MFU authentication data already enabled{C0}')
+                    print(color_string((CY, "Requested logging of MFU authentication data already enabled")))
             else:
-                print(f'{CR}Detection functionality not available in this firmware{C0}')
+                print(color_string((CR, "Detection functionality not available in this firmware")))
         elif args.disable_log:
             change_requested = True
             if detection is not None:
@@ -3022,52 +3036,50 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
                     self.cmd.mf0_ntag_set_detection_enable(detection)
                     change_done = True
                 else:
-                    print(f'{CY}Requested logging of MFU authentication data already disabled{C0}')
+                    print(color_string((CY, "Requested logging of MFU authentication data already disabled")))
             else:
-                print(f'{CR}Detection functionality not available in this firmware{C0}')
+                print(color_string((CR, "Detection functionality not available in this firmware")))
 
         if change_done or aux_data_changed:
             print(' - MFU/NTAG Emulator settings updated')
         if not (change_requested or aux_data_change_requested):
-            print(f'- {"Type:":40}{CY}{hf_tag_type}{C0}')
-            print(f'- {"UID:":40}{CY}{uid.hex().upper()}{C0}')
-            print(f'- {"ATQA:":40}{CY}{atqa.hex().upper()} '
-                  f'(0x{int.from_bytes(atqa, byteorder="little"):04x}){C0}')
-            print(f'- {"SAK:":40}{CY}{sak.hex().upper()}{C0}')
+            atqa_string = f"{atqa.hex().upper()} (0x{int.from_bytes(atqa, byteorder='little'):04x})"
+            print(f'- {"Type:":40}{color_string((CY, hf_tag_type))}')
+            print(f'- {"UID:":40}{color_string((CY, uid.hex().upper()))}')
+            print(f'- {"ATQA:":40}{color_string((CY, atqa_string))}')
+            print(f'- {"SAK:":40}{color_string((CY, sak.hex().upper()))}')
             if len(ats) > 0:
-                print(f'- {"ATS:":40}{CY}{ats.hex().upper()}{C0}')
+                print(f'- {"ATS:":40}{color_string((CY, ats.hex().upper()))}')
 
             # Display UID Magic status
-            if magic_mode:
-                print(f'- {"UID Magic:":40}{CY}enabled{C0}')
-            else:
-                print(f'- {"UID Magic:":40}{CY}disabled{C0}')
+            magic_status = "enabled" if magic_mode else "disabled"
+            print(f'- {"UID Magic:":40}{color_string((CY, magic_status))}')
 
             # Add this to display write mode if available
             try:
-                write_mode = self.cmd.mf0_ntag_get_write_mode()
-                print(f'- {"Write mode:":40}{CY}{MifareUltralightWriteMode(write_mode)}{C0}')
+                write_mode = MifareUltralightWriteMode(self.cmd.mf0_ntag_get_write_mode())
+                print(f'- {"Write mode:":40}{color_string((CY, write_mode))}')
             except:
                 # Write mode not supported in current firmware
                 pass
 
             # Existing version/signature display code
             try:
-                version = self.cmd.mf0_ntag_get_version_data()
-                print(f'- {"Version:":40}{CY}{version.hex().upper()}{C0}')
+                version = self.cmd.mf0_ntag_get_version_data().hex().upper()
+                print(f'- {"Version:":40}{color_string((CY, version))}')
             except:
                 pass
 
             try:
-                signature = self.cmd.mf0_ntag_get_signature_data()
-                print(f'- {"Signature:":40}{CY}{signature.hex().upper()}{C0}')
+                signature = self.cmd.mf0_ntag_get_signature_data().hex().upper()
+                print(f'- {"Signature:":40}{color_string((CY, signature))}')
             except:
                 pass
 
             try:
-                detection = self.cmd.mf0_ntag_get_detection_enable()
+                detection = color_string((CG, "enabled")) if self.cmd.mf0_ntag_get_detection_enable() else color_string((CR, "disabled"))
                 print(
-                    f'- {"Log (password) mode:":40}{f"{CG}enabled{C0}" if detection else f"{CR}disabled{C0}"}')
+                    f'- {"Log (password) mode:":40}{f"{detection}"}')
             except:
                 pass
 
@@ -3084,14 +3096,14 @@ class HFMFUEDetect(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         detection_enabled = self.cmd.mf0_ntag_get_detection_enable()
         if not detection_enabled:
-            print(f"{CY}Detection logging is disabled for this slot{C0}")
+            print(color_string((CY, "Detection logging is disabled for this slot")))
             return
 
         total_count = self.cmd.mf0_ntag_get_detection_count()
         print(f"Total detection log entries: {total_count}")
 
         if total_count == 0:
-            print(f"{CY}No detection logs available{C0}")
+            print(color_string((CY, "No detection logs available")))
             return
 
         if args.count is not None:
@@ -3100,7 +3112,7 @@ class HFMFUEDetect(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
             entries_to_get = total_count - args.index
 
         if entries_to_get <= 0:
-            print(f"{CY}No entries available from index {args.index}{C0}")
+            print(color_string((CY, f"No entries available from index {args.index}")))
             return
 
         logs = self.cmd.mf0_ntag_get_detection_log(args.index)
@@ -3111,7 +3123,7 @@ class HFMFUEDetect(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
         for i, log_entry in enumerate(logs):
             actual_index = args.index + i
             password = log_entry['password']
-            print(f"{actual_index:3d}: {CY}{password.upper()}{C0}")
+            print(f"{actual_index:3d}: {color_string((CY, password.upper()))}")
 
 
 @lf_em_410x.command('read')
@@ -3123,7 +3135,7 @@ class LFEMRead(ReaderRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         data = self.cmd.em410x_scan()
-        print(f"{TagSpecificType(data[0])}: {CG}{data[1].hex()}{C0}")
+        print(color_string((TagSpecificType(data[0])), (CG, data[1].hex())))
 
 
 @lf_em_410x.command('write')
@@ -3155,12 +3167,12 @@ class LFHIDProxRead(LFHIDIdReadArgsUnit, ReaderRequiredUnit):
         cn = (cn1 << 32) + cn2
         print(f"HIDProx/{HIDFormat(format)}")
         if fc > 0:
-            print(f" FC: {CG}{fc}{C0}")
+            print(f" FC: {color_string((CG, fc))}")
         if il > 0:
-            print(f" IL: {CG}{il}{C0}")
+            print(f" IL: {color_string((CG, il))}")
         if oem > 0:
-            print(f" OEM: {CG}{oem}{C0}")
-        print(f" CN: {CG}{cn}{C0}")
+            print(f" OEM: {color_string((CG, oem))}")
+        print(f" CN: {color_string((CG, cn))}")
 
 @lf_hid_prox.command("write")
 class LFHIDProxWriteT55xx(LFHIDIdArgsUnit, ReaderRequiredUnit):
@@ -3217,13 +3229,13 @@ class LFHIDProxEconfig(SlotIndexArgsAndGoUnit, LFHIDIdArgsUnit):
             cn = (cn1 << 32) + cn2
             print(' - Get hidprox tag id success.')
             print(f" - HIDProx/{HIDFormat(format)}")
-            if fc > 0:
-                print(f"   FC: {CG}{fc}{C0}")
-            if il > 0:
-                print(f"   IL: {CG}{il}{C0}")
-            if oem > 0:
-                print(f"   OEM: {CG}{oem}{C0}")
-            print(f"   CN: {CG}{cn}{C0}")
+        if fc > 0:
+            print(f"   FC: {color_string((CG, fc))}")
+        if il > 0:
+            print(f"   IL: {color_string((CG, il))}")
+        if oem > 0:
+            print(f"   OEM: {color_string((CG, oem))}")
+        print(f"   CN: {color_string((CG, cn))}")
 
 @lf_viking.command('read')
 class LFVikingRead(ReaderRequiredUnit):
@@ -3234,7 +3246,7 @@ class LFVikingRead(ReaderRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         id = self.cmd.viking_scan()
-        print(f"Viking: {CG}{id.hex()}{C0}")
+        print(f" Viking: {color_string((CG, id.hex()))}")
 
 
 @lf_viking.command('write')
@@ -3262,12 +3274,12 @@ class HWSlotList(DeviceRequiredUnit):
     def get_slot_name(self, slot, sense):
         try:
             name = self.cmd.get_slot_tag_nick(slot, sense)
-            return {'baselen': len(name), 'metalen': len(CC+C0), 'name': f'{CC}{name}{C0}'}
+            return {'baselen': len(name), 'metalen': len(CC+C0), 'name': color_string((CC, name))}
         except UnexpectedResponseError:
             return {'baselen': 0, 'metalen': 0, 'name': ''}
         except UnicodeDecodeError:
             name = "UTF8 Err"
-            return {'baselen': len(name), 'metalen': len(CC+C0), 'name': f'{CC}{name}{C0}'}
+            return {'baselen': len(name), 'metalen': len(CC+C0), 'name': color_string((CC, name))}
 
     def on_exec(self, args: argparse.Namespace):
         slotinfo = self.cmd.get_slot_info()
@@ -3279,26 +3291,28 @@ class HWSlotList(DeviceRequiredUnit):
         slotnames = []
         all_nicks = self.cmd.get_all_slot_nicks()
         for slot_data in all_nicks:
-            hfn = {'baselen': len(slot_data['hf']), 'metalen': len(CC+C0), 'name': f'{CC}{slot_data["hf"]}{C0}'}
-            lfn = {'baselen': len(slot_data['lf']), 'metalen': len(CC+C0), 'name': f'{CC}{slot_data["lf"]}{C0}'}
+            hfn = {'baselen': len(slot_data['hf']), 'metalen': len(CC+C0), 'name': color_string((CC, slot_data["hf"]))}
+            lfn = {'baselen': len(slot_data['lf']), 'metalen': len(CC+C0), 'name': color_string((CC, slot_data["lf"]))}
             m = max(hfn['baselen'], lfn['baselen'])
             maxnamelength = m if m > maxnamelength else maxnamelength
             slotnames.append({'hf': hfn, 'lf': lfn})
 
         for slot in SlotNumber:
             fwslot = SlotNumber.to_fw(slot)
+            status = f"({color_string((CG, 'active'))})" if slot == selected else ""
             hf_tag_type = TagSpecificType(slotinfo[fwslot]['hf'])
             lf_tag_type = TagSpecificType(slotinfo[fwslot]['lf'])
-            print(f' - {f"Slot {slot}:":{4+maxnamelength+1}}'
-                  f'{f"({CG}active{C0})" if slot == selected else ""}')
+            print(f' - {f"Slot {slot}:":{4+maxnamelength+1}} {status}')
 
             # HF
             field_length = maxnamelength+slotnames[fwslot]["hf"]["metalen"]+1
+            status = f"({color_string((CR, 'disabled'))})" if not enabled[fwslot]["hf"] else ""
             print(f'   HF: '
                   f'{slotnames[fwslot]["hf"]["name"]:{field_length}}', end='')
-            print(f'{f"({CR}disabled{C0}) " if not enabled[fwslot]["hf"] else ""}', end='')
+            print(status, end='')
             if hf_tag_type != TagSpecificType.UNDEFINED:
-                print(f"{CY if enabled[fwslot]['hf'] else C0}{hf_tag_type}{C0}")
+                color = CY if enabled[fwslot]['hf'] else C0
+                print(color_string((color, hf_tag_type)))
             else:
                 print("undef")
             if (not args.short) and enabled[fwslot]['hf'] and hf_tag_type != TagSpecificType.UNDEFINED:
@@ -3311,12 +3325,12 @@ class HWSlotList(DeviceRequiredUnit):
                 sak = anti_coll_data['sak']
                 ats = anti_coll_data['ats']
                 # print('    - ISO14443A emulator settings:')
-                print(f'      {"UID:":40}{CY}{uid.hex().upper()}{C0}')
-                print(f'      {"ATQA:":40}{CY}{atqa.hex().upper()} '
-                      f'(0x{int.from_bytes(atqa, byteorder="little"):04x}){C0}')
-                print(f'      {"SAK:":40}{CY}{sak.hex().upper()}{C0}')
+                atqa_hex_le = f"(0x{int.from_bytes(atqa, byteorder='little'):04x})"
+                print(f'      {"UID:":40}{color_string((CY, uid.hex().upper()))}')
+                print(f'      {"ATQA:":40}{color_string((CY, f"{atqa.hex().upper()} {atqa_hex_le}"))}')
+                print(f'      {"SAK:":40}{color_string((CY, sak.hex().upper()))}')
                 if len(ats) > 0:
-                    print(f'      {"ATS:":40}{CY}{ats.hex().upper()}{C0}')
+                    print(f'      {"ATS:":40}{color_string((CY, ats.hex().upper()))}')
                 if hf_tag_type in [
                     TagSpecificType.MIFARE_Mini,
                     TagSpecificType.MIFARE_1024,
@@ -3325,31 +3339,35 @@ class HWSlotList(DeviceRequiredUnit):
                 ]:
                     config = self.cmd.mf1_get_emulator_config()
                     # print('    - Mifare Classic emulator settings:')
+                    enabled_str = color_string((CG, "enabled"))
+                    disabled_str = color_string((CR, "disabled"))
                     print(
                         f'      {"Gen1A magic mode:":40}'
-                        f'{f"{CG}enabled{C0}" if config["gen1a_mode"] else f"{CR}disabled{C0}"}')
+                        f'{enabled_str if config["gen1a_mode"] else disabled_str}')
                     print(
                         f'      {"Gen2 magic mode:":40}'
-                        f'{f"{CG}enabled{C0}" if config["gen2_mode"] else f"{CR}disabled{C0}"}')
+                        f'{enabled_str if config["gen2_mode"] else disabled_str}')
                     print(
                         f'      {"Use anti-collision data from block 0:":40}'
-                        f'{f"{CG}enabled{C0}" if config["block_anti_coll_mode"] else f"{CR}disabled{C0}"}')
+                        f'{enabled_str if config["block_anti_coll_mode"] else disabled_str}')
                     try:
-                        print(f'      {"Write mode:":40}{CY}'
-                              f'{MifareClassicWriteMode(config["write_mode"])}{C0}')
+                        print(f'      {"Write mode:":40}'
+                              f'{color_string((CY, MifareClassicWriteMode(config["write_mode"])))}')
                     except ValueError:
-                        print(f'      {"Write mode:":40}{CR}invalid value!{C0}')
+                        print(f'      {"Write mode:":40}{color_string((CR, "invalid value!"))}')
                     print(
                         f'      {"Log (mfkey32) mode:":40}'
-                        f'{f"{CG}enabled{C0}" if config["detection"] else f"{CR}disabled{C0}"}')
+                        f'{enabled_str if config["detection"] else disabled_str}')
 
             # LF
             field_length = maxnamelength+slotnames[fwslot]["lf"]["metalen"]+1
+            status = f"({color_string((CR, 'disabled'))})" if not enabled[fwslot]["lf"] else ""
             print(f'   LF: '
                   f'{slotnames[fwslot]["lf"]["name"]:{field_length}}', end='')
-            print(f'{f"({CR}disabled{C0}) " if not enabled[fwslot]["lf"] else ""}', end='')
+            print(status, end='')
             if lf_tag_type != TagSpecificType.UNDEFINED:
-                print(f"{CY if enabled[fwslot]['lf'] else C0}{lf_tag_type}{C0}")
+                color = CY if enabled[fwslot]['lf'] else C0
+                print(color_string((color, lf_tag_type)))
             else:
                 print("undef")
             if (not args.short) and enabled[fwslot]['lf'] and lf_tag_type != TagSpecificType.UNDEFINED:
@@ -3358,21 +3376,21 @@ class HWSlotList(DeviceRequiredUnit):
                     current = slot
                 if lf_tag_type == TagSpecificType.EM410X:
                     id = self.cmd.em410x_get_emu_id()
-                    print(f'      {"ID:":40}{CY}{id.hex().upper()}{C0}')
+                    print(f'      {"ID:":40}{color_string((CY, id.hex().upper()))}')
                 if lf_tag_type == TagSpecificType.HIDProx:
                     (format, fc, cn1, cn2, il, oem) = self.cmd.hidprox_get_emu_id()
                     cn = (cn1 << 32) + cn2
-                    print(f'      {"Format:":40}{CY}{HIDFormat(format)}{C0}')
+                    print(f"      {'Format:':40}{color_string((CY, HIDFormat(format)))}")
                     if fc > 0:
-                        print(f'      {"FC:":40}{CY}{fc}{C0}')
+                        print(f" FC: {color_string((CG, fc))}")
                     if il > 0:
-                        print(f'      {"IL:":40}{CY}{il}{C0}')
+                        print(f" IL: {color_string((CG, il))}")
                     if oem > 0:
-                        print(f'      {"OEM:":40}{CY}{oem}{C0}')
-                    print(f'      {"CN:":40}{CY}{cn}{C0}')
+                        print(f" OEM: {color_string((CG, oem))}")
+                    print(f" CN: {color_string((CG, cn))}")
                 if lf_tag_type == TagSpecificType.Viking:
                     id = self.cmd.viking_get_emu_id()
-                    print(f'      {"ID:":40}{CY}{id.hex().upper()}{C0}')
+                    print(f"      {'ID:':40}{color_string((CY, id.hex().upper()))}")
         if current != selected:
             self.cmd.set_active_slot(selected)
 
@@ -3524,7 +3542,7 @@ class LFVikingEconfig(SlotIndexArgsAndGoUnit, LFVikingIdArgsUnit):
             selected = SlotNumber.from_fw(self.cmd.get_active_slot())
             lf_tag_type = TagSpecificType(slotinfo[selected - 1]['lf'])
             if lf_tag_type != TagSpecificType.Viking:
-                print(f"{CR}WARNING{C0}: Slot type not set to Viking.")
+                print(f"{color_string((CR, 'WARNING'))}: Slot type not set to Viking.")
             self.cmd.viking_set_emu_id(bytes.fromhex(args.id))
             print(' - Set Viking tag id success.')
         else:
@@ -3645,7 +3663,7 @@ class HWSettingsAnimation(DeviceRequiredUnit):
             mode = AnimationMode[args.mode]
             self.cmd.set_animation_mode(mode)
             print("Animation mode change success.")
-            print(f"{CY}Do not forget to store your settings in flash!{C0}")
+            print(color_string((CY, "Do not forget to store your settings in flash!")))
         else:
             print(AnimationMode(self.cmd.get_animation_mode()))
 
@@ -3737,7 +3755,7 @@ class HWBatteryInfo(DeviceRequiredUnit):
         print(f"   voltage    -> {voltage} mV")
         print(f"   percentage -> {percentage}%")
         if percentage < HWBatteryInfo.BATTERY_LOW_LEVEL:
-            print(f"{CR}[!] Low battery, please charge.{C0}")
+            print(color_string((CR, "[!] Low battery, please charge.")))
 
 
 @hw_settings.command('btnpress')
@@ -3763,7 +3781,7 @@ class HWButtonSettingsGet(DeviceRequiredUnit):
         if args.function is not None:
             function = ButtonPressFunction[args.function]
             if not args.a and not args.b:
-                print(f"{CR}You must specify which button you want to change{C0}")
+                print(color_string((CR, "You must specify which button you want to change")))
                 return
             if args.a:
                 button = ButtonType.A
@@ -3775,7 +3793,7 @@ class HWButtonSettingsGet(DeviceRequiredUnit):
                 self.cmd.set_button_press_config(button, function)
             print(f" - Successfully set function '{function}'"
                   f" to Button {button.name} {'long-press' if args.long else 'short-press'}")
-            print(f"{CY}Do not forget to store your settings in flash!{C0}")
+            print(color_string((CY, "Do not forget to store your settings in flash!")))
         else:
             if args.a:
                 button_list = [ButtonType.A]
@@ -3787,11 +3805,11 @@ class HWButtonSettingsGet(DeviceRequiredUnit):
                 if not args.long:
                     resp = self.cmd.get_button_press_config(button)
                     button_fn = ButtonPressFunction(resp)
-                    print(f" - {CG}{button.name} short{C0}: {button_fn}")
+                    print(f"{color_string((CG, f'{button.name} short'))}: {button_fn}")
                 if not args.short:
                     resp_long = self.cmd.get_long_button_press_config(button)
                     button_long_fn = ButtonPressFunction(resp_long)
-                    print(f" - {CG}{button.name} long {C0}: {button_long_fn}")
+                    print(f"{color_string((CG, f'{button.name} long'))}: {button_long_fn}")
                 print("")
 
 
@@ -3806,23 +3824,18 @@ class HWSettingsBLEKey(DeviceRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         key = self.cmd.get_ble_pairing_key()
-        print(" - The current key of the device(ascii): "
-              f"{CG}{key}{C0}")
+        print(f" - The current key of the device(ascii): {color_string((CG, key))}")
 
         if args.key is not None:
             if len(args.key) != 6:
-                print(f" - {CR}The ble connect key length must be 6{C0}")
+                print(f" - {color_string((CR, 'The ble connect key length must be 6'))}")
                 return
             if re.match(r'[0-9]{6}', args.key):
                 self.cmd.set_ble_connect_key(args.key)
-                print(" - Successfully set ble connect key to :", end='')
-                print(f"{CG}"
-                      f" {args.key}"
-                      f"{C0}"
-                      )
-                print(f"{CY}Do not forget to store your settings in flash!{C0}")
+                print(f" - Successfully set ble connect key to : {color_string((CG, args.key))}")
+                print(color_string((CY, "Do not forget to store your settings in flash!")))
             else:
-                print(f" - {CR}Only 6 ASCII characters from 0 to 9 are supported.{C0}")
+                print(f" - {color_string((CR, 'Only 6 ASCII characters from 0 to 9 are supported.'))}")
 
 
 @hw_settings.command('blepair')
@@ -3838,25 +3851,28 @@ class HWBlePair(DeviceRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         is_pairing_enable = self.cmd.get_ble_pairing_enable()
+        enabled_str = color_string((CG, "Enabled"))
+        disabled_str = color_string((CR, "Disabled"))
+
         if not args.enable and not args.disable:
             if is_pairing_enable:
-                print(f" - BLE pairing: {CG} Enabled{C0}")
+                print(f" - BLE pairing: {enabled_str}")
             else:
-                print(f" - BLE pairing: {CR} Disabled{C0}")
+                print(f" - BLE pairing: {disabled_str}")
         elif args.enable:
             if is_pairing_enable:
-                print(f"{CY} BLE pairing is already enabled.{C0}")
+                print(color_string((CY, "BLE pairing is already enabled.")))
                 return
             self.cmd.set_ble_pairing_enable(True)
-            print(f" - Successfully change ble pairing to {CG}Enabled{C0}.")
-            print(f"{CY}Do not forget to store your settings in flash!{C0}")
+            print(f" - Successfully change ble pairing to {enabled_str}.")
+            print(color_string((CY, "Do not forget to store your settings in flash!")))
         elif args.disable:
             if not is_pairing_enable:
-                print(f"{CY} BLE pairing is already disabled.{C0}")
+                print(color_string((CY, "BLE pairing is already disabled.")))
                 return
             self.cmd.set_ble_pairing_enable(False)
-            print(f" - Successfully change ble pairing to {CR}Disabled{C0}.")
-            print(f"{CY}Do not forget to store your settings in flash!{C0}")
+            print(f" - Successfully change ble pairing to {disabled_str}.")
+            print(color_string((CY, "Do not forget to store your settings in flash!")))
 
 
 @hw.command('raw')
@@ -3950,17 +3966,17 @@ examples/notes:
             data = data.replace(' ', '')
             if re.match(r'^[0-9a-fA-F]+$', data):
                 if len(data) % 2 != 0:
-                    print(f" [!] {CR}The length of the data must be an integer multiple of 2.{C0}")
+                    print(f" [!] {color_string((CR, 'The length of the data must be an integer multiple of 2.'))}")
                     return
                 else:
                     data_bytes = bytes.fromhex(data)
             else:
-                print(f" [!] {CR}The data must be a HEX string{C0}")
+                print(f" [!] {color_string((CR, 'The data must be a HEX string'))}")
                 return
         else:
             data_bytes = []
         if args.bits is not None and args.crc:
-            print(f" [!] {CR}--bits and --crc are mutually exclusive{C0}")
+            print(f" [!] {color_string((CR, '--bits and --crc are mutually exclusive'))}")
             return
 
         # Exec 14a raw cmd.
@@ -3973,4 +3989,4 @@ examples/notes:
                 ' '.join([hex(byte).replace('0x', '').rjust(2, '0') for byte in resp])
             )
         else:
-            print(F" [*] {CY}No response{C0}")
+            print(f" [*] {color_string((CY, 'No response'))}")

@@ -4,7 +4,7 @@ import threading
 import time
 import serial
 from typing import Union
-from chameleon_utils import CR, CG, CC, CY, C0
+from chameleon_utils import CR, CG, CC, CY, color_string
 from chameleon_enum import Command, Status
 
 # each thread is waiting for its data for 100 ms before looping again
@@ -213,13 +213,13 @@ class ChameleonCom:
                                 try:
                                     status_string = str(Status(data_status))
                                     if data_status == Status.SUCCESS:
-                                        status_string = f'{CG}{status_string:30}{C0}'
+                                        status_string = color_string((CG, status_string.ljust(30)))
                                     else:
-                                        status_string = f'{CR}{status_string:30}{C0}'
+                                        status_string = color_string((CR, status_string.ljust(30)))
                                 except ValueError:
-                                    status_string = f"{CR}{data_status:30x}{C0}"
-                                print(f'<= {CC}{command_string:40}{C0}{status_string}'
-                                      f'{CY}{data_response.hex() if data_response is not None else ""}{C0}')
+                                    status_string = f"{data_status:30x}"
+                                    response = data_response.hex() if data_response is not None else ""
+                                    print(f"<={color_string((CC, command_string.ljust(40)), (CR, status_string), (CY, response))}")
                             if data_cmd in self.wait_response_map:
                                 # call processor
                                 if 'callback' in self.wait_response_map[data_cmd]:
@@ -341,8 +341,8 @@ class ChameleonCom:
             except ValueError:
                 command_name = "(UNKNOWN)"
             cmd_string = f'{cmd:4} {command_name}{f"[{status:04x}]" if status != 0 else ""}'
-            print(f'=> {CC}{cmd_string:40}{C0}'
-                  f'{CY}{data.hex() if data is not None else ""}{C0}')
+            hexdata = data.hex() if data is not None else ""
+            print(f"<={color_string((CC, cmd_string.ljust(40)), (CY, hexdata))}")
         data_frame = self.make_data_frame_bytes(cmd, data, status)
         task = {'cmd': cmd, 'frame': data_frame, 'timeout': timeout, 'close': close}
         if callable(callback):
