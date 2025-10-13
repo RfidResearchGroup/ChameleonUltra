@@ -76,6 +76,9 @@
 #define DATA_CMD_HF14A_SET_FIELD_ON             (2100)
 #define DATA_CMD_HF14A_SET_FIELD_OFF            (2101)
 
+#define DATA_CMD_HF14A_GET_CONFIG               (2200)
+#define DATA_CMD_HF14A_SET_CONFIG               (2201)
+
 //
 // ******************************************************************
 
