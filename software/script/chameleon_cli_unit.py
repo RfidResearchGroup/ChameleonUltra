@@ -65,12 +65,11 @@ def load_dic_file(import_dic, keys):
 
 
 def check_tools():
-    bin_dir = Path.cwd() / "bin"
     missing_tools = []
 
     for tool in ("staticnested", "nested", "darkside", "mfkey32v2", "staticnested_1nt",
              "staticnested_2x1nt_rf08s", "staticnested_2x1nt_rf08s_1key"):
-        if any(bin_dir.glob(f"{tool}*")):
+        if any(default_cwd.glob(f"{tool}*")):
             continue
         else:
             missing_tools.append(tool)
