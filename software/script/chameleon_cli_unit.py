@@ -405,8 +405,8 @@ class LFEMIdArgsUnit(DeviceRequiredUnit):
     def before_exec(self, args: argparse.Namespace):
         if not super().before_exec(args):
             return False
-        if args.id is None or not re.match(r"^[a-fA-F0-9]{10}$", args.id):
-            raise ArgsParserError("ID must include 10 HEX symbols")
+        if args.id is None or not re.match(r"^[a-fA-F0-9]{26}$", args.id):
+            raise ArgsParserError("ID must include 26 HEX symbols")
         return True
 
     def args_parser(self) -> ArgumentParserNoExit:

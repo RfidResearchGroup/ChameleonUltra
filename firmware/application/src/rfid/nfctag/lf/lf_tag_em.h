@@ -5,7 +5,7 @@
 #include "rfid_main.h"
 #include "tag_emulation.h"
 
-#define LF_EM410X_TAG_ID_SIZE 5
+#define LF_EM410X_TAG_ID_SIZE 13
 #define LF_HIDPROX_TAG_ID_SIZE 13
 #define LF_VIKING_TAG_ID_SIZE 4
 
