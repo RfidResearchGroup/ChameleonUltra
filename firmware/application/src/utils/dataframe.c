@@ -46,7 +46,18 @@ data_frame_tx_t *data_frame_make(uint16_t cmd, uint16_t status, uint16_t data_le
     }
     NRF_LOG_INFO("TX Data frame: cmd = 0x%04x (%i), status = 0x%04x, length = %d%s", cmd, cmd, status, data_length, data_length > 0 ? ", data =" : "");
     if (data_length > 0) {
-        NRF_LOG_HEXDUMP_INFO(data, data_length);
+        uint16_t offset = 0;
+        uint16_t chunk_size = 128;
+
+        while (offset < data_length) {
+            uint16_t remaining = data_length - offset;
+            uint16_t current_chunk = (remaining > chunk_size) ? chunk_size : remaining;
+
+            NRF_LOG_HEXDUMP_INFO(&data[offset], current_chunk);
+            while (NRF_LOG_PROCESS());
+
+            offset += current_chunk;
+        }
     }
 
     netdata_frame_postamble_t *tx_post = (netdata_frame_postamble_t *)((uint8_t *)&m_netdata_frame_tx_buf + sizeof(netdata_frame_preamble_t) + data_length);
