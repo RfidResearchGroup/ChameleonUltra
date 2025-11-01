@@ -687,17 +687,37 @@ static void handle_fast_read_command(uint8_t block_num, uint8_t end_block_num) {
 
 static bool check_ro_lock_on_page(int block_num) {
     if (block_num < 3) return true;
-    else if (block_num == 3) return (m_tag_information->memory[2][2] & 9) != 0; // bits 0 and 3
-    else if (block_num <= MF0ICU1_PAGES) {
+    else if (block_num == 3) {
+        switch (m_tag_type) {
+            case TAG_TYPE_NTAG_213:
+            case TAG_TYPE_NTAG_215:
+            case TAG_TYPE_NTAG_216:
+                //page 3 can be locked or not independant of BL CC bit
+                //the BL bit only freezes the lock bytes !
+                return (m_tag_information->memory[2][2] & 8) != 0;
+            default:
+                return (m_tag_information->memory[2][2] & 9) != 0; 
+        }
+        // bits 0 and 3
+    } else if (block_num <= MF0ICU1_PAGES) {
         bool locked = false;
+        switch (m_tag_type) {
+            case TAG_TYPE_NTAG_213:
+            case TAG_TYPE_NTAG_215:
+            case TAG_TYPE_NTAG_216:
+                // pages can be locked or not independant of BL bits
+                //the BL bits only freezes the lock bytes !
+                uint16_t lock_bits = *(uint16_t *)&m_tag_information->memory[2][2];
+                return ((lock_bits >> block_num) & 0x01) == 1;
+            default:
+                // check block locking bits
+                if (block_num <= 9) locked |= (m_tag_information->memory[2][2] & 2) == 2;
+                else locked |= (m_tag_information->memory[2][2] & 4) == 4;
 
-        // check block locking bits
-        if (block_num <= 9) locked |= (m_tag_information->memory[2][2] & 2) == 2;
-        else locked |= (m_tag_information->memory[2][2] & 4) == 4;
+                locked |= (((*(uint16_t *)&m_tag_information->memory[2][2]) >> block_num) & 1) == 1;
 
-        locked |= (((*(uint16_t *)&m_tag_information->memory[2][2]) >> block_num) & 1) == 1;
-
-        return locked;
+                return locked;
+        }
     } else {
         uint8_t *p_lock_bytes = NULL;
         int user_memory_end = 0;
@@ -776,9 +796,18 @@ static bool check_ro_lock_on_page(int block_num) {
 
             bool locked_small_range = ((lock_word >> (index / dyn_lock_bit_page_cnt)) & 1) != 0;
             bool locked_large_range = ((p_lock_bytes[2] >> (index / dyn_lock_bit_page_cnt / 2)) & 1) != 0;
-
-            return locked_small_range | locked_large_range;
+            switch (m_tag_type) {
+                case TAG_TYPE_NTAG_213:
+                case TAG_TYPE_NTAG_215:
+                case TAG_TYPE_NTAG_216:
+                    // For NTAG213/215/216: byte 2 contains block-locking bits (BL) which only freeze
+                    // the lock configuration. We only check the actual lock bits (L0-L15) in bytes 0-1.
+                    return locked_small_range;
+                default:
+                return locked_small_range | locked_large_range;
+            }
         } else {
+            //TODO needs to check the block locking bits to see if we can touch the dynamic locks bytes for NTAG tags
             // check CFGLCK bit
             int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
             uint8_t access = m_tag_information->memory[first_cfg_page + CONF_ACCESS_PAGE_OFFSET][CONF_ACCESS_BYTE];
