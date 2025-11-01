@@ -822,7 +822,25 @@ static bool check_ro_lock_on_page(int block_num) {
 static int handle_write_command(uint8_t block_num, uint8_t *p_data) {
     int block_max = get_block_max_by_tag_type(m_tag_type, false);
 
-    if (block_num >= block_max) {
+    bool out_of_bounds = false;
+    switch (m_tag_type) {
+        case TAG_TYPE_NTAG_213:
+        case TAG_TYPE_NTAG_215:
+        case TAG_TYPE_NTAG_216:
+            int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
+            uint8_t cfglck = m_tag_information->memory[first_cfg_page][0] & 0x40;
+            // For NTAG cards we need to check CFGLCK bit for config pages
+            bool is_config_page = (block_num >= first_cfg_page) && (block_num <= first_cfg_page + 1);
+            bool config_locked = (cfglck != 0) && (!m_tag_information->config.mode_uid_magic);
+            bool is_beyond_user_memory = (block_num >= block_max);
+            out_of_bounds = (is_beyond_user_memory && !is_config_page) || (config_locked && is_config_page);
+            break;
+        default:
+            out_of_bounds = block_num >= block_max;
+            break;
+    }   
+    // Reject out-of-bounds writes (except config pages)
+    if (out_of_bounds) {
         NRF_LOG_ERROR("Write failed: block_num %08x >= block_max %08x", block_num, block_max);
         return NAK_INVALID_OPERATION_TBV;
     }
