@@ -675,14 +675,14 @@ static void handle_fast_read_command(uint8_t block_num, uint8_t end_block_num) {
 
     int block_max = get_block_max_by_tag_type(m_tag_type, true);
 
-    if (block_num >= end_block_num || end_block_num >= block_max) {
+    if (block_num > end_block_num || end_block_num >= block_max) {
         nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
         return;
     }
 
     NRF_LOG_INFO("HANDLING FAST READ %02x %02x", block_num, end_block_num);
-
-    handle_any_read(block_num, end_block_num - block_num, block_max);
+    // FAST_READ is inclusive: read from block_num to end_block_num (both included)
+    handle_any_read(block_num, end_block_num - block_num + 1, block_max);
 }
 
 static bool check_ro_lock_on_page(int block_num) {
