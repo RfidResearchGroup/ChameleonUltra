@@ -807,7 +807,32 @@ static bool check_ro_lock_on_page(int block_num) {
                 return locked_small_range | locked_large_range;
             }
         } else {
-            //TODO needs to check the block locking bits to see if we can touch the dynamic locks bytes for NTAG tags
+            //Check the block locking bits to see if we can touch the dynamic locks bytes for NTAG tags
+            if(block_num == user_memory_end)
+            {
+                switch (m_tag_type) {
+                    case TAG_TYPE_NTAG_213:
+                    case TAG_TYPE_NTAG_215:
+                    case TAG_TYPE_NTAG_216:
+                    {
+                        uint8_t block_bytes = m_tag_information->memory[user_memory_end][2];
+                        uint16_t block_world = 0;
+                        
+                        // Each bit in block_bytes maps to 2 bits in block_world
+                        for (int i = 0; i < 8; i++) {
+                            if (block_bytes & (0x01 << i)) {
+                                block_world |= (0x0003 << (i * 2));
+                            }
+                        }
+                        
+                        p_lock_bytes = m_tag_information->memory[user_memory_end];
+                        uint16_t lock_word = (((uint16_t)p_lock_bytes[1]) << 8) | (uint16_t)p_lock_bytes[0];
+                        return (lock_word & block_world) != 0;
+                    }
+                    default:
+                        break;
+                }
+            }
             // check CFGLCK bit
             int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
             uint8_t access = m_tag_information->memory[first_cfg_page + CONF_ACCESS_PAGE_OFFSET][CONF_ACCESS_BYTE];
