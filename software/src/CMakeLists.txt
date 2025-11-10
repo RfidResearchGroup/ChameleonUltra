@@ -217,6 +217,20 @@ if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     target_compile_definitions(staticnested_2x1nt_rf08s_1key PRIVATE HAVE_STRUCT_TIMESPEC)
 endif()
 
+# --- mfulc_des_brute Executable ---
+add_executable(mfulc_des_brute mfulc_des_brute.c)
+target_include_directories(mfulc_des_brute PRIVATE ${SRC_DIR})
+target_link_libraries(mfulc_des_brute PRIVATE ${LIBTHREAD} OpenSSL::Crypto)
+target_compile_options(mfulc_des_brute PRIVATE -Wno-deprecated-declarations)
+if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+    target_compile_definitions(mfulc_des_brute PRIVATE _GNU_SOURCE)
+    find_package(OpenSSL REQUIRED)
+endif()
+if (CMAKE_SYSTEM_NAME MATCHES "Windows")
+    target_compile_definitions(mfulc_des_brute PRIVATE HAVE_STRUCT_TIMESPEC)
+    find_package(OpenSSL REQUIRED)
+endif()
+
 
 # --- hardnested Executable ---
 add_executable(hardnested ${COMMON_FILES} ${HARDNESTED_SOURCES})
