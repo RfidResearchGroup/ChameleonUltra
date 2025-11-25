@@ -155,6 +155,10 @@ static enum {
     LF_SENSE_STATE_ENABLE,
 } m_lf_sense_state = LF_SENSE_STATE_NONE;
 
+static uint16_t lf_em410x_id_size(tag_specific_type_t type) {
+    return type == TAG_TYPE_EM410X_ELECTRA ? LF_EM410X_ELECTRA_TAG_ID_SIZE : LF_EM410X_TAG_ID_SIZE;
+}
+
 /**
  * @brief switchLfFieldInductionToEnableTheState
  */
@@ -182,13 +186,14 @@ void lf_tag_125khz_sense_switch(bool enable) {
 int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     // ensure buffer size is large enough for specific tag type,
     // so that tag data (e.g., card numbers) can be converted to corresponding pwm sequence here.
-    if (type == TAG_TYPE_EM410X && buffer->length >= LF_EM410X_TAG_ID_SIZE) {
+    if ((type == TAG_TYPE_EM410X || type == TAG_TYPE_EM410X_ELECTRA) && buffer->length >= lf_em410x_id_size(type)) {
+        const protocol *p = type == TAG_TYPE_EM410X_ELECTRA ? &em410x_electra : &em410x_64;
         m_tag_type = type;
-        void *codec = em410x_64.alloc();
-        m_pwm_seq = em410x_64.modulator(codec, buffer->buffer);
-        em410x_64.free(codec);
-        NRF_LOG_INFO("load lf em410x data finish.");
-        return LF_EM410X_TAG_ID_SIZE;
+        void *codec = p->alloc();
+        m_pwm_seq = p->modulator(codec, buffer->buffer);
+        p->free(codec);
+        NRF_LOG_INFO("load lf em410x%s data finish.", type == TAG_TYPE_EM410X_ELECTRA ? " electra" : "");
+        return lf_em410x_id_size(type);
     }
 
     if (type == TAG_TYPE_HID_PROX && buffer->length >= LF_HIDPROX_TAG_ID_SIZE) {
@@ -221,7 +226,13 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
 int lf_tag_em410x_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     // Make sure to load this tag before allowing saving
     // Just save the original card package directly
-    return m_tag_type == TAG_TYPE_EM410X ? LF_EM410X_TAG_ID_SIZE : 0;
+    if (m_tag_type == TAG_TYPE_EM410X) {
+        return LF_EM410X_TAG_ID_SIZE;
+    }
+    if (m_tag_type == TAG_TYPE_EM410X_ELECTRA) {
+        return LF_EM410X_ELECTRA_TAG_ID_SIZE;
+    }
+    return 0;
 }
 
 /** @brief Id card deposit card number before callback
@@ -252,7 +263,7 @@ bool lf_tag_data_factory(uint8_t slot, tag_specific_type_t tag_type, uint8_t *ta
     fds_slot_record_map_t map_info;  // Get the special card slot FDS record information
     get_fds_map_by_slot_sense_type_for_dump(slot, sense_type, &map_info);
     // Call the blocked FDS to write the function, and write the data of the specified field type of the card slot into the Flash
-    bool ret = fds_write_sync(map_info.id, map_info.key, sizeof(tag_id), (uint8_t *)tag_id);
+    bool ret = fds_write_sync(map_info.id, map_info.key, length, (uint8_t *)tag_id);
     if (ret) {
         NRF_LOG_INFO("Factory slot data success.");
     } else {
@@ -267,9 +278,18 @@ bool lf_tag_data_factory(uint8_t slot, tag_specific_type_t tag_type, uint8_t *ta
  * @return Whether the format is successful, if the formatting is successful, it will return to True, otherwise False will be returned
  */
 bool lf_tag_em410x_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
-    // default id, must to align(4), more word...
-    uint8_t tag_id[5] = {0xDE, 0xAD, 0xBE, 0xEF, 0x88};
-    return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
+    static const uint8_t tag_id_base[LF_EM410X_TAG_ID_SIZE] = {0xDE, 0xAD, 0xBE, 0xEF, 0x88};
+    static const uint8_t tag_id_electra[LF_EM410X_ELECTRA_TAG_ID_SIZE] = {0xDE, 0xAD, 0xBE, 0xEF, 0x88,
+                                                                          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+
+    switch (tag_type) {
+        case TAG_TYPE_EM410X_ELECTRA:
+            return lf_tag_data_factory(slot, tag_type, (uint8_t *)tag_id_electra, sizeof(tag_id_electra));
+        case TAG_TYPE_EM410X:
+            return lf_tag_data_factory(slot, tag_type, (uint8_t *)tag_id_base, sizeof(tag_id_base));
+        default:
+            return false;
+    }
 }
 
 /** @brief Id card deposit card number before callback
