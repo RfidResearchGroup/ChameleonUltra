@@ -14,6 +14,13 @@
 #include "settings.h"
 #include "delayed_reset.h"
 #include "netdata.h"
+#include "emv.h"
+#include "desfire.h"
+#include "ntag_attack.h"
+#include "ndef_gen.h"
+#include "fdx_b.h"
+#include "indala.h"
+#include "t5577_brute.h"
 
 
 #define NRF_LOG_MODULE_NAME app_cmd
@@ -489,6 +496,73 @@ static data_frame_tx_t *cmd_processor_mf1_write_one_block(uint16_t cmd, uint16_t
 }
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
+
+static data_frame_tx_t *cmd_processor_hf14a_scan_emv(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    char buffer[128];
+    bool result = emv_scan(buffer, sizeof(buffer));
+    uint16_t len = strlen(buffer);
+    if (result) {
+        return data_frame_make(cmd, STATUS_HF_TAG_OK, len, (uint8_t *)buffer);
+    } else {
+        return data_frame_make(cmd, STATUS_HF_ERR_STAT, len, (uint8_t *)buffer);
+    }
+}
+
+static data_frame_tx_t *cmd_processor_hf_desfire_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    char buffer[128];
+    bool result = desfire_scan(buffer, sizeof(buffer));
+    uint16_t len = strlen(buffer);
+    if (result) {
+        return data_frame_make(cmd, STATUS_HF_TAG_OK, len, (uint8_t *)buffer);
+    } else {
+        return data_frame_make(cmd, STATUS_HF_ERR_STAT, len, (uint8_t *)buffer);
+    }
+}
+
+static data_frame_tx_t *cmd_processor_hf_ntag_brute(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    char buffer[128];
+    bool result = ntag_attack_run(buffer, sizeof(buffer));
+    uint16_t len = strlen(buffer);
+    if (result) {
+        return data_frame_make(cmd, STATUS_HF_TAG_OK, len, (uint8_t *)buffer);
+    } else {
+        return data_frame_make(cmd, STATUS_HF_ERR_STAT, len, (uint8_t *)buffer);
+    }
+}
+
+static data_frame_tx_t *cmd_processor_hf_ndef_gen_uri(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    // Input: URI String
+    if (length == 0) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    
+    char uri[128] = {0};
+    memcpy(uri, data, length < 127 ? length : 127);
+    
+    uint8_t buffer[256];
+    uint16_t gen_len = ndef_gen_uri(buffer, sizeof(buffer), uri);
+    
+    return data_frame_make(cmd, STATUS_SUCCESS, gen_len, buffer);
+}
+
+static data_frame_tx_t *cmd_processor_lf_fdxb_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    char buffer[128];
+    bool result = fdx_b_scan(buffer, sizeof(buffer));
+    uint16_t len = strlen(buffer);
+    return data_frame_make(cmd, result ? STATUS_LF_TAG_OK : STATUS_LF_TAG_NO_FOUND, len, (uint8_t *)buffer);
+}
+
+static data_frame_tx_t *cmd_processor_lf_indala_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    char buffer[128];
+    bool result = indala_scan(buffer, sizeof(buffer));
+    uint16_t len = strlen(buffer);
+    return data_frame_make(cmd, result ? STATUS_LF_TAG_OK : STATUS_LF_TAG_NO_FOUND, len, (uint8_t *)buffer);
+}
+
+static data_frame_tx_t *cmd_processor_lf_t5577_brute(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    char buffer[128];
+    bool result = t5577_brute_run(buffer, sizeof(buffer));
+    uint16_t len = strlen(buffer);
+    return data_frame_make(cmd, result ? STATUS_LF_TAG_OK : STATUS_LF_TAG_NO_FOUND, len, (uint8_t *)buffer);
+}
 
 static data_frame_tx_t *cmd_processor_hf14a_set_field_on(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     device_mode_t mode = get_device_mode();
@@ -1599,6 +1673,10 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_CHECK_KEYS_OF_SECTORS,    before_hf_reader_run,        cmd_processor_mf1_check_keys_of_sectors,     after_hf_reader_run    },
     {    DATA_CMD_MF1_HARDNESTED_ACQUIRE,       before_hf_reader_run,        cmd_processor_mf1_hardnested_nonces_acquire, after_hf_reader_run    },
     {    DATA_CMD_MF1_CHECK_KEYS_ON_BLOCK,      before_hf_reader_run,        cmd_processor_mf1_check_keys_on_block,       after_hf_reader_run    },
+    {    DATA_CMD_HF14A_SCAN_EMV,               before_hf_reader_run,        cmd_processor_hf14a_scan_emv,                after_hf_reader_run    },
+    {    DATA_CMD_HF_DESFIRE_SCAN,              before_hf_reader_run,        cmd_processor_hf_desfire_scan,               after_hf_reader_run    },
+    {    DATA_CMD_HF_NTAG_BRUTE,                before_hf_reader_run,        cmd_processor_hf_ntag_brute,                 after_hf_reader_run    },
+    {    DATA_CMD_HF_NDEF_GEN_URI,              NULL,                        cmd_processor_hf_ndef_gen_uri,               NULL                   },
 
     {    DATA_CMD_EM410X_SCAN,                  before_reader_run,           cmd_processor_em410x_scan,                   NULL                   },
     {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_em410x_write_to_t55xx,         NULL                   },
@@ -1606,6 +1684,9 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_HIDPROX_WRITE_TO_T55XX,       before_reader_run,           cmd_processor_hidprox_write_to_t55xx,        NULL                   },
     {    DATA_CMD_VIKING_SCAN,                  before_reader_run,           cmd_processor_viking_scan,                   NULL                   },
     {    DATA_CMD_VIKING_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_viking_write_to_t55xx,         NULL                   },
+    {    DATA_CMD_LF_FDXB_SCAN,                 before_reader_run,           cmd_processor_lf_fdxb_scan,                  NULL                   },
+    {    DATA_CMD_LF_INDALA_SCAN,               before_reader_run,           cmd_processor_lf_indala_scan,                NULL                   },
+    {    DATA_CMD_LF_T5577_BRUTE,               before_reader_run,           cmd_processor_lf_t5577_brute,                NULL                   },
 
     {    DATA_CMD_HF14A_SET_FIELD_ON,           before_reader_run,           cmd_processor_hf14a_set_field_on,            NULL                   },
     {    DATA_CMD_HF14A_SET_FIELD_OFF,          before_reader_run,           cmd_processor_hf14a_set_field_off,           NULL                   },

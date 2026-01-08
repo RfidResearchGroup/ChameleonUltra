@@ -119,6 +119,54 @@ class ChameleonCMD:
             resp.parsed = data
         return resp
 
+    @expect_response([Status.HF_TAG_OK, Status.HF_ERR_STAT])
+    def hf14a_scan_emv(self):
+        """
+        Scan EMV tag and get basic information.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.HF14A_SCAN_EMV, timeout=10)
+        resp.parsed = resp.data.decode('utf-8', errors='ignore')
+        return resp
+
+    @expect_response(Status.HF_TAG_OK)
+    def hf_desfire_scan(self):
+        resp = self.device.send_cmd_sync(Command.HF_DESFIRE_SCAN, timeout=10)
+        resp.parsed = resp.data.decode('utf-8', errors='ignore')
+        return resp
+
+    @expect_response(Status.HF_TAG_OK)
+    def hf_ntag_brute(self):
+        resp = self.device.send_cmd_sync(Command.HF_NTAG_BRUTE, timeout=10)
+        resp.parsed = resp.data.decode('utf-8', errors='ignore')
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def hf_ndef_gen_uri(self, uri: str):
+        data = uri.encode('utf-8')
+        resp = self.device.send_cmd_sync(Command.HF_NDEF_GEN_URI, data)
+        resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def lf_fdxb_scan(self):
+        resp = self.device.send_cmd_sync(Command.LF_FDXB_SCAN, timeout=10)
+        resp.parsed = resp.data.decode('utf-8', errors='ignore')
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def lf_indala_scan(self):
+        resp = self.device.send_cmd_sync(Command.LF_INDALA_SCAN, timeout=10)
+        resp.parsed = resp.data.decode('utf-8', errors='ignore')
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def lf_t5577_brute(self):
+        resp = self.device.send_cmd_sync(Command.LF_T5577_BRUTE, timeout=10)
+        resp.parsed = resp.data.decode('utf-8', errors='ignore')
+        return resp
+
     def mf1_detect_support(self):
         """
         Detect whether it is mifare classic tag.
