@@ -3212,6 +3212,11 @@ class LFHIDProxEconfig(SlotIndexArgsAndGoUnit, LFHIDIdArgsUnit):
 
     def on_exec(self, args: argparse.Namespace):
         if args.cn is not None:
+            slotinfo = self.cmd.get_slot_info()
+            selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+            lf_tag_type = TagSpecificType(slotinfo[selected - 1]['lf'])
+            if lf_tag_type != TagSpecificType.HIDProx:
+                print(f"{color_string((CR, 'WARNING'))}: Slot type not set to HIDProx.")
             if args.fc is None:
                 args.fc = 0
             if args.il is None:
@@ -3224,6 +3229,10 @@ class LFHIDProxEconfig(SlotIndexArgsAndGoUnit, LFHIDIdArgsUnit):
             id = struct.pack(">BIBIBH", format.value, args.fc, (args.cn >> 32), args.cn & 0xffffffff, args.il, args.oem)
             self.cmd.hidprox_set_emu_id(id)
             print(' - Set hidprox tag id success.')
+            fc = args.fc
+            cn = args.cn
+            il = args.il
+            oem = args.oem
         else:
             (format, fc, cn1, cn2, il, oem) = self.cmd.hidprox_get_emu_id()
             cn = (cn1 << 32) + cn2
