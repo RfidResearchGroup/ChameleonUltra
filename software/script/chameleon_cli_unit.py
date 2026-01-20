@@ -12,7 +12,10 @@ import time
 import serial.tools.list_ports
 import threading
 import struct
-from dataclasses import dataclass
+import copy
+from functools import reduce
+from operator import xor
+from dataclasses import dataclass, astuple
 from multiprocessing import Pool, cpu_count
 from typing import Union
 from pathlib import Path
@@ -938,7 +941,7 @@ class HFMFNested(ReaderRequiredUnit):
         return
 
 
-def umc_command(cmd, command, password):
+def umc_command(cmd, command, password=b'\x00\x00\x00\x00'):
         options = {
             'activate_rf_field': False,
             'wait_response': True,
@@ -951,7 +954,27 @@ def umc_command(cmd, command, password):
         return cmd.hf14a_raw(options, 1000, b'\xCF' + password + command, None)
 
 
-class UMCBrickingError(Exception): ...
+def umc_read_block(cmd, block, password=b'\x00\x00\x00\x00'):
+    if not 0 <= block < 256:
+        raise ValueError('block out of range')
+    return umc_command(cmd, b'\xCE' + bytes((block,)), password=password)
+
+
+def umc_write_block(cmd, block, data, password=b'\x00\x00\x00\x00'):
+    if not 0 <= block < 256:
+        raise ValueError('block out of range')
+    return umc_command(cmd, b'\xCD' + bytes((block,)) + data, password=password)
+
+
+def get_umc_settings(cmd, password=b'\x00\x00\x00\x00'):
+    resp = umc_command(cmd, b'\xC6', password=password)
+    return UMCSettings.parse(resp)
+
+
+class UMCBrickingError(Exception):
+    def __init__(self, why, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.why = why
 
 
 @dataclass
@@ -988,7 +1011,7 @@ class UMCSettings:
         password = data[2:6]
         gtu_mode = data[6]
         ats_length = data[7]
-        ats = data[8:24]
+        ats = data[8:24][:ats_length]
         atqa = data[24:26]
         sak = data[26]
         ul_mode = data[27]
@@ -1001,24 +1024,27 @@ class UMCSettings:
         """
         Check if the configuration values make sense at all
         """
+        errors = []
         if self.uid_length not in (0, 1, 2):
-            raise ValueError('invalid UID length')
-        if not (0 <= ats_length <= 16):
-            raise ValueError('invalid ATS length value')
+            errors.append('invalid UID length')
+        if not (0 <= self.ats_length <= 16):
+            errors.append('invalid ATS length value')
         if len(self.ats) > 16:
-            raise ValueError('invalid ATS storage length')
+            errors.append('invalid ATS storage length')
         if self.ul_proto not in (0, 1, 2, 3):
-            raise ValueError('invalid UL protocol')
+            errors.append('invalid UL protocol')
         if self.ul_mode not in (0, 1):
-            raise ValueError('invalid card emulation type')
-        if len(password) != 4:
-            raise ValueError('invalid password length')
-        if gtu_mode not in (0, 1, 2, 3, 4):
-            raise ValueError('invalid shadow/GTU mode')
-        if len(atqa) != 2:
-            raise ValueError('invalid ATQA length')
-        if directwrite_block0 not in (0, 1, 2):
-            raise ValueError('invalid directwrite block0 value')
+            errors.append('invalid card emulation type')
+        if len(self.password) != 4:
+            errors.append('invalid password length')
+        if self.gtu_mode not in (0, 1, 2, 3, 4):
+            errors.append('invalid shadow/GTU mode')
+        if len(self.atqa) != 2:
+            errors.append('invalid ATQA length')
+        if self.directwrite_block0 not in (0, 1, 2):
+            errors.append('invalid directwrite block0 value')
+        if errors:
+            raise ValueError('; '.join(errors))
 
     def check_bricking(self, version):
         """
@@ -1028,13 +1054,13 @@ class UMCSettings:
         version_new = bytes.fromhex('00000006A0')
 
         self.check()
-        if self.sak | 0x20 and self.ats == 0:
+        if self.sak | 0x20 and self.ats_length == 0:
             raise UMCBrickingError('An ATS needs to be defined for this SAK')
 
-        if version == version_old:
+        if version == version_new:
             if self.gtu_mode == 1:
                 raise UMCBrickingError('Invalid mode for version 06A0')
-        elif version == version_new:
+        elif version == version_old:
             if self.gtu_mode == 4:
                 raise UMCBrickingError('Untested mode for version 03A0, proceed at your own caution with '
                                        '--i-want-to-brick-my-card and report your findings')
@@ -1090,7 +1116,7 @@ class UMCSettings:
         except KeyError:
             raise ValueError('invalid UL mode') from None
 
-    @property.setter
+    @ul_mode_mapped.setter
     def ul_mode_mapped(self, value: str):
         try:
             self.ul_mode = type(self).UL_MODES_MAPPED[value]
@@ -1100,32 +1126,16 @@ class UMCSettings:
     @property
     def directwrite_block0_mapped(self) -> bool:
         try:
-            return type(self).BLOCK0_DIRECTWRITE_MAPPED[self.directwrite_block0]
+            return type(self).BLOCK0_DIRECTWRITE_RAW[self.directwrite_block0]
         except KeyError:
             raise ValueError('invalid direct write block 0 mode') from None
 
-    @property
+    @directwrite_block0_mapped.setter
     def directwrite_block0_mapped(self, value: bool):
         try:
-            self.directwrite_block0 = type(self).BLOCK0_DIRECTWRITE_RAW[value]
+            self.directwrite_block0 = type(self).BLOCK0_DIRECTWRITE_MAPPED[value]
         except KeyError:
             raise ValueError('invalid direct write block 0 mode') from None
-
-
-def get_umc_settings(cmd, password):
-    resp = umc_command(cmd, b'\xC6', password)
-    ul_proto = resp[0]
-    uid_length = resp[1]
-    password = resp[2:6]
-    gtu_mode = resp[6]
-    ats_length = resp[7]
-    ats = resp[8:24]
-    atqa = resp[24:26]
-    sak = resp[26]
-    ul_mode = resp[27]
-    sectors = resp[28]
-    directwrite_block0 = resp[29]
-    return UMCSettings(ul_proto, uid_length, password, gtu_mode, ats_length, ats, atqa, sak, ul_mode, sectors, directwrite_block0)
 
 
 @umc.command('raw')
@@ -1185,11 +1195,12 @@ class UMCConfig(ReaderRequiredUnit):
         parser.add_argument('--atqa', type=str, help='ATQA')
         parser.add_argument('--sak', type=str, help='SAK')
         parser.add_argument('--uid', type=str, help='UID (4, 7 or 10 bytes)')
+        parser.add_argument('--block0-auto', type=str, nargs='?', default=None, const='1122334455667788', metavar='MANUFACTURER_DATA', help='automatically fill block 0 with the UID, SAK, ATQA and manufacturer data (default %(const)s)')
         parser.add_argument('--new-password', type=str, help='New backdoor password (do not lose it!!)', metavar='PASSWORD')
         parser.add_argument('--type', type=str, choices=('MFC', 'UL'), help='Card emulation type')
-        parser.add_argument('--ul-type', type=str, choices=('UL-EV1', 'NTAG', 'UL-C', 'UL'), help='Ultralight mode (ignored when emulation type is Mifare Classic)')
+        parser.add_argument('--ul-mode', type=str, choices=('UL-EV1', 'NTAG', 'UL-C', 'UL'), help='Ultralight mode (ignored when emulation type is Mifare Classic)')
         parser.add_argument('--shadow', type=str, choices=('pre-write', 'restore', 'disabled', 'high-speed-rw', 'split'), help='Shadow mode/GTU type')
-        parser.add_argument('--block0-directwrite', type=bool, help='Block 0 direct write mode (set to 0 or 1)', metavar='BOOL')
+        parser.add_argument('--block0-directwrite', type=int, help='Block 0 direct write mode (set to 0 or 1)', metavar='BOOL')
         parser.add_argument('--i-want-to-brick-my-card', action='store_true', help='Force setting invalid parameter combinations (bricked card is not recoverable with a Chameleon Ultra!!)')
         return parser
 
@@ -1197,42 +1208,117 @@ class UMCConfig(ReaderRequiredUnit):
         hex_args = {}
         # parse hexadecimal arguments
         invalid_values = False
-        for arg in ('password', 'ats', 'atqa', 'sak', 'uid', 'manufacturer-data', 'new-password'):
-            value = getattr(args, arg)
+        for arg in ('password', 'ats', 'atqa', 'sak', 'uid', 'block0_auto', 'new_password', 'block0_auto'):
+            value = getattr(args, arg, None)
+            if value == '""' or value == '\'\'':
+                # Workaround to do things like --ats="" which is more intuitive than --ats=
+                value = ''
             if value is not None:
                 try:
                     hex_args[arg] = bytes.fromhex(value)
                 except ValueError:
-                    print(color_string(CR, f'{arg} is not a valid hexadecimal value'))
+                    print(color_string((CR, f'{arg}={value} is not a valid hexadecimal value')))
                     invalid_values = True
                     continue
             else:
                 hex_args[arg] = None
+        if invalid_values:
+            return
 
         password, ats, atqa, sak, uid, manufacturer_data, new_password = \
-            hex_args['password'], hex_args['ats'], hex_args['atqa'], hex_args['sak'], hex_args['uid'], hex_args['manufacturer-data'], hex_args['new-password']
+            hex_args['password'], hex_args['ats'], hex_args['atqa'], hex_args['sak'], hex_args['uid'], hex_args['block0_auto'], hex_args['new_password']
+        card_type = getattr(args, 'type', None)
+        ul_mode = getattr(args, 'ul_mode', None)
+        shadow = getattr(args, 'shadow', None)
+        block0_directwrite = bool(getattr(args, 'block0_directwrite', None))
+        force_config = args.i_want_to_brick_my_card
 
         if len(password) != 4:
-            print(color_string((CR, 'Invalid password format (needs to be 4 bytes in hexadecimal)')))
-            return
-        if new_password is not None and len(new_password) != 4:
             print(color_string((CR, 'Invalid password format (needs to be 4 bytes in hexadecimal)')))
             return
 
         # get current configuration
         settings = get_umc_settings(self.cmd, password)
+        original_settings = copy.copy(settings)
+        version_info = umc_command(self.cmd, b'\xCC', password)
+        block0 = umc_read_block(self.cmd, 0, password=password)
+        original_block0 = copy.copy(block0)
 
-        block0 = umc_command(self.cmd, b'\xCE\x00', password)
-        uid_lengths = {0: 4, 1: 7, 2: 10}
-        uid_length_bytes = uid_lengths.get(uid_length)
-        if uid_length_bytes:
-            uid = block0[:uid_length_bytes]
-        else:
-            print(color_string(CR, 'UID length byte is invalid'))
+        if new_password is not None:
+            settings.password = args.new_password
+        if ats is not None:
+            settings.ats = ats
+            settings.ats_length = len(ats)
+        if atqa is not None:
+            settings.atqa = args.atqa
+        if sak is not None:
+            if len(sak) != 1:
+                print(color_string(CR, 'SAK should be only 1 byte'))
+                return
+            settings.sak = sak[0]
+        if uid is not None:
+            settings.uid_length_mapped = len(uid)
+            block0 = uid + block0[len(uid):]
+        if manufacturer_data is not None:
+            block0_uid = uid if uid is not None else current_uid
+            if len(block0_uid) == 4:
+                manufacturer_data = manufacturer_data[:8]
+                manufacturer_data = manufacturer_data + (8 - len(manufacturer_data)) * b'\x00'
+                block0 = block0_uid + bytes((reduce(xor, block0_uid), settings.sak)) + settings.atqa + manufacturer_data
+            elif len(block0_uid) == 7:
+                manufacturer_data = manufacturer_data[:6]
+                manufacturer_data = manufacturer_data + (6 - len(manufacturer_data)) * b'\x00'
+                block0 = block0_uid + bytes((settings.sak | 0x80,)) + settings.atqa + manufacturer_data
+            elif len(block0_uid) == 10:
+                manufacturer_data = manufacturer_data[:6]
+                manufacturer_data = manufacturer_data + (6 - len(manufacturer_data)) * b'\x00'
+                block0 = block0_uid + manufacturer_data
+        if ul_mode is not None:
+            settings.ul_proto_mapped = ul_mode
+        if card_type is not None:
+            settings.ul_mode_mapped = card_type
+        if shadow is not None:
+            settings.gtu_mode_mapped = shadow
+        if block0_directwrite is not None:
+            settings.directwrite_block0_mapped = block0_directwrite
+
+        try:
+            settings.check()
+        except ValueError as e:
+            print(color_string(CR, f'Invalid settings: {"; ".join(e.args) if e.args else ""}'))
             return
 
-        configuration_change = False
-        block0_change = False
+        try:
+            if not force_config:
+                settings.check_bricking(version=version_info)
+        except UMCBrickingError as e:
+            print(color_string((CR, e.why)))
+            if not force_config:
+                return
+
+        if settings != original_settings:
+            # ul_proto = data[0]
+            # uid_length = data[1]
+            # password = data[2:6]
+            # gtu_mode = data[6]
+            # ats_length = data[7]
+            # ats = data[8:24][:ats_length]
+            # atqa = data[24:26]
+            # sak = data[26]
+            # ul_mode = data[27]
+            # sectors = data[28]
+            # directwrite_block0 = data[29]
+            new_settings = bytes((settings.ul_proto, settings.uid_length)) + settings.password + bytes((settings.gtu_mode, settings.ats_length)) + \
+                settings.ats + (16 - len(settings.ats)) * b'\x00' + settings.atqa + bytes((settings.sak, settings.ul_mode, settings.sectors, settings.directwrite_block0))
+
+            print('Writing new settings:', color_string((CG, ' '.join(map('{:02X}'.format, new_settings)))))
+        else:
+            print(color_string((CY, 'Settings unchanged')))
+
+        if block0 != original_block0:
+            print('Writing new block 0:', color_string((CG, ' '.join(map('{:02X}'.format, block0)))))
+        else:
+            print(color_string((CY, 'Block 0 unchanged')))
 
 
 @umc.command('info')
@@ -1256,51 +1342,52 @@ class UMCInfo(ReaderRequiredUnit):
             return
 
         version_info = umc_command(self.cmd, b'\xCC', password)
-        version_old = bytes.fromhex('00000003A0')
-        version_new = bytes.fromhex('00000006A0')
-        versions = {version_old: 'Old (03A0)', version_new: 'New (06A0)'}
+        versions = {UMCSettings.VERSION_OLD: 'Old (03A0)', UMCSettings.VERSION_NEW: 'New (06A0)'}
 
-        ul_proto, uid_length, password, gtu_mode, ats_length, ats, atqa, sak, ul_mode, sectors, directwrite_block0 = \
-            get_umc_settings(self.cmd, password)
+        # ul_proto, uid_length, password, gtu_mode, ats_length, ats, atqa, sak, ul_mode, sectors, directwrite_block0 = \
+        #     get_umc_settings(self.cmd, password)
 
-        uid_lengths = {0: 4, 1: 7, 2: 10}
-        ul_modes = {0: 'Mifare Classic', 1: 'Mifare Ultralight/NTAG mode'}
-        ul_protos = {0: 'UL EV1', 1: 'NTAG', 2: 'UL-C', 3: 'UL'}
-        gtu_modes = {0: 'pre-write, shadow data can be written',
-                     1: 'restore mode',
-                     2: 'disabled',
-                     3: 'disabled, high speed R/W mode for Ultralight (?)',
-                     4: 'split mode'}
-        gtu_mode_desc = gtu_modes.get(gtu_mode, color_string((CY, 'unknown')))
-        if gtu_mode == 1 and version_info == version_new:
-            gtu_mode_desc += color_string((CR, ' [Invalid mode for the new version!]'))
-        elif gtu_mode == 4 and version_info == version_old:
-            gtu_mode_desc += cololr_string((CY, ' [Untested: please report back your findings]'))
-        directwrite_block0_desc = {0: 'Activate direct write to block 0 (as with Gen2 magic tags)',
-                                   1: 'Deactivate direct write to block 0 (as with vanilla tags)',
-                                   2: 'Default value, activate direct write to block 0 (?)'}
+        # uid_lengths = {0: 4, 1: 7, 2: 10}
+        # ul_modes = {0: 'Mifare Classic', 1: 'Mifare Ultralight/NTAG mode'}
+        # ul_protos = {0: 'UL EV1', 1: 'NTAG', 2: 'UL-C', 3: 'UL'}
+        # gtu_modes = {0: 'pre-write, shadow data can be written',
+        #              1: 'restore mode',
+        #              2: 'disabled',
+        #              3: 'disabled, high speed R/W mode for Ultralight (?)',
+        #              4: 'split mode'}
+        # gtu_mode_desc = gtu_modes.get(gtu_mode, color_string((CY, 'unknown')))
+        # if gtu_mode == 1 and version_info == version_new:
+        #     gtu_mode_desc += color_string((CR, ' [Invalid mode for the new version!]'))
+        # elif gtu_mode == 4 and version_info == version_old:
+        #     gtu_mode_desc += cololr_string((CY, ' [Untested: please report back your findings]'))
+        # directwrite_block0_desc = {0: 'Activate direct write to block 0 (as with Gen2 magic tags)',
+        #                            1: 'Deactivate direct write to block 0 (as with vanilla tags)',
+        #                            2: 'Default value, activate direct write to block 0 (?)'}
+
+        settings = get_umc_settings(self.cmd, password)
+        try:
+            settings.check()
+        except ValueError as e:
+            print(color_string(CR, f'Invalid UMC configuration: {e.args[0] if e.args else ""}'))
+            return
 
         block0 = umc_command(self.cmd, b'\xCE\x00', password)
-        print(block0)
-        uid_length_bytes = uid_lengths.get(uid_length)
-        if uid_length_bytes:
-            uid = block0[:uid_length_bytes]
-        else:
-            uid = 'unknown (UID length invalid)'
+        uid = block0[:settings.uid_length_mapped]
 
         print(f'- Version: {versions.get(version_info, color_string((CY, "Unknown (" + version_info.hex().upper() + ")")))}')
-        print(f'- UID length: {uid_lengths.get(uid_length, color_string((CY, "unknown")))} bytes')
+        print(f'- UID length: {settings.uid_length_mapped} bytes')
         print(f'- UID: {uid.hex().upper()}')
-        print(f'- Ultralight protocol: {ul_protos.get(ul_proto, color_string((CY, "unknown")))}')
+        print(f'- Ultralight protocol: {settings.ul_proto_mapped}')
         print(f'- Password: {password.hex().upper()}')
-        print(f'- GTU (shadow) mode: {gtu_mode_desc}')
-        print(f'- ATS length: {ats_length}')
-        print(f'- ATS: {ats[:ats_length].hex().upper()}')
-        print(f'- ATQA: {atqa.hex().upper()} (0x{atqa[1]:02x}{atqa[0]:02x})')
-        print(f'- SAK: {sak:02x}')
-        print(f'- Card type: {ul_modes.get(ul_mode, color_string((CY, "unknown")))}')
-        print(f'- Maximum r/w sectors: {sectors}')
-        print(f'- Block 0 direct write: {directwrite_block0_desc.get(directwrite_block0, color_string((CY, "unknown")))}')
+        print(f'- GTU (shadow) mode: {settings.gtu_mode_mapped}')
+        print(f'- ATS length: {settings.ats_length}')
+        print(f'- ATS: {settings.ats.hex().upper()}')
+        print(f'- ATQA: {settings.atqa.hex().upper()} (0x{settings.atqa[1]:02x}{settings.atqa[0]:02x})')
+        print(f'- SAK: {settings.sak:02X}')
+        print(f'- Card type: {settings.ul_mode_mapped}')
+        print(f'- Maximum r/w sectors: {settings.sectors}')
+        print(f'- Block 0 direct write: {settings.directwrite_block0_mapped}')
+
 
 @hf_mf.command('darkside')
 class HFMFDarkside(ReaderRequiredUnit):
