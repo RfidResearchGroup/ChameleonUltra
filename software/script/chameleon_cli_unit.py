@@ -12,11 +12,13 @@ import time
 import serial.tools.list_ports
 import threading
 import struct
+from dataclasses import dataclass
 from multiprocessing import Pool, cpu_count
 from typing import Union
 from pathlib import Path
 from platform import uname
 from datetime import datetime
+from itertools import chain
 import hardnested_utils
 
 import chameleon_com
@@ -542,6 +544,7 @@ hw_settings = hw.subgroup('settings', 'Chameleon settings commands')
 
 hf = root.subgroup('hf', 'High Frequency commands')
 hf_14a = hf.subgroup('14a', 'ISO14443-a commands')
+umc = hf_14a.subgroup('umc', 'Ultimate Magic Card')
 hf_mf = hf.subgroup('mf', 'MIFARE Classic commands')
 hf_mfu = hf.subgroup('mfu', 'MIFARE Ultralight / NTAG commands')
 
@@ -935,6 +938,370 @@ class HFMFNested(ReaderRequiredUnit):
         return
 
 
+def umc_command(cmd, command, password):
+        options = {
+            'activate_rf_field': False,
+            'wait_response': True,
+            'append_crc': True,
+            'auto_select': True,
+            'keep_rf_field': False,
+            'check_response_crc': True,
+        }
+
+        return cmd.hf14a_raw(options, 1000, b'\xCF' + password + command, None)
+
+
+class UMCBrickingError(Exception): ...
+
+
+@dataclass
+class UMCSettings:
+    VERSION_OLD = bytes.fromhex('00000003A0')
+    VERSION_NEW = bytes.fromhex('00000006A0')
+    UID_LENGTHS_RAW = {0: 4, 1: 7, 2: 10}
+    UID_LENGTHS_MAPPED = {4: 0, 7: 1, 10: 2}
+    UL_MODES_RAW = {0: 'MFC', 1: 'UL'}
+    UL_MODES_MAPPED = {'MFC': 0, 'UL': 1}
+    UL_PROTOS_RAW = {0: 'UL-EV1', 1: 'NTAG', 2: 'UL-C', 3: 'UL'}
+    UL_PROTOS_MAPPED = {'UL-EV1': 0, 'NTAG': 1, 'UL-C': 2, 'UL': 3}
+    BLOCK0_DIRECTWRITE_RAW = {0: True, 1: False, 2: True}
+    BLOCK0_DIRECTWRITE_MAPPED = {True: 0, False: 1}
+    GTU_MODES_RAW = {0: 'pre-write', 1: 'restore', 2: 'disabled', 3: 'high-speed-rw', 4: 'split'}
+    GTU_MODES_MAPPED = {'pre-write': 0, 'restore': 1, 'disabled': 2, 'high-speed-rw': 3, 'split': 4}
+
+    ul_proto: int
+    uid_length: int
+    password: bytes
+    gtu_mode: int
+    ats_length: int
+    ats: bytes
+    atqa: bytes
+    sak: int
+    ul_mode: int
+    sectors: int
+    directwrite_block0: int
+
+    @classmethod
+    def parse(cls, data):
+        ul_proto = data[0]
+        uid_length = data[1]
+        password = data[2:6]
+        gtu_mode = data[6]
+        ats_length = data[7]
+        ats = data[8:24]
+        atqa = data[24:26]
+        sak = data[26]
+        ul_mode = data[27]
+        sectors = data[28]
+        directwrite_block0 = data[29]
+        return cls(ul_proto, uid_length, password, gtu_mode, ats_length, ats, atqa, sak, ul_mode, sectors, directwrite_block0)
+
+
+    def check(self):
+        """
+        Check if the configuration values make sense at all
+        """
+        if self.uid_length not in (0, 1, 2):
+            raise ValueError('invalid UID length')
+        if not (0 <= ats_length <= 16):
+            raise ValueError('invalid ATS length value')
+        if len(self.ats) > 16:
+            raise ValueError('invalid ATS storage length')
+        if self.ul_proto not in (0, 1, 2, 3):
+            raise ValueError('invalid UL protocol')
+        if self.ul_mode not in (0, 1):
+            raise ValueError('invalid card emulation type')
+        if len(password) != 4:
+            raise ValueError('invalid password length')
+        if gtu_mode not in (0, 1, 2, 3, 4):
+            raise ValueError('invalid shadow/GTU mode')
+        if len(atqa) != 2:
+            raise ValueError('invalid ATQA length')
+        if directwrite_block0 not in (0, 1, 2):
+            raise ValueError('invalid directwrite block0 value')
+
+    def check_bricking(self, version):
+        """
+        Check if the configuration values would result in a bricked card
+        """
+        version_old = bytes.fromhex('00000003A0')
+        version_new = bytes.fromhex('00000006A0')
+
+        self.check()
+        if self.sak | 0x20 and self.ats == 0:
+            raise UMCBrickingError('An ATS needs to be defined for this SAK')
+
+        if version == version_old:
+            if self.gtu_mode == 1:
+                raise UMCBrickingError('Invalid mode for version 06A0')
+        elif version == version_new:
+            if self.gtu_mode == 4:
+                raise UMCBrickingError('Untested mode for version 03A0, proceed at your own caution with '
+                                       '--i-want-to-brick-my-card and report your findings')
+        else:
+            raise UMCBrickingError('Version unknown, cannot perform checks')
+
+    @property
+    def uid_length_mapped(self) -> int:
+        try:
+            return type(self).UID_LENGTHS_RAW[self.uid_length]
+        except KeyError:
+            raise ValueError('invalid UID length') from None
+
+    @uid_length_mapped.setter
+    def uid_length_mapped(self, value: int):
+        try:
+            self.uid_length = type(self).UID_LENGTHS_MAPPED[value]
+        except KeyError:
+            raise ValueError('invalid UID length') from None
+    
+    @property
+    def ul_proto_mapped(self) -> str:
+        try:
+            return type(self).UL_PROTOS_RAW[self.ul_proto]
+        except KeyError:
+            raise ValueError('invalid UL protocol') from None
+
+    @ul_proto_mapped.setter
+    def ul_proto_mapped(self, value: str):
+        try:
+            self.ul_proto = type(self).UL_PROTOS_MAPPED[value]
+        except KeyError:
+            raise ValueError('invalid UL protocol') from None
+
+    @property
+    def gtu_mode_mapped(self) -> str:
+        try:
+            return type(self).GTU_MODES_RAW[self.gtu_mode]
+        except KeyError:
+            raise ValueError('invalid GTU mode') from None
+
+    @gtu_mode_mapped.setter
+    def gtu_mode_mapped(self, value: str):
+        try:
+            self.gtu_mode = type(self).GTU_MODES_MAPPED[value]
+        except KeyError:
+            raise ValueError('invalid GTU mode') from None
+
+    @property
+    def ul_mode_mapped(self) -> str:
+        try:
+            return type(self).UL_MODES_RAW[self.ul_mode]
+        except KeyError:
+            raise ValueError('invalid UL mode') from None
+
+    @property.setter
+    def ul_mode_mapped(self, value: str):
+        try:
+            self.ul_mode = type(self).UL_MODES_MAPPED[value]
+        except KeyError:
+            raise ValueError('invalid UL mode') from None
+
+    @property
+    def directwrite_block0_mapped(self) -> bool:
+        try:
+            return type(self).BLOCK0_DIRECTWRITE_MAPPED[self.directwrite_block0]
+        except KeyError:
+            raise ValueError('invalid direct write block 0 mode') from None
+
+    @property
+    def directwrite_block0_mapped(self, value: bool):
+        try:
+            self.directwrite_block0 = type(self).BLOCK0_DIRECTWRITE_RAW[value]
+        except KeyError:
+            raise ValueError('invalid direct write block 0 mode') from None
+
+
+def get_umc_settings(cmd, password):
+    resp = umc_command(cmd, b'\xC6', password)
+    ul_proto = resp[0]
+    uid_length = resp[1]
+    password = resp[2:6]
+    gtu_mode = resp[6]
+    ats_length = resp[7]
+    ats = resp[8:24]
+    atqa = resp[24:26]
+    sak = resp[26]
+    ul_mode = resp[27]
+    sectors = resp[28]
+    directwrite_block0 = resp[29]
+    return UMCSettings(ul_proto, uid_length, password, gtu_mode, ats_length, ats, atqa, sak, ul_mode, sectors, directwrite_block0)
+
+
+@umc.command('raw')
+class UMCRaw(ReaderRequiredUnit):
+    def __init__(self):
+        super().__init__()
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Ultimate Magic Card raw configuration'
+        parser.add_argument('--password', type=str, default='00000000', help='Password (default %(default)s)')
+        parser.add_argument('command', type=str, help='raw command, 1 byte')
+        parser.add_argument('value', type=str, nargs='?', help='parameter, 0+ bytes')
+        parser.epilog = 'Warning! It is easy to brick your card if you use the raw unprotected commands.'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            password = bytes.fromhex(args.password)
+        except ValueError:
+            password = None
+        if not password or len(password) != 4:
+            print(color_string((CR, 'Invalid password format (needs to be 4 bytes in hexadecimal)')))
+            return
+
+        try:
+            cmd = bytes.fromhex(args.command)
+            if len(cmd) != 1:
+                raise ValueError()
+        except ValueError:
+            print(color_string(CR, 'command must be one hexadecimal byte'))
+            return
+
+        if args.value is None:
+            value = b''
+        else:
+            try:
+                value = bytes.fromhex(args.value)
+            except ValueError:
+                print(color_string(CR, 'value must be an hexadecimal byte string'))
+                return
+
+        result = umc_command(self.cmd, cmd + value, password)
+        print(f'Result: [{color_string((CG, " ".join(map("{:02X}".format, result))))}]')
+
+
+@umc.command('config')
+class UMCConfig(ReaderRequiredUnit):
+    def __init__(self):
+        super().__init__()
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Ultimate Magic Card configuration'
+        parser.add_argument('--password', type=str, default='00000000', help='Password (default %(default)s)')
+        parser.add_argument('--ats', type=str, help='ATS (maximum length 16 bytes, set to the empty string to disable)')
+        parser.add_argument('--atqa', type=str, help='ATQA')
+        parser.add_argument('--sak', type=str, help='SAK')
+        parser.add_argument('--uid', type=str, help='UID (4, 7 or 10 bytes)')
+        parser.add_argument('--new-password', type=str, help='New backdoor password (do not lose it!!)', metavar='PASSWORD')
+        parser.add_argument('--type', type=str, choices=('MFC', 'UL'), help='Card emulation type')
+        parser.add_argument('--ul-type', type=str, choices=('UL-EV1', 'NTAG', 'UL-C', 'UL'), help='Ultralight mode (ignored when emulation type is Mifare Classic)')
+        parser.add_argument('--shadow', type=str, choices=('pre-write', 'restore', 'disabled', 'high-speed-rw', 'split'), help='Shadow mode/GTU type')
+        parser.add_argument('--block0-directwrite', type=bool, help='Block 0 direct write mode (set to 0 or 1)', metavar='BOOL')
+        parser.add_argument('--i-want-to-brick-my-card', action='store_true', help='Force setting invalid parameter combinations (bricked card is not recoverable with a Chameleon Ultra!!)')
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        hex_args = {}
+        # parse hexadecimal arguments
+        invalid_values = False
+        for arg in ('password', 'ats', 'atqa', 'sak', 'uid', 'manufacturer-data', 'new-password'):
+            value = getattr(args, arg)
+            if value is not None:
+                try:
+                    hex_args[arg] = bytes.fromhex(value)
+                except ValueError:
+                    print(color_string(CR, f'{arg} is not a valid hexadecimal value'))
+                    invalid_values = True
+                    continue
+            else:
+                hex_args[arg] = None
+
+        password, ats, atqa, sak, uid, manufacturer_data, new_password = \
+            hex_args['password'], hex_args['ats'], hex_args['atqa'], hex_args['sak'], hex_args['uid'], hex_args['manufacturer-data'], hex_args['new-password']
+
+        if len(password) != 4:
+            print(color_string((CR, 'Invalid password format (needs to be 4 bytes in hexadecimal)')))
+            return
+        if new_password is not None and len(new_password) != 4:
+            print(color_string((CR, 'Invalid password format (needs to be 4 bytes in hexadecimal)')))
+            return
+
+        # get current configuration
+        settings = get_umc_settings(self.cmd, password)
+
+        block0 = umc_command(self.cmd, b'\xCE\x00', password)
+        uid_lengths = {0: 4, 1: 7, 2: 10}
+        uid_length_bytes = uid_lengths.get(uid_length)
+        if uid_length_bytes:
+            uid = block0[:uid_length_bytes]
+        else:
+            print(color_string(CR, 'UID length byte is invalid'))
+            return
+
+        configuration_change = False
+        block0_change = False
+
+
+@umc.command('info')
+class UMCInfo(ReaderRequiredUnit):
+    def __init__(self):
+        super().__init__()
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Ultimate Magic Card information'
+        parser.add_argument('--password', type=str, default='00000000', help='Password (default %(default)s)')
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            password = bytes.fromhex(args.password)
+        except ValueError:
+            password = None
+        if not password or len(password) != 4:
+            print(color_string((CR, 'Invalid password format (needs to be 4 bytes in hexadecimal)')))
+            return
+
+        version_info = umc_command(self.cmd, b'\xCC', password)
+        version_old = bytes.fromhex('00000003A0')
+        version_new = bytes.fromhex('00000006A0')
+        versions = {version_old: 'Old (03A0)', version_new: 'New (06A0)'}
+
+        ul_proto, uid_length, password, gtu_mode, ats_length, ats, atqa, sak, ul_mode, sectors, directwrite_block0 = \
+            get_umc_settings(self.cmd, password)
+
+        uid_lengths = {0: 4, 1: 7, 2: 10}
+        ul_modes = {0: 'Mifare Classic', 1: 'Mifare Ultralight/NTAG mode'}
+        ul_protos = {0: 'UL EV1', 1: 'NTAG', 2: 'UL-C', 3: 'UL'}
+        gtu_modes = {0: 'pre-write, shadow data can be written',
+                     1: 'restore mode',
+                     2: 'disabled',
+                     3: 'disabled, high speed R/W mode for Ultralight (?)',
+                     4: 'split mode'}
+        gtu_mode_desc = gtu_modes.get(gtu_mode, color_string((CY, 'unknown')))
+        if gtu_mode == 1 and version_info == version_new:
+            gtu_mode_desc += color_string((CR, ' [Invalid mode for the new version!]'))
+        elif gtu_mode == 4 and version_info == version_old:
+            gtu_mode_desc += cololr_string((CY, ' [Untested: please report back your findings]'))
+        directwrite_block0_desc = {0: 'Activate direct write to block 0 (as with Gen2 magic tags)',
+                                   1: 'Deactivate direct write to block 0 (as with vanilla tags)',
+                                   2: 'Default value, activate direct write to block 0 (?)'}
+
+        block0 = umc_command(self.cmd, b'\xCE\x00', password)
+        print(block0)
+        uid_length_bytes = uid_lengths.get(uid_length)
+        if uid_length_bytes:
+            uid = block0[:uid_length_bytes]
+        else:
+            uid = 'unknown (UID length invalid)'
+
+        print(f'- Version: {versions.get(version_info, color_string((CY, "Unknown (" + version_info.hex().upper() + ")")))}')
+        print(f'- UID length: {uid_lengths.get(uid_length, color_string((CY, "unknown")))} bytes')
+        print(f'- UID: {uid.hex().upper()}')
+        print(f'- Ultralight protocol: {ul_protos.get(ul_proto, color_string((CY, "unknown")))}')
+        print(f'- Password: {password.hex().upper()}')
+        print(f'- GTU (shadow) mode: {gtu_mode_desc}')
+        print(f'- ATS length: {ats_length}')
+        print(f'- ATS: {ats[:ats_length].hex().upper()}')
+        print(f'- ATQA: {atqa.hex().upper()} (0x{atqa[1]:02x}{atqa[0]:02x})')
+        print(f'- SAK: {sak:02x}')
+        print(f'- Card type: {ul_modes.get(ul_mode, color_string((CY, "unknown")))}')
+        print(f'- Maximum r/w sectors: {sectors}')
+        print(f'- Block 0 direct write: {directwrite_block0_desc.get(directwrite_block0, color_string((CY, "unknown")))}')
+
 @hf_mf.command('darkside')
 class HFMFDarkside(ReaderRequiredUnit):
     def __init__(self):
@@ -1008,6 +1375,7 @@ class HFMFDarkside(ReaderRequiredUnit):
         else:
             print(" - Key recover fail.")
         return
+
 
 
 @hf_mf.command('hardnested')

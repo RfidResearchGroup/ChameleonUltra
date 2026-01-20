@@ -54,8 +54,7 @@ class ArgumentParserNoExit(argparse.ArgumentParser):
         self.help_requested = False
 
     def exit(self, status: int = 0, message: Union[str, None] = None):
-        if message:
-            raise ParserExitIntercept(message)
+        raise ParserExitIntercept(message)
 
     def error(self, message: str):
         args = {'prog': self.prog, 'message': message}
