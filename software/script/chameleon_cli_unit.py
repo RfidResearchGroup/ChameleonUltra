@@ -3590,7 +3590,7 @@ class LFEMRead(ReaderRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         data = self.cmd.em410x_scan()
-        print(color_string((TagSpecificType(data[0])), (CG, data[1].hex())))
+        print(f"{TagSpecificType(data[0])}: {color_string((CG, data[1].hex()))}")
 
 
 @lf_em_410x.command('write')
