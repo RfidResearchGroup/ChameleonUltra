@@ -66,16 +66,16 @@ class ArgumentParserNoExit(argparse.ArgumentParser):
         Colorize argparse help
         """
         print("-" * 80)
-        print(f"{CR}{self.prog}{C0}\n")
+        print(color_string((CR, self.prog)))
         lines = self.format_help().splitlines()
         usage = lines[:lines.index('')]
         assert usage[0].startswith('usage:')
-        usage[0] = usage[0].replace('usage:', f'{CG}usage:{C0}\n ')
-        usage[0] = usage[0].replace(self.prog, f'{CR}{self.prog}{C0}')
+        usage[0] = usage[0].replace('usage:', f'{color_string((CG, "usage:"))}\n ')
+        usage[0] = usage[0].replace(self.prog, color_string((CR, self.prog)))
         usage = [usage[0]] + [x[4:] for x in usage[1:]] + ['']
         lines = lines[lines.index('')+1:]
         desc = lines[:lines.index('')]
-        print(f'{CC}'+'\n'.join(desc)+f'{C0}\n')
+        print(color_string((CC, "\n".join(desc))))
         print('\n'.join(usage))
         lines = lines[lines.index('')+1:]
         if '' in lines:
@@ -86,7 +86,7 @@ class ArgumentParserNoExit(argparse.ArgumentParser):
             lines = []
         if len(options) > 0 and options[0].strip() == 'positional arguments:':
             positional_args = options
-            positional_args[0] = positional_args[0].replace('positional arguments:', f'{CG}positional arguments:{C0}')
+            positional_args[0] = positional_args[0].replace('positional arguments:', color_string((CG, "positional arguments:")))
             if len(positional_args) > 1:
                 positional_args.append('')
             print('\n'.join(positional_args))
@@ -99,13 +99,13 @@ class ArgumentParserNoExit(argparse.ArgumentParser):
         if len(options) > 0:
             # 2 variants depending on Python version(?)
             assert options[0].strip() in ['options:', 'optional arguments:']
-            options[0] = options[0].replace('options:', f'{CG}options:{C0}')
-            options[0] = options[0].replace('optional arguments:', f'{CG}optional arguments:{C0}')
+            options[0] = options[0].replace('options:', color_string((CG, "options:")))
+            options[0] = options[0].replace('optional arguments:', color_string((CG, "optional arguments:")))
             if len(options) > 1:
                 options.append('')
             print('\n'.join(options))
         if len(lines) > 0:
-            lines[0] = f'{CG}{lines[0]}{C0}'
+            lines[0] = color_string((CG, lines[0]))
             print('\n'.join(lines))
         print('')
         self.help_requested = True
@@ -245,6 +245,14 @@ def expect_response(accepted_responses: Union[int, list[int]]) -> Callable[..., 
         return error_throwing_func
 
     return decorator
+
+
+def color_string(*args):
+    result = []
+    for arg in args:
+        result.append(f"{arg[0]}{arg[1]}")
+    result.append(C0)
+    return "".join(result)
 
 
 class CLITree:

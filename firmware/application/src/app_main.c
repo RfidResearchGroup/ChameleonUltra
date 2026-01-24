@@ -559,6 +559,12 @@ static void cycle_slot(bool dec) {
     }
     // Update status only if the new card slot switch is valid
     tag_emulation_change_slot(slot_new, true); // Tell the analog card module that we need to switch card slots
+    // Turn off the LEDs in case we were showing the battery status
+    rgb_marquee_stop();
+    uint32_t *led_pins = hw_get_led_array();
+    for (int i = 0; i < RGB_LIST_NUM; i++) {
+        nrf_gpio_pin_clear(led_pins[i]);
+    }
     // Go back to the color corresponding to the field enablement type
     apply_slot_change(slot_now, slot_new);
 }
