@@ -8,7 +8,6 @@ from typing import Union
 from enum import Enum, auto
 import serial
 import socket
-import platform
 
 from chameleon_utils import CR, CG, CC, CY, color_string
 from chameleon_enum import Command, Status
