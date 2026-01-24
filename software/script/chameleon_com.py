@@ -1,3 +1,4 @@
+import sys
 import queue
 import struct
 import threading
@@ -5,12 +6,14 @@ import time
 import platform
 from typing import Union
 from enum import Enum, auto
-if platform.system() != 'Android':
-    import serial
+import serial
 import socket
+import platform
 
 from chameleon_utils import CR, CG, CC, CY, color_string
 from chameleon_enum import Command, Status
+
+ANDROID = 'android' in platform.release()
 
 # each thread is waiting for its data for 100 ms before looping again
 THREAD_BLOCKING_TIMEOUT = 0.1
@@ -101,7 +104,7 @@ class ChameleonCom:
                     self.transport.connect((host, int(port)))
                     self.transport_type = TransportType.SOCKET
                 else:
-                    if platform.system() == 'Android':
+                    if ANDROID:
                         sys.exit(color_string(CR, 'COM port is not supported on Android, make a USB-serial to TCP communication bridge'))
                     self.transport = serial.Serial(port=port, baudrate=115200)
                     self.transport_type = TransportType.SERIAL
