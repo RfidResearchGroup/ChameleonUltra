@@ -61,7 +61,10 @@ static volatile bool m_is_responded = false;
 static uint8_t m_nfc_rx_buffer[MAX_NFC_RX_BUFFER_SIZE] = { 0x00 };
 static uint8_t m_nfc_tx_buffer[MAX_NFC_TX_BUFFER_SIZE] = { 0x00 };
 // The N -secondary connection needs to use SAK, when the "third 'bit' in SAK is 1 is 1, the logo UID is incomplete
-static uint8_t m_uid_incomplete_sak[]   = { 0x04, 0xda, 0x17 };
+static uint8_t m_uid_incomplete_sak[] = { 0x04, 0xda, 0x17 };
+// Reset nfc peripheral after field lost?
+static bool reset_if_field_lost = false; // default is 'false', Unless there is a genuine need for a reset.
+
 
 /**
  * @brief Calculate BCC
@@ -525,8 +528,8 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
 
 // Copy from nrf_nfct.c and modified for nrf52840 adapted(no verify on nrf52832)
 static inline void nrf_nfct_reset(void) {
-    uint32_t                       fdm;
-    uint32_t                       int_enabled;
+    uint32_t fdm;
+    uint32_t int_enabled;
 
     // Save parameter settings before the reset of the NFCT peripheral.
     fdm         = nrf_nfct_frame_delay_max_get();
@@ -608,10 +611,12 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             TAG_FIELD_LED_OFF()
             m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
 
-            // Fix a bug where certain special conditions prevent triggering TX start events and actually transmit incorrect data to the card reader.
-            // After more more more testing, I found that simply going into sleep mode and restarting can restore work. 
-            // Therefore, I suspect that there may be some issues with the NFC peripheral that require a reset to resolve.
-            nrf_nfct_reset();
+            if (reset_if_field_lost) {
+                // Fix a bug where certain special conditions prevent triggering TX start events and actually transmit incorrect data to the card reader.
+                // After more more more testing, I found that simply going into sleep mode and restarting can restore work. 
+                // Therefore, I suspect that there may be some issues with the NFC peripheral that require a reset to resolve.
+                nrf_nfct_reset();
+            }
 
             NRF_LOG_INFO("HF FIELD LOST");
             break;
@@ -729,4 +734,12 @@ bool is_valid_uid_size(uint8_t uid_length) {
     return uid_length == NFC_TAG_14A_UID_SINGLE_SIZE ||
            uid_length == NFC_TAG_14A_UID_DOUBLE_SIZE ||
            uid_length == NFC_TAG_14A_UID_TRIPLE_SIZE;
+}
+
+void nfc_tag_14a_set_reset_enable(bool enable) {
+    reset_if_field_lost = enable;
+}
+
+bool nfc_tag_14a_is_reset_enable() {
+    return reset_if_field_lost;
 }

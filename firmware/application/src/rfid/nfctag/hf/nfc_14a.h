@@ -115,4 +115,8 @@ void nfc_tag_14a_tx_nbit(uint8_t data, uint32_t bits);
 // Determine whether it is an effective UID length
 bool is_valid_uid_size(uint8_t uid_length);
 
+// Reset nfc peripheral after field lost
+void nfc_tag_14a_set_reset_enable(bool enable);
+bool nfc_tag_14a_is_reset_enable();
+
 #endif
