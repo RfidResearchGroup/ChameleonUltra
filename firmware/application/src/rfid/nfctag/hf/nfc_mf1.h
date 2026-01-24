@@ -164,6 +164,7 @@ void nfc_tag_mf1_set_use_mf1_coll_res(bool enable);
 bool nfc_tag_mf1_is_use_mf1_coll_res(void);
 void nfc_tag_mf1_set_write_mode(nfc_tag_mf1_write_mode_t write_mode);
 nfc_tag_mf1_write_mode_t nfc_tag_mf1_get_write_mode(void);
-
+void nfc_tag_mf1_set_field_off_do_reset(bool enable);
+bool nfc_tag_mf1_is_field_off_do_reset(void);
 
 #endif
