@@ -927,7 +927,7 @@ class HFMFNested(ReaderRequiredUnit):
         if block_known == block_target and type_known == type_target:
             print(color_string((CR, "Target key already known")))
             return
-        print(f" - Nested recover one key running...")
+        print(" - Nested recover one key running...")
         key = self.recover_a_key(block_known, type_known, key_known_bytes, block_target, type_target)
         if key is None:
             print(color_string((CY, "No key found, you can retry.")))
@@ -2366,7 +2366,7 @@ class HFMFURDPG(MFUAuthArgsUnit):
         else:
             try:
                 self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x30, args.page))
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 # we may lose the tag again here
                 pass
             print(color_string((CR, " - Auth failed")))
@@ -2431,7 +2431,7 @@ class HFMFUWRPG(MFUAuthArgsUnit):
             # send a command just to disable the field. use read to avoid corrupting the data
             try:
                 self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x30, args.page))
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 # we may lose the tag again here
                 pass
             print(color_string((CR, " - Auth failed")))
@@ -2570,7 +2570,7 @@ class HFMFUESAVE(DeviceRequiredUnit):
                     version = self.cmd.mf0_ntag_get_version_data()
 
                     fd.write(f"# Version: {version.hex()}\n")
-                except:
+                except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                     pass  # slot does not have version data
 
                 try:
@@ -2578,7 +2578,7 @@ class HFMFUESAVE(DeviceRequiredUnit):
 
                     if signature != b"\x00" * 32:
                         fd.write(f"# Signature: {signature.hex()}\n")
-                except:
+                except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                     pass  # slot does not have signature data
 
             page = 0
@@ -2641,7 +2641,7 @@ class HFMFURCNT(MFUAuthArgsUnit):
         else:
             try:
                 self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x39, args.counter))
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 # we may lose the tag again here
                 pass
             print(color_string((CR, " - Auth failed")))
@@ -2698,14 +2698,14 @@ class HFMFUDUMP(MFUAuthArgsUnit):
                 version = self.cmd.hf14a_raw(options=options, resp_timeout_ms=100, data=struct.pack('!B', 0x60))
                 if len(version) == 0:
                     version = None
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 version = None
 
             # try sending AUTHENTICATE command and observe the result
             try:
                 supports_auth = len(self.cmd.hf14a_raw(
                     options=options, resp_timeout_ms=100, data=struct.pack('!B', 0x1A))) != 0
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 supports_auth = False
 
             if version is not None and not supports_auth:
@@ -2744,7 +2744,7 @@ class HFMFUDUMP(MFUAuthArgsUnit):
 
                     print(color_string((CY, "Tag is likely NTAG 20x, reading until first error.")))
                     stop_page = 256
-                except:
+                except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                     # Regular Ultralight
                     tag_name = 'Mifare Ultralight'
                     stop_page = 16
@@ -2794,7 +2794,7 @@ class HFMFUDUMP(MFUAuthArgsUnit):
 
             try:
                 resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x30, i))
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 # probably lost tag, but we still need to disable rf field
                 resp = None
 
@@ -3085,9 +3085,6 @@ class HFMFUULCG(ReaderRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         import json
-        import queue
-        import signal
-        import random
 
         if not args.offline:
             challenges = self.collect_challenges(args.challenges)
@@ -3290,7 +3287,7 @@ class HFMFUULCG(ReaderRequiredUnit):
                         key_found = False
                         crack_effect.stop_event.set()
                         crack_effect.erase_key()
-                        print(f"\n\n\n[-] Error: Unexpected output from mfulc_des_brute\033[?25h")
+                        print("\n\n\n[-] Error: Unexpected output from mfulc_des_brute\033[?25h")
                         break
 
                     # Extract the key segment from output
@@ -3324,7 +3321,7 @@ class HFMFUULCG(ReaderRequiredUnit):
             formatted_key = f"\033[1;34m{result_key}\033[0m"
             print(f"[+] Found key: {formatted_key}\033[?25h")
             if offline:
-                print(f"You can restore found key on the card with appropriate write commands")
+                print("You can restore found key on the card with appropriate write commands")
             else:
                 # Restore the key on the card
                 print("[+] Restoring key to card...")
@@ -3392,7 +3389,7 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
 
             try:
                 self.cmd.mf0_ntag_set_version_data(args.set_version)
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 print(color_string((CR, "Tag type does not support GET_VERSION command.")))
                 return
 
@@ -3406,7 +3403,7 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
 
             try:
                 self.cmd.mf0_ntag_set_signature_data(args.set_signature)
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 print(color_string((CR, "Tag type does not support READ_SIG command.")))
                 return
 
@@ -3468,7 +3465,7 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
                     write_mode = new_write_mode
                 else:
                     print(color_string((CY, "Requested write mode already set")))
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 print(color_string((CR, "Failed to set write mode. Check if device firmware supports this feature.")))
 
         detection = self.cmd.mf0_ntag_get_detection_enable()
@@ -3514,7 +3511,7 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
             try:
                 write_mode = MifareUltralightWriteMode(self.cmd.mf0_ntag_get_write_mode())
                 print(f'- {"Write mode:":40}{color_string((CY, write_mode))}')
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 # Write mode not supported in current firmware
                 pass
 
@@ -3522,20 +3519,20 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
             try:
                 version = self.cmd.mf0_ntag_get_version_data().hex().upper()
                 print(f'- {"Version:":40}{color_string((CY, version))}')
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 pass
 
             try:
                 signature = self.cmd.mf0_ntag_get_signature_data().hex().upper()
                 print(f'- {"Signature:":40}{color_string((CY, signature))}')
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 pass
 
             try:
                 detection = color_string((CG, "enabled")) if self.cmd.mf0_ntag_get_detection_enable() else color_string((CR, "disabled"))
                 print(
                     f'- {"Log (password) mode:":40}{f"{detection}"}')
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 pass
 
 @hf_mfu.command('edetect')
