@@ -1374,6 +1374,19 @@ static data_frame_tx_t *cmd_processor_mf1_set_write_mode(uint16_t cmd, uint16_t 
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
+static data_frame_tx_t *cmd_processor_mf1_get_field_off_do_reset(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t enable = nfc_tag_mf1_is_field_off_do_reset();
+    return data_frame_make(cmd, STATUS_SUCCESS, 1, &enable);
+}
+
+static data_frame_tx_t *cmd_processor_mf1_set_field_off_do_reset(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 1 || data[0] >= 2) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    nfc_tag_mf1_set_field_off_do_reset(data[0]);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
 static data_frame_tx_t *cmd_processor_get_enabled_slots(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     struct {
         uint8_t enabled_hf;
@@ -1630,6 +1643,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_SET_BLOCK_ANTI_COLL_MODE, NULL,                        cmd_processor_mf1_set_block_anti_coll_mode,  NULL                   },
     {    DATA_CMD_MF1_GET_WRITE_MODE,           NULL,                        cmd_processor_mf1_get_write_mode,            NULL                   },
     {    DATA_CMD_MF1_SET_WRITE_MODE,           NULL,                        cmd_processor_mf1_set_write_mode,            NULL                   },
+    {    DATA_CMD_MF1_GET_FIELD_OFF_DO_RESET,   NULL,                        cmd_processor_mf1_get_field_off_do_reset,    NULL                   },
+    {    DATA_CMD_MF1_SET_FIELD_OFF_DO_RESET,   NULL,                        cmd_processor_mf1_set_field_off_do_reset,    NULL                   },
 
     {    DATA_CMD_MF0_NTAG_GET_UID_MAGIC_MODE,    NULL,                      cmd_processor_mf0_ntag_get_uid_mode,         NULL                   },
     {    DATA_CMD_MF0_NTAG_SET_UID_MAGIC_MODE,    NULL,                      cmd_processor_mf0_ntag_set_uid_mode,         NULL                   },
