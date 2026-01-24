@@ -259,7 +259,8 @@ include $(TEMPLATE_PATH)/Makefile.common
 
 # tolerate warnings in newer gcc versions
 # need to be called after $(TEMPLATE_PATH)/Makefile.common
-CC_VERSION = $(shell $(CC) -dumpversion 2>/dev/null|sed 's/\..*//')
+# The return value of the Windows+msys2 build platform has carriage returns and line breaks, which need to be removed.
+CC_VERSION = $(shell $(CC) -dumpversion 2>/dev/null | tr -d '\r' | cut -d. -f1)
 CC_VERSION := $(or $(strip $(CC_VERSION)),0)
 ifeq ($(shell expr $(CC_VERSION) \>= 12), 1)
     # avoid a couple of false warnings in nRF SDK

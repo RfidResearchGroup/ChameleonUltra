@@ -139,6 +139,8 @@
 #define DATA_CMD_MF0_NTAG_GET_DETECTION_LOG     (4035)
 #define DATA_CMD_MF0_NTAG_GET_DETECTION_ENABLE  (4036)
 #define DATA_CMD_MF0_NTAG_GET_EMULATOR_CONFIG   (4037)
+#define DATA_CMD_MF1_SET_FIELD_OFF_DO_RESET     (4038)
+#define DATA_CMD_MF1_GET_FIELD_OFF_DO_RESET     (4039)
 //
 // ******************************************************************
 
