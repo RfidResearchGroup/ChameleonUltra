@@ -199,7 +199,7 @@ class DeviceRequiredUnit(BaseCLIUnit):
         if ret:
             return True
         else:
-            print("Please connect to chameleon device first(use 'hw connect').")
+            print("Please connect to chameleon device first (use 'hw connect').")
             return False
 
 
@@ -3678,19 +3678,19 @@ class LFHIDProxEconfig(SlotIndexArgsAndGoUnit, LFHIDIdArgsUnit):
                 format = HIDFormat[args.format]
             id = struct.pack(">BIBIBH", format.value, args.fc, (args.cn >> 32), args.cn & 0xffffffff, args.il, args.oem)
             self.cmd.hidprox_set_emu_id(id)
-            print(' - Set hidprox tag id success.')
+            print(' - SET hidprox tag id success.')
         else:
             (format, fc, cn1, cn2, il, oem) = self.cmd.hidprox_get_emu_id()
             cn = (cn1 << 32) + cn2
-            print(' - Get hidprox tag id success.')
+            print(' - GET hidprox tag id success.')
             print(f" - HIDProx/{HIDFormat(format)}")
-        if fc > 0:
-            print(f"   FC: {color_string((CG, fc))}")
-        if il > 0:
-            print(f"   IL: {color_string((CG, il))}")
-        if oem > 0:
-            print(f"   OEM: {color_string((CG, oem))}")
-        print(f"   CN: {color_string((CG, cn))}")
+            if fc > 0:
+                print(f"   FC: {color_string((CG, fc))}")
+            if il > 0:
+                print(f"   IL: {color_string((CG, il))}")
+            if oem > 0:
+                print(f"   OEM: {color_string((CG, oem))}")
+            print(f"   CN: {color_string((CG, cn))}")
 
 @lf_viking.command('read')
 class LFVikingRead(ReaderRequiredUnit):
