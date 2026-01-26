@@ -553,7 +553,7 @@ static uint64_t pack_actprox(wiegand_card_t *card) {
     if (card->oem == 0) {
         card->oem = 900;
     }
-    uint64_t bits = PREAMBLE_36BIT;
+    uint64_t bits = PREAMBLE_ACTP;
     bits <<= 1;
     bits = (bits << 10) | (card->oem & 0x3ff);
     bits = (bits << 8) | (card->facility_code & 0xff);
