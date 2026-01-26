@@ -581,6 +581,7 @@ class HIDFormat(enum.IntEnum):
     C1K35S = 21
     C15001 = 22
     S12906 = 23
+    ACTPHID = 42
     SIE36 = 24
     H10320 = 25
     H10302 = 26
@@ -614,6 +615,7 @@ class HIDFormat(enum.IntEnum):
             HIDFormat.C1K35S: "HID Corporate 1000 35-bit Std",
             HIDFormat.C15001: "HID KeyScan 36-bit",
             HIDFormat.S12906: "HID Simplex 36-bit",
+            HIDFormat.ACTPHID: "HID ACTProx 36-bit",
             HIDFormat.SIE36: "HID 36-bit Siemens",
             HIDFormat.H10320: "HID H10320 37-bit BCD",
             HIDFormat.H10302: "HID H10302 37-bit huge ID",
