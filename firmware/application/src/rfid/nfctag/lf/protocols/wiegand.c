@@ -18,6 +18,7 @@
 #define PREAMBLE_34BIT (0x009)
 #define PREAMBLE_35BIT (0x005)
 #define PREAMBLE_36BIT (0x003)
+#define PREAMBLE_ACTP  (0x095)
 
 /**@brief Set a bit in the uint64 word.
  *
@@ -548,6 +549,37 @@ static wiegand_card_t *unpack_c15001(uint64_t hi, uint64_t lo) {
     return d;
 }
 
+static uint64_t pack_actprox(wiegand_card_t *card) {
+    if (card->oem == 0) {
+        card->oem = 900;
+    }
+    uint64_t bits = PREAMBLE_36BIT;
+    bits <<= 1;
+    bits = (bits << 10) | (card->oem & 0x3ff);
+    bits = (bits << 8) | (card->facility_code & 0xff);
+    bits = (bits << 16) | (card->card_number & 0xffff);
+    bits <<= 1;
+    if (evenparity32((bits >> 18) & 0x1ffff)) {
+        SET_BIT64(bits, 35);
+    }
+    if (oddparity32((bits >> 1) & 0x1ffff)) {
+        SET_BIT64(bits, 0);
+    }
+    return bits;
+}
+
+static wiegand_card_t *unpack_actprox(uint64_t hi, uint64_t lo) {
+    if (!(IS_SET(lo, 35) == evenparity32((lo >> 18) & 0x1ffff) &&
+          IS_SET(lo, 0) == oddparity32((lo >> 1) & 0x1ffff))) {
+        return NULL;
+    }
+    wiegand_card_t *d = wiegand_card_alloc();
+    d->oem = (lo >> 25) & 0x3ff;
+    d->facility_code = (lo >> 17) & 0xff;
+    d->card_number = (lo >> 1) & 0xffff;
+    return d;
+}
+
 static uint64_t pack_s12906(wiegand_card_t *card) {
     uint64_t bits = PREAMBLE_36BIT;
     bits <<= 1;
@@ -819,6 +851,7 @@ static const card_format_table_t formats[] = {
     {P10004, pack_p10004, unpack_p10004, 37, {0, 0x1FFF, 0x3FFFF, 0, 0}},        // HID P10004 37-bit PCSC
     {HGEN37, pack_hgeneric37, unpack_hgeneric37, 37, {1, 0, 0xFFFFFFFF, 0, 0}},  // HID Generic 37-bit
     {MDI37, pack_mdi37, unpack_mdi37, 37, {1, 0xF, 0x1FFFFFFF, 0, 0}},           // PointGuard MDI 37-bit
+    {ACTPHID, pack_actprox, unpack_actprox, 36, {1, 0xFF, 0xFFFF, 0x3FF, 0}},   // HID ACTProx 36-bit
 };
 
 uint64_t pack(wiegand_card_t *card) {

@@ -453,6 +453,7 @@ class LFHIDIdArgsUnit(DeviceRequiredUnit):
             HIDFormat.C1K35S: [0xFFF, 0xFFFFF, 0, 0],
             HIDFormat.C15001: [0xFF, 0xFFFF, 0, 0x3FF],
             HIDFormat.S12906: [0xFF, 0xFFFFFF, 0x3, 0],
+            HIDFormat.ACTPHID: [0xFF, 0xFFFFFF, 0, 0x3FF],
             HIDFormat.SIE36: [0x3FFFF, 0xFFFF, 0, 0],
             HIDFormat.H10320: [0, 99999999, 0, 0],
             HIDFormat.H10302: [0, 0x7FFFFFFFF, 0, 0],
