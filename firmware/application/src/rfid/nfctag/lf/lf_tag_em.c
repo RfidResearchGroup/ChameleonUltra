@@ -268,7 +268,7 @@ bool lf_tag_data_factory(uint8_t slot, tag_specific_type_t tag_type, uint8_t *ta
  */
 bool lf_tag_em410x_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     // default id, must to align(4), more word...
-    uint8_t tag_id[5] = {0xDE, 0xAD, 0xBE, 0xEF, 0x88};
+    uint8_t tag_id[13] = {0xDE, 0xAD, 0xBE, 0xEF, 0x88, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
 }
 

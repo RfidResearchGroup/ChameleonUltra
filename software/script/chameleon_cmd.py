@@ -434,7 +434,7 @@ class ChameleonCMD:
         """
         resp = self.device.send_cmd_sync(Command.EM410X_SCAN)
         if resp.status == Status.LF_TAG_OK:
-            resp.parsed = struct.unpack('!h5s', resp.data) # tag type + uid
+            resp.parsed = struct.unpack('!h13s', resp.data) # tag type + uid
         return resp
 
     @expect_response(Status.LF_TAG_OK)
@@ -599,9 +599,9 @@ class ChameleonCMD:
         :param id_bytes: byte of the card number
         :return:
         """
-        if len(id) != 5:
-            raise ValueError("The id bytes length must equal 5")
-        data = struct.pack('5s', id)
+        if len(id) != 13:
+            raise ValueError("The id bytes length must equal 13")
+        data = struct.pack('13s', id)
         return self.device.send_cmd_sync(Command.EM410X_SET_EMU_ID, data)
 
     @expect_response(Status.SUCCESS)
