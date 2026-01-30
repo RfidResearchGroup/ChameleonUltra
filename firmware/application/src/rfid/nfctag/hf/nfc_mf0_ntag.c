@@ -682,7 +682,7 @@ static void handle_fast_read_command(uint8_t block_num, uint8_t end_block_num) {
 
     NRF_LOG_INFO("HANDLING FAST READ %02x %02x", block_num, end_block_num);
 
-    handle_any_read(block_num, end_block_num - block_num, block_max);
+    handle_any_read(block_num, end_block_num - block_num + 1, block_max);
 }
 
 static bool check_ro_lock_on_page(int block_num) {
