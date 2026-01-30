@@ -500,6 +500,18 @@ class ChameleonCMD:
         data = struct.pack(f'!4s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.VIKING_WRITE_TO_T55XX, data)
 
+    @expect_response(Status.LF_TAG_OK)
+    def adc_generic_read(self):
+        """
+        Read the ADC when the field is on.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.ADC_GENERIC_READ, None)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data
+        return resp
+
     @expect_response(Status.SUCCESS)
     def get_slot_info(self):
         """
