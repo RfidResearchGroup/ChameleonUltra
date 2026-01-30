@@ -5,9 +5,12 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 ## [unreleased][unreleased]
  - Fix for static nested key recovery (@jekkos)
  - Fix LEDs being stuck on after battery check (@suut)
+ - Add TCP support for the CLI (@suut)
+ - Fix build on Android in Termux (@suut)
  - Fix the issue where some reader cause CU to enter a strange state (@xianglin1998)
  - The transmission performance of USB has been improved (@xianglin1998)
  - Added cmd for set mf1 config 'field_off_do_reset' (@xianglin1998)
+
 
 ## [v2.1.0][2025-09-02]
  - Added UV, formatter and linter. Contribution guidelines. (@GameTec-live)
