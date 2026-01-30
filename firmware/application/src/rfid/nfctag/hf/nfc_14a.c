@@ -61,7 +61,10 @@ static volatile bool m_is_responded = false;
 static uint8_t m_nfc_rx_buffer[MAX_NFC_RX_BUFFER_SIZE] = { 0x00 };
 static uint8_t m_nfc_tx_buffer[MAX_NFC_TX_BUFFER_SIZE] = { 0x00 };
 // The N -secondary connection needs to use SAK, when the "third 'bit' in SAK is 1 is 1, the logo UID is incomplete
-static uint8_t m_uid_incomplete_sak[]   = { 0x04, 0xda, 0x17 };
+static uint8_t m_uid_incomplete_sak[] = { 0x04, 0xda, 0x17 };
+// Reset nfc peripheral after field lost?
+static bool reset_if_field_lost = false; // default is 'false', Unless there is a genuine need for a reset.
+
 
 /**
  * @brief Calculate BCC
@@ -349,7 +352,7 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
                 m_tag_state_14a = NFC_TAG_STATE_14A_READY;
                 // After receiving the WUPA or REQA instruction, we need to reply to ATQA
                 nfc_tag_14a_tx_bytes(auto_coll_res->atqa, 2, false);
-                // NRF_LOG_INFO("ATQA reply.");
+                // NRF_LOG_INFO("ATQA reply: %02x%02x", auto_coll_res->atqa[0], auto_coll_res->atqa[1]);
             } else {
                 m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
                 NRF_LOG_INFO("Auto anti-collision resource no exists.");
@@ -523,6 +526,43 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
     }
 }
 
+// Copy from nrf_nfct.c and modified for nrf52840 adapted(no verify on nrf52832)
+static inline void nrf_nfct_reset(void) {
+    uint32_t fdm;
+    uint32_t int_enabled;
+
+    // Save parameter settings before the reset of the NFCT peripheral.
+    fdm         = nrf_nfct_frame_delay_max_get();
+    int_enabled = nrf_nfct_int_enable_get();
+
+    // Reset the NFCT peripheral.
+    *(volatile uint32_t *)0x40005FFC = 0;
+    *(volatile uint32_t *)0x40005FFC;
+    *(volatile uint32_t *)0x40005FFC = 1;
+
+    // Restore parameter settings after the reset of the NFCT peripheral.
+    nrf_nfct_frame_delay_max_set(fdm);
+
+    // Use Window Grid frame delay mode.
+    nrf_nfct_frame_delay_mode_set(NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
+
+    /* Begin: Workaround for anomaly 25 */
+    /* Workaround for wrong SENSRES values require using SDD00001, but here SDD00100 is used
+       because it is required to operate with Windows Phone */
+    nrf_nfct_sensres_bit_frame_sdd_set(NRF_NFCT_SENSRES_BIT_FRAME_SDD_00100);
+    /* End: Workaround for anomaly 25 */
+
+    // Restore interrupts.
+    nrf_nfct_int_enable(int_enabled);
+
+    // Disable interrupts associated with data exchange.
+    nrf_nfct_int_disable(NRF_NFCT_INT_RXFRAMESTART_MASK | 
+        NRF_NFCT_INT_RXFRAMEEND_MASK   | 
+        NRF_NFCT_INT_RXERROR_MASK      | 
+        NRF_NFCT_INT_TXFRAMESTART_MASK | 
+        NRF_NFCT_INT_TXFRAMEEND_MASK);
+}
+
 static inline void nfc_fdt_reset(void) {
     // STOP TX
     *(volatile uint32_t *)0x40005010 = 0x01;
@@ -570,6 +610,13 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
 
             TAG_FIELD_LED_OFF()
             m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
+
+            if (reset_if_field_lost) {
+                // Fix a bug where certain special conditions prevent triggering TX start events and actually transmit incorrect data to the card reader.
+                // After more more more testing, I found that simply going into sleep mode and restarting can restore work. 
+                // Therefore, I suspect that there may be some issues with the NFC peripheral that require a reset to resolve.
+                nrf_nfct_reset();
+            }
 
             NRF_LOG_INFO("HF FIELD LOST");
             break;
@@ -687,4 +734,12 @@ bool is_valid_uid_size(uint8_t uid_length) {
     return uid_length == NFC_TAG_14A_UID_SINGLE_SIZE ||
            uid_length == NFC_TAG_14A_UID_DOUBLE_SIZE ||
            uid_length == NFC_TAG_14A_UID_TRIPLE_SIZE;
+}
+
+void nfc_tag_14a_set_reset_enable(bool enable) {
+    reset_if_field_lost = enable;
+}
+
+bool nfc_tag_14a_is_reset_enable() {
+    return reset_if_field_lost;
 }
