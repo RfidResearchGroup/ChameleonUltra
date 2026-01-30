@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Added clang formatter (@GameTec-live)
  - Fix for static nested key recovery (@jekkos)
  - Fix LEDs being stuck on after battery check (@suut)
  - Add TCP support for the CLI (@suut)

@@ -1,0 +1,5 @@
+BreakBeforeBinaryOperators: All
+ColumnLimit: 120
+BasedOnStyle: Google
+BreakBeforeBraces: Stroustrup
+IndentWidth: 4
