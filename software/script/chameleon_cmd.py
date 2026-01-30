@@ -434,7 +434,12 @@ class ChameleonCMD:
         """
         resp = self.device.send_cmd_sync(Command.EM410X_SCAN)
         if resp.status == Status.LF_TAG_OK:
-            resp.parsed = struct.unpack('!h5s', resp.data) # tag type + uid
+            tag_type = struct.unpack('!H', resp.data[:2])[0]
+            if tag_type == TagSpecificType.EM410X_ELECTRA:
+                fmt = '!H13s'
+            else:
+                fmt = '!H5s'
+            resp.parsed = struct.unpack(fmt, resp.data[:struct.calcsize(fmt)]) # tag type + uid
         return resp
 
     @expect_response(Status.LF_TAG_OK)
@@ -445,10 +450,13 @@ class ChameleonCMD:
         :param id_bytes: ID card number
         :return:
         """
-        if len(id_bytes) != 5:
-            raise ValueError("The id bytes length must equal 5")
-        data = struct.pack(f'!5s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
-        return self.device.send_cmd_sync(Command.EM410X_WRITE_TO_T55XX, data)
+        if len(id_bytes) == 5:
+            data = struct.pack(f'!5s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+            return self.device.send_cmd_sync(Command.EM410X_WRITE_TO_T55XX, data)
+        if len(id_bytes) == 13:
+            data = struct.pack(f'!13s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+            return self.device.send_cmd_sync(Command.EM410X_ELECTRA_WRITE_TO_T55XX, data)
+        raise ValueError("The id bytes length must equal 5 (EM410X) or 13 (Electra)")
 
     @expect_response(Status.LF_TAG_OK)
     def hidprox_scan(self, format: int):
@@ -591,6 +599,12 @@ class ChameleonCMD:
         data = struct.pack('!BBB', SlotNumber.to_fw(slot_index), sense_type, enabled)
         return self.device.send_cmd_sync(Command.SET_SLOT_ENABLE, data)
 
+    def _get_active_lf_tag_type(self) -> TagSpecificType:
+        slotinfo = self.get_slot_info()
+        active_slot = SlotNumber.from_fw(self.get_active_slot())
+        lf_tag_value = slotinfo[active_slot - 1]['lf']
+        return TagSpecificType(lf_tag_value)
+
     @expect_response(Status.SUCCESS)
     def em410x_set_emu_id(self, id: bytes):
         """
@@ -599,9 +613,18 @@ class ChameleonCMD:
         :param id_bytes: byte of the card number
         :return:
         """
-        if len(id) != 5:
-            raise ValueError("The id bytes length must equal 5")
-        data = struct.pack('5s', id)
+        lf_tag_type = self._get_active_lf_tag_type()
+        if lf_tag_type == TagSpecificType.EM410X_ELECTRA:
+            expected_len = 13
+        elif lf_tag_type == TagSpecificType.EM410X:
+            expected_len = 5
+        else:
+            raise ValueError(f"Active LF slot type {lf_tag_type} is not EM410X")
+
+        if len(id) != expected_len:
+            raise ValueError(f"The id bytes length must equal {expected_len}")
+
+        data = struct.pack(f'!{expected_len}s', id)
         return self.device.send_cmd_sync(Command.EM410X_SET_EMU_ID, data)
 
     @expect_response(Status.SUCCESS)
@@ -610,7 +633,34 @@ class ChameleonCMD:
         Get the emulated EM410x card id
         """
         resp = self.device.send_cmd_sync(Command.EM410X_GET_EMU_ID)
-        resp.parsed = resp.data
+        if resp.status == Status.SUCCESS:
+            data = resp.data
+            id_bytes = data
+            tag_type = None
+
+            if len(data) >= 2:
+                try:
+                    candidate = TagSpecificType(int.from_bytes(data[:2], byteorder='big'))
+                except ValueError:
+                    candidate = None
+
+                if candidate in (TagSpecificType.EM410X, TagSpecificType.EM410X_ELECTRA):
+                    expected_len = 13 if candidate == TagSpecificType.EM410X_ELECTRA else 5
+                    if len(data) == expected_len + 2:
+                        tag_type = candidate
+                        id_bytes = data[2:2 + expected_len]
+
+            if tag_type is None:
+                lf_tag_type = self._get_active_lf_tag_type()
+                if lf_tag_type == TagSpecificType.EM410X_ELECTRA:
+                    expected_len = 13
+                elif lf_tag_type == TagSpecificType.EM410X:
+                    expected_len = 5
+                else:
+                    expected_len = len(data)
+                id_bytes = data[:expected_len]
+
+            resp.parsed = id_bytes
         return resp
 
     @expect_response(Status.SUCCESS)

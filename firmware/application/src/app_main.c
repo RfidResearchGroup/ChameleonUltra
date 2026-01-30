@@ -648,10 +648,22 @@ static void btn_fn_copy_lf(uint8_t slot, tag_specific_type_t type) {
             data = id_buffer;
             break;
         case TAG_TYPE_EM410X:
+        case TAG_TYPE_EM410X_ELECTRA: {
             status = scan_em410x(id_buffer);
-            size = LF_EM410X_TAG_ID_SIZE;
-            data = id_buffer + 2; // skip tag type
+            tag_specific_type_t detected_type = (id_buffer[0] << 8) | id_buffer[1];
+            tag_specific_type_t new_type =
+                detected_type == TAG_TYPE_EM410X_ELECTRA ? TAG_TYPE_EM410X_ELECTRA : TAG_TYPE_EM410X;
+
+            // If we read Electra but the slot was classic (or vice versa), switch slot type automatically.
+            if (new_type != type) {
+                tag_emulation_change_type(slot, new_type);
+                type = new_type;
+            }
+
+            size = (new_type == TAG_TYPE_EM410X_ELECTRA) ? LF_EM410X_ELECTRA_TAG_ID_SIZE : LF_EM410X_TAG_ID_SIZE;
+            data = id_buffer + 2;  // skip tag type
             break;
+        }
         case TAG_TYPE_VIKING:
             status = scan_viking(id_buffer);
             size = LF_VIKING_TAG_ID_SIZE;
