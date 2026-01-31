@@ -14,14 +14,18 @@
 
 // MIFARE
 extern int compare_uint64(const void *a, const void *b);
-int inline compare_uint64(const void *a, const void *b) {
-    if (*(uint64_t *)b == *(uint64_t *)a) return 0;
-    if (*(uint64_t *)b < * (uint64_t *)a) return 1;
+inline int compare_uint64(const void *a, const void *b)
+{
+    if (*(uint64_t *)b == *(uint64_t *)a)
+        return 0;
+    if (*(uint64_t *)b < *(uint64_t *)a)
+        return 1;
     return -1;
 }
 
 // create the intersection (common members) of two sorted lists. Lists are terminated by -1. Result will be in list1. Number of elements is returned.
-uint32_t intersection(uint64_t *listA, uint64_t *listB) {
+uint32_t intersection(uint64_t *listA, uint64_t *listB)
+{
     if (listA == NULL || listB == NULL)
         return 0;
 
@@ -29,13 +33,19 @@ uint32_t intersection(uint64_t *listA, uint64_t *listB) {
     p1 = p3 = listA;
     p2 = listB;
 
-    while (*p1 != UINT64_C(-1) && *p2 != UINT64_C(-1)) {
-        if (compare_uint64(p1, p2) == 0) {
+    while (*p1 != UINT64_C(-1) && *p2 != UINT64_C(-1))
+    {
+        if (compare_uint64(p1, p2) == 0)
+        {
             *p3++ = *p1++;
             p2++;
-        } else {
-            while (compare_uint64(p1, p2) < 0) ++p1;
-            while (compare_uint64(p1, p2) > 0) ++p2;
+        }
+        else
+        {
+            while (compare_uint64(p1, p2) < 0)
+                ++p1;
+            while (compare_uint64(p1, p2) > 0)
+                ++p2;
         }
     }
     *p3 = UINT64_C(-1);
@@ -44,8 +54,10 @@ uint32_t intersection(uint64_t *listA, uint64_t *listB) {
 
 // Darkside attack (hf mf mifare)
 // if successful it will return a list of keys, not just one.
-uint32_t nonce2key(uint32_t uid, uint32_t nt, uint32_t nr, uint32_t ar, uint64_t par_info, uint64_t ks_info, uint64_t **keys) {
-    union {
+uint32_t nonce2key(uint32_t uid, uint32_t nt, uint32_t nr, uint32_t ar, uint64_t par_info, uint64_t ks_info, uint64_t **keys)
+{
+    union
+    {
         struct Crypto1State *states;
         uint64_t *keylist;
     } unionstate;
@@ -57,7 +69,8 @@ uint32_t nonce2key(uint32_t uid, uint32_t nt, uint32_t nr, uint32_t ar, uint64_t
     // Reset the last three significant bits of the reader nonce
     nr &= 0xFFFFFF1F;
 
-    for (pos = 0; pos < 8; pos++) {
+    for (pos = 0; pos < 8; pos++)
+    {
         ks3x[7 - pos] = (ks_info >> (pos * 8)) & 0x0F;
         uint8_t bt = (par_info >> (pos * 8)) & 0xFF;
 
@@ -73,12 +86,14 @@ uint32_t nonce2key(uint32_t uid, uint32_t nt, uint32_t nr, uint32_t ar, uint64_t
 
     unionstate.states = lfsr_common_prefix(nr, ar, ks3x, par, (par_info == 0));
 
-    if (!unionstate.states) {
+    if (!unionstate.states)
+    {
         *keys = NULL;
         return 0;
     }
 
-    for (i = 0; unionstate.keylist[i]; i++) {
+    for (i = 0; unionstate.keylist[i]; i++)
+    {
         lfsr_rollback_word(unionstate.states + i, uid ^ nt, 0);
         crypto1_get_lfsr(unionstate.states + i, &key_recovered);
         unionstate.keylist[i] = key_recovered;

@@ -9,7 +9,8 @@
 #include "mfkey.h"
 #include "common.h"
 
-typedef struct {
+typedef struct
+{
     uint32_t nt;
     uint32_t nr;
     uint32_t ar;
@@ -18,9 +19,11 @@ typedef struct {
     uint64_t ks_list;
 } DarksideParam;
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
 
-    if (((argc - 2) % 5) != 0) {
+    if (((argc - 2) % 5) != 0)
+    {
         printf("Unexpected param count\n");
         return EXIT_FAILURE;
     }
@@ -32,9 +35,11 @@ int main(int argc, char *argv[]) {
     DarksideParam *dps = NULL;
     bool no_key_recover = true;
 
-    for (i = 1; i + 5 < argc;) {
+    for (i = 1; i + 5 < (uint32_t)argc;)
+    {
         void *pTmp = realloc(dps, sizeof(DarksideParam) * ++count);
-        if (pTmp == NULL) {
+        if (pTmp == NULL)
+        {
             printf("Can't malloc at param construct.");
             return EXIT_FAILURE;
         }
@@ -46,7 +51,8 @@ int main(int argc, char *argv[]) {
         dps[count - 1].ar = (uint32_t)atoui(argv[++i]);
     }
 
-    for (i = 0; i < count; i++) {
+    for (i = 0; i < count; i++)
+    {
         // Initialize NT, NR, AR
         uint32_t nt = dps[i].nt;
         uint32_t nr = dps[i].nr;
@@ -67,27 +73,35 @@ int main(int argc, char *argv[]) {
         // start decrypting
         keycount = nonce2key(uid, nt, nr, ar, par_list, ks_list, &keylist);
 
-        if (keycount == 0) {
+        if (keycount == 0)
+        {
             continue;
         }
 
         // only parity zero attack
-        if (par_list == 0) {
+        if (par_list == 0)
+        {
             qsort(keylist, keycount, sizeof(*keylist), compare_uint64);
             keycount = intersection(last_keylist, keylist);
-            if (keycount == 0) {
+            if (keycount == 0)
+            {
                 free(last_keylist);
                 last_keylist = keylist;
                 continue;
             }
         }
-        uint8_t key_tmp[6] = { 0 };
-        if (keycount > 0) {
+        uint8_t key_tmp[6] = {0};
+        if (keycount > 0)
+        {
             no_key_recover = false;
-            for (j = 0; j < keycount; j++) {
-                if (par_list == 0) {
+            for (j = 0; j < keycount; j++)
+            {
+                if (par_list == 0)
+                {
                     num_to_bytes(last_keylist[j], 6, key_tmp);
-                } else {
+                }
+                else
+                {
                     num_to_bytes(keylist[j], 6, key_tmp);
                 }
                 printf("Key%d: %02X%02X%02X%02X%02X%02X\r\n", j + 1, key_tmp[0], key_tmp[1], key_tmp[2], key_tmp[3], key_tmp[4], key_tmp[5]);
@@ -95,17 +109,23 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if (no_key_recover) {
+    if (no_key_recover)
+    {
         printf("key not found\r\n");
     }
 
-    if (last_keylist == keylist && last_keylist != NULL) {
+    if (last_keylist == keylist && last_keylist != NULL)
+    {
         free(keylist);
-    } else {
-        if (last_keylist) {
+    }
+    else
+    {
+        if (last_keylist)
+        {
             free(last_keylist);
         }
-        if (keylist) {
+        if (keylist)
+        {
             free(keylist);
         }
     }
