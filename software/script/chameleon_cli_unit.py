@@ -3835,12 +3835,12 @@ class HWSlotList(DeviceRequiredUnit):
                     cn = (cn1 << 32) + cn2
                     print(f"      {'Format:':40}{color_string((CY, HIDFormat(format)))}")
                     if fc > 0:
-                        print(f" FC: {color_string((CG, fc))}")
+                        print(f"      {'FC:':40}{color_string((CG, fc))}")
                     if il > 0:
-                        print(f" IL: {color_string((CG, il))}")
+                        print(f"      {'IL:':40}{color_string((CG, il))}")
                     if oem > 0:
-                        print(f" OEM: {color_string((CG, oem))}")
-                    print(f" CN: {color_string((CG, cn))}")
+                        print(f"      {'OEM:':40}{color_string((CG, oem))}")
+                    print(f"      {'CN:':40}{color_string((CG, cn))}")
                 if lf_tag_type == TagSpecificType.Viking:
                     id = self.cmd.viking_get_emu_id()
                     print(f"      {'ID:':40}{color_string((CY, id.hex().upper()))}")
