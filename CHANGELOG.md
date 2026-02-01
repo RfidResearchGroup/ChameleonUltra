@@ -3,6 +3,9 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Fix for FAST_READ command for nfc - mf0 tags
+ - Rewrite of the dynamic and static locks logic for NTAG213, NTAG215 and NTAG216; we shouldn't take into account the block lock bits
+ - Fixed an issue where we wouldn't be able to change CFG0 and CFG1 for NTAG213, NTAG215 and NTG216 once a password was added even if the cfg bit was reset.
  - Fix for static nested key recovery (@jekkos)
  - Fix LEDs being stuck on after battery check (@suut)
  - Add TCP support for the CLI (@suut)
