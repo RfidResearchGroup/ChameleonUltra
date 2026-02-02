@@ -222,7 +222,7 @@ add_executable(mfulc_des_brute mfulc_des_brute.c)
 target_include_directories(mfulc_des_brute PRIVATE ${SRC_DIR})
 target_link_libraries(mfulc_des_brute PRIVATE ${LIBTHREAD} OpenSSL::Crypto)
 if (MSVC)
-    target_compile_options(mfulc_des_brute PRIVATE /Wd4996)  # disable "deprecated declaration" warning
+    target_compile_options(mfulc_des_brute PRIVATE /wd4996)  # disable "deprecated declaration" warning
 else()
     target_compile_options(mfulc_des_brute PRIVATE -Wno-deprecated-declarations)
 endif()
