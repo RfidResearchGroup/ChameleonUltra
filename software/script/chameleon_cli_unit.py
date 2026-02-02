@@ -2156,8 +2156,8 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
         log_group.add_argument('--enable-log', action='store_true', help="Enable logging of MFC authentication data")
         log_group.add_argument('--disable-log', action='store_true', help="Disable logging of MFC authentication data")
         field_off_reset_group = parser.add_mutually_exclusive_group()
-        field_off_reset_group.add_argument('--enable_set_field_off_do_reset', action='store_true', help="Enable FIELD_OFF_DO_RESET")
-        field_off_reset_group.add_argument('--disable_set_field_off_do_reset', action='store_true', help="Disable FIELD_OFF_DO_RESET")
+        field_off_reset_group.add_argument('--enable_field_off_do_reset', action='store_true', help="Enable FIELD_OFF_DO_RESET")
+        field_off_reset_group.add_argument('--disable_field_off_do_reset', action='store_true', help="Disable FIELD_OFF_DO_RESET")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
