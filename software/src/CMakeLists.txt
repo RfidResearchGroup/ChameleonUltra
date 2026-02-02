@@ -221,16 +221,18 @@ endif()
 add_executable(mfulc_des_brute mfulc_des_brute.c)
 target_include_directories(mfulc_des_brute PRIVATE ${SRC_DIR})
 target_link_libraries(mfulc_des_brute PRIVATE ${LIBTHREAD} OpenSSL::Crypto)
-target_compile_options(mfulc_des_brute PRIVATE -Wno-deprecated-declarations)
+if (MSVC)
+    target_compile_options(mfulc_des_brute PRIVATE /Wd4996)  # disable "deprecated declaration" warning
+else()
+    target_compile_options(mfulc_des_brute PRIVATE -Wno-deprecated-declarations)
+endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "Android" OR CMAKE_SYSTEM_NAME MATCHES "Darwin")
     target_compile_definitions(mfulc_des_brute PRIVATE _GNU_SOURCE)
-    find_package(OpenSSL REQUIRED)
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     target_compile_definitions(mfulc_des_brute PRIVATE HAVE_STRUCT_TIMESPEC)
-    find_package(OpenSSL REQUIRED)
 endif()
-
+find_package(OpenSSL REQUIRED)
 
 # --- hardnested Executable ---
 add_executable(hardnested ${COMMON_FILES} ${HARDNESTED_SOURCES})
