@@ -425,6 +425,32 @@ class ChameleonCMD:
                 i += 14
         return resp
 
+    @expect_response(Status.SUCCESS)
+    def hf14a_get_config(self):
+        """
+        Get hf 14a config
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.HF14A_GET_CONFIG)
+        if resp.status == Status.SUCCESS:
+            bcc, cl2, cl3, rats = struct.unpack('!bbbb', resp.data)
+            resp.parsed = {'bcc': bcc,
+                           'cl2': cl2,
+                           'cl3': cl3,
+                           'rats': rats}
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def hf14a_set_config(self, data):
+        """
+        Set hf 14a config
+
+        :return:
+        """
+        data = struct.pack('!bbbb', data['bcc'], data['cl2'], data['cl3'], data['rats'])
+        return self.device.send_cmd_sync(Command.HF14A_SET_CONFIG, data)
+
     @expect_response(Status.LF_TAG_OK)
     def em410x_scan(self):
         """

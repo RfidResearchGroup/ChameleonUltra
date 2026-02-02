@@ -574,6 +574,21 @@ static data_frame_tx_t *cmd_processor_hf14a_raw(uint16_t cmd, uint16_t status, u
     return data_frame_make(cmd, status, resp_length, resp);
 }
 
+static data_frame_tx_t *cmd_processor_hf14a_get_config(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    hf14a_config_t *hc = get_hf14a_config();
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(hf14a_config_t), (uint8_t *)hc);
+}
+
+static data_frame_tx_t *cmd_processor_hf14a_set_config(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != sizeof(hf14a_config_t)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    hf14a_config_t hc;
+    memcpy(&hc, data, sizeof(hf14a_config_t));
+    set_hf14a_config(&hc);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
 static data_frame_tx_t *cmd_processor_mf1_manipulate_value_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     typedef struct {
         uint8_t src_type;
@@ -1622,6 +1637,9 @@ static cmd_data_map_t m_data_cmd_map[] = {
 
     {    DATA_CMD_HF14A_SET_FIELD_ON,           before_reader_run,           cmd_processor_hf14a_set_field_on,            NULL                   },
     {    DATA_CMD_HF14A_SET_FIELD_OFF,          before_reader_run,           cmd_processor_hf14a_set_field_off,           NULL                   },
+
+    {    DATA_CMD_HF14A_GET_CONFIG,             NULL,                        cmd_processor_hf14a_get_config,              NULL                   },
+    {    DATA_CMD_HF14A_SET_CONFIG,             NULL,                        cmd_processor_hf14a_set_config,              NULL                   },
 
 #endif
 

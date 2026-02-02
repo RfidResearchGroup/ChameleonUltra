@@ -13,6 +13,7 @@ import serial.tools.list_ports
 import threading
 import struct
 import queue
+from enum import Enum
 from multiprocessing import Pool, cpu_count
 from typing import Union
 from pathlib import Path
@@ -754,6 +755,88 @@ class HWVersion(DeviceRequiredUnit):
         git_version = self.cmd.get_git_version()
         model = ['Ultra', 'Lite'][self.cmd.get_device_model()]
         print(f' - Chameleon {model}, Version: {fw_version} ({git_version})')
+
+
+@hf_14a.command('config')
+class HF14AConfig(DeviceRequiredUnit):
+    class Config(Enum):
+        def __new__(cls, value, desc):
+            obj = object.__new__(cls)
+            obj._value_ = value
+            obj.desc = desc
+            return obj
+
+        @classmethod
+        def choices(cls):
+            return [elem.name for elem in cls]
+
+        @classmethod
+        def format(cls, index):
+            item = cls(index)
+            color = CG if index == 0 else CR
+            return f' - {cls.__name__.upper()} override: {color_string((color, item.name))} ( {item.desc} )'
+
+        @classmethod
+        def help(cls):
+            return ' / '.join([f'{elem.desc}' for elem in cls])
+
+    class Bcc(Config):
+        std = (0, "follow standard")
+        fix = (1, "fix bad BCC")
+        ignore = (2, "ignore bad BCC, always use card BCC")
+
+    class Cl2(Config):
+        std = (0, "follow standard")
+        force = (1, "always do CL2")
+        skip = (2, "always skip CL2")
+
+    class Cl3(Config):
+        std = (0, "follow standard")
+        force = (1, "always do CL3")
+        skip = (2, "always skip CL3")
+
+    class Rats(Config):
+        std = (0, "follow standard")
+        force = (1, "always do RATS")
+        skip = (2, "always skip RATS")
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Configure 14a settings (use with caution)'
+        parser.add_argument('--std', action='store_true', help='Reset default configuration (follow standard)')
+        parser.add_argument('--bcc', type=str, choices=self.Bcc.choices(), help=self.Bcc.help())
+        parser.add_argument('--cl2', type=str, choices=self.Cl2.choices(), help=self.Cl2.help())
+        parser.add_argument('--cl3', type=str, choices=self.Cl3.choices(), help=self.Cl3.help())
+        parser.add_argument('--rats', type=str, choices=self.Rats.choices(), help=self.Rats.help())
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        change_requested = False
+        if args.std:
+            config = {'bcc': 0, 'cl2': 0, 'cl3': 0, 'rats': 0}
+            change_requested = True
+        else:
+            config = self.cmd.hf14a_get_config()
+        if args.bcc:
+            config['bcc'] = self.Bcc[args.bcc].value
+            change_requested = True
+        if args.cl2:
+            config['cl2'] = self.Cl2[args.cl2].value
+            change_requested = True
+        if args.cl3:
+            config['cl3'] = self.Cl3[args.cl3].value
+            change_requested = True
+        if args.rats:
+            config['rats'] = self.Rats[args.rats].value
+            change_requested = True
+        if change_requested:
+            self.cmd.hf14a_set_config(config)
+            config = self.cmd.hf14a_get_config()
+        print('HF 14a config')
+        print(self.Bcc.format(config['bcc']))
+        print(self.Cl2.format(config['cl2']))
+        print(self.Cl3.format(config['cl3']))
+        print(self.Rats.format(config['rats']))
 
 
 @hf_14a.command('scan')
