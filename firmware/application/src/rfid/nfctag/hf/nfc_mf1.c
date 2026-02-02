@@ -1111,6 +1111,8 @@ int nfc_tag_mf1_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer)
             .cb_reset = nfc_tag_mf1_reset_handler,
         };
         nfc_tag_14a_set_handler(&handler_for_14a);
+        NRF_LOG_INFO("HF mf1 config 'field_off_do_reset' = %d", m_tag_information->config.field_off_do_reset);
+        nfc_tag_14a_set_reset_enable(m_tag_information->config.field_off_do_reset);
         NRF_LOG_INFO("HF mf1 data load finish.");
     } else {
         NRF_LOG_ERROR("nfc_tag_mf1_information_t too big.");
@@ -1157,6 +1159,12 @@ bool nfc_tag_mf1_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     p_mf1_information->config.use_mf1_coll_res = false;
     p_mf1_information->config.mode_block_write = NFC_TAG_MF1_WRITE_NORMAL;
     p_mf1_information->config.detection_enable = false;
+    p_mf1_information->config.field_off_do_reset = false;
+
+    // zero for reserved byte
+    p_mf1_information->config.reserved1 = 0x00;
+    p_mf1_information->config.reserved2 = 0x00;
+    p_mf1_information->config.reserved3 = 0x00;
 
     // save data to flash
     tag_sense_type_t sense_type = get_sense_type_from_tag_type(tag_type);
@@ -1236,3 +1244,10 @@ nfc_tag_mf1_write_mode_t nfc_tag_mf1_get_write_mode(void) {
     return m_tag_information->config.mode_block_write;
 }
 
+void nfc_tag_mf1_set_field_off_do_reset(bool enable) {
+    m_tag_information->config.field_off_do_reset = enable;
+}
+
+bool nfc_tag_mf1_is_field_off_do_reset(void) {
+    return m_tag_information->config.field_off_do_reset;
+}

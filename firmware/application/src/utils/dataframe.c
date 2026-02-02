@@ -28,6 +28,11 @@ static uint8_t compute_lrc(uint8_t *buf, uint16_t bufsize) {
     return 0x100 - lrc;
 }
 
+//
+//  !!!!!!!!!!!!!!!!! NRF_LOG_HEXDUMP_INFO() printing long data can cause freezing and needs to be fixed. !!!!!!!!!!!!!!!!!
+//  FIXME.
+//
+
 /**
  * @brief: create a packet, put the created data packet into the buffer, and wait for the post to set up a non busy state
  * @param cmd: instructionResponse
@@ -44,10 +49,11 @@ data_frame_tx_t *data_frame_make(uint16_t cmd, uint16_t status, uint16_t data_le
         NRF_LOG_ERROR("data_frame_make error, too much data.");
         return NULL;
     }
-    NRF_LOG_INFO("TX Data frame: cmd = 0x%04x (%i), status = 0x%04x, length = %d%s", cmd, cmd, status, data_length, data_length > 0 ? ", data =" : "");
-    if (data_length > 0) {
-        NRF_LOG_HEXDUMP_INFO(data, data_length);
-    }
+
+    // NRF_LOG_INFO("TX Data frame: cmd = 0x%04x (%i), status = 0x%04x, length = %d%s", cmd, cmd, status, data_length, data_length > 0 ? ", data =" : "");
+    // if (data_length > 0) {
+    //     NRF_LOG_HEXDUMP_INFO(data, data_length);
+    // }
 
     netdata_frame_postamble_t *tx_post = (netdata_frame_postamble_t *)((uint8_t *)&m_netdata_frame_tx_buf + sizeof(netdata_frame_preamble_t) + data_length);
     // sof
@@ -92,7 +98,7 @@ void data_frame_receive(uint8_t *data, uint16_t length) {
         return;
     }
     // buffer overflow
-    if (m_data_rx_position + length >= sizeof(m_netdata_frame_rx_buf)) {
+    if (m_data_rx_position + length > sizeof(m_netdata_frame_rx_buf)) {
         NRF_LOG_ERROR("Data frame wait overflow.");
         data_frame_reset();
         return;
@@ -142,10 +148,10 @@ void data_frame_receive(uint8_t *data, uint16_t length) {
                     // and we are receive completed
                     m_data_buffer = m_data_len > 0 ? (uint8_t *)&m_netdata_frame_rx_buf.data : NULL;
                     m_data_completed = true;
-                    NRF_LOG_INFO("RX Data frame: cmd = 0x%04x (%i), status = 0x%04x, length = %d%s", m_data_cmd, m_data_cmd, m_data_status, m_data_len, m_data_len > 0 ? ", data =" : "");
-                    if (m_data_len > 0) {
-                        NRF_LOG_HEXDUMP_INFO(m_data_buffer, m_data_len);
-                    }
+                    // NRF_LOG_INFO("RX Data frame: cmd = 0x%04x (%i), status = 0x%04x, length = %d%s", m_data_cmd, m_data_cmd, m_data_status, m_data_len, m_data_len > 0 ? ", data =" : "");
+                    // if (m_data_len > 0) {
+                    //     NRF_LOG_HEXDUMP_INFO(m_data_buffer, m_data_len);
+                    // }
                 } else {
                     // data frame lrc error
                     NRF_LOG_ERROR("Data frame finally lrc error.");
