@@ -15,10 +15,14 @@
 #define EM_BITS_PER_ROW_COUNT (EM_COLUMN_COUNT + 1)
 
 #define EM_RAW_SIZE (64)
-#define EM_DATA_SIZE (5)
+#define EM_DECODED_BASE_DATA_SIZE (5)
+#define EM_DECODED_EPILOGUE_SIZE  (8)
+#define EM_DATA_SIZE (EM_DECODED_BASE_DATA_SIZE + EM_DECODED_EPILOGUE_SIZE)
 #define EM_ROW_COUNT (10)
 #define EM_COLUMN_COUNT (4)
 #define EM_HEADER (0x1ff)  // 9 bits of 1
+
+#define EM_ENCODED_DATA_HEADER (0xFF80000000000000ULL)
 
 #define EM_T55XX_BLOCK_COUNT (3)
 
@@ -33,7 +37,7 @@
 #include "nrf_log_default_backends.h"
 NRF_LOG_MODULE_REGISTER();
 
-static nrf_pwm_values_wave_form_t m_em410x_pwm_seq_vals[EM_RAW_SIZE] = {};
+static nrf_pwm_values_wave_form_t m_em410x_pwm_seq_vals[EM_RAW_SIZE + EM_RAW_SIZE] = {};
 
 nrf_pwm_sequence_t const m_em410x_pwm_seq = {
     .values.p_wave_form = m_em410x_pwm_seq_vals,
@@ -53,7 +57,8 @@ size_t em410x_protocols_size = ARRAY_SIZE(em410x_protocols);
 typedef struct {
     uint8_t data[EM_DATA_SIZE];
     uint64_t raw;
-    uint8_t raw_length;
+    uint64_t epilogue;
+    uint8_t length;
     manchester *modem;
 } em410x_codec;
 
@@ -77,6 +82,17 @@ uint64_t em410x_raw_data(uint8_t *uid) {
     }
     raw = (raw << EM_COLUMN_COUNT) | pc;  // column parity
     raw <<= 1;                            // stop bit
+    return raw;
+}
+
+uint64_t em410x_raw_epilogue(uint8_t *uid) {
+    uint64_t raw = 0;
+
+    for (int i = 0; i < EM_DECODED_EPILOGUE_SIZE; i++) {
+        raw <<= 8;
+        raw |= uid[EM_DECODED_BASE_DATA_SIZE + i];
+    }
+
     return raw;
 }
 
@@ -144,27 +160,24 @@ uint8_t *em410x_get_data(em410x_codec *d) { return d->data; };
 void em410x_decoder_start(em410x_codec *d, uint8_t format) {
     memset(d->data, 0, EM_DATA_SIZE);
     d->raw = 0;
-    d->raw_length = 0;
+    d->length = 0;
+    d->epilogue = 0;
     manchester_reset(d->modem);
 };
 
 bool em410x_decode_feed(em410x_codec *d, bool bit) {
-    d->raw <<= 1;
-    d->raw_length++;
-    if (bit) {
-        d->raw |= 0x01;
-    }
-    if (d->raw_length < EM_RAW_SIZE) {
+    bool carry_bit = (d->epilogue >> 63) & 0b1;
+
+    d->length++;
+    d->raw = (d->raw << 1) | carry_bit;
+    d->epilogue = (d->epilogue << 1) | bit;
+
+    if (d->length < EM_RAW_SIZE + EM_RAW_SIZE) {
         return false;
     }
 
     // check header
-    uint8_t v = (d->raw >> (EM_RAW_SIZE - 8)) & 0xff;
-    if (v != 0xff) {
-        return false;
-    }
-    v = (d->raw >> (EM_RAW_SIZE - 9)) & 0xff;
-    if (v != 0xff) {
+    if ((d->raw & EM_ENCODED_DATA_HEADER) != EM_ENCODED_DATA_HEADER) {
         return false;
     }
 
@@ -192,6 +205,15 @@ bool em410x_decode_feed(em410x_codec *d, bool bit) {
             d->data[i >> 1] = data << 4;
         }
     }
+
+    for (int i = 0; i < EM_DECODED_EPILOGUE_SIZE; i++) {
+        if ((d->epilogue & EM_ENCODED_DATA_HEADER) == EM_ENCODED_DATA_HEADER) {
+            d->data[EM_DECODED_BASE_DATA_SIZE + i] = 0;
+        } else {
+            d->data[EM_DECODED_BASE_DATA_SIZE + i] = (d->epilogue >> ((EM_DECODED_EPILOGUE_SIZE - 1 - i) * 8)) & 0XFF;
+        }
+    }
+
     return pc == 0x00;  // column parity
 }
 
@@ -201,7 +223,8 @@ bool em410x_decoder_feed(em410x_codec *d, uint16_t interval) {
     manchester_feed(d->modem, (uint8_t)interval, bits, &bitlen);
     if (bitlen == -1) {
         d->raw = 0;
-        d->raw_length = 0;
+        d->length = 0;
+        d->epilogue = 0;
         return false;
     }
     for (int i = 0; i < bitlen; i++) {
@@ -213,15 +236,21 @@ bool em410x_decoder_feed(em410x_codec *d, uint16_t interval) {
 };
 
 const nrf_pwm_sequence_t *em410x_modulator(em410x_codec *d, uint8_t *buf) {
-    uint64_t lo = em410x_raw_data(buf);
-    for (int i = 0; i < EM_RAW_SIZE; i++) {
-        uint16_t msb = 0x00;
-        if (IS_SET(lo, EM_RAW_SIZE - i - 1)) {
-            msb = (1 << 15);
+    uint64_t data[] = {em410x_raw_data(buf), em410x_raw_epilogue(buf)};
+    uint8_t output_index = 0;
+
+    for (int d = 0; d < 2; d++) {
+        for (int i = 0; i < EM_RAW_SIZE; i++) {
+            uint16_t msb = 0x00;
+            if (IS_SET(data[d], EM_RAW_SIZE - i - 1)) {
+                msb = (1 << 15);
+            }
+            m_em410x_pwm_seq_vals[output_index].channel_0 = msb | 32;
+            m_em410x_pwm_seq_vals[output_index].counter_top = 64;
+            output_index++;
         }
-        m_em410x_pwm_seq_vals[i].channel_0 = msb | 32;
-        m_em410x_pwm_seq_vals[i].counter_top = 64;
     }
+
     return &m_em410x_pwm_seq;
 };
 
