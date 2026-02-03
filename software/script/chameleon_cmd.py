@@ -1354,6 +1354,18 @@ class ChameleonCMD:
     def set_ble_pairing_enable(self, enabled: bool):
         data = struct.pack('!B', enabled)
         return self.device.send_cmd_sync(Command.SET_BLE_PAIRING_ENABLE, data)
+    
+    @expect_response(Status.SUCCESS)
+    def mf1_get_field_off_do_reset(self):
+        resp = self.device.send_cmd_sync(Command.MF1_GET_FIELD_OFF_DO_RESET)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = struct.unpack('!B', resp.data)[0] == 1
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mf1_set_field_off_do_reset(self, enabled: bool):
+        data = struct.pack('!B', enabled)
+        return self.device.send_cmd_sync(Command.MF1_SET_FIELD_OFF_DO_RESET, data)
 
 
 def test_fn():

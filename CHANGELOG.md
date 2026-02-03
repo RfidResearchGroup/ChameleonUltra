@@ -3,6 +3,9 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Fix for FAST_READ command for nfc - mf0 tags
+ - Rewrite of the dynamic and static locks logic for NTAG213, NTAG215 and NTAG216; we shouldn't take into account the block lock bits
+ - Fixed an issue where we wouldn't be able to change CFG0 and CFG1 for NTAG213, NTAG215 and NTG216 once a password was added even if the cfg bit was reset.
  - Fix for static nested key recovery (@jekkos)
  - Fix LEDs being stuck on after battery check (@suut)
  - Add TCP support for the CLI (@suut)
@@ -10,7 +13,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Fix the issue where some reader cause CU to enter a strange state (@xianglin1998)
  - The transmission performance of USB has been improved (@xianglin1998)
  - Added cmd for set mf1 config 'field_off_do_reset' (@xianglin1998)
-
+ - Fix Windows build (@suut)
 
 ## [v2.1.0][2025-09-02]
  - Added UV, formatter and linter. Contribution guidelines. (@GameTec-live)

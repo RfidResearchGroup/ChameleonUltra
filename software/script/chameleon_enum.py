@@ -125,6 +125,9 @@ class Command(enum.IntEnum):
     # FIXME: not implemented
     MF0_NTAG_GET_EMULATOR_CONFIG = 4037
 
+    MF1_SET_FIELD_OFF_DO_RESET = 4038
+    MF1_GET_FIELD_OFF_DO_RESET = 4039
+
     EM410X_SET_EMU_ID = 5000
     EM410X_GET_EMU_ID = 5001
     HIDPROX_SET_EMU_ID = 5002
@@ -585,6 +588,7 @@ class HIDFormat(enum.IntEnum):
     C1K35S = 21
     C15001 = 22
     S12906 = 23
+    ACTPHID = 42
     SIE36 = 24
     H10320 = 25
     H10302 = 26
@@ -618,6 +622,7 @@ class HIDFormat(enum.IntEnum):
             HIDFormat.C1K35S: "HID Corporate 1000 35-bit Std",
             HIDFormat.C15001: "HID KeyScan 36-bit",
             HIDFormat.S12906: "HID Simplex 36-bit",
+            HIDFormat.ACTPHID: "HID ACTProx 36-bit",
             HIDFormat.SIE36: "HID 36-bit Siemens",
             HIDFormat.H10320: "HID H10320 37-bit BCD",
             HIDFormat.H10302: "HID H10302 37-bit huge ID",

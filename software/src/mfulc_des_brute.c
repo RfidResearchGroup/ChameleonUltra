@@ -10,6 +10,12 @@
 #include <pthread.h>
 #include <openssl/des.h>
 
+#ifdef _MSC_VER
+# define bswap64 _byteswap_uint64
+#else
+# define bswap64 __builtin_bswap64
+#endif
+
 #define BLOCK_SIZE 8   // DES (and 3DES) block size in bytes
 #define KEY_SIZE   16  // Full 2TDEA key size (K1 || K2)
 #define BENCHMARK_FULL_KEYSPACE 0
@@ -57,7 +63,7 @@ static void print_hex(const unsigned char *buf, size_t len) {
 }
 
 static bool valid_lfsr_ulcg(uint64_t x64) {
-    x64 = __builtin_bswap64(x64);
+    x64 = bswap64(x64);
     uint16_t x16 = x64 >> 48;
     x16 = x16 << 15 | ((x16 >> 1) ^ ((x16 >> 3 ^ x16 >> 4 ^ x16 >> 6) & 1));
     if (x16 != ((x64 >> 32) & 0xFFFF)) return false;
@@ -69,7 +75,7 @@ static bool valid_lfsr_ulcg(uint64_t x64) {
 }
 
 static bool valid_lfsr_uscuidul(uint64_t x64) {
-    x64 = __builtin_bswap64(x64);
+    x64 = bswap64(x64);
     uint16_t x16 = x64 & 0xFFFF;
     for (int i = 0; i < 16; i++) x16 = x16 >> 1 | (x16 ^ x16 >> 2 ^ x16 >> 3 ^ x16 >> 5) << 15;
     if (x16 != ((x64 >> 16) & 0xFFFF)) return false;
@@ -193,9 +199,9 @@ static void *worker(void *arg) {
 
             // Check if out is 8-bit (1-byte) left rotated version of init_out
             // Need to convert to big-endian for byte rotation, then back to little-endian
-            uint64_t init_be = __builtin_bswap64(init_out);
+            uint64_t init_be = bswap64(init_out);
             uint64_t rotated_be = (init_be << 8) | (init_be >> 56);
-            uint64_t rotated = __builtin_bswap64(rotated_be);
+            uint64_t rotated = bswap64(rotated_be);
             match = (out == rotated);
         } else {
             // In counterfeit mode, check the resulting plaintext against LFSR

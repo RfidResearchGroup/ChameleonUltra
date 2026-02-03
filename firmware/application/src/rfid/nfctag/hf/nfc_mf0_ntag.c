@@ -675,29 +675,49 @@ static void handle_fast_read_command(uint8_t block_num, uint8_t end_block_num) {
 
     int block_max = get_block_max_by_tag_type(m_tag_type, true);
 
-    if (block_num >= end_block_num || end_block_num >= block_max) {
+    if (block_num > end_block_num || end_block_num >= block_max) {
         nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
         return;
     }
 
     NRF_LOG_INFO("HANDLING FAST READ %02x %02x", block_num, end_block_num);
-
-    handle_any_read(block_num, end_block_num - block_num, block_max);
+    // FAST_READ is inclusive: read from block_num to end_block_num (both included)
+    handle_any_read(block_num, end_block_num - block_num + 1, block_max);
 }
 
 static bool check_ro_lock_on_page(int block_num) {
     if (block_num < 3) return true;
-    else if (block_num == 3) return (m_tag_information->memory[2][2] & 9) != 0; // bits 0 and 3
-    else if (block_num <= MF0ICU1_PAGES) {
+    else if (block_num == 3) {
+        switch (m_tag_type) {
+            case TAG_TYPE_NTAG_213:
+            case TAG_TYPE_NTAG_215:
+            case TAG_TYPE_NTAG_216:
+                //page 3 can be locked or not independant of BL CC bit
+                //the BL bit only freezes the lock bytes !
+                return (m_tag_information->memory[2][2] & 8) != 0;
+            default:
+                return (m_tag_information->memory[2][2] & 9) != 0; 
+        }
+        // bits 0 and 3
+    } else if (block_num <= MF0ICU1_PAGES) {
         bool locked = false;
+        switch (m_tag_type) {
+            case TAG_TYPE_NTAG_213:
+            case TAG_TYPE_NTAG_215:
+            case TAG_TYPE_NTAG_216:
+                // pages can be locked or not independant of BL bits
+                //the BL bits only freezes the lock bytes !
+                uint16_t lock_bits = *(uint16_t *)&m_tag_information->memory[2][2];
+                return ((lock_bits >> block_num) & 0x01) == 1;
+            default:
+                // check block locking bits
+                if (block_num <= 9) locked |= (m_tag_information->memory[2][2] & 2) == 2;
+                else locked |= (m_tag_information->memory[2][2] & 4) == 4;
 
-        // check block locking bits
-        if (block_num <= 9) locked |= (m_tag_information->memory[2][2] & 2) == 2;
-        else locked |= (m_tag_information->memory[2][2] & 4) == 4;
+                locked |= (((*(uint16_t *)&m_tag_information->memory[2][2]) >> block_num) & 1) == 1;
 
-        locked |= (((*(uint16_t *)&m_tag_information->memory[2][2]) >> block_num) & 1) == 1;
-
-        return locked;
+                return locked;
+        }
     } else {
         uint8_t *p_lock_bytes = NULL;
         int user_memory_end = 0;
@@ -776,9 +796,43 @@ static bool check_ro_lock_on_page(int block_num) {
 
             bool locked_small_range = ((lock_word >> (index / dyn_lock_bit_page_cnt)) & 1) != 0;
             bool locked_large_range = ((p_lock_bytes[2] >> (index / dyn_lock_bit_page_cnt / 2)) & 1) != 0;
-
-            return locked_small_range | locked_large_range;
+            switch (m_tag_type) {
+                case TAG_TYPE_NTAG_213:
+                case TAG_TYPE_NTAG_215:
+                case TAG_TYPE_NTAG_216:
+                    // For NTAG213/215/216: byte 2 contains block-locking bits (BL) which only freeze
+                    // the lock configuration. We only check the actual lock bits (L0-L15) in bytes 0-1.
+                    return locked_small_range;
+                default:
+                return locked_small_range | locked_large_range;
+            }
         } else {
+            //Check the block locking bits to see if we can touch the dynamic locks bytes for NTAG tags
+            if(block_num == user_memory_end)
+            {
+                switch (m_tag_type) {
+                    case TAG_TYPE_NTAG_213:
+                    case TAG_TYPE_NTAG_215:
+                    case TAG_TYPE_NTAG_216:
+                    {
+                        uint8_t block_bytes = m_tag_information->memory[user_memory_end][2];
+                        uint16_t block_world = 0;
+                        
+                        // Each bit in block_bytes maps to 2 bits in block_world
+                        for (int i = 0; i < 8; i++) {
+                            if (block_bytes & (0x01 << i)) {
+                                block_world |= (0x0003 << (i * 2));
+                            }
+                        }
+                        
+                        p_lock_bytes = m_tag_information->memory[user_memory_end];
+                        uint16_t lock_word = (((uint16_t)p_lock_bytes[1]) << 8) | (uint16_t)p_lock_bytes[0];
+                        return (lock_word & block_world) != 0;
+                    }
+                    default:
+                        break;
+                }
+            }
             // check CFGLCK bit
             int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
             uint8_t access = m_tag_information->memory[first_cfg_page + CONF_ACCESS_PAGE_OFFSET][CONF_ACCESS_BYTE];
@@ -793,7 +847,25 @@ static bool check_ro_lock_on_page(int block_num) {
 static int handle_write_command(uint8_t block_num, uint8_t *p_data) {
     int block_max = get_block_max_by_tag_type(m_tag_type, false);
 
-    if (block_num >= block_max) {
+    bool out_of_bounds = false;
+    switch (m_tag_type) {
+        case TAG_TYPE_NTAG_213:
+        case TAG_TYPE_NTAG_215:
+        case TAG_TYPE_NTAG_216:
+            int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
+            uint8_t cfglck = m_tag_information->memory[first_cfg_page][0] & 0x40;
+            // For NTAG cards we need to check CFGLCK bit for config pages
+            bool is_config_page = (block_num >= first_cfg_page) && (block_num <= first_cfg_page + 1);
+            bool config_locked = (cfglck != 0) && (!m_tag_information->config.mode_uid_magic);
+            bool is_beyond_user_memory = (block_num >= block_max);
+            out_of_bounds = (is_beyond_user_memory && !is_config_page) || (config_locked && is_config_page);
+            break;
+        default:
+            out_of_bounds = block_num >= block_max;
+            break;
+    }   
+    // Reject out-of-bounds writes (except config pages)
+    if (out_of_bounds) {
         NRF_LOG_ERROR("Write failed: block_num %08x >= block_max %08x", block_num, block_max);
         return NAK_INVALID_OPERATION_TBV;
     }
