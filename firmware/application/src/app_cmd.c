@@ -1675,8 +1675,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_HF14A_SET_FIELD_ON,           before_reader_run,           cmd_processor_hf14a_set_field_on,            NULL                   },
     {    DATA_CMD_HF14A_SET_FIELD_OFF,          before_reader_run,           cmd_processor_hf14a_set_field_off,           NULL                   },
 
-    {    DATA_CMD_HF14A_GET_CONFIG,             NULL,                        cmd_processor_hf14a_get_config,              NULL                   },
-    {    DATA_CMD_HF14A_SET_CONFIG,             NULL,                        cmd_processor_hf14a_set_config,              NULL                   },
+    {DATA_CMD_HF14A_GET_CONFIG, NULL, cmd_processor_hf14a_get_config, NULL},
+    {DATA_CMD_HF14A_SET_CONFIG, NULL, cmd_processor_hf14a_set_config, NULL},
 
 #endif
 

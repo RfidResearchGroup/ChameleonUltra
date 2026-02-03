@@ -287,6 +287,9 @@ pyrightconfig.json
 # Local History for Visual Studio Code
 .history/
 
+# Local toolchains
+software/src/openJdk-25/
+
 # Built Visual Studio Code Extensions
 *.vsix
 

@@ -7,6 +7,11 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Fix for FAST_READ command for nfc - mf0 tags
  - Rewrite of the dynamic and static locks logic for NTAG213, NTAG215 and NTAG216; we shouldn't take into account the block lock bits
  - Fixed an issue where we wouldn't be able to change CFG0 and CFG1 for NTAG213, NTAG215 and NTG216 once a password was added even if the cfg bit was reset.
+ - Fixed critical memory safety vulnerabilities in nested attack implementation (buffer overflow in uniqsort, memory corruption in nested recovery, null pointer dereferences)
+ - Fixed buffer overflow in hw_connect sprintf for device version string
+ - Fixed Variable Length Array stack overflow vulnerability in app_cmd nested acquisition
+ - Fixed compiler warnings in nested, staticnested, darkside, and mfkey attack implementations
+ - Fixed binary path detection in CLI to correctly locate compiled attack tools regardless of working directory
  - Fix for static nested key recovery (@jekkos)
  - Fix LEDs being stuck on after battery check (@suut)
  - Add TCP support for the CLI (@suut)

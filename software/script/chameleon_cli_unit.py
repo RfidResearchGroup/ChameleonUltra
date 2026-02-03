@@ -49,7 +49,7 @@ type_id_SAK_dict = {0x00: "MIFARE Ultralight Classic/C/EV1/Nano | NTAG 2xx",
                     0x38: "SmartMX with MIFARE Classic 4K",
                     }
 
-default_cwd = Path.cwd() / Path(__file__).with_name("bin")
+default_cwd = Path(__file__).resolve().parent / "bin"
 
 
 def load_key_file(import_key, keys):
@@ -67,11 +67,12 @@ def load_dic_file(import_dic, keys):
 
 
 def check_tools():
+    bin_dir = default_cwd
     missing_tools = []
 
     for tool in ("staticnested", "nested", "darkside", "mfkey32v2", "staticnested_1nt",
              "staticnested_2x1nt_rf08s", "staticnested_2x1nt_rf08s_1key"):
-        if any(default_cwd.glob(f"{tool}*")):
+        if any(bin_dir.glob(f"{tool}*")):
             continue
         else:
             missing_tools.append(tool)
