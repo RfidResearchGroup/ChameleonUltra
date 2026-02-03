@@ -2263,7 +2263,7 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 change_done = True
             else:
                 print(f'{color_string((CY, "Requested logging of MFC authentication data already disabled"))}')
-        if args.enable_set_field_off_do_reset:
+        if args.enable_field_off_do_reset:
             change_requested = True
             if not field_off_do_reset:
                 field_off_do_reset = True
@@ -2271,7 +2271,7 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 change_done = True
             else:
                 print(f'{color_string((CY, "Requested FIELD_OFF_DO_RESET already enabled"))}')
-        elif args.disable_set_field_off_do_reset:
+        elif args.disable_field_off_do_reset:
             change_requested = True
             if field_off_do_reset:
                 field_off_do_reset = False
