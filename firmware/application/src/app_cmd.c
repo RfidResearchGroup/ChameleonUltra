@@ -627,12 +627,16 @@ static data_frame_tx_t *cmd_processor_mf1_manipulate_value_block(uint16_t cmd, u
 }
 
 static data_frame_tx_t *cmd_processor_em410x_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t card_buffer[7] = {0x00};
+    uint8_t card_buffer[2 + LF_EM410X_ELECTRA_TAG_ID_SIZE] = {0x00};
     status = scan_em410x(card_buffer);
     if (status != STATUS_LF_TAG_OK) {
         return data_frame_make(cmd, status, 0, NULL);
     }
-    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_buffer), card_buffer);
+
+    tag_specific_type_t tag_type = (card_buffer[0] << 8) | card_buffer[1];
+    uint16_t id_size = (tag_type == TAG_TYPE_EM410X_ELECTRA) ? LF_EM410X_ELECTRA_TAG_ID_SIZE : LF_EM410X_TAG_ID_SIZE;
+
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, 2 + id_size, card_buffer);
 }
 
 static data_frame_tx_t *cmd_processor_em410x_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -647,6 +651,21 @@ static data_frame_tx_t *cmd_processor_em410x_write_to_t55xx(uint16_t cmd, uint16
     }
 
     status = write_em410x_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_em410x_electra_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t id[13];
+        uint8_t new_key[4];
+        uint8_t old_keys[4]; // we can have more than one... struct just to compute offsets with min 1 key
+    } PACKED payload_t;
+    payload_t *payload = (payload_t *)data;
+    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    status = write_em410x_electra_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
     return data_frame_make(cmd, status, 0, NULL);
 }
 
@@ -830,24 +849,41 @@ static data_frame_tx_t *cmd_processor_wipe_fds(uint16_t cmd, uint16_t status, ui
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+static bool get_active_em410x_type(tag_specific_type_t *tag_type_out, uint16_t *id_size_out) {
+    tag_slot_specific_type_t tag_types;
+    tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &tag_types);
+    if (tag_types.tag_lf == TAG_TYPE_EM410X || tag_types.tag_lf == TAG_TYPE_EM410X_ELECTRA) {
+        *tag_type_out = tag_types.tag_lf;
+        *id_size_out = (tag_types.tag_lf == TAG_TYPE_EM410X_ELECTRA) ? LF_EM410X_ELECTRA_TAG_ID_SIZE : LF_EM410X_TAG_ID_SIZE;
+        return true;
+    }
+    return false;
+}
+
 static data_frame_tx_t *cmd_processor_em410x_set_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    if (length != LF_EM410X_TAG_ID_SIZE) {
+    tag_specific_type_t tag_type;
+    uint16_t id_size;
+    if (!get_active_em410x_type(&tag_type, &id_size) || length != id_size) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
-    memcpy(buffer->buffer, data, LF_EM410X_TAG_ID_SIZE);
-    tag_emulation_load_by_buffer(TAG_TYPE_EM410X, false);
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(tag_type);
+    memcpy(buffer->buffer, data, id_size);
+    tag_emulation_load_by_buffer(tag_type, false);
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
 static data_frame_tx_t *cmd_processor_em410x_get_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    tag_slot_specific_type_t tag_types;
-    tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &tag_types);
-    if (tag_types.tag_lf != TAG_TYPE_EM410X) {
+    tag_specific_type_t tag_type;
+    uint16_t id_size;
+    if (!get_active_em410x_type(&tag_type, &id_size)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, data);  // no data in slot, don't send garbage
     }
-    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
-    return data_frame_make(cmd, STATUS_SUCCESS, LF_EM410X_TAG_ID_SIZE, buffer->buffer);
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(tag_type);
+    uint8_t resp[2 + LF_EM410X_ELECTRA_TAG_ID_SIZE] = {0x00};
+    resp[0] = tag_type >> 8;
+    resp[1] = tag_type;
+    memcpy(resp + 2, buffer->buffer, id_size);
+    return data_frame_make(cmd, STATUS_SUCCESS, 2 + id_size, resp);
 }
 
 static data_frame_tx_t *cmd_processor_hidprox_set_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -1615,6 +1651,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
 
     {    DATA_CMD_EM410X_SCAN,                  before_reader_run,           cmd_processor_em410x_scan,                   NULL                   },
     {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_em410x_write_to_t55xx,         NULL                   },
+    {    DATA_CMD_EM410X_ELECTRA_WRITE_TO_T55XX,before_reader_run,           cmd_processor_em410x_electra_write_to_t55xx, NULL                   },
     {    DATA_CMD_HIDPROX_SCAN,                 before_reader_run,           cmd_processor_hidprox_scan,                  NULL                   },
     {    DATA_CMD_HIDPROX_WRITE_TO_T55XX,       before_reader_run,           cmd_processor_hidprox_write_to_t55xx,        NULL                   },
     {    DATA_CMD_VIKING_SCAN,                  before_reader_run,           cmd_processor_viking_scan,                   NULL                   },
