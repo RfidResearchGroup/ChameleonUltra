@@ -546,6 +546,8 @@ hf = root.subgroup('hf', 'High Frequency commands')
 hf_14a = hf.subgroup('14a', 'ISO14443-a commands')
 hf_mf = hf.subgroup('mf', 'MIFARE Classic commands')
 hf_mfu = hf.subgroup('mfu', 'MIFARE Ultralight / NTAG commands')
+hf_desfire = hf.subgroup('desfire', 'MIFARE DESFire commands')
+hf_ndef = hf.subgroup('ndef', 'NDEF commands')
 
 lf = root.subgroup('lf', 'Low Frequency commands')
 lf_em = lf.subgroup('em', 'EM commands')
@@ -553,6 +555,9 @@ lf_em_410x = lf_em.subgroup('410x', 'EM410x commands')
 lf_hid = lf.subgroup('hid', 'HID commands')
 lf_hid_prox = lf_hid.subgroup('prox', 'HID Prox commands')
 lf_viking = lf.subgroup('viking', 'Viking commands')
+lf_fdxb = lf.subgroup('fdxb', 'FDX-B commands')
+lf_indala = lf.subgroup('indala', 'Indala commands')
+lf_t5577 = lf.subgroup('t5577', 'T5577 commands')
 
 @root.command('clear')
 class RootClear(BaseCLIUnit):
@@ -813,6 +818,19 @@ class HF14AInfo(ReaderRequiredUnit):
         scan = HF14AScan()
         scan.device_com = self.device_com
         scan.scan(deep=True)
+
+
+@hf_14a.command('emv')
+class HF14AScanEMV(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Scan EMV tag, and print basic information'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        print("Scanning for EMV card...")
+        resp = self.cmd.hf14a_scan_emv()
+        print(f"- {resp}")
 
 
 @hf_mf.command('nested')
@@ -4468,3 +4486,86 @@ examples/notes:
             )
         else:
             print(f" [*] {color_string((CY, 'No response'))}")
+
+
+@hf_desfire.command('scan')
+class HFDESFireScan(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Scan DESFire tag'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        print("Scanning for DESFire card...")
+        resp = self.cmd.hf_desfire_scan()
+        print(f"- {resp}")
+
+
+@hf_mfu.command('brute')
+class HFNTAGBrute(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Brute-force NTAG password'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        print("Starting NTAG dictionary attack...")
+        resp = self.cmd.hf_ntag_brute()
+        print(f"- {resp}")
+
+
+@hf_ndef.command('uri')
+class HFNDEFUri(BaseCLIUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Generate NDEF URI record'
+        parser.add_argument('uri', type=str, help='URI to encode')
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        resp = self.cmd.hf_ndef_gen_uri(args.uri)
+        if resp:
+            print(f"- Generated {len(resp)} bytes NDEF data:")
+            print(f"  {resp.hex()}")
+        else:
+            print("- Failed to generate NDEF")
+
+
+@lf_fdxb.command('scan')
+class LFFDXBScan(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Scan FDX-B tag'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        print("Scanning for FDX-B tag...")
+        resp = self.cmd.lf_fdxb_scan()
+        print(f"- {resp}")
+
+
+@lf_indala.command('scan')
+class LFIndalaScan(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Scan Indala tag'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        print("Scanning for Indala tag...")
+        resp = self.cmd.lf_indala_scan()
+        print(f"- {resp}")
+
+
+@lf_t5577.command('brute')
+class LFT5577Brute(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Brute-force T5577 password'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        print("Starting T5577 password attack...")
+        resp = self.cmd.lf_t5577_brute()
+        print(f"- {resp}")
+

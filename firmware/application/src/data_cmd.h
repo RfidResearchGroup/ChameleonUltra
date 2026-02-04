@@ -72,6 +72,10 @@
 #define DATA_CMD_MF1_HARDNESTED_ACQUIRE         (2013)
 #define DATA_CMD_MF1_ENC_NESTED_ACQUIRE         (2014)
 #define DATA_CMD_MF1_CHECK_KEYS_ON_BLOCK        (2015)
+#define DATA_CMD_HF14A_SCAN_EMV                 (2016)
+#define DATA_CMD_HF_DESFIRE_SCAN                (2017)
+#define DATA_CMD_HF_NTAG_BRUTE                  (2018)
+#define DATA_CMD_HF_NDEF_GEN_URI                (2019)
 
 #define DATA_CMD_HF14A_SET_FIELD_ON             (2100)
 #define DATA_CMD_HF14A_SET_FIELD_OFF            (2101)
@@ -92,6 +96,9 @@
 #define DATA_CMD_HIDPROX_WRITE_TO_T55XX         (3003)
 #define DATA_CMD_VIKING_SCAN                    (3004)
 #define DATA_CMD_VIKING_WRITE_TO_T55XX          (3005)
+#define DATA_CMD_LF_FDXB_SCAN                   (3006)
+#define DATA_CMD_LF_INDALA_SCAN                 (3007)
+#define DATA_CMD_LF_T5577_BRUTE                 (3008)
 
 //
 // ******************************************************************

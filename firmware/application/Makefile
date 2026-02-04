@@ -41,6 +41,7 @@ SRC_FILES += \
   $(PROJ_DIR)/utils/dataframe.c \
   $(PROJ_DIR)/utils/delayed_reset.c \
   $(PROJ_DIR)/utils/fds_util.c \
+  $(PROJ_DIR)/utils/ndef_gen.c \
   $(PROJ_DIR)/utils/syssleep.c \
   $(PROJ_DIR)/utils/timeslot.c \
   $(SDK_ROOT)/modules/nrfx/mdk/gcc_startup_nrf52840.S \
@@ -336,6 +337,11 @@ LIB_FILES += \
 ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
 # Append reader module source code to compile list.
   SRC_FILES +=\
+    $(PROJ_DIR)/rfid/emv.c \
+    $(PROJ_DIR)/rfid/desfire.c \
+    $(PROJ_DIR)/rfid/ntag_attack.c \
+    $(PROJ_DIR)/rfid/t5577_brute.c \
+    $(PROJ_DIR)/rfid/reader/hf/iso14443_4_transceiver.c \
     $(PROJ_DIR)/rfid/reader/hf/mf1_toolbox.c \
     $(PROJ_DIR)/rfid/reader/hf/rc522.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_125khz_radio.c \
@@ -345,6 +351,8 @@ ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
     $(PROJ_DIR)/rfid/reader/lf/lf_t55xx_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_hidprox_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_viking_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/fdx_b.c \
+    $(PROJ_DIR)/rfid/reader/lf/indala.c \
 
   INC_FOLDERS +=\
     ${PROJ_DIR}/rfid/reader/ \
