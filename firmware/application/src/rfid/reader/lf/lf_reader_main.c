@@ -90,6 +90,15 @@ uint8_t write_em410x_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_pa
     return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
 }
 
+uint8_t write_em410x_electra_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[7] = {0x00};
+    uint8_t blk_count = em410x_electra_t55xx_writer(uid, blks);
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
+    }
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
 /**
  * Write hidprox card data to t55xx
  */

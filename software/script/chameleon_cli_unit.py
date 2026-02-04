@@ -406,8 +406,8 @@ class LFEMIdArgsUnit(DeviceRequiredUnit):
     def before_exec(self, args: argparse.Namespace):
         if not super().before_exec(args):
             return False
-        if args.id is None or not re.match(r"^[a-fA-F0-9]{10}$", args.id):
-            raise ArgsParserError("ID must include 10 HEX symbols")
+        if args.id is None or not re.match(r"^([a-fA-F0-9]{10}|[a-fA-F0-9]{26})$", args.id):
+            raise ArgsParserError("ID must include 10 or 26 HEX symbols")
         return True
 
     def args_parser(self) -> ArgumentParserNoExit:
@@ -2263,7 +2263,7 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 change_done = True
             else:
                 print(f'{color_string((CY, "Requested logging of MFC authentication data already disabled"))}')
-        if args.enable_set_field_off_do_reset:
+        if args.enable_field_off_do_reset:
             change_requested = True
             if not field_off_do_reset:
                 field_off_do_reset = True
@@ -2271,7 +2271,7 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 change_done = True
             else:
                 print(f'{color_string((CY, "Requested FIELD_OFF_DO_RESET already enabled"))}')
-        elif args.disable_set_field_off_do_reset:
+        elif args.disable_field_off_do_reset:
             change_requested = True
             if field_off_do_reset:
                 field_off_do_reset = False
@@ -3623,9 +3623,11 @@ class LFEM410xWriteT55xx(LFEMIdArgsUnit, ReaderRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         id_hex = args.id
+        if len(id_hex) not in (10, 26):
+            raise ArgsParserError("Writing to T55xx supports 5-byte EM410X (10 hex) or 13-byte Electra (26 hex) IDs.")
         id_bytes = bytes.fromhex(id_hex)
         self.cmd.em410x_write_to_t55xx(id_bytes)
-        print(f" - EM410x ID(10H): {id_hex} write done.")
+        print(f" - EM410x ID write done: {id_hex}")
 
 
 @lf_hid_prox.command('read')

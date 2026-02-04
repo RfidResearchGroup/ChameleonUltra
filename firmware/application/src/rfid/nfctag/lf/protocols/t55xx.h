@@ -51,6 +51,12 @@ extern "C" {
     T5577_PWD |                   \
     (2 << T5577_MAXBLOCK_SHIFT))
 
+#define T5577_EM410X_ELECTRA_CONFIG ( \
+    T5577_BITRATE_RF_64 |            \
+    T5577_MODULATION_MANCHESTER |    \
+    T5577_PWD |                      \
+    (4 << T5577_MAXBLOCK_SHIFT))
+
 #define T5577_HIDPROX_CONFIG ( \
     T5577_BITRATE_RF_50 |      \
     T5577_MODULATION_FSK2a |   \
