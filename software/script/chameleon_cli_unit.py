@@ -3773,6 +3773,11 @@ class LFHIDProxEconfig(SlotIndexArgsAndGoUnit, LFHIDIdArgsUnit):
 
     def on_exec(self, args: argparse.Namespace):
         if args.cn is not None:
+            slotinfo = self.cmd.get_slot_info()
+            selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+            lf_tag_type = TagSpecificType(slotinfo[selected - 1]['lf'])
+            if lf_tag_type != TagSpecificType.HIDProx:
+                print(f"{color_string((CR, 'WARNING'))}: Slot type not set to HIDProx.")
             if args.fc is None:
                 args.fc = 0
             if args.il is None:
