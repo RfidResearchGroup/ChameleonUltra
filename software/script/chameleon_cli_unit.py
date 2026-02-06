@@ -682,8 +682,8 @@ class AutoWorkflowRunner:
         try:
             if not self._ensure_reader_mode():
                 return
-            hf_handled = self._handle_hf()
             lf_handled = self._handle_lf()
+            hf_handled = self._handle_hf()
             if not hf_handled and not lf_handled:
                 print(" - No HF or LF tags detected.")
             print("[Auto] Workflow complete.")
@@ -737,20 +737,25 @@ class AutoWorkflowRunner:
 
     def _handle_lf(self) -> bool:
         print("\n[Auto] LF scans")
-        detected = False
-        detected |= self._scan_em410x()
-        detected |= self._scan_hid_prox()
-        detected |= self._scan_viking()
-        if detected:
+        em410x_data = self._scan_em410x()
+        detected = bool(em410x_data)
+        lf_keys = None
+        if em410x_data:
+            lf_keys = self._load_lf_keys()
+        if self._scan_hid_prox():
+            detected = True
+        if self._scan_viking():
+            detected = True
+        if detected and lf_keys is None:
             self._load_lf_keys()
-        else:
+        if not detected:
             print(" - No LF tags detected.")
         return detected
 
-    def _scan_em410x(self) -> bool:
+    def _scan_em410x(self):
         data = self._call_with_quiet_status(self.cmd.em410x_scan, self.QUIET_LF_STATUS)
         if not data:
-            return False
+            return None
         tag_type, uid_bytes = data
         tag_label = (
             TagSpecificType(tag_type).name
@@ -762,7 +767,7 @@ class AutoWorkflowRunner:
         print(f" - EM410x detected ({tag_label})")
         print(f"   UID hex: {color_string((CG, uid_hex))}")
         print(f"   UID dec: {color_string((CG, str(uid_dec)))}")
-        return True
+        return data
 
     def _scan_hid_prox(self) -> bool:
         def hid_scan():
@@ -808,6 +813,12 @@ class AutoWorkflowRunner:
             print(
                 f" - Aggregated {color_string((CG, str(len(lf_keys))))} T55xx key candidates."
             )
+            preview = ", ".join(key.hex().upper() for key in lf_keys[:5])
+            if preview:
+                if len(lf_keys) > 5:
+                    preview += ", ..."
+                print(f"   Preview: {preview}")
+        return lf_keys
 
     def _scan_value_blocks(self, sector_keys: dict[int, bytes], max_sectors: int):
         print(" - Inspecting data blocks for MIFARE value structures...")
@@ -853,11 +864,10 @@ class AutoWorkflowRunner:
     ):
         for key_type, key in key_candidates:
             try:
-                resp = self.cmd.mf1_read_one_block(block_number, key_type, key)
+                block_data = self.cmd.mf1_read_one_block(block_number, key_type, key)
             except UnexpectedResponseError:
                 continue
-            if resp.status == Status.HF_TAG_OK:
-                return resp.parsed
+            return block_data
         return None
 
     @staticmethod
