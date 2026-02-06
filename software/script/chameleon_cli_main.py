@@ -32,7 +32,7 @@ BANNER = """
 📡 ██║     ██╔══██║██╔══██║██╔██╔██║██╔══╝  ██║     ██╔══╝  ██║  ██║██╔████║ 📡
 📡 ╚██████╗██║  ██║██║  ██║██║╚═╝██║███████╗███████╗███████╗╚█████╔╝██║╚███║ 📡
  📡 ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝   ╚═╝╚══════╝╚══════╝╚══════╝ ╚════╝ ╚═╝ ╚══╝ 📡
- 📡 U 📡 L 📡 T 📡 R 📡 A 📡
+ 📡 U 📡 L 📡 T 📡 R 📡 A 📡  v1 API Integration by @gokingsgo805
 """
 
 
@@ -84,7 +84,7 @@ class ChameleonCLI:
 
         :return:
         """
-        print(color_string((CY, BANNER)))
+        print(color_string((colorama.Fore.LIGHTGREEN_EX, BANNER)))
 
     def exec_cmd(self, cmd_str):
         if cmd_str == "":

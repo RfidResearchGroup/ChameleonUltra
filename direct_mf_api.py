@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Direct API Mifare Classic reader (no CLI).
+Direct API hf Mifare Classic & lf EM 410x reader (no CLI).
 Uses chameleon_com + chameleon_cmd to scan, search keys, and read blocks.
 """
 

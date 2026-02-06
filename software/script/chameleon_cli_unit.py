@@ -51,6 +51,35 @@ type_id_SAK_dict = {0x00: "MIFARE Ultralight Classic/C/EV1/Nano | NTAG 2xx",
 
 default_cwd = Path(__file__).resolve().parent / "bin"
 
+AUTO_HF_KEY_DICTIONARY_PATHS = [
+    Path(r"C:\Users\Cobiwan Kenobi\Documents\Proxmark3 (Mifare Classic).dic"),
+    Path(
+        r"C:\Users\Cobiwan Kenobi\Documents\Flipper Zero Unleashed Firmware (Mifare Classic).dic"
+    ),
+    Path(r"C:\Users\Cobiwan Kenobi\Documents\Proxmark3 (Mifare Ultralight C).dic"),
+]
+AUTO_LF_KEY_DICTIONARY_PATHS = [
+    Path(r"C:\Users\Cobiwan Kenobi\Documents\Proxmark3 (T55XX).dic"),
+]
+AUTO_HF_KEY_HEX_LENGTHS = (12,)
+AUTO_LF_KEY_HEX_LENGTHS = (8,)
+AUTO_HF_DEFAULT_MAX_SECTORS = 16
+AUTO_KEY_CHUNK_SIZE = 20
+HEX_LINE_PATTERN = re.compile(r"^[a-fA-F0-9]+$")
+
+
+def _iter_dic_entries(stream, valid_hex_lengths: tuple[int, ...] = (12,)):
+    normalized_lengths = tuple(valid_hex_lengths)
+    for raw_line in stream:
+        # Strip inline comments (proxmark dictionaries often use '#' prefixes)
+        entry = raw_line.split("#", 1)[0].strip()
+        if not entry:
+            continue
+        if len(entry) not in normalized_lengths:
+            continue
+        if HEX_LINE_PATTERN.fullmatch(entry):
+            yield bytes.fromhex(entry)
+
 
 def load_key_file(import_key, keys):
     """
@@ -63,6 +92,11 @@ def load_key_file(import_key, keys):
 
 
 def load_dic_file(import_dic, keys):
+    try:
+        for key in _iter_dic_entries(import_dic):
+            keys.add(key)
+    finally:
+        import_dic.close()
     return keys
 
 
@@ -635,7 +669,319 @@ class RootDumpHelp(BaseCLIUnit):
         self.dump_help(root, dump_cmd_groups=args.show_groups, dump_description=args.show_desc)
 
 
-@hw.command('connect')
+class AutoWorkflowRunner:
+    QUIET_HF_STATUS = (str(Status.HF_TAG_NO),)
+    QUIET_LF_STATUS = (str(Status.LF_TAG_NO_FOUND),)
+
+    def __init__(self, cli_unit: BaseCLIUnit):
+        self.cli_unit = cli_unit
+        self.cmd = cli_unit.cmd
+
+    def run(self):
+        print("\n[Auto] Post-connect workflow")
+        try:
+            if not self._ensure_reader_mode():
+                return
+            hf_handled = self._handle_hf()
+            lf_handled = self._handle_lf()
+            if not hf_handled and not lf_handled:
+                print(" - No HF or LF tags detected.")
+            print("[Auto] Workflow complete.")
+        except Exception as exc:
+            print(color_string((CR, f"[Auto] Unexpected error: {exc}")))
+
+    def _ensure_reader_mode(self) -> bool:
+        try:
+            self.cmd.set_device_reader_mode(True)
+            return True
+        except UnexpectedResponseError as exc:
+            print(color_string((CR, f"[Auto] Failed to enter reader mode: {exc}")))
+            return False
+
+    def _handle_hf(self) -> bool:
+        print("\n[Auto] HF 14A scan")
+        tags = self._call_with_quiet_status(self.cmd.hf14a_scan, self.QUIET_HF_STATUS)
+        if not tags:
+            print(" - No HF tags detected.")
+            return False
+        for idx, tag in enumerate(tags, start=1):
+            uid_hex = tag["uid"].hex().upper()
+            atqa_hex = tag["atqa"].hex().upper()
+            sak_hex = tag["sak"].hex().upper()
+            line = f" - Tag {idx}: UID {color_string((CG, uid_hex))}"
+            line += f" ATQA {atqa_hex}"
+            line += f" SAK {sak_hex}"
+            if tag["ats"]:
+                line += f" ATS {tag['ats'].hex().upper()}"
+            print(line)
+        if len(tags) != 1:
+            print(" - Multiple HF tags detected; skipping key dictionary checks.")
+            return True
+        if not self.cmd.mf1_detect_support():
+            print(
+                " - Detected HF tag does not advertise Mifare Classic support; skipping dictionary checks."
+            )
+            return True
+        hf_keys = self._collect_keys(
+            AUTO_HF_KEY_DICTIONARY_PATHS, "HF", AUTO_HF_KEY_HEX_LENGTHS
+        )
+        if not hf_keys:
+            print(" - No HF key entries available; skipping key checks.")
+            return True
+        sak_value = tags[0]["sak"][0]
+        max_sectors = self._guess_sector_count(sak_value)
+        sector_keys = self._perform_hf_key_checks(hf_keys, max_sectors)
+        if sector_keys:
+            self._scan_value_blocks(sector_keys, max_sectors)
+        return True
+
+    def _handle_lf(self) -> bool:
+        print("\n[Auto] LF scans")
+        detected = False
+        detected |= self._scan_em410x()
+        detected |= self._scan_hid_prox()
+        detected |= self._scan_viking()
+        if detected:
+            self._load_lf_keys()
+        else:
+            print(" - No LF tags detected.")
+        return detected
+
+    def _scan_em410x(self) -> bool:
+        data = self._call_with_quiet_status(self.cmd.em410x_scan, self.QUIET_LF_STATUS)
+        if not data:
+            return False
+        tag_type, uid_bytes = data
+        tag_label = (
+            TagSpecificType(tag_type).name
+            if tag_type in TagSpecificType._value2member_map_
+            else f"0x{tag_type:04X}"
+        )
+        uid_hex = uid_bytes.hex().upper()
+        uid_dec = int.from_bytes(uid_bytes, byteorder="big")
+        print(f" - EM410x detected ({tag_label})")
+        print(f"   UID hex: {color_string((CG, uid_hex))}")
+        print(f"   UID dec: {color_string((CG, str(uid_dec)))}")
+        return True
+
+    def _scan_hid_prox(self) -> bool:
+        def hid_scan():
+            return self.cmd.hidprox_scan(0)
+
+        data = self._call_with_quiet_status(hid_scan, self.QUIET_LF_STATUS)
+        if not data:
+            return False
+        fmt_val, fc, cn_msb, cn_lsb, il, oem = data
+        try:
+            fmt_name = HIDFormat(fmt_val).name
+        except ValueError:
+            fmt_name = f"0x{fmt_val:02X}"
+        card_number = (cn_msb << 32) | cn_lsb
+        print(f" - HID Prox detected ({fmt_name})")
+        if fc:
+            print(f"   Facility: {color_string((CG, str(fc)))}")
+        if il:
+            print(f"   Issue Level: {color_string((CG, str(il)))}")
+        if oem:
+            print(f"   OEM: {color_string((CG, str(oem)))}")
+        print(
+            f"   Card #: {color_string((CG, str(card_number)))} (0x{card_number:08X})"
+        )
+        return True
+
+    def _scan_viking(self) -> bool:
+        data = self._call_with_quiet_status(self.cmd.viking_scan, self.QUIET_LF_STATUS)
+        if not data:
+            return False
+        uid_hex = data.hex().upper()
+        uid_dec = int.from_bytes(data, byteorder="big")
+        print(" - Viking tag detected")
+        print(f"   UID hex: {color_string((CG, uid_hex))}")
+        print(f"   UID dec: {color_string((CG, str(uid_dec)))}")
+        return True
+
+    def _load_lf_keys(self):
+        lf_keys = self._collect_keys(
+            AUTO_LF_KEY_DICTIONARY_PATHS, "T55xx", AUTO_LF_KEY_HEX_LENGTHS
+        )
+        if lf_keys:
+            print(
+                f" - Aggregated {color_string((CG, str(len(lf_keys))))} T55xx key candidates."
+            )
+
+    def _scan_value_blocks(self, sector_keys: dict[int, bytes], max_sectors: int):
+        print(" - Inspecting data blocks for MIFARE value structures...")
+        sectors = sorted({idx // 2 for idx in sector_keys})
+        any_values = False
+        for sector in sectors:
+            if sector >= max_sectors:
+                continue
+            key_candidates = self._build_sector_key_list(sector, sector_keys)
+            if not key_candidates:
+                continue
+            blocks_per_sector = 4 if sector < 32 else 16
+            for block_offset in range(blocks_per_sector - 1):
+                global_block = self._sector_block_number(sector, block_offset)
+                block_data = self._read_block_with_keys(global_block, key_candidates)
+                if block_data is None:
+                    continue
+                value_info = self._decode_value_block(block_data)
+                if value_info is None:
+                    continue
+                any_values = True
+                value, address = value_info
+                value_hex = f"0x{(value & 0xFFFFFFFF):08X}"
+                print(
+                    f"   Sector {sector:02d} Block {global_block:03d}"
+                    f" → value {color_string((CG, str(value)))} ({value_hex}), addr {address}"
+                )
+        if not any_values:
+            print(" - No value blocks found with the recovered keys.")
+
+    def _build_sector_key_list(self, sector: int, sector_keys: dict[int, bytes]):
+        candidates = []
+        a_key = sector_keys.get(sector * 2)
+        if a_key:
+            candidates.append((MfcKeyType.A, a_key))
+        b_key = sector_keys.get(sector * 2 + 1)
+        if b_key:
+            candidates.append((MfcKeyType.B, b_key))
+        return candidates
+
+    def _read_block_with_keys(
+        self, block_number: int, key_candidates: list[tuple[MfcKeyType, bytes]]
+    ):
+        for key_type, key in key_candidates:
+            try:
+                resp = self.cmd.mf1_read_one_block(block_number, key_type, key)
+            except UnexpectedResponseError:
+                continue
+            if resp.status == Status.HF_TAG_OK:
+                return resp.parsed
+        return None
+
+    @staticmethod
+    def _decode_value_block(block_data: bytes):
+        if len(block_data) != 16:
+            return None
+        val1, val2, val3, adr1, adr2, adr3, adr4 = struct.unpack("<iiiBBBB", block_data)
+        if (val1 != val3) or (val1 + val2 != -1):
+            return None
+        if (adr1 != adr3) or (adr2 != adr4) or ((adr1 + adr2) & 0xFF) != 0xFF:
+            return None
+        return val1, adr1
+
+    @staticmethod
+    def _sector_block_number(sector: int, block_offset: int) -> int:
+        if sector < 32:
+            return sector * 4 + block_offset
+        return 32 * 4 + (sector - 32) * 16 + block_offset
+
+    def _call_with_quiet_status(self, func, quiet_statuses: tuple[str, ...]):
+        try:
+            return func()
+        except UnexpectedResponseError as exc:
+            if str(exc) in quiet_statuses:
+                return None
+            print(color_string((CR, f"[Auto] {func.__name__} failed: {exc}")))
+            return None
+
+    def _collect_keys(
+        self, paths, label: str, valid_hex_lengths: tuple[int, ...]
+    ) -> list[bytes]:
+        aggregated = []
+        seen = set()
+        for dic_path in paths:
+            dic = Path(dic_path)
+            if not dic.exists():
+                print(color_string((CR, f" - {label} key file not found: {dic}")))
+                continue
+            try:
+                with dic.open("r", encoding="utf8") as handle:
+                    file_keys = list(_iter_dic_entries(handle, valid_hex_lengths))
+            except OSError as exc:
+                print(color_string((CR, f" - Could not read {dic}: {exc}")))
+                continue
+            if not file_keys:
+                print(color_string((CY, f" - {dic} contained no usable entries")))
+                continue
+            print(
+                f" - Loaded {color_string((CG, str(len(file_keys))))} keys from {dic}"
+            )
+            for key in file_keys:
+                if key not in seen:
+                    aggregated.append(key)
+                    seen.add(key)
+        if aggregated:
+            print(
+                f" - Aggregated {color_string((CG, str(len(aggregated))))} unique {label} keys."
+            )
+        return aggregated
+
+    def _perform_hf_key_checks(
+        self, keys: list[bytes], max_sectors: int
+    ) -> dict[int, bytes]:
+        print(
+            f" - Checking first {color_string((CY, str(max_sectors)))} sectors with loaded HF dictionaries..."
+        )
+        mask = self._build_mask(max_sectors)
+        sector_keys = {}
+        for offset in range(0, len(keys), AUTO_KEY_CHUNK_SIZE):
+            chunk = keys[offset : offset + AUTO_KEY_CHUNK_SIZE]
+            try:
+                resp = self.cmd.mf1_check_keys_of_sectors(mask, chunk)
+            except UnexpectedResponseError as exc:
+                print(color_string((CR, f" - Key check failed: {exc}")))
+                return {}
+            status = resp["status"]
+            if status != Status.HF_TAG_OK:
+                print(color_string((CR, f" - Key check halted: {status}")))
+                return {}
+            if "sectorKeys" not in resp:
+                break
+            for idx in range(10):
+                mask[idx] |= resp["found"][idx]
+            sector_keys.update(resp["sectorKeys"])
+            if all(value == 0xFF for value in mask):
+                break
+        if sector_keys:
+            self._print_sector_keys(sector_keys)
+        else:
+            print(" - No matching keys were found in the supplied dictionaries.")
+        return sector_keys
+
+    def _build_mask(self, max_sectors: int) -> bytearray:
+        mask = bytearray(10)
+        capped = max(1, min(max_sectors, 40))
+        for sector in range(capped, 40):
+            mask[sector // 4] |= 3 << (6 - sector % 4 * 2)
+        return mask
+
+    def _print_sector_keys(self, sector_keys: dict[int, bytes]):
+        print(" - HF keys recovered:")
+        sectors = sorted({idx // 2 for idx in sector_keys})
+        for sector in sectors:
+            parts = []
+            a_key = sector_keys.get(sector * 2)
+            b_key = sector_keys.get(sector * 2 + 1)
+            if a_key:
+                parts.append(f"A={color_string((CG, a_key.hex().upper()))}")
+            if b_key:
+                parts.append(f"B={color_string((CG, b_key.hex().upper()))}")
+            summary = ", ".join(parts) if parts else "No keys"
+            print(f"   Sector {color_string((CY, f'{sector:02d}'))}: {summary}")
+
+    def _guess_sector_count(self, sak_value: int) -> int:
+        if sak_value == 0x09:
+            return 5
+        if sak_value in {0x18, 0x11}:
+            return 40
+        if sak_value in {0x10, 0x19}:
+            return 32
+        return AUTO_HF_DEFAULT_MAX_SECTORS
+
+
+@hw.command("connect")
 class HWConnect(BaseCLIUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
@@ -682,6 +1028,7 @@ class HWConnect(BaseCLIUnit):
             major, minor = self.cmd.get_app_version()
             model = ['Ultra', 'Lite'][self.cmd.get_device_model()]
             print(f" {{ Chameleon {model} connected: v{major}.{minor} }}")
+            AutoWorkflowRunner(self).run()
 
         except Exception as e:
             print(color_string((CR, f"Chameleon Connect fail: {str(e)}")))
