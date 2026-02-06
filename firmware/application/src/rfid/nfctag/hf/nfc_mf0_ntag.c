@@ -704,11 +704,12 @@ static bool check_ro_lock_on_page(int block_num) {
         switch (m_tag_type) {
             case TAG_TYPE_NTAG_213:
             case TAG_TYPE_NTAG_215:
-            case TAG_TYPE_NTAG_216: ;
+            case TAG_TYPE_NTAG_216: {
                 // pages can be locked or not independant of BL bits
                 //the BL bits only freezes the lock bytes !
                 uint16_t lock_bits = *(uint16_t *)&m_tag_information->memory[2][2];
                 return ((lock_bits >> block_num) & 0x01) == 1;
+            }
             default:
                 // check block locking bits
                 if (block_num <= 9) locked |= (m_tag_information->memory[2][2] & 2) == 2;
@@ -813,8 +814,7 @@ static bool check_ro_lock_on_page(int block_num) {
                 switch (m_tag_type) {
                     case TAG_TYPE_NTAG_213:
                     case TAG_TYPE_NTAG_215:
-                    case TAG_TYPE_NTAG_216:
-                    {
+                    case TAG_TYPE_NTAG_216: {
                         uint8_t block_bytes = m_tag_information->memory[user_memory_end][2];
                         uint16_t block_world = 0;
                         
@@ -851,7 +851,7 @@ static int handle_write_command(uint8_t block_num, uint8_t *p_data) {
     switch (m_tag_type) {
         case TAG_TYPE_NTAG_213:
         case TAG_TYPE_NTAG_215:
-        case TAG_TYPE_NTAG_216: ;
+        case TAG_TYPE_NTAG_216: {
             int first_cfg_page = get_first_cfg_page_by_tag_type(m_tag_type);
             uint8_t cfglck = m_tag_information->memory[first_cfg_page][0] & 0x40;
             // For NTAG cards we need to check CFGLCK bit for config pages
@@ -860,6 +860,7 @@ static int handle_write_command(uint8_t block_num, uint8_t *p_data) {
             bool is_beyond_user_memory = (block_num >= block_max);
             out_of_bounds = (is_beyond_user_memory && !is_config_page) || (config_locked && is_config_page);
             break;
+        }
         default:
             out_of_bounds = block_num >= block_max;
             break;
