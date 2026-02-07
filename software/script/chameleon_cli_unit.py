@@ -1841,7 +1841,7 @@ class HFMFClone(MF1AuthArgsUnit):
         parser = ArgumentParserNoExit()
         parser.description = 'Mifare Classic clone tag from dump'
         parser.add_argument('-t', '--dump-file-type', type=str, required=False, help="Dump file content type", choices=['bin', 'hex'])
-        parser.add_argument('-a', '--clone-access', type=bool, default=False, help="Write ACL from original dump too (/!\ could brick your tag)")
+        parser.add_argument('-a', '--clone-access', type=bool, default=False, help="Write ACL from original dump too (! could brick your tag)")
         parser.add_argument('-f', '--dump-file', type=argparse.FileType("rb"), required=True,
                             help="Dump file containing data to write on new tag")
         parser.add_argument('-d', '--dic', type=argparse.FileType("r"), required=True,
