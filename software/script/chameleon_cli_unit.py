@@ -553,6 +553,7 @@ lf_em_410x = lf_em.subgroup('410x', 'EM410x commands')
 lf_hid = lf.subgroup('hid', 'HID commands')
 lf_hid_prox = lf_hid.subgroup('prox', 'HID Prox commands')
 lf_viking = lf.subgroup('viking', 'Viking commands')
+lf_generic = lf.subgroup('generic', 'Generic commands')
 
 @root.command('clear')
 class RootClear(BaseCLIUnit):
@@ -3826,6 +3827,32 @@ class LFVikingWriteT55xx(LFVikingIdArgsUnit, ReaderRequiredUnit):
         id_bytes = bytes.fromhex(id_hex)
         self.cmd.viking_write_to_t55xx(id_bytes)
         print(f" - Viking ID(8H): {id_hex} write done.")
+
+@lf_generic.command('adcread')
+class LFADCGenericRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Read ADC and return the array'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        resp = self.cmd.adc_generic_read()
+
+        if resp is not None:
+            print(f"generic read data[{len(resp)}]:")
+            width = 50
+            for i in range(0, len(resp), width):
+                chunk = resp[i : i + width]
+                hexpart = " ".join(f"{b:02x}" for b in chunk)
+                binpart = "".join('1' if b >= 0xbf else '0' for b in chunk)
+                print(f"{i:04x} {hexpart:<{width * 3}} {binpart}")
+
+            avg = 0
+            for val in resp:
+                avg += val
+            print(f'avg: {hex(round(avg / len(resp)))}')
+        else:
+            print(f"generic read error")
 
 @hw_slot.command('list')
 class HWSlotList(DeviceRequiredUnit):
