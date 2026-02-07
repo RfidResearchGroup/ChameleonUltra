@@ -18,6 +18,7 @@ SRC_FILES += \
   $(PROJ_DIR)/bsp/bsp_delay.c \
   $(PROJ_DIR)/bsp/bsp_time.c \
   $(PROJ_DIR)/bsp/bsp_wdt.c \
+  $(PROJ_DIR)/rfid/byte_mirror.c \
   $(PROJ_DIR)/rfid/crc_utils.c \
   $(PROJ_DIR)/rfid/hex_utils.c \
   $(PROJ_DIR)/rfid/mf1_crapto1.c \
@@ -28,8 +29,15 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/nfctag/hf/crypto1_helper.c \
   $(PROJ_DIR)/rfid/nfctag/hf/nfc_14a.c \
   $(PROJ_DIR)/rfid/nfctag/hf/nfc_mf1.c \
-  $(PROJ_DIR)/rfid/nfctag/hf/nfc_ntag.c \
+  $(PROJ_DIR)/rfid/nfctag/hf/nfc_mf0_ntag.c \
   $(PROJ_DIR)/rfid/nfctag/lf/lf_tag_em.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/utils/fskdemod.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/utils/circular_buffer.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/utils/manchester.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/protocols/em410x.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/protocols/hidprox.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/protocols/viking.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/protocols/wiegand.c \
   $(PROJ_DIR)/utils/dataframe.c \
   $(PROJ_DIR)/utils/delayed_reset.c \
   $(PROJ_DIR)/utils/fds_util.c \
@@ -174,6 +182,7 @@ INC_FOLDERS += \
   ${PROJ_DIR}/rfid/nfctag/ \
   ${PROJ_DIR}/rfid/nfctag/hf \
   ${PROJ_DIR}/rfid/nfctag/lf \
+  ${PROJ_DIR}/rfid/nfctag/lf/utils \
   $(SDK_ROOT)/components/nfc/ndef/generic/message \
   $(SDK_ROOT)/components/nfc/t2t_lib \
   $(SDK_ROOT)/components/nfc/t4t_parser/hl_detection_procedure \
@@ -329,12 +338,14 @@ ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
   SRC_FILES +=\
     $(PROJ_DIR)/rfid/reader/hf/mf1_toolbox.c \
     $(PROJ_DIR)/rfid/reader/hf/rc522.c \
-    $(PROJ_DIR)/rfid/reader/lf/data_utils.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_125khz_radio.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_em410x_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_reader_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_reader_main.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_t55xx_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_hidprox_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_viking_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_reader_generic.c \
 
   INC_FOLDERS +=\
     ${PROJ_DIR}/rfid/reader/ \

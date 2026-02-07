@@ -188,7 +188,7 @@ static nfc_tag_14a_coll_res_reference_t m_shadow_coll_res;
 static nfc_tag_mf1_trailer_info_t *m_tag_trailer_info = NULL;
 // Define and use MF1 special communication buffer
 static nfc_tag_mf1_tx_buffer_t m_tag_tx_buffer;
-//Save the specific type of MF1 currently being simulated
+//Save the specific type of MF1 currently being emulated
 static tag_specific_type_t m_tag_type;
 
 // Fast simulate is enable, we use internal crypto1 instance from 'mf1_crypto1.c'
@@ -201,7 +201,7 @@ static struct Crypto1State *pcs = &mpcs;
 // Define the buffer of the data that stored the detected data
 // Place this data in a dormant RAM to save time and space to write into Flash
 #define MF1_AUTH_LOG_MAX_SIZE   1000
-static __attribute__((section(".noinit"))) struct nfc_tag_mf1_auth_log_buffer {
+static __attribute__((section(".noinit_mf1"))) struct nfc_tag_mf1_auth_log_buffer {
     uint32_t count;
     nfc_tag_mf1_auth_log_t logs[MF1_AUTH_LOG_MAX_SIZE];
 } m_auth_log;
@@ -500,7 +500,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                                 BlockEnd = BlockStart + 4 - 1;
                             }
 
-                            // The type of current simulation card is not enough to support the access of the card reader
+                            // The type of current emulation card is not enough to support the access of the card reader
                             if (check_block_max_overflow(BlockAuth)) {
                                 break;
                             }
@@ -805,7 +805,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                                 BlockEnd = BlockStart + 4 - 1;
                             }
 
-                            // The type of current simulation card is not enough to support the access of the card reader
+                            // The type of current emulation card is not enough to support the access of the card reader
                             if (check_block_max_overflow(BlockAuth)) {
                                 break;
                             }
@@ -1016,7 +1016,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
  * @brief Provide the necessary anti -conflict resources for the MiFare label (only pointer provides pointers)
  */
 nfc_tag_14a_coll_res_reference_t *get_mifare_coll_res() {
-    //According to the current interoperability configuration, selectively return the configuration data to selectively, assuming that the data interoperability is turned on, then we also need to ensure that the current simulation card is 4BYTE
+    //According to the current interoperability configuration, selectively return the configuration data to selectively, assuming that the data interoperability is turned on, then we also need to ensure that the current emulation card is 4BYTE
     if (m_tag_information->config.use_mf1_coll_res && m_tag_information->res_coll.size == NFC_TAG_14A_UID_SINGLE_SIZE) {
         // Manufacturer information obtained by the data area
         nfc_tag_mf1_factory_info_t *block0_factory_info = (nfc_tag_mf1_factory_info_t *)m_tag_information->memory[0];
@@ -1102,7 +1102,7 @@ int nfc_tag_mf1_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer)
     if (buffer->length >= info_size) {
         //Convert the data buffer to MF1 structure type
         m_tag_information = (nfc_tag_mf1_information_t *)buffer->buffer;
-        // The specific type of MF1 that is simulated by the cache
+        // The specific type of MF1 that is emulated by the cache
         m_tag_type = type;
         // Register 14A communication management interface
         nfc_tag_14a_handler_t handler_for_14a = {
@@ -1111,6 +1111,8 @@ int nfc_tag_mf1_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer)
             .cb_reset = nfc_tag_mf1_reset_handler,
         };
         nfc_tag_14a_set_handler(&handler_for_14a);
+        NRF_LOG_INFO("HF mf1 config 'field_off_do_reset' = %d", m_tag_information->config.field_off_do_reset);
+        nfc_tag_14a_set_reset_enable(m_tag_information->config.field_off_do_reset);
         NRF_LOG_INFO("HF mf1 data load finish.");
     } else {
         NRF_LOG_ERROR("nfc_tag_mf1_information_t too big.");
@@ -1157,6 +1159,12 @@ bool nfc_tag_mf1_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     p_mf1_information->config.use_mf1_coll_res = false;
     p_mf1_information->config.mode_block_write = NFC_TAG_MF1_WRITE_NORMAL;
     p_mf1_information->config.detection_enable = false;
+    p_mf1_information->config.field_off_do_reset = false;
+
+    // zero for reserved byte
+    p_mf1_information->config.reserved1 = 0x00;
+    p_mf1_information->config.reserved2 = 0x00;
+    p_mf1_information->config.reserved3 = 0x00;
 
     // save data to flash
     tag_sense_type_t sense_type = get_sense_type_from_tag_type(tag_type);
@@ -1236,3 +1244,10 @@ nfc_tag_mf1_write_mode_t nfc_tag_mf1_get_write_mode(void) {
     return m_tag_information->config.mode_block_write;
 }
 
+void nfc_tag_mf1_set_field_off_do_reset(bool enable) {
+    m_tag_information->config.field_off_do_reset = enable;
+}
+
+bool nfc_tag_mf1_is_field_off_do_reset(void) {
+    return m_tag_information->config.field_off_do_reset;
+}

@@ -4,6 +4,31 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 
 ## [unreleased][unreleased]
  - Added commands to dump and clone Mifare tags
+ - Fix bad missing tools warning (@suut)
+ - Fix for FAST_READ command for nfc - mf0 tags
+ - Rewrite of the dynamic and static locks logic for NTAG213, NTAG215 and NTAG216; we shouldn't take into account the block lock bits
+ - Fixed an issue where we wouldn't be able to change CFG0 and CFG1 for NTAG213, NTAG215 and NTG216 once a password was added even if the cfg bit was reset.
+ - Fix for static nested key recovery (@jekkos)
+ - Fix LEDs being stuck on after battery check (@suut)
+ - Add TCP support for the CLI (@suut)
+ - Fix build on Android in Termux (@suut)
+ - Fix the issue where some reader cause CU to enter a strange state (@xianglin1998)
+ - The transmission performance of USB has been improved (@xianglin1998)
+ - Added cmd for set mf1 config 'field_off_do_reset' (@xianglin1998)
+ - Fix Windows build (@suut)
+ - Added `hf 14a config` to deal with badly configured cards (@azuwis)
+
+## [v2.1.0][2025-09-02]
+ - Added UV, formatter and linter. Contribution guidelines. (@GameTec-live)
+ - Extend max packet data size from 512 to 4096 bytes (@Foxushka)
+ - HID Prox support (@TeCHiScy)
+ - `hf mf elog --decrypt` skip records with found keys (@taichunmin)
+ - Added cmd for fetching all slots nicks (@Foxushka)
+ - Added `hf mf senested` for recovering keys from static encrypted cards via backdoor (https://eprint.iacr.org/2024/1275) (@Foxushka)
+ - Added cmd for faster bulk key checking on one block (~33 keys per second) (@Foxushka, @taichunmin)
+ - Added cmd to acquire nonces for static encrypted cards via backdoor (@Foxushka) 
+ - Added `firmware/docker-compose.yml` to build firmware in local docker (@taichunmin)
+ - Added cmd to acquire nonces for hardnested(Protocol doc need update) (@xianglin1998)
  - Added command to check keys of multiple sectors at once (@taichunmin)
  - Fixed unused target key type parameter for nested (@petepriority)
  - Skip already used items `hf mf elog --decrypt` (@p-l-)
@@ -31,6 +56,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Added support for timestamped comments in CLI via `rem`, `;`, `%` or `#` (@doegox)
  - Fixed watchdog trigger during `hw factory_reset` (@doegox)
  - Added PyInstaller support for CLI client (@augustozanellato)
+ - Added proper Mifare Ultralight (original, C, EV1) / NTAG (213, 215, 216) emulation (@turbocooler).
 
 ## [v2.0.0][2023-09-26]
  - Added `hw slot nick delete` and DELETE_SLOT_TAG_NICK (@doegox)

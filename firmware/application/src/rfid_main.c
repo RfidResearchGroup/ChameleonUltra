@@ -1,11 +1,12 @@
 #include <stdint.h>
 #include "rfid_main.h"
-
-
+#include "rgb_marquee.h"
 
 //The current mode of the device
 device_mode_t rfid_state = DEVICE_MODE_NONE;
 
+// External declaration for field state
+extern bool m_is_field_on;
 
 /**
  * @brief Function for enter tag reader mode
@@ -41,6 +42,12 @@ void tag_mode_enter(void) {
         rfid_state = DEVICE_MODE_TAG;
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
+        // Safety check: turn off field if it's on
+        if (m_is_field_on) {
+            pcd_14a_reader_antenna_off();
+            m_is_field_on = false;
+        }
+        
         // uninit reader
         lf_125khz_radio_uninit();
         pcd_14a_reader_uninit();
@@ -82,6 +89,15 @@ void light_up_by_slot(void) {
 }
 
 /**
+ * @brief Apply visual and state changes after switching slot
+ */
+void apply_slot_change(uint8_t slot_now, uint8_t slot_new) {
+    uint8_t color_now = get_color_by_slot(slot_now);
+    uint8_t color_new = get_color_by_slot(slot_new);
+    ledblink3(slot_now, color_now, slot_new, color_new);
+}
+
+/**
  * @brief Function for get current device mode
  */
 device_mode_t get_device_mode(void) {
@@ -97,11 +113,13 @@ device_mode_t get_device_mode(void) {
 uint8_t get_color_by_slot(uint8_t slot) {
     tag_slot_specific_type_t tag_types;
     tag_emulation_get_specific_types_by_slot(slot, &tag_types);
-    if (tag_types.tag_hf != TAG_TYPE_UNDEFINED && tag_types.tag_lf != TAG_TYPE_UNDEFINED) {
-        return 0;   // Dual -frequency card simulation, return R, indicate a dual -frequency card
-    } else if (tag_types.tag_hf != TAG_TYPE_UNDEFINED) {   //High -frequency simulation, return G
+    bool enabled_lf = is_slot_enabled(slot, TAG_SENSE_LF);
+    bool enabled_hf = is_slot_enabled(slot, TAG_SENSE_HF);
+    if (tag_types.tag_hf != TAG_TYPE_UNDEFINED && tag_types.tag_lf != TAG_TYPE_UNDEFINED && enabled_hf && enabled_lf) {
+        return 0;   // Dual -frequency card emulation, return R, indicate a dual -frequency card
+    } else if (tag_types.tag_hf != TAG_TYPE_UNDEFINED && enabled_hf) {   //High -frequency emulation, return G
         return 1;
-    } else {    // Low -frequency simulation, return B
+    } else {    // Low -frequency emulation, return B
         return 2;
     }
 }

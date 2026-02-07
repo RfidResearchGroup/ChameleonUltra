@@ -17,7 +17,7 @@
 // The default delay of the antenna reset
 static uint32_t g_ant_reset_delay = 100;
 
-// Label information used for global operations
+// tag information used for this module.
 static picc_14a_tag_t m_tag_info;
 static picc_14a_tag_t *p_tag_info = &m_tag_info;
 
@@ -1014,18 +1014,18 @@ uint16_t auth_key_use_522_hw(uint8_t block, uint8_t type, uint8_t *key) {
     return pcd_14a_reader_mf1_auth(p_tag_info, type, block, key);
 }
 
-inline void mf1_toolbox_antenna_restart () {
+inline void mf1_toolbox_antenna_restart() {
     pcd_14a_reader_reset();
     pcd_14a_reader_antenna_on();
     bsp_delay_ms(8);
 }
 
-inline void mf1_toolbox_report_healthy () {
+inline void mf1_toolbox_report_healthy() {
     bsp_wdt_feed();
     while (NRF_LOG_PROCESS());
 }
 
-uint16_t mf1_toolbox_check_keys_of_sectors (
+uint16_t mf1_toolbox_check_keys_of_sectors(
     mf1_toolbox_check_keys_of_sectors_in_t *in,
     mf1_toolbox_check_keys_of_sectors_out_t *out
 ) {
@@ -1068,7 +1068,7 @@ uint16_t mf1_toolbox_check_keys_of_sectors (
                 // try to read keyB from trailer of sector
                 status = pcd_14a_reader_mf1_read(trailerNo, trailer);
                 // key B not in trailer
-                if (status != STATUS_HF_TAG_OK || 0 == *(uint64_t*) &trailer[10]) break;
+                if (status != STATUS_HF_TAG_OK || 0 == *(uint64_t *) &trailer[10]) break;
                 // key B found
                 skipKeyB = true;
                 out->found.b[i / 4] |= 0b1 << maskShift;
@@ -1095,4 +1095,235 @@ uint16_t mf1_toolbox_check_keys_of_sectors (
     }
 
     return STATUS_HF_TAG_OK;
+}
+
+/**
+* @brief : HardNested random number acquisition implementation
+* @param :slow : Is it a low-speed acquisition mode? Low-speed acquisition is suitable for some non-standard cards
+* @param :keyKnown : The known secret key of the card
+* @param :blkKnown : The sector to which the known secret key of the card belongs
+* @param :typKnown : The type of the known secret key of the card, 0x60 (A secret key) or 0x61 (B secret key)
+* @param :targetBlk : The target sector for nested attack
+* @param :targetTyp : The target secret key type for nested attack
+* @param :nonces : The buffer for storing random numbers
+* @param :noncesMax : The upper limit of the random number buffer in bytes
+* @retval : STATUS_HF_TAG_OK is returned if the acquisition is successful, and non-HF_TAG_OK is returned if the acquisition is unsuccessful Value
+*
+*/
+uint8_t mf1_hardnested_nonces_acquire(bool slow, uint8_t blkKnown, uint8_t typKnown, uint64_t keyKnown,
+                                      uint8_t targetBlk, uint8_t targetTyp, uint8_t *nonces, uint16_t noncesMax, uint8_t *num_nonces) {
+    struct Crypto1State mpcs = { 0, 0 };
+    struct Crypto1State *pcs = &mpcs;
+    uint8_t answer[] 	     = { 0x00, 0x00, 0x00, 0x00 };
+    uint8_t parity[] 	     = { 0x00, 0x00, 0x00, 0x00 };
+    uint8_t nt_par_enc       = 0;
+    uint8_t status           = STATUS_HF_TAG_NO;
+    uint32_t cuid            = 0;   // cuid can be fixed when selecting card
+    uint16_t len             = 0;
+    *num_nonces              = 0;   // The number of random numbers currently counted must be reset
+    bool tag_selected        = false;
+    uint8_t err_count        = 0;
+
+    for (uint16_t i = 0; i <= noncesMax - 9;) {
+        // NRF_LOG_INFO("AcquireEncryptedNonces: %d\r\n", i);
+        if (tag_selected) {
+            mf1_toolbox_report_healthy();
+            if (pcd_14a_reader_fast_select(p_tag_info) != STATUS_HF_TAG_OK) {
+                NRF_LOG_INFO("AcquireEncryptedNonces: Tag lost\r\n");
+                if (++err_count >= 15) {
+                    return STATUS_HF_TAG_NO;
+                }
+                continue;
+            }
+            // Slow mode, delay some time?
+            if (slow) {
+                bsp_delay_us(400);
+            }
+            // First auth
+            if (authex(pcs, cuid, blkKnown, typKnown, keyKnown, AUTH_FIRST, NULL) != STATUS_HF_TAG_OK) {
+                NRF_LOG_INFO("AcquireEncryptedNonces: Auth1 error\r\n");
+                if (++err_count >= 15) {
+                    return STATUS_MF_ERR_AUTH;
+                }
+                continue;
+            }
+            // Nested auth
+            len = send_cmd(pcs, AUTH_NESTED, targetTyp, targetBlk, &status, answer, parity, U8ARR_BIT_LEN(answer));
+            if (len != 32) {
+                NRF_LOG_INFO("AcquireEncryptedNonces: Auth2 error len=%d\r\n", len);
+                if (++err_count >= 15) {
+                    return STATUS_HF_ERR_STAT;
+                }
+                continue;
+            }
+            // Reset err count
+            err_count = 0;
+            // merge parity
+            uint8_t par_enc = 0;
+            par_enc |= parity[3] << 4;
+            par_enc |= parity[2] << 5;
+            par_enc |= parity[1] << 6;
+            par_enc |= parity[0] << 7;
+            // copy to buffer
+            *num_nonces = *num_nonces + 1;
+            if (*num_nonces % 2) {
+                memcpy(nonces + i, answer, 4);
+                nt_par_enc = par_enc & 0xf0;
+            } else {
+                nt_par_enc |= par_enc >> 4;
+                memcpy(nonces + i + 4, answer, 4);
+                memcpy(nonces + i + 8, &nt_par_enc, 1);
+                i += 9;
+            }
+        } else {
+            // scan the tag to fixed cuid.
+            status = pcd_14a_reader_scan_auto(p_tag_info);
+            if (status != STATUS_HF_TAG_OK) {
+                return STATUS_HF_TAG_NO;
+            }
+            cuid = get_u32_tag_uid(p_tag_info);
+            tag_selected = true;
+        }
+    }
+
+    // OK!
+    return STATUS_HF_TAG_OK;
+}
+
+//-----------------------------------------------------------------------------
+// acquire static encrypted nonces in order to perform the attack described in
+// Philippe Teuwen, "MIFARE Classic: exposing the static encrypted nonce variant"
+//-----------------------------------------------------------------------------
+uint8_t mf1_static_encrypted_nonces_acquire(uint64_t keyKnown, uint8_t sector_count, uint8_t starting_sector, uint8_t sector_data[40][sizeof(mf1_static_nonce_sector_t)], uint8_t *sectors_acquired, uint32_t *cardUid) {
+    struct Crypto1State mpcs = {0, 0};
+    struct Crypto1State *pcs = &mpcs;
+
+    uint8_t receivedAnswer[16] = {0x00};
+    uint8_t par_enc[4] = {0x00};
+    uint32_t cuid = 0;
+    bool have_uid = false;
+
+    *sectors_acquired = 0;
+
+    for (uint16_t sec = starting_sector; sec < sector_count && sec < 40; sec++) {
+        mf1_toolbox_report_healthy();
+        uint16_t blockNo = (sec < 32) ? sec * 4 + 3 : 128 + (sec - 32) * 16 + 15;
+
+        mf1_static_nonce_sector_t sector_nonces = {0};
+
+        for (uint8_t keyType = 0; keyType < 2; keyType++) {
+            memset(par_enc, 0, sizeof(par_enc));
+            if (have_uid == false) {
+                if (pcd_14a_reader_scan_auto(p_tag_info) != STATUS_HF_TAG_OK) {
+                    return STATUS_HF_TAG_NO;
+                }
+                cuid = get_u32_tag_uid(p_tag_info);
+                have_uid = true;
+            } else {
+                if (pcd_14a_reader_fast_select(p_tag_info) != STATUS_HF_TAG_OK) {
+                    return STATUS_HF_TAG_NO;
+                }
+            }
+
+            uint32_t nt1 = 0;
+            if (authex(pcs, cuid, blockNo, 0x60 + keyType + 4, keyKnown, AUTH_FIRST, &nt1) != STATUS_HF_TAG_OK) {
+                return STATUS_MF_ERR_AUTH;
+            }
+
+            uint8_t cmd_status;
+            uint8_t res = send_cmd(pcs, AUTH_NESTED, 0x60 + keyType + 4, blockNo, &cmd_status, receivedAnswer, par_enc, sizeof(receivedAnswer) * 8);
+            if (res != 32) {
+                return STATUS_MF_ERR_AUTH;
+            }
+
+            uint32_t nt_enc = bytes_to_num(receivedAnswer, 4);
+            crypto1_init(pcs, keyKnown);
+            uint32_t nt = crypto1_word(pcs, nt_enc ^ cuid, 1) ^ nt_enc;
+
+            uint16_t nt_first_half = nt >> 16;
+
+            if (pcd_14a_reader_fast_select(p_tag_info) != STATUS_HF_TAG_OK) {
+                return STATUS_HF_TAG_NO;
+            }
+
+            if (authex(pcs, cuid, blockNo, 0x60 + keyType + 4, keyKnown, AUTH_FIRST, &nt1) != STATUS_HF_TAG_OK) {
+                return STATUS_MF_ERR_AUTH;
+            }
+
+            res = send_cmd(pcs, AUTH_NESTED, 0x60 + keyType, blockNo, &cmd_status, receivedAnswer, par_enc, sizeof(receivedAnswer) * 8);
+            if (res != 32) {
+                return STATUS_MF_ERR_AUTH;
+            }
+
+            uint32_t nt_enc_final = bytes_to_num(receivedAnswer, 4);
+
+            uint8_t nt_par_err = ((par_enc[0] ^ oddparity8((nt_enc_final >> 24) & 0xFF)) << 3 |
+                                  (par_enc[1] ^ oddparity8((nt_enc_final >> 16) & 0xFF)) << 2 |
+                                  (par_enc[2] ^ oddparity8((nt_enc_final >> 8) & 0xFF)) << 1 |
+                                  (par_enc[3] ^ oddparity8((nt_enc_final >> 0) & 0xFF)));
+
+            if (keyType == 0) {
+                num_to_bytes(nt_first_half, 2, sector_nonces.key_a.nt_first_half);
+                sector_nonces.key_a.nt_par_err = nt_par_err;
+                num_to_bytes(nt_enc_final, 4, sector_nonces.key_a.nt_enc);
+            } else {
+                num_to_bytes(nt_first_half, 2, sector_nonces.key_b.nt_first_half);
+                sector_nonces.key_b.nt_par_err = nt_par_err;
+                num_to_bytes(nt_enc_final, 4, sector_nonces.key_b.nt_enc);
+            }
+        }
+
+        memcpy(sector_data[sec], &sector_nonces, sizeof(sector_nonces));
+        (*sectors_acquired)++;
+    }
+
+    crypto1_deinit(pcs);
+
+    *cardUid = cuid;
+
+    return STATUS_HF_TAG_OK;
+}
+
+uint16_t mf1_toolbox_check_keys_on_block(
+    mf1_toolbox_check_keys_on_block_in_t *in,
+    mf1_toolbox_check_keys_on_block_out_t *out
+) {
+    memset(out, 0, sizeof(mf1_toolbox_check_keys_on_block_out_t));
+
+    struct Crypto1State mpcs = {0, 0};
+    struct Crypto1State *pcs = &mpcs;
+    uint16_t status = STATUS_HF_TAG_OK;
+    uint32_t cuid = 0;
+    bool have_uid = false;
+
+    for (int i = 0; i < in->keys_len; i++) {
+        mf1_toolbox_report_healthy();
+
+        if (have_uid == false) {
+            status = pcd_14a_reader_scan_auto(p_tag_info);
+            if (status != STATUS_HF_TAG_OK) {
+                return status;
+            }
+            cuid = get_u32_tag_uid(p_tag_info);
+            have_uid = true;
+        } else {
+            status = pcd_14a_reader_fast_select(p_tag_info);
+            if (status != STATUS_HF_TAG_OK) {
+                return status;
+            }
+        }
+
+        uint32_t nt1 = 0;
+        uint64_t key_u64 = bytes_to_num(in->keys[i].key, 6);
+        status = authex(pcs, cuid, in->block, in->key_type, key_u64, AUTH_FIRST, &nt1);
+        if (status != STATUS_HF_TAG_OK) {
+            if (status == STATUS_HF_TAG_NO) return STATUS_HF_TAG_NO;
+            continue;
+        }
+        out->found = 1;
+        out->key = in->keys[i];
+        return STATUS_HF_TAG_OK;
+    }
+
+    return STATUS_MF_ERR_AUTH;
 }

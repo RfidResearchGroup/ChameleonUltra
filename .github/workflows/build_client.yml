@@ -35,13 +35,18 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ inputs.checkout-sha == null && github.sha || inputs.checkout-sha }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Install PyInstaller and client dependencies
         run: |
-          pip3 install pyinstaller
-          pip3 install -r software/script/requirements.txt
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r software/script/requirements.txt
       - name: Run OS specific setup
         run: ${{ matrix.pre_command }}
       - name: Compile native code
@@ -56,14 +61,14 @@ jobs:
           cd software
           pyinstaller pyinstaller.spec
       - name: Upload built client
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: client-${{ matrix.name }}
           path: software/dist/*
       - name: Zip up client for release
         run: ${{ matrix.bundle_command }}
       - name: Upload release artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: release-artifacts
+          name: release-artifacts-${{ matrix.name }}
           path: client-${{ matrix.name }}.zip

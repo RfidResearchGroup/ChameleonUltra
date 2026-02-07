@@ -11,6 +11,7 @@ NRF_LOG_MODULE_REGISTER();
 #include "hex_utils.h"
 #include "crc_utils.h"
 #include "nfc_mf1.h"
+#include "byte_mirror.h"
 
 #include "rfid_main.h"
 #include "syssleep.h"
@@ -46,42 +47,6 @@ nfc_tag_14a_handler_t m_tag_handler = {
     .get_coll_res = NULL,   // Obtain packaging of anti -conflict resources of labels
 };
 
-// Byte mirror
-const uint8_t ByteMirror[256] = {
-    0x00, 0x80, 0x40, 0xc0, 0x20, 0xa0, 0x60, 0xe0,
-    0x10, 0x90, 0x50, 0xd0, 0x30, 0xb0, 0x70, 0xf0,
-    0x08, 0x88, 0x48, 0xc8, 0x28, 0xa8, 0x68, 0xe8,
-    0x18, 0x98, 0x58, 0xd8, 0x38, 0xb8, 0x78, 0xf8,
-    0x04, 0x84, 0x44, 0xc4, 0x24, 0xa4, 0x64, 0xe4,
-    0x14, 0x94, 0x54, 0xd4, 0x34, 0xb4, 0x74, 0xf4,
-    0x0c, 0x8c, 0x4c, 0xcc, 0x2c, 0xac, 0x6c, 0xec,
-    0x1c, 0x9c, 0x5c, 0xdc, 0x3c, 0xbc, 0x7c, 0xfc,
-    0x02, 0x82, 0x42, 0xc2, 0x22, 0xa2, 0x62, 0xe2,
-    0x12, 0x92, 0x52, 0xd2, 0x32, 0xb2, 0x72, 0xf2,
-    0x0a, 0x8a, 0x4a, 0xca, 0x2a, 0xaa, 0x6a, 0xea,
-    0x1a, 0x9a, 0x5a, 0xda, 0x3a, 0xba, 0x7a, 0xfa,
-    0x06, 0x86, 0x46, 0xc6, 0x26, 0xa6, 0x66, 0xe6,
-    0x16, 0x96, 0x56, 0xd6, 0x36, 0xb6, 0x76, 0xf6,
-    0x0e, 0x8e, 0x4e, 0xce, 0x2e, 0xae, 0x6e, 0xee,
-    0x1e, 0x9e, 0x5e, 0xde, 0x3e, 0xbe, 0x7e, 0xfe,
-    0x01, 0x81, 0x41, 0xc1, 0x21, 0xa1, 0x61, 0xe1,
-    0x11, 0x91, 0x51, 0xd1, 0x31, 0xb1, 0x71, 0xf1,
-    0x09, 0x89, 0x49, 0xc9, 0x29, 0xa9, 0x69, 0xe9,
-    0x19, 0x99, 0x59, 0xd9, 0x39, 0xb9, 0x79, 0xf9,
-    0x05, 0x85, 0x45, 0xc5, 0x25, 0xa5, 0x65, 0xe5,
-    0x15, 0x95, 0x55, 0xd5, 0x35, 0xb5, 0x75, 0xf5,
-    0x0d, 0x8d, 0x4d, 0xcd, 0x2d, 0xad, 0x6d, 0xed,
-    0x1d, 0x9d, 0x5d, 0xdd, 0x3d, 0xbd, 0x7d, 0xfd,
-    0x03, 0x83, 0x43, 0xc3, 0x23, 0xa3, 0x63, 0xe3,
-    0x13, 0x93, 0x53, 0xd3, 0x33, 0xb3, 0x73, 0xf3,
-    0x0b, 0x8b, 0x4b, 0xcb, 0x2b, 0xab, 0x6b, 0xeb,
-    0x1b, 0x9b, 0x5b, 0xdb, 0x3b, 0xbb, 0x7b, 0xfb,
-    0x07, 0x87, 0x47, 0xc7, 0x27, 0xa7, 0x67, 0xe7,
-    0x17, 0x97, 0x57, 0xd7, 0x37, 0xb7, 0x77, 0xf7,
-    0x0f, 0x8f, 0x4f, 0xcf, 0x2f, 0xaf, 0x6f, 0xef,
-    0x1f, 0x9f, 0x5f, 0xdf, 0x3f, 0xbf, 0x7f, 0xff,
-};
-
 // RATS FSDI length check table
 const uint16_t ats_fsdi_table[] = {
     // 0 - 8
@@ -90,14 +55,16 @@ const uint16_t ats_fsdi_table[] = {
     256, 256, 256, 256, 256, 256, 256,
 };
 
-
 // Whether it is responding to
-static volatile  bool m_is_responded = false;
+static volatile bool m_is_responded = false;
 // Receiving buffer
 static uint8_t m_nfc_rx_buffer[MAX_NFC_RX_BUFFER_SIZE] = { 0x00 };
 static uint8_t m_nfc_tx_buffer[MAX_NFC_TX_BUFFER_SIZE] = { 0x00 };
 // The N -secondary connection needs to use SAK, when the "third 'bit' in SAK is 1 is 1, the logo UID is incomplete
-static uint8_t m_uid_incomplete_sak[]   = { 0x04, 0xda, 0x17 };
+static uint8_t m_uid_incomplete_sak[] = { 0x04, 0xda, 0x17 };
+// Reset nfc peripheral after field lost?
+static bool reset_if_field_lost = false; // default is 'false', Unless there is a genuine need for a reset.
+
 
 /**
  * @brief Calculate BCC
@@ -184,16 +151,16 @@ uint8_t nfc_tag_14a_wrap_frame(const uint8_t *pbtTx, const size_t szTxBits, cons
 
         for (uiBitPos = 0; uiBitPos < 8; uiBitPos++) {
             // Copy as much data that fits in the frame byte
-            btData = ByteMirror[pbtTx[uiDataPos]];
+            btData = byte_mirror[pbtTx[uiDataPos]];
             btFrame |= (btData >> uiBitPos);
             // Save this frame byte
-            *pbtFrame = ByteMirror[btFrame];
+            *pbtFrame = byte_mirror[btFrame];
             // Set the remaining bits of the date in the new frame byte and append the parity bit
             btFrame = (btData << (8 - uiBitPos));
             btFrame |= ((pbtTxPar[uiDataPos] & 0x01) << (7 - uiBitPos));
             // Backup the frame bits we have so far
             pbtFrame++;
-            *pbtFrame = ByteMirror[btFrame];
+            *pbtFrame = byte_mirror[btFrame];
             // Increase the data (without parity bit) position
             uiDataPos++;
             // Test if we are done
@@ -242,11 +209,11 @@ uint8_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBi
     // This process is the reverse of WrapFrame(), look there for more info
     while (1) {
         for (uiBitPos = 0; uiBitPos < 8; uiBitPos++) {
-            btFrame = ByteMirror[pbtFramePos[uiDataPos]];
+            btFrame = byte_mirror[pbtFramePos[uiDataPos]];
             btData = (btFrame << uiBitPos);
-            btFrame = ByteMirror[pbtFramePos[uiDataPos + 1]];
+            btFrame = byte_mirror[pbtFramePos[uiDataPos + 1]];
             btData |= (btFrame >> (8 - uiBitPos));
-            pbtRx[uiDataPos] = ByteMirror[btData];
+            pbtRx[uiDataPos] = byte_mirror[btData];
             if (pbtRxPar != NULL)
                 pbtRxPar[uiDataPos] = ((btFrame >> (7 - uiBitPos)) & 0x01);
             // Increase the data (without parity bit) position
@@ -295,6 +262,7 @@ uint8_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBi
  * @param[in]   appendCrc  Whether to send the byte flow, automatically send the CRC16 verification automatically
  */
 void nfc_tag_14a_tx_bytes(uint8_t *data, uint32_t bytes, bool appendCrc) {
+    ASSERT(bytes <= MAX_NFC_TX_BUFFER_SIZE);
     NFC_14A_TX_BYTE_CORE(data, bytes, appendCrc, NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
 }
 
@@ -384,7 +352,7 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
                 m_tag_state_14a = NFC_TAG_STATE_14A_READY;
                 // After receiving the WUPA or REQA instruction, we need to reply to ATQA
                 nfc_tag_14a_tx_bytes(auto_coll_res->atqa, 2, false);
-                // NRF_LOG_INFO("ATQA reply.");
+                // NRF_LOG_INFO("ATQA reply: %02x%02x", auto_coll_res->atqa[0], auto_coll_res->atqa[1]);
             } else {
                 m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
                 NRF_LOG_INFO("Auto anti-collision resource no exists.");
@@ -430,6 +398,15 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
                     case NFC_TAG_14A_CMD_HALT:
                         if (p_data[1] == 0x00) {
                             m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
+                        }
+                        return;
+                    case NFC_TAG_14A_CMD_REQA:
+                    case NFC_TAG_14A_CMD_WUPA:
+                        // Reader is re-sending REQA/WUPA while in READY state
+                        // This can happen if reader retries or if frame was received incorrectly
+                        // Respond with ATQA again and stay in READY state
+                        if (auto_coll_res != NULL) {
+                            nfc_tag_14a_tx_bytes(auto_coll_res->atqa, 2, false);
                         }
                         return;
                     default: {
@@ -558,6 +535,43 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
     }
 }
 
+// Copy from nrf_nfct.c and modified for nrf52840 adapted(no verify on nrf52832)
+static inline void nrf_nfct_reset(void) {
+    uint32_t fdm;
+    uint32_t int_enabled;
+
+    // Save parameter settings before the reset of the NFCT peripheral.
+    fdm         = nrf_nfct_frame_delay_max_get();
+    int_enabled = nrf_nfct_int_enable_get();
+
+    // Reset the NFCT peripheral.
+    *(volatile uint32_t *)0x40005FFC = 0;
+    *(volatile uint32_t *)0x40005FFC;
+    *(volatile uint32_t *)0x40005FFC = 1;
+
+    // Restore parameter settings after the reset of the NFCT peripheral.
+    nrf_nfct_frame_delay_max_set(fdm);
+
+    // Use Window Grid frame delay mode.
+    nrf_nfct_frame_delay_mode_set(NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
+
+    /* Begin: Workaround for anomaly 25 */
+    /* Workaround for wrong SENSRES values require using SDD00001, but here SDD00100 is used
+       because it is required to operate with Windows Phone */
+    nrf_nfct_sensres_bit_frame_sdd_set(NRF_NFCT_SENSRES_BIT_FRAME_SDD_00100);
+    /* End: Workaround for anomaly 25 */
+
+    // Restore interrupts.
+    nrf_nfct_int_enable(int_enabled);
+
+    // Disable interrupts associated with data exchange.
+    nrf_nfct_int_disable(NRF_NFCT_INT_RXFRAMESTART_MASK | 
+        NRF_NFCT_INT_RXFRAMEEND_MASK   | 
+        NRF_NFCT_INT_RXERROR_MASK      | 
+        NRF_NFCT_INT_TXFRAMESTART_MASK | 
+        NRF_NFCT_INT_TXFRAMEEND_MASK);
+}
+
 static inline void nfc_fdt_reset(void) {
     // STOP TX
     *(volatile uint32_t *)0x40005010 = 0x01;
@@ -605,6 +619,13 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
 
             TAG_FIELD_LED_OFF()
             m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
+
+            if (reset_if_field_lost) {
+                // Fix a bug where certain special conditions prevent triggering TX start events and actually transmit incorrect data to the card reader.
+                // After more more more testing, I found that simply going into sleep mode and restarting can restore work. 
+                // Therefore, I suspect that there may be some issues with the NFC peripheral that require a reset to resolve.
+                nrf_nfct_reset();
+            }
 
             NRF_LOG_INFO("HF FIELD LOST");
             break;
@@ -722,4 +743,12 @@ bool is_valid_uid_size(uint8_t uid_length) {
     return uid_length == NFC_TAG_14A_UID_SINGLE_SIZE ||
            uid_length == NFC_TAG_14A_UID_DOUBLE_SIZE ||
            uid_length == NFC_TAG_14A_UID_TRIPLE_SIZE;
+}
+
+void nfc_tag_14a_set_reset_enable(bool enable) {
+    reset_if_field_lost = enable;
+}
+
+bool nfc_tag_14a_is_reset_enable() {
+    return reset_if_field_lost;
 }

@@ -5,7 +5,6 @@
 #include "rfid_main.h"
 #include "ble_main.h"
 #include "syssleep.h"
-#include "tag_emulation.h"
 #include "hex_utils.h"
 #include "data_cmd.h"
 #include "app_cmd.h"
@@ -24,11 +23,11 @@
 NRF_LOG_MODULE_REGISTER();
 
 
-static void change_slot_auto(uint8_t slot) {
+static void change_slot_auto(uint8_t slot_new) {
+    uint8_t slot_now = tag_emulation_get_slot();
     device_mode_t mode = get_device_mode();
-    tag_emulation_change_slot(slot, mode != DEVICE_MODE_READER);
-    light_up_by_slot();
-    set_slot_light_color(RGB_RED);
+    tag_emulation_change_slot(slot_new, mode != DEVICE_MODE_READER);
+    apply_slot_change(slot_now, slot_new);
 }
 
 static data_frame_tx_t *cmd_processor_get_app_version(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -330,6 +329,33 @@ static data_frame_tx_t *cmd_processor_mf1_nested_acquire(uint16_t cmd, uint16_t 
     return data_frame_make(cmd, STATUS_HF_TAG_OK, sizeof(ncs), (uint8_t *)(&ncs));
 }
 
+static data_frame_tx_t *cmd_processor_mf1_enc_nested_acquire(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t key[6];
+        uint8_t sector_count;
+        uint8_t starting_sector;
+    } PACKED payload_t;
+
+    if (length != sizeof(payload_t)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    payload_t *payload = (payload_t *)data;
+
+    uint64_t ui64Key = bytes_to_num(payload->key, 6);
+    uint8_t sector_data[40][sizeof(mf1_static_nonce_sector_t)];
+    uint8_t sectors_acquired = 0;
+    uint32_t cuid = 0;
+
+    status = mf1_static_encrypted_nonces_acquire(ui64Key, payload->sector_count, payload->starting_sector, sector_data, &sectors_acquired, &cuid);
+
+    uint8_t response_data[sizeof(uint32_t) + sectors_acquired * sizeof(mf1_static_nonce_sector_t)];
+    num_to_bytes(cuid, 4, response_data);
+    memcpy(response_data + sizeof(uint32_t), sector_data, sectors_acquired * sizeof(mf1_static_nonce_sector_t));
+
+    return data_frame_make(cmd, status, sectors_acquired * sizeof(mf1_static_nonce_sector_t) + sizeof(uint32_t), response_data);
+}
+
 static data_frame_tx_t *cmd_processor_mf1_auth_one_key_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     typedef struct {
         uint8_t type;
@@ -361,6 +387,62 @@ static data_frame_tx_t *cmd_processor_mf1_check_keys_of_sectors(uint16_t cmd, ui
     status = mf1_toolbox_check_keys_of_sectors(&in, &out);
 
     return data_frame_make(cmd, status, sizeof(out), (uint8_t *)&out);
+}
+
+static data_frame_tx_t *cmd_processor_mf1_check_keys_on_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length < 9 || data[2] * 6 + 3 != length) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    mf1_toolbox_check_keys_on_block_in_t in = {
+        .block = data[0],
+        .key_type = data[1],
+        .keys_len = data[2],
+        .keys = (mf1_key_t *) &data[3]
+    };
+
+    mf1_toolbox_check_keys_on_block_out_t out;
+    status = mf1_toolbox_check_keys_on_block(&in, &out);
+
+    return data_frame_make(cmd, status, sizeof(out), (uint8_t *)&out);
+}
+
+static data_frame_tx_t *cmd_processor_mf1_hardnested_nonces_acquire(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t slow;
+        uint8_t type_known;
+        uint8_t block_known;
+        uint8_t key_known[6];
+        uint8_t type_target;
+        uint8_t block_target;
+    } PACKED payload_t;
+    if (length != sizeof(payload_t)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    payload_t *payload = (payload_t *)data;
+
+    // It is enough to collect 110 nonces at a time. The total transmitted data payload is 495 + 1 bytes
+    // Then, the total length can be controlled within 4096, so that when encountering a BLE host that supports large packets, one communication can be completed.
+    // There is no need to send or receive packets in separate packets, which improves communication speed.
+    uint8_t nonces[500] = { 0x00 };
+    if (length < 11) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    status = mf1_hardnested_nonces_acquire(
+                 payload->slow,
+                 payload->block_known,
+                 payload->type_known,
+                 bytes_to_num(payload->key_known, 6),
+                 payload->block_target,
+                 payload->type_target,
+                 nonces + 1,
+                 sizeof(nonces) - 1,         // The upper limit of the buffer size. Here we take out the first byte to mark the number of collections.
+                 &nonces[0]                  // The number of random numbers collected above
+             );
+    if (status != STATUS_HF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    return data_frame_make(cmd, status, nonces[0] * 4.5, (uint8_t *)(nonces + 1));
 }
 
 static data_frame_tx_t *cmd_processor_mf1_read_one_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -405,6 +487,35 @@ static data_frame_tx_t *cmd_processor_mf1_write_one_block(uint16_t cmd, uint16_t
     status = pcd_14a_reader_mf1_write(payload->block, payload->block_data);
     return data_frame_make(cmd, status, 0, NULL);
 }
+
+#if defined(PROJECT_CHAMELEON_ULTRA)
+
+static data_frame_tx_t *cmd_processor_hf14a_set_field_on(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    device_mode_t mode = get_device_mode();
+    if (mode != DEVICE_MODE_READER) {
+        return data_frame_make(cmd, STATUS_DEVICE_MODE_ERROR, 0, NULL);
+    }
+    
+    // Reset and turn on the antenna
+    pcd_14a_reader_reset();
+    pcd_14a_reader_antenna_on();
+    
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_hf14a_set_field_off(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    device_mode_t mode = get_device_mode();
+    if (mode != DEVICE_MODE_READER) {
+        return data_frame_make(cmd, STATUS_DEVICE_MODE_ERROR, 0, NULL);
+    }
+    
+    // Turn off the antenna
+    pcd_14a_reader_antenna_off();
+    
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+#endif
 
 static data_frame_tx_t *cmd_processor_hf14a_raw(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     // Response Buffer
@@ -463,6 +574,21 @@ static data_frame_tx_t *cmd_processor_hf14a_raw(uint16_t cmd, uint16_t status, u
     return data_frame_make(cmd, status, resp_length, resp);
 }
 
+static data_frame_tx_t *cmd_processor_hf14a_get_config(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    hf14a_config_t *hc = get_hf14a_config();
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(hf14a_config_t), (uint8_t *)hc);
+}
+
+static data_frame_tx_t *cmd_processor_hf14a_set_config(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != sizeof(hf14a_config_t)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    hf14a_config_t hc;
+    memcpy(&hc, data, sizeof(hf14a_config_t));
+    set_hf14a_config(&hc);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
 static data_frame_tx_t *cmd_processor_mf1_manipulate_value_block(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     typedef struct {
         uint8_t src_type;
@@ -516,17 +642,51 @@ static data_frame_tx_t *cmd_processor_mf1_manipulate_value_block(uint16_t cmd, u
 }
 
 static data_frame_tx_t *cmd_processor_em410x_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t id_buffer[5] = { 0x00 };
-    status = PcdScanEM410X(id_buffer);
+    uint8_t card_buffer[2 + LF_EM410X_ELECTRA_TAG_ID_SIZE] = {0x00};
+    status = scan_em410x(card_buffer);
     if (status != STATUS_LF_TAG_OK) {
         return data_frame_make(cmd, status, 0, NULL);
     }
-    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(id_buffer), id_buffer);
+
+    tag_specific_type_t tag_type = (card_buffer[0] << 8) | card_buffer[1];
+    uint16_t id_size = (tag_type == TAG_TYPE_EM410X_ELECTRA) ? LF_EM410X_ELECTRA_TAG_ID_SIZE : LF_EM410X_TAG_ID_SIZE;
+
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, 2 + id_size, card_buffer);
 }
 
-static data_frame_tx_t *cmd_processor_em410x_write_to_t55XX(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+static data_frame_tx_t *cmd_processor_em410x_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     typedef struct {
         uint8_t id[5];
+        uint8_t new_key[4];
+        uint8_t old_keys[4]; // we can have more than one... struct just to compute offsets with min 1 key
+    } PACKED payload_t;
+    payload_t *payload = (payload_t *)data;
+    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    status = write_em410x_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_em410x_electra_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t id[13];
+        uint8_t new_key[4];
+        uint8_t old_keys[4]; // we can have more than one... struct just to compute offsets with min 1 key
+    } PACKED payload_t;
+    payload_t *payload = (payload_t *)data;
+    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    status = write_em410x_electra_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_hidprox_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t id[13];
         uint8_t old_key[4];
         uint8_t new_keys[4]; // we can have more than one... struct just to compute offsets with min 1 key
     } PACKED payload_t;
@@ -535,8 +695,72 @@ static data_frame_tx_t *cmd_processor_em410x_write_to_t55XX(uint16_t cmd, uint16
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
-    status = PcdWriteT55XX(payload->id, payload->old_key, payload->new_keys, (length - offsetof(payload_t, new_keys)) / sizeof(payload->new_keys));
+    uint8_t format = payload->id[0];
+    uint32_t fc = bytes_to_num(payload->id+1, 4);
+    uint64_t cn = payload->id[5];
+    cn = (cn << 32) | (bytes_to_num(payload->id+6, 4));
+    uint32_t il = payload->id[10];
+    uint32_t oem = bytes_to_num(payload->id+11, 2);
+    status = write_hidprox_to_t55xx(format, fc, cn, il, oem, payload->old_key, payload->new_keys, (length - offsetof(payload_t, new_keys)) / sizeof(payload->new_keys));
     return data_frame_make(cmd, status, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_hidprox_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t card_data[16] = {0x00};
+    status = scan_hidprox(card_data, data[0]);
+    if (status != STATUS_LF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_data), card_data);
+}
+
+static data_frame_tx_t *cmd_processor_viking_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t card_buffer[4] = {0x00};
+    status = scan_viking(card_buffer);
+    if (status != STATUS_LF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_buffer), card_buffer);
+}
+
+static data_frame_tx_t *cmd_processor_viking_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t id[4];
+        uint8_t new_key[4];
+        uint8_t old_keys[4]; // we can have more than one... struct just to compute offsets with min 1 key
+    } PACKED payload_t;
+    payload_t *payload = (payload_t *)data;
+    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    status = write_viking_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+#define GENERIC_READ_LEN 800
+#define GENERIC_READ_TIMEOUT_MS 500
+static data_frame_tx_t *cmd_processor_generic_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t *outdata = malloc(GENERIC_READ_LEN); 
+
+    if (outdata == NULL) {
+        return data_frame_make(cmd, STATUS_MEM_ERR, 0, NULL);
+    }
+
+    size_t outlen = 0;
+    if (!raw_read_to_buffer(outdata, GENERIC_READ_LEN, GENERIC_READ_TIMEOUT_MS, &outlen)) {
+        free(outdata);
+        return data_frame_make(cmd, STATUS_CMD_ERR, 0, NULL);
+    };
+    data_frame_tx_t *frame = data_frame_make(cmd, STATUS_LF_TAG_OK, outlen, outdata);
+
+    free(outdata);
+
+    if (frame == NULL) {
+        return data_frame_make(cmd, STATUS_CREATE_RESPONSE_ERR, 0, NULL);
+    }
+
+    return frame;
 }
 
 #endif
@@ -620,7 +844,7 @@ static data_frame_tx_t *cmd_processor_set_slot_enable(uint16_t cmd, uint16_t sta
     uint8_t slot_now = payload->slot_index;
     tag_emulation_slot_set_enable(slot_now, payload->sense_type, payload->enabled);
     if ((!payload->enabled) &&
-            (!tag_emulation_slot_is_enabled(slot_now, payload->sense_type == TAG_SENSE_HF ? TAG_SENSE_LF : TAG_SENSE_HF))) {
+            (!is_slot_enabled(slot_now, payload->sense_type == TAG_SENSE_HF ? TAG_SENSE_LF : TAG_SENSE_HF))) {
         // HF and LF disabled, need to change slot
         uint8_t slot_prev = tag_emulation_slot_find_next(slot_now);
         NRF_LOG_INFO("slot_now = %d, slot_prev = %d", slot_now, slot_prev);
@@ -666,35 +890,121 @@ static data_frame_tx_t *cmd_processor_wipe_fds(uint16_t cmd, uint16_t status, ui
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+static bool get_active_em410x_type(tag_specific_type_t *tag_type_out, uint16_t *id_size_out) {
+    tag_slot_specific_type_t tag_types;
+    tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &tag_types);
+    if (tag_types.tag_lf == TAG_TYPE_EM410X || tag_types.tag_lf == TAG_TYPE_EM410X_ELECTRA) {
+        *tag_type_out = tag_types.tag_lf;
+        *id_size_out = (tag_types.tag_lf == TAG_TYPE_EM410X_ELECTRA) ? LF_EM410X_ELECTRA_TAG_ID_SIZE : LF_EM410X_TAG_ID_SIZE;
+        return true;
+    }
+    return false;
+}
+
 static data_frame_tx_t *cmd_processor_em410x_set_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    if (length != LF_EM410X_TAG_ID_SIZE) {
+    tag_specific_type_t tag_type;
+    uint16_t id_size;
+    if (!get_active_em410x_type(&tag_type, &id_size) || length != id_size) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
-    memcpy(buffer->buffer, data, LF_EM410X_TAG_ID_SIZE);
-    tag_emulation_load_by_buffer(TAG_TYPE_EM410X, false);
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(tag_type);
+    memcpy(buffer->buffer, data, id_size);
+    tag_emulation_load_by_buffer(tag_type, false);
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
 static data_frame_tx_t *cmd_processor_em410x_get_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    tag_specific_type_t tag_type;
+    uint16_t id_size;
+    if (!get_active_em410x_type(&tag_type, &id_size)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, data);  // no data in slot, don't send garbage
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(tag_type);
+    uint8_t resp[2 + LF_EM410X_ELECTRA_TAG_ID_SIZE] = {0x00};
+    resp[0] = tag_type >> 8;
+    resp[1] = tag_type;
+    memcpy(resp + 2, buffer->buffer, id_size);
+    return data_frame_make(cmd, STATUS_SUCCESS, 2 + id_size, resp);
+}
+
+static data_frame_tx_t *cmd_processor_hidprox_set_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != LF_HIDPROX_TAG_ID_SIZE) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_HID_PROX);
+    memcpy(buffer->buffer, data, LF_HIDPROX_TAG_ID_SIZE);
+    tag_emulation_load_by_buffer(TAG_TYPE_HID_PROX, false);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_hidprox_get_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     tag_slot_specific_type_t tag_types;
     tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &tag_types);
-    if (tag_types.tag_lf != TAG_TYPE_EM410X) {
-        return data_frame_make(cmd, STATUS_PAR_ERR, 0, data); // no data in slot, don't send garbage
+    if (tag_types.tag_lf != TAG_TYPE_HID_PROX) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, data);  // no data in slot, don't send garbage
     }
-    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
-    uint8_t responseData[LF_EM410X_TAG_ID_SIZE];
-    memcpy(responseData, buffer->buffer, LF_EM410X_TAG_ID_SIZE);
-    return data_frame_make(cmd, STATUS_SUCCESS, LF_EM410X_TAG_ID_SIZE, responseData);
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_HID_PROX);
+    return data_frame_make(cmd, STATUS_SUCCESS, LF_HIDPROX_TAG_ID_SIZE, buffer->buffer);
+}
+
+static data_frame_tx_t *cmd_processor_viking_set_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != LF_VIKING_TAG_ID_SIZE) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_VIKING);
+    memcpy(buffer->buffer, data, LF_VIKING_TAG_ID_SIZE);
+    tag_emulation_load_by_buffer(TAG_TYPE_VIKING, false);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_viking_get_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    tag_slot_specific_type_t tag_types;
+    tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &tag_types);
+    if (tag_types.tag_lf != TAG_TYPE_VIKING) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, data);  // no data in slot, don't send garbage
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_VIKING);
+    return data_frame_make(cmd, STATUS_SUCCESS, LF_VIKING_TAG_ID_SIZE, buffer->buffer);
+}
+
+static nfc_tag_14a_coll_res_reference_t *get_coll_res_data(bool write) {
+    nfc_tag_14a_coll_res_reference_t *info;
+    tag_slot_specific_type_t tag_types;
+
+    tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &tag_types);
+
+    switch (tag_types.tag_hf) {
+        case TAG_TYPE_MIFARE_1024:
+        case TAG_TYPE_MIFARE_2048:
+        case TAG_TYPE_MIFARE_4096:
+        case TAG_TYPE_MIFARE_Mini:
+            info = write ? get_mifare_coll_res() : get_saved_mifare_coll_res();
+            break;
+        case TAG_TYPE_MF0ICU1:
+        case TAG_TYPE_MF0ICU2:
+        case TAG_TYPE_MF0UL11:
+        case TAG_TYPE_MF0UL21:
+        case TAG_TYPE_NTAG_210:
+        case TAG_TYPE_NTAG_212:
+        case TAG_TYPE_NTAG_213:
+        case TAG_TYPE_NTAG_215:
+        case TAG_TYPE_NTAG_216:
+            info = nfc_tag_mf0_ntag_get_coll_res();
+            break;
+        default:
+            // no collision resolution data for slot
+            info = NULL;
+            break;
+    }
+
+    return info;
 }
 
 static data_frame_tx_t *cmd_processor_hf14a_get_anti_coll_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    tag_slot_specific_type_t tag_types;
-    tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &tag_types);
-    if (tag_types.tag_hf == TAG_TYPE_UNDEFINED) {
-        return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL); // no data in slot, don't send garbage
-    }
-    nfc_tag_14a_coll_res_reference_t *info = get_saved_mifare_coll_res();
+    nfc_tag_14a_coll_res_reference_t *info = get_coll_res_data(false);
+
+    if (info == NULL) return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+
     // uidlen[1]|uid[uidlen]|atqa[2]|sak[1]|atslen[1]|ats[atslen]
     // dynamic length, so no struct
     uint8_t payload[1 + *info->size + 2 + 1 + 1 + 254];
@@ -763,7 +1073,7 @@ static data_frame_tx_t *cmd_processor_mf1_write_emu_block_data(uint16_t cmd, uin
     uint8_t block_index = data[0];
     uint8_t block_count = (length - 1) / NFC_TAG_MF1_DATA_SIZE;
     if (block_index + block_count > NFC_TAG_MF1_BLOCK_MAX) {
-        status = STATUS_PAR_ERR;
+       return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_MIFARE_4096);
     nfc_tag_mf1_information_t *info = (nfc_tag_mf1_information_t *)buffer->buffer;
@@ -790,6 +1100,166 @@ static data_frame_tx_t *cmd_processor_mf1_read_emu_block_data(uint16_t cmd, uint
     return data_frame_make(cmd, STATUS_SUCCESS, result_length, result_buffer);
 }
 
+static data_frame_tx_t *cmd_processor_mf0_ntag_write_emu_page_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t byte;
+    uint8_t active_slot = tag_emulation_get_slot();
+
+    tag_slot_specific_type_t active_slot_tag_types;
+    tag_emulation_get_specific_types_by_slot(active_slot, &active_slot_tag_types);
+
+    int nr_pages = nfc_tag_mf0_ntag_get_nr_pages_by_tag_type(active_slot_tag_types.tag_hf);
+    // This means wrong slot type.
+    if (nr_pages <= 0) return data_frame_make(cmd, STATUS_INVALID_SLOT_TYPE, 0, data);
+
+    if (length < 2) {
+        byte = nr_pages;
+        return data_frame_make(cmd, STATUS_PAR_ERR, 1, &byte);
+    }
+
+    int page_index = data[0];
+    int pages_count = data[1];
+    int byte_length = (int)pages_count * NFC_TAG_MF0_NTAG_DATA_SIZE;
+
+    if (pages_count == 0) return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+    else if (
+        (page_index >= ((int)nr_pages))
+        || (pages_count > (((int)nr_pages) - page_index))
+        || (((int)length - 2) < byte_length)
+    ) {
+        byte = nr_pages;
+        return data_frame_make(cmd, STATUS_PAR_ERR, 1, &byte);
+    }
+
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(active_slot_tag_types.tag_hf);
+    nfc_tag_mf0_ntag_information_t *info = (nfc_tag_mf0_ntag_information_t *)buffer->buffer;
+
+    memcpy(&info->memory[page_index][0], &data[2], byte_length);
+
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_get_emu_page_count(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t byte;
+    uint8_t active_slot = tag_emulation_get_slot();
+
+    tag_slot_specific_type_t active_slot_tag_types;
+    tag_emulation_get_specific_types_by_slot(active_slot, &active_slot_tag_types);
+
+    int nr_pages = nfc_tag_mf0_ntag_get_nr_pages_by_tag_type(active_slot_tag_types.tag_hf);
+    // This means wrong slot type.
+    if (nr_pages <= 0) return data_frame_make(cmd, STATUS_INVALID_SLOT_TYPE, 0, data);
+
+    // Convert the int value to u8 value if it's valid.
+    byte = nr_pages;
+    return data_frame_make(cmd, STATUS_SUCCESS, 1, &byte);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_read_emu_page_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t byte;
+    uint8_t active_slot = tag_emulation_get_slot();
+
+    tag_slot_specific_type_t active_slot_tag_types;
+    tag_emulation_get_specific_types_by_slot(active_slot, &active_slot_tag_types);
+
+    int nr_pages = nfc_tag_mf0_ntag_get_nr_pages_by_tag_type(active_slot_tag_types.tag_hf);
+    // This means wrong slot type.
+    if (nr_pages <= 0) return data_frame_make(cmd, STATUS_INVALID_SLOT_TYPE, 0, data);
+
+    if (length < 2) {
+        byte = nr_pages;
+        return data_frame_make(cmd, STATUS_PAR_ERR, 1, &byte);
+    }
+
+    int page_index = data[0];
+    int pages_count = data[1];
+
+    if (pages_count == 0) return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(active_slot_tag_types.tag_hf);
+    nfc_tag_mf0_ntag_information_t *info = (nfc_tag_mf0_ntag_information_t *)buffer->buffer;
+
+    return data_frame_make(cmd, STATUS_SUCCESS, pages_count * NFC_TAG_MF0_NTAG_DATA_SIZE, &info->memory[page_index][0]);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_get_version_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t *version_data = nfc_tag_mf0_ntag_get_version_data();
+    if (version_data == NULL) return data_frame_make(cmd, STATUS_INVALID_SLOT_TYPE, 0, NULL);
+
+    return data_frame_make(cmd, STATUS_SUCCESS, NFC_TAG_MF0_NTAG_VER_SIZE, version_data);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_set_version_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 8) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+
+    uint8_t *version_data = nfc_tag_mf0_ntag_get_version_data();
+    if (version_data == NULL) return data_frame_make(cmd, STATUS_INVALID_SLOT_TYPE, 0, NULL);
+    memcpy(version_data, data, NFC_TAG_MF0_NTAG_VER_SIZE);
+
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_get_signature_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t *signature_data = nfc_tag_mf0_ntag_get_signature_data();
+    if (signature_data == NULL) return data_frame_make(cmd, STATUS_INVALID_SLOT_TYPE, 0, NULL);
+
+    return data_frame_make(cmd, STATUS_SUCCESS, NFC_TAG_MF0_NTAG_SIG_SIZE, signature_data);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_set_signature_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != NFC_TAG_MF0_NTAG_SIG_SIZE) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+
+    uint8_t *signature_data = nfc_tag_mf0_ntag_get_signature_data();
+    if (signature_data == NULL) return data_frame_make(cmd, STATUS_INVALID_SLOT_TYPE, 0, NULL);
+    memcpy(signature_data, data, NFC_TAG_MF0_NTAG_SIG_SIZE);
+
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_get_counter_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 1) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+
+    uint8_t index = data[0] & 0x7F;
+    uint8_t *counter_data = nfc_tag_mf0_ntag_get_counter_data_by_index(index);
+    if (counter_data == NULL) return data_frame_make(cmd, STATUS_INVALID_SLOT_TYPE, 0, NULL);
+
+    bool tearing = (counter_data[MF0_NTAG_AUTHLIM_OFF_IN_CTR] & MF0_NTAG_AUTHLIM_MASK_IN_CTR) != 0;
+
+    uint8_t response[4];
+    memcpy(response, counter_data, 3);
+    response[3] = tearing ? 0x00 : 0xBD;
+
+    return data_frame_make(cmd, STATUS_SUCCESS, 4, response);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_set_counter_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 4) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+
+    uint8_t index = data[0] & 0x7F;
+    uint8_t *counter_data = nfc_tag_mf0_ntag_get_counter_data_by_index(index);
+    if (counter_data == NULL) return data_frame_make(cmd, STATUS_INVALID_SLOT_TYPE, 0, NULL);
+
+    // clear tearing event flag
+    if ((data[0] & 0x80) == 0x80) {
+        counter_data[MF0_NTAG_AUTHLIM_OFF_IN_CTR] &= ~MF0_NTAG_TEARING_MASK_IN_AUTHLIM;
+    }
+
+    // copy the actual counter value
+    memcpy(counter_data, &data[1], 3);
+
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_reset_auth_cnt(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    // all tags with counters support auth
+    uint8_t *counter_data = nfc_tag_mf0_ntag_get_counter_data_by_index(0);
+    if (counter_data == NULL) return data_frame_make(cmd, STATUS_INVALID_SLOT_TYPE, 0, NULL);
+
+    uint8_t old_value = counter_data[MF0_NTAG_AUTHLIM_OFF_IN_CTR] & MF0_NTAG_AUTHLIM_MASK_IN_CTR;
+    counter_data[MF0_NTAG_AUTHLIM_OFF_IN_CTR] &= ~MF0_NTAG_AUTHLIM_MASK_IN_CTR;
+
+    return data_frame_make(cmd, STATUS_SUCCESS, 1, &old_value);
+}
+
 static data_frame_tx_t *cmd_processor_hf14a_set_anti_coll_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     // uidlen[1]|uid[uidlen]|atqa[2]|sak[1]|atslen[1]|ats[atslen]
     // dynamic length, so no struct
@@ -799,7 +1269,8 @@ static data_frame_tx_t *cmd_processor_hf14a_set_anti_coll_data(uint16_t cmd, uin
             (length < 1 + data[0] + 2 + 1 + 1 + data[1 + data[0] + 2 + 1])) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-    nfc_tag_14a_coll_res_reference_t *info = get_mifare_coll_res();
+    nfc_tag_14a_coll_res_reference_t *info = get_coll_res_data(true);
+
     uint16_t offset = 0;
     *(info->size) = (nfc_tag_14a_uid_size)data[offset];
     offset++;
@@ -858,6 +1329,45 @@ static data_frame_tx_t *cmd_processor_get_slot_tag_nick(uint16_t cmd, uint16_t s
         return data_frame_make(cmd, STATUS_FLASH_READ_FAIL, 0, NULL);
     }
     return data_frame_make(cmd, STATUS_SUCCESS, buffer[0], &buffer[1]);
+}
+
+static data_frame_tx_t *cmd_processor_get_all_slot_nicks(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t response_buffer[TAG_MAX_SLOT_NUM * 2 * 37]; // Max possible size: 8 slots * 2 sense types * (1 byte length + 36 bytes nick)
+    uint16_t response_length = 0;
+
+    for (uint8_t slot = 0; slot < TAG_MAX_SLOT_NUM; slot++) {
+        uint8_t hf_buffer[36];
+        fds_slot_record_map_t hf_map_info;
+        get_fds_map_by_slot_sense_type_for_nick(slot, TAG_SENSE_HF, &hf_map_info);
+        uint16_t hf_buffer_length = sizeof(hf_buffer);
+        bool hf_ret = fds_read_sync(hf_map_info.id, hf_map_info.key, &hf_buffer_length, hf_buffer);
+
+        if (hf_ret && hf_buffer_length > 0) {
+            response_buffer[response_length++] = hf_buffer[0];
+            for (uint8_t i = 1; i <= hf_buffer[0] && i < hf_buffer_length; i++) {
+                response_buffer[response_length++] = hf_buffer[i];
+            }
+        } else {
+            response_buffer[response_length++] = 0;
+        }
+
+        uint8_t lf_buffer[36];
+        fds_slot_record_map_t lf_map_info;
+        get_fds_map_by_slot_sense_type_for_nick(slot, TAG_SENSE_LF, &lf_map_info);
+        uint16_t lf_buffer_length = sizeof(lf_buffer);
+        bool lf_ret = fds_read_sync(lf_map_info.id, lf_map_info.key, &lf_buffer_length, lf_buffer);
+
+        if (lf_ret && lf_buffer_length > 0) {
+            response_buffer[response_length++] = lf_buffer[0];
+            for (uint8_t i = 1; i <= lf_buffer[0] && i < lf_buffer_length; i++) {
+                response_buffer[response_length++] = lf_buffer[i];
+            }
+        } else {
+            response_buffer[response_length++] = 0;
+        }
+    }
+
+    return data_frame_make(cmd, STATUS_SUCCESS, response_length, response_buffer);
 }
 
 static data_frame_tx_t *cmd_processor_delete_slot_tag_nick(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -941,14 +1451,27 @@ static data_frame_tx_t *cmd_processor_mf1_set_write_mode(uint16_t cmd, uint16_t 
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
+static data_frame_tx_t *cmd_processor_mf1_get_field_off_do_reset(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t enable = nfc_tag_mf1_is_field_off_do_reset();
+    return data_frame_make(cmd, STATUS_SUCCESS, 1, &enable);
+}
+
+static data_frame_tx_t *cmd_processor_mf1_set_field_off_do_reset(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 1 || data[0] >= 2) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    nfc_tag_mf1_set_field_off_do_reset(data[0]);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
 static data_frame_tx_t *cmd_processor_get_enabled_slots(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     struct {
         uint8_t enabled_hf;
         uint8_t enabled_lf;
     } PACKED payload[8];
     for (uint8_t slot = 0; slot < 8; slot++) {
-        payload[slot].enabled_hf = tag_emulation_slot_is_enabled(slot, TAG_SENSE_HF);
-        payload[slot].enabled_lf = tag_emulation_slot_is_enabled(slot, TAG_SENSE_LF);
+        payload[slot].enabled_hf = is_slot_enabled(slot, TAG_SENSE_HF);
+        payload[slot].enabled_lf = is_slot_enabled(slot, TAG_SENSE_LF);
     }
     return data_frame_make(cmd, STATUS_SUCCESS, sizeof(payload), (uint8_t *)&payload);
 }
@@ -1026,6 +1549,83 @@ static data_frame_tx_t *after_hf_reader_run(uint16_t cmd, uint16_t status, uint1
 // fct will be defined after m_data_cmd_map because we need to know its size
 data_frame_tx_t *cmd_processor_get_device_capabilities(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data);
 
+static data_frame_tx_t *cmd_processor_mf0_ntag_get_uid_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    int rc = nfc_tag_mf0_ntag_get_uid_mode();
+    if (rc < 0) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    else {
+        uint8_t mode = rc;
+        return data_frame_make(cmd, STATUS_SUCCESS, 1, &mode);
+    }
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_set_uid_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 1 || !nfc_tag_mf0_ntag_set_uid_mode(data[0] != 0)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_get_write_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t mode = nfc_tag_mf0_ntag_get_write_mode();
+    return data_frame_make(cmd, STATUS_SUCCESS, 1, &mode);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_set_write_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 1 || data[0] > 4) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    nfc_tag_mf0_ntag_set_write_mode(data[0]);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_set_detection_enable(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 1 || data[0] > 1) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    nfc_tag_mf0_ntag_detection_log_clear();
+    nfc_tag_mf0_ntag_set_detection_enable(data[0]);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_get_detection_enable(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t is_enable = nfc_tag_mf0_ntag_is_detection_enable();
+    return data_frame_make(cmd, STATUS_SUCCESS, 1, (uint8_t *)(&is_enable));
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_get_detection_count(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint32_t count = nfc_tag_mf0_ntag_detection_log_count();
+    if (count == 0xFFFFFFFF) {
+        count = 0;
+    }
+    uint32_t payload = U32HTONL(count);
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(uint32_t), (uint8_t *)&payload);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ntag_get_detection_log(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint32_t count;
+    uint32_t index;
+    uint8_t *resp = NULL;
+    nfc_tag_mf0_ntag_auth_log_t *logs = mf0_get_auth_log(&count);
+    if (length != 4 || count == 0xFFFFFFFF) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    index = U32NTOHL(*(uint32_t *)data);
+    if (index >= count) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    resp = (uint8_t *)(logs + index);
+    length = MIN(count - index, NETDATA_MAX_DATA_LENGTH / sizeof(nfc_tag_mf0_ntag_auth_log_t)) * sizeof(nfc_tag_mf0_ntag_auth_log_t);
+    return data_frame_make(cmd, STATUS_SUCCESS, length, resp);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_get_emulator_config(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t mf0_info[3] = {};
+    mf0_info[0] = nfc_tag_mf0_ntag_is_detection_enable();
+    mf0_info[1] = nfc_tag_mf0_ntag_get_uid_mode();
+    mf0_info[2] = nfc_tag_mf0_ntag_get_write_mode();
+    return data_frame_make(cmd, STATUS_SUCCESS, 3, mf0_info);
+}
+
 /**
  * (cmd -> processor) function map, the map struct is:
  *       cmd code                               before process               cmd processor                                after process
@@ -1068,6 +1668,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_DEVICE_CAPABILITIES,      NULL,                        cmd_processor_get_device_capabilities,       NULL                   },
     {    DATA_CMD_GET_BLE_PAIRING_ENABLE,       NULL,                        cmd_processor_get_ble_pairing_enable,        NULL                   },
     {    DATA_CMD_SET_BLE_PAIRING_ENABLE,       NULL,                        cmd_processor_set_ble_pairing_enable,        NULL                   },
+    {    DATA_CMD_GET_ALL_SLOT_NICKS,           NULL,                        cmd_processor_get_all_slot_nicks,            NULL                   },
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
@@ -1078,6 +1679,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_DARKSIDE_ACQUIRE,         before_hf_reader_run,        cmd_processor_mf1_darkside_acquire,          after_hf_reader_run    },
     {    DATA_CMD_MF1_DETECT_NT_DIST,           before_hf_reader_run,        cmd_processor_mf1_detect_nt_dist,            after_hf_reader_run    },
     {    DATA_CMD_MF1_NESTED_ACQUIRE,           before_hf_reader_run,        cmd_processor_mf1_nested_acquire,            after_hf_reader_run    },
+    {    DATA_CMD_MF1_ENC_NESTED_ACQUIRE,       before_hf_reader_run,        cmd_processor_mf1_enc_nested_acquire,        after_hf_reader_run    },
 
     {    DATA_CMD_MF1_AUTH_ONE_KEY_BLOCK,       before_hf_reader_run,        cmd_processor_mf1_auth_one_key_block,        after_hf_reader_run    },
     {    DATA_CMD_MF1_READ_ONE_BLOCK,           before_hf_reader_run,        cmd_processor_mf1_read_one_block,            after_hf_reader_run    },
@@ -1085,15 +1687,30 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_HF14A_RAW,                    before_reader_run,           cmd_processor_hf14a_raw,                     NULL                   },
     {    DATA_CMD_MF1_MANIPULATE_VALUE_BLOCK,   before_hf_reader_run,        cmd_processor_mf1_manipulate_value_block,    after_hf_reader_run    },
     {    DATA_CMD_MF1_CHECK_KEYS_OF_SECTORS,    before_hf_reader_run,        cmd_processor_mf1_check_keys_of_sectors,     after_hf_reader_run    },
+    {    DATA_CMD_MF1_HARDNESTED_ACQUIRE,       before_hf_reader_run,        cmd_processor_mf1_hardnested_nonces_acquire, after_hf_reader_run    },
+    {    DATA_CMD_MF1_CHECK_KEYS_ON_BLOCK,      before_hf_reader_run,        cmd_processor_mf1_check_keys_on_block,       after_hf_reader_run    },
 
     {    DATA_CMD_EM410X_SCAN,                  before_reader_run,           cmd_processor_em410x_scan,                   NULL                   },
-    {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_em410x_write_to_t55XX,         NULL                   },
+    {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_em410x_write_to_t55xx,         NULL                   },
+    {    DATA_CMD_EM410X_ELECTRA_WRITE_TO_T55XX,before_reader_run,           cmd_processor_em410x_electra_write_to_t55xx, NULL                   },
+    {    DATA_CMD_HIDPROX_SCAN,                 before_reader_run,           cmd_processor_hidprox_scan,                  NULL                   },
+    {    DATA_CMD_HIDPROX_WRITE_TO_T55XX,       before_reader_run,           cmd_processor_hidprox_write_to_t55xx,        NULL                   },
+    {    DATA_CMD_VIKING_SCAN,                  before_reader_run,           cmd_processor_viking_scan,                   NULL                   },
+    {    DATA_CMD_VIKING_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_viking_write_to_t55xx,         NULL                   },
+    {    DATA_CMD_ADC_GENERIC_READ,             before_reader_run,           cmd_processor_generic_read,                  NULL                   },
+
+    {    DATA_CMD_HF14A_SET_FIELD_ON,           before_reader_run,           cmd_processor_hf14a_set_field_on,            NULL                   },
+    {    DATA_CMD_HF14A_SET_FIELD_OFF,          before_reader_run,           cmd_processor_hf14a_set_field_off,           NULL                   },
+
+    {    DATA_CMD_HF14A_GET_CONFIG,             NULL,                        cmd_processor_hf14a_get_config,              NULL                   },
+    {    DATA_CMD_HF14A_SET_CONFIG,             NULL,                        cmd_processor_hf14a_set_config,              NULL                   },
 
 #endif
 
-    {    DATA_CMD_MF1_WRITE_EMU_BLOCK_DATA,     NULL,                        cmd_processor_mf1_write_emu_block_data,      NULL                   },
+    {    DATA_CMD_HF14A_GET_ANTI_COLL_DATA,     NULL,                        cmd_processor_hf14a_get_anti_coll_data,      NULL                   },
     {    DATA_CMD_HF14A_SET_ANTI_COLL_DATA,     NULL,                        cmd_processor_hf14a_set_anti_coll_data,      NULL                   },
 
+    {    DATA_CMD_MF1_WRITE_EMU_BLOCK_DATA,     NULL,                        cmd_processor_mf1_write_emu_block_data,      NULL                   },
     {    DATA_CMD_MF1_SET_DETECTION_ENABLE,     NULL,                        cmd_processor_mf1_set_detection_enable,      NULL                   },
     {    DATA_CMD_MF1_GET_DETECTION_COUNT,      NULL,                        cmd_processor_mf1_get_detection_count,       NULL                   },
     {    DATA_CMD_MF1_GET_DETECTION_LOG,        NULL,                        cmd_processor_mf1_get_detection_log,         NULL                   },
@@ -1108,10 +1725,35 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_SET_BLOCK_ANTI_COLL_MODE, NULL,                        cmd_processor_mf1_set_block_anti_coll_mode,  NULL                   },
     {    DATA_CMD_MF1_GET_WRITE_MODE,           NULL,                        cmd_processor_mf1_get_write_mode,            NULL                   },
     {    DATA_CMD_MF1_SET_WRITE_MODE,           NULL,                        cmd_processor_mf1_set_write_mode,            NULL                   },
-    {    DATA_CMD_HF14A_GET_ANTI_COLL_DATA,     NULL,                        cmd_processor_hf14a_get_anti_coll_data,      NULL                   },
+    {    DATA_CMD_MF1_GET_FIELD_OFF_DO_RESET,   NULL,                        cmd_processor_mf1_get_field_off_do_reset,    NULL                   },
+    {    DATA_CMD_MF1_SET_FIELD_OFF_DO_RESET,   NULL,                        cmd_processor_mf1_set_field_off_do_reset,    NULL                   },
 
-    {    DATA_CMD_EM410X_SET_EMU_ID,            NULL,                        cmd_processor_em410x_set_emu_id,             NULL                   },
-    {    DATA_CMD_EM410X_GET_EMU_ID,            NULL,                        cmd_processor_em410x_get_emu_id,             NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_UID_MAGIC_MODE,    NULL,                      cmd_processor_mf0_ntag_get_uid_mode,         NULL                   },
+    {    DATA_CMD_MF0_NTAG_SET_UID_MAGIC_MODE,    NULL,                      cmd_processor_mf0_ntag_set_uid_mode,         NULL                   },
+    {    DATA_CMD_MF0_NTAG_READ_EMU_PAGE_DATA,    NULL,                      cmd_processor_mf0_ntag_read_emu_page_data,   NULL                   },
+    {    DATA_CMD_MF0_NTAG_WRITE_EMU_PAGE_DATA,   NULL,                      cmd_processor_mf0_ntag_write_emu_page_data,  NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_VERSION_DATA,      NULL,                      cmd_processor_mf0_ntag_get_version_data,     NULL                   },
+    {    DATA_CMD_MF0_NTAG_SET_VERSION_DATA,      NULL,                      cmd_processor_mf0_ntag_set_version_data,     NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_SIGNATURE_DATA,    NULL,                      cmd_processor_mf0_ntag_get_signature_data,   NULL                   },
+    {    DATA_CMD_MF0_NTAG_SET_SIGNATURE_DATA,    NULL,                      cmd_processor_mf0_ntag_set_signature_data,   NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_COUNTER_DATA,      NULL,                      cmd_processor_mf0_ntag_get_counter_data,     NULL                   },
+    {    DATA_CMD_MF0_NTAG_SET_COUNTER_DATA,      NULL,                      cmd_processor_mf0_ntag_set_counter_data,     NULL                   },
+    {    DATA_CMD_MF0_NTAG_RESET_AUTH_CNT,        NULL,                      cmd_processor_mf0_ntag_reset_auth_cnt,       NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_PAGE_COUNT,        NULL,                      cmd_processor_mf0_ntag_get_emu_page_count,   NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_WRITE_MODE,        NULL,                      cmd_processor_mf0_ntag_get_write_mode,       NULL                   },
+    {    DATA_CMD_MF0_NTAG_SET_WRITE_MODE,        NULL,                      cmd_processor_mf0_ntag_set_write_mode,       NULL                   },
+    {    DATA_CMD_MF0_NTAG_SET_DETECTION_ENABLE,  NULL,                      cmd_processor_mf0_ntag_set_detection_enable, NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_DETECTION_COUNT,   NULL,                      cmd_processor_mf0_ntag_get_detection_count,  NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_DETECTION_LOG,     NULL,                      cmd_processor_mf0_ntag_get_detection_log,    NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_DETECTION_ENABLE,  NULL,                      cmd_processor_mf0_ntag_get_detection_enable, NULL                   },
+    {    DATA_CMD_MF0_NTAG_GET_EMULATOR_CONFIG,   NULL,                      cmd_processor_mf0_get_emulator_config,       NULL                   },
+
+    {    DATA_CMD_EM410X_SET_EMU_ID,              NULL,                      cmd_processor_em410x_set_emu_id,             NULL                   },
+    {    DATA_CMD_EM410X_GET_EMU_ID,              NULL,                      cmd_processor_em410x_get_emu_id,             NULL                   },
+    {    DATA_CMD_HIDPROX_SET_EMU_ID,             NULL,                      cmd_processor_hidprox_set_emu_id,            NULL                   },
+    {    DATA_CMD_HIDPROX_GET_EMU_ID,             NULL,                      cmd_processor_hidprox_get_emu_id,            NULL                   },
+    {    DATA_CMD_VIKING_SET_EMU_ID,              NULL,                      cmd_processor_viking_set_emu_id,             NULL                   },
+    {    DATA_CMD_VIKING_GET_EMU_ID,              NULL,                      cmd_processor_viking_get_emu_id,             NULL                   },
 };
 
 data_frame_tx_t *cmd_processor_get_device_capabilities(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {

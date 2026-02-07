@@ -45,6 +45,7 @@
 #define DATA_CMD_GET_DEVICE_CAPABILITIES        (1035)
 #define DATA_CMD_GET_BLE_PAIRING_ENABLE         (1036)
 #define DATA_CMD_SET_BLE_PAIRING_ENABLE         (1037)
+#define DATA_CMD_GET_ALL_SLOT_NICKS             (1038)
 
 //
 // ******************************************************************
@@ -68,6 +69,15 @@
 #define DATA_CMD_HF14A_RAW                      (2010)
 #define DATA_CMD_MF1_MANIPULATE_VALUE_BLOCK     (2011)
 #define DATA_CMD_MF1_CHECK_KEYS_OF_SECTORS      (2012)
+#define DATA_CMD_MF1_HARDNESTED_ACQUIRE         (2013)
+#define DATA_CMD_MF1_ENC_NESTED_ACQUIRE         (2014)
+#define DATA_CMD_MF1_CHECK_KEYS_ON_BLOCK        (2015)
+
+#define DATA_CMD_HF14A_SET_FIELD_ON             (2100)
+#define DATA_CMD_HF14A_SET_FIELD_OFF            (2101)
+
+#define DATA_CMD_HF14A_GET_CONFIG               (2200)
+#define DATA_CMD_HF14A_SET_CONFIG               (2201)
 
 //
 // ******************************************************************
@@ -80,6 +90,15 @@
 //
 #define DATA_CMD_EM410X_SCAN                    (3000)
 #define DATA_CMD_EM410X_WRITE_TO_T55XX          (3001)
+#define DATA_CMD_EM410X_ELECTRA_WRITE_TO_T55XX  (3006)
+#define DATA_CMD_HIDPROX_SCAN                   (3002)
+#define DATA_CMD_HIDPROX_WRITE_TO_T55XX         (3003)
+#define DATA_CMD_VIKING_SCAN                    (3004)
+#define DATA_CMD_VIKING_WRITE_TO_T55XX          (3005)
+#define DATA_CMD_ADC_GENERIC_READ               (3006)
+#define DATA_CMD_GENERIC_READ                   (3007)
+#define DATA_CMD_CORR_GENERIC_READ              (3008)
+
 //
 // ******************************************************************
 
@@ -106,6 +125,29 @@
 #define DATA_CMD_MF1_GET_WRITE_MODE             (4016)
 #define DATA_CMD_MF1_SET_WRITE_MODE             (4017)
 #define DATA_CMD_HF14A_GET_ANTI_COLL_DATA       (4018)
+#define DATA_CMD_MF0_NTAG_GET_UID_MAGIC_MODE    (4019)
+#define DATA_CMD_MF0_NTAG_SET_UID_MAGIC_MODE    (4020)
+#define DATA_CMD_MF0_NTAG_READ_EMU_PAGE_DATA    (4021)
+#define DATA_CMD_MF0_NTAG_WRITE_EMU_PAGE_DATA   (4022)
+#define DATA_CMD_MF0_NTAG_GET_VERSION_DATA      (4023)
+#define DATA_CMD_MF0_NTAG_SET_VERSION_DATA      (4024)
+#define DATA_CMD_MF0_NTAG_GET_SIGNATURE_DATA    (4025)
+#define DATA_CMD_MF0_NTAG_SET_SIGNATURE_DATA    (4026)
+#define DATA_CMD_MF0_NTAG_GET_COUNTER_DATA      (4027)
+#define DATA_CMD_MF0_NTAG_SET_COUNTER_DATA      (4028)
+#define DATA_CMD_MF0_NTAG_RESET_AUTH_CNT        (4029)
+#define DATA_CMD_MF0_NTAG_GET_PAGE_COUNT        (4030)
+#define DATA_CMD_MF0_NTAG_RESET_AUTH_CNT        (4029)
+#define DATA_CMD_MF0_NTAG_GET_PAGE_COUNT        (4030)
+#define DATA_CMD_MF0_NTAG_GET_WRITE_MODE        (4031)
+#define DATA_CMD_MF0_NTAG_SET_WRITE_MODE        (4032)
+#define DATA_CMD_MF0_NTAG_SET_DETECTION_ENABLE  (4033)
+#define DATA_CMD_MF0_NTAG_GET_DETECTION_COUNT   (4034)
+#define DATA_CMD_MF0_NTAG_GET_DETECTION_LOG     (4035)
+#define DATA_CMD_MF0_NTAG_GET_DETECTION_ENABLE  (4036)
+#define DATA_CMD_MF0_NTAG_GET_EMULATOR_CONFIG   (4037)
+#define DATA_CMD_MF1_SET_FIELD_OFF_DO_RESET     (4038)
+#define DATA_CMD_MF1_GET_FIELD_OFF_DO_RESET     (4039)
 //
 // ******************************************************************
 
@@ -120,5 +162,9 @@
 // ******************************************************************
 #define DATA_CMD_EM410X_SET_EMU_ID              (5000)
 #define DATA_CMD_EM410X_GET_EMU_ID              (5001)
+#define DATA_CMD_HIDPROX_SET_EMU_ID             (5002)
+#define DATA_CMD_HIDPROX_GET_EMU_ID             (5003)
+#define DATA_CMD_VIKING_SET_EMU_ID              (5004)
+#define DATA_CMD_VIKING_GET_EMU_ID              (5005)
 
 #endif

@@ -1,11 +1,18 @@
+import sys
 import queue
 import struct
 import threading
 import time
-import serial
+import platform
 from typing import Union
-from chameleon_utils import CR, CG, CC, CY, C0
+from enum import Enum, auto
+import serial
+import socket
+
+from chameleon_utils import CR, CG, CC, CY, color_string
 from chameleon_enum import Command, Status
+
+ANDROID = 'android' in platform.release()
 
 # each thread is waiting for its data for 100 ms before looping again
 THREAD_BLOCKING_TIMEOUT = 0.1
@@ -13,6 +20,10 @@ THREAD_BLOCKING_TIMEOUT = 0.1
 # TODO: client settings
 DEBUG = False
 
+class TransportType(Enum):
+    NONE = auto()
+    SERIAL = auto()
+    SOCKET = auto()
 
 class NotOpenException(Exception):
     """
@@ -50,14 +61,15 @@ class ChameleonCom:
         Communication and Data frame implemented
     """
     data_frame_sof = 0x11
-    data_max_length = 512
+    data_max_length = 4096
     commands = []
 
     def __init__(self):
         """
             Create a chameleon device instance
         """
-        self.serial_instance: Union[serial.Serial, None] = None
+        self.transport: Union[serial.Serial, socket.socket, None] = None
+        self.transport_type = TransportType.NONE
         self.send_data_queue = queue.Queue()
         self.wait_response_map = {}
         self.event_closing = threading.Event()
@@ -68,7 +80,7 @@ class ChameleonCom:
 
         :return:
         """
-        return self.serial_instance is not None and self.serial_instance.is_open
+        return self.transport is not None and (self.transport_type is TransportType.SOCKET or self.transport.is_open)
 
     def open(self, port) -> "ChameleonCom":
         """
@@ -82,19 +94,35 @@ class ChameleonCom:
             error = None
             try:
                 # open serial port
-                self.serial_instance = serial.Serial(port=port, baudrate=115200)
+                if port.startswith('tcp:'):
+                    host, _, port = port[4:].partition(':')
+                    if not host or not port:
+                        sys.exit(color_string(CR, 'Usage: tcp:127.0.0.1:4321'))
+                    self.transport = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    print('Connecting to', host, int(port))
+                    self.transport.connect((host, int(port)))
+                    self.transport_type = TransportType.SOCKET
+                else:
+                    if ANDROID:
+                        sys.exit(color_string(CR, 'COM port is not supported on Android, make a USB-serial to TCP communication bridge'))
+                    self.transport = serial.Serial(port=port, baudrate=115200)
+                    self.transport_type = TransportType.SERIAL
             except Exception as e:
                 error = e
             finally:
                 if error is not None:
                     raise OpenFailException(error)
-            assert self.serial_instance is not None
-            try:
-                self.serial_instance.dtr = True  # must make dtr enable
-            except Exception:
-                # not all serial support dtr, e.g. virtual serial over BLE
-                pass
-            self.serial_instance.timeout = THREAD_BLOCKING_TIMEOUT
+            assert self.transport is not None
+            assert self.transport_type is not TransportType.NONE
+            if self.transport_type is TransportType.SERIAL:
+                try:
+                    self.transport.dtr = True  # must make dtr enable
+                except Exception:
+                    # not all serial support dtr, e.g. virtual serial over BLE
+                    pass
+                self.transport.timeout = THREAD_BLOCKING_TIMEOUT
+            else:  # SOCKET
+                self.transport.settimeout(THREAD_BLOCKING_TIMEOUT)
             # clear variable
             self.send_data_queue.queue.clear()
             self.wait_response_map.clear()
@@ -136,12 +164,14 @@ class ChameleonCom:
         """
         self.event_closing.set()
         try:
-            assert self.serial_instance is not None
-            self.serial_instance.close()
+            assert self.transport is not None
+            if self.transport_type is TransportType.SOCKET:
+                self.transport.shutdown()
+            self.transport.close()
         except Exception:
             pass
         finally:
-            self.serial_instance = None
+            self.transport = None
         self.wait_response_map.clear()
         self.send_data_queue.queue.clear()
 
@@ -159,16 +189,29 @@ class ChameleonCom:
 
         while self.isOpen():
             # receive
-            try:
-                assert self.serial_instance is not None
-                data_bytes = self.serial_instance.read()
-            except Exception as e:
-                if not self.event_closing.is_set():
-                    print(f"Serial Error {e}, thread for receiver exit.")
-                self.close()
-                break
-            if len(data_bytes) > 0:
+            assert self.transport_type is not TransportType.NONE
+            if self.transport_type is TransportType.SERIAL:
+                try:
+                    assert self.transport is not None
+                    data_bytes = bytearray(self.transport.read())
+                except Exception as e:
+                    if not self.event_closing.is_set():
+                        print(f"Serial Error {e}, thread for receiver exit.")
+                    self.close()
+                    break
+            else:  # SOCKET
+                try:
+                    data_bytes = bytearray(self.transport.recv(1024))
+                except socket.timeout:
+                    continue
+                except OSError:
+                    print(color_string(CR, 'socket closed'))
+                    self.transport = None
+                    break
+
+            while len(data_bytes) > 0:
                 data_byte = data_bytes[0]
+                data_bytes = data_bytes[1:]
                 data_buffer.append(data_byte)
                 if data_position < struct.calcsize('!BB'):  # start of frame + lrc1
                     if data_position == 0:
@@ -213,13 +256,13 @@ class ChameleonCom:
                                 try:
                                     status_string = str(Status(data_status))
                                     if data_status == Status.SUCCESS:
-                                        status_string = f'{CG}{status_string:30}{C0}'
+                                        status_string = color_string((CG, status_string.ljust(30)))
                                     else:
-                                        status_string = f'{CR}{status_string:30}{C0}'
+                                        status_string = color_string((CR, status_string.ljust(30)))
                                 except ValueError:
-                                    status_string = f"{CR}{data_status:30x}{C0}"
-                                print(f'<= {CC}{command_string:40}{C0}{status_string}'
-                                      f'{CY}{data_response.hex() if data_response is not None else ""}{C0}')
+                                    status_string = f"{data_status:30x}"
+                                    response = data_response.hex() if data_response is not None else ""
+                                    print(f"<={color_string((CC, command_string.ljust(40)), (CR, status_string), (CY, response))}")
                             if data_cmd in self.wait_response_map:
                                 # call processor
                                 if 'callback' in self.wait_response_map[data_cmd]:
@@ -267,14 +310,25 @@ class ChameleonCom:
             self.wait_response_map[task_cmd]['start_time'] = start_time
             self.wait_response_map[task_cmd]['end_time'] = start_time + task_timeout
             self.wait_response_map[task_cmd]['is_timeout'] = False
-            try:
-                assert self.serial_instance is not None
-                # send to device
-                self.serial_instance.write(task['frame'])
-            except Exception as e:
-                print(f"Serial Error {e}, thread for transfer exit.")
-                self.close()
-                break
+            assert self.transport_type is not TransportType.NONE
+            if self.transport_type == TransportType.SERIAL:
+                try:
+                    assert self.transport is not None
+                    # send to device
+                    self.transport.write(task['frame'])
+                except Exception as e:
+                    print(f"Serial Error {e}, thread for transfer exit.")
+                    self.close()
+                    break
+            else:  # SOCKET
+                try:
+                    assert self.transport is not None
+                    self.transport.sendall(task['frame'])
+                except OSError as e:
+                    self.transport = None
+                    print(f'Socket error {e}, thread for transfer exit.')
+                    self.close()
+                    break
             # update queue status
             self.send_data_queue.task_done()
             # disconnect if DFU command has been sent
@@ -341,8 +395,8 @@ class ChameleonCom:
             except ValueError:
                 command_name = "(UNKNOWN)"
             cmd_string = f'{cmd:4} {command_name}{f"[{status:04x}]" if status != 0 else ""}'
-            print(f'=> {CC}{cmd_string:40}{C0}'
-                  f'{CY}{data.hex() if data is not None else ""}{C0}')
+            hexdata = data.hex() if data is not None else ""
+            print(f"<={color_string((CC, cmd_string.ljust(40)), (CY, hexdata))}")
         data_frame = self.make_data_frame_bytes(cmd, data, status)
         task = {'cmd': cmd, 'frame': data_frame, 'timeout': timeout, 'close': close}
         if callable(callback):

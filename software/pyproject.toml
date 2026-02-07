@@ -1,0 +1,24 @@
+[project]
+name = "Chameleon_Ultra_CLI"
+version = "2.0.0"
+description = "The official CLI for the Chameleon Ultra"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "colorama==0.4.6",
+    "prompt-toolkit==3.0.39",
+    "pyserial==3.5",
+]
+
+[tool.pyrefly]
+project-includes = ["**/*"]
+project-excludes = ["**/.venv"]
+search-path = ["script"]
+
+[dependency-groups]
+dev = [
+    "pyrefly>=0.28.0",
+    "ruff>=0.12.8",
+]
+
+[tool]

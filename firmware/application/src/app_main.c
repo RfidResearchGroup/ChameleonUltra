@@ -41,6 +41,10 @@ NRF_LOG_MODULE_REGISTER();
 #include "tag_persistence.h"
 #include "settings.h"
 
+#if defined(PROJECT_CHAMELEON_ULTRA)
+#include "rc522.h"
+#endif
+
 // Defining soft timers
 APP_TIMER_DEF(m_button_check_timer); // Timer for button debounce
 
@@ -55,6 +59,9 @@ static bool m_is_b_btn_release = false;
 static bool m_is_a_btn_release = false;
 
 static bool m_system_off_processing = false;
+
+// NFC field generator state
+volatile bool m_is_field_on = false;  
 
 // cpu reset reason
 static uint32_t m_reset_source;
@@ -139,12 +146,41 @@ static void gpio_te_init(void) {
     APP_ERROR_CHECK(err_code);
 }
 
+#if defined(PROJECT_CHAMELEON_ULTRA)
+static void field_generator_rainbow_loop(void) {
+    static uint8_t color_index = 0;
+    static uint32_t last_update = 0;
+    
+    if (!m_is_field_on) return;
+    
+    uint32_t now = app_timer_cnt_get();
+    
+    if (app_timer_cnt_diff_compute(now, last_update) < APP_TIMER_TICKS(100)) {
+        return;
+    }
+    last_update = now;
+    
+    // Rainbow colors
+    const uint8_t colors[] = {RGB_RED, RGB_YELLOW, RGB_GREEN, RGB_CYAN, RGB_BLUE, RGB_MAGENTA};
+    
+    set_slot_light_color(colors[color_index]);
+    uint32_t *led_pins = hw_get_led_array();
+    
+    // Light up all LEDs with current color
+    for (int i = 0; i < RGB_LIST_NUM; i++) {
+        nrf_gpio_pin_set(led_pins[i]);
+    }
+    
+    color_index = (color_index + 1) % 6;
+}
+#endif
+
 /**@brief Button Matrix Events
  */
 static void button_pin_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action) {
     device_mode_t mode = get_device_mode();
-    // Temporarily allow only the analog card mode to respond to button operations
-    if (mode == DEVICE_MODE_TAG) {
+    // Allow button operations in both tag and reader mode
+    if (mode == DEVICE_MODE_TAG || mode == DEVICE_MODE_READER) {
         static nrf_drv_gpiote_pin_t pin_static;                                  // Use static internal variables to store the GPIO where the current event occurred
         pin_static = pin;                                                        // Cache the button that currently triggers the event into an internal variable
         app_timer_start(m_button_check_timer, APP_TIMER_TICKS(50), &pin_static); // Start timer anti-shake
@@ -162,7 +198,9 @@ static void timer_button_event_handle(void *arg) {
         NRF_LOG_INFO("BUTTON press during shutdown");
         return;
     }
+    
     nrf_drv_gpiote_pin_t pin = *(nrf_drv_gpiote_pin_t *)arg;
+    
     // Check here if the current GPIO is at the pressed level
     if (nrf_gpio_pin_read(pin) == 1) {
         if (pin == BUTTON_1) {
@@ -357,13 +395,13 @@ static void system_off_enter(void) {
     app_timer_stop_all();
 
     // Check whether there are low -frequency fields, solving very strong field signals during dormancy have always caused the comparator to be at a high level input state, so that the problem of uprising the rising edge cannot be awakened.
-    if (lf_is_field_exists()) {
+    if (is_lf_field_exists()) {
         // Close the comparator
         nrf_drv_lpcomp_disable();
         // Set the reason for Reset. After restarting, you need to get this reason to avoid misjudgment from the source of wake up.
         sd_power_gpregret_clr(1, GPREGRET_CLEAR_VALUE_DEFAULT);
         sd_power_gpregret_set(1, RESET_ON_LF_FIELD_EXISTS_Msk);
-        // Trigger the RESET awakening system, restart the simulation process
+        // Trigger the RESET awakening system, restart the emulation process
         nrf_pwr_mgmt_shutdown(NRF_PWR_MGMT_SHUTDOWN_RESET);
         return;
     };
@@ -453,7 +491,7 @@ static void check_wakeup_src(void) {
             }
         }
 
-        // It is currently the wake -up system of the simulation card event, we can make the strong lights on the field first
+        // It is currently the wake-up system of the emulation card event, we can make the strong lights on the field first
         TAG_FIELD_LED_ON();
 
         uint8_t animation_config = settings_get_animation_config();
@@ -521,15 +559,14 @@ static void cycle_slot(bool dec) {
     }
     // Update status only if the new card slot switch is valid
     tag_emulation_change_slot(slot_new, true); // Tell the analog card module that we need to switch card slots
+    // Turn off the LEDs in case we were showing the battery status
+    rgb_marquee_stop();
+    uint32_t *led_pins = hw_get_led_array();
+    for (int i = 0; i < RGB_LIST_NUM; i++) {
+        nrf_gpio_pin_clear(led_pins[i]);
+    }
     // Go back to the color corresponding to the field enablement type
-    uint8_t color_now = get_color_by_slot(slot_now);
-    uint8_t color_new = get_color_by_slot(slot_new);
-    // Switching the light effect of the card slot
-    ledblink3(slot_now, color_now, slot_new, color_new);
-    // Switched the card slot, we need to re-light
-    light_up_by_slot();
-    // Then switch the color of the light again
-    set_slot_light_color(color_new);
+    apply_slot_change(slot_now, slot_new);
 }
 
 static void show_battery(void) {
@@ -587,61 +624,86 @@ static void offline_status_blink_color(uint8_t blink_color) {
 }
 
 static void offline_status_error(void) {
-    offline_status_blink_color(0);
+    offline_status_blink_color(RGB_RED);
 }
 
 static void offline_status_ok(void) {
-    offline_status_blink_color(1);
+    offline_status_blink_color(RGB_GREEN);
 }
 
-// fast detect a 14a tag uid to sim
-static void btn_fn_copy_ic_uid(void) {
-    bool lf_copy_succeeded = false;
-    bool hf_copy_succeeded = false;
-    uint8_t status;
-    uint8_t id_buffer[5] = { 0x00 };
-    // get 14a tag res buffer;
-    uint8_t slot_now = tag_emulation_get_slot();
-    tag_slot_specific_type_t tag_types;
-    tag_emulation_get_specific_types_by_slot(slot_now, &tag_types);
-
-    nfc_tag_14a_coll_res_entity_t *antres = NULL;
-
-    bool is_reader_mode_now = get_device_mode() == DEVICE_MODE_READER;
-    // first, we need switch to reader mode.
-    if (!is_reader_mode_now) {
-        // enter reader mode
-        reader_mode_enter();
-        bsp_delay_ms(8);
-        NRF_LOG_INFO("Start reader mode to offline copy.")
+static void btn_fn_copy_lf(uint8_t slot, tag_specific_type_t type) {
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(type);
+    if (buffer == NULL) {
+        // empty HF slot, nothing to do
+        return;
     }
-
-    switch (tag_types.tag_lf) {
-        case TAG_TYPE_EM410X:
-            status = PcdScanEM410X(id_buffer);
-
-            if (status == STATUS_LF_TAG_OK) {
-                tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_EM410X);
-                memcpy(buffer->buffer, id_buffer, LF_EM410X_TAG_ID_SIZE);
-                tag_emulation_load_by_buffer(TAG_TYPE_EM410X, false);
-                NRF_LOG_INFO("Offline LF uid copied")
-                lf_copy_succeeded = true;
-                offline_status_ok();
-            } else {
-                NRF_LOG_INFO("No LF tag found");
-                offline_status_error();
-            }
+    size_t size = 0;
+    uint8_t id_buffer[16] = {0x00};
+    uint8_t status = STATUS_LF_TAG_NO_FOUND;
+    uint8_t *data = NULL;
+    switch (type) {
+        case TAG_TYPE_HID_PROX:
+            status = scan_hidprox(id_buffer, 0);
+            size = LF_HIDPROX_TAG_ID_SIZE;
+            data = id_buffer;
             break;
-        case TAG_TYPE_UNDEFINED:
-            // empty LF slot, nothing to do, move on to HF
+        case TAG_TYPE_EM410X:
+        case TAG_TYPE_EM410X_ELECTRA: {
+            status = scan_em410x(id_buffer);
+            tag_specific_type_t detected_type = (id_buffer[0] << 8) | id_buffer[1];
+            tag_specific_type_t new_type =
+                detected_type == TAG_TYPE_EM410X_ELECTRA ? TAG_TYPE_EM410X_ELECTRA : TAG_TYPE_EM410X;
+
+            // If we read Electra but the slot was classic (or vice versa), switch slot type automatically.
+            if (new_type != type) {
+                tag_emulation_change_type(slot, new_type);
+                type = new_type;
+            }
+
+            size = (new_type == TAG_TYPE_EM410X_ELECTRA) ? LF_EM410X_ELECTRA_TAG_ID_SIZE : LF_EM410X_TAG_ID_SIZE;
+            data = id_buffer + 2;  // skip tag type
+            break;
+        }
+        case TAG_TYPE_VIKING:
+            status = scan_viking(id_buffer);
+            size = LF_VIKING_TAG_ID_SIZE;
+            data = id_buffer;
             break;
         default:
             NRF_LOG_ERROR("Unsupported LF tag type")
             offline_status_error();
     }
 
-    tag_data_buffer_t *buffer = get_buffer_by_tag_type(tag_types.tag_hf);
-    switch (tag_types.tag_hf) {
+    if (status == STATUS_LF_TAG_OK) {
+        memcpy(buffer->buffer, data, size);
+        tag_emulation_load_by_buffer(type, false);
+        NRF_LOG_INFO("Offline lf tag copied")
+
+        char *nick = "cloned";
+        uint8_t nick_buffer[36];
+        nick_buffer[0] = strlen(nick);
+        memcpy(nick_buffer + 1, nick, nick_buffer[0]);
+
+        fds_slot_record_map_t map_info;
+        get_fds_map_by_slot_sense_type_for_nick(slot, TAG_SENSE_LF, &map_info);
+        fds_write_sync(map_info.id, map_info.key, sizeof(nick_buffer), nick_buffer);
+        offline_status_ok();
+    } else {
+        NRF_LOG_INFO("No lf tag found");
+        offline_status_error();
+    }
+}
+
+static void btn_fn_copy_hf(uint8_t slot, tag_specific_type_t type) {
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(type);
+    if (buffer == NULL) {
+        // empty HF slot, nothing to do
+        return;
+    }
+
+    uint8_t status = 0;
+    nfc_tag_14a_coll_res_entity_t *antres = NULL;
+    switch (type) {
         case TAG_TYPE_MIFARE_Mini:
         case TAG_TYPE_MIFARE_1024:
         case TAG_TYPE_MIFARE_2048:
@@ -651,71 +713,85 @@ static void btn_fn_copy_ic_uid(void) {
             break;
         }
 
+        case TAG_TYPE_NTAG_210:
+        case TAG_TYPE_NTAG_212:
         case TAG_TYPE_NTAG_213:
         case TAG_TYPE_NTAG_215:
-        case TAG_TYPE_NTAG_216: {
-            nfc_tag_ntag_information_t *p_info = (nfc_tag_ntag_information_t *)buffer->buffer;
+        case TAG_TYPE_NTAG_216:
+        case TAG_TYPE_MF0ICU1:
+        case TAG_TYPE_MF0ICU2:
+        case TAG_TYPE_MF0UL11:
+        case TAG_TYPE_MF0UL21: {
+            nfc_tag_mf0_ntag_information_t *p_info = (nfc_tag_mf0_ntag_information_t *)buffer->buffer;
             antres = &(p_info->res_coll);
             break;
         }
-
-        case TAG_TYPE_UNDEFINED:
-            // empty HF slot, nothing to do
-            break;
-
         default:
             NRF_LOG_ERROR("Unsupported HF tag type")
             offline_status_error();
             break;
     }
-    if (antres != NULL) {
-        if (!is_reader_mode_now) {
-            // finish HF reader initialization
-            pcd_14a_reader_reset();
-        }
-        pcd_14a_reader_antenna_on();
-        bsp_delay_ms(8);
-        // select a tag
-        picc_14a_tag_t tag;
 
-        status = pcd_14a_reader_scan_auto(&tag);
-        pcd_14a_reader_antenna_off();
-        if (status == STATUS_HF_TAG_OK) {
-            // copy uid
-            antres->size = tag.uid_len;
-            memcpy(antres->uid, tag.uid, tag.uid_len);
-            // copy atqa
-            memcpy(antres->atqa, tag.atqa, 2);
-            // copy sak
-            antres->sak[0] = tag.sak;
-            // copy ats
-            antres->ats.length = tag.ats_len;
-            memcpy(antres->ats.data, tag.ats, tag.ats_len);
-            NRF_LOG_INFO("Offline HF uid copied")
-            hf_copy_succeeded = true;
-            offline_status_ok();
-        } else {
-            NRF_LOG_INFO("No HF tag found");
-            offline_status_error();
-        }
+    if (antres == NULL) {
+        return;
     }
-    if (lf_copy_succeeded || hf_copy_succeeded) {
-        fds_slot_record_map_t map_info;
+
+    pcd_14a_reader_antenna_on();
+    bsp_delay_ms(8);
+    // select a tag
+    picc_14a_tag_t tag;
+
+    status = pcd_14a_reader_scan_auto(&tag);
+    pcd_14a_reader_antenna_off();
+    if (status == STATUS_HF_TAG_OK) {
+        // copy uid
+        antres->size = tag.uid_len;
+        memcpy(antres->uid, tag.uid, tag.uid_len);
+        // copy atqa
+        memcpy(antres->atqa, tag.atqa, 2);
+        // copy sak
+        antres->sak[0] = tag.sak;
+        // copy ats
+        antres->ats.length = tag.ats_len;
+        memcpy(antres->ats.data, tag.ats, tag.ats_len);
+        NRF_LOG_INFO("Offline HF uid copied")
+
         char *nick = "cloned";
-        uint8_t buffer[36];
-        buffer[0] = strlen(nick);
-        memcpy(buffer + 1, nick, buffer[0]);
-        if (lf_copy_succeeded) {
-            get_fds_map_by_slot_sense_type_for_nick(slot_now, TAG_SENSE_LF, &map_info);
-            fds_write_sync(map_info.id, map_info.key, sizeof(buffer), buffer);
-        }
-        if (hf_copy_succeeded) {
-            get_fds_map_by_slot_sense_type_for_nick(slot_now, TAG_SENSE_HF, &map_info);
-            fds_write_sync(map_info.id, map_info.key, sizeof(buffer), buffer);
-        }
+        uint8_t nick_buffer[36];
+        nick_buffer[0] = strlen(nick);
+        memcpy(nick_buffer + 1, nick, nick_buffer[0]);
+
+        fds_slot_record_map_t map_info;
+        get_fds_map_by_slot_sense_type_for_nick(slot, TAG_SENSE_HF, &map_info);
+        fds_write_sync(map_info.id, map_info.key, sizeof(nick_buffer), nick_buffer);
+        offline_status_ok();
+    } else {
+        NRF_LOG_INFO("No HF tag found");
+        offline_status_error();
     }
+}
+
+// fast detect a 14a tag uid to sim
+static void btn_fn_copy_ic_uid(void) {
+    // get 14a tag res buffer;
+    uint8_t slot_now = tag_emulation_get_slot();
+    tag_slot_specific_type_t tag_types;
+    tag_emulation_get_specific_types_by_slot(slot_now, &tag_types);
+
+    bool is_in_reader_mode = get_device_mode() == DEVICE_MODE_READER;
+    // first, we need switch to reader mode.
+    if (!is_in_reader_mode) {
+        // enter reader mode
+        reader_mode_enter();
+        bsp_delay_ms(8);
+        NRF_LOG_INFO("Start reader mode to offline copy.")
+    }
+
+    btn_fn_copy_lf(slot_now, tag_types.tag_lf);
+    btn_fn_copy_hf(slot_now, tag_types.tag_hf);
+
     // keep reader mode or exit reader mode.
-    if (!is_reader_mode_now) {
+    if (!is_in_reader_mode) {
         tag_mode_enter();
     }
 }
@@ -737,13 +813,67 @@ static void run_button_function_by_settings(settings_button_function_t sbf) {
         case SettingsButtonCloneIcUid:
             btn_fn_copy_ic_uid();
             break;
+        case SettingsButtonNfcFieldGenerator:
+            if (!m_is_field_on) {
+                // Initialize reader hardware if not already in reader mode
+                device_mode_t current_mode = get_device_mode();
+                if (current_mode != DEVICE_MODE_READER) {
+                    // Temporarily init reader hardware just for the field
+                    nrf_gpio_cfg_output(READER_POWER);
+                    nrf_gpio_pin_set(READER_POWER);     // reader power enable
+                    nrf_gpio_cfg_output(HF_ANT_SEL);
+                    nrf_gpio_pin_clear(HF_ANT_SEL);     // hf ant switch to reader mode
+                    
+                    pcd_14a_reader_init();
+                    bsp_delay_ms(10);
+                }
+                
+                pcd_14a_reader_reset();
+                pcd_14a_reader_antenna_on();
+                m_is_field_on = true;
+                NRF_LOG_INFO("NFC field ON");
+                
+                // Set initial rainbow state
+                set_slot_light_color(RGB_RED);
+                uint32_t *led_pins = hw_get_led_array();
+                for (int i = 0; i < RGB_LIST_NUM; i++) {
+                    nrf_gpio_pin_set(led_pins[i]);
+                }
+
+                // Stop sleep timer while field is active
+                NRF_LOG_INFO("Stopping sleep timer for field generator");
+                sleep_timer_stop();
+                NRF_LOG_INFO("Sleep timer stopped");
+            } else {
+                pcd_14a_reader_antenna_off();
+                m_is_field_on = false;
+                NRF_LOG_INFO("NFC field OFF");
+                
+                // If we're not in reader mode, clean up the hardware
+                device_mode_t current_mode = get_device_mode();
+                if (current_mode != DEVICE_MODE_READER) {
+                    pcd_14a_reader_uninit();
+                    nrf_gpio_pin_clear(READER_POWER);   // reader power disable
+                    nrf_gpio_pin_set(HF_ANT_SEL);       // hf ant switch back to tag mode
+                }
+                
+                // Restore normal LED
+                light_up_by_slot();
+
+                // Restart sleep timer
+                NRF_LOG_INFO("Field off, restarting sleep timer");
+                sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
+                NRF_LOG_INFO("Sleep timer restarted");
+            }
+            break;
 #endif
 
         case SettingsButtonShowBattery:
             show_battery();
+            break;
 
         default:
-            NRF_LOG_ERROR("Unsupported button function")
+            NRF_LOG_ERROR("Unsupported button function");
             break;
     }
 }
@@ -772,8 +902,10 @@ static void button_press_process(void) {
         }
         // Disable led marquee for usb at button pressed.
         g_usb_led_marquee_enable = false;
-        // Re-delay into hibernation
-        sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
+        // Re-delay into hibernation (unless field is on)
+        if (!m_is_field_on) {
+            sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
+        }
     }
 }
 
@@ -854,7 +986,7 @@ int main(void) {
     on_data_frame_complete(on_data_frame_received);
 
     check_wakeup_src();       // Detect wake-up source and decide BLE broadcast and subsequent hibernation action according to the wake-up source
-    tag_mode_enter();         // Enter card simulation mode by default
+    tag_mode_enter();         // Enter card emulation mode by default
 
     // usbd event listener
     APP_ERROR_CHECK(app_usbd_power_events_enable());
@@ -867,8 +999,17 @@ int main(void) {
         lesc_event_process();
         // Button event process
         button_press_process();
-        // Led blink at usb status
-        blink_usb_led_status();
+        
+#if defined(PROJECT_CHAMELEON_ULTRA)
+        // Field generator rainbow animation
+        field_generator_rainbow_loop();
+#endif
+        
+        // Led blink at usb status (only if field generator is off)
+        if (!m_is_field_on) {
+            blink_usb_led_status();
+        }
+        
         // Data pack process
         data_frame_process();
         // Log print process
