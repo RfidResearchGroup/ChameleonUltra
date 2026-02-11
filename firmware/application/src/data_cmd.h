@@ -167,5 +167,7 @@
 #define DATA_CMD_HIDPROX_GET_EMU_ID             (5003)
 #define DATA_CMD_VIKING_SET_EMU_ID              (5004)
 #define DATA_CMD_VIKING_GET_EMU_ID              (5005)
+#define DATA_CMD_PAC_SET_EMU_ID                 (5006)
+#define DATA_CMD_PAC_GET_EMU_ID                 (5007)
 
 #endif

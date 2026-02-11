@@ -9,6 +9,7 @@
 #include "nrfx_pwm.h"
 #include "protocols/em410x.h"
 #include "protocols/hidprox.h"
+#include "protocols/pac.h"
 #include "protocols/viking.h"
 #include "syssleep.h"
 #include "tag_emulation.h"
@@ -214,6 +215,15 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
         return LF_VIKING_TAG_ID_SIZE;
     }
 
+    if (type == TAG_TYPE_PAC && buffer->length >= LF_PAC_TAG_ID_SIZE) {
+        m_tag_type = type;
+        void *codec = pac.alloc();
+        m_pwm_seq = pac.modulator(codec, buffer->buffer);
+        pac.free(codec);
+        NRF_LOG_INFO("load lf pac data finish.");
+        return LF_PAC_TAG_ID_SIZE;
+    }
+
     NRF_LOG_ERROR("no valid data exists in buffer for tag type: %d.", type);
     return 0;
 }
@@ -311,5 +321,15 @@ bool lf_tag_hidprox_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
 bool lf_tag_viking_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     // default id
     uint8_t tag_id[4] = {0xDE, 0xAD, 0xBE, 0xEF};
+    return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
+}
+
+int lf_tag_pac_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return m_tag_type == TAG_TYPE_PAC ? LF_PAC_TAG_ID_SIZE : 0;
+}
+
+bool lf_tag_pac_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    // default id: 8 ASCII bytes
+    uint8_t tag_id[8] = {'C', 'A', 'R', 'D', '0', '0', '0', '1'};
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
 }

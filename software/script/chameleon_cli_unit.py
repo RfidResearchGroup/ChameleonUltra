@@ -4050,6 +4050,49 @@ class LFPacDebug(ReaderRequiredUnit):
             print(f"  {i:04x} {hexpart}")
 
 
+class LFPacIdArgsUnit(DeviceRequiredUnit):
+    @staticmethod
+    def add_card_arg(parser: ArgumentParserNoExit, required=False):
+        parser.add_argument("--id", type=str, required=required, help="PAC/Stanley card ID (8 ASCII hex chars)", metavar="<hex>")
+        return parser
+
+    def before_exec(self, args: argparse.Namespace):
+        if not super().before_exec(args):
+            return False
+        if args.id is not None and not re.match(r"^[a-fA-F0-9]{16}$", args.id):
+            raise ArgsParserError("ID must include 16 HEX symbols (8 bytes)")
+        return True
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        raise NotImplementedError("Please implement this")
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError("Please implement this")
+
+@lf_pac.command('econfig')
+class LFPacEconfig(SlotIndexArgsAndGoUnit, LFPacIdArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Set emulated PAC/Stanley card ID'
+        self.add_slot_args(parser)
+        self.add_card_arg(parser)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.id is not None:
+            slotinfo = self.cmd.get_slot_info()
+            selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+            lf_tag_type = TagSpecificType(slotinfo[selected - 1]['lf'])
+            if lf_tag_type != TagSpecificType.PAC:
+                print(f"{color_string((CR, 'WARNING'))}: Slot type not set to PAC.")
+            self.cmd.pac_set_emu_id(bytes.fromhex(args.id))
+            print(' - Set PAC/Stanley tag id success.')
+        else:
+            response = self.cmd.pac_get_emu_id()
+            card_id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in response)
+            print(' - Get PAC/Stanley tag id success.')
+            print(f'ID: {card_id_ascii} ({response.hex().upper()})')
+
 @lf_viking.command('read')
 class LFVikingRead(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -4230,6 +4273,10 @@ class HWSlotList(DeviceRequiredUnit):
                 if lf_tag_type == TagSpecificType.Viking:
                     id = self.cmd.viking_get_emu_id()
                     print(f"      {'ID:':40}{color_string((CY, id.hex().upper()))}")
+                if lf_tag_type == TagSpecificType.PAC:
+                    id = self.cmd.pac_get_emu_id()
+                    id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in id)
+                    print(f"      {'ID:':40}{color_string((CY, f'{id_ascii} ({id.hex().upper()})'))}")
         if current != selected:
             self.cmd.set_active_slot(selected)
 

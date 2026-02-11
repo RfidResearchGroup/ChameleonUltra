@@ -758,6 +758,28 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
+    def pac_set_emu_id(self, id: bytes):
+        """
+        Set the card ID emulated by PAC/Stanley.
+
+        :param id: 8-byte ASCII card ID
+        :return:
+        """
+        if len(id) != 8:
+            raise ValueError("The id bytes length must equal 8")
+        data = struct.pack('8s', id)
+        return self.device.send_cmd_sync(Command.PAC_SET_EMU_ID, data)
+
+    @expect_response(Status.SUCCESS)
+    def pac_get_emu_id(self):
+        """
+        Get the emulated PAC/Stanley card ID
+        """
+        resp = self.device.send_cmd_sync(Command.PAC_GET_EMU_ID)
+        resp.parsed = resp.data[:8]
+        return resp
+
+    @expect_response(Status.SUCCESS)
     def mf1_set_detection_enable(self, enabled: bool):
         """
         Set whether to enable the detection of the current card slot.
