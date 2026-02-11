@@ -9,6 +9,7 @@
 #include "protocols/ioprox.h"
 #include "protocols/hidprox.h"
 #include "protocols/t55xx.h"
+#include "protocols/pac.h"
 #include "protocols/viking.h"
 
 #define NRF_LOG_MODULE_NAME lf_main
@@ -78,6 +79,16 @@ uint8_t encode_ioprox_params(uint8_t ver, uint8_t fc, uint16_t cn, uint8_t *out)
         return STATUS_SUCCESS;
     }
     return STATUS_CMD_ERR;
+}
+
+/**
+ * Search PAC/Stanley tag
+ */
+uint8_t scan_pac(uint8_t *card_id) {
+    if (pac_read(card_id, g_timeout_readem_ms)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
 }
 
 /**
