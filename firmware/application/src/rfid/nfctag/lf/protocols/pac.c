@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "nordic_common.h"
+#include "nrf_pwm.h"
 #include "protocols.h"
 #include "tag_base_type.h"
 
@@ -282,13 +284,87 @@ static bool pac_decoder_feed(pac_codec *d, uint16_t raw_sample) {
     return pac_process_interval(d, interval);
 }
 
+// --- Modulator (emulation) ---
+
+static nrf_pwm_values_wave_form_t m_pac_pwm_seq_vals[PAC_FRAME_BITS] = {};
+
+static const nrf_pwm_sequence_t m_pac_pwm_seq = {
+    .values.p_wave_form = m_pac_pwm_seq_vals,
+    .length = NRF_PWM_VALUES_LENGTH(m_pac_pwm_seq_vals),
+    .repeats = 0,
+    .end_delay = 0,
+};
+
+// Build the 128-bit NRZ bitstream from 8-byte card ID.
+// Frame: 0xFF sync (8 bits) + 12 × 10-bit UART frames = 128 bits.
+// UART frame: start(0) + 7 data bits LSB-first + odd parity + stop(1).
+// Payload bytes: STX(0x02), '2', '0', card_id[0..7], XOR checksum.
+static void pac_build_bitstream(const uint8_t *card_id, uint8_t *bits_out) {
+    uint8_t payload[PAC_PAYLOAD_BYTES];
+    payload[0] = PAC_STX;
+    payload[1] = '2';
+    payload[2] = '0';
+    memcpy(&payload[3], card_id, PAC_DATA_SIZE);
+
+    // XOR checksum over card ID bytes (indices 3..10)
+    uint8_t xor_check = 0;
+    for (int i = 3; i < 3 + PAC_DATA_SIZE; i++) {
+        xor_check ^= payload[i];
+    }
+    payload[11] = xor_check;
+
+    int bit_pos = 0;
+
+    // 8-bit sync marker: 0xFF (all ones)
+    for (int i = 0; i < 8; i++) {
+        bits_out[bit_pos++] = 1;
+    }
+
+    // 12 UART frames
+    for (int f = 0; f < PAC_PAYLOAD_BYTES; f++) {
+        uint8_t byte_val = payload[f];
+
+        // Start bit (0)
+        bits_out[bit_pos++] = 0;
+
+        // 7 data bits, LSB first
+        uint8_t ones = 0;
+        for (int i = 0; i < 7; i++) {
+            uint8_t bit = (byte_val >> i) & 1;
+            bits_out[bit_pos++] = bit;
+            ones += bit;
+        }
+
+        // Odd parity: set so total ones (data + parity) is odd
+        uint8_t parity = (ones & 1) ? 0 : 1;
+        bits_out[bit_pos++] = parity;
+
+        // Stop bit (1)
+        bits_out[bit_pos++] = 1;
+    }
+}
+
+static const nrf_pwm_sequence_t *pac_modulator(pac_codec *d, uint8_t *buf) {
+    uint8_t bits[PAC_FRAME_BITS];
+    pac_build_bitstream(buf, bits);
+
+    // NRZ: output must be CONSTANT within each bit period (no mid-bit transition).
+    // Per nRF52840 PS: compare = 0 → pin held LOW; compare >= counter_top → pin held HIGH.
+    // No polarity bits needed — avoids edge-case ambiguity with compare = 0.
+    for (int i = 0; i < PAC_FRAME_BITS; i++) {
+        m_pac_pwm_seq_vals[i].channel_0 = bits[i] ? 32 : 0;
+        m_pac_pwm_seq_vals[i].counter_top = 32;
+    }
+    return &m_pac_pwm_seq;
+}
+
 const protocol pac = {
     .tag_type = TAG_TYPE_PAC,
     .data_size = PAC_DATA_SIZE,
     .alloc = (codec_alloc)pac_alloc,
     .free = (codec_free)pac_free,
     .get_data = (codec_get_data)pac_get_data,
-    .modulator = NULL,
+    .modulator = (modulator)pac_modulator,
     .decoder =
         {
             .start = (decoder_start)pac_decoder_start,
