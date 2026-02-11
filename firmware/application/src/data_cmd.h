@@ -93,6 +93,7 @@
 #define DATA_CMD_EM410X_ELECTRA_WRITE_TO_T55XX  (3006)
 #define DATA_CMD_HIDPROX_SCAN                   (3002)
 #define DATA_CMD_HIDPROX_WRITE_TO_T55XX         (3003)
+#define DATA_CMD_PAC_SCAN                       (3010)
 #define DATA_CMD_VIKING_SCAN                    (3004)
 #define DATA_CMD_VIKING_WRITE_TO_T55XX          (3005)
 #define DATA_CMD_ADC_GENERIC_READ               (3009)

@@ -552,6 +552,7 @@ lf_em = lf.subgroup('em', 'EM commands')
 lf_em_410x = lf_em.subgroup('410x', 'EM410x commands')
 lf_hid = lf.subgroup('hid', 'HID commands')
 lf_hid_prox = lf_hid.subgroup('prox', 'HID Prox commands')
+lf_pac = lf.subgroup('pac', 'PAC/Stanley commands')
 lf_viking = lf.subgroup('viking', 'Viking commands')
 lf_generic = lf.subgroup('generic', 'Generic commands')
 
@@ -3944,6 +3945,110 @@ class LFHIDProxEconfig(SlotIndexArgsAndGoUnit, LFHIDIdArgsUnit):
             if oem > 0:
                 print(f"   OEM: {color_string((CG, oem))}")
             print(f"   CN: {color_string((CG, cn))}")
+
+@lf_pac.command('read')
+class LFPacRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Scan PAC/Stanley tag and print card ID'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        card_id = self.cmd.pac_scan()
+        card_id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in card_id)
+        print(f" PAC/Stanley Card ID: {color_string((CG, card_id_ascii))} ({card_id.hex().upper()})")
+
+
+@lf_pac.command('debug')
+class LFPacDebug(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Capture raw ADC data and analyze NRZ signal for PAC debugging'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        resp = self.cmd.adc_generic_read()
+        if resp is None:
+            print("ADC read failed")
+            return
+
+        data = list(resp)
+        min_val = min(data)
+        max_val = max(data)
+
+        print(f" Samples: {len(data)}")
+        print(f" ADC range: {min_val} - {max_val} (spread: {max_val - min_val})")
+
+        # Spike removal: clip values above 3x the minimum (LC ringing transients)
+        spike_cap = min_val * 3 if min_val > 0 else max_val
+        clipped = [min(v, spike_cap) for v in data]
+        c_min = min(clipped)
+        c_max = max(clipped)
+        c_thresh = (c_min + c_max) / 2
+
+        print(f" Spike cap: {spike_cap} (3x raw min {min_val})")
+        print(f" Clipped range: {c_min} - {c_max} (spread: {c_max - c_min})")
+
+        # Moving-average of clipped signal (32-sample window = 1 NRZ bit)
+        window = 32
+        if len(clipped) >= window:
+            filtered = []
+            s = sum(clipped[:window])
+            for i in range(window, len(clipped)):
+                filtered.append(s / window)
+                s += clipped[i] - clipped[i - window]
+            filtered.append(s / window)
+            f_min = min(filtered)
+            f_max = max(filtered)
+            f_thresh = (f_min + f_max) / 2
+            f_hyst = (f_max - f_min) / 4
+            print(f"\n Spike-free moving average (window={window}):")
+            print(f"  Range: {f_min:.1f} - {f_max:.1f} (spread: {f_max - f_min:.1f})")
+            print(f"  Threshold: {f_thresh:.1f}, Hysteresis: {f_hyst:.1f}")
+
+            # Binary decode with hysteresis
+            f_binary = []
+            state = filtered[0] > f_thresh
+            for v in filtered:
+                if v > f_thresh + f_hyst:
+                    state = True
+                elif v < f_thresh - f_hyst:
+                    state = False
+                f_binary.append(1 if state else 0)
+
+            f_trans = sum(1 for i in range(1, len(f_binary)) if f_binary[i] != f_binary[i - 1])
+            f_runs = []
+            cur = f_binary[0]
+            cnt = 1
+            for i in range(1, len(f_binary)):
+                if f_binary[i] == cur:
+                    cnt += 1
+                else:
+                    f_runs.append(cnt)
+                    cur = f_binary[i]
+                    cnt = 1
+            f_runs.append(cnt)
+            print(f"  Transitions: {f_trans}")
+            print(f"  Run lengths: {f_runs[:40]}{'...' if len(f_runs) > 40 else ''}")
+            run_bits = [f"{r / 32:.1f}" for r in f_runs[:40]]
+            print(f"  Run bits:    {run_bits}")
+
+            # Show bit-period averages (each = avg of 32 clipped samples)
+            print(f"\n Bit-period averages (32 samples each):")
+            bit_avgs = []
+            for i in range(0, len(clipped) - window + 1, window):
+                chunk = clipped[i:i + window]
+                bit_avgs.append(sum(chunk) / len(chunk))
+            bit_str = " ".join(f"{a:.0f}" for a in bit_avgs)
+            print(f"  {bit_str}")
+
+        # Raw hex dump (first 512 bytes)
+        print(f"\n Raw ADC (8-bit, min={min_val} max={max_val}):")
+        for i in range(0, min(len(data), 512), 50):
+            chunk = data[i:i + 50]
+            hexpart = " ".join(f"{b:02x}" for b in chunk)
+            print(f"  {i:04x} {hexpart}")
+
 
 @lf_viking.command('read')
 class LFVikingRead(ReaderRequiredUnit):

@@ -723,6 +723,15 @@ static data_frame_tx_t *cmd_processor_viking_scan(uint16_t cmd, uint16_t status,
     return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_buffer), card_buffer);
 }
 
+static data_frame_tx_t *cmd_processor_pac_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t card_id[8] = {0x00};
+    status = scan_pac(card_id);
+    if (status != STATUS_LF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_id), card_id);
+}
+
 static data_frame_tx_t *cmd_processor_viking_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     typedef struct {
         uint8_t id[4];
@@ -1697,6 +1706,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_HIDPROX_WRITE_TO_T55XX,       before_reader_run,           cmd_processor_hidprox_write_to_t55xx,        NULL                   },
     {    DATA_CMD_VIKING_SCAN,                  before_reader_run,           cmd_processor_viking_scan,                   NULL                   },
     {    DATA_CMD_VIKING_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_viking_write_to_t55xx,         NULL                   },
+    {    DATA_CMD_PAC_SCAN,                     before_reader_run,           cmd_processor_pac_scan,                      NULL                   },
     {    DATA_CMD_ADC_GENERIC_READ,             before_reader_run,           cmd_processor_generic_read,                  NULL                   },
 
     {    DATA_CMD_HF14A_SET_FIELD_ON,           before_reader_run,           cmd_processor_hf14a_set_field_on,            NULL                   },

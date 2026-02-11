@@ -8,6 +8,7 @@
 #include "protocols/em410x.h"
 #include "protocols/hidprox.h"
 #include "protocols/t55xx.h"
+#include "protocols/pac.h"
 #include "protocols/viking.h"
 
 #define NRF_LOG_MODULE_NAME lf_main
@@ -34,6 +35,16 @@ uint8_t scan_em410x(uint8_t *uid) {
  */
 uint8_t scan_hidprox(uint8_t *data, uint8_t format_hint) {
     if (hidprox_read(data, format_hint, g_timeout_readem_ms)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
+/**
+ * Search PAC/Stanley tag
+ */
+uint8_t scan_pac(uint8_t *card_id) {
+    if (pac_read(card_id, g_timeout_readem_ms)) {
         return STATUS_LF_TAG_OK;
     }
     return STATUS_LF_TAG_NO_FOUND;

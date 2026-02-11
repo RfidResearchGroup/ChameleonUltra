@@ -83,6 +83,7 @@ class Command(enum.IntEnum):
     HIDPROX_WRITE_TO_T55XX = 3003
     VIKING_SCAN = 3004
     VIKING_WRITE_TO_T55XX = 3005
+    PAC_SCAN = 3010
     ADC_GENERIC_READ = 3009
 
     MF1_WRITE_EMU_BLOCK_DATA = 4000
@@ -270,6 +271,7 @@ class TagSpecificType(enum.IntEnum):
     # securakey
     # gallagher
     # PAC/Stanley
+    PAC = 150
     # Presco
     # Visa2000
     Viking = 170
@@ -361,6 +363,8 @@ class TagSpecificType(enum.IntEnum):
             return "EM410X Electra"
         elif self == TagSpecificType.HIDProx:
             return "HIDProx"
+        elif self == TagSpecificType.PAC:
+            return "PAC/Stanley"
         elif self == TagSpecificType.Viking:
             return "Viking"
         elif self == TagSpecificType.MIFARE_Mini:

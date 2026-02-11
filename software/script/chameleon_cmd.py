@@ -535,6 +535,18 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(Command.VIKING_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
+    def pac_scan(self):
+        """
+        Read the card ID of PAC/Stanley.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.PAC_SCAN)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data[:8]
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
     def adc_generic_read(self):
         """
         Read the ADC when the field is on.
