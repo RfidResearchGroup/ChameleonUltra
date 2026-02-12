@@ -30,11 +30,10 @@
 #define PAC_STX             0x02
 
 // ADC demodulation parameters
-#define PAC_AVG_WINDOW      32   // Moving average window = 1 NRZ bit period
 #define PAC_PRESCAN_SAMPLES 128  // Samples for raw min/max detection (spike cap)
 #define PAC_WARMUP_SAMPLES  600  // Samples for threshold calibration (~5ms)
-#define PAC_MIN_HYST_SUM    (10 * PAC_AVG_WINDOW) // Min hysteresis in sum units
 #define PAC_SPIKE_MULT      3    // Samples > raw_min * SPIKE_MULT are spike transients
+#define PAC_THRESH_FUZZ     75   // PM3-style: threshold at 75% of signal range
 
 typedef struct {
     // NRZ shift register (128 bits)
@@ -44,20 +43,17 @@ typedef struct {
     uint16_t bit_count;     // total bits shifted in (capped at PAC_FRAME_BITS)
     uint8_t card_id[PAC_DATA_SIZE];
 
-    // ADC → NRZ demodulation state (moving-average based)
-    int16_t avg_buf[PAC_AVG_WINDOW]; // circular buffer for moving average
-    int32_t avg_sum;        // running sum of last PAC_AVG_WINDOW samples
-    uint8_t avg_idx;        // circular index into avg_buf
-    uint16_t total_samples; // total samples processed
+    // ADC → NRZ demodulation state (per-sample threshold with dead zone)
+    uint32_t total_samples; // total samples processed
     int16_t raw_min;        // minimum raw sample seen (for spike detection)
-    int16_t spike_cap;      // clip level: raw values above this are transients
-    int32_t avg_max;        // max of avg_sum during warmup (spike-free)
-    int32_t avg_min;        // min of avg_sum during warmup (spike-free)
-    int32_t threshold;      // center threshold (in sum units, not divided)
-    int32_t hysteresis;     // hysteresis margin (in sum units)
+    int32_t spike_cap;      // clip level: raw values above this are transients
+    int16_t clip_max;       // max of clipped samples during warmup
+    int16_t clip_min;       // min of clipped samples during warmup
+    int16_t thresh_high;    // above this → bit=1
+    int16_t thresh_low;     // below this → bit=0, between → keep previous
     bool adc_state;         // current demodulated binary level
     bool has_signal;        // true after first threshold crossing
-    uint16_t sample_count;  // samples since last transition
+    uint32_t sample_count;  // samples since last transition
 } pac_codec;
 
 // Shift one bit into the 128-bit register.
@@ -147,8 +143,8 @@ static bool try_decode_frame(pac_codec *d, bool inverted) {
 }
 
 // Process a demodulated NRZ edge interval (in samples = carrier cycles).
-static bool pac_process_interval(pac_codec *d, uint16_t interval) {
-    uint16_t nbits = (interval + PAC_HALF_BIT) / PAC_RF_PER_BIT;
+static bool pac_process_interval(pac_codec *d, uint32_t interval) {
+    uint32_t nbits = (interval + PAC_HALF_BIT) / PAC_RF_PER_BIT;
 
     if (nbits < 1 || nbits > PAC_MAX_BITS_RUN) {
         d->raw_hi = 0;
@@ -158,7 +154,7 @@ static bool pac_process_interval(pac_codec *d, uint16_t interval) {
         return false;
     }
 
-    for (uint16_t i = 0; i < nbits; i++) {
+    for (uint32_t i = 0; i < nbits; i++) {
         shift_bit(d, d->polarity);
         if (d->bit_count < PAC_FRAME_BITS) {
             d->bit_count++;
@@ -189,17 +185,16 @@ static uint8_t *pac_get_data(pac_codec *d) {
 
 static void pac_decoder_start(pac_codec *d, uint8_t format) {
     memset(d, 0, sizeof(pac_codec));
-    // Initialize min/max to extremes so first comparison updates them
-    d->raw_min = 32767;     // INT16_MAX for raw min tracking
-    d->spike_cap = 32767;   // No capping until prescan completes
-    d->avg_max = -1048576;
-    d->avg_min = 1048576;
+    d->raw_min = 32767;        // INT16_MAX: first sample updates it
+    d->spike_cap = 0x7FFFFFFF; // INT32_MAX: no capping until prescan completes
+    d->clip_max = -32768;      // INT16_MIN: first clipped sample updates it
+    d->clip_min = 32767;       // INT16_MAX: first clipped sample updates it
 }
 
 // Feed a raw ADC sample (one per carrier cycle at 125kHz).
-// The antenna signal has brief 0xFF transient spikes at NRZ transitions due to
-// LC circuit ringing. The actual NRZ data is encoded as two lower amplitude
-// levels. We clip spikes before averaging, then threshold the clean signal.
+// PM3-inspired approach: clip spikes, then per-sample threshold with dead zone.
+// No moving average — edges are detected directly on clipped samples, giving
+// much tighter timing than the ~16 sample group delay of a moving average.
 static bool pac_decoder_feed(pac_codec *d, uint16_t raw_sample) {
     int16_t sample = (int16_t)raw_sample;
     d->total_samples++;
@@ -211,58 +206,44 @@ static bool pac_decoder_feed(pac_codec *d, uint16_t raw_sample) {
             d->raw_min = sample;
         }
         if (d->total_samples == PAC_PRESCAN_SAMPLES) {
-            // Set spike cap: anything above 3x the minimum is a transient.
-            // This keeps both NRZ data levels but removes the LC ringing spikes.
-            d->spike_cap = d->raw_min * PAC_SPIKE_MULT;
+            d->spike_cap = (int32_t)d->raw_min * PAC_SPIKE_MULT;
         }
         return false;
     }
 
-    // Clip spikes: replace transient values with the cap level.
-    // This prevents the LC ringing spikes from dominating the moving average.
+    // Clip spikes: LC ringing transients are replaced with the cap level.
     if (sample > d->spike_cap) {
         sample = d->spike_cap;
     }
 
-    // Update 32-sample moving average (window = 1 NRZ bit period at RF/32).
-    d->avg_sum -= d->avg_buf[d->avg_idx];
-    d->avg_buf[d->avg_idx] = sample;
-    d->avg_sum += sample;
-    d->avg_idx = (d->avg_idx + 1) % PAC_AVG_WINDOW;
+    uint32_t warmup_samples = d->total_samples - PAC_PRESCAN_SAMPLES;
 
-    uint16_t avg_samples = d->total_samples - PAC_PRESCAN_SAMPLES;
-
-    // Need a full window before the average is valid
-    if (avg_samples < PAC_AVG_WINDOW) {
-        return false;
-    }
-
-    // Warmup: track min/max of the spike-free averaged signal.
-    if (avg_samples < PAC_WARMUP_SAMPLES) {
-        if (d->avg_sum > d->avg_max) d->avg_max = d->avg_sum;
-        if (d->avg_sum < d->avg_min) d->avg_min = d->avg_sum;
-        return false;
-    }
-
-    // Compute threshold once at end of warmup
-    if (avg_samples == PAC_WARMUP_SAMPLES) {
-        d->threshold = (d->avg_max + d->avg_min) / 2;
-        d->hysteresis = (d->avg_max - d->avg_min) / 4;
-        if (d->hysteresis < PAC_MIN_HYST_SUM) {
-            d->hysteresis = PAC_MIN_HYST_SUM;
+    // Phase 2: Warmup — track min/max of clipped samples to find NRZ levels.
+    if (warmup_samples <= PAC_WARMUP_SAMPLES) {
+        if (sample > d->clip_max) d->clip_max = sample;
+        if (sample < d->clip_min) d->clip_min = sample;
+        if (warmup_samples == PAC_WARMUP_SAMPLES) {
+            // PM3-style thresholds: 75% fuzz creates a dead zone between levels.
+            // high = 75% of peak, low = bottom + 25% of range.
+            int16_t range = d->clip_max - d->clip_min;
+            d->thresh_high = d->clip_min + (range * PAC_THRESH_FUZZ) / 100;
+            d->thresh_low = d->clip_min + (range * (100 - PAC_THRESH_FUZZ)) / 100;
         }
+        return false;
     }
 
-    // Detection: threshold the averaged signal with hysteresis
+    // Phase 3: Per-sample threshold with dead zone (PM3 nrzRawDemod style).
+    // Values above thresh_high → 1, below thresh_low → 0, between → keep previous.
+    // No moving average means near-zero edge timing jitter.
     d->sample_count++;
 
-    bool new_state;
-    if (d->avg_sum > d->threshold + d->hysteresis) {
+    bool new_state = d->adc_state;
+    if (sample >= d->thresh_high) {
         new_state = true;
-    } else if (d->avg_sum < d->threshold - d->hysteresis) {
+    } else if (sample <= d->thresh_low) {
         new_state = false;
     } else {
-        return false;
+        return false; // Dead zone: no state change
     }
 
     if (!d->has_signal) {
@@ -277,7 +258,7 @@ static bool pac_decoder_feed(pac_codec *d, uint16_t raw_sample) {
     }
 
     // Transition detected — process the interval
-    uint16_t interval = d->sample_count;
+    uint32_t interval = d->sample_count;
     d->sample_count = 0;
     d->adc_state = new_state;
 
