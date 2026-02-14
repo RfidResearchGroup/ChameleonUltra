@@ -106,6 +106,7 @@ hf mfu nfcimport -f /path/to/your/file.nfc -s 1
 
 - **`-f`** is the path to your `.nfc` file. Drag the file from Finder into the Terminal window to paste the full path automatically.
 - **`-s 1`** means "put it in slot 1". You can use slots 1 through 8. If you leave `-s` off, it uses whichever slot is currently active.
+- **`--amiibo`** (optional) derives and writes the correct password (PWD/PACK) for amiibo tags. Use this when importing amiibo NTAG215 dumps so that readers can authenticate the emulated tag. See [Amiibo Tags](#amiibo-tags) below.
 
 #### Example
 
@@ -137,6 +138,18 @@ Writing 135 pages... done
 
 That's it! Your ChameleonUltra is now emulating the tag.
 
+#### Amiibo Tags
+
+If your `.nfc` file is an amiibo dump, add the `--amiibo` flag:
+
+```
+hf mfu nfcimport -f ~/Downloads/Kirby.nfc -s 1 --amiibo
+```
+
+**Why is this needed?** Real NTAG215 chips never reveal their stored password over NFC — it always reads back as zeros. So Flipper `.nfc` dumps always have `00 00 00 00` for the password (page 133) and PACK (page 134). Without the correct password, readers that perform `PWD_AUTH` (like the Nintendo Switch) will reject the emulated tag.
+
+The `--amiibo` flag automatically derives the correct 4-byte password from the tag's UID and sets PACK to the standard `0x80 0x80`, matching what Nintendo devices expect.
+
 ### Step 6: Verify (Optional)
 
 Want to double-check it worked? Run these commands:
@@ -160,6 +173,7 @@ This dumps all the page data from the emulator. Compare it with the pages in you
 | What you want to do | Command |
 |---|---|
 | Import to slot 1 | `hf mfu nfcimport -f myfile.nfc -s 1` |
+| Import amiibo to slot 1 | `hf mfu nfcimport -f myfile.nfc -s 1 --amiibo` |
 | Import to active slot | `hf mfu nfcimport -f myfile.nfc` |
 | Check slot config | `hf mfu econfig -s 1` |
 | View page data | `hf mfu eview` |
@@ -186,3 +200,4 @@ You forgot to run `hw connect` before the import command.
 **The import ran but scanning the CU doesn't work as expected**
 - Make sure the CU is in **tag emulation mode** (not reader mode). The device should already be in tag mode by default.
 - Try pressing the button on your CU to cycle to the slot you loaded the tag into.
+- **For amiibos:** If a reader (e.g., Nintendo Switch) detects the tag but rejects it, re-import with `--amiibo` to set the correct password. Real NTAG215 chips never reveal their password over NFC, so Flipper dumps always have zeros for it. The `--amiibo` flag derives the correct password from the UID.
