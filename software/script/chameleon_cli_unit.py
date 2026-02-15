@@ -3853,6 +3853,8 @@ class HFMFUNfcImport(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
         parser.description = 'Import a Flipper Zero .nfc file into a MIFARE Ultralight / NTAG emulator slot'
         self.add_slot_args(parser)
         parser.add_argument('-f', '--file', required=True, type=str, help="Path to Flipper Zero .nfc file")
+        parser.add_argument('--amiibo', action='store_true', default=False,
+                            help="Derive and write correct PWD/PACK for amiibo (NTAG215)")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
@@ -4035,6 +4037,24 @@ class HFMFUNfcImport(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
                 page += cur_count
 
             print("done")
+
+        # --- Step 7: Derive and write amiibo PWD/PACK ---
+        if args.amiibo:
+            if tag_type != TagSpecificType.NTAG_215:
+                print(color_string((CY, f"  Warning: --amiibo flag ignored (tag type is {tag_type}, not NTAG 215).")))
+            elif uid is None or len(uid) != 7:
+                print(color_string((CY, "  Warning: --amiibo flag ignored (UID is not 7 bytes).")))
+            else:
+                pwd = bytes([
+                    0xAA ^ uid[1] ^ uid[3],
+                    0x55 ^ uid[2] ^ uid[4],
+                    0xAA ^ uid[3] ^ uid[5],
+                    0x55 ^ uid[4] ^ uid[6],
+                ])
+                pack = bytes([0x80, 0x80, 0x00, 0x00])
+                print(f"Setting amiibo PWD: {pwd.hex(' ').upper()}, PACK: {pack[:2].hex(' ').upper()}...")
+                self.cmd.mfu_write_emu_page_data(133, pwd)
+                self.cmd.mfu_write_emu_page_data(134, pack)
 
         self.cmd.set_slot_enable(self.slot_num, TagSenseType.HF, True)
 
