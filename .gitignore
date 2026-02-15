@@ -709,5 +709,3 @@ FodyWeavers.xsd
 software/script/tests/nonces.bin
 software/script/nonces.bin
 
-# Local archives / investigation artifacts
-_archive/
