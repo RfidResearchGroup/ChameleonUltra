@@ -440,7 +440,7 @@ class LFHIDIdArgsUnit(DeviceRequiredUnit):
             HIDFormat.ATSW30: [0xFFF, 0xFFFF, 0, 0],
             HIDFormat.ADT31: [0xF, 0x7FFFFF, 0, 0],
             HIDFormat.HCP32: [0, 0x3FFF, 0, 0],
-            HIDFormat.HPP32: [0xFFF, 0x7FFFF, 0, 0],
+            HIDFormat.HPP32: [0xFFF, 0x1FFFFFFF, 0, 0],
             HIDFormat.KASTLE: [0xFF, 0xFFFF, 0x1F, 0],
             HIDFormat.KANTECH: [0xFF, 0xFFFF, 0, 0],
             HIDFormat.WIE32: [0xFFF, 0xFFFF, 0, 0],
@@ -3864,11 +3864,18 @@ class LFHIDProxRead(LFHIDIdReadArgsUnit, ReaderRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         format = 0
+        include_matches = args.format is None
         if args.format is not None:
             format = HIDFormat[args.format].value
-        (format, fc, cn1, cn2, il, oem) = self.cmd.hidprox_scan(format)
+        resp = self.cmd.hidprox_scan(format, include_matches=include_matches)
+
+        (format, fc, cn1, cn2, il, oem) = resp['fields']
         cn = (cn1 << 32) + cn2
-        print(f"HIDProx/{HIDFormat(format)}")
+        try:
+            format_label = str(HIDFormat(format))
+        except ValueError:
+            format_label = f"Unknown({format})"
+        print(f"HIDProx/{format_label}")
         if fc > 0:
             print(f" FC: {color_string((CG, fc))}")
         if il > 0:
@@ -3876,6 +3883,38 @@ class LFHIDProxRead(LFHIDIdReadArgsUnit, ReaderRequiredUnit):
         if oem > 0:
             print(f" OEM: {color_string((CG, oem))}")
         print(f" CN: {color_string((CG, cn))}")
+
+        if include_matches and resp.get('matches'):
+            def confidence_label(has_parity: int, mismatches: int) -> str:
+                if mismatches == 0 and has_parity:
+                    return 'high'
+                if mismatches == 0 or mismatches == 1:
+                    return 'medium'
+                return f"low (mismatch {mismatches})"
+
+            raw = resp.get('raw')
+            if raw is not None:
+                print(f" Raw: 0x{raw:012X}")
+
+            print(" Matches:")
+            matches = sorted(
+                resp['matches'],
+                key=lambda item: (item['mismatches'], -item['has_parity'])
+            )
+            for item in matches:
+                fmt = item['format']
+                mismatches = item['mismatches']
+                has_parity = item['has_parity']
+                repacked = item['repacked']
+                try:
+                    fmt_name = str(HIDFormat(fmt))
+                except ValueError:
+                    fmt_name = f"format({fmt})"
+                confidence = confidence_label(has_parity, mismatches)
+                parity_label = "parity" if has_parity else "no parity"
+                print(
+                    f"  {fmt_name}: confidence={confidence}, {parity_label}, repacked=0x{repacked:012X}"
+                )
 
 @lf_hid_prox.command("write")
 class LFHIDProxWriteT55xx(LFHIDIdArgsUnit, ReaderRequiredUnit):

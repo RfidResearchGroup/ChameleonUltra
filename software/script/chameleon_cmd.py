@@ -485,15 +485,50 @@ class ChameleonCMD:
         raise ValueError("The id bytes length must equal 5 (EM410X) or 13 (Electra)")
 
     @expect_response(Status.LF_TAG_OK)
-    def hidprox_scan(self, format: int):
+    def hidprox_scan(self, format: int, include_matches: bool = False):
         """
         Read the length, facility code and card number of HID Prox.
 
         :return:
         """
-        resp = self.device.send_cmd_sync(Command.HIDPROX_SCAN, struct.pack('!B', format))
+        if include_matches:
+            flags = 0x01
+            payload = struct.pack('!BB', format, flags)
+        else:
+            payload = struct.pack('!B', format)
+        resp = self.device.send_cmd_sync(Command.HIDPROX_SCAN, payload)
         if resp.status == Status.LF_TAG_OK:
-            resp.parsed = struct.unpack('>BIBIBH', resp.data[:13])
+            fields = struct.unpack('>BIBIBH', resp.data[:13])
+            matches = []
+            if len(resp.data) >= 21 and resp.data[13] == 0xD2:
+                count = resp.data[14]
+                raw = int.from_bytes(resp.data[15:21], 'big')
+                offset = 21
+                for _ in range(count):
+                    if offset + 9 > len(resp.data):
+                        break
+                    fmt = resp.data[offset]
+                    has_parity = resp.data[offset + 1]
+                    mismatches = resp.data[offset + 2]
+                    repacked = int.from_bytes(resp.data[offset + 3:offset + 9], 'big')
+                    matches.append({
+                        'format': fmt,
+                        'has_parity': has_parity,
+                        'mismatches': mismatches,
+                        'repacked': repacked,
+                    })
+                    offset += 9
+                resp.parsed = {
+                    'fields': fields,
+                    'matches': matches,
+                    'raw': raw,
+                }
+            else:
+                resp.parsed = {
+                    'fields': fields,
+                    'matches': matches,
+                    'raw': None,
+                }
         return resp
 
     @expect_response(Status.LF_TAG_OK)
