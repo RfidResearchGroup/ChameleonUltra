@@ -440,7 +440,7 @@ class LFHIDIdArgsUnit(DeviceRequiredUnit):
             HIDFormat.ATSW30: [0xFFF, 0xFFFF, 0, 0],
             HIDFormat.ADT31: [0xF, 0x7FFFFF, 0, 0],
             HIDFormat.HCP32: [0, 0x3FFF, 0, 0],
-            HIDFormat.HPP32: [0xFFF, 0x1FFFFFFF, 0, 0],
+            HIDFormat.HPP32: [0xFFF, 0x7FFFF, 0, 0],
             HIDFormat.KASTLE: [0xFF, 0xFFFF, 0x1F, 0],
             HIDFormat.KANTECH: [0xFF, 0xFFFF, 0, 0],
             HIDFormat.WIE32: [0xFFF, 0xFFFF, 0, 0],

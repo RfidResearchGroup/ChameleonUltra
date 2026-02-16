@@ -328,14 +328,14 @@ static uint64_t pack_hpp32(wiegand_card_t *card) {
     uint64_t bits = PREAMBLE_32BIT;
     bits <<= 1;
     bits = (bits << 12) | (card->facility_code & 0xfff);
-    bits = (bits << 19) | ((card->card_number >> 10) & 0x7ffff);
+    bits = (bits << 19) | (card->card_number & 0x7ffff);
     return bits;
 }
 
 static wiegand_card_t *unpack_hpp32(uint64_t hi, uint64_t lo) {
     wiegand_card_t *d = wiegand_card_alloc();
     d->facility_code = (lo >> 19) & 0xfff;
-    d->card_number = ((lo >> 0) & 0x7ffff) << 10;
+    d->card_number = (lo >> 0) & 0x7ffff;
     return d;
 }
 
@@ -883,7 +883,7 @@ static const card_format_table_t formats[] = {
     {ATSW30, pack_atsw30, unpack_atsw30, 30, {1, 0xFFF, 0xFFFF, 0, 0}},          // ATS Wiegand 30-bit
     {ADT31, pack_adt31, unpack_adt31, 31, {0, 0xF, 0x7FFFFF, 0, 0}},             // HID ADT 31-bit
     {HCP32, pack_hcp32, unpack_hcp32, 32, {0, 0, 0x3FFF, 0, 0}},                 // HID Check Point 32-bit
-    {HPP32, pack_hpp32, unpack_hpp32, 32, {0, 0xFFF, 0x1FFFFFFF, 0, 0}},         // HID Hewlett-Packard 32-bit
+    {HPP32, pack_hpp32, unpack_hpp32, 32, {0, 0xFFF, 0x7FFFF, 0, 0}},            // HID Hewlett-Packard 32-bit
     {KASTLE, pack_kastle, unpack_kastle, 32, {1, 0xFF, 0xFFFF, 0x1F, 0}},        // Kastle 32-bit
     {KANTECH, pack_kantech, unpack_kantech, 32, {0, 0xFF, 0xFFFF, 0, 0}},        // Indala/Kantech KFS 32-bit
     {WIE32, pack_wie32, unpack_wie32, 32, {0, 0xFFF, 0xFFFF, 0, 0}},             // Wiegand 32-bit
