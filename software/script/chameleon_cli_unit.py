@@ -444,6 +444,7 @@ class LFHIDIdArgsUnit(DeviceRequiredUnit):
             HIDFormat.KASTLE: [0xFF, 0xFFFF, 0x1F, 0],
             HIDFormat.KANTECH: [0xFF, 0xFFFF, 0, 0],
             HIDFormat.WIE32: [0xFFF, 0xFFFF, 0, 0],
+            HIDFormat.B32: [0x3FFF, 0xFFFF, 0, 0],
             HIDFormat.D10202: [0x7F, 0xFFFFFF, 0, 0],
             HIDFormat.H10306: [0xFFFF, 0xFFFF, 0, 0],
             HIDFormat.N10002: [0xFFFF, 0xFFFF, 0, 0],

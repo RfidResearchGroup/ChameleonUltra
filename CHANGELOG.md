@@ -17,7 +17,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Added cmd for set mf1 config 'field_off_do_reset' (@xianglin1998)
  - Fix Windows build (@suut)
  - Added `hf 14a config` to deal with badly configured cards (@azuwis)
- - HID Prox: add optional scan flags for match metadata, align HPP32 packing with Proxmark3, and show match confidence in CLI (@vidonnus)
+ - HID Prox: add 32-B format support, optional scan flags for match metadata, and match confidence in CLI (@vidonnus)
 
 ## [v2.1.0][2025-09-02]
  - Added UV, formatter and linter. Contribution guidelines. (@GameTec-live)

@@ -68,6 +68,8 @@ static uint64_t validation_mask(uint8_t length, card_format_t format) {
             return ((1ULL << 24) - 1) << 7; // CN bits (30..7)
         case HPP32:
             return (1ULL << 31) - 1; // FC+CN bits (30..0)
+        case B32:
+            return ((1ULL << 30) - 1) << 1; // FC+CN bits (30..1)
         case KANTECH:
             return ((1ULL << 24) - 1) << 1; // FC+CN bits (24..1)
         case WIE32:
@@ -336,6 +338,32 @@ static wiegand_card_t *unpack_hpp32(uint64_t hi, uint64_t lo) {
     wiegand_card_t *d = wiegand_card_alloc();
     d->facility_code = (lo >> 19) & 0xfff;
     d->card_number = (lo >> 0) & 0x7ffff;
+    return d;
+}
+
+static uint64_t pack_b32(wiegand_card_t *card) {
+    uint64_t bits = PREAMBLE_32BIT;
+    bits <<= 1;
+    bits = (bits << 14) | (card->facility_code & 0x3fff);
+    bits = (bits << 16) | (card->card_number & 0xffff);
+    bits <<= 1;
+    if (evenparity32((bits >> 15) & 0xffff)) {
+        SET_BIT64(bits, 31);
+    }
+    if (oddparity32((bits >> 1) & 0xffff)) {
+        SET_BIT64(bits, 0);
+    }
+    return bits;
+}
+
+static wiegand_card_t *unpack_b32(uint64_t hi, uint64_t lo) {
+    if (!(IS_SET(lo, 31) == evenparity32((lo >> 15) & 0xffff) &&
+          IS_SET(lo, 0) == oddparity32((lo >> 1) & 0xffff))) {
+        return NULL;
+    }
+    wiegand_card_t *d = wiegand_card_alloc();
+    d->facility_code = (lo >> 17) & 0x3fff;
+    d->card_number = (lo >> 1) & 0xffff;
     return d;
 }
 
@@ -884,6 +912,7 @@ static const card_format_table_t formats[] = {
     {ADT31, pack_adt31, unpack_adt31, 31, {0, 0xF, 0x7FFFFF, 0, 0}},             // HID ADT 31-bit
     {HCP32, pack_hcp32, unpack_hcp32, 32, {0, 0, 0x3FFF, 0, 0}},                 // HID Check Point 32-bit
     {HPP32, pack_hpp32, unpack_hpp32, 32, {0, 0xFFF, 0x7FFFF, 0, 0}},            // HID Hewlett-Packard 32-bit
+    {B32, pack_b32, unpack_b32, 32, {1, 0x3FFF, 0xFFFF, 0, 0}},                  // 32-B 32-bit
     {KASTLE, pack_kastle, unpack_kastle, 32, {1, 0xFF, 0xFFFF, 0x1F, 0}},        // Kastle 32-bit
     {KANTECH, pack_kantech, unpack_kantech, 32, {0, 0xFF, 0xFFFF, 0, 0}},        // Indala/Kantech KFS 32-bit
     {WIE32, pack_wie32, unpack_wie32, 32, {0, 0xFFF, 0xFFFF, 0, 0}},             // Wiegand 32-bit
