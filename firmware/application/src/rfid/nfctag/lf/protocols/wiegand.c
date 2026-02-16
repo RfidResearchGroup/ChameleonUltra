@@ -35,10 +35,62 @@ const uint8_t indasc27_cn_map[14] = {3, 15, 5, 8, 24, 1, 13, 6, 9, 12, 11, 23, 2
 const uint8_t tecom27_fc_map[11] = {24, 23, 12, 16, 20, 8, 4, 3, 2, 7, 11};
 const uint8_t tecom27_cn_map[16] = {21, 22, 15, 18, 19, 1, 5, 9, 10, 6, 0, 17, 14, 13, 25, 26};
 
+static wiegand_match_info_t g_wiegand_match_info = {0};
+
+static void match_reset(uint64_t raw) {
+    g_wiegand_match_info.valid = 1;
+    g_wiegand_match_info.count = 0;
+    g_wiegand_match_info.raw = raw;
+    memset(g_wiegand_match_info.entries, 0, sizeof(g_wiegand_match_info.entries));
+}
+
+static void match_add(uint8_t format, bool has_parity, uint8_t fixed_mismatches, uint64_t repacked) {
+    if (!g_wiegand_match_info.valid) {
+        return;
+    }
+    if (g_wiegand_match_info.count >= WIEGAND_MATCH_MAX_FORMATS) {
+        return;
+    }
+    wiegand_match_entry_t *entry = &g_wiegand_match_info.entries[g_wiegand_match_info.count++];
+    entry->format = format;
+    entry->has_parity = has_parity ? 1 : 0;
+    entry->fixed_mismatches = fixed_mismatches;
+    entry->repacked = repacked;
+}
+
+static uint64_t validation_mask(uint8_t length, card_format_t format) {
+    if (length != 32) {
+        return (1ULL << 38) - 1; // HID Prox payload size (preamble + Wiegand)
+    }
+
+    switch (format) {
+        case HCP32:
+            return ((1ULL << 24) - 1) << 7; // CN bits (30..7)
+        case HPP32:
+            return (1ULL << 31) - 1; // FC+CN bits (30..0)
+        case KANTECH:
+            return ((1ULL << 24) - 1) << 1; // FC+CN bits (24..1)
+        case WIE32:
+            return (1ULL << 28) - 1; // FC+CN bits (27..0)
+        case KASTLE:
+            return (1ULL << 32) - 1; // full payload (parity + fixed bit)
+        default:
+            return (1ULL << 38) - 1;
+    }
+}
+
 wiegand_card_t *wiegand_card_alloc() {
     wiegand_card_t *card = (wiegand_card_t *)malloc(sizeof(wiegand_card_t));
     memset(card, 0, sizeof(wiegand_card_t));
     return card;
+}
+
+bool wiegand_get_match_info(wiegand_match_info_t *out) {
+    if (!g_wiegand_match_info.valid || out == NULL) {
+        return false;
+    }
+    *out = g_wiegand_match_info;
+    return true;
 }
 
 static uint64_t get_nonlinear_fields(uint64_t n, const uint8_t *map, size_t size) {
@@ -276,14 +328,14 @@ static uint64_t pack_hpp32(wiegand_card_t *card) {
     uint64_t bits = PREAMBLE_32BIT;
     bits <<= 1;
     bits = (bits << 12) | (card->facility_code & 0xfff);
-    bits = (bits << 19) | (card->card_number & 0x7ffff);
+    bits = (bits << 19) | ((card->card_number >> 10) & 0x7ffff);
     return bits;
 }
 
 static wiegand_card_t *unpack_hpp32(uint64_t hi, uint64_t lo) {
     wiegand_card_t *d = wiegand_card_alloc();
     d->facility_code = (lo >> 19) & 0xfff;
-    d->card_number = (lo >> 0) & 0x7ffff;
+    d->card_number = ((lo >> 0) & 0x7ffff) << 10;
     return d;
 }
 
@@ -831,7 +883,7 @@ static const card_format_table_t formats[] = {
     {ATSW30, pack_atsw30, unpack_atsw30, 30, {1, 0xFFF, 0xFFFF, 0, 0}},          // ATS Wiegand 30-bit
     {ADT31, pack_adt31, unpack_adt31, 31, {0, 0xF, 0x7FFFFF, 0, 0}},             // HID ADT 31-bit
     {HCP32, pack_hcp32, unpack_hcp32, 32, {0, 0, 0x3FFF, 0, 0}},                 // HID Check Point 32-bit
-    {HPP32, pack_hpp32, unpack_hpp32, 32, {0, 0xFFF, 0x7FFFF, 0, 0}},            // HID Hewlett-Packard 32-bit
+    {HPP32, pack_hpp32, unpack_hpp32, 32, {0, 0xFFF, 0x1FFFFFFF, 0, 0}},         // HID Hewlett-Packard 32-bit
     {KASTLE, pack_kastle, unpack_kastle, 32, {1, 0xFF, 0xFFFF, 0x1F, 0}},        // Kastle 32-bit
     {KANTECH, pack_kantech, unpack_kantech, 32, {0, 0xFF, 0xFFFF, 0, 0}},        // Indala/Kantech KFS 32-bit
     {WIE32, pack_wie32, unpack_wie32, 32, {0, 0xFFF, 0xFFFF, 0, 0}},             // Wiegand 32-bit
@@ -868,6 +920,13 @@ uint64_t pack(wiegand_card_t *card) {
 }
 
 wiegand_card_t *unpack(uint8_t format_hint, uint8_t length, uint64_t hi, uint64_t lo) {
+    if (length == 32 && format_hint == 0) {
+        match_reset(lo);
+    } else {
+        g_wiegand_match_info.valid = 0;
+    }
+    wiegand_card_t *best_card = NULL;
+    uint8_t best_mismatches = 0xFF;
     for (int i = 0; i < ARRAY_SIZE(formats); i++) {
         if (format_hint != 0 && format_hint != formats[i].format) {
             continue;
@@ -883,7 +942,40 @@ wiegand_card_t *unpack(uint8_t format_hint, uint8_t length, uint64_t hi, uint64_
             continue;
         }
         card->format = formats[i].format;
+        if (formats[i].pack != NULL) {
+            uint64_t repacked = formats[i].pack(card);
+            if (repacked == 0) {
+                free(card);
+                continue;
+            }
+            uint64_t mask = validation_mask(length, formats[i].format);
+            bool passed = ((repacked & mask) == (lo & mask));
+            if (!passed) {
+                free(card);
+                continue;
+            }
+            if (length == 32 && format_hint == 0) {
+                uint64_t payload_mask = (1ULL << 38) - 1;
+                uint64_t fixed_mask = payload_mask & ~mask;
+                uint64_t fixed_diff = (repacked ^ lo) & fixed_mask;
+                uint8_t mismatches = (uint8_t)__builtin_popcountll(fixed_diff);
+                match_add(formats[i].format, formats[i].fields.has_parity, mismatches, repacked);
+                if (mismatches < best_mismatches) {
+                    if (best_card != NULL) {
+                        free(best_card);
+                    }
+                    best_card = card;
+                    best_mismatches = mismatches;
+                    continue;
+                }
+                free(card);
+                continue;
+            }
+        }
         return card;
+    }
+    if (best_card != NULL) {
+        return best_card;
     }
     return NULL;
 }

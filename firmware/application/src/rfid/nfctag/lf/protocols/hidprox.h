@@ -4,7 +4,7 @@
 #include "utils/fskdemod.h"
 #include "wiegand.h"
 
-#define HIDPROX_DATA_SIZE (16)
+#define HIDPROX_DATA_SIZE (80)
 
 typedef enum {
     STATE_SOF,

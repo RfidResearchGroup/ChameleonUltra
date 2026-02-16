@@ -14,6 +14,8 @@
 #include "settings.h"
 #include "delayed_reset.h"
 #include "netdata.h"
+#include "protocols/hidprox.h"
+#include "protocols/wiegand.h"
 
 
 #define NRF_LOG_MODULE_NAME app_cmd
@@ -705,13 +707,57 @@ static data_frame_tx_t *cmd_processor_hidprox_write_to_t55xx(uint16_t cmd, uint1
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+#define HIDPROX_SCAN_FLAG_ALL_MATCHES (0x01)
+
+static uint16_t append_hidprox_matches(uint8_t *buffer, uint16_t buffer_size) {
+    wiegand_match_info_t info = {0};
+    if (!wiegand_get_match_info(&info)) {
+        return 0;
+    }
+
+    uint16_t index = 13;
+    if (index + 8 > buffer_size) {
+        return 0;
+    }
+
+    buffer[index++] = 0xD2;
+    buffer[index++] = info.count;
+    num_to_bytes(info.raw, 6, buffer + index);
+    index += 6;
+
+    for (uint8_t i = 0; i < info.count; i++) {
+        if (index + 9 > buffer_size) {
+            break;
+        }
+        buffer[index++] = info.entries[i].format;
+        buffer[index++] = info.entries[i].has_parity;
+        buffer[index++] = info.entries[i].fixed_mismatches;
+        num_to_bytes(info.entries[i].repacked, 6, buffer + index);
+        index += 6;
+    }
+
+    return index;
+}
+
 static data_frame_tx_t *cmd_processor_hidprox_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t card_data[16] = {0x00};
-    status = scan_hidprox(card_data, data[0]);
+    uint8_t card_data[HIDPROX_DATA_SIZE] = {0x00};
+    if (length > 2) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    uint8_t format_hint = (length >= 1) ? data[0] : 0;
+    uint8_t flags = (length == 2) ? data[1] : 0;
+    status = scan_hidprox(card_data, format_hint);
     if (status != STATUS_LF_TAG_OK) {
         return data_frame_make(cmd, status, 0, NULL);
     }
-    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_data), card_data);
+    uint16_t out_len = 13;
+    if ((flags & HIDPROX_SCAN_FLAG_ALL_MATCHES) != 0) {
+        uint16_t matches_len = append_hidprox_matches(card_data, sizeof(card_data));
+        if (matches_len > 0) {
+            out_len = matches_len;
+        }
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, out_len, card_data);
 }
 
 static data_frame_tx_t *cmd_processor_viking_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
