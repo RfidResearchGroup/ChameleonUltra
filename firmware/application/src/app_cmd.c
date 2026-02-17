@@ -747,6 +747,20 @@ static data_frame_tx_t *cmd_processor_viking_write_to_t55xx(uint16_t cmd, uint16
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+static data_frame_tx_t *cmd_processor_pac_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t id[LF_PAC_TAG_ID_SIZE];
+        uint8_t new_key[4];
+        uint8_t old_keys[4];
+    } PACKED payload_t;
+    payload_t *payload = (payload_t *)data;
+    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    status = write_pac_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
 #define GENERIC_READ_LEN 800
 #define GENERIC_READ_TIMEOUT_MS 500
 static data_frame_tx_t *cmd_processor_generic_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -1727,6 +1741,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_VIKING_SCAN,                  before_reader_run,           cmd_processor_viking_scan,                   NULL                   },
     {    DATA_CMD_VIKING_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_viking_write_to_t55xx,         NULL                   },
     {    DATA_CMD_PAC_SCAN,                     before_reader_run,           cmd_processor_pac_scan,                      NULL                   },
+    {    DATA_CMD_PAC_WRITE_TO_T55XX,           before_reader_run,           cmd_processor_pac_write_to_t55xx,            NULL                   },
     {    DATA_CMD_ADC_GENERIC_READ,             before_reader_run,           cmd_processor_generic_read,                  NULL                   },
 
     {    DATA_CMD_HF14A_SET_FIELD_ON,           before_reader_run,           cmd_processor_hf14a_set_field_on,            NULL                   },

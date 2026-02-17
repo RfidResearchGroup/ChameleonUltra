@@ -6,6 +6,7 @@
 #include "nordic_common.h"
 #include "nrf_pwm.h"
 #include "protocols.h"
+#include "t55xx.h"
 #include "tag_base_type.h"
 
 #define PAC_DATA_SIZE       8   // 8-byte ASCII card ID
@@ -333,10 +334,27 @@ static const nrf_pwm_sequence_t *pac_modulator(pac_codec *d, uint8_t *buf) {
     // Per nRF52840 PS: compare = 0 → pin held LOW; compare >= counter_top → pin held HIGH.
     // No polarity bits needed — avoids edge-case ambiguity with compare = 0.
     for (int i = 0; i < PAC_FRAME_BITS; i++) {
-        m_pac_pwm_seq_vals[i].channel_0 = bits[i] ? 32 : 0;
-        m_pac_pwm_seq_vals[i].counter_top = 32;
+        m_pac_pwm_seq_vals[i].channel_0 = bits[i] ? PAC_RF_PER_BIT : 0;
+        m_pac_pwm_seq_vals[i].counter_top = PAC_RF_PER_BIT;
     }
     return &m_pac_pwm_seq;
+}
+
+#define PAC_T55XX_BLOCK_COUNT 5  // 1 config + 4 data blocks
+
+uint8_t pac_t55xx_writer(uint8_t *data, uint32_t *blks) {
+    uint8_t bits[PAC_FRAME_BITS];
+    pac_build_bitstream(data, bits);
+
+    blks[0] = T5577_PAC_CONFIG;
+    for (int b = 0; b < 4; b++) {
+        uint32_t word = 0;
+        for (int i = 0; i < 32; i++) {
+            word = (word << 1) | bits[b * 32 + i];
+        }
+        blks[b + 1] = word;
+    }
+    return PAC_T55XX_BLOCK_COUNT;
 }
 
 const protocol pac = {
