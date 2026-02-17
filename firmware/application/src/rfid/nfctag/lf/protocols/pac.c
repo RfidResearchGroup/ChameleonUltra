@@ -30,11 +30,26 @@
 #define PAC_PAYLOAD_BYTES   12  // STX + '2' + '0' + 8 card ID + XOR checksum
 #define PAC_STX             0x02
 
-// ADC demodulation parameters
-#define PAC_PRESCAN_SAMPLES 128  // Samples for raw min/max detection (spike cap)
-#define PAC_WARMUP_SAMPLES  600  // Samples for threshold calibration (~5ms)
-#define PAC_SPIKE_MULT      3    // Samples > raw_min * SPIKE_MULT are spike transients
-#define PAC_THRESH_FUZZ     75   // PM3-style: threshold at 75% of signal range
+// ADC demodulation: spike-clipping + threshold with dead zone.
+//
+// Signal has 3 amplitude zones:
+//   NRZ low  (~500-2000 ADC) — tag load modulation "0" state
+//   NRZ high (~4000-6000)    — tag load modulation "1" state
+//   Spikes   (~10k-14k)      — LC ringing at NRZ transitions (8-20 cycles wide)
+//
+// Prescan (128 samples) finds the NRZ floor (raw_min), then spike_cap
+// = max(raw_min * SPIKE_MULT, MIN_SPIKE_CAP) clips spikes while preserving
+// the NRZ high level. MIN_SPIKE_CAP ensures spike_cap is never below the
+// NRZ high level, even when raw_min correctly captures NRZ low.
+#define PAC_PRESCAN_SAMPLES 128  // ~1ms: raw min detection
+#define PAC_WARMUP_SAMPLES  600  // ~5ms: threshold calibration on clipped signal
+#define PAC_SPIKE_MULT      3    // Clip at 3× floor
+#define PAC_MIN_SPIKE_CAP   8000 // Floor: preserves NRZ high (~5000) always
+#define PAC_THRESH_FUZZ     75   // Dead zone: 25%-75% of clipped range
+// Auto-recalibrate if no frame found within this many Phase 3 samples.
+// ~5 frame periods = 5 × 128 bits × 32 samples/bit = 20480 samples (~164ms).
+// Gives ~3 calibration attempts in a 500ms scan window.
+#define PAC_RECAL_SAMPLES   20480
 
 typedef struct {
     // NRZ shift register (128 bits)
@@ -44,10 +59,10 @@ typedef struct {
     uint16_t bit_count;     // total bits shifted in (capped at PAC_FRAME_BITS)
     uint8_t card_id[PAC_DATA_SIZE];
 
-    // ADC → NRZ demodulation state (per-sample threshold with dead zone)
+    // ADC → NRZ demodulation state (spike-clip + threshold with dead zone)
     uint32_t total_samples; // total samples processed
-    int16_t raw_min;        // minimum raw sample seen (for spike detection)
-    int32_t spike_cap;      // clip level: raw values above this are transients
+    int16_t raw_min;        // minimum raw sample seen (for spike cap)
+    int32_t spike_cap;      // clip level
     int16_t clip_max;       // max of clipped samples during warmup
     int16_t clip_min;       // min of clipped samples during warmup
     int16_t thresh_high;    // above this → bit=1
@@ -55,6 +70,7 @@ typedef struct {
     bool adc_state;         // current demodulated binary level
     bool has_signal;        // true after first threshold crossing
     uint32_t sample_count;  // samples since last transition
+    uint32_t decode_samples; // Phase 3 samples since last calibration
 } pac_codec;
 
 // Shift one bit into the 128-bit register.
@@ -193,21 +209,21 @@ static void pac_decoder_start(pac_codec *d, uint8_t format) {
 }
 
 // Feed a raw ADC sample (one per carrier cycle at 125kHz).
-// PM3-inspired approach: clip spikes, then per-sample threshold with dead zone.
-// No moving average — edges are detected directly on clipped samples, giving
-// much tighter timing than the ~16 sample group delay of a moving average.
+// Spike-clipping + threshold with dead zone (PM3 nrzRawDemod style).
 static bool pac_decoder_feed(pac_codec *d, uint16_t raw_sample) {
     int16_t sample = (int16_t)raw_sample;
     d->total_samples++;
 
-    // Phase 1: Prescan — track raw minimum to characterize data levels.
-    // The NRZ data levels are the lowest values; spikes are 5-15x higher.
+    // Phase 1: Prescan — track raw minimum to find the NRZ floor.
     if (d->total_samples <= PAC_PRESCAN_SAMPLES) {
         if (sample < d->raw_min && sample > 0) {
             d->raw_min = sample;
         }
         if (d->total_samples == PAC_PRESCAN_SAMPLES) {
             d->spike_cap = (int32_t)d->raw_min * PAC_SPIKE_MULT;
+            if (d->spike_cap < PAC_MIN_SPIKE_CAP) {
+                d->spike_cap = PAC_MIN_SPIKE_CAP;
+            }
         }
         return false;
     }
@@ -224,8 +240,6 @@ static bool pac_decoder_feed(pac_codec *d, uint16_t raw_sample) {
         if (sample > d->clip_max) d->clip_max = sample;
         if (sample < d->clip_min) d->clip_min = sample;
         if (warmup_samples == PAC_WARMUP_SAMPLES) {
-            // PM3-style thresholds: 75% fuzz creates a dead zone between levels.
-            // high = 75% of peak, low = bottom + 25% of range.
             int16_t range = d->clip_max - d->clip_min;
             d->thresh_high = d->clip_min + (range * PAC_THRESH_FUZZ) / 100;
             d->thresh_low = d->clip_min + (range * (100 - PAC_THRESH_FUZZ)) / 100;
@@ -233,9 +247,14 @@ static bool pac_decoder_feed(pac_codec *d, uint16_t raw_sample) {
         return false;
     }
 
-    // Phase 3: Per-sample threshold with dead zone (PM3 nrzRawDemod style).
-    // Values above thresh_high → 1, below thresh_low → 0, between → keep previous.
-    // No moving average means near-zero edge timing jitter.
+    // Phase 3: Per-sample threshold with dead zone.
+    // Auto-recalibrate if no frame found after enough decode samples —
+    // the one-shot calibration may have captured an unlucky NRZ segment.
+    d->decode_samples++;
+    if (d->decode_samples >= PAC_RECAL_SAMPLES) {
+        pac_decoder_start(d, 0);
+        return false;
+    }
     d->sample_count++;
 
     bool new_state = d->adc_state;
@@ -244,7 +263,7 @@ static bool pac_decoder_feed(pac_codec *d, uint16_t raw_sample) {
     } else if (sample <= d->thresh_low) {
         new_state = false;
     } else {
-        return false; // Dead zone: no state change
+        return false;
     }
 
     if (!d->has_signal) {
