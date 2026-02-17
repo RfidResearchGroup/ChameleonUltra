@@ -43,9 +43,14 @@ bool pac_read(uint8_t *data, uint32_t timeout_ms) {
     void *codec = pac.alloc();
     pac.decoder.start(codec, 0);
 
+    // Start carrier first, then wait for T55XX POR (~5ms) before
+    // enabling SAADC.  This ensures the prescan calibration phase
+    // sees real NRZ signal levels rather than power-up noise.
+    start_lf_125khz_radio();
+    bsp_delay_ms(10);
+
     cb_init(&cb, PAC_BUFFER_SIZE, sizeof(uint16_t));
     init_pac_hw();
-    start_lf_125khz_radio();
 
     bool ok = false;
     autotimer *p_at = bsp_obtain_timer(0);
