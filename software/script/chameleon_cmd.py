@@ -547,17 +547,13 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
-    def pac_write_to_t55xx(self, id_bytes: bytes, new_key: bytes = b'\x00\x00\x00\x00', old_keys: list = None):
+    def pac_write_to_t55xx(self, id_bytes: bytes):
         """
         Write PAC/Stanley card data to a T55XX tag.
 
         :param id_bytes: 8-byte ASCII card ID
-        :param new_key: new password (4 bytes)
-        :param old_keys: list of old passwords to try (each 4 bytes)
         :return:
         """
-        if old_keys is None:
-            old_keys = [b'\x00\x00\x00\x00']
         if len(id_bytes) != 8:
             raise ValueError("The id bytes length must equal 8")
         data = struct.pack(f'!8s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))

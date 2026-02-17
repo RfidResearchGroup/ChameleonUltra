@@ -3959,108 +3959,29 @@ class LFPacRead(ReaderRequiredUnit):
         print(f" PAC/Stanley Card ID: {color_string((CG, card_id_ascii))} ({card_id.hex().upper()})")
 
 
-@lf_pac.command('debug')
-class LFPacDebug(ReaderRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit:
-        parser = ArgumentParserNoExit()
-        parser.description = 'Capture raw ADC data and analyze NRZ signal for PAC debugging'
-        return parser
-
-    def on_exec(self, args: argparse.Namespace):
-        resp = self.cmd.adc_generic_read()
-        if resp is None:
-            print("ADC read failed")
-            return
-
-        data = list(resp)
-        min_val = min(data)
-        max_val = max(data)
-
-        print(f" Samples: {len(data)}")
-        print(f" ADC range: {min_val} - {max_val} (spread: {max_val - min_val})")
-
-        # Spike removal: clip values above 3x the minimum (LC ringing transients)
-        spike_cap = min_val * 3 if min_val > 0 else max_val
-        clipped = [min(v, spike_cap) for v in data]
-        c_min = min(clipped)
-        c_max = max(clipped)
-        c_thresh = (c_min + c_max) / 2
-
-        print(f" Spike cap: {spike_cap} (3x raw min {min_val})")
-        print(f" Clipped range: {c_min} - {c_max} (spread: {c_max - c_min})")
-
-        # Moving-average of clipped signal (32-sample window = 1 NRZ bit)
-        window = 32
-        if len(clipped) >= window:
-            filtered = []
-            s = sum(clipped[:window])
-            for i in range(window, len(clipped)):
-                filtered.append(s / window)
-                s += clipped[i] - clipped[i - window]
-            filtered.append(s / window)
-            f_min = min(filtered)
-            f_max = max(filtered)
-            f_thresh = (f_min + f_max) / 2
-            f_hyst = (f_max - f_min) / 4
-            print(f"\n Spike-free moving average (window={window}):")
-            print(f"  Range: {f_min:.1f} - {f_max:.1f} (spread: {f_max - f_min:.1f})")
-            print(f"  Threshold: {f_thresh:.1f}, Hysteresis: {f_hyst:.1f}")
-
-            # Binary decode with hysteresis
-            f_binary = []
-            state = filtered[0] > f_thresh
-            for v in filtered:
-                if v > f_thresh + f_hyst:
-                    state = True
-                elif v < f_thresh - f_hyst:
-                    state = False
-                f_binary.append(1 if state else 0)
-
-            f_trans = sum(1 for i in range(1, len(f_binary)) if f_binary[i] != f_binary[i - 1])
-            f_runs = []
-            cur = f_binary[0]
-            cnt = 1
-            for i in range(1, len(f_binary)):
-                if f_binary[i] == cur:
-                    cnt += 1
-                else:
-                    f_runs.append(cnt)
-                    cur = f_binary[i]
-                    cnt = 1
-            f_runs.append(cnt)
-            print(f"  Transitions: {f_trans}")
-            print(f"  Run lengths: {f_runs[:40]}{'...' if len(f_runs) > 40 else ''}")
-            run_bits = [f"{r / 32:.1f}" for r in f_runs[:40]]
-            print(f"  Run bits:    {run_bits}")
-
-            # Show bit-period averages (each = avg of 32 clipped samples)
-            print(f"\n Bit-period averages (32 samples each):")
-            bit_avgs = []
-            for i in range(0, len(clipped) - window + 1, window):
-                chunk = clipped[i:i + window]
-                bit_avgs.append(sum(chunk) / len(chunk))
-            bit_str = " ".join(f"{a:.0f}" for a in bit_avgs)
-            print(f"  {bit_str}")
-
-        # Raw hex dump (first 512 bytes)
-        print(f"\n Raw ADC (8-bit, min={min_val} max={max_val}):")
-        for i in range(0, min(len(data), 512), 50):
-            chunk = data[i:i + 50]
-            hexpart = " ".join(f"{b:02x}" for b in chunk)
-            print(f"  {i:04x} {hexpart}")
-
-
 class LFPacIdArgsUnit(DeviceRequiredUnit):
     @staticmethod
     def add_card_arg(parser: ArgumentParserNoExit, required=False):
-        parser.add_argument("--id", type=str, required=required, help="PAC/Stanley card ID (8 ASCII hex chars)", metavar="<hex>")
+        parser.add_argument("--id", type=str, required=required,
+                            help="PAC/Stanley card ID: 16 hex chars (e.g. 4141414141414141) or 8 ASCII chars (e.g. AAAAAAAA)",
+                            metavar="<hex|ascii>")
         return parser
 
     def before_exec(self, args: argparse.Namespace):
         if not super().before_exec(args):
             return False
-        if args.id is not None and not re.match(r"^[a-fA-F0-9]{16}$", args.id):
-            raise ArgsParserError("ID must include 16 HEX symbols (8 bytes)")
+        if args.id is not None:
+            if re.match(r"^[a-fA-F0-9]{16}$", args.id):
+                pass  # already hex
+            elif len(args.id) == 8:
+                # treat as 8 ASCII characters, convert to hex
+                args.id = args.id.encode('ascii').hex()
+            else:
+                raise ArgsParserError("ID must be 16 hex chars (8 bytes) or 8 ASCII characters")
+            # PAC uses 7-bit UART frames; MSB of each byte is not encoded
+            id_bytes = bytes.fromhex(args.id)
+            if any(b > 0x7F for b in id_bytes):
+                raise ArgsParserError("PAC card IDs are 7-bit ASCII only (each byte must be 0x00-0x7F)")
         return True
 
     def args_parser(self) -> ArgumentParserNoExit:
@@ -4068,6 +3989,19 @@ class LFPacIdArgsUnit(DeviceRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         raise NotImplementedError("Please implement this")
+
+@lf_pac.command('write')
+class LFPacWriteT55xx(LFPacIdArgsUnit, ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Write PAC/Stanley id to T55xx'
+        return self.add_card_arg(parser, required=True)
+
+    def on_exec(self, args: argparse.Namespace):
+        id_bytes = bytes.fromhex(args.id)
+        self.cmd.pac_write_to_t55xx(id_bytes)
+        id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in id_bytes)
+        print(f" - PAC/Stanley ID write done: {id_ascii} ({args.id.upper()})")
 
 @lf_pac.command('econfig')
 class LFPacEconfig(SlotIndexArgsAndGoUnit, LFPacIdArgsUnit):
@@ -4182,8 +4116,20 @@ class HWSlotList(DeviceRequiredUnit):
         for slot in SlotNumber:
             fwslot = SlotNumber.to_fw(slot)
             status = f"({color_string((CG, 'active'))})" if slot == selected else ""
-            hf_tag_type = TagSpecificType(slotinfo[fwslot]['hf'])
-            lf_tag_type = TagSpecificType(slotinfo[fwslot]['lf'])
+            try:
+                hf_tag_type = TagSpecificType(slotinfo[fwslot]['hf'])
+            except ValueError:
+                hf_tag_type = TagSpecificType.UNDEFINED
+                hf_unknown = slotinfo[fwslot]['hf']
+            else:
+                hf_unknown = None
+            try:
+                lf_tag_type = TagSpecificType(slotinfo[fwslot]['lf'])
+            except ValueError:
+                lf_tag_type = TagSpecificType.UNDEFINED
+                lf_unknown = slotinfo[fwslot]['lf']
+            else:
+                lf_unknown = None
             print(f' - {f"Slot {slot}:":{4+maxnamelength+1}} {status}')
 
             # HF
@@ -4192,12 +4138,14 @@ class HWSlotList(DeviceRequiredUnit):
             print(f'   HF: '
                   f'{slotnames[fwslot]["hf"]["name"]:{field_length}}', end='')
             print(status, end='')
-            if hf_tag_type != TagSpecificType.UNDEFINED:
+            if hf_unknown is not None:
+                print(color_string((CR, f"Unknown ({hf_unknown})")))
+            elif hf_tag_type != TagSpecificType.UNDEFINED:
                 color = CY if enabled[fwslot]['hf'] else C0
                 print(color_string((color, hf_tag_type)))
             else:
                 print("undef")
-            if (not args.short) and enabled[fwslot]['hf'] and hf_tag_type != TagSpecificType.UNDEFINED:
+            if (not args.short) and enabled[fwslot]['hf'] and hf_tag_type != TagSpecificType.UNDEFINED and hf_unknown is None:
                 if current != slot:
                     self.cmd.set_active_slot(slot)
                     current = slot
@@ -4247,12 +4195,14 @@ class HWSlotList(DeviceRequiredUnit):
             print(f'   LF: '
                   f'{slotnames[fwslot]["lf"]["name"]:{field_length}}', end='')
             print(status, end='')
-            if lf_tag_type != TagSpecificType.UNDEFINED:
+            if lf_unknown is not None:
+                print(color_string((CR, f"Unknown ({lf_unknown})")))
+            elif lf_tag_type != TagSpecificType.UNDEFINED:
                 color = CY if enabled[fwslot]['lf'] else C0
                 print(color_string((color, lf_tag_type)))
             else:
                 print("undef")
-            if (not args.short) and enabled[fwslot]['lf'] and lf_tag_type != TagSpecificType.UNDEFINED:
+            if (not args.short) and enabled[fwslot]['lf'] and lf_tag_type != TagSpecificType.UNDEFINED and lf_unknown is None:
                 if current != slot:
                     self.cmd.set_active_slot(slot)
                     current = slot
@@ -4310,6 +4260,7 @@ class HWSlotType(TagTypeArgsUnit, SlotIndexArgsUnit):
         else:
             slot_num = SlotNumber.from_fw(self.cmd.get_active_slot())
         self.cmd.set_slot_tag_type(slot_num, tag_type)
+        self.cmd.set_slot_data_default(slot_num, tag_type)
         print(f' - Set slot {slot_num} tag type success.')
 
 
