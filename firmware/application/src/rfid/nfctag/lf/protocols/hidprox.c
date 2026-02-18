@@ -16,12 +16,12 @@
 #define DEMOD_BUFFER_SIZE (32)
 #define HIDPROX_RAW_SIZE (96)
 
-#define LF_FSK2a_PWM_LO_FREQ_LOOP (5)
 #define LF_FSK2a_PWM_LO_FREQ_TOP_VALUE (10)
-#define LF_FSK2a_PWM_HI_FREQ_LOOP (6)
 #define LF_FSK2a_PWM_HI_FREQ_TOP_VALUE (8)
+#define LF_FSK2a_PWM_CLOCK (50)
+#define LF_FSK2a_PWM_MAX_WAVES (7)
 
-static nrf_pwm_values_wave_form_t m_hidprox_pwm_seq_vals[HIDPROX_RAW_SIZE * 6] = {};
+static nrf_pwm_values_wave_form_t m_hidprox_pwm_seq_vals[HIDPROX_RAW_SIZE * LF_FSK2a_PWM_MAX_WAVES] = {};
 
 nrf_pwm_sequence_t m_hidprox_pwm_seq = {
     .values.p_wave_form = m_hidprox_pwm_seq_vals,
@@ -176,6 +176,32 @@ void hidprox_raw_data(wiegand_card_t *card, uint32_t *hi, uint32_t *mid, uint32_
     }
 }
 
+static int16_t fsk2a_add_waveforms(
+    nrf_pwm_values_wave_form_t *seq,
+    int index,
+    uint8_t waves,
+    uint16_t counter_top
+) {
+    for (uint8_t j = 0; j < waves; j++) {
+        seq[index].channel_0 = counter_top / 2;
+        seq[index].counter_top = counter_top;
+        index++;
+    }
+    return index;
+}
+
+static uint8_t fsk2a_wave_count(uint8_t fc, int16_t *remainder) {
+    const uint8_t half_fc = fc >> 1;
+    const int16_t total = (int16_t)LF_FSK2a_PWM_CLOCK + *remainder;
+    uint8_t waves = (uint8_t)(total / fc);
+    *remainder = (int16_t)(total % fc);
+    if (*remainder > half_fc) {
+        waves++;
+        *remainder = (int16_t)(*remainder - fc);
+    }
+    return waves;
+}
+
 // fsk2a modulator
 const nrf_pwm_sequence_t *hidprox_modulator(hidprox_codec *d, uint8_t *buf) {
     uint64_t cn = buf[5];
@@ -191,6 +217,7 @@ const nrf_pwm_sequence_t *hidprox_modulator(hidprox_codec *d, uint8_t *buf) {
     uint32_t hi, mid, bot;
     hidprox_raw_data(&card, &hi, &mid, &bot);
     int k = 0;
+    int16_t remainder = 0;
     for (int i = 0; i < HIDPROX_RAW_SIZE; i++) {
         bool bit = false;
         if (i < 32) {
@@ -200,19 +227,11 @@ const nrf_pwm_sequence_t *hidprox_modulator(hidprox_codec *d, uint8_t *buf) {
         } else {
             bit = (bot >> (95 - i)) & 1;
         }
-        if (!bit) {
-            for (int j = 0; j < LF_FSK2a_PWM_HI_FREQ_LOOP; j++) {
-                m_hidprox_pwm_seq_vals[k].channel_0 = LF_FSK2a_PWM_HI_FREQ_TOP_VALUE / 2;
-                m_hidprox_pwm_seq_vals[k].counter_top = LF_FSK2a_PWM_HI_FREQ_TOP_VALUE;
-                k++;
-            }
-        } else {
-            for (int j = 0; j < LF_FSK2a_PWM_LO_FREQ_LOOP; j++) {
-                m_hidprox_pwm_seq_vals[k].channel_0 = LF_FSK2a_PWM_LO_FREQ_TOP_VALUE / 2;
-                m_hidprox_pwm_seq_vals[k].counter_top = LF_FSK2a_PWM_LO_FREQ_TOP_VALUE;
-                k++;
-            }
-        }
+        const uint16_t counter_top = bit ?
+            LF_FSK2a_PWM_LO_FREQ_TOP_VALUE :
+            LF_FSK2a_PWM_HI_FREQ_TOP_VALUE;
+        const uint8_t waves = fsk2a_wave_count(counter_top, &remainder);
+        k = fsk2a_add_waveforms(m_hidprox_pwm_seq_vals, k, waves, counter_top);
     }
     m_hidprox_pwm_seq.length = k * 4;
     return &m_hidprox_pwm_seq;
