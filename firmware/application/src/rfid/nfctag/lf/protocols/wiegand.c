@@ -949,7 +949,8 @@ uint64_t pack(wiegand_card_t *card) {
 }
 
 wiegand_card_t *unpack(uint8_t format_hint, uint8_t length, uint64_t hi, uint64_t lo) {
-    if (length == 32 && format_hint == 0) {
+    const bool use_scoring = (length == 32 && format_hint == 0);
+    if (use_scoring) {
         match_reset(lo);
     } else {
         g_wiegand_match_info.valid = 0;
@@ -971,37 +972,39 @@ wiegand_card_t *unpack(uint8_t format_hint, uint8_t length, uint64_t hi, uint64_
             continue;
         }
         card->format = formats[i].format;
-        if (formats[i].pack != NULL) {
-            uint64_t repacked = formats[i].pack(card);
-            if (repacked == 0) {
-                free(card);
-                continue;
-            }
-            uint64_t mask = validation_mask(length, formats[i].format);
-            bool passed = ((repacked & mask) == (lo & mask));
-            if (!passed) {
-                free(card);
-                continue;
-            }
-            if (length == 32 && format_hint == 0) {
-                uint64_t payload_mask = (1ULL << 38) - 1;
-                uint64_t fixed_mask = payload_mask & ~mask;
-                uint64_t fixed_diff = (repacked ^ lo) & fixed_mask;
-                uint8_t mismatches = (uint8_t)__builtin_popcountll(fixed_diff);
-                match_add(formats[i].format, formats[i].fields.has_parity, mismatches, repacked);
-                if (mismatches < best_mismatches) {
-                    if (best_card != NULL) {
-                        free(best_card);
-                    }
-                    best_card = card;
-                    best_mismatches = mismatches;
-                    continue;
-                }
-                free(card);
-                continue;
-            }
+        if (!use_scoring) {
+            return card;
         }
-        return card;
+        if (formats[i].pack == NULL) {
+            free(card);
+            continue;
+        }
+        uint64_t repacked = formats[i].pack(card);
+        if (repacked == 0) {
+            free(card);
+            continue;
+        }
+        uint64_t mask = validation_mask(length, formats[i].format);
+        bool passed = ((repacked & mask) == (lo & mask));
+        if (!passed) {
+            free(card);
+            continue;
+        }
+        uint64_t payload_mask = (1ULL << 38) - 1;
+        uint64_t fixed_mask = payload_mask & ~mask;
+        uint64_t fixed_diff = (repacked ^ lo) & fixed_mask;
+        uint8_t mismatches = (uint8_t)__builtin_popcountll(fixed_diff);
+        match_add(formats[i].format, formats[i].fields.has_parity, mismatches, repacked);
+        if (mismatches < best_mismatches) {
+            if (best_card != NULL) {
+                free(best_card);
+            }
+            best_card = card;
+            best_mismatches = mismatches;
+            continue;
+        }
+        free(card);
+        continue;
     }
     if (best_card != NULL) {
         return best_card;
