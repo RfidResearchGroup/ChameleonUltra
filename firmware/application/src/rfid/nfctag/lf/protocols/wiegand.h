@@ -73,6 +73,7 @@ typedef enum {
     AVIG56,
     IR56,
     ACTPHID,
+    B32,
 } card_format_t;
 
 // Structure for defined Wiegand card formats available for packing/unpacking
@@ -84,6 +85,23 @@ typedef struct {
     card_format_descriptor_t fields;
 } card_format_table_t;
 
+#define WIEGAND_MATCH_MAX_FORMATS (5)
+
+typedef struct {
+    uint8_t format;
+    uint8_t has_parity;
+    uint8_t fixed_mismatches;
+    uint64_t repacked;
+} wiegand_match_entry_t;
+
+typedef struct {
+    uint8_t valid;
+    uint8_t count;
+    uint64_t raw;
+    wiegand_match_entry_t entries[WIEGAND_MATCH_MAX_FORMATS];
+} wiegand_match_info_t;
+
 extern uint64_t pack(wiegand_card_t *card);
 extern wiegand_card_t *unpack(uint8_t format_hint, uint8_t length, uint64_t hi, uint64_t lo);
 extern wiegand_card_t *wiegand_card_alloc();
+extern bool wiegand_get_match_info(wiegand_match_info_t *out);

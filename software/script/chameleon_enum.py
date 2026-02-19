@@ -599,6 +599,7 @@ class HIDFormat(enum.IntEnum):
     P10004 = 28
     HGEN37 = 29
     MDI37 = 30
+    B32 = 43
 
     def __str__(self):
         descriptions = {
@@ -633,6 +634,7 @@ class HIDFormat(enum.IntEnum):
             HIDFormat.P10004: "HID P10004 37-bit PCSC",
             HIDFormat.HGEN37: "HID Generic 37-bit",
             HIDFormat.MDI37: "PointGuard MDI 37-bit",
+            HIDFormat.B32: "32-B 32-bit",
         }
         if self in descriptions:
             return descriptions[self]
