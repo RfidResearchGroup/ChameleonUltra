@@ -535,6 +535,31 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(Command.VIKING_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
+    def pac_scan(self):
+        """
+        Read the card ID of PAC/Stanley.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.PAC_SCAN)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data[:8]
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def pac_write_to_t55xx(self, id_bytes: bytes):
+        """
+        Write PAC/Stanley card data to a T55XX tag.
+
+        :param id_bytes: 8-byte ASCII card ID
+        :return:
+        """
+        if len(id_bytes) != 8:
+            raise ValueError("The id bytes length must equal 8")
+        data = struct.pack(f'!8s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.PAC_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
     def adc_generic_read(self):
         """
         Read the ADC when the field is on.
@@ -743,6 +768,28 @@ class ChameleonCMD:
         """
         resp = self.device.send_cmd_sync(Command.VIKING_GET_EMU_ID)
         resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def pac_set_emu_id(self, id: bytes):
+        """
+        Set the card ID emulated by PAC/Stanley.
+
+        :param id: 8-byte ASCII card ID
+        :return:
+        """
+        if len(id) != 8:
+            raise ValueError("The id bytes length must equal 8")
+        data = struct.pack('8s', id)
+        return self.device.send_cmd_sync(Command.PAC_SET_EMU_ID, data)
+
+    @expect_response(Status.SUCCESS)
+    def pac_get_emu_id(self):
+        """
+        Get the emulated PAC/Stanley card ID
+        """
+        resp = self.device.send_cmd_sync(Command.PAC_GET_EMU_ID)
+        resp.parsed = resp.data[:8]
         return resp
 
     @expect_response(Status.SUCCESS)

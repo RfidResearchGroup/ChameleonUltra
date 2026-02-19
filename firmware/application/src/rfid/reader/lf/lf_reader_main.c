@@ -8,6 +8,7 @@
 #include "protocols/em410x.h"
 #include "protocols/hidprox.h"
 #include "protocols/t55xx.h"
+#include "protocols/pac.h"
 #include "protocols/viking.h"
 
 #define NRF_LOG_MODULE_NAME lf_main
@@ -34,6 +35,16 @@ uint8_t scan_em410x(uint8_t *uid) {
  */
 uint8_t scan_hidprox(uint8_t *data, uint8_t format_hint) {
     if (hidprox_read(data, format_hint, g_timeout_readem_ms)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
+/**
+ * Search PAC/Stanley tag
+ */
+uint8_t scan_pac(uint8_t *card_id) {
+    if (pac_read(card_id, g_timeout_readem_ms)) {
         return STATUS_LF_TAG_OK;
     }
     return STATUS_LF_TAG_NO_FOUND;
@@ -127,6 +138,13 @@ uint8_t write_viking_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_pa
     if (blk_count == 0) {
         return STATUS_PAR_ERR;
     }
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
+uint8_t write_pac_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[7] = {0x00};
+    uint8_t blk_count = pac_t55xx_writer(data, blks);
+    if (blk_count == 0) return STATUS_PAR_ERR;
     return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
 }
 

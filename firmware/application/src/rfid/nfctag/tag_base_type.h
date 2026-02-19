@@ -43,6 +43,7 @@ typedef enum {
     // securakey
     // gallagher
     // PAC/Stanley
+    TAG_TYPE_PAC = 150,
     // Presco
     // Visa2000
     // Viking
@@ -107,7 +108,7 @@ typedef enum {
     }
 
 #define TAG_SPECIFIC_TYPE_LF_VALUES \
-    TAG_TYPE_EM410X, TAG_TYPE_EM410X_ELECTRA, TAG_TYPE_HID_PROX, TAG_TYPE_VIKING
+    TAG_TYPE_EM410X, TAG_TYPE_EM410X_ELECTRA, TAG_TYPE_PAC, TAG_TYPE_HID_PROX, TAG_TYPE_VIKING
 
 #define TAG_SPECIFIC_TYPE_HF_VALUES                                   \
     TAG_TYPE_MIFARE_Mini, TAG_TYPE_MIFARE_1024, TAG_TYPE_MIFARE_2048, \

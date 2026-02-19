@@ -552,6 +552,7 @@ lf_em = lf.subgroup('em', 'EM commands')
 lf_em_410x = lf_em.subgroup('410x', 'EM410x commands')
 lf_hid = lf.subgroup('hid', 'HID commands')
 lf_hid_prox = lf_hid.subgroup('prox', 'HID Prox commands')
+lf_pac = lf.subgroup('pac', 'PAC/Stanley commands')
 lf_viking = lf.subgroup('viking', 'Viking commands')
 lf_generic = lf.subgroup('generic', 'Generic commands')
 
@@ -3945,6 +3946,87 @@ class LFHIDProxEconfig(SlotIndexArgsAndGoUnit, LFHIDIdArgsUnit):
                 print(f"   OEM: {color_string((CG, oem))}")
             print(f"   CN: {color_string((CG, cn))}")
 
+@lf_pac.command('read')
+class LFPacRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Scan PAC/Stanley tag and print card ID'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        card_id = self.cmd.pac_scan()
+        card_id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in card_id)
+        print(f" PAC/Stanley Card ID: {color_string((CG, card_id_ascii))} ({card_id.hex().upper()})")
+
+
+class LFPacIdArgsUnit(DeviceRequiredUnit):
+    @staticmethod
+    def add_card_arg(parser: ArgumentParserNoExit, required=False):
+        parser.add_argument("--id", type=str, required=required,
+                            help="PAC/Stanley card ID: 16 hex chars (e.g. 4141414141414141) or 8 ASCII chars (e.g. AAAAAAAA)",
+                            metavar="<hex|ascii>")
+        return parser
+
+    def before_exec(self, args: argparse.Namespace):
+        if not super().before_exec(args):
+            return False
+        if args.id is not None:
+            if re.match(r"^[a-fA-F0-9]{16}$", args.id):
+                pass  # already hex
+            elif len(args.id) == 8:
+                # treat as 8 ASCII characters, convert to hex
+                args.id = args.id.encode('ascii').hex()
+            else:
+                raise ArgsParserError("ID must be 16 hex chars (8 bytes) or 8 ASCII characters")
+            # PAC uses 7-bit UART frames; MSB of each byte is not encoded
+            id_bytes = bytes.fromhex(args.id)
+            if any(b > 0x7F for b in id_bytes):
+                raise ArgsParserError("PAC card IDs are 7-bit ASCII only (each byte must be 0x00-0x7F)")
+        return True
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        raise NotImplementedError("Please implement this")
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError("Please implement this")
+
+@lf_pac.command('write')
+class LFPacWriteT55xx(LFPacIdArgsUnit, ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Write PAC/Stanley id to T55xx'
+        return self.add_card_arg(parser, required=True)
+
+    def on_exec(self, args: argparse.Namespace):
+        id_bytes = bytes.fromhex(args.id)
+        self.cmd.pac_write_to_t55xx(id_bytes)
+        id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in id_bytes)
+        print(f" - PAC/Stanley ID write done: {id_ascii} ({args.id.upper()})")
+
+@lf_pac.command('econfig')
+class LFPacEconfig(SlotIndexArgsAndGoUnit, LFPacIdArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Set emulated PAC/Stanley card ID'
+        self.add_slot_args(parser)
+        self.add_card_arg(parser)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.id is not None:
+            slotinfo = self.cmd.get_slot_info()
+            selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+            lf_tag_type = TagSpecificType(slotinfo[selected - 1]['lf'])
+            if lf_tag_type != TagSpecificType.PAC:
+                print(f"{color_string((CR, 'WARNING'))}: Slot type not set to PAC.")
+            self.cmd.pac_set_emu_id(bytes.fromhex(args.id))
+            print(' - Set PAC/Stanley tag id success.')
+        else:
+            response = self.cmd.pac_get_emu_id()
+            card_id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in response)
+            print(' - Get PAC/Stanley tag id success.')
+            print(f'ID: {card_id_ascii} ({response.hex().upper()})')
+
 @lf_viking.command('read')
 class LFVikingRead(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -4034,8 +4116,20 @@ class HWSlotList(DeviceRequiredUnit):
         for slot in SlotNumber:
             fwslot = SlotNumber.to_fw(slot)
             status = f"({color_string((CG, 'active'))})" if slot == selected else ""
-            hf_tag_type = TagSpecificType(slotinfo[fwslot]['hf'])
-            lf_tag_type = TagSpecificType(slotinfo[fwslot]['lf'])
+            try:
+                hf_tag_type = TagSpecificType(slotinfo[fwslot]['hf'])
+            except ValueError:
+                hf_tag_type = TagSpecificType.UNDEFINED
+                hf_unknown = slotinfo[fwslot]['hf']
+            else:
+                hf_unknown = None
+            try:
+                lf_tag_type = TagSpecificType(slotinfo[fwslot]['lf'])
+            except ValueError:
+                lf_tag_type = TagSpecificType.UNDEFINED
+                lf_unknown = slotinfo[fwslot]['lf']
+            else:
+                lf_unknown = None
             print(f' - {f"Slot {slot}:":{4+maxnamelength+1}} {status}')
 
             # HF
@@ -4044,12 +4138,14 @@ class HWSlotList(DeviceRequiredUnit):
             print(f'   HF: '
                   f'{slotnames[fwslot]["hf"]["name"]:{field_length}}', end='')
             print(status, end='')
-            if hf_tag_type != TagSpecificType.UNDEFINED:
+            if hf_unknown is not None:
+                print(color_string((CR, f"Unknown ({hf_unknown})")))
+            elif hf_tag_type != TagSpecificType.UNDEFINED:
                 color = CY if enabled[fwslot]['hf'] else C0
                 print(color_string((color, hf_tag_type)))
             else:
                 print("undef")
-            if (not args.short) and enabled[fwslot]['hf'] and hf_tag_type != TagSpecificType.UNDEFINED:
+            if (not args.short) and enabled[fwslot]['hf'] and hf_tag_type != TagSpecificType.UNDEFINED and hf_unknown is None:
                 if current != slot:
                     self.cmd.set_active_slot(slot)
                     current = slot
@@ -4099,12 +4195,14 @@ class HWSlotList(DeviceRequiredUnit):
             print(f'   LF: '
                   f'{slotnames[fwslot]["lf"]["name"]:{field_length}}', end='')
             print(status, end='')
-            if lf_tag_type != TagSpecificType.UNDEFINED:
+            if lf_unknown is not None:
+                print(color_string((CR, f"Unknown ({lf_unknown})")))
+            elif lf_tag_type != TagSpecificType.UNDEFINED:
                 color = CY if enabled[fwslot]['lf'] else C0
                 print(color_string((color, lf_tag_type)))
             else:
                 print("undef")
-            if (not args.short) and enabled[fwslot]['lf'] and lf_tag_type != TagSpecificType.UNDEFINED:
+            if (not args.short) and enabled[fwslot]['lf'] and lf_tag_type != TagSpecificType.UNDEFINED and lf_unknown is None:
                 if current != slot:
                     self.cmd.set_active_slot(slot)
                     current = slot
@@ -4125,6 +4223,10 @@ class HWSlotList(DeviceRequiredUnit):
                 if lf_tag_type == TagSpecificType.Viking:
                     id = self.cmd.viking_get_emu_id()
                     print(f"      {'ID:':40}{color_string((CY, id.hex().upper()))}")
+                if lf_tag_type == TagSpecificType.PAC:
+                    id = self.cmd.pac_get_emu_id()
+                    id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in id)
+                    print(f"      {'ID:':40}{color_string((CY, f'{id_ascii} ({id.hex().upper()})'))}")
         if current != selected:
             self.cmd.set_active_slot(selected)
 
@@ -4158,6 +4260,7 @@ class HWSlotType(TagTypeArgsUnit, SlotIndexArgsUnit):
         else:
             slot_num = SlotNumber.from_fw(self.cmd.get_active_slot())
         self.cmd.set_slot_tag_type(slot_num, tag_type)
+        self.cmd.set_slot_data_default(slot_num, tag_type)
         print(f' - Set slot {slot_num} tag type success.')
 
 
