@@ -18,6 +18,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Added cmd for set mf1 config 'field_off_do_reset' (@xianglin1998)
  - Fix Windows build (@suut)
  - Added `hf 14a config` to deal with badly configured cards (@azuwis)
+ - New Symmetrical LED Animation Mode and Improved Minimal Mode (@WillyJL)
 
 ## [v2.1.0][2025-09-02]
  - Added UV, formatter and linter. Contribution guidelines. (@GameTec-live)

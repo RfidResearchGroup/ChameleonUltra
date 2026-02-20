@@ -141,7 +141,7 @@ static data_frame_tx_t *cmd_processor_get_device_settings(uint16_t cmd, uint16_t
 }
 
 static data_frame_tx_t *cmd_processor_set_animation_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    if ((length != 1) || (data[0] > 2)) {
+    if ((length != 1) || (data[0] >= SettingsAnimationModeMAX)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     settings_set_animation_config(data[0]);
