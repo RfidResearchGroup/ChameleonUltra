@@ -4,6 +4,8 @@
 #include "bsp_delay.h"
 #include "rgb_marquee.h"
 #include "bsp_time.h"
+#include "ble_main.h"
+#include "app_timer.h"
 
 
 #define NRF_LOG_MODULE_NAME rgb
@@ -33,7 +35,6 @@ nrf_drv_pwm_config_t pwm_config = {//PWM configuration structure
 };
 static autotimer *timer;
 static uint8_t ledblink6_step = 0;
-static uint8_t ledblink6_color = RGB_RED;
 static uint8_t ledblink1_step = 0;
 extern bool g_usb_led_marquee_enable;
 
@@ -372,118 +373,68 @@ void ledblink5(uint8_t color, uint8_t start, uint8_t stop) {
 }
 
 
-// Charging animation
-// the current percentage of the battery 0-4 4 represents full electric breathing light
+// Charging animation - displays battery percentage on all LEDs sequentially
 volatile bool callback_waiting6 = 0;
+static uint8_t ledblink6_color = RGB_GREEN;
+static uint8_t prev_leds_lit = 0;
+static uint8_t prev_percentage = 101; // Initialize to impossible value to force first update
+
 void ledblink6_pwm_callback(nrfx_pwm_evt_type_t event_type) {
     if (event_type == NRF_DRV_PWM_EVT_FINISHED) {
         callback_waiting6 = 1;
     }
 }
+
 void ledblink6(void) {
     uint32_t *led_array = hw_get_led_array();
-    const uint16_t delay_time = 25;
-    static int16_t light_level = 99; //LED brightness value
-
-    if (!g_usb_led_marquee_enable && ledblink6_step != 0) {
-        light_level = 99;
-        callback_waiting6 = 0;
-        rgb_marquee_stop();
-        return;
-    }
-
-    if (ledblink6_step == 0) {
+    
+    // Update battery level when percentage changes or when marquee is disabled
+    if (prev_percentage != percentage_batt_lvl || !g_usb_led_marquee_enable) {
+        
+        if (!g_usb_led_marquee_enable) {
+            // If marquee is disabled, turn off all LEDs and return
+            for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
+                nrf_gpio_pin_clear(led_array[i]);
+            }
+            return;
+        }
+        
+        // Calculate how many LEDs should be lit based on battery percentage
+        // Map 0-100% to 0-8 LEDs
+        uint8_t leds_to_light = (percentage_batt_lvl * RGB_LIST_NUM) / 100;
+        
+        // Update the color based on battery level (green when full, red when low)
+        if (percentage_batt_lvl >= 75) {
+            ledblink6_color = RGB_GREEN;  // Green for high battery
+        } else if (percentage_batt_lvl >= 50) {
+            ledblink6_color = RGB_CYAN;   // Cyan for medium-high battery
+        } else if (percentage_batt_lvl >= 25) {
+            ledblink6_color = RGB_YELLOW; // Yellow for medium-low battery
+        } else {
+            ledblink6_color = RGB_RED;    // Red for low battery
+        }
+        
+        // Set the color
         set_slot_light_color(ledblink6_color);
-        for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
-            nrf_gpio_pin_clear(led_array[i]);
+        
+        // Gradually update LEDs to show smooth transition
+        if (leds_to_light > prev_leds_lit) {
+            // Turn on additional LEDs one by one
+            for (uint8_t i = prev_leds_lit; i < leds_to_light && i < RGB_LIST_NUM; i++) {
+                nrf_gpio_pin_set(led_array[i]);
+                bsp_delay_ms(50); // Small delay for smooth visual effect
+            }
+        } else if (leds_to_light < prev_leds_lit) {
+            // Turn off LEDs one by one
+            for (uint8_t i = prev_leds_lit; i > leds_to_light && i > 0; i--) {
+                nrf_gpio_pin_clear(led_array[i-1]);
+                bsp_delay_ms(50); // Small delay for smooth visual effect
+            }
         }
-        pwm_config.output_pins[0] = led_array[2];
-        pwm_config.output_pins[1] = led_array[3];
-        pwm_config.output_pins[2] = led_array[4];
-        pwm_config.output_pins[3] = led_array[5];
-        ledblink6_step = 1;
-
-        // Reset the state of the lamp when the USB is not turned on
-        ledblink1_step = 0;
+        
+        prev_leds_lit = leds_to_light;
     }
-
-    if (ledblink6_step == 1) {
-        light_level  = 0;
-        ledblink6_step = 2;
-    }
-
-    if (ledblink6_step == 2 || ledblink6_step == 3 || ledblink6_step == 4) {
-        if (light_level <= 99) {
-            if (ledblink6_step == 2) {
-                //Treatment brightness
-                pwm_sequ_val.channel_0 = get_pwmduty(light_level);
-                pwm_sequ_val.channel_1 = pwm_sequ_val.channel_0;
-                pwm_sequ_val.channel_2 = pwm_sequ_val.channel_0;
-                pwm_sequ_val.channel_3 = pwm_sequ_val.channel_0;
-                nrfx_pwm_uninit(&pwm0_ins); //Close PWM output
-                set_slot_light_color(ledblink6_color);
-                nrf_drv_pwm_init(&pwm0_ins, &pwm_config, ledblink6_pwm_callback);
-                nrf_drv_pwm_simple_playback(&pwm0_ins, &seq, 1, NRF_DRV_PWM_FLAG_LOOP);
-                ledblink6_step = 3;
-            }
-            if (ledblink6_step == 3) {  //Waiting for the output of the PWM module to complete
-                if (callback_waiting6 != 0) {
-                    ledblink6_step = 4;
-                    bsp_set_timer(timer, 0);
-                }
-            }
-            if (ledblink6_step == 4) {
-                if (!NO_TIMEOUT_1MS(timer, delay_time)) {
-                    callback_waiting = 0;
-                    light_level++;
-                    ledblink6_step = 2;
-                }
-            }
-        } else {
-            ledblink6_step = 5;
-        }
-    }
-
-    if (ledblink6_step == 5) {
-        light_level = 99;
-        ledblink6_step = 6;
-    }
-
-    if (ledblink6_step == 6 || ledblink6_step == 7 || ledblink6_step == 8) {
-        if (light_level >= 0) {
-            if (ledblink6_step == 6) {
-                //Treatment brightness
-                pwm_sequ_val.channel_0 = get_pwmduty(light_level);
-                pwm_sequ_val.channel_1 = pwm_sequ_val.channel_0;
-                pwm_sequ_val.channel_2 = pwm_sequ_val.channel_0;
-                pwm_sequ_val.channel_3 = pwm_sequ_val.channel_0;
-                nrfx_pwm_uninit(&pwm0_ins); //Close PWM output
-                set_slot_light_color(ledblink6_color);
-                nrf_drv_pwm_init(&pwm0_ins, &pwm_config, ledblink6_pwm_callback);
-                nrf_drv_pwm_simple_playback(&pwm0_ins, &seq, 1, NRF_DRV_PWM_FLAG_LOOP);
-                ledblink6_step = 7;
-            }
-            if (ledblink6_step == 7) {  //Waiting for the output of the PWM module to complete
-                if (callback_waiting6 != 0) {
-                    ledblink6_step = 8;
-                    bsp_set_timer(timer, 0);
-                }
-            }
-            if (ledblink6_step == 8) {
-                if (!NO_TIMEOUT_1MS(timer, delay_time)) {
-                    callback_waiting = 0;
-                    light_level--;
-                    ledblink6_step = 6;
-                }
-            }
-        } else {
-            ledblink6_step = 0;
-            //if (++ledblink6_color == RGB_WHITE) ledblink6_color = RGB_RED;
-            uint8_t new_color = rand() % 6;
-            for (; new_color == ledblink6_color; new_color = rand() % 6);
-            ledblink6_color = new_color;
-        }
-    }
+    prev_percentage = percentage_batt_lvl;
 }
 
 /**
