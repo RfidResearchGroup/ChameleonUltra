@@ -3827,6 +3827,241 @@ class HFMFUEDetect(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
             print(f"{actual_index:3d}: {color_string((CY, password.upper()))}")
 
 
+@hf_mfu.command('nfcimport')
+class HFMFUNfcImport(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
+    # Mapping from Flipper Zero device type strings to CU TagSpecificType
+    FLIPPER_TYPE_MAP = {
+        'NTAG203':  TagSpecificType.NTAG_215,  # best-effort: no native NTAG203 support
+        'NTAG210':  TagSpecificType.NTAG_210,
+        'NTAG212':  TagSpecificType.NTAG_212,
+        'NTAG213':  TagSpecificType.NTAG_213,
+        'NTAG215':  TagSpecificType.NTAG_215,
+        'NTAG216':  TagSpecificType.NTAG_216,
+        'NTAGI2C1K':  TagSpecificType.NTAG_216,  # best-effort
+        'NTAGI2C2K':  TagSpecificType.NTAG_216,  # best-effort
+        'NTAGI2CPlus1K':  TagSpecificType.NTAG_216,  # best-effort
+        'NTAGI2CPlus2K':  TagSpecificType.NTAG_216,  # best-effort
+        'Mifare Ultralight':  TagSpecificType.MF0ICU1,
+        'Mifare Ultralight C':  TagSpecificType.MF0ICU2,
+        'Mifare Ultralight 11':  TagSpecificType.MF0UL11,
+        'Mifare Ultralight 21':  TagSpecificType.MF0UL21,
+        # "Mifare Ultralight EV1" is disambiguated by page count in on_exec
+    }
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Import a Flipper Zero .nfc file into a MIFARE Ultralight / NTAG emulator slot'
+        self.add_slot_args(parser)
+        parser.add_argument('-f', '--file', required=True, type=str, help="Path to Flipper Zero .nfc file")
+        parser.add_argument('--amiibo', action='store_true', default=False,
+                            help="Derive and write correct PWD/PACK for amiibo (NTAG215)")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        file_path = args.file
+        file_name = os.path.basename(file_path)
+
+        # --- Parse the .nfc file ---
+        try:
+            with open(file_path, 'r') as f:
+                lines = f.readlines()
+        except FileNotFoundError:
+            print(color_string((CR, f"File not found: {file_path}")))
+            return
+        except OSError as e:
+            print(color_string((CR, f"Error reading file: {e}")))
+            return
+
+        device_type = None
+        uid = None
+        atqa = None
+        sak = None
+        signature = None
+        version = None
+        counters = {}
+        tearing = {}
+        pages_total = None
+        pages = {}
+
+        for line in lines:
+            line = line.strip()
+            if line.startswith('#') or not line:
+                continue
+
+            if line.startswith('Device type:'):
+                device_type = line.split(':', 1)[1].strip()
+            elif line.startswith('UID:'):
+                uid = bytes.fromhex(line.split(':', 1)[1].strip().replace(' ', ''))
+            elif line.startswith('ATQA:'):
+                atqa = bytes.fromhex(line.split(':', 1)[1].strip().replace(' ', ''))
+            elif line.startswith('SAK:'):
+                sak = bytes.fromhex(line.split(':', 1)[1].strip().replace(' ', ''))
+            elif line.startswith('Signature:'):
+                signature = bytes.fromhex(line.split(':', 1)[1].strip().replace(' ', ''))
+            elif line.startswith('Mifare version:'):
+                version = bytes.fromhex(line.split(':', 1)[1].strip().replace(' ', ''))
+            elif line.startswith('Counter '):
+                match = re.match(r'Counter\s+(\d+):\s+(\d+)', line)
+                if match:
+                    counters[int(match.group(1))] = int(match.group(2))
+            elif line.startswith('Tearing '):
+                match = re.match(r'Tearing\s+(\d+):\s+([0-9A-Fa-f]+)', line)
+                if match:
+                    tearing[int(match.group(1))] = int(match.group(2), 16)
+            elif line.startswith('Pages total:'):
+                pages_total = int(line.split(':', 1)[1].strip())
+            elif line.startswith('Page '):
+                match = re.match(r'Page\s+(\d+):\s+(.*)', line)
+                if match:
+                    page_num = int(match.group(1))
+                    page_data = bytes.fromhex(match.group(2).strip().replace(' ', ''))
+                    pages[page_num] = page_data
+
+        # --- Validate required fields ---
+        if device_type is None:
+            print(color_string((CR, "No 'Device type' found in .nfc file.")))
+            return
+        if uid is None:
+            print(color_string((CR, "No 'UID' found in .nfc file.")))
+            return
+        if atqa is None:
+            print(color_string((CR, "No 'ATQA' found in .nfc file.")))
+            return
+        if sak is None:
+            print(color_string((CR, "No 'SAK' found in .nfc file.")))
+            return
+
+        # --- Map device type to TagSpecificType ---
+        tag_type = self.FLIPPER_TYPE_MAP.get(device_type)
+
+        if tag_type is None and device_type.startswith('Mifare Ultralight EV1'):
+            # Disambiguate EV1 by page count
+            nr = pages_total if pages_total else len(pages)
+            tag_type = TagSpecificType.MF0UL11 if nr <= 20 else TagSpecificType.MF0UL21
+
+        if tag_type is None:
+            print(color_string((CR, f"Unsupported Flipper device type: '{device_type}'")))
+            print(f"  Supported types: {', '.join(sorted(self.FLIPPER_TYPE_MAP.keys()))}, Mifare Ultralight EV1")
+            return
+
+        # --- Print summary ---
+        print(f"Importing Flipper NFC file: {file_name}")
+        print(f"  Device type: {device_type} -> {tag_type}")
+        print(f"  UID: {uid.hex(' ').upper()}")
+        print(f"  ATQA: {atqa.hex(' ').upper()}  SAK: {sak.hex().upper()}")
+        if version:
+            print(f"  Version: {version.hex(' ').upper()}")
+        if signature:
+            print(f"  Signature: {signature.hex(' ').upper()}")
+        if counters:
+            print(f"  Counters: {', '.join(str(counters.get(i, 0)) for i in range(max(counters.keys()) + 1))}")
+        nr_pages = pages_total if pages_total else len(pages)
+        print(f"  Pages: {nr_pages}")
+        print()
+
+        # --- Step 1: Set slot tag type ---
+        print(f"Setting slot {self.slot_num} tag type to {tag_type}...")
+        self.cmd.set_slot_tag_type(self.slot_num, tag_type)
+        self.cmd.set_slot_data_default(self.slot_num, tag_type)
+        # Must re-activate slot after changing type so subsequent commands target the new type
+        self.cmd.set_active_slot(self.slot_num)
+
+        # --- Step 2: Set anti-collision data ---
+        print("Setting anti-collision data...")
+        self.cmd.hf14a_set_anti_coll_data(uid, atqa, sak)
+
+        # --- Step 3: Set version data ---
+        if version and len(version) == 8:
+            print("Setting version data...")
+            try:
+                self.cmd.mf0_ntag_set_version_data(version)
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
+                print(color_string((CY, "  Warning: tag type does not support GET_VERSION.")))
+
+        # --- Step 4: Set signature data ---
+        if signature and len(signature) == 32:
+            print("Setting signature data...")
+            try:
+                self.cmd.mf0_ntag_set_signature_data(signature)
+            except (ValueError, chameleon_com.CMDInvalidException, TimeoutError):
+                print(color_string((CY, "  Warning: tag type does not support READ_SIG.")))
+
+        # --- Step 5: Set counter and tearing data ---
+        if counters:
+            print("Setting counter data...")
+            # NTAG types have a single counter accessed via NFC at index 2,
+            # but stored at firmware internal index 0
+            ntag_types = {
+                TagSpecificType.NTAG_210, TagSpecificType.NTAG_212,
+                TagSpecificType.NTAG_213, TagSpecificType.NTAG_215,
+                TagSpecificType.NTAG_216,
+            }
+            for i in sorted(counters.keys()):
+                value = counters[i]
+                if value > 0xFFFFFF:
+                    print(color_string((CY, f"  Warning: counter {i} value {value:#x} exceeds 24-bit, skipping.")))
+                    continue
+                # Map Flipper counter index to firmware internal index
+                if tag_type in ntag_types:
+                    if i != 2:
+                        continue  # NTAG only has counter at NFC index 2
+                    fw_index = 0
+                else:
+                    fw_index = i
+                # Reset tearing flag if tearing byte is BD (default / no tearing)
+                tearing_val = tearing.get(i, 0x00)
+                reset_tearing = (tearing_val == 0xBD or tearing_val == 0x00)
+                try:
+                    self.cmd.mfu_write_emu_counter_data(fw_index, value, reset_tearing)
+                except (ValueError, chameleon_com.CMDInvalidException, UnexpectedResponseError, TimeoutError):
+                    print(color_string((CY, f"  Warning: could not set counter {i}.")))
+
+        # --- Step 6: Write page data ---
+        if pages:
+            # Get total pages for the configured slot
+            slot_pages = self.cmd.mfu_get_emu_pages_count()
+
+            # Build contiguous data from parsed pages
+            max_page = max(pages.keys())
+            write_pages = min(max_page + 1, slot_pages)
+
+            print(f"Writing {write_pages} pages...", end=' ', flush=True)
+
+            page = 0
+            while page < write_pages:
+                cur_count = min(16, write_pages - page)
+                batch = bytearray()
+                for p in range(page, page + cur_count):
+                    batch.extend(pages.get(p, b'\x00\x00\x00\x00'))
+                self.cmd.mfu_write_emu_page_data(page, bytes(batch))
+                page += cur_count
+
+            print("done")
+
+        # --- Step 7: Derive and write amiibo PWD/PACK ---
+        if args.amiibo:
+            if tag_type != TagSpecificType.NTAG_215:
+                print(color_string((CY, f"  Warning: --amiibo flag ignored (tag type is {tag_type}, not NTAG 215).")))
+            elif uid is None or len(uid) != 7:
+                print(color_string((CY, "  Warning: --amiibo flag ignored (UID is not 7 bytes).")))
+            else:
+                pwd = bytes([
+                    0xAA ^ uid[1] ^ uid[3],
+                    0x55 ^ uid[2] ^ uid[4],
+                    0xAA ^ uid[3] ^ uid[5],
+                    0x55 ^ uid[4] ^ uid[6],
+                ])
+                pack = bytes([0x80, 0x80, 0x00, 0x00])
+                print(f"Setting amiibo PWD: {pwd.hex(' ').upper()}, PACK: {pack[:2].hex(' ').upper()}...")
+                self.cmd.mfu_write_emu_page_data(133, pwd)
+                self.cmd.mfu_write_emu_page_data(134, pack)
+
+        self.cmd.set_slot_enable(self.slot_num, TagSenseType.HF, True)
+
+        print()
+        print(f" - Import complete. Slot {self.slot_num} is now emulating {device_type} ({file_name})")
+
+
 @lf_em_410x.command('read')
 class LFEMRead(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
