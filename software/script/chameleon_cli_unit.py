@@ -3557,7 +3557,7 @@ class HFMFESave(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
         data = bytearray(0)
         max_blocks = self.device_com.data_max_length // 16
         while block_count > 0:
-            chunk_count = min(block_count, max_blocks)
+            chunk_count = min(block_count, max_blocks, 32)
             data.extend(self.cmd.mf1_read_emu_block_data(index, chunk_count))
             index += chunk_count
             block_count -= chunk_count
