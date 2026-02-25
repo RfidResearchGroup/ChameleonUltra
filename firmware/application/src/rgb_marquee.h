@@ -18,5 +18,5 @@ void rgb_marquee_sweep_from_to(uint8_t color, uint8_t start, uint8_t stop);
 void rgb_marquee_usb_idle(void);
 void rgb_marquee_symmetric_out(uint8_t color, uint8_t slot);
 void rgb_marquee_symmetric_in(uint8_t color, uint8_t slot);
-
+void rgb_marquee_battery_display(void);
 #endif
