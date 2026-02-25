@@ -34,8 +34,11 @@ nrf_drv_pwm_config_t pwm_config = {//PWM configuration structure
     .step_mode = NRF_PWM_STEP_AUTO
 };
 static autotimer *timer;
-static uint8_t ledblink6_step = 0;
-static uint8_t ledblink1_step = 0;
+static uint8_t rgb_marquee_usb_idle_step = 0;
+static uint8_t rgb_marquee_usb_idle_color = RGB_RED;
+static uint8_t rgb_marquee_usb_open_step = 0;
+static uint8_t battery_display_prev_leds_lit = 0;
+static uint8_t battery_display_prev_percentage = 101; // Initialize to impossible value to force first update
 extern bool g_usb_led_marquee_enable;
 
 
@@ -46,14 +49,14 @@ void rgb_marquee_init(void) {
 void rgb_marquee_stop(void) {
     nrfx_pwm_stop(&pwm0_ins, true);
     nrfx_pwm_uninit(&pwm0_ins);//turn off pwm output
-    ledblink6_step = 0;
-    ledblink1_step = 0;
+    rgb_marquee_usb_idle_step = 0;
+    rgb_marquee_usb_open_step = 0;
 }
 
 // reset RGB state machines to force a refresh of the LED color
 void rgb_marquee_reset(void) {
-    ledblink6_step = 0;
-    ledblink1_step = 0;
+    rgb_marquee_usb_idle_step = 0;
+    rgb_marquee_usb_open_step = 0;
 }
 
 // Brightness to PWM value
@@ -63,12 +66,12 @@ uint16_t get_pwmduty(uint8_t light_level) {
 
 // 4 Lights and the level of brightness levels (no return)
 //COLOR 0-R,1-G,2-B
-void ledblink1(uint8_t color, uint8_t dir) {
+void rgb_marquee_usb_open_sweep(uint8_t color, uint8_t dir) {
     static uint8_t startled = 0;
     static uint8_t setled = 0;
     uint32_t *led_pins_arr;
 
-    if (!g_usb_led_marquee_enable && ledblink1_step != 0) {
+    if (!g_usb_led_marquee_enable && rgb_marquee_usb_open_step != 0) {
         startled = 0;
         setled = 0;
         rgb_marquee_stop();
@@ -82,7 +85,7 @@ void ledblink1(uint8_t color, uint8_t dir) {
         led_pins_arr = hw_get_led_reversal_array();
     }
 
-    if (ledblink1_step == 0) {
+    if (rgb_marquee_usb_open_step == 0) {
         //Adjust the color
         set_slot_light_color(color);
         pwm_sequ_val.channel_0 = 1;
@@ -90,13 +93,13 @@ void ledblink1(uint8_t color, uint8_t dir) {
         pwm_sequ_val.channel_2 = 1;
         pwm_sequ_val.channel_3 = 1;
         bsp_set_timer(timer, 0);
-        ledblink1_step = 1;
+        rgb_marquee_usb_open_step = 1;
 
         // Reset the state of the light when the USB is turned on to open the communication
-        ledblink6_step = 0;
+        rgb_marquee_usb_idle_step = 0;
     }
 
-    if (ledblink1_step == 1) {
+    if (rgb_marquee_usb_open_step == 1) {
         setled = startled;
         for (uint8_t i = 0; i < 4; i++) {
             pwm_config.output_pins[i] = led_pins_arr[setled];
@@ -110,12 +113,12 @@ void ledblink1(uint8_t color, uint8_t dir) {
         nrf_drv_pwm_simple_playback(&pwm0_ins, &seq, 1, NRF_DRV_PWM_FLAG_LOOP);
 
         bsp_set_timer(timer, 0);
-        ledblink1_step = 2;
+        rgb_marquee_usb_open_step = 2;
     }
 
-    if (ledblink1_step == 2) {
+    if (rgb_marquee_usb_open_step == 2) {
         if (!(NO_TIMEOUT_1MS(timer, 80))) {
-            ledblink1_step = 1;
+            rgb_marquee_usb_open_step = 1;
         }
     }
 }
@@ -123,7 +126,7 @@ void ledblink1(uint8_t color, uint8_t dir) {
 // 4 Lights Dragon Tail horizontal movement cycle (not returning), including the disappearance of the tail and the head of the head slowly
 //dir 0-from 1 card slot to 8 card slot, 1-from 8 card slot to 1 card slot (Direction, the end point is determined by the END parameter)
 //end To scan the number of lamps, decide the final animation area with the direction
-void ledblink2(uint8_t color, uint8_t dir, uint8_t end) {
+void rgb_marquee_sweep_to(uint8_t color, uint8_t dir, uint8_t end) {
     uint8_t startled = 0;
     uint8_t setled = 0;
     uint8_t leds2turnon = 0;
@@ -204,12 +207,12 @@ void ledblink2(uint8_t color, uint8_t dir, uint8_t end) {
 //led_down LED to be extinguished
 //color_led_down The color of the LED to be extinguished 0-R,1-G,2-B
 volatile bool callback_waiting = 0;
-static void ledblink3_pwm_callback(nrfx_pwm_evt_type_t event_type) {
+static void rgb_marquee_slot_switch_pwm_callback(nrfx_pwm_evt_type_t event_type) {
     if (event_type == NRF_DRV_PWM_EVT_FINISHED) {
         callback_waiting = 1;
     }
 }
-void ledblink3(uint8_t led_down, uint8_t color_led_down, uint8_t led_up, uint8_t color_led_up) {
+void rgb_marquee_slot_switch(uint8_t led_down, uint8_t color_led_down, uint8_t led_up, uint8_t color_led_up) {
     int16_t light_level = 99; //ledBrightnessValue
     uint32_t *led_pins = hw_get_led_array();
     if (led_down >= 0 && led_down <= 7) {
@@ -230,7 +233,7 @@ void ledblink3(uint8_t led_down, uint8_t color_led_down, uint8_t led_up, uint8_t
 
             set_slot_light_color(color_led_down);
 
-            nrf_drv_pwm_init(&pwm0_ins, &pwm_config, ledblink3_pwm_callback);
+            nrf_drv_pwm_init(&pwm0_ins, &pwm_config, rgb_marquee_slot_switch_pwm_callback);
             nrf_drv_pwm_simple_playback(&pwm0_ins, &seq, 1, NRF_DRV_PWM_FLAG_LOOP);
 
             while (callback_waiting == 0); //Waiting for the output of the PWM module to complete
@@ -258,7 +261,7 @@ void ledblink3(uint8_t led_down, uint8_t color_led_down, uint8_t led_up, uint8_t
 
             set_slot_light_color(color_led_up);
 
-            nrf_drv_pwm_init(&pwm0_ins, &pwm_config, ledblink3_pwm_callback);
+            nrf_drv_pwm_init(&pwm0_ins, &pwm_config, rgb_marquee_slot_switch_pwm_callback);
             nrf_drv_pwm_simple_playback(&pwm0_ins, &seq, 1, NRF_DRV_PWM_FLAG_LOOP);
 
             while (callback_waiting == 0); //Waiting for the output of the PWM module to complete
@@ -273,7 +276,7 @@ void ledblink3(uint8_t led_down, uint8_t color_led_down, uint8_t led_up, uint8_t
 //dir 0-from 1 card slot to 8 card slot, 1-from 8 card slot to 1 card slot (Direction, the end point is determined by the END parameter)
 //end To scan the number of lamps, decide the final animation area with the direction
 //start_light stop_light 0-99 Indicate gradient brightness
-void ledblink4(uint8_t color, uint8_t dir, uint8_t end, uint8_t start_light, uint8_t stop_light) {
+void rgb_marquee_sweep_fade(uint8_t color, uint8_t dir, uint8_t end, uint8_t start_light, uint8_t stop_light) {
     uint8_t startled = 0;
     uint8_t setled = 0;
     uint8_t leds2turnon = 0;
@@ -347,8 +350,8 @@ void ledblink4(uint8_t color, uint8_t dir, uint8_t end, uint8_t start_light, uin
 //color The color of the lit LED 0-R,1-G,2-B
 //start Start the lamp position
 //stop Stop lamp position
-void ledblink5(uint8_t color, uint8_t start, uint8_t stop) {
-    uint8_t setled = start;
+void rgb_marquee_sweep_from_to(uint8_t color, uint8_t start, uint8_t stop) {
+    int8_t setled = start;
     uint32_t *led_pins = hw_get_led_array();
     //Set the brightness
     pwm_sequ_val.channel_3 = 0;
@@ -357,7 +360,7 @@ void ledblink5(uint8_t color, uint8_t start, uint8_t stop) {
     pwm_sequ_val.channel_0 = get_pwmduty(99);
     //Adjust the color
     set_slot_light_color(color);
-    while (setled < (start < stop ? stop + 1 : stop - 1)) {
+    while (start < stop ? (setled < stop + 1) : (setled > (int8_t)stop - 1)) {
         //Close all channels
         pwm_config.output_pins[0] = NRF_DRV_PWM_PIN_NOT_USED;
         pwm_config.output_pins[1] = NRF_DRV_PWM_PIN_NOT_USED;
@@ -373,23 +376,23 @@ void ledblink5(uint8_t color, uint8_t start, uint8_t stop) {
 }
 
 
-// Charging animation - displays battery percentage on all LEDs sequentially
+// Battery level display - shows battery percentage on all LEDs sequentially
 volatile bool callback_waiting6 = 0;
-static uint8_t ledblink6_color = RGB_GREEN;
-static uint8_t prev_leds_lit = 0;
-static uint8_t prev_percentage = 101; // Initialize to impossible value to force first update
+static uint8_t battery_display_color = RGB_GREEN;
+static uint8_t battery_display_prev_leds_lit = 0;
+static uint8_t battery_display_prev_percentage = 101; // Initialize to impossible value to force first update
 
-void ledblink6_pwm_callback(nrfx_pwm_evt_type_t event_type) {
+void battery_display_pwm_callback(nrfx_pwm_evt_type_t event_type) {
     if (event_type == NRF_DRV_PWM_EVT_FINISHED) {
         callback_waiting6 = 1;
     }
 }
 
-void ledblink6(void) {
+void rgb_marquee_battery_display(void) {
     uint32_t *led_array = hw_get_led_array();
     
     // Update battery level when percentage changes or when marquee is disabled
-    if (prev_percentage != percentage_batt_lvl || !g_usb_led_marquee_enable) {
+    if (battery_display_prev_percentage != percentage_batt_lvl || !g_usb_led_marquee_enable) {
         
         if (!g_usb_led_marquee_enable) {
             // If marquee is disabled, turn off all LEDs and return
@@ -405,36 +408,36 @@ void ledblink6(void) {
         
         // Update the color based on battery level (green when full, red when low)
         if (percentage_batt_lvl >= 75) {
-            ledblink6_color = RGB_GREEN;  // Green for high battery
+            battery_display_color = RGB_GREEN;  // Green for high battery
         } else if (percentage_batt_lvl >= 50) {
-            ledblink6_color = RGB_CYAN;   // Cyan for medium-high battery
+            battery_display_color = RGB_CYAN;   // Cyan for medium-high battery
         } else if (percentage_batt_lvl >= 25) {
-            ledblink6_color = RGB_YELLOW; // Yellow for medium-low battery
+            battery_display_color = RGB_YELLOW; // Yellow for medium-low battery
         } else {
-            ledblink6_color = RGB_RED;    // Red for low battery
+            battery_display_color = RGB_RED;    // Red for low battery
         }
         
         // Set the color
-        set_slot_light_color(ledblink6_color);
+        set_slot_light_color(battery_display_color);
         
         // Gradually update LEDs to show smooth transition
-        if (leds_to_light > prev_leds_lit) {
+        if (leds_to_light > battery_display_prev_leds_lit) {
             // Turn on additional LEDs one by one
-            for (uint8_t i = prev_leds_lit; i < leds_to_light && i < RGB_LIST_NUM; i++) {
+            for (uint8_t i = battery_display_prev_leds_lit; i < leds_to_light && i < RGB_LIST_NUM; i++) {
                 nrf_gpio_pin_set(led_array[i]);
                 bsp_delay_ms(50); // Small delay for smooth visual effect
             }
-        } else if (leds_to_light < prev_leds_lit) {
+        } else if (leds_to_light < battery_display_prev_leds_lit) {
             // Turn off LEDs one by one
-            for (uint8_t i = prev_leds_lit; i > leds_to_light && i > 0; i--) {
+            for (uint8_t i = battery_display_prev_leds_lit; i > leds_to_light && i > 0; i--) {
                 nrf_gpio_pin_clear(led_array[i-1]);
                 bsp_delay_ms(50); // Small delay for smooth visual effect
             }
         }
         
-        prev_leds_lit = leds_to_light;
+        battery_display_prev_leds_lit = leds_to_light;
     }
-    prev_percentage = percentage_batt_lvl;
+    battery_display_prev_percentage = percentage_batt_lvl;
 }
 
 /**
@@ -443,6 +446,6 @@ void ledblink6(void) {
  * @return true Make the state, flickering in the lighting effect
  * @return false The state is prohibited, in the state of ordinary card slot indicator
  */
-bool is_rgb_marquee_enable(void) {
+bool rgb_marquee_is_enabled(void) {
     return g_usb_led_marquee_enable;
 }
