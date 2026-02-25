@@ -342,6 +342,11 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
         // The trigger conditions are: REQA response in non -Halt mode
         // Temporary through: Wupa response in non -choice state, no matter what state is in the state, you can use the Wupa instruction to wake up
         if ((szDataBits == 7) && ((isREQA && m_tag_state_14a != NFC_TAG_STATE_14A_HALTED) || isWUPA)) {
+            // Received 7-bit command (REQA or WUPA) while the tag is active — reset state machine
+            if (m_tag_state_14a != NFC_TAG_STATE_14A_IDLE && m_tag_state_14a != NFC_TAG_STATE_14A_HALTED) {
+                m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
+                return;
+            }
             // The receiver of the 14A communication is notified, the internal state machine is reset
             if (m_tag_handler.cb_reset != NULL) {
                 m_tag_handler.cb_reset();
@@ -529,8 +534,16 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
             // No processing is successful, it may be some other data. You need to re-post processing
             if (m_tag_handler.cb_state != NULL) {    //Activation status, transfer the message to other registered processor processing
                 m_tag_handler.cb_state(p_data, szDataBits);
-                break;
             }
+            break;
+        }
+        case NFC_TAG_STATE_14A_PROPRIETARY: {
+            if (m_tag_handler.cb_state != NULL) {
+                m_tag_handler.cb_state(p_data, szDataBits);
+            } else {
+                m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
+            }
+            break;
         }
     }
 }
