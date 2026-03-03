@@ -63,6 +63,12 @@ extern "C" {
     T5577_PWD |                \
     (3 << T5577_MAXBLOCK_SHIFT))
 
+#define T5577_IOPROX_CONFIG ( \
+    T5577_BITRATE_RF_64 |      \
+    T5577_MODULATION_FSK2a |   \
+    T5577_PWD |                \
+    (2 << T5577_MAXBLOCK_SHIFT))
+
 #define T5577_VIKING_CONFIG (     \
     T5577_BITRATE_RF_32 |         \
     T5577_MODULATION_MANCHESTER | \

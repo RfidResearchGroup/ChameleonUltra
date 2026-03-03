@@ -84,6 +84,10 @@ class Command(enum.IntEnum):
     VIKING_SCAN = 3004
     VIKING_WRITE_TO_T55XX = 3005
     ADC_GENERIC_READ = 3009
+    IOPROX_SCAN = 3010
+    IOPROX_WRITE_TO_T55XX = 3011
+    IOPROX_DECODE_RAW = 3012
+    IOPROX_COMPOSE_ID = 3013
 
     MF1_WRITE_EMU_BLOCK_DATA = 4000
     HF14A_SET_ANTI_COLL_DATA = 4001
@@ -137,6 +141,8 @@ class Command(enum.IntEnum):
     HIDPROX_GET_EMU_ID = 5003
     VIKING_SET_EMU_ID = 5004
     VIKING_GET_EMU_ID = 5005
+    IOPROX_SET_EMU_ID = 5006
+    IOPROX_GET_EMU_ID = 5007
 
 
 @enum.unique
@@ -278,7 +284,7 @@ class TagSpecificType(enum.IntEnum):
 
     # FSK Tag-Talk-First      200
     HIDProx = 200
-    # ioProx
+    ioProx = 201
     # AWID
     # Paradox
 
@@ -361,6 +367,8 @@ class TagSpecificType(enum.IntEnum):
             return "EM410X Electra"
         elif self == TagSpecificType.HIDProx:
             return "HIDProx"
+        elif self == TagSpecificType.ioProx:
+            return "ioProx"
         elif self == TagSpecificType.Viking:
             return "Viking"
         elif self == TagSpecificType.MIFARE_Mini:

@@ -631,6 +631,70 @@ class LFHIDIdReadArgsUnit(DeviceRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         raise NotImplementedError()
 
+class LFIOProxIdArgsUnit(DeviceRequiredUnit):
+    """
+    IOProx identity arguments:
+      --ver <int>  version (0-255)
+      --fc  <int>  facility (0-255)
+      --cn  <int>  card number (0-65535)
+      --raw8 <hex8> raw 8 bytes hex, e.g. 007854E03A5D65AB
+    """
+    @staticmethod
+    def add_card_arg(parser: ArgumentParserNoExit, required=False):
+        parser.add_argument("--ver", type=int, required=False, help="ioProx version", metavar="<int>")
+        parser.add_argument("--fc",  type=str, required=False, help="ioProx facility code, e.g., 83 or 0x53", metavar="<str>")
+        parser.add_argument("--cn",  type=int, required=required, help="ioProx card number", metavar="<int>")
+        parser.add_argument("--raw8", type=str, required=False, help="ioProx raw 8 bytes hex (e.g. 00AABBCCDDEEFF55)", metavar="<hex8>")
+        return parser
+
+    @staticmethod
+    def _check_u8(name: str, v: int):
+        if v < 0 or v > 0xFF:
+            raise ArgsParserError(f"{name} must be 0..255")
+
+    @staticmethod
+    def _check_u16(name: str, v: int):
+        if v < 0 or v > 0xFFFF:
+            raise ArgsParserError(f"{name} must be 0..65535")
+
+    @staticmethod
+    def parse_raw8(raw8: str) -> bytes:
+        s = raw8.replace(" ", "").replace("0x", "").strip()
+        b = bytes.fromhex(s)
+        if len(b) != 8:
+            raise ArgsParserError("ioProx --raw must be exactly 8 bytes (16 hex chars), e.g. 007854E03A5D65AB")
+        return b
+
+    @staticmethod
+    def checksum5(b1, b2, b3, b4, b5) -> int:
+        return (0xFF - ((b1 + b2 + b3 + b4 + b5) & 0xFF)) & 0xFF
+
+    def before_exec(self, args: argparse.Namespace):
+        if not super().before_exec(args):
+            return False
+
+        # validate if provided
+        if args.ver is not None:
+            self._check_u8("version", args.ver)
+        if args.fc is not None:
+            val = int(args.fc, 0) 
+            self._check_u8("facility", val)
+            args.fc = val
+        if args.cn is not None:
+            self._check_u16("card number", args.cn)
+
+        # if raw is present, validate it
+        if args.raw8 is not None:
+            self.parse_raw8(args.raw8)
+
+        return True
+
+
+class LFIOProxReadArgsUnit(DeviceRequiredUnit):
+    @staticmethod
+    def add_card_arg(parser: ArgumentParserNoExit, required=False):
+        parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+        return parser
 
 class LFVikingIdArgsUnit(DeviceRequiredUnit):
     @staticmethod
@@ -692,6 +756,7 @@ lf_em = lf.subgroup("em", "EM commands")
 lf_em_410x = lf_em.subgroup("410x", "EM410x commands")
 lf_hid = lf.subgroup("hid", "HID commands")
 lf_hid_prox = lf_hid.subgroup("prox", "HID Prox commands")
+lf_ioprox = lf.subgroup("ioprox", "ioProx commands")
 lf_viking = lf.subgroup("viking", "Viking commands")
 lf_generic = lf.subgroup("generic", "Generic commands")
 
@@ -5502,7 +5567,6 @@ class LFHIDProxRead(LFHIDIdReadArgsUnit, ReaderRequiredUnit):
             print(f" OEM: {color_string((CG, oem))}")
         print(f" CN: {color_string((CG, cn))}")
 
-
 @lf_hid_prox.command("write")
 class LFHIDProxWriteT55xx(LFHIDIdArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -5588,6 +5652,116 @@ class LFHIDProxEconfig(SlotIndexArgsAndGoUnit, LFHIDIdArgsUnit):
                 print(f"   OEM: {color_string((CG, oem))}")
             print(f"   CN: {color_string((CG, cn))}")
 
+@lf_ioprox.command("read")
+class LFIOProxRead(LFIOProxReadArgsUnit, ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Scan ioProx tag and print version, facility, card number and raw"
+        return self.add_card_arg(parser, required=False)
+
+    def on_exec(self, args: argparse.Namespace):
+        ver, fc, cn, raw8, *futureuse = self.cmd.ioprox_scan() 
+        print(f"ioProx XSF format")        
+        print(f"   Version: {color_string((CG, ver))}")
+        print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
+        print(f"   ID: {color_string((CY, cn))}")
+        print(f"   Raw: {color_string((CY, raw8.hex().upper()))}")  
+
+@lf_ioprox.command("write")
+class LFIOProxWriteT55xx(LFIOProxIdArgsUnit, ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Write ioProx card data to t55xx"
+        return self.add_card_arg(parser, required=False)
+
+    def on_exec(self, args: argparse.Namespace):
+        # defaults
+        ver = args.ver if args.ver is not None else 1
+        fc  = args.fc  if args.fc  is not None else 0
+        cn  = args.cn  if args.cn  is not None else 0
+
+        # raw8 priority
+        if args.raw8 is not None:
+            raw8 = self.parse_raw8(args.raw8)
+            ver, fc, cn, raw8, *futureuse = self.cmd.ioprox_decode_raw(raw8)
+        else:
+            res = self.cmd.ioprox_compose_id(args.ver, args.fc, args.cn)      
+            raw8 = res[3]
+        
+        payload16 = struct.pack(
+            ">BBH8s4x",
+            ver & 0xFF,
+            fc & 0xFF,
+            cn & 0xFFFF,
+            raw8
+        )
+        
+        result = self.cmd.ioprox_write_to_t55xx(payload16)
+
+        print(f"ioProx XSF format")        
+        print(f"   Version: {color_string((CG, ver))}")
+        print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
+        print(f"   ID: {color_string((CY, cn))}")
+        print(f"   Raw: {color_string((CY, raw8.hex().upper()))}") 
+        print("Write done.")
+
+@lf_ioprox.command("econfig")
+class LFIOProxEconfig(SlotIndexArgsAndGoUnit, LFIOProxIdArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Set/Get emulated ioProx card id (stored in slot)"
+        self.add_slot_args(parser)
+        self.add_card_arg(parser, required=False)  # SET when --cn or --raw present; GET otherwise
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        do_set = (args.cn is not None) or (args.raw8 is not None) or (args.fc is not None) or (args.ver is not None)
+
+        if do_set:
+            # warn if slot isn't ioProx
+            slotinfo = self.cmd.get_slot_info()
+            selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+            lf_tag_type = TagSpecificType(slotinfo[selected - 1]["lf"])
+            if lf_tag_type != TagSpecificType.ioProx:
+                print(f"{color_string((CR, 'WARNING'))}: Slot type not set to IOProx.")
+
+            # defaults
+            ver = args.ver if args.ver is not None else 1
+            fc  = args.fc  if args.fc  is not None else 0
+            cn  = args.cn  if args.cn  is not None else 0
+
+            # raw8 priority
+            if args.raw8 is not None:
+                raw8 = self.parse_raw8(args.raw8)
+                ver, fc, cn, raw8, *futureuse = self.cmd.ioprox_decode_raw(raw8)
+            else:
+                res = self.cmd.ioprox_compose_id(args.ver, args.fc, args.cn)      
+                raw8 = res[3]
+            
+            payload16 = struct.pack(
+                ">BBH8s4x",
+                ver & 0xFF,
+                fc & 0xFF,
+                cn & 0xFFFF,
+                raw8
+            )
+
+            result = self.cmd.ioprox_set_emu_id(payload16)
+            
+            print(f"ioProx XSF format")        
+            print(f"   Version: {color_string((CG, ver))}")
+            print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
+            print(f"   ID: {color_string((CY, cn))}")
+            print(f"   Raw: {color_string((CY, raw8.hex().upper()))}") 
+
+        else:
+            # GET
+            ver, fc, cn, raw8, *futureuse = self.cmd.ioprox_get_emu_id()
+            print(f"ioProx XSF format")        
+            print(f"   Version: {color_string((CG, ver))}")
+            print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
+            print(f"   ID: {color_string((CY, cn))}")
+            print(f"   Raw: {color_string((CY, raw8.hex().upper()))}") 
 
 @lf_viking.command("read")
 class LFVikingRead(ReaderRequiredUnit):
@@ -5817,6 +5991,12 @@ class HWSlotList(DeviceRequiredUnit):
                     if oem > 0:
                         print(f"      {'OEM:':40}{color_string((CG, oem))}")
                     print(f"      {'CN:':40}{color_string((CG, cn))}")
+                if lf_tag_type == TagSpecificType.ioProx:
+                    ver, fc, cn, raw8, *futureuse = self.cmd.ioprox_get_emu_id()             
+                    print(f"      {'Version:':40}{color_string((CG, ver))}")
+                    print(f"      {'Facility:':40}{color_string((CG, f'{fc} [0x{fc:02X}]'))}")
+                    print(f"      {'ID:':40}{color_string((CY, cn))}")
+                    print(f"      {'Raw:':40}{color_string((CY, raw8.hex().upper()))}")                   
                 if lf_tag_type == TagSpecificType.Viking:
                     id = self.cmd.viking_get_emu_id()
                     print(f"      {'ID:':40}{color_string((CY, id.hex().upper()))}")
