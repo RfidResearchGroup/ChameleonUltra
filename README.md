@@ -18,6 +18,10 @@ Guangdong, China: [MTools Tec](https://shop.mtoolstec.com/)
 
 Lazada One, Singapore: [Aliexpress by RRG](https://proxgrind.aliexpress.com/store/1101312023)
 
+# Hardware Upgrade Notice
+
+**Important:** The Chameleon Ultra hardware has been upgraded! Restarting the device now only requires running each of the three RGB colors once (equivalent to a restart). This resolves previous issues where firmware modifications could cause the device to malfunction.
+
 # What is it and how to use ?
 
 Read the [available documentation](https://github.com/RfidResearchGroup/ChameleonUltra/wiki).
