@@ -4,10 +4,10 @@
 #include <stdint.h>
 #include "dataframe.h"
 
-
 typedef data_frame_tx_t *(*cmd_processor)(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data);
 
-typedef struct {
+typedef struct
+{
     uint16_t cmd;
     cmd_processor cmd_before;
     cmd_processor cmd_processor;
@@ -15,5 +15,11 @@ typedef struct {
 } cmd_data_map_t;
 
 void on_data_frame_received(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data);
+
+// Fuzzer command processor prototype
+data_frame_tx_t *cmd_processor_fuzzer_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data);
+
+// Value block extraction command processor prototype
+data_frame_tx_t *cmd_processor_mf1_extract_value_blocks(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data);
 
 #endif

@@ -97,14 +97,20 @@ elseif (CMAKE_SYSTEM_NAME MATCHES "Windows")
         endif()
     endif()
 
-    FetchContent_Declare(
-        pthreads4w
-        GIT_REPOSITORY "https://github.com/GerHobbelt/pthread-win32"
-        OVERRIDE_FIND_PACKAGE
-        EXCLUDE_FROM_ALL
-    )
-    find_package(pthreads4w CONFIG REQUIRED)
-    set(LIBTHREAD pthreads4w::pthreadVC3)
+    if(MSVC)
+        FetchContent_Declare(
+            pthreads4w
+            GIT_REPOSITORY "https://github.com/GerHobbelt/pthread-win32"
+            OVERRIDE_FIND_PACKAGE
+            EXCLUDE_FROM_ALL
+        )
+        find_package(pthreads4w CONFIG REQUIRED)
+        set(LIBTHREAD pthreads4w::pthreadVC3)
+    else()
+        # MinGW with posix threading model has pthreads built-in
+        find_package(Threads REQUIRED)
+        set(LIBTHREAD Threads::Threads)
+    endif()
 
     set(LIBMATH "") # No separate math library needed on Windows
 else()
