@@ -141,8 +141,8 @@ class Command(enum.IntEnum):
     HIDPROX_GET_EMU_ID = 5003
     VIKING_SET_EMU_ID = 5004
     VIKING_GET_EMU_ID = 5005
-    IOPROX_SET_EMU_ID = 5006
-    IOPROX_GET_EMU_ID = 5007
+    IOPROX_SET_EMU_ID = 5008
+    IOPROX_GET_EMU_ID = 5009
 
 
 @enum.unique

@@ -170,7 +170,7 @@
 #define DATA_CMD_HIDPROX_GET_EMU_ID             (5003)
 #define DATA_CMD_VIKING_SET_EMU_ID              (5004)
 #define DATA_CMD_VIKING_GET_EMU_ID              (5005)
-#define DATA_CMD_IOPROX_SET_EMU_ID              (5006)
-#define DATA_CMD_IOPROX_GET_EMU_ID              (5007)
+#define DATA_CMD_IOPROX_SET_EMU_ID              (5008)
+#define DATA_CMD_IOPROX_GET_EMU_ID              (5009)
 
 #endif
