@@ -7,6 +7,7 @@
 
 #define LF_EM410X_TAG_ID_SIZE 5
 #define LF_EM410X_ELECTRA_TAG_ID_SIZE 13
+#define LF_IOPROX_TAG_ID_SIZE 16
 #define LF_HIDPROX_TAG_ID_SIZE 13
 #define LF_VIKING_TAG_ID_SIZE 4
 
@@ -16,6 +17,8 @@ int lf_tag_em410x_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffe
 bool lf_tag_em410x_data_factory(uint8_t slot, tag_specific_type_t tag_type);
 int lf_tag_hidprox_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 bool lf_tag_hidprox_data_factory(uint8_t slot, tag_specific_type_t tag_type);
+int lf_tag_ioprox_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
+bool lf_tag_ioprox_data_factory(uint8_t slot, tag_specific_type_t tag_type);
 int lf_tag_viking_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 bool lf_tag_viking_data_factory(uint8_t slot, tag_specific_type_t tag_type);
 bool is_lf_field_exists(void);

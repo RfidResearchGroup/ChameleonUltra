@@ -98,6 +98,10 @@
 #define DATA_CMD_ADC_GENERIC_READ               (3009)
 #define DATA_CMD_GENERIC_READ                   (3007)
 #define DATA_CMD_CORR_GENERIC_READ              (3008)
+#define DATA_CMD_IOPROX_SCAN                    (3010)
+#define DATA_CMD_IOPROX_WRITE_TO_T55XX          (3011)
+#define DATA_CMD_IOPROX_DECODE_RAW              (3012)
+#define DATA_CMD_IOPROX_COMPOSE_ID              (3013)
 
 //
 // ******************************************************************
@@ -166,5 +170,7 @@
 #define DATA_CMD_HIDPROX_GET_EMU_ID             (5003)
 #define DATA_CMD_VIKING_SET_EMU_ID              (5004)
 #define DATA_CMD_VIKING_GET_EMU_ID              (5005)
+#define DATA_CMD_IOPROX_SET_EMU_ID              (5008)
+#define DATA_CMD_IOPROX_GET_EMU_ID              (5009)
 
 #endif
