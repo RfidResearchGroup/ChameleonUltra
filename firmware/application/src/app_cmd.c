@@ -2,7 +2,6 @@
 #include "bsp_time.h"
 #include "bsp_delay.h"
 #include "usb_main.h"
-#include "lf_em4x05_data.h"
 #include "rfid_main.h"
 #include "ble_main.h"
 #include "syssleep.h"
