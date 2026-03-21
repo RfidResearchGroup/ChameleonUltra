@@ -73,21 +73,14 @@ class Command(enum.IntEnum):
     MF1_HARDNESTED_ACQUIRE = 2013
     MF1_ENC_NESTED_ACQUIRE = 2014
     MF1_CHECK_KEYS_ON_BLOCK = 2015
-    HF14A_GET_CONFIG = 2200
-    HF14A_SET_CONFIG = 2201
 
     EM410X_SCAN = 3000
     EM410X_WRITE_TO_T55XX = 3001
-    EM410X_ELECTRA_WRITE_TO_T55XX = 3006
     HIDPROX_SCAN = 3002
     HIDPROX_WRITE_TO_T55XX = 3003
     VIKING_SCAN = 3004
     VIKING_WRITE_TO_T55XX = 3005
-    ADC_GENERIC_READ = 3009
-    IOPROX_SCAN = 3010
-    IOPROX_WRITE_TO_T55XX = 3011
-    IOPROX_DECODE_RAW = 3012
-    IOPROX_COMPOSE_ID = 3013
+    EM4X05_SCAN = 3010
 
     MF1_WRITE_EMU_BLOCK_DATA = 4000
     HF14A_SET_ANTI_COLL_DATA = 4001
@@ -132,17 +125,12 @@ class Command(enum.IntEnum):
     # FIXME: not implemented
     MF0_NTAG_GET_EMULATOR_CONFIG = 4037
 
-    MF1_SET_FIELD_OFF_DO_RESET = 4038
-    MF1_GET_FIELD_OFF_DO_RESET = 4039
-
     EM410X_SET_EMU_ID = 5000
     EM410X_GET_EMU_ID = 5001
     HIDPROX_SET_EMU_ID = 5002
     HIDPROX_GET_EMU_ID = 5003
     VIKING_SET_EMU_ID = 5004
     VIKING_GET_EMU_ID = 5005
-    IOPROX_SET_EMU_ID = 5008
-    IOPROX_GET_EMU_ID = 5009
 
 
 @enum.unique
@@ -271,7 +259,6 @@ class TagSpecificType(enum.IntEnum):
     EM410X_16 = 101
     EM410X_32 = 102
     EM410X_64 = 103
-    EM410X_ELECTRA = 104
     # FDX-B
     # securakey
     # gallagher
@@ -284,7 +271,7 @@ class TagSpecificType(enum.IntEnum):
 
     # FSK Tag-Talk-First      200
     HIDProx = 200
-    ioProx = 201
+    # ioProx
     # AWID
     # Paradox
 
@@ -363,12 +350,8 @@ class TagSpecificType(enum.IntEnum):
             return "EM410X/32"
         elif self == TagSpecificType.EM410X_64:
             return "EM410X/64"
-        elif self == TagSpecificType.EM410X_ELECTRA:
-            return "EM410X Electra"
         elif self == TagSpecificType.HIDProx:
             return "HIDProx"
-        elif self == TagSpecificType.ioProx:
-            return "ioProx"
         elif self == TagSpecificType.Viking:
             return "Viking"
         elif self == TagSpecificType.MIFARE_Mini:
@@ -521,7 +504,6 @@ class MifareClassicDarksideStatus(enum.IntEnum):
 class AnimationMode(enum.IntEnum):
     FULL = 0
     MINIMAL = 1
-    SYMMETRIC = 3
     NONE = 2
 
     def __str__(self):
@@ -529,8 +511,6 @@ class AnimationMode(enum.IntEnum):
             return "Full animation"
         elif self == AnimationMode.MINIMAL:
             return "Minimal animation"
-        elif self == AnimationMode.SYMMETRIC:
-            return "Symmetric animation"
         elif self == AnimationMode.NONE:
             return "No animation"
 
@@ -554,7 +534,6 @@ class ButtonPressFunction(enum.IntEnum):
     PREVSLOT = 2
     CLONE = 3
     BATTERY = 4
-    FIELDGEN = 5
 
     def __str__(self):
         if self == ButtonPressFunction.NONE:
@@ -567,9 +546,8 @@ class ButtonPressFunction(enum.IntEnum):
             return "Read then simulate the ID/UID card number"
         elif self == ButtonPressFunction.BATTERY:
             return "Show Battery Level"
-        elif self == ButtonPressFunction.FIELDGEN:
-            return "Toggle NFC Field Generator"
         return "None"
+
 
 @enum.unique
 class MfcValueBlockOperator(enum.IntEnum):
@@ -602,7 +580,6 @@ class HIDFormat(enum.IntEnum):
     C1K35S = 21
     C15001 = 22
     S12906 = 23
-    ACTPHID = 42
     SIE36 = 24
     H10320 = 25
     H10302 = 26
@@ -636,7 +613,6 @@ class HIDFormat(enum.IntEnum):
             HIDFormat.C1K35S: "HID Corporate 1000 35-bit Std",
             HIDFormat.C15001: "HID KeyScan 36-bit",
             HIDFormat.S12906: "HID Simplex 36-bit",
-            HIDFormat.ACTPHID: "HID ACTProx 36-bit",
             HIDFormat.SIE36: "HID 36-bit Siemens",
             HIDFormat.H10320: "HID H10320 37-bit BCD",
             HIDFormat.H10302: "HID H10302 37-bit huge ID",
@@ -648,3 +624,4 @@ class HIDFormat(enum.IntEnum):
         if self in descriptions:
             return descriptions[self]
         return "Invalid"
+

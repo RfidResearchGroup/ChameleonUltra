@@ -341,7 +341,7 @@ class ChameleonCMD:
             })
         return resp
 
-    @expect_response([Status.HF_TAG_OK, Status.HF_TAG_NO, Status.MF_ERR_AUTH])
+    @expect_response([Status.HF_TAG_OK, Status.HF_TAG_NO])
     def mf1_check_keys_on_block(self, block: int, key_type: int, keys: list[bytes]):
         if key_type not in [0x60, 0x61]:
             raise ValueError("Wrong key type")
@@ -425,32 +425,6 @@ class ChameleonCMD:
                 i += 14
         return resp
 
-    @expect_response(Status.SUCCESS)
-    def hf14a_get_config(self):
-        """
-        Get hf 14a config
-
-        :return:
-        """
-        resp = self.device.send_cmd_sync(Command.HF14A_GET_CONFIG)
-        if resp.status == Status.SUCCESS:
-            bcc, cl2, cl3, rats = struct.unpack('!bbbb', resp.data)
-            resp.parsed = {'bcc': bcc,
-                           'cl2': cl2,
-                           'cl3': cl3,
-                           'rats': rats}
-        return resp
-
-    @expect_response(Status.SUCCESS)
-    def hf14a_set_config(self, data):
-        """
-        Set hf 14a config
-
-        :return:
-        """
-        data = struct.pack('!bbbb', data['bcc'], data['cl2'], data['cl3'], data['rats'])
-        return self.device.send_cmd_sync(Command.HF14A_SET_CONFIG, data)
-
     @expect_response(Status.LF_TAG_OK)
     def em410x_scan(self):
         """
@@ -460,12 +434,7 @@ class ChameleonCMD:
         """
         resp = self.device.send_cmd_sync(Command.EM410X_SCAN)
         if resp.status == Status.LF_TAG_OK:
-            tag_type = struct.unpack('!H', resp.data[:2])[0]
-            if tag_type == TagSpecificType.EM410X_ELECTRA:
-                fmt = '!H13s'
-            else:
-                fmt = '!H5s'
-            resp.parsed = struct.unpack(fmt, resp.data[:struct.calcsize(fmt)]) # tag type + uid
+            resp.parsed = struct.unpack('!h5s', resp.data) # tag type + uid
         return resp
 
     @expect_response(Status.LF_TAG_OK)
@@ -476,13 +445,10 @@ class ChameleonCMD:
         :param id_bytes: ID card number
         :return:
         """
-        if len(id_bytes) == 5:
-            data = struct.pack(f'!5s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
-            return self.device.send_cmd_sync(Command.EM410X_WRITE_TO_T55XX, data)
-        if len(id_bytes) == 13:
-            data = struct.pack(f'!13s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
-            return self.device.send_cmd_sync(Command.EM410X_ELECTRA_WRITE_TO_T55XX, data)
-        raise ValueError("The id bytes length must equal 5 (EM410X) or 13 (Electra)")
+        if len(id_bytes) != 5:
+            raise ValueError("The id bytes length must equal 5")
+        data = struct.pack(f'!5s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.EM410X_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
     def hidprox_scan(self, format: int):
@@ -510,52 +476,6 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(Command.HIDPROX_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
-    def ioprox_scan(self):
-        """
-        Read ioProx (XSF): version, facility, number, raw.
-        """
-        resp = self.device.send_cmd_sync(Command.IOPROX_SCAN)
-        if resp.status == Status.LF_TAG_OK:
-            resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])  
-        return resp
-        
-    @expect_response(Status.LF_TAG_OK)
-    def ioprox_write_to_t55xx(self, id_bytes: bytes):
-        """
-        Write ioProx card data to a T55XX tag.
-        """
-        if len(id_bytes) != 16:
-            raise ValueError("The ioProx id bytes length must equal 16")
-
-        # Pack id_bytes (16), new_key (4), and all old_keys (4 each) into one buffer
-        fmt = f'!16s4s{4 * len(old_keys)}s'
-        data = struct.pack(fmt, id_bytes, new_key, b''.join(old_keys))
-        return self.device.send_cmd_sync(Command.IOPROX_WRITE_TO_T55XX, data)
-        
-    @expect_response(Status.SUCCESS)
-    def ioprox_decode_raw(self, raw8_bytes):
-        """
-        Send 8 raw card bytes to firmware and return 16-byte card data structure.
-        Response layout: [0]=ver, [1]=fc, [2..3]=cn, [4..11]=raw8, [12..15]=padding.
-        """
-        resp = self.device.send_cmd_sync(Command.IOPROX_DECODE_RAW, data=raw8_bytes)
-        if resp.status == Status.SUCCESS:
-            resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
-        return resp
-
-    @expect_response(Status.SUCCESS)
-    def ioprox_compose_id(self, ver, fc, cn):
-        """
-        Encode ioProx parameters into a 16-byte card data structure via firmware.
-        Response layout: [0]=ver, [1]=fc, [2..3]=cn, [4..11]=raw8, [12..15]=padding.
-        """
-        payload = struct.pack(">BBH", ver, fc, cn)
-        resp = self.device.send_cmd_sync(Command.IOPROX_COMPOSE_ID, data=payload)
-        if resp.status == Status.SUCCESS:
-            resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
-        return resp
-
-    @expect_response(Status.LF_TAG_OK)
     def viking_scan(self):
         """
         Read the card number of Viking.
@@ -565,6 +485,24 @@ class ChameleonCMD:
         resp = self.device.send_cmd_sync(Command.VIKING_SCAN)
         if resp.status == Status.LF_TAG_OK:
             resp.parsed = resp.data # uid
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def em4x05_scan(self):
+        """
+        Read an EM4x05 or EM4x69 tag (reader-talk-first).
+
+        Response payload (13 bytes, big-endian):
+          config    4 bytes  — block 0 configuration word
+          uid       4 bytes  — EM4x05 block-15 UID (or EM4x69 uid_lo)
+          uid_hi    4 bytes  — EM4x69 uid_hi (zero for plain EM4x05)
+          is_em4x69 1 byte   — 1 if a 64-bit EM4x69 UID was read
+
+        :return: parsed tuple (config, uid, uid_hi, is_em4x69)
+        """
+        resp = self.device.send_cmd_sync(Command.EM4X05_SCAN)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = struct.unpack('!IIIB', resp.data[:13])
         return resp
 
     @expect_response(Status.LF_TAG_OK)
@@ -579,18 +517,6 @@ class ChameleonCMD:
             raise ValueError("The id bytes length must equal 4")
         data = struct.pack(f'!4s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.VIKING_WRITE_TO_T55XX, data)
-
-    @expect_response(Status.LF_TAG_OK)
-    def adc_generic_read(self):
-        """
-        Read the ADC when the field is on.
-
-        :return:
-        """
-        resp = self.device.send_cmd_sync(Command.ADC_GENERIC_READ, None)
-        if resp.status == Status.LF_TAG_OK:
-            resp.parsed = resp.data
-        return resp
 
     @expect_response(Status.SUCCESS)
     def get_slot_info(self):
@@ -683,12 +609,6 @@ class ChameleonCMD:
         data = struct.pack('!BBB', SlotNumber.to_fw(slot_index), sense_type, enabled)
         return self.device.send_cmd_sync(Command.SET_SLOT_ENABLE, data)
 
-    def _get_active_lf_tag_type(self) -> TagSpecificType:
-        slotinfo = self.get_slot_info()
-        active_slot = SlotNumber.from_fw(self.get_active_slot())
-        lf_tag_value = slotinfo[active_slot - 1]['lf']
-        return TagSpecificType(lf_tag_value)
-
     @expect_response(Status.SUCCESS)
     def em410x_set_emu_id(self, id: bytes):
         """
@@ -697,18 +617,9 @@ class ChameleonCMD:
         :param id_bytes: byte of the card number
         :return:
         """
-        lf_tag_type = self._get_active_lf_tag_type()
-        if lf_tag_type == TagSpecificType.EM410X_ELECTRA:
-            expected_len = 13
-        elif lf_tag_type == TagSpecificType.EM410X:
-            expected_len = 5
-        else:
-            raise ValueError(f"Active LF slot type {lf_tag_type} is not EM410X")
-
-        if len(id) != expected_len:
-            raise ValueError(f"The id bytes length must equal {expected_len}")
-
-        data = struct.pack(f'!{expected_len}s', id)
+        if len(id) != 5:
+            raise ValueError("The id bytes length must equal 5")
+        data = struct.pack('5s', id)
         return self.device.send_cmd_sync(Command.EM410X_SET_EMU_ID, data)
 
     @expect_response(Status.SUCCESS)
@@ -717,34 +628,7 @@ class ChameleonCMD:
         Get the emulated EM410x card id
         """
         resp = self.device.send_cmd_sync(Command.EM410X_GET_EMU_ID)
-        if resp.status == Status.SUCCESS:
-            data = resp.data
-            id_bytes = data
-            tag_type = None
-
-            if len(data) >= 2:
-                try:
-                    candidate = TagSpecificType(int.from_bytes(data[:2], byteorder='big'))
-                except ValueError:
-                    candidate = None
-
-                if candidate in (TagSpecificType.EM410X, TagSpecificType.EM410X_ELECTRA):
-                    expected_len = 13 if candidate == TagSpecificType.EM410X_ELECTRA else 5
-                    if len(data) == expected_len + 2:
-                        tag_type = candidate
-                        id_bytes = data[2:2 + expected_len]
-
-            if tag_type is None:
-                lf_tag_type = self._get_active_lf_tag_type()
-                if lf_tag_type == TagSpecificType.EM410X_ELECTRA:
-                    expected_len = 13
-                elif lf_tag_type == TagSpecificType.EM410X:
-                    expected_len = 5
-                else:
-                    expected_len = len(data)
-                id_bytes = data[:expected_len]
-
-            resp.parsed = id_bytes
+        resp.parsed = resp.data
         return resp
 
     @expect_response(Status.SUCCESS)
@@ -767,28 +651,6 @@ class ChameleonCMD:
         resp = self.device.send_cmd_sync(Command.HIDPROX_GET_EMU_ID)
         if resp.status == Status.SUCCESS:
             resp.parsed = struct.unpack('>BIBIBH', resp.data[:13])
-        return resp
-        
-    @expect_response(Status.SUCCESS)
-    def ioprox_set_emu_id(self, id: bytes):
-        """
-        Set the card number emulated by ioProx.
-
-        :param id_bytes: byte of the card number
-        :return:
-        """
-        if len(id) != 16:
-            raise ValueError("The id bytes length must equal 16")
-        return self.device.send_cmd_sync(Command.IOPROX_SET_EMU_ID, id)
-
-    @expect_response(Status.SUCCESS)
-    def ioprox_get_emu_id(self):
-        """
-        Get the emulated ioProx card id
-        """
-        resp = self.device.send_cmd_sync(Command.IOPROX_GET_EMU_ID)   
-        if resp.status == Status.SUCCESS:
-            resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])    
         return resp
 
     @expect_response(Status.SUCCESS)
@@ -1460,18 +1322,6 @@ class ChameleonCMD:
     def set_ble_pairing_enable(self, enabled: bool):
         data = struct.pack('!B', enabled)
         return self.device.send_cmd_sync(Command.SET_BLE_PAIRING_ENABLE, data)
-    
-    @expect_response(Status.SUCCESS)
-    def mf1_get_field_off_do_reset(self):
-        resp = self.device.send_cmd_sync(Command.MF1_GET_FIELD_OFF_DO_RESET)
-        if resp.status == Status.SUCCESS:
-            resp.parsed = struct.unpack('!B', resp.data)[0] == 1
-        return resp
-
-    @expect_response(Status.SUCCESS)
-    def mf1_set_field_off_do_reset(self, enabled: bool):
-        data = struct.pack('!B', enabled)
-        return self.device.send_cmd_sync(Command.MF1_SET_FIELD_OFF_DO_RESET, data)
 
 
 def test_fn():
