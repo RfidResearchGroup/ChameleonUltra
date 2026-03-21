@@ -510,52 +510,6 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(Command.HIDPROX_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
-    def ioprox_scan(self):
-        """
-        Read ioProx (XSF): version, facility, number, raw.
-        """
-        resp = self.device.send_cmd_sync(Command.IOPROX_SCAN)
-        if resp.status == Status.LF_TAG_OK:
-            resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])  
-        return resp
-        
-    @expect_response(Status.LF_TAG_OK)
-    def ioprox_write_to_t55xx(self, id_bytes: bytes):
-        """
-        Write ioProx card data to a T55XX tag.
-        """
-        if len(id_bytes) != 16:
-            raise ValueError("The ioProx id bytes length must equal 16")
-
-        # Pack id_bytes (16), new_key (4), and all old_keys (4 each) into one buffer
-        fmt = f'!16s4s{4 * len(old_keys)}s'
-        data = struct.pack(fmt, id_bytes, new_key, b''.join(old_keys))
-        return self.device.send_cmd_sync(Command.IOPROX_WRITE_TO_T55XX, data)
-        
-    @expect_response(Status.SUCCESS)
-    def ioprox_decode_raw(self, raw8_bytes):
-        """
-        Send 8 raw card bytes to firmware and return 16-byte card data structure.
-        Response layout: [0]=ver, [1]=fc, [2..3]=cn, [4..11]=raw8, [12..15]=padding.
-        """
-        resp = self.device.send_cmd_sync(Command.IOPROX_DECODE_RAW, data=raw8_bytes)
-        if resp.status == Status.SUCCESS:
-            resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
-        return resp
-
-    @expect_response(Status.SUCCESS)
-    def ioprox_compose_id(self, ver, fc, cn):
-        """
-        Encode ioProx parameters into a 16-byte card data structure via firmware.
-        Response layout: [0]=ver, [1]=fc, [2..3]=cn, [4..11]=raw8, [12..15]=padding.
-        """
-        payload = struct.pack(">BBH", ver, fc, cn)
-        resp = self.device.send_cmd_sync(Command.IOPROX_COMPOSE_ID, data=payload)
-        if resp.status == Status.SUCCESS:
-            resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
-        return resp
-
-    @expect_response(Status.LF_TAG_OK)
     def viking_scan(self):
         """
         Read the card number of Viking.
@@ -579,6 +533,24 @@ class ChameleonCMD:
             raise ValueError("The id bytes length must equal 4")
         data = struct.pack(f'!4s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.VIKING_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
+    def em4x05_scan(self):
+        """
+        Read an EM4x05 or EM4x69 tag (reader-talk-first).
+
+        Response payload (13 bytes, big-endian):
+          config    4 bytes  — block 0 configuration word
+          uid       4 bytes  — EM4x05 block-15 UID (or EM4x69 uid_lo)
+          uid_hi    4 bytes  — EM4x69 uid_hi (zero for plain EM4x05)
+          is_em4x69 1 byte   — 1 if a 64-bit EM4x69 UID was read
+
+        :return: parsed tuple (config, uid, uid_hi, is_em4x69)
+        """
+        resp = self.device.send_cmd_sync(Command.EM4X05_SCAN)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = struct.unpack('!IIIB', resp.data[:13])
+        return resp
 
     @expect_response(Status.LF_TAG_OK)
     def adc_generic_read(self):
@@ -767,28 +739,6 @@ class ChameleonCMD:
         resp = self.device.send_cmd_sync(Command.HIDPROX_GET_EMU_ID)
         if resp.status == Status.SUCCESS:
             resp.parsed = struct.unpack('>BIBIBH', resp.data[:13])
-        return resp
-        
-    @expect_response(Status.SUCCESS)
-    def ioprox_set_emu_id(self, id: bytes):
-        """
-        Set the card number emulated by ioProx.
-
-        :param id_bytes: byte of the card number
-        :return:
-        """
-        if len(id) != 16:
-            raise ValueError("The id bytes length must equal 16")
-        return self.device.send_cmd_sync(Command.IOPROX_SET_EMU_ID, id)
-
-    @expect_response(Status.SUCCESS)
-    def ioprox_get_emu_id(self):
-        """
-        Get the emulated ioProx card id
-        """
-        resp = self.device.send_cmd_sync(Command.IOPROX_GET_EMU_ID)   
-        if resp.status == Status.SUCCESS:
-            resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])    
         return resp
 
     @expect_response(Status.SUCCESS)
