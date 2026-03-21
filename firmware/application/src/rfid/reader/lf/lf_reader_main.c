@@ -8,6 +8,7 @@
 #include "protocols/em410x.h"
 #include "protocols/hidprox.h"
 #include "protocols/t55xx.h"
+#include "protocols/ioprox.h"
 #include "protocols/viking.h"
 
 #define NRF_LOG_MODULE_NAME lf_main
@@ -44,6 +45,16 @@ uint8_t scan_hidprox(uint8_t *data, uint8_t format_hint) {
  */
 uint8_t scan_viking(uint8_t *uid) {
     if (viking_read(uid, g_timeout_readem_ms)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
+/**
+ * Search ioProx tag
+ */
+uint8_t scan_ioprox(uint8_t *data, uint8_t format_hint) {
+    if (ioprox_read(data, format_hint, g_timeout_readem_ms)) {
         return STATUS_LF_TAG_OK;
     }
     return STATUS_LF_TAG_NO_FOUND;
