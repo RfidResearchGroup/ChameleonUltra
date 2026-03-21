@@ -40,6 +40,16 @@ uint8_t scan_hidprox(uint8_t *data, uint8_t format_hint) {
 }
 
 /**
+ * Search ioProx tag
+ */
+uint8_t scan_ioprox(uint8_t *data, uint8_t format_hint) {
+    if (ioprox_read(data, format_hint, g_timeout_readem_ms)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
+/**
  * Search Viking tag
  */
 uint8_t scan_viking(uint8_t *uid) {
