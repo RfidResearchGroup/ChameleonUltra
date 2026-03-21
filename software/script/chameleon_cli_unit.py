@@ -425,7 +425,7 @@ class MFUAuthArgsUnit(ReaderRequiredUnit):
         def key_parser(key: str) -> bytes:
             try:
                 key = bytes.fromhex(key)
-            except:
+            except ValueError:
                 raise ValueError("Key should be a hex string")
 
             if len(key) not in [4, 16]:
@@ -5661,7 +5661,7 @@ class LFADCGenericRead(ReaderRequiredUnit):
                 avg += val
             print(f"avg: {hex(round(avg / len(resp)))}")
         else:
-            print(f"generic read error")
+            print("generic read error")
 
 
 @hw_slot.command("list")
@@ -6576,3 +6576,4 @@ examples/notes:
             )
         else:
             print(f" [*] {color_string((CY, 'No response'))}")
+
