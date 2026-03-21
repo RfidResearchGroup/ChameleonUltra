@@ -2,6 +2,7 @@
 #include "bsp_time.h"
 #include "bsp_delay.h"
 #include "usb_main.h"
+#include "lf_em4x05_data.h"
 #include "rfid_main.h"
 #include "ble_main.h"
 #include "syssleep.h"
@@ -714,85 +715,6 @@ static data_frame_tx_t *cmd_processor_hidprox_scan(uint16_t cmd, uint16_t status
     return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_data), card_data);
 }
 
-static data_frame_tx_t *cmd_processor_ioprox_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t card_data[16] = {0};
-    uint8_t hint = (data != NULL) ? data[0] : 0;
-    status = scan_ioprox(card_data, hint);
-    if (status != STATUS_LF_TAG_OK) {
-        return data_frame_make(cmd, status, 0, NULL);
-    }
-
-    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_data), card_data);
-}
-
-static data_frame_tx_t *cmd_processor_ioprox_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    typedef struct {
-        uint8_t card_data[16];  // ioprox_codec_t->data layout: version, facility code, card number, raw8
-        uint8_t new_key[4];  
-        uint8_t old_keys[4];  // we can have more than one... struct just to compute offsets with min 1 key
-    } PACKED payload_t;
-
-    payload_t *payload = (payload_t *)data;
-
-    // Validate packet length
-    if (length < sizeof(payload_t) ||
-        (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
-        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
-    }
-
-    uint8_t old_cnt = (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys);
-
-    // Pass card_data (including raw8 at index 4-11) directly to the T55xx writer.
-    status = write_ioprox_to_t55xx(
-        payload->card_data, 
-        payload->new_key, 
-        payload->old_keys, 
-        old_cnt
-    );
-
-    return data_frame_make(cmd, status, 0, NULL);
-}
-
-/**
- * @brief Decode raw8 data to structured ioProx format
- * @param raw8 Input 8 bytes
- * @param output 16 bytes ioprox_codec_t->data layout: version, facility code, card number, raw8
- * @return STATUS_SUCCESS on success
- */
-static data_frame_tx_t *cmd_processor_ioprox_decode_raw(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    if (length != 8) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
-    
-    uint8_t output[16];
-    uint8_t result = decode_ioprox_raw(data, output);
-    
-    if (result != STATUS_SUCCESS) {
-        return data_frame_make(cmd, STATUS_CMD_ERR, 0, NULL);
-    }
-    
-    return data_frame_make(cmd, STATUS_SUCCESS, 16, output);
-}
-
-/**
- * @brief Encode ioProx parameters to structured ioProx format
- * @param ver Version byte
- * @param fc Facility code byte
- * @param cn Card number (16-bit)
- * @param out 16 bytes ioprox_codec_t->data layout: version, facility code, card number, raw8
- * @return STATUS_SUCCESS on success
- */
-static data_frame_tx_t *cmd_processor_ioprox_compose_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    if (length != 4) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
-    
-    uint8_t output[16];
-    memset(output, 0, sizeof(output));
-    uint8_t result = encode_ioprox_params(data[0], data[1], (data[2] << 8) | data[3], output);
-    
-    if (result != STATUS_SUCCESS) {
-        return data_frame_make(cmd, STATUS_CMD_ERR, 0, NULL);
-    }
-    return data_frame_make(cmd, STATUS_SUCCESS, 16, output);
-}
-
 static data_frame_tx_t *cmd_processor_viking_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t card_buffer[4] = {0x00};
     status = scan_viking(card_buffer);
@@ -815,6 +737,32 @@ static data_frame_tx_t *cmd_processor_viking_write_to_t55xx(uint16_t cmd, uint16
 
     status = write_viking_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
     return data_frame_make(cmd, status, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_em4x05_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    em4x05_data_t tag = {0};
+    status = scan_em4x05(&tag);
+    if (status != STATUS_LF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    /*
+     * Response payload layout:
+     *   config   [4 bytes] — block 0 configuration word
+     *   uid      [4 bytes] — EM4x05 block 15 UID (or EM4x69 uid_lo)
+     *   uid_hi   [4 bytes] — EM4x69 uid_hi (zero for EM4x05)
+     *   is_em4x69[1 byte]  — 1 if 64-bit UID was read, 0 otherwise
+     */
+    struct {
+        uint32_t config;
+        uint32_t uid;
+        uint32_t uid_hi;
+        uint8_t  is_em4x69;
+    } PACKED payload;
+    payload.config    = U32HTONL(tag.config);
+    payload.uid       = U32HTONL(tag.uid);
+    payload.uid_hi    = U32HTONL(tag.uid_hi);
+    payload.is_em4x69 = tag.is_em4x69 ? 1 : 0;
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(payload), (uint8_t *)&payload);
 }
 
 #define GENERIC_READ_LEN 800
@@ -1024,26 +972,6 @@ static data_frame_tx_t *cmd_processor_hidprox_get_emu_id(uint16_t cmd, uint16_t 
     }
     tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_HID_PROX);
     return data_frame_make(cmd, STATUS_SUCCESS, LF_HIDPROX_TAG_ID_SIZE, buffer->buffer);
-}
-
-static data_frame_tx_t *cmd_processor_ioprox_set_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    if (length != LF_IOPROX_TAG_ID_SIZE) {
-        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
-    }
-    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_IOPROX);
-    memcpy(buffer->buffer, data, LF_IOPROX_TAG_ID_SIZE);
-    tag_emulation_load_by_buffer(TAG_TYPE_IOPROX, false);
-    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
-}
-
-static data_frame_tx_t *cmd_processor_ioprox_get_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    tag_slot_specific_type_t tag_types;
-    tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &tag_types);
-    if (tag_types.tag_lf != TAG_TYPE_IOPROX) {
-        return data_frame_make(cmd, STATUS_PAR_ERR, 0, data);  // no data in slot, don't send garbage
-    }
-    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_IOPROX);
-    return data_frame_make(cmd, STATUS_SUCCESS, LF_IOPROX_TAG_ID_SIZE, buffer->buffer);
 }
 
 static data_frame_tx_t *cmd_processor_viking_set_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -1796,8 +1724,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_HIDPROX_WRITE_TO_T55XX,       before_reader_run,           cmd_processor_hidprox_write_to_t55xx,        NULL                   },
     {    DATA_CMD_VIKING_SCAN,                  before_reader_run,           cmd_processor_viking_scan,                   NULL                   },
     {    DATA_CMD_VIKING_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_viking_write_to_t55xx,         NULL                   },
-    {    DATA_CMD_IOPROX_SCAN,                  before_reader_run,           cmd_processor_ioprox_scan,                   NULL                   },
-    {    DATA_CMD_IOPROX_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_ioprox_write_to_t55xx,         NULL                   },
+    {    DATA_CMD_EM4X05_SCAN,                  before_reader_run,           cmd_processor_em4x05_scan,                   NULL                   },
     {    DATA_CMD_ADC_GENERIC_READ,             before_reader_run,           cmd_processor_generic_read,                  NULL                   },
 
     {    DATA_CMD_HF14A_SET_FIELD_ON,           before_reader_run,           cmd_processor_hf14a_set_field_on,            NULL                   },
@@ -1805,9 +1732,6 @@ static cmd_data_map_t m_data_cmd_map[] = {
 
     {    DATA_CMD_HF14A_GET_CONFIG,             NULL,                        cmd_processor_hf14a_get_config,              NULL                   },
     {    DATA_CMD_HF14A_SET_CONFIG,             NULL,                        cmd_processor_hf14a_set_config,              NULL                   },
-
-    {    DATA_CMD_IOPROX_DECODE_RAW,            NULL,                        cmd_processor_ioprox_decode_raw,             NULL                   },
-    {    DATA_CMD_IOPROX_COMPOSE_ID,            NULL,                        cmd_processor_ioprox_compose_id,             NULL                   },
 
 #endif
 
@@ -1856,8 +1780,6 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_EM410X_GET_EMU_ID,              NULL,                      cmd_processor_em410x_get_emu_id,             NULL                   },
     {    DATA_CMD_HIDPROX_SET_EMU_ID,             NULL,                      cmd_processor_hidprox_set_emu_id,            NULL                   },
     {    DATA_CMD_HIDPROX_GET_EMU_ID,             NULL,                      cmd_processor_hidprox_get_emu_id,            NULL                   },
-    {    DATA_CMD_IOPROX_SET_EMU_ID,              NULL,                      cmd_processor_ioprox_set_emu_id,             NULL                   },
-    {    DATA_CMD_IOPROX_GET_EMU_ID,              NULL,                      cmd_processor_ioprox_get_emu_id,             NULL                   },  
     {    DATA_CMD_VIKING_SET_EMU_ID,              NULL,                      cmd_processor_viking_set_emu_id,             NULL                   },
     {    DATA_CMD_VIKING_GET_EMU_ID,              NULL,                      cmd_processor_viking_get_emu_id,             NULL                   },
 };
