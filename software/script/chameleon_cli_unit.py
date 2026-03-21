@@ -3264,13 +3264,13 @@ class LFEm4x05Read(ReaderRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         (config, uid, uid_hi, is_em4x69) = self.cmd.em4x05_scan()
         tag_label = "EM4x69" if is_em4x69 else "EM4x05"
-        print(f" Tag type : {color_string((CG, tag_label))}")
-        print(f" Config   : {color_string((CG, f'{config:#010x}'))}")
+        print(f" Tag type : {CG}{tag_label}{C0}")
+        print(f" Config   : {CG}{config:#010x}{C0}")
         if is_em4x69:
             uid64 = (uid_hi << 32) | uid
-            print(f" UID (64) : {color_string((CG, f'{uid64:016x}'))}")
+            print(f" UID (64) : {CG}{uid64:016x}{C0}")
         else:
-            print(f" UID      : {color_string((CG, f'{uid:08x}'))}")
+            print(f" UID      : {CG}{uid:08x}{C0}")
 
 
 @hw_slot.command('list')
