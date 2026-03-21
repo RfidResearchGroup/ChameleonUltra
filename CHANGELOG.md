@@ -3,7 +3,9 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
- - Added ioProx LF protocol support (read, emulate and T55xx clone)
+ - Added EM4x05/EM4x69 reader-talk-first LF tag support (`lf em 4x05 read`), auto-detects EM4x69 64-bit UID (@nieldk)
+ - Added LF gap infrastructure (`lf_gap`) shared by all reader-talk-first protocols (@nieldk)
+ - Fixed PSK demodulator: wrong PSK2/PSK3 differential logic, LONG interval double-counting clk_count, and SHORT/NORMAL classification overlap at small rf_div values (@nieldk)
  - Added commands to dump and clone Mifare tags
  - Fix bad missing tools warning (@suut)
  - Fix for FAST_READ command for nfc - mf0 tags
