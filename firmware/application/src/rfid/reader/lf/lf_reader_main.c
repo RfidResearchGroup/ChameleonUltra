@@ -60,12 +60,14 @@ uint8_t scan_ioprox(uint8_t *data, uint8_t format_hint) {
     return STATUS_LF_TAG_NO_FOUND;
 }
 
+#if defined(PROJECT_CHAMELEON_ULTRA)
 /**
  * Search EM4x05 / EM4x69 tag (reader-talk-first)
  */
 uint8_t scan_em4x05(em4x05_data_t *out) {
     return lf_em4x05_scan(out);
 }
+#endif
 
 /**
  * Try reset t55XX tag passwords by enumerating old passwords.
