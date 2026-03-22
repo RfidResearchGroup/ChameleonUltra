@@ -320,25 +320,27 @@ bool em4x05_read(em4x05_data_t *out, uint32_t timeout_ms) {
         return false;
     }
 
-    /* Extract LWR (Last Word Read) from config - bits 19-16.
-     * In EM410x-compat mode the UID lives in the LWR block (often block 6).
-     * In native EM4x05 mode the UID is in block 15.
-     * Try LWR block first, fall back to block 15. */
+    /* Extract LWR (Last Word Read) from config word bits 19-16.
+     * This field tells us the highest block the tag will auto-transmit,
+     * and the UID lives in block 1 for EM4305/EM UNIQUE mode, or block 15
+     * for native EM4x05.  Blocks 14-15 on EM4305 are lock fields.
+     *
+     * Strategy:
+     *   LWR=1  -> EM UNIQUE/PAXTON mode, UID in block 1
+     *   LWR>1 and <14 -> custom config, UID in LWR block
+     *   LWR=0 or >=14 -> native EM4x05, UID in block 15
+     */
     uint8_t lwr = (out->config >> 16) & 0xF;
-    uint8_t uid_block = (lwr > 0 && lwr < 15) ? lwr : EM4X05_BLOCK_UID;
+    uint8_t uid_block;
+    if (lwr >= 1 && lwr < 14) {
+        uid_block = lwr;          /* EM4305/EM UNIQUE: UID at LWR block */
+    } else {
+        uid_block = EM4X05_BLOCK_UID;  /* native EM4x05: UID at block 15 */
+    }
 
     if (!em4x05_read_block(uid_block, &out->uid, block_timeout)) {
-        /* Try block 15 as fallback */
-        if (uid_block != EM4X05_BLOCK_UID) {
-            if (!em4x05_read_block(EM4X05_BLOCK_UID, &out->uid, block_timeout)) {
-                NRF_LOG_DEBUG("em4x05: UID block read failed");
-                return false;
-            }
-            uid_block = EM4X05_BLOCK_UID;
-        } else {
-            NRF_LOG_DEBUG("em4x05: block 15 read failed");
-            return false;
-        }
+        NRF_LOG_DEBUG("em4x05: UID block %d read failed", uid_block);
+        return false;
     }
     out->uid_block = uid_block;
 
