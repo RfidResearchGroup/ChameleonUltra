@@ -320,11 +320,27 @@ bool em4x05_read(em4x05_data_t *out, uint32_t timeout_ms) {
         return false;
     }
 
-    /* Block 15: UID (EM4x05) */
-    if (!em4x05_read_block(EM4X05_BLOCK_UID, &out->uid, block_timeout)) {
-        NRF_LOG_DEBUG("em4x05: block 15 read failed");
-        return false;
+    /* Extract LWR (Last Word Read) from config - bits 19-16.
+     * In EM410x-compat mode the UID lives in the LWR block (often block 6).
+     * In native EM4x05 mode the UID is in block 15.
+     * Try LWR block first, fall back to block 15. */
+    uint8_t lwr = (out->config >> 16) & 0xF;
+    uint8_t uid_block = (lwr > 0 && lwr < 15) ? lwr : EM4X05_BLOCK_UID;
+
+    if (!em4x05_read_block(uid_block, &out->uid, block_timeout)) {
+        /* Try block 15 as fallback */
+        if (uid_block != EM4X05_BLOCK_UID) {
+            if (!em4x05_read_block(EM4X05_BLOCK_UID, &out->uid, block_timeout)) {
+                NRF_LOG_DEBUG("em4x05: UID block read failed");
+                return false;
+            }
+            uid_block = EM4X05_BLOCK_UID;
+        } else {
+            NRF_LOG_DEBUG("em4x05: block 15 read failed");
+            return false;
+        }
     }
+    out->uid_block = uid_block;
 
     /*
      * Attempt EM4x69 64-bit UID blocks (13 and 14).
