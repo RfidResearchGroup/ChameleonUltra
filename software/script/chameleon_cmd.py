@@ -502,7 +502,7 @@ class ChameleonCMD:
         """
         resp = self.device.send_cmd_sync(Command.EM4X05_SCAN)
         if resp.status == Status.LF_TAG_OK:
-            resp.parsed = struct.unpack('!IIIB', resp.data[:13])
+            resp.parsed = struct.unpack('!IIIBB', resp.data[:14])
         return resp
 
     @expect_response(Status.LF_TAG_OK)
