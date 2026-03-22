@@ -43,19 +43,19 @@ extern "C" {
  * --------------------------------------------------------------------- */
 
 /** Start gap: resets the tag and signals start of a command sequence. */
-#define GAP_START_TC        50
+#define GAP_START_TC        55  /* PM3 proven: 55*8=440us for EM4x05/4305 */
 #define GAP_START_US        (GAP_START_TC * 8)
 
 /** Write gap: separates command bits during transmission. */
-#define GAP_WRITE_TC        10
+#define GAP_WRITE_TC        16  /* PM3 proven: 16*8=128us */
 #define GAP_WRITE_US        (GAP_WRITE_TC * 8)
 
 /** Field-on duration encoding bit '0' between write gaps. */
-#define GAP_BIT0_TC         24
+#define GAP_BIT0_TC         23  /* PM3 proven: 23*8=184us */
 #define GAP_BIT0_US         (GAP_BIT0_TC * 8)
 
 /** Field-on duration encoding bit '1' between write gaps. */
-#define GAP_BIT1_TC         56
+#define GAP_BIT1_TC         32  /* PM3 proven: 32*8=256us */
 #define GAP_BIT1_US         (GAP_BIT1_TC * 8)
 
 /**
