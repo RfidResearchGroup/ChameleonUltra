@@ -320,6 +320,12 @@ bool em4x05_read(em4x05_data_t *out, uint32_t timeout_ms) {
         return false;
     }
 
+    /* Sanity check: 0x00000000 and 0xFFFFFFFF are not valid config words */
+    if (out->config == 0x00000000 || out->config == 0xFFFFFFFF) {
+        NRF_LOG_DEBUG("em4x05: invalid config word 0x%08X", out->config);
+        return false;
+    }
+
     /* Extract LWR (Last Word Read) from config word bits 19-16.
      * This field tells us the highest block the tag will auto-transmit,
      * and the UID lives in block 1 for EM4305/EM UNIQUE mode, or block 15
