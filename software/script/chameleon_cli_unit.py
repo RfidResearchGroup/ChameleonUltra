@@ -3262,10 +3262,11 @@ class LFEm4x05Read(ReaderRequiredUnit):
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        (config, uid, uid_hi, is_em4x69) = self.cmd.em4x05_scan()
+        (config, uid, uid_hi, is_em4x69, uid_block) = self.cmd.em4x05_scan()
         tag_label = "EM4x69" if is_em4x69 else "EM4x05"
         print(f" Tag type : {CG}{tag_label}{C0}")
         print(f" Config   : {CG}{config:#010x}{C0}")
+        print(f" UID block: {CG}{uid_block}{C0}")
         if is_em4x69:
             uid64 = (uid_hi << 32) | uid
             print(f" UID (64) : {CG}{uid64:016x}{C0}")
