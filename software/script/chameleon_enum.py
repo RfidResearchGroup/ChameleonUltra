@@ -149,6 +149,7 @@ class Status(enum.IntEnum):
     LF_TAG_OK = 0x40
     # Unable to search for a valid EM410X tag
     LF_TAG_NO_FOUND = 0x41
+    LF_TAG_LOGIN_REQUIRED = 0x42
 
     # The parameters passed by the BLE instruction are wrong, or the parameters passed
     # by calling some functions are wrong
