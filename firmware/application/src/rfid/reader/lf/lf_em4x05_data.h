@@ -91,6 +91,7 @@ typedef struct {
     uint32_t uid;         /* block 15 (EM4x05) or blocks 13+14 (EM4x69)   */
     uint32_t uid_hi;      /* EM4x69 only: high word of 64-bit UID          */
     bool     is_em4x69;   /* true if 64-bit UID was successfully read       */
+    uint8_t  uid_block;   /* block number where UID was actually read from  */
 } em4x05_data_t;
 
 /* -----------------------------------------------------------------------
