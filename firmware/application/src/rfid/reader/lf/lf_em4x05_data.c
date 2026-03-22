@@ -21,7 +21,7 @@
 NRF_LOG_MODULE_REGISTER();
 
 /* -----------------------------------------------------------------------
- * Internal constants .
+ * Internal constants
  * --------------------------------------------------------------------- */
 
 #define EM4X05_CMD_BITS      9
@@ -111,7 +111,7 @@ static uint8_t em4x05_rf64_period(uint8_t interval) {
 }
 
 /* -----------------------------------------------------------------------
- * Edge-capture receive loop
+ * Edge-capture
  * --------------------------------------------------------------------- */
 
 static circular_buffer g_cb;
@@ -124,13 +124,31 @@ static void em4x05_edge_cb(void) {
 }
 
 /* -----------------------------------------------------------------------
- * Password data word builder (for LOGIN)
+ * Timeslot callbacks â send only, no receive here
+ * --------------------------------------------------------------------- */
+
+static uint8_t  g_send_opcode;
+static uint8_t  g_send_addr;
+static uint32_t g_send_password;
+static volatile bool g_timeslot_done = false;
+
+static void em4x05_send_timeslot_cb(void) {
+    lf_gap_send_start();
+    bsp_delay_us(GAP_LISTEN_US);
+    uint16_t cmd = em4x05_build_cmd(g_send_opcode, g_send_addr);
+    lf_gap_send_bits(cmd, EM4X05_CMD_BITS);
+    /* Carrier stays ON â tag begins responding ~3Tc after last bit */
+    g_timeslot_done = true;
+}
+
+/* -----------------------------------------------------------------------
+ * Password data word builder
  * --------------------------------------------------------------------- */
 
 static void em4x05_build_data_word(uint32_t data, uint8_t bits[45]) {
     uint8_t col_par[4] = {0};
     int pos = 0;
-    bits[pos++] = 0;  /* header = 0 */
+    bits[pos++] = 0;
     for (int row = 0; row < 8; row++) {
         uint8_t nibble = (data >> (28 - row * 4)) & 0xF;
         uint8_t rp = 0;
@@ -145,37 +163,19 @@ static void em4x05_build_data_word(uint32_t data, uint8_t bits[45]) {
     for (int col = 0; col < 4; col++) {
         bits[pos++] = (~col_par[col]) & 1;
     }
-    /* pos == 45 */
-}
-
-/* -----------------------------------------------------------------------
- * Timeslot callbacks
- * --------------------------------------------------------------------- */
-
-static uint8_t  g_send_opcode;
-static uint8_t  g_send_addr;
-static uint32_t g_send_password;
-
-static void em4x05_send_timeslot_cb(void) {
-    lf_gap_send_start();
-    bsp_delay_us(GAP_LISTEN_US);
-    uint16_t cmd = em4x05_build_cmd(g_send_opcode, g_send_addr);
-    lf_gap_send_bits(cmd, EM4X05_CMD_BITS);
 }
 
 static void em4x05_login_timeslot_cb(void) {
     lf_gap_send_start();
     bsp_delay_us(GAP_LISTEN_US);
-    /* LOGIN command: opcode=0b00 (DSBL), addr=0b000 */
     uint16_t cmd = em4x05_build_cmd(EM4X05_OPCODE_DSBL, 0);
     lf_gap_send_bits(cmd, EM4X05_CMD_BITS);
-    /* Send 45-bit password word */
     uint8_t pwd_bits[45];
     em4x05_build_data_word(g_send_password, pwd_bits);
     for (int i = 0; i < 45; i++) {
         lf_gap_send_bit(pwd_bits[i]);
     }
-    /* Leave carrier on — tag sends 1-bit ACK */
+    g_timeslot_done = true;
 }
 
 /* -----------------------------------------------------------------------
@@ -184,10 +184,16 @@ static void em4x05_login_timeslot_cb(void) {
 
 static bool em4x05_login(uint32_t password, uint32_t timeout_ms) {
     g_send_password = password;
+    g_timeslot_done = false;
 
-    request_timeslot(6000, em4x05_login_timeslot_cb);
-    bsp_delay_ms(7);
+    request_timeslot(10000, em4x05_login_timeslot_cb);
 
+    /* Wait for timeslot to complete */
+    autotimer *p_wait = bsp_obtain_timer(0);
+    while (!g_timeslot_done && NO_TIMEOUT_1MS(p_wait, 15)) {}
+    bsp_return_timer(p_wait);
+
+    /* Now set up edge capture to receive ACK */
     cb_init(&g_cb, EM4X05_CB_SIZE, sizeof(uint16_t));
     register_rio_callback(em4x05_edge_cb);
     lf_125khz_radio_gpiote_enable();
@@ -195,7 +201,6 @@ static bool em4x05_login(uint32_t password, uint32_t timeout_ms) {
 
     bool ack = false;
     autotimer *p_at = bsp_obtain_timer(0);
-
     while (!ack && NO_TIMEOUT_1MS(p_at, timeout_ms)) {
         uint16_t interval = 0;
         if (!cb_pop_front(&g_cb, &interval)) {
@@ -206,63 +211,71 @@ static bool em4x05_login(uint32_t password, uint32_t timeout_ms) {
             ack = true;
         }
     }
-
     bsp_return_timer(p_at);
     lf_125khz_radio_gpiote_disable();
     unregister_rio_callback();
     cb_free(&g_cb);
-
     return ack;
 }
 
 /* -----------------------------------------------------------------------
  * Block read
+ * Key insight from T5577: send command in timeslot, then receive AFTER
  * --------------------------------------------------------------------- */
 
 static bool em4x05_read_block(uint8_t addr, uint32_t *data, uint32_t timeout_ms) {
-    manchester modem = {
-        .sync = true,
-        .rp   = em4x05_rf64_period,
-    };
+    g_send_opcode = EM4X05_OPCODE_READ;
+    g_send_addr   = addr;
+    g_timeslot_done = false;
 
-    uint8_t resp_bits[EM4X05_RESP_BITS] = {0};
-    uint8_t bit_count = 0;
+    /*
+     * Send READ command via timeslot.
+     * Timeslot duration must cover:
+     *   start_gap(55*8=440us) + listen(50*8=400us) + 9 bits*(32+16)*8us = 3296us
+     * Use 5000us for margin.
+     */
+    request_timeslot(5000, em4x05_send_timeslot_cb);
 
+    /* Wait for timeslot to complete before setting up receive */
+    autotimer *p_wait = bsp_obtain_timer(0);
+    while (!g_timeslot_done && NO_TIMEOUT_1MS(p_wait, 10)) {}
+    bsp_return_timer(p_wait);
+
+    /*
+     * Now set up edge capture. The tag starts responding ~3Tc (~24us)
+     * after the last command bit. We have a small window here but the
+     * circular buffer will absorb any edges we catch.
+     */
     cb_init(&g_cb, EM4X05_CB_SIZE, sizeof(uint16_t));
     register_rio_callback(em4x05_edge_cb);
     lf_125khz_radio_gpiote_enable();
     clear_lf_counter_value();
 
-    g_send_opcode = EM4X05_OPCODE_READ;
-    g_send_addr   = addr;
-    /* Timeslot must cover: start_gap(400) + listen(400) + 9 bits×(56+10)×8µs(4752) = 5552µs. Use 7000 for margin. */
-    request_timeslot(7000, em4x05_send_timeslot_cb);
-
-    bsp_delay_ms(8);  /* wait for full 7ms timeslot + tag response start (~3Tc) */
-
+    manchester modem = {
+        .sync = true,
+        .rp   = em4x05_rf64_period,
+    };
+    uint8_t resp_bits[EM4X05_RESP_BITS] = {0};
+    uint8_t bit_count = 0;
     bool ok = false;
-    autotimer *p_at = bsp_obtain_timer(0);
 
+    autotimer *p_at = bsp_obtain_timer(0);
     while (!ok && NO_TIMEOUT_1MS(p_at, timeout_ms)) {
         uint16_t interval = 0;
         if (!cb_pop_front(&g_cb, &interval)) {
             continue;
         }
-
         bool mbits[2] = {false, false};
         int8_t mbitlen = 0;
         manchester_feed(&modem, (uint8_t)interval, mbits, &mbitlen);
-
         if (mbitlen == -1) {
             manchester_reset(&modem);
             bit_count = 0;
             continue;
         }
-
         for (int8_t i = 0; i < mbitlen && bit_count < EM4X05_RESP_BITS; i++) {
             resp_bits[bit_count++] = mbits[i] ? 1 : 0;
         }
-
         if (bit_count >= EM4X05_RESP_BITS) {
             ok = em4x05_decode_response(resp_bits, data);
             if (!ok) {
@@ -271,12 +284,10 @@ static bool em4x05_read_block(uint8_t addr, uint32_t *data, uint32_t timeout_ms)
             }
         }
     }
-
     bsp_return_timer(p_at);
     lf_125khz_radio_gpiote_disable();
     unregister_rio_callback();
     cb_free(&g_cb);
-
     return ok;
 }
 
@@ -288,21 +299,18 @@ bool em4x05_read(em4x05_data_t *out, uint32_t timeout_ms) {
     memset(out, 0, sizeof(*out));
 
     uint32_t block_timeout = timeout_ms / 4;
-    if (block_timeout < 50) block_timeout = 50;
+    if (block_timeout < 100) block_timeout = 100;
 
-    /* Block 0: configuration */
     if (!em4x05_read_block(EM4X05_BLOCK_CONFIG, &out->config, block_timeout)) {
         NRF_LOG_DEBUG("em4x05: block 0 read failed");
         return false;
     }
 
-    /* Sanity check */
     if (out->config == 0x00000000 || out->config == 0xFFFFFFFF) {
         NRF_LOG_DEBUG("em4x05: invalid config word 0x%08X", out->config);
         return false;
     }
 
-    /* Check Read Login (RL) bit — bit 6 */
     bool rl = (out->config >> 6) & 1;
     if (rl) {
         NRF_LOG_DEBUG("em4x05: RL set, attempting login pwd=%08X", out->password);
@@ -315,7 +323,6 @@ bool em4x05_read(em4x05_data_t *out, uint32_t timeout_ms) {
         NRF_LOG_DEBUG("em4x05: login OK");
     }
 
-    /* Determine UID block from LWR field (bits 19-16) */
     uint8_t lwr = (out->config >> 16) & 0xF;
     uint8_t uid_block = (lwr >= 1 && lwr < 14) ? lwr : EM4X05_BLOCK_UID;
 
@@ -325,7 +332,6 @@ bool em4x05_read(em4x05_data_t *out, uint32_t timeout_ms) {
     }
     out->uid_block = uid_block;
 
-    /* Attempt EM4x69 64-bit UID (blocks 13+14) — non-fatal */
     uint32_t uid_lo = 0, uid_hi = 0;
     if (em4x05_read_block(EM4X69_BLOCK_UID_LO, &uid_lo, block_timeout) &&
         em4x05_read_block(EM4X69_BLOCK_UID_HI, &uid_hi, block_timeout)) {
@@ -341,7 +347,7 @@ uint8_t scan_em4x05(em4x05_data_t *out) {
     start_lf_125khz_radio();
     bsp_delay_ms(5);
 
-    bool found = em4x05_read(out, 500);
+    bool found = em4x05_read(out, 1000);
 
     stop_lf_125khz_radio();
 
