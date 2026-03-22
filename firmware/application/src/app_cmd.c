@@ -671,11 +671,13 @@ static data_frame_tx_t *cmd_processor_em4x05_scan(uint16_t cmd, uint16_t status,
         uint32_t uid;
         uint32_t uid_hi;
         uint8_t  is_em4x69;
+        uint8_t  uid_block;
     } PACKED payload;
     payload.config    = U32HTONL(tag.config);
     payload.uid       = U32HTONL(tag.uid);
     payload.uid_hi    = U32HTONL(tag.uid_hi);
     payload.is_em4x69 = tag.is_em4x69 ? 1 : 0;
+    payload.uid_block = tag.uid_block;
     return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(payload), (uint8_t *)&payload);
 }
 
