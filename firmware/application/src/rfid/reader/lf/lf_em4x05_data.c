@@ -132,14 +132,40 @@ static uint8_t  g_send_addr;
 static uint32_t g_send_password;
 static volatile bool g_timeslot_done = false;
 
+static void send_em4305_bit(bool bit) {
+    // Every bit starts with a 128us Low pulse (16 carrier cycles)
+    lf_125khz_radio_field_off();
+    bsp_delay_us(128); 
+    
+    lf_125khz_radio_field_on();
+    if (bit) {
+        // Logic 1: Field stays ON for 384us (Total bit time 512us)
+        bsp_delay_us(384);
+    } else {
+        // Logic 0: Field stays ON for 128us (Total bit time 256us)
+        bsp_delay_us(128);
+    }
+}
+
 static void em4x05_send_timeslot_cb(void) {
-    lf_gap_send_start();
-    bsp_delay_us(GAP_LISTEN_US);
+    // 1. Start Gap: 480us of SILENCE
+    lf_125khz_radio_field_off();
+    bsp_delay_us(480);
+    
+    // 2. Build the command
     uint16_t cmd = em4x05_build_cmd(g_send_opcode, g_send_addr);
-    lf_gap_send_bits(cmd, EM4X05_CMD_BITS);
-    /* Carrier stays ON â tag begins responding ~3Tc after last bit */
+    
+    // 3. Send bits MSB first (9 bits total)
+    // Note: EM4305 protocol usually expects bits in a specific order
+    for (int i = 8; i >= 0; i--) {
+        send_em4305_bit((cmd >> i) & 1);
+    }
+
+    // 4. Ensure field stays ON for tag to respond
+    lf_125khz_radio_field_on();
     g_timeslot_done = true;
 }
+
 
 /* -----------------------------------------------------------------------
  * Password data word builder
