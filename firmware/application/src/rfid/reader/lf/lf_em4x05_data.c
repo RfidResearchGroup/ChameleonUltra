@@ -133,18 +133,13 @@ static uint32_t g_send_password;
 static volatile bool g_timeslot_done = false;
 
 static void send_em4305_bit(bool bit) {
-    // 1. Create the Write Gap (Silence)
     stop_lf_125khz_radio();
-    bsp_delay_us(128); // This should create ~16 consecutive '80's in your hex dump
+    bsp_delay_us(150); // Increased from 128 to ensure the gap is wide enough
     
-    // 2. Resume the Field
     start_lf_125khz_radio();
-    
     if (bit) {
-        // '1' bit: Field ON for 384us
         bsp_delay_us(384); 
     } else {
-        // '0' bit: Field ON for 128us
         bsp_delay_us(128);
     }
 }
