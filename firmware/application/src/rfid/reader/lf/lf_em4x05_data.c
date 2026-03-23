@@ -132,19 +132,17 @@ static uint8_t  g_send_addr;
 static uint32_t g_send_password;
 static volatile bool g_timeslot_done = false;
 
-static void send_em4305_bit(bool bit) {
+void send_em4305_bit(bool bit) {
+    // FORCE A VISIBLE GAP
     stop_lf_125khz_radio();
-    bsp_delay_us(180); // Increased slightly to ensure a solid "gap"
-    
+    bsp_delay_us(40); // This will create ~10-15 '80' samples in a row
+
+    // SEND THE PULSE
     start_lf_125khz_radio();
     if (bit) {
-        // Target is 384us. 
-        // We use 350us to account for the overhead of the function calls
-        bsp_delay_us(350); 
+        bsp_delay_us(380); // Logic 1
     } else {
-        // Target is 128us.
-        // We use 100us to account for overhead
-        bsp_delay_us(100); 
+        bsp_delay_us(120); // Logic 0
     }
 }
 
