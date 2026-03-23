@@ -133,35 +133,41 @@ static uint32_t g_send_password;
 static volatile bool g_timeslot_done = false;
 
 static void send_em4305_bit(bool bit) {
-    // 1. Field OFF (The "Write Hole")
-    lf_125khz_radio_field_set(false);
+    // 1. Every EM4305 bit starts with a "Write Gap" (Field OFF)
+    stop_lf_125khz_radio();
     bsp_delay_us(128); 
     
-    // 2. Field ON 
-    lf_125khz_radio_field_set(true);
+    // 2. Turn field back ON
+    start_lf_125khz_radio();
+    
     if (bit) {
-        // Logic 1: ON for 384us (Total 512us)
+        // Logic 1: Field stays ON for 384us (Total bit period 512us)
         bsp_delay_us(384);
     } else {
-        // Logic 0: ON for 128us (Total 256us)
+        // Logic 0: Field stays ON for 128us (Total bit period 256us)
         bsp_delay_us(128);
     }
 }
 
 static void em4x05_send_timeslot_cb(void) {
-    // Start Gap: Silence for 480us
-    lf_125khz_radio_field_set(false);
+    // 1. Start Gap: 480us of SILENCE to wake up the tag logic
+    stop_lf_125khz_radio();
     bsp_delay_us(480);
     
+    // Field must be ON briefly before the first bit's write hole
+    start_lf_125khz_radio();
+    bsp_delay_us(10); // Tiny "settle" time
+
+    // 2. Build the command (Opcode + Addr + Parity)
     uint16_t cmd = em4x05_build_cmd(g_send_opcode, g_send_addr);
     
-    // Send bits MSB first
+    // 3. Send the 9 bits (MSB first)
     for (int i = 8; i >= 0; i--) {
         send_em4305_bit((cmd >> i) & 1);
     }
 
-    // Ensure field is back ON for the tag's response
-    lf_125khz_radio_field_set(true);
+    // 4. Ensure field stays ON so the tag has power to reply!
+    start_lf_125khz_radio();
     g_timeslot_done = true;
 }
 
