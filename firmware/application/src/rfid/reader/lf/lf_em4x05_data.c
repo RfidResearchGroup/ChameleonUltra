@@ -132,18 +132,18 @@ static uint8_t  g_send_addr;
 static uint32_t g_send_password;
 static volatile bool g_timeslot_done = false;
 
-void send_em4305_bit(bool bit) {
-    // 1. HARD GAP: Increase to 140us to ensure the field hits zero
+static void send_em4305_bit(bool bit) {
     stop_lf_125khz_radio();
-    bsp_delay_us(140); 
-
-    // 2. DATA PULSE:
+    bsp_delay_us(180); // Increased slightly to ensure a solid "gap"
+    
     start_lf_125khz_radio();
     if (bit) {
-        // Logic 1: Aiming for ~300us ON time
-        bsp_delay_us(300); 
+        // Target is 384us. 
+        // We use 350us to account for the overhead of the function calls
+        bsp_delay_us(350); 
     } else {
-        // Logic 0: Aiming for ~100us ON time
+        // Target is 128us.
+        // We use 100us to account for overhead
         bsp_delay_us(100); 
     }
 }
