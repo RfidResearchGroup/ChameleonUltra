@@ -133,16 +133,18 @@ static uint32_t g_send_password;
 static volatile bool g_timeslot_done = false;
 
 void send_em4305_bit(bool bit) {
-    // FORCE A VISIBLE GAP
+    // 1. HARD GAP: Increase to 140us to ensure the field hits zero
     stop_lf_125khz_radio();
-    bsp_delay_us(40); // This will create ~10-15 '80' samples in a row
+    bsp_delay_us(140); 
 
-    // SEND THE PULSE
+    // 2. DATA PULSE:
     start_lf_125khz_radio();
     if (bit) {
-        bsp_delay_us(380); // Logic 1
+        // Logic 1: Aiming for ~300us ON time
+        bsp_delay_us(300); 
     } else {
-        bsp_delay_us(120); // Logic 0
+        // Logic 0: Aiming for ~100us ON time
+        bsp_delay_us(100); 
     }
 }
 
