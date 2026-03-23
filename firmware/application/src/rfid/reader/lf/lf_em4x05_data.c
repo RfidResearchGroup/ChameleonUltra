@@ -134,13 +134,17 @@ static volatile bool g_timeslot_done = false;
 
 static void send_em4305_bit(bool bit) {
     stop_lf_125khz_radio();
-    bsp_delay_us(150); // Increased from 128 to ensure the gap is wide enough
+    bsp_delay_us(180); // Increased slightly to ensure a solid "gap"
     
     start_lf_125khz_radio();
     if (bit) {
-        bsp_delay_us(384); 
+        // Target is 384us. 
+        // We use 350us to account for the overhead of the function calls
+        bsp_delay_us(350); 
     } else {
-        bsp_delay_us(128);
+        // Target is 128us.
+        // We use 100us to account for overhead
+        bsp_delay_us(100); 
     }
 }
 
