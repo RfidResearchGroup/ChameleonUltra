@@ -133,37 +133,38 @@ static uint32_t g_send_password;
 static volatile bool g_timeslot_done = false;
 
 static void send_em4305_bit(bool bit) {
-    stop_lf_125khz_radio();
-    bsp_delay_us(180); // Increased slightly to ensure a solid "gap"
-    
-    start_lf_125khz_radio();
+    // Field is already ON from the previous bit/settle
     if (bit) {
-        // Target is 384us. 
-        // We use 350us to account for the overhead of the function calls
-        bsp_delay_us(350); 
+        bsp_delay_us(256);   /* bit 1: 32 Tc */
     } else {
-        // Target is 128us.
-        // We use 100us to account for overhead
-        bsp_delay_us(100); 
+        bsp_delay_us(184);   /* bit 0: 23 Tc */
     }
+    
+    stop_lf_125khz_radio();
+    // 250us delay: ~125us of ringing + ~125us of actual silence
+    bsp_delay_us(250);       
+    start_lf_125khz_radio();
 }
 
 static void em4x05_send_timeslot_cb(void) {
-    // 1. Start Gap: 480us of SILENCE to wake up the tag logic
+    // 1. Start Gap (Wake up)
     stop_lf_125khz_radio();
-    bsp_delay_us(480);
+    bsp_delay_us(440);
     
-    // Field must be ON briefly before the first bit's write hole
+    // 2. Settle (Clock Recovery)
     start_lf_125khz_radio();
-    bsp_delay_us(10); // Tiny "settle" time
+    bsp_delay_us(104); 
 
-    // 2. Build the command (Opcode + Addr + Parity)
+    // 3. Command bits
     uint16_t cmd = em4x05_build_cmd(g_send_opcode, g_send_addr);
-    
-    // 3. Send the 9 bits (MSB first)
     for (int i = 8; i >= 0; i--) {
         send_em4305_bit((cmd >> i) & 1);
     }
+
+    // 4. Power for Response
+    // Field is left ON by the last start_lf_125khz_radio() in send_em4305_bit
+    g_timeslot_done = true;
+}
 
     // 4. Ensure field stays ON so the tag has power to reply!
     start_lf_125khz_radio();
