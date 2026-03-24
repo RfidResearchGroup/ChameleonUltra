@@ -1,6 +1,7 @@
 #include "lf_gap.h"
 
 #include "bsp_delay.h"
+#include "hw_connect.h"
 #include "lf_125khz_radio.h"
 #include "lf_reader_data.h"
 #include "nrf_gpio.h"
