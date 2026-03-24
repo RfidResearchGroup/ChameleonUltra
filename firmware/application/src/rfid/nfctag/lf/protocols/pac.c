@@ -356,10 +356,13 @@ static const nrf_pwm_sequence_t *pac_modulator(pac_codec *d, uint8_t *buf) {
     pac_build_bitstream(buf, bits);
 
     // NRZ: output must be CONSTANT within each bit period (no mid-bit transition).
-    // Per nRF52840 PS: compare = 0 → pin held LOW; compare >= counter_top → pin held HIGH.
-    // No polarity bits needed — avoids edge-case ambiguity with compare = 0.
+    // Per nRF52840 PS: compare >= counter_top → pin held HIGH; compare = 0 → pin held LOW.
+    // Use compare = counter_top + 1 (not counter_top) to avoid the compare == counter_top
+    // boundary where a 1-tick output glitch may occur due to simultaneous compare-match
+    // and counter-wrap. Real PAC readers with hardware edge detection are sensitive to this;
+    // PM3's software NRZ demod is not (it averages over the bit period).
     for (int i = 0; i < PAC_FRAME_BITS; i++) {
-        m_pac_pwm_seq_vals[i].channel_0 = bits[i] ? PAC_RF_PER_BIT : 0;
+        m_pac_pwm_seq_vals[i].channel_0 = bits[i] ? (PAC_RF_PER_BIT + 1) : 0;
         m_pac_pwm_seq_vals[i].counter_top = PAC_RF_PER_BIT;
     }
     return &m_pac_pwm_seq;
