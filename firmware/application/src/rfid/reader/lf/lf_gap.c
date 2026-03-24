@@ -3,6 +3,7 @@
 #include "bsp_delay.h"
 #include "lf_125khz_radio.h"
 #include "lf_reader_data.h"
+#include "nrf_gpio.h"
 
 #define NRF_LOG_MODULE_NAME lf_gap
 #include "nrf_log.h"
@@ -13,27 +14,43 @@ NRF_LOG_MODULE_REGISTER();
 /* -----------------------------------------------------------------------
  * Transmit side
  *
- * All functions must be called from within a timeslot callback, exactly
- * as t55xx_timeslot_callback() does in lf_t55xx_data.c.  The timeslot
- * gives us uninterrupted CPU time so the µs-precision delays are accurate.
+ * All functions must be called from within a timeslot callback.
+ *
+ * Gap generation: we cannot rely on nrfx_pwm_stop() to cut the field
+ * because when the PWM stops it releases LF_ANT_DRIVER to GPIO state,
+ * which may leave the antenna driver enabled.  Instead we:
+ *   1. Stop the PWM (releases pin to GPIO)
+ *   2. Explicitly drive LF_ANT_DRIVER low (field off)
+ *   3. Delay for the gap duration
+ *   4. Drive LF_ANT_DRIVER high then restart PWM (field on)
  * --------------------------------------------------------------------- */
 
+static inline void field_off(void) {
+    nrfx_pwm_stop(&m_pwm, true);           /* stop PWM, releases pin    */
+    nrf_gpio_cfg_output(LF_ANT_DRIVER);
+    nrf_gpio_pin_clear(LF_ANT_DRIVER);     /* drive low = field off     */
+}
+
+static inline void field_on(void) {
+    nrf_gpio_pin_set(LF_ANT_DRIVER);       /* drive high briefly        */
+    start_lf_125khz_radio();               /* restart PWM on pin        */
+}
+
 void lf_gap_send_start(void) {
-    stop_lf_125khz_radio();
+    field_off();
     bsp_delay_us(GAP_START_US);
-    start_lf_125khz_radio();
+    field_on();
 }
 
 void lf_gap_send_bit(uint8_t bit) {
-    /* Field on for the bit duration, then a write gap */
     if (bit & 1) {
         bsp_delay_us(GAP_BIT1_US);
     } else {
         bsp_delay_us(GAP_BIT0_US);
     }
-    stop_lf_125khz_radio();
+    field_off();
     bsp_delay_us(GAP_WRITE_US);
-    start_lf_125khz_radio();
+    field_on();
 }
 
 void lf_gap_send_u32(uint32_t word) {
@@ -46,31 +63,9 @@ void lf_gap_send_bits(uint32_t value, uint8_t nbits) {
     }
 }
 
-/* -----------------------------------------------------------------------
- * Receive side
- *
- * The GPIOTE edge counter (m_pwm_timer_counter via get_lf_counter_value)
- * increments once per carrier cycle while the field is present and edges
- * arrive.  During a gap, no edges arrive so the counter freezes.
- *
- * We detect a gap by comparing the current counter value against the value
- * at the last known edge.  If the difference exceeds GAP_DETECT_TIMEOUT_TC
- * we declare a gap.
- *
- * Note: get_lf_counter_value() returns the captured counter (snapshot),
- * not a live read.  The counter is captured by the PPI on each PWM period
- * end.  At 125kHz this gives 8µs granularity which is sufficient.
- * --------------------------------------------------------------------- */
-
 bool lf_gap_detect(uint32_t last_count, uint32_t *gap_tc) {
     uint32_t now = get_lf_counter_value();
-
-    /*
-     * Handle counter wrap (32-bit, wraps at 2^32 carrier cycles ≈ 9.5 hours
-     * of continuous field — effectively never, but handle it correctly).
-     */
     uint32_t elapsed = now - last_count;
-
     if (elapsed >= GAP_DETECT_TIMEOUT_TC) {
         *gap_tc = elapsed;
         return true;
