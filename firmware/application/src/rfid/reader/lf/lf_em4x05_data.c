@@ -124,7 +124,7 @@ static void em4x05_edge_cb(void) {
 }
 
 /* -----------------------------------------------------------------------
- * Timeslot callbacks â send only, no receive here
+ * Command transmission
  * --------------------------------------------------------------------- */
 
 static uint8_t  g_send_opcode;
@@ -132,47 +132,45 @@ static uint8_t  g_send_addr;
 static uint32_t g_send_password;
 static volatile bool g_timeslot_done = false;
 
+/*
+ * Send one EM4305 command bit.
+ * Protocol: field ON for bit duration, then write gap (field OFF).
+ * The write gap delay is padded to compensate for antenna ringing (~200us).
+ * Field is left ON after the gap ready for the next bit or response window.
+ */
 static void send_em4305_bit(bool bit) {
-    // Field is already ON from the previous bit/settle
     if (bit) {
-        bsp_delay_us(256);   /* bit 1: 32 Tc */
+        bsp_delay_us(256);   /* bit 1: 32 Tc = 256us */
     } else {
-        bsp_delay_us(184);   /* bit 0: 23 Tc */
+        bsp_delay_us(184);   /* bit 0: 23 Tc = 184us */
     }
-    
     stop_lf_125khz_radio();
-    // 250us delay: ~125us of ringing + ~125us of actual silence
-    bsp_delay_us(250);       
+    bsp_delay_us(250);       /* write gap: 128us target + ~122us ringing compensation */
     start_lf_125khz_radio();
 }
 
 static void em4x05_send_timeslot_cb(void) {
-    // 1. Start Gap (Wake up)
+    /* 1. Start gap: wake up tag */
     stop_lf_125khz_radio();
-    bsp_delay_us(440);
-    
-    // 2. Settle (Clock Recovery)
-    start_lf_125khz_radio();
-    bsp_delay_us(104); 
+    bsp_delay_us(440);           /* 55 Tc = 440us */
 
-    // 3. Command bits
+    /* 2. Settle: allow tag clock recovery to lock onto carrier */
+    start_lf_125khz_radio();
+    bsp_delay_us(104);           /* 13 carrier cycles = 104us */
+
+    /* 3. Send 9-bit command MSB first */
     uint16_t cmd = em4x05_build_cmd(g_send_opcode, g_send_addr);
     for (int i = 8; i >= 0; i--) {
         send_em4305_bit((cmd >> i) & 1);
     }
 
-    // 4. Power for Response
-    // Field is left ON by the last start_lf_125khz_radio() in send_em4305_bit
-    g_timeslot_done = true;
-}
-
-    // 4. Ensure field stays ON so the tag has power to reply!
-    start_lf_125khz_radio();
+    /* 4. Field stays ON (left by last start_lf in send_em4305_bit)
+     * Tag will respond ~3 Tc (~24us) after the last write gap */
     g_timeslot_done = true;
 }
 
 /* -----------------------------------------------------------------------
- * Password data word builder
+ * Password data word builder (for LOGIN)
  * --------------------------------------------------------------------- */
 
 static void em4x05_build_data_word(uint32_t data, uint8_t bits[45]) {
@@ -196,15 +194,25 @@ static void em4x05_build_data_word(uint32_t data, uint8_t bits[45]) {
 }
 
 static void em4x05_login_timeslot_cb(void) {
-    lf_gap_send_start();
-    bsp_delay_us(GAP_LISTEN_US);
+    /* Start gap */
+    stop_lf_125khz_radio();
+    bsp_delay_us(440);
+    start_lf_125khz_radio();
+    bsp_delay_us(104);
+
+    /* LOGIN command: opcode=0b00 (DSBL), addr=0b000 */
     uint16_t cmd = em4x05_build_cmd(EM4X05_OPCODE_DSBL, 0);
-    lf_gap_send_bits(cmd, EM4X05_CMD_BITS);
+    for (int i = 8; i >= 0; i--) {
+        send_em4305_bit((cmd >> i) & 1);
+    }
+
+    /* Send 45-bit password word using same bit encoding */
     uint8_t pwd_bits[45];
     em4x05_build_data_word(g_send_password, pwd_bits);
     for (int i = 0; i < 45; i++) {
-        lf_gap_send_bit(pwd_bits[i]);
+        send_em4305_bit(pwd_bits[i]);
     }
+
     g_timeslot_done = true;
 }
 
@@ -216,14 +224,12 @@ static bool em4x05_login(uint32_t password, uint32_t timeout_ms) {
     g_send_password = password;
     g_timeslot_done = false;
 
-    request_timeslot(10000, em4x05_login_timeslot_cb);
+    request_timeslot(15000, em4x05_login_timeslot_cb);
 
-    /* Wait for timeslot to complete */
     autotimer *p_wait = bsp_obtain_timer(0);
-    while (!g_timeslot_done && NO_TIMEOUT_1MS(p_wait, 15)) {}
+    while (!g_timeslot_done && NO_TIMEOUT_1MS(p_wait, 20)) {}
     bsp_return_timer(p_wait);
 
-    /* Now set up edge capture to receive ACK */
     cb_init(&g_cb, EM4X05_CB_SIZE, sizeof(uint16_t));
     register_rio_callback(em4x05_edge_cb);
     lf_125khz_radio_gpiote_enable();
@@ -250,32 +256,26 @@ static bool em4x05_login(uint32_t password, uint32_t timeout_ms) {
 
 /* -----------------------------------------------------------------------
  * Block read
- * Key insight from T5577: send command in timeslot, then receive AFTER
  * --------------------------------------------------------------------- */
 
 static bool em4x05_read_block(uint8_t addr, uint32_t *data, uint32_t timeout_ms) {
-    g_send_opcode = EM4X05_OPCODE_READ;
-    g_send_addr   = addr;
+    g_send_opcode   = EM4X05_OPCODE_READ;
+    g_send_addr     = addr;
     g_timeslot_done = false;
 
     /*
-     * Send READ command via timeslot.
-     * Timeslot duration must cover:
-     *   start_gap(55*8=440us) + listen(50*8=400us) + 9 bits*(32+16)*8us = 3296us
-     * Use 5000us for margin.
+     * Timeslot must cover full command transmission:
+     *   start_gap(440) + settle(104) + 9 bits * (256+250) = 5098us
+     * Use 6000us for margin.
      */
-    request_timeslot(5000, em4x05_send_timeslot_cb);
+    request_timeslot(6000, em4x05_send_timeslot_cb);
 
-    /* Wait for timeslot to complete before setting up receive */
+    /* Wait for timeslot to complete */
     autotimer *p_wait = bsp_obtain_timer(0);
     while (!g_timeslot_done && NO_TIMEOUT_1MS(p_wait, 10)) {}
     bsp_return_timer(p_wait);
 
-    /*
-     * Now set up edge capture. The tag starts responding ~3Tc (~24us)
-     * after the last command bit. We have a small window here but the
-     * circular buffer will absorb any edges we catch.
-     */
+    /* Set up edge capture — tag responds ~3 Tc after last write gap */
     cb_init(&g_cb, EM4X05_CB_SIZE, sizeof(uint16_t));
     register_rio_callback(em4x05_edge_cb);
     lf_125khz_radio_gpiote_enable();
