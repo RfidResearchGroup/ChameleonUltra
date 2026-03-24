@@ -9,6 +9,12 @@
 #include "t55xx.h"
 #include "tag_base_type.h"
 
+#define NRF_LOG_MODULE_NAME pac_protocol
+#include "nrf_log.h"
+#include "nrf_log_ctrl.h"
+#include "nrf_log_default_backends.h"
+NRF_LOG_MODULE_REGISTER();
+
 #define PAC_DATA_SIZE       8   // 8-byte ASCII card ID
 
 // NRZ at RF/32: 32 carrier cycles per bit.
