@@ -2440,9 +2440,43 @@ class HFMFAutopwn(ReaderRequiredUnit):
 
         print(f" {CG}[+]{C0}  Some keys found, recovering remaining..")
         if nt_level == 2:
-            print(
-                f" {CY}[+]{C0}  Hardened card — use 'hf mf hardnested' to recover remaining keys"
-            )
+            missing_keys = self.find_missing_keys(current_keys_found, total)
+            hardnested = HFMFHardNested.__new__(HFMFHardNested)
+            BaseCLIUnit.__init__(hardnested)
+            hardnested._device_cmd = self.cmd
+            for missing_key_num, key_type_target in missing_keys.items():
+                if current_keys_found.get(missing_key_num) is not None:
+                    print(f" {CG}[+]{C0}  Key {missing_key_num} found by reuse")
+                    continue
+                block_known, key_known_bytes, type_known = self.choose_random_known_key(
+                    current_keys_found
+                )
+                block_target = (missing_key_num // 2) * 4
+                hn_key = hardnested.recover_key(
+                    False,
+                    block_known,
+                    type_known,
+                    key_known_bytes,
+                    block_target,
+                    key_type_target,
+                    False,
+                    200,
+                    3,
+                )
+                if hn_key is None:
+                    continue
+                print(f" {CG}[+]{C0}  Found key {missing_key_num}: {hn_key.upper()}")
+                current_keys_found[missing_key_num] = bytes.fromhex(hn_key)
+                current_keys_found = dict(sorted(current_keys_found.items()))
+                _, mask_bytes = self.mask_from_keys(missing_keys)
+                current_keys_found = self.merge_found_sector_keys(
+                    current_keys_found,
+                    self.try_key(bytes.fromhex(hn_key), self.neg_bytes(mask_bytes)),
+                )
+            if len(current_keys_found) < total:
+                current_keys_found = self.run_senested(
+                    current_keys_found, max_sectors_num
+                )
         elif nt_level == 0:
             current_keys_found = self.run_senested(current_keys_found, max_sectors_num)
         else:
