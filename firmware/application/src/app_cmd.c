@@ -10,9 +10,11 @@
 #include "app_cmd.h"
 #include "app_status.h"
 #include "bsp_wdt.h"
+#include "tag_persistence.h"
+#if defined(PROJECT_CHAMELEON_ULTRA)
 #include "lf_reader_generic.h"
 #include "nfc_14a.h"
-#include "tag_persistence.h"
+#endif
 #include "nrf_pwr_mgmt.h"
 #include "settings.h"
 #include "delayed_reset.h"
