@@ -81,6 +81,9 @@ class Command(enum.IntEnum):
     VIKING_SCAN = 3004
     VIKING_WRITE_TO_T55XX = 3005
     EM4X05_SCAN = 3010
+    LF_SNIFF = 3020
+    EM4X05_READSNIFF = 3025
+    HF14A_SNIFF = 2020
 
     MF1_WRITE_EMU_BLOCK_DATA = 4000
     HF14A_SET_ANTI_COLL_DATA = 4001
@@ -149,7 +152,6 @@ class Status(enum.IntEnum):
     LF_TAG_OK = 0x40
     # Unable to search for a valid EM410X tag
     LF_TAG_NO_FOUND = 0x41
-    LF_TAG_LOGIN_REQUIRED = 0x42
 
     # The parameters passed by the BLE instruction are wrong, or the parameters passed
     # by calling some functions are wrong

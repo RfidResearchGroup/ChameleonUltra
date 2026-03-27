@@ -3,6 +3,13 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Added `lf em 4x05 read` — EM4305/EM4x69 reader-talk-first (RTF) support: gap-encoded READ command, 45-bit Manchester response decoder, LOGIN support for password-protected tags (@nieldk)
+ - Added `lf sniff` — raw LF field ADC capture at 125kHz (8µs/sample) via nRF52840 SAADC, returns up to 4000 bytes of antenna signal for offline analysis (@nieldk)
+ - Added `data hexsamples` — hex dump of last LF sniff capture with per-byte signal level indicators (gap/ringing/carrier/clipped) (@nieldk)
+ - Added `data plot` — graphical waveform plot of last LF sniff capture using pyqtgraph (interactive) or matplotlib, with carrier mean, gap threshold, and shaded gap regions (@nieldk)
+ - Added `data manrawdecode` — Manchester decode of last LF sniff capture, configurable clock divisor (default RF/64), prints bit stream and hex (@nieldk)
+ - Added `data modulation` — detect clock rate and modulation type (Manchester/ASK/FSK) from last LF sniff capture, reports RTF gap command presence (@nieldk)
+ - Added `hf 14a sniff` — passive ISO14443-A frame capture via nRF52840 NFCT peripheral while in tag emulation mode; decodes REQA/WUPA, anti-collision, SELECT, AUTH, APDU commands with colour-coded output and session summary (@nieldk)
  - Added ioProx LF protocol support (read, emulate and T55xx clone)
  - Added commands to dump and clone Mifare tags
  - Fix bad missing tools warning (@suut)

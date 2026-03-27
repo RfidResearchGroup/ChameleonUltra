@@ -82,6 +82,14 @@ typedef struct {
 
 // Communication reception function that needs to be implemented
 typedef void (*nfc_tag_14a_reset_handler_t)(void);
+
+/* Sniff callback — called for every received frame before the tag handler.
+ * data    : raw frame bytes (after parity strip)
+ * szBits  : number of bits received */
+typedef void (*nfc_tag_14a_sniff_cb_t)(const uint8_t *data, uint16_t szBits);
+
+void nfc_tag_14a_set_sniff_cb(nfc_tag_14a_sniff_cb_t cb);
+void nfc_tag_14a_clear_sniff_cb(void);
 typedef void (*nfc_tag_14a_state_handler_t)(uint8_t *data, uint16_t szBits);
 typedef nfc_tag_14a_coll_res_reference_t *(*nfc_tag_14a_coll_handler_t)(void);
 

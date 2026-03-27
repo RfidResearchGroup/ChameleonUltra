@@ -9,6 +9,9 @@
 #include "data_cmd.h"
 #include "app_cmd.h"
 #include "app_status.h"
+#include "bsp_wdt.h"
+#include "lf_reader_generic.h"
+#include "nfc_14a.h"
 #include "tag_persistence.h"
 #include "nrf_pwr_mgmt.h"
 #include "settings.h"
@@ -230,6 +233,79 @@ static data_frame_tx_t *cmd_processor_hf14a_scan(uint16_t cmd, uint16_t status, 
     memcpy(&payload[offset], taginfo.ats, taginfo.ats_len);
     offset += taginfo.ats_len;
     return data_frame_make(cmd, STATUS_HF_TAG_OK, offset, payload);
+}
+
+
+/*
+ * HF 14A Sniff — capture reader frames while in tag emulation mode.
+ *
+ * Installs a sniff callback into nfc_tag_14a_data_process(), waits for
+ * the requested duration, then returns all captured frames.
+ *
+ * Response payload: sequence of frames, each:
+ *   [2 bytes: bit count, big-endian] [N bytes: frame data, ceil(bits/8)]
+ *
+ * A zero bit-count entry marks end of data.
+ */
+#define HF_SNIFF_BUF_SIZE   3800   /* leave room for USB framing */
+#define HF_SNIFF_MAX_FRAMES  200
+
+static uint8_t  m_sniff_buf[HF_SNIFF_BUF_SIZE];
+static uint16_t m_sniff_buf_len = 0;
+static bool     m_sniff_active  = false;
+static uint16_t m_sniff_cb_count = 0;   /* debug: total callback invocations */
+
+static void hf14a_sniff_frame_cb(const uint8_t *data, uint16_t szBits) {
+    m_sniff_cb_count++;   /* count even if buffer full or inactive */
+    if (!m_sniff_active) return;
+    uint16_t szBytes = (szBits + 7) / 8;
+    /* Check space: 2 bytes header + data */
+    if (m_sniff_buf_len + 2 + szBytes > HF_SNIFF_BUF_SIZE) return;
+    /* Write bit count big-endian */
+    m_sniff_buf[m_sniff_buf_len++] = (szBits >> 8) & 0xFF;
+    m_sniff_buf[m_sniff_buf_len++] = szBits & 0xFF;
+    /* Write frame bytes */
+    memcpy(&m_sniff_buf[m_sniff_buf_len], data, szBytes);
+    m_sniff_buf_len += szBytes;
+}
+
+static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    /* Optional 2-byte big-endian timeout in ms (default 5000ms) */
+    uint32_t timeout_ms = 5000;
+    if (length >= 2) {
+        timeout_ms = ((uint32_t)data[0] << 8) | data[1];
+        if (timeout_ms == 0 || timeout_ms > 30000) timeout_ms = 5000;
+    }
+
+    /* Install sniff callback into the already-running tag emulation stack.
+     * Do NOT call tag_mode_enter() or sense_switch() here — those reinit
+     * NFCT and wipe the anti-collision data, breaking the emulation.
+     * The device must already be in emulator mode (hw mode --emulator)
+     * with a slot active before running this command. */
+    m_sniff_buf_len = 0;
+    m_sniff_cb_count = 0;
+    m_sniff_active  = true;
+    nfc_tag_14a_set_sniff_cb(hf14a_sniff_frame_cb);
+
+    /* Wait for duration, yielding each ms so USB stack stays alive.
+     * Feed watchdog every iteration — WDT timeout is 5000ms and the
+     * main loop cannot feed it while we are blocking here. */
+    autotimer *p_at = bsp_obtain_timer(0);
+    while (NO_TIMEOUT_1MS(p_at, timeout_ms)) {
+        bsp_delay_ms(1);
+        bsp_wdt_feed();
+    }
+    bsp_return_timer(p_at);
+
+    /* Remove callback and restore normal sense state */
+    m_sniff_active = false;
+    nfc_tag_14a_clear_sniff_cb();
+    tag_emulation_sense_run();  /* restore slot-based sense state */
+
+    if (m_sniff_buf_len == 0) {
+        return data_frame_make(cmd, STATUS_HF_TAG_NO, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_SUCCESS, m_sniff_buf_len, m_sniff_buf);
 }
 
 static data_frame_tx_t *cmd_processor_mf1_detect_support(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -671,14 +747,33 @@ static data_frame_tx_t *cmd_processor_em4x05_scan(uint16_t cmd, uint16_t status,
         uint32_t uid;
         uint32_t uid_hi;
         uint8_t  is_em4x69;
-        uint8_t  uid_block;
     } PACKED payload;
     payload.config    = U32HTONL(tag.config);
     payload.uid       = U32HTONL(tag.uid);
     payload.uid_hi    = U32HTONL(tag.uid_hi);
     payload.is_em4x69 = tag.is_em4x69 ? 1 : 0;
-    payload.uid_block = tag.uid_block;
     return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(payload), (uint8_t *)&payload);
+}
+
+
+#define LF_SNIFF_MAX_SAMPLES  4000   /* max bytes in one USB frame */
+
+static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    /* Optional 2-byte big-endian timeout in ms from host (default 2000ms) */
+    uint32_t timeout_ms = 2000;
+    if (length >= 2) {
+        timeout_ms = ((uint32_t)data[0] << 8) | data[1];
+        if (timeout_ms == 0 || timeout_ms > 10000) timeout_ms = 2000;
+    }
+
+    static uint8_t sniff_buf[LF_SNIFF_MAX_SAMPLES];
+    size_t outlen = 0;
+    raw_read_to_buffer(sniff_buf, LF_SNIFF_MAX_SAMPLES, timeout_ms, &outlen);
+
+    if (outlen == 0) {
+        return data_frame_make(cmd, STATUS_LF_TAG_NO_FOUND, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, (uint16_t)outlen, sniff_buf);
 }
 
 static data_frame_tx_t *cmd_processor_viking_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -1587,6 +1682,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_READ_ONE_BLOCK,           before_hf_reader_run,        cmd_processor_mf1_read_one_block,            after_hf_reader_run    },
     {    DATA_CMD_MF1_WRITE_ONE_BLOCK,          before_hf_reader_run,        cmd_processor_mf1_write_one_block,           after_hf_reader_run    },
     {    DATA_CMD_HF14A_RAW,                    before_reader_run,           cmd_processor_hf14a_raw,                     NULL                   },
+    {    DATA_CMD_HF14A_SNIFF,                  NULL,                        cmd_processor_hf14a_sniff,                   NULL                   },
     {    DATA_CMD_MF1_MANIPULATE_VALUE_BLOCK,   before_hf_reader_run,        cmd_processor_mf1_manipulate_value_block,    after_hf_reader_run    },
     {    DATA_CMD_MF1_CHECK_KEYS_OF_SECTORS,    before_hf_reader_run,        cmd_processor_mf1_check_keys_of_sectors,     after_hf_reader_run    },
     {    DATA_CMD_MF1_HARDNESTED_ACQUIRE,       before_hf_reader_run,        cmd_processor_mf1_hardnested_nonces_acquire, after_hf_reader_run    },
@@ -1598,6 +1694,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_HIDPROX_WRITE_TO_T55XX,       before_reader_run,           cmd_processor_hidprox_write_to_t55xx,        NULL                   },
     {    DATA_CMD_VIKING_SCAN,                  before_reader_run,           cmd_processor_viking_scan,                   NULL                   },
     {    DATA_CMD_EM4X05_SCAN,                  before_reader_run,           cmd_processor_em4x05_scan,                   NULL                   },
+    {    DATA_CMD_LF_SNIFF,                     before_reader_run,           cmd_processor_lf_sniff,                      NULL                   },
     {    DATA_CMD_VIKING_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_viking_write_to_t55xx,         NULL                   },
 
 #endif

@@ -67,6 +67,7 @@
 #define DATA_CMD_MF1_READ_ONE_BLOCK             (2008)
 #define DATA_CMD_MF1_WRITE_ONE_BLOCK            (2009)
 #define DATA_CMD_HF14A_RAW                      (2010)
+#define DATA_CMD_HF14A_SNIFF                    (2020)
 #define DATA_CMD_MF1_MANIPULATE_VALUE_BLOCK     (2011)
 #define DATA_CMD_MF1_CHECK_KEYS_OF_SECTORS      (2012)
 #define DATA_CMD_MF1_HARDNESTED_ACQUIRE         (2013)
@@ -89,6 +90,8 @@
 #define DATA_CMD_VIKING_SCAN                    (3004)
 #define DATA_CMD_VIKING_WRITE_TO_T55XX          (3005)
 #define DATA_CMD_EM4X05_SCAN                    (3010)
+#define DATA_CMD_LF_SNIFF                       (3020)
+#define DATA_CMD_EM4X05_READSNIFF               (3025)
 
 //
 // ******************************************************************

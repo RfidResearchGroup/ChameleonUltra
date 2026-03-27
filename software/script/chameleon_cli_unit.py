@@ -547,6 +547,11 @@ lf_hid = lf.subgroup('hid', 'HID commands')
 lf_hid_prox = lf_hid.subgroup('prox', 'HID Prox commands')
 lf_viking = lf.subgroup('viking', 'Viking commands')
 
+data = root.subgroup('data', 'Data analysis and visualization commands')
+
+# Module-level capture buffer shared between lf sniff and data commands
+_last_capture: bytes = b''
+
 @root.command('clear')
 class RootClear(BaseCLIUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -793,6 +798,360 @@ class HF14AScan(ReaderRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         self.scan()
+
+
+@hf_14a.command('sniff')
+class HF14ASniff(BaseCLIUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Capture ISO14443A reader frames while CU acts as a tag. "
+            "Place CU near a reader — all commands the reader sends are logged. "
+            "Useful for understanding what a reader expects before configuring emulation."
+        )
+        parser.add_argument(
+            '--timeout', type=int, default=5000, metavar='MS',
+            help='Listen duration in milliseconds (default: 5000, max: 30000, firmware blocks for full duration)'
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        timeout = max(1, min(30000, args.timeout))
+        print(f" Listening for reader frames for {timeout}ms...")
+        print(f" Place CU near a reader now.")
+        print()
+
+        try:
+            resp = self.cmd.hf14a_sniff(timeout_ms=timeout)
+        except Exception as e:
+            if 'CMDInvalid' in type(e).__name__ or '2020' in str(e):
+                print(f"{CR}Command not supported — reflash firmware to enable hf 14a sniff{C0}")
+            else:
+                print(f"{CR}{e}{C0}")
+            return
+
+        if resp.status not in (Status.HF_TAG_OK, Status.SUCCESS):
+            cb_count = 0
+            if resp.data and len(resp.data) >= 2:
+                cb_count = (resp.data[0] << 8) | resp.data[1]
+            if cb_count > 0:
+                print(f"{CY} Callback fired {cb_count}x but no valid frames buffered{C0}")
+            else:
+                print(f" No frames captured — no reader detected")
+            return
+
+        # Parse packed frame buffer: [2 bytes bits BE][N bytes data] ...
+        buf = bytes(resp.data)
+        frames = []
+        i = 0
+        while i + 2 <= len(buf):
+            szBits = (buf[i] << 8) | buf[i+1]
+            i += 2
+            if szBits == 0:
+                break
+            szBytes = (szBits + 7) // 8
+            if i + szBytes > len(buf):
+                break
+            frames.append((szBits, buf[i:i+szBytes]))
+            i += szBytes
+
+        if not frames:
+            print(f"{CR}No frames decoded{C0}")
+            return
+
+        print(f" Captured : {CG}{len(frames)}{C0} frame(s)")
+        print()
+        print(f"  {'#':>3}  {'bits':>4}  {'hex data':<42}  decoded")
+        print(f"  {'---':>3}  {'----':>4}  {'-'*42}  {'-'*35}")
+
+        for n, (szBits, data) in enumerate(frames):
+            hex_str          = ' '.join(f'{b:02x}' for b in data)
+            decoded, col     = _decode_14a_frame_col(data, szBits)
+            print(f"  {CY}{n+1:>3}{C0}  {szBits:>4}  {hex_str:<42}  {col}{decoded}{C0}")
+
+        # Summary block
+        print()
+        _print_14a_sniff_summary(frames)
+
+
+def _decode_14a_frame_col(data: bytes, szBits: int):
+    """Return (description, colour) for a 14A frame."""
+    if not data:
+        return '', C0
+    b0 = data[0]
+
+    # Short frames (7-bit)
+    if szBits == 7:
+        if b0 == 0x26: return 'REQA', CG
+        if b0 == 0x52: return 'WUPA', CG
+        return f'short(0x{b0:02x})', CC
+
+    # Anti-collision / Select
+    if b0 == 0x93:
+        if len(data) > 1 and data[1] == 0x70:
+            uid = ' '.join(f'{b:02x}' for b in data[2:6]) if len(data) >= 6 else ''
+            return f'SELECT CL1  UID={uid}', CB
+        nvb = f'NVB={data[1]:02x}' if len(data) > 1 else ''
+        return f'ANTICOLL CL1  {nvb}', CB
+    if b0 == 0x95:
+        if len(data) > 1 and data[1] == 0x70:
+            uid = ' '.join(f'{b:02x}' for b in data[2:6]) if len(data) >= 6 else ''
+            return f'SELECT CL2  UID={uid}', CB
+        nvb = f'NVB={data[1]:02x}' if len(data) > 1 else ''
+        return f'ANTICOLL CL2  {nvb}', CB
+    if b0 == 0x97:
+        if len(data) > 1 and data[1] == 0x70:
+            uid = ' '.join(f'{b:02x}' for b in data[2:6]) if len(data) >= 6 else ''
+            return f'SELECT CL3  UID={uid}', CB
+        nvb = f'NVB={data[1]:02x}' if len(data) > 1 else ''
+        return f'ANTICOLL CL3  {nvb}', CB
+
+    # HALT (0x50 0x00 + CRC — b1 may vary after parity strip)
+    if b0 == 0x50:
+        return 'HALT', CC
+
+    # S-DESELECT (ISO14443-4 block)
+    if b0 == 0xc2:
+        return 'S-DESELECT', CC
+
+    # PPS
+    if b0 == 0xd0:
+        return f'PPS  PPS1={data[1]:02x}' if len(data) > 1 else 'PPS', CM
+
+    # RATS
+    if b0 == 0xe0:
+        fsdi = (data[1] >> 4) if len(data) > 1 else 0
+        cid  = (data[1] & 0xf) if len(data) > 1 else 0
+        return f'RATS  FSDI={fsdi} CID={cid}', CM
+
+    # MIFARE Classic commands
+    if b0 == 0x60: return f'AUTH KeyA  block={data[1]}' if len(data) > 1 else 'AUTH KeyA', CR
+    if b0 == 0x61: return f'AUTH KeyB  block={data[1]}' if len(data) > 1 else 'AUTH KeyB', CR
+    # Encrypted nonce / auth response (follows AUTH, first byte varies)
+    if szBits == 72: return '(encrypted nonce — auth challenge/response)', CC
+    if b0 == 0x30: return f'READ  block={data[1]}'      if len(data) > 1 else 'READ',      CC
+    if b0 == 0xa0: return f'WRITE block={data[1]}'      if len(data) > 1 else 'WRITE',     CY
+    if b0 == 0x40: return 'MAGIC WUPC1', CY
+    if b0 == 0x43: return 'MAGIC WUPC2', CY
+    if b0 == 0x41: return 'MAGIC WIPE',  CR
+
+    # ISO 7816-4 APDUs
+    if len(data) >= 2 and b0 in (0x00, 0x80, 0x90, 0xa0):
+        cla, ins = data[0], data[1]
+        p1 = data[2] if len(data) > 2 else 0
+        p2 = data[3] if len(data) > 3 else 0
+        # SELECT FILE / AID
+        if cla == 0x00 and ins == 0xa4:
+            if len(data) > 5:
+                aid = ' '.join(f'{b:02x}' for b in data[5:5+data[4]])
+                # Identify known AIDs
+                aid_raw = bytes(data[5:5+data[4]])
+                name = _known_aid(aid_raw)
+                label = f'SELECT AID  {aid.upper()}'
+                if name: label += f'  ({name})'
+                return label, CY
+            return 'SELECT', CY
+        # READ BINARY
+        if cla == 0x00 and ins == 0xb0:
+            return f'READ BINARY  off={p1<<8|p2} len={data[4] if len(data)>4 else 0}', CC
+        # READ RECORD
+        if cla == 0x00 and ins == 0xb2:
+            sfi = p2 >> 3
+            return f'READ RECORD  SFI={sfi} rec={p1}', CC
+        # GET DATA
+        if cla == 0x80 and ins == 0xca:
+            tag = (p1 << 8) | p2
+            name = _known_bertag(tag)
+            return f'GET DATA  {p1:02x}{p2:02x}' + (f'  ({name})' if name else ''), CC
+        # GET PROCESSING OPTIONS
+        if cla == 0x80 and ins == 0xa8:
+            return 'GPO  (Get Processing Options)', CY
+        # GENERATE AC
+        if cla == 0x80 and ins == 0xae:
+            actype = {0x00:'AAC', 0x40:'TC', 0x80:'ARQC'}.get(p1 & 0xc0, f'AC/{p1:02x}')
+            return f'GENERATE AC  requesting {actype}', CR
+        # VERIFY
+        if cla == 0x00 and ins == 0x20:
+            return 'VERIFY PIN', CY
+        # INTERNAL AUTHENTICATE
+        if cla == 0x00 and ins == 0x88:
+            return 'INTERNAL AUTH', CR
+        # EXTERNAL AUTHENTICATE
+        if cla == 0x00 and ins == 0x82:
+            return 'EXTERNAL AUTH', CR
+        # MANAGE CHANNEL
+        if cla == 0x00 and ins == 0x70:
+            return 'MANAGE CHANNEL', CM
+        return f'APDU  CLA={cla:02x} INS={ins:02x} P1={p1:02x} P2={p2:02x}', CY
+
+    # Unknown — show first byte
+    return f'unknown (0x{b0:02x})', CC
+
+
+def _known_aid(aid: bytes) -> str:
+    table = {
+        bytes.fromhex('a0000000031010'): 'Visa Credit/Debit',
+        bytes.fromhex('a0000000032010'): 'Visa Electron',
+        bytes.fromhex('a0000000033010'): 'Visa Classic',
+        bytes.fromhex('a0000000038010'): 'Visa Plus',
+        bytes.fromhex('a0000000041010'): 'Mastercard',
+        bytes.fromhex('a0000000043060'): 'Maestro',
+        bytes.fromhex('a000000025010801'): 'AmEx',
+        bytes.fromhex('a0000000181002'): 'Mastercard Debit',
+        bytes.fromhex('d2760000850101'): 'NDEF (NFC Forum)',
+        bytes.fromhex('d27600002545'): 'NDEF Type 4',
+        bytes.fromhex('315041592e5359532e4444463031'): 'PPSE (2PAY.SYS.DDF01)',
+    }
+    return table.get(aid, '')
+
+
+def _known_bertag(tag: int) -> str:
+    table = {
+        0x9f36: 'ATC',
+        0x9f13: 'Last Online ATC',
+        0x9f17: 'PIN Try Counter',
+        0x9f4f: 'Log Format',
+        0x9f4e: 'Merchant Name',
+    }
+    return table.get(tag, '')
+
+
+def _print_14a_sniff_summary(frames):
+    """Print a decoded summary of the sniff session."""
+    uid_cl1    = None
+    uid_cl2    = None
+    uid_cl3    = None
+    aids       = []
+    auth_blocks = []   # (key_type, block)
+    auth_seen  = False
+    arqc_seen  = False
+    tc_seen    = False
+    halted     = False
+    rats_seen  = False
+    atc_tag    = None
+    amount     = None
+    anticoll_uids = []  # UIDs seen in anticoll frames (partial but useful)
+
+    for szBits, data in frames:
+        if not data: continue
+        b0 = data[0]
+
+        # Extract UID from anticoll frames (NVB != 70 = anticoll, NVB = 70 = select)
+        # Anticoll frame with NVB=41 means we're requesting UID bytes
+        # The *response* from the tag contains the UID — but we only see reader frames
+        # So extract from SELECT (NVB=70) which contains the full UID
+        if b0 in (0x93, 0x95, 0x97) and len(data) >= 5 and data[1] == 0x70:
+            uid_bytes = bytes(data[2:6])
+            if b0 == 0x93:
+                if data[2] == 0x88:
+                    uid_cl1 = None  # cascade tag, UID continues in CL2
+                else:
+                    uid_cl1 = uid_bytes
+            elif b0 == 0x95:
+                uid_cl2 = uid_bytes
+            elif b0 == 0x97:
+                uid_cl3 = uid_bytes
+
+        # Extract partial UID from anticoll frames — the tag sends back UID bytes
+        # We capture the reader's anticoll command which may contain partial UID
+        # NVB high nibble = number of full bytes sent, low nibble = bits
+        # NVB=41 means reader sent 4 bits, so tag should respond with rest
+        # NVB=e1 (225) is unusual — may be tag response captured by NFCT
+
+        # RATS
+        if b0 == 0xe0:
+            rats_seen = True
+
+        # SELECT AID
+        if b0 == 0x00 and len(data) > 5 and data[1] == 0xa4:
+            aid = bytes(data[5:5+data[4]])
+            name = _known_aid(aid)
+            entry = aid.hex().upper()
+            if name: entry += f'  ({name})'
+            if entry not in aids:
+                aids.append(entry)
+
+        # MIFARE Classic auth
+        if b0 in (0x60, 0x61) and len(data) > 1:
+            auth_seen = True
+            key_type = 'KeyA' if b0 == 0x60 else 'KeyB'
+            block = data[1]
+            if (key_type, block) not in auth_blocks:
+                auth_blocks.append((key_type, block))
+
+        # GENERATE AC — check AC type
+        if b0 == 0x80 and len(data) > 2 and data[1] == 0xae:
+            ac_type = {0x00:'AAC (decline)', 0x40:'TC (approved offline)',
+                       0x80:'ARQC (online auth)'}.get(data[2] & 0xc0, 'AC')
+            if (data[2] & 0xc0) == 0x80: arqc_seen = True
+            if (data[2] & 0xc0) == 0x40: tc_seen = True
+
+        # GET DATA — ATC
+        if b0 == 0x80 and len(data) > 2 and data[1] == 0xca:
+            tag = (data[2] << 8) | data[3]
+            atc_tag = _known_bertag(tag) or f'{data[2]:02x}{data[3]:02x}'
+
+        # GPO — extract amount if PDOL present
+        if b0 == 0x80 and len(data) > 4 and data[1] == 0xa8:
+            # Amount is usually first 6 bytes of PDOL data at offset 4+
+            if len(data) >= 11:
+                amt_bytes = data[5:11]
+                amt = int.from_bytes(amt_bytes, 'big')
+                if amt > 0:
+                    amount = amt
+
+        # HALT / DESELECT
+        if b0 == 0x50 or b0 == 0xc2:
+            halted = True
+
+    # Build UID from cascade levels
+    uid_bytes = None
+    if uid_cl1 and uid_cl2:
+        uid_bytes = uid_cl1 + uid_cl2
+        if uid_cl3:
+            uid_bytes = uid_bytes + uid_cl3
+    elif uid_cl1:
+        uid_bytes = uid_cl1
+
+    # Also check anticoll frames for partial UID if no SELECT seen
+    if uid_bytes is None:
+        # Look for the 81-bit anticoll frames (tag UID response captured)
+        for szBits, data in frames:
+            if not data: continue
+            if data[0] in (0x93, 0x95) and szBits == 81 and len(data) >= 9:
+                # Extract UID bytes from the anticoll response bytes
+                uid_bytes = bytes(data[2:6])
+                break
+
+    print(f" {'─'*55}")
+    if uid_bytes:
+        uid_str = ' '.join(f'{b:02X}' for b in uid_bytes)
+        cascade = f'  ({len(uid_bytes)}-byte UID)' if uid_bytes else ''
+        print(f" {CC}UID      :{C0} {CG}{uid_str}{cascade}{C0}")
+    if rats_seen:
+        print(f" {CC}Protocol :{C0} ISO14443-4 (RATS seen)")
+    for aid in aids:
+        print(f" {CC}AID      :{C0} {CY}{aid}{C0}")
+    if amount is not None:
+        major = amount // 100
+        minor = amount % 100
+        print(f" {CC}Amount   :{C0} {CG}{major}.{minor:02d}{C0}  (raw={amount})")
+    if auth_blocks:
+        for key_type, block in auth_blocks:
+            print(f" {CC}Auth     :{C0} {CR}MIFARE Classic {key_type} block={block}{C0}")
+    elif auth_seen:
+        print(f" {CC}Auth     :{C0} {CR}MIFARE Classic auth detected{C0}")
+    if arqc_seen:
+        print(f" {CC}Auth type:{C0} {CR}ARQC — online authorisation requested{C0}")
+    if tc_seen:
+        print(f" {CC}Auth type:{C0} {CG}TC — approved offline{C0}")
+    if atc_tag:
+        print(f" {CC}ATC      :{C0} tag {atc_tag}  (transaction counter)")
+    if halted:
+        print(f" {CC}End      :{C0} HALT / DESELECT")
+    if not uid_bytes and not aids and not auth_seen and not rats_seen:
+        print(f" {CC}Note     :{C0} anti-collision incomplete — reader could not select tag")
+
 
 
 @hf_14a.command('info')
@@ -3262,16 +3621,119 @@ class LFEm4x05Read(ReaderRequiredUnit):
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        (config, uid, uid_hi, is_em4x69, uid_block) = self.cmd.em4x05_scan()
+        try:
+            pwd = int(args.pwd, 16) if hasattr(args, 'pwd') and args.pwd else 0
+        except ValueError:
+            print(f"{CR}Invalid password, expected hex{C0}")
+            return
+        (config, uid, uid_hi, is_em4x69, uid_block) = self.cmd.em4x05_scan(pwd=pwd)
         tag_label = "EM4x69" if is_em4x69 else "EM4x05"
+        rl = bool((config >> 6) & 1)
         print(f" Tag type : {CG}{tag_label}{C0}")
         print(f" Config   : {CG}{config:#010x}{C0}")
         print(f" UID block: {CG}{uid_block}{C0}")
+        if rl:
+            print(f" Auth     : {CG}LOGIN used (pwd={args.pwd.upper() if hasattr(args, 'pwd') and args.pwd else '00000000'}){C0}")
         if is_em4x69:
             uid64 = (uid_hi << 32) | uid
             print(f" UID (64) : {CG}{uid64:016x}{C0}")
         else:
             print(f" UID      : {CG}{uid:08x}{C0}")
+
+@lf.command('sniff')
+class LFSniff(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Capture raw LF field ADC samples (125kHz, 8µs/sample). "
+            "~0x80 = field on, lower values = gap or no field."
+        )
+        parser.add_argument(
+            '--timeout', type=int, default=2000, metavar='MS',
+            help='Capture duration in milliseconds (default: 2000, max: 10000, firmware blocks for full duration)'
+        )
+        parser.add_argument(
+            '--out', type=str, default=None, metavar='FILE',
+            help='Save raw samples to binary file (for offline analysis)'
+        )
+        parser.add_argument(
+            '--hex', action='store_true',
+            help='Print hex dump of samples to screen'
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        timeout = max(1, min(10000, args.timeout))
+        print(f" Capturing LF field for {timeout}ms at 125kHz (8µs/sample)...")
+        resp = self.cmd.lf_sniff(timeout_ms=timeout)
+
+        if resp.status != Status.LF_TAG_OK or not resp.data:
+            print(f"{CR}No samples captured{C0}")
+            return
+
+        import chameleon_cli_unit as _self_mod
+        data = bytes(resp.data)
+        _self_mod._last_capture = data
+
+        n = len(data)
+        duration_ms = n * 8 / 1000
+        print(f" Captured : {CG}{n}{C0} bytes ({duration_ms:.1f}ms)")
+
+        mn = min(data)
+        mx = max(data)
+        mean = sum(data) // len(data)
+        print(f" Range    : {CG}0x{mn:02x}{C0} – {CG}0x{mx:02x}{C0}  mean: {CG}0x{mean:02x}{C0}")
+
+        # Detect real field gaps — they drop to near zero (0x00-0x40),
+        # well below the steady carrier (~0xb0). Use half of mean as threshold
+        # to avoid false positives from the antenna startup transient.
+        gap_threshold = mean // 2
+        # Skip first 200 samples (1.6ms) to ignore startup ringing
+        steady_data = data[200:]
+        gap_count = sum(1 for b in steady_data if b < gap_threshold)
+        if gap_count > 0:
+            print(f" Gaps     : {CG}{gap_count}{C0} samples below 0x{gap_threshold:02x} (real field drops)")
+        else:
+            print(f" Gaps     : {CR}none detected — flat carrier (no gap commands sent){C0}")
+
+        if args.hex:
+            print()
+            print(f"  addr  {'hex bytes':47s}  level")
+            print(f"  ----  {'-'*47}  ----------------")
+            for i in range(0, min(n, 256), 16):
+                row = data[i:i+16]
+                hex_part = ' '.join(f'{b:02x}' for b in row)
+                bar = ''
+                for b in row:
+                    if b < 0x10:
+                        bar += '_'   # gap / field off
+                    elif b < 0x40:
+                        bar += '.'   # ringing decay
+                    elif b < 0x80:
+                        bar += '-'   # low
+                    elif b < 0xa0:
+                        bar += '+'   # mid
+                    elif b < 0xc0:
+                        bar += 'o'   # steady carrier
+                    elif b < 0xe0:
+                        bar += 'O'   # high
+                    else:
+                        bar += '#'   # clipped 0xff
+                print(f"  {i:04x}  {hex_part:<47s}  {bar}")
+            if n > 256:
+                print(f"  ... ({n - 256} more bytes, use --out to save all)")
+            print()
+            print("  _ gap  . ringing  - low  + mid  o carrier  O high  # clipped")
+
+        if args.out:
+            try:
+                with open(args.out, 'wb') as f:
+                    f.write(data)
+                print(f" Saved    : {CG}{args.out}{C0} ({n} bytes)")
+            except Exception as e:
+                print(f"{CR}Failed to save: {e}{C0}")
+
+
 
 
 @hw_slot.command('list')
@@ -3998,3 +4460,432 @@ examples/notes:
             )
         else:
             print(F" [*] {CY}No response{C0}")
+
+
+# =============================================================================
+# data commands — operate on the last lf sniff capture buffer
+# =============================================================================
+
+def _get_capture():
+    """Return last capture buffer or print error."""
+    import chameleon_cli_unit as _m
+    if not _m._last_capture:
+        return None
+    return _m._last_capture
+
+
+@data.command('hexsamples')
+class DataHexsamples(BaseCLIUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Dump last LF sniff capture as hex bytes (PM3 style)'
+        parser.add_argument('-n', '--num', type=int, default=512, metavar='N',
+                            help='Number of bytes to display (default: 512)')
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        buf = _get_capture()
+        if buf is None:
+            print(f"{CR}No capture in buffer — run lf sniff first{C0}")
+            return
+        n = min(args.num, len(buf))
+        print(f" Buffer: {CG}{len(buf)}{C0} bytes total, showing {n}")
+        print()
+        for row in range(0, n, 16):
+            chunk = buf[row:row+16]
+            hex_part = ' '.join(f'{b:02x}' for b in chunk)
+            bar = ''
+            for b in chunk:
+                if b < 0x10:   bar += '_'
+                elif b < 0x40: bar += '.'
+                elif b < 0x80: bar += '-'
+                elif b < 0xa0: bar += '+'
+                elif b < 0xc0: bar += 'o'
+                elif b < 0xe0: bar += 'O'
+                else:          bar += '#'
+            print(f" {row // 16 :02d} | {hex_part:<47s} | {bar}")
+        print()
+        print(" _ gap  . ringing  - low  + mid  o carrier  O high  # clipped")
+
+
+@data.command('plot')
+class DataPlot(BaseCLIUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Graphical waveform plot of last LF sniff capture (PyQt5 or matplotlib)'
+        parser.add_argument('--start', type=int, default=0, metavar='N',
+                            help='Start sample (default: 0)')
+        parser.add_argument('--len', type=int, default=4000, metavar='N',
+                            help='Number of samples to plot (default: all)')
+        parser.add_argument('--ascii', action='store_true',
+                            help='Force ASCII plot even if GUI is available')
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        buf = _get_capture()
+        if buf is None:
+            print(f"{CR}No capture in buffer — run lf sniff first{C0}")
+            return
+
+        start = max(0, args.start)
+        end   = min(len(buf), start + args.len)
+        view  = list(buf[start:end])
+        n     = len(view)
+
+        # X axis: time in µs (1 sample = 8µs)
+        xs = [((start + i) * 8) for i in range(n)]
+
+        mean = sum(view) // n
+        threshold = mean // 2
+
+        if not args.ascii:
+            # Try PyQt5 first, then matplotlib
+            try:
+                from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
+                from PyQt5.QtCore import Qt
+                import pyqtgraph as pg
+                _plot_pyqtgraph(xs, view, mean, threshold, start, end)
+                return
+            except ImportError:
+                pass
+            try:
+                import matplotlib
+                matplotlib.use('Qt5Agg')
+                import matplotlib.pyplot as plt
+                _plot_matplotlib(xs, view, mean, threshold, start, end)
+                return
+            except ImportError:
+                pass
+            try:
+                import matplotlib.pyplot as plt
+                _plot_matplotlib(xs, view, mean, threshold, start, end)
+                return
+            except ImportError:
+                print(f" No GUI library found (install PyQt5+pyqtgraph or matplotlib)")
+                print(f" Falling back to ASCII plot...")
+
+        # ASCII fallback
+        w = 64
+        bsize = max(1, n // w)
+        buckets = []
+        for i in range(0, n, bsize):
+            chunk = view[i:i+bsize]
+            buckets.append(sum(chunk) // len(chunk))
+        buckets = buckets[:w]
+        mn, mx = min(view), max(view)
+        print(f" Samples {start}–{end}  range 0x{mn:02x}–0x{mx:02x}  mean 0x{mean:02x}")
+        print()
+        levels = [0xe0, 0xc0, 0xa0, 0x80, 0x60, 0x40, 0x20, 0x00]
+        labels = ['0xff','0xc0','0xa0','0x80','0x60','0x40','0x20','0x00']
+        for thresh, lbl in zip(levels, labels):
+            row = ''.join('#' if v >= thresh else ' ' for v in buckets)
+            print(f" {lbl} |{row}|")
+        print(f"        +{'-'*len(buckets)}+")
+
+
+def _plot_matplotlib(xs, ys, mean, threshold, start, end):
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches
+
+    fig, ax = plt.subplots(figsize=(14, 5))
+    fig.patch.set_facecolor('#1a1a2e')
+    ax.set_facecolor('#0d1117')
+
+    # Main waveform
+    ax.plot(xs, ys, color='#00e5ff', linewidth=0.8, label='LF field')
+
+    # Mean and gap threshold lines
+    ax.axhline(mean,      color='#ffb020', linewidth=0.8, linestyle='--', label=f'mean 0x{mean:02x}')
+    ax.axhline(threshold, color='#ff3d57', linewidth=0.8, linestyle=':',  label=f'gap threshold 0x{threshold:02x}')
+
+    # Shade gap regions
+    in_gap = False
+    gap_start = 0
+    for i, v in enumerate(ys):
+        if not in_gap and v < threshold:
+            in_gap = True
+            gap_start = xs[i]
+        elif in_gap and v >= threshold:
+            ax.axvspan(gap_start, xs[i], alpha=0.25, color='#ff3d57', linewidth=0)
+            in_gap = False
+    if in_gap:
+        ax.axvspan(gap_start, xs[-1], alpha=0.25, color='#ff3d57', linewidth=0)
+
+    ax.set_xlabel('Time (µs)', color='#8899b4')
+    ax.set_ylabel('ADC value', color='#8899b4')
+    ax.set_title(f'LF Sniff — samples {start}–{end}  ({(end-start)*8}µs)',
+                 color='#dde8f5', fontsize=11)
+    ax.set_ylim(0, 270)
+    ax.set_xlim(xs[0], xs[-1])
+    ax.tick_params(colors='#8899b4')
+    for spine in ax.spines.values():
+        spine.set_edgecolor('#21262d')
+    ax.legend(facecolor='#161b22', edgecolor='#30363d', labelcolor='#c9d1d9',
+              fontsize=8, loc='upper right')
+    ax.grid(True, color='#21262d', linewidth=0.5)
+
+    gap_patch = mpatches.Patch(color='#ff3d57', alpha=0.4, label='field gap')
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(handles + [gap_patch], labels + ['field gap'],
+              facecolor='#161b22', edgecolor='#30363d',
+              labelcolor='#c9d1d9', fontsize=8, loc='upper right')
+
+    plt.tight_layout()
+    plt.show()
+
+
+def _plot_pyqtgraph(xs, ys, mean, threshold, start, end):
+    import sys
+    from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtGui import QFont
+    import pyqtgraph as pg
+
+    pg.setConfigOption('background', '#0d1117')
+    pg.setConfigOption('foreground', '#8899b4')
+
+    app = QApplication.instance() or QApplication(sys.argv)
+
+    win = pg.GraphicsLayoutWidget(title=f'ChameleonUltra — LF Sniff')
+    win.resize(1200, 400)
+    win.setWindowTitle(f'LF Sniff — samples {start}–{end}  ({(end-start)*8}µs)')
+
+    plot = win.addPlot()
+    plot.setLabel('bottom', 'Time (µs)')
+    plot.setLabel('left', 'ADC value')
+    plot.showGrid(x=True, y=True, alpha=0.2)
+    plot.setYRange(0, 270)
+
+    # Waveform
+    plot.plot(xs, ys, pen=pg.mkPen('#00e5ff', width=1))
+
+    # Mean line
+    plot.addLine(y=mean,      pen=pg.mkPen('#ffb020', width=1, style=pg.QtCore.Qt.DashLine))
+    # Gap threshold line
+    plot.addLine(y=threshold, pen=pg.mkPen('#ff3d57', width=1, style=pg.QtCore.Qt.DotLine))
+
+    # Shade gaps
+    for i in range(len(ys)-1):
+        if ys[i] < threshold:
+            r = pg.LinearRegionItem([xs[i], xs[i+1]],
+                                     brush=pg.mkBrush(255, 61, 87, 40),
+                                     pen=pg.mkPen(None), movable=False)
+            plot.addItem(r)
+
+    # Legend / info panel
+    legend_text = (
+        '<span style="color:#8899b4; font-size:11px;">'
+        '<span style="color:#00e5ff;">━</span> LF field (ADC)&nbsp;&nbsp;'
+        '<span style="color:#ffb020;">- -</span> Mean&nbsp;&nbsp;'
+        '<span style="color:#ff3d57;">···</span> Gap threshold (mean÷2)&nbsp;&nbsp;'
+        '<span style="background:#ff3d57; opacity:0.3;">&nbsp;&nbsp;&nbsp;</span>'
+        ' Field gap (below threshold)&nbsp;&nbsp;'
+        '<span style="color:#8899b4;">Ringing = exponential rise on field restore</span>'
+        '</span>'
+    )
+    legend = pg.LabelItem(legend_text, justify='left')
+    win.addItem(legend, row=1, col=0)
+
+    win.show()
+    app.exec_()
+
+
+@data.command('manrawdecode')
+class DataManrawdecode(BaseCLIUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Manchester decode the last LF sniff capture'
+        parser.add_argument('--clock', type=int, default=64, metavar='N',
+                            help='Clock divisor in Tc (default: 64 = RF/64)')
+        parser.add_argument('--invert', action='store_true',
+                            help='Invert logic (high=0, low=1)')
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        buf = _get_capture()
+        if buf is None:
+            print(f"{CR}No capture in buffer — run lf sniff first{C0}")
+            return
+
+        # Binarise: above mean = 1 (carrier), below = 0 (gap)
+        mean = sum(buf) // len(buf)
+        threshold = mean // 2
+        bits_raw = [1 if b > threshold else 0 for b in buf]
+        if args.invert:
+            bits_raw = [1 - b for b in bits_raw]
+
+        # Find transitions and measure run lengths
+        runs = []
+        cur = bits_raw[0]
+        count = 1
+        for b in bits_raw[1:]:
+            if b == cur:
+                count += 1
+            else:
+                runs.append((cur, count))
+                cur = b
+                count = 1
+        runs.append((cur, count))
+
+        # Clock period in samples (1 sample = 8µs)
+        samples_per_tc = 1   # our SAADC runs at 125kHz = 1 sample/8µs = 1 sample/Tc
+        half_clk = args.clock // 2  # samples per half-bit
+
+        # Decode Manchester: half-bit transitions
+        # Low->High = 0, High->Low = 1 (standard Manchester)
+        decoded_bits = []
+        tol = max(2, half_clk // 3)
+
+        i = 0
+        while i < len(runs):
+            val, cnt = runs[i]
+            # Short run = half period, long run = full period
+            half = abs(cnt - half_clk) <= tol
+            full = abs(cnt - args.clock) <= tol
+            if half:
+                # need next run to complete bit
+                if i + 1 < len(runs):
+                    nval, ncnt = runs[i+1]
+                    nhalf = abs(ncnt - half_clk) <= tol
+                    if nhalf:
+                        # two halves: transition val->nval
+                        if val == 0 and nval == 1:
+                            decoded_bits.append(0)
+                        elif val == 1 and nval == 0:
+                            decoded_bits.append(1)
+                        i += 2
+                        continue
+            elif full:
+                # biphase / stay same level for full period = repeated bit
+                decoded_bits.append(val)
+            i += 1
+
+        if not decoded_bits:
+            print(f"{CR}No bits decoded — check clock rate or signal quality{C0}")
+            print(f" Mean threshold: 0x{threshold:02x}  Clock: RF/{args.clock}")
+            return
+
+        bits_str = ''.join(str(b) for b in decoded_bits)
+        hex_str  = hex(int(bits_str, 2))[2:] if decoded_bits else ''
+
+        print(f" Clock    : RF/{args.clock}  ({args.clock} Tc = {args.clock*8}µs/bit)")
+        print(f" Threshold: 0x{threshold:02x}  Inverted: {args.invert}")
+        print(f" Bits     : {CG}{len(decoded_bits)}{C0}")
+        print()
+        # Print in rows of 64
+        for i in range(0, len(bits_str), 64):
+            print(f"  {bits_str[i:i+64]}")
+        if hex_str:
+            print()
+            print(f" Hex: {CG}{hex_str[:64]}{C0}{'...' if len(hex_str) > 64 else ''}")
+
+
+@data.command('modulation')
+class DataModulation(BaseCLIUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Detect clock rate and modulation type in last LF capture'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        buf = _get_capture()
+        if buf is None:
+            print(f"{CR}No capture in buffer — run lf sniff first{C0}")
+            return
+
+        n = len(buf)
+        mean = sum(buf) // n
+        mn   = min(buf)
+        mx   = max(buf)
+        threshold = mean // 2
+
+        print(f" Samples  : {CG}{n}{C0}  ({n*8}µs)")
+        print(f" Range    : 0x{mn:02x} – 0x{mx:02x}  mean: 0x{mean:02x}")
+        print()
+
+        # Check if there is any modulation at all
+        dynamic_range = mx - mn
+        if dynamic_range < 0x20:
+            print(f" Modulation: {CR}none — flat carrier (no signal){C0}")
+            return
+
+        # Binarise
+        bits = [1 if b > threshold else 0 for b in buf]
+
+        # Measure run lengths (periods between transitions)
+        runs = []
+        cur = bits[0]; count = 1
+        for b in bits[1:]:
+            if b == cur: count += 1
+            else:
+                runs.append(count)
+                cur = b; count = 1
+        runs.append(count)
+
+        if len(runs) < 4:
+            print(f" Modulation: {CR}insufficient transitions{C0}")
+            return
+
+        runs_sorted = sorted(runs)
+        # Remove outliers (top/bottom 10%)
+        trim = max(1, len(runs) // 10)
+        trimmed = runs_sorted[trim:-trim] if len(runs_sorted) > 2*trim else runs_sorted
+        avg_run = sum(trimmed) // len(trimmed)
+
+        # Estimate clock: most common run length = half-period
+        from collections import Counter
+        run_counts = Counter(runs)
+        most_common_run = run_counts.most_common(1)[0][0]
+
+        # Map to nearest standard RF divider
+        half_samples = most_common_run
+        full_period_us = half_samples * 2 * 8  # us
+        clock_hz = 1_000_000 // full_period_us if full_period_us else 0
+
+        rf_dividers = [8, 16, 32, 40, 50, 64, 100, 128]
+        tc_us = 8  # 1 Tc = 8µs at 125kHz
+        best_div = min(rf_dividers, key=lambda d: abs(d*tc_us - full_period_us))
+
+        print(f" Half-period : ~{most_common_run} samples = {most_common_run*8}µs")
+        print(f" Full period : ~{full_period_us}µs")
+        print(f" Nearest RF  : {CG}RF/{best_div}{C0}  ({best_div*tc_us}µs/bit)")
+        print()
+
+        # Modulation type heuristic
+        # Manchester: runs cluster around 1 value (half period) and 2x that (full period)
+        # ASK/NRZ: long runs of same value
+        # FSK: two distinct run lengths alternating
+
+        unique_runs = set(runs)
+        long_runs = [r for r in runs if r > most_common_run * 3]
+
+        # Manchester has runs clustering at N and 2N (half and full period)
+        # Check if second most common run is ~2x the most common
+        tol = max(2, most_common_run // 3)
+        top2 = run_counts.most_common(2)
+        is_manchester = (len(top2) >= 2 and
+                         abs(top2[1][0] - most_common_run * 2) <= tol)
+
+        if len(long_runs) > len(runs) * 0.3:
+            mod = "ASK / NRZ (long steady periods)"
+            col = CG
+        elif is_manchester:
+            mod = f"Manchester (RF/{best_div})"
+            col = CG
+        elif len(unique_runs) <= 4:
+            mod = f"Biphase (RF/{best_div})"
+            col = CG
+        else:
+            mod = f"FSK or mixed (multiple run lengths)"
+            col = CG
+
+        print(f" Modulation : {col}{mod}{C0}")
+
+        # Gap detection
+        gap_threshold = mean // 2
+        gaps = [i for i, b in enumerate(buf[200:]) if b < gap_threshold]
+        if gaps:
+            print(f" RTF gaps   : {CG}{len(gaps)}{C0} samples below 0x{gap_threshold:02x}"
+                  f" — gap commands present")
+        else:
+            print(f" RTF gaps   : {CR}none — no gap commands detected{C0}")

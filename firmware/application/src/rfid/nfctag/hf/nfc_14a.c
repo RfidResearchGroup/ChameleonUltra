@@ -59,6 +59,17 @@ const uint16_t ats_fsdi_table[] = {
 static volatile bool m_is_responded = false;
 // Receiving buffer
 static uint8_t m_nfc_rx_buffer[MAX_NFC_RX_BUFFER_SIZE] = { 0x00 };
+
+/* Optional sniff callback — fires for every received frame */
+static nfc_tag_14a_sniff_cb_t m_sniff_cb = NULL;
+
+void nfc_tag_14a_set_sniff_cb(nfc_tag_14a_sniff_cb_t cb) {
+    m_sniff_cb = cb;
+}
+
+void nfc_tag_14a_clear_sniff_cb(void) {
+    m_sniff_cb = NULL;
+}
 static uint8_t m_nfc_tx_buffer[MAX_NFC_TX_BUFFER_SIZE] = { 0x00 };
 // The N -secondary connection needs to use SAK, when the "third 'bit' in SAK is 1 is 1, the logo UID is incomplete
 static uint8_t m_uid_incomplete_sak[] = { 0x04, 0xda, 0x17 };
@@ -325,6 +336,11 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
         // If there are abnormal data received, we skip it directly without processing,
         // Because of this error receiving event caused by this possible interference
         return;
+    }
+
+    /* Sniff hook — fire before any tag response logic */
+    if (m_sniff_cb != NULL) {
+        m_sniff_cb(p_data, szDataBits);
     }
     // Manually draw frame, separate data and strange school inspection
 #if !NFC_TAG_14A_RX_PARITY_AUTO_DEL_ENABLE
