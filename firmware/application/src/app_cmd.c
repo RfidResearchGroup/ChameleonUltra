@@ -279,6 +279,17 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
         if (timeout_ms == 0 || timeout_ms > 30000) timeout_ms = 5000;
     }
 
+    /* Reload active slot data before sniffing.
+     * The NFCT anti-collision response is built from m_tag_information which
+     * points into the shared tag data buffer. After a slot switch the buffer
+     * may still contain the previous slot's UID if the FDS async load has not
+     * completed. A forced reload here ensures the correct UID is presented
+     * during the sniff session.
+     * A short settle delay follows to allow the reload to complete before
+     * the first field detection can trigger the anti-collision path. */
+    tag_emulation_load_data();
+    bsp_delay_ms(100);
+
     /* Install sniff callback into the already-running tag emulation stack.
      * Do NOT call tag_mode_enter() or sense_switch() here — those reinit
      * NFCT and wipe the anti-collision data, breaking the emulation.

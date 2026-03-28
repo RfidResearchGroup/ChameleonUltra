@@ -852,8 +852,30 @@ class HF14ASniff(BaseCLIUnit):
             szBytes = (szBits + 7) // 8
             if i + szBytes > len(buf):
                 break
-            frames.append((szBits, buf[i:i+szBytes]))
+            raw = buf[i:i+szBytes]
             i += szBytes
+
+            # ISO14443-A frames include one parity bit per byte.
+            # Short frames (< 8 bits, e.g. REQA=7 bits) have no parity.
+            # All other frames: szBits = data_bytes * 9, strip every 9th bit.
+            if szBits >= 8 and szBits % 9 == 0:
+                n_bytes = szBits // 9
+                all_bits = []
+                for byte in raw:
+                    for b in range(8):
+                        all_bits.append((byte >> b) & 1)
+                stripped = []
+                for nb in range(n_bytes):
+                    val = 0
+                    for b in range(8):
+                        val |= all_bits[nb * 9 + b] << b
+                    stripped.append(val)
+                data = bytes(stripped)
+                szBits = n_bytes * 8
+            else:
+                data = raw
+
+            frames.append((szBits, data))
 
         if not frames:
             print(f"{CR}No frames decoded{C0}")
@@ -1113,15 +1135,10 @@ def _print_14a_sniff_summary(frames):
     elif uid_cl1:
         uid_bytes = uid_cl1
 
-    # Also check anticoll frames for partial UID if no SELECT seen
-    if uid_bytes is None:
-        # Look for the 81-bit anticoll frames (tag UID response captured)
-        for szBits, data in frames:
-            if not data: continue
-            if data[0] in (0x93, 0x95) and szBits == 81 and len(data) >= 9:
-                # Extract UID bytes from the anticoll response bytes
-                uid_bytes = bytes(data[2:6])
-                break
+    # Do NOT attempt to extract UID from anticoll frames (81-bit NVB=e1):
+    # those frames are the CU's own emulated tag responding, so the UID
+    # would always be the active slot's UID — not useful information.
+    # Only report UID when we see a completed SELECT (NVB=70).
 
     print(f" {'─'*55}")
     if uid_bytes:
@@ -1150,7 +1167,7 @@ def _print_14a_sniff_summary(frames):
     if halted:
         print(f" {CC}End      :{C0} HALT / DESELECT")
     if not uid_bytes and not aids and not auth_seen and not rats_seen:
-        print(f" {CC}Note     :{C0} anti-collision incomplete — reader could not select tag")
+        print(f" {CC}Note     :{C0} anti-collision incomplete — no SELECT seen (reader could not complete exchange)")
 
 
 
