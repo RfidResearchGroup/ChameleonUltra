@@ -956,13 +956,11 @@ def _decode_14a_frame_col(data: bytes, szBits: int):
     # Encrypted nonce / auth response (follows AUTH, first byte varies)
     if szBits == 72: 
         return '(encrypted nonce — auth challenge/response)', CC
+
     if b0 == 0x30: 
-        return f'READ  block={data[1]}'
-    if len(data) > 1 else 'READ', CC
+        return f'READ  block={data[1]}' if len(data) > 1 else 'READ', CC
     if b0 == 0xa0: 
-        return f'WRITE block={data[1]}'
-    if len(data) > 1
-        else 'WRITE', CY
+        return f'WRITE block={data[1]}' if len(data) > 1 else 'WRITE', CY
     if b0 == 0x40: 
         return 'MAGIC WUPC1', CY
     if b0 == 0x43: 
@@ -4525,28 +4523,26 @@ class DataHexsamples(BaseCLIUnit):
         print()
         for row in range(0, n, 16):
             chunk = buf[row:row+16]
-            hex_part = ' '.join(f'{b:02x}' 
-            for b in chunk)
-                bar = ''
-                for b in chunk:
-                    if b < 0x10:
-                        bar += '_'
-                    elif b < 0x40: 
-                        bar += '.'
-                    elif b < 0x80: 
-                        bar += '-'
-                    elif b < 0xa0: 
-                        bar += '+'
-                    elif b < 0xc0: 
-                        bar += 'o'
-                    elif b < 0xe0: 
-                        bar += 'O'
-                    else:
-                        bar += '#'
-            print(f" {row // 16 :02d} | {hex_part:<47s} | {bar}")
-            print()
-            print(" _ gap  . ringing  - low  + mid  o carrier  O high  # clipped")
-
+        hex_part = ' '.join(f'{b:02x}' for b in chunk)
+        bar = ''
+        for b in chunk:
+            if b < 0x10:
+                bar += '_'
+            elif b < 0x40: 
+                bar += '.'
+            elif b < 0x80: 
+                bar += '-'
+            elif b < 0xa0: 
+                bar += '+'
+            elif b < 0xc0: 
+                bar += 'o'
+            elif b < 0xe0: 
+                bar += 'O'
+            else:
+                bar += '#'
+        print(f" {row // 16 :02d} | {hex_part:<47s} | {bar}")
+        print()
+        print(" _ gap  . ringing  - low  + mid  o carrier  O high  # clipped")
 
 @data.command('plot')
 class DataPlot(BaseCLIUnit):
@@ -4853,13 +4849,14 @@ class DataModulation(BaseCLIUnit):
 
         # Measure run lengths (periods between transitions)
         runs = []
-        cur = bits[0]; count = 1
+        cur = bits[0]; 
+            count = 1
         for b in bits[1:]:
             if b == cur:
                 count += 1
             else:
                 runs.append(count)
-                cur = b; 
+                cur = b
                 count = 1
 
         runs.append(count)
