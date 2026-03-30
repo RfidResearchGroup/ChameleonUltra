@@ -24,7 +24,7 @@ import chameleon_cmd
 from chameleon_utils import ArgumentParserNoExit, ArgsParserError, UnexpectedResponseError, execute_tool, \
     tqdm_if_exists, print_key_table
 from chameleon_utils import CLITree
-from chameleon_utils import CR, CG, CB, CC, CY, C0
+from chameleon_utils import CR, CG, CB, CC, CY, CM, C0, color_string
 from chameleon_utils import print_mem_dump
 from chameleon_enum import Command, Status, SlotNumber, TagSenseType, TagSpecificType
 from chameleon_enum import MifareClassicWriteMode, MifareClassicPrngType, MifareClassicDarksideStatus, MfcKeyType
@@ -818,7 +818,7 @@ class HF14ASniff(BaseCLIUnit):
     def on_exec(self, args: argparse.Namespace):
         timeout = max(1, min(30000, args.timeout))
         print(f" Listening for reader frames for {timeout}ms...")
-        print(f" Place CU near a reader now.")
+        print(" Place CU near a reader now.")
         print()
 
         try:
@@ -837,7 +837,7 @@ class HF14ASniff(BaseCLIUnit):
             if cb_count > 0:
                 print(f"{CY} Callback fired {cb_count}x but no valid frames buffered{C0}")
             else:
-                print(f" No frames captured — no reader detected")
+                print(" No frames captured — no reader detected")
             return
 
         # Parse packed frame buffer: [2 bytes bits BE][N bytes data] ...
@@ -904,8 +904,10 @@ def _decode_14a_frame_col(data: bytes, szBits: int):
 
     # Short frames (7-bit)
     if szBits == 7:
-        if b0 == 0x26: return 'REQA', CG
-        if b0 == 0x52: return 'WUPA', CG
+        if b0 == 0x26: 
+            return 'REQA', CG
+        if b0 == 0x52:
+            return 'WUPA', CG
         return f'short(0x{b0:02x})', CC
 
     # Anti-collision / Select
@@ -947,15 +949,26 @@ def _decode_14a_frame_col(data: bytes, szBits: int):
         return f'RATS  FSDI={fsdi} CID={cid}', CM
 
     # MIFARE Classic commands
-    if b0 == 0x60: return f'AUTH KeyA  block={data[1]}' if len(data) > 1 else 'AUTH KeyA', CR
-    if b0 == 0x61: return f'AUTH KeyB  block={data[1]}' if len(data) > 1 else 'AUTH KeyB', CR
+    if b0 == 0x60: 
+        return f'AUTH KeyA  block={data[1]}' if len(data) > 1 else 'AUTH KeyA', CR
+    if b0 == 0x61: 
+        return f'AUTH KeyB  block={data[1]}' if len(data) > 1 else 'AUTH KeyB', CR
     # Encrypted nonce / auth response (follows AUTH, first byte varies)
-    if szBits == 72: return '(encrypted nonce — auth challenge/response)', CC
-    if b0 == 0x30: return f'READ  block={data[1]}'      if len(data) > 1 else 'READ',      CC
-    if b0 == 0xa0: return f'WRITE block={data[1]}'      if len(data) > 1 else 'WRITE',     CY
-    if b0 == 0x40: return 'MAGIC WUPC1', CY
-    if b0 == 0x43: return 'MAGIC WUPC2', CY
-    if b0 == 0x41: return 'MAGIC WIPE',  CR
+    if szBits == 72: 
+        return '(encrypted nonce — auth challenge/response)', CC
+    if b0 == 0x30: 
+        return f'READ  block={data[1]}'
+    if len(data) > 1 else 'READ', CC
+    if b0 == 0xa0: 
+        return f'WRITE block={data[1]}'
+    if len(data) > 1
+        else 'WRITE', CY
+    if b0 == 0x40: 
+        return 'MAGIC WUPC1', CY
+    if b0 == 0x43: 
+        return 'MAGIC WUPC2', CY
+    if b0 == 0x41:
+        return 'MAGIC WIPE', CR
 
     # ISO 7816-4 APDUs
     if len(data) >= 2 and b0 in (0x00, 0x80, 0x90, 0xa0):
@@ -970,7 +983,8 @@ def _decode_14a_frame_col(data: bytes, szBits: int):
                 aid_raw = bytes(data[5:5+data[4]])
                 name = _known_aid(aid_raw)
                 label = f'SELECT AID  {aid.upper()}'
-                if name: label += f'  ({name})'
+                if name: 
+                    label += f'  ({name})'
                 return label, CY
             return 'SELECT', CY
         # READ BINARY
@@ -1052,10 +1066,10 @@ def _print_14a_sniff_summary(frames):
     rats_seen  = False
     atc_tag    = None
     amount     = None
-    anticoll_uids = []  # UIDs seen in anticoll frames (partial but useful)
 
     for szBits, data in frames:
-        if not data: continue
+        if not data: 
+            continue
         b0 = data[0]
 
         # Extract UID from anticoll frames (NVB != 70 = anticoll, NVB = 70 = select)
@@ -1089,7 +1103,8 @@ def _print_14a_sniff_summary(frames):
             aid = bytes(data[5:5+data[4]])
             name = _known_aid(aid)
             entry = aid.hex().upper()
-            if name: entry += f'  ({name})'
+            if name: 
+                entry += f'  ({name})'
             if entry not in aids:
                 aids.append(entry)
 
@@ -1103,10 +1118,10 @@ def _print_14a_sniff_summary(frames):
 
         # GENERATE AC — check AC type
         if b0 == 0x80 and len(data) > 2 and data[1] == 0xae:
-            ac_type = {0x00:'AAC (decline)', 0x40:'TC (approved offline)',
-                       0x80:'ARQC (online auth)'}.get(data[2] & 0xc0, 'AC')
-            if (data[2] & 0xc0) == 0x80: arqc_seen = True
-            if (data[2] & 0xc0) == 0x40: tc_seen = True
+            if (data[2] & 0xc0) == 0x80:
+                arqc_seen = True
+            if (data[2] & 0xc0) == 0x40: 
+                tc_seen = True
 
         # GET DATA — ATC
         if b0 == 0x80 and len(data) > 2 and data[1] == 0xca:
@@ -4510,19 +4525,27 @@ class DataHexsamples(BaseCLIUnit):
         print()
         for row in range(0, n, 16):
             chunk = buf[row:row+16]
-            hex_part = ' '.join(f'{b:02x}' for b in chunk)
-            bar = ''
-            for b in chunk:
-                if b < 0x10:   bar += '_'
-                elif b < 0x40: bar += '.'
-                elif b < 0x80: bar += '-'
-                elif b < 0xa0: bar += '+'
-                elif b < 0xc0: bar += 'o'
-                elif b < 0xe0: bar += 'O'
-                else:          bar += '#'
+            hex_part = ' '.join(f'{b:02x}' 
+            for b in chunk)
+                bar = ''
+                for b in chunk:
+                    if b < 0x10:
+                        bar += '_'
+                    elif b < 0x40: 
+                        bar += '.'
+                    elif b < 0x80: 
+                        bar += '-'
+                    elif b < 0xa0: 
+                        bar += '+'
+                    elif b < 0xc0: 
+                        bar += 'o'
+                    elif b < 0xe0: 
+                        bar += 'O'
+                    else:
+                        bar += '#'
             print(f" {row // 16 :02d} | {hex_part:<47s} | {bar}")
-        print()
-        print(" _ gap  . ringing  - low  + mid  o carrier  O high  # clipped")
+            print()
+            print(" _ gap  . ringing  - low  + mid  o carrier  O high  # clipped")
 
 
 @data.command('plot')
@@ -4578,8 +4601,8 @@ class DataPlot(BaseCLIUnit):
                 _plot_matplotlib(xs, view, mean, threshold, start, end)
                 return
             except ImportError:
-                print(f" No GUI library found (install PyQt5+pyqtgraph or matplotlib)")
-                print(f" Falling back to ASCII plot...")
+                print(" No GUI library found (install PyQt5+pyqtgraph or matplotlib)")
+                print(" Falling back to ASCII plot...")
 
         # ASCII fallback
         w = 64
@@ -4663,7 +4686,7 @@ def _plot_pyqtgraph(xs, ys, mean, threshold, start, end):
 
     app = QApplication.instance() or QApplication(sys.argv)
 
-    win = pg.GraphicsLayoutWidget(title=f'ChameleonUltra — LF Sniff')
+    win = pg.GraphicsLayoutWidget(title='ChameleonUltra — LF Sniff')
     win.resize(1200, 400)
     win.setWindowTitle(f'LF Sniff — samples {start}–{end}  ({(end-start)*8}µs)')
 
@@ -4745,7 +4768,6 @@ class DataManrawdecode(BaseCLIUnit):
         runs.append((cur, count))
 
         # Clock period in samples (1 sample = 8µs)
-        samples_per_tc = 1   # our SAADC runs at 125kHz = 1 sample/8µs = 1 sample/Tc
         half_clk = args.clock // 2  # samples per half-bit
 
         # Decode Manchester: half-bit transitions
@@ -4833,10 +4855,13 @@ class DataModulation(BaseCLIUnit):
         runs = []
         cur = bits[0]; count = 1
         for b in bits[1:]:
-            if b == cur: count += 1
+            if b == cur:
+                count += 1
             else:
                 runs.append(count)
-                cur = b; count = 1
+                cur = b; 
+                count = 1
+
         runs.append(count)
 
         if len(runs) < 4:
@@ -4847,7 +4872,6 @@ class DataModulation(BaseCLIUnit):
         # Remove outliers (top/bottom 10%)
         trim = max(1, len(runs) // 10)
         trimmed = runs_sorted[trim:-trim] if len(runs_sorted) > 2*trim else runs_sorted
-        avg_run = sum(trimmed) // len(trimmed)
 
         # Estimate clock: most common run length = half-period
         from collections import Counter
@@ -4857,7 +4881,6 @@ class DataModulation(BaseCLIUnit):
         # Map to nearest standard RF divider
         half_samples = most_common_run
         full_period_us = half_samples * 2 * 8  # us
-        clock_hz = 1_000_000 // full_period_us if full_period_us else 0
 
         rf_dividers = [8, 16, 32, 40, 50, 64, 100, 128]
         tc_us = 8  # 1 Tc = 8µs at 125kHz
