@@ -24,7 +24,7 @@ import chameleon_cmd
 from chameleon_utils import ArgumentParserNoExit, ArgsParserError, UnexpectedResponseError, execute_tool, \
     tqdm_if_exists, print_key_table
 from chameleon_utils import CLITree
-from chameleon_utils import CR, CG, CB, CC, CY, CM, C0, color_string
+from chameleon_utils import CR, CG, CB, CC, CY, CM, C0
 from chameleon_utils import print_mem_dump
 from chameleon_enum import Command, Status, SlotNumber, TagSenseType, TagSpecificType
 from chameleon_enum import MifareClassicWriteMode, MifareClassicPrngType, MifareClassicDarksideStatus, MfcKeyType
@@ -5227,7 +5227,6 @@ class DataModulation(BaseCLIUnit):
         runs_sorted = sorted(runs)
         # Remove outliers (top/bottom 10%)
         trim = max(1, len(runs) // 10)
-        trimmed = runs_sorted[trim:-trim] if len(runs_sorted) > 2*trim else runs_sorted
 
         # Estimate clock: most common run length = half-period
         from collections import Counter
@@ -5272,7 +5271,7 @@ class DataModulation(BaseCLIUnit):
             mod = f"Biphase (RF/{best_div})"
             col = CG
         else:
-            mod = f"FSK or mixed (multiple run lengths)"
+            mod = "FSK or mixed (multiple run lengths)"
             col = CG
 
         print(f" Modulation : {col}{mod}{C0}")
