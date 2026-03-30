@@ -1852,6 +1852,365 @@ class HFMFStaticEncryptedNested(ReaderRequiredUnit):
 
         print_key_table(key_map)
 
+@hf_mf.command("autopwn")
+class HFMFAutopwn(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Mifare Classic auto recovery tool"
+        parser.add_argument(
+            "-k", "--key", type=str, required=False, metavar="<hex>", help="Known key"
+        )
+        return parser
+
+    def get_mf_size(self, sak):
+        sizes = {
+            b"\x18": ("4k", 40),
+            b"\x08": ("1k", 16),
+            b"\x09": ("mini", 5),
+            b"\x10": ("2k", 32),
+            b"\x01": ("1k", 16),
+        }
+        if sak not in sizes:
+            print("Unknown SAK, defaulting to 16 sectors")
+        return sizes.get(sak, ("1k", 16))
+
+    def getsak(self, deep=False):
+        return self.scan(deep, "sak")
+
+    def getuid(self, deep=False):
+        return self.scan(deep, "uid")
+
+    def from_nt_level_code_to_str(self, nt_level):
+        return {0: "StaticNested", 1: "Nested", 2: "HardNested"}.get(
+            nt_level, "Unknown"
+        )
+
+    def scan(self, deep=False, scanitem="uid"):
+        resp = self.cmd.hf14a_scan()
+        if resp is None:
+            print("ISO14443-A tag not found")
+            return None
+        for data_tag in resp:
+            if deep:
+                self.sak_info(data_tag)
+                if len(resp) == 1:
+                    self.check_mf1_nt()
+                else:
+                    print("Multiple tags detected, skipping deep tests...")
+            return data_tag[scanitem].hex().upper()
+
+    def bits_to_10byte_mask(self, bits=0):
+        return bytes.fromhex(f"{(1 << (80 - bits)) - 1:020X}")
+
+    def try_key(self, key: bytes, mask: bytes):
+        return self.cmd.mf1_check_keys_of_sectors(mask, [key])
+
+    def neg_bytes(self, data: bytes) -> bytes:
+        return (~int.from_bytes(data, "big") & ((1 << (len(data) * 8)) - 1)).to_bytes(
+            len(data), "big"
+        )
+
+    def merge_found_sector_keys(self, existing, response, overwrite=False):
+        for idx, key in response.get("sectorKeys", {}).items():
+            if overwrite or idx not in existing:
+                existing[idx] = key
+        return existing
+
+    def print_key_table(self, keymap, max_sectors):
+        def fmt(k):
+            text = (
+                k.hex().upper().ljust(12)
+                if isinstance(k, (bytes, bytearray))
+                else "------------"
+            )
+            color = CG if isinstance(k, (bytes, bytearray)) else CR
+            return f"{color}{text}{C0}"
+
+        sep = "╠══════╬══════════════╬══════════════╣"
+        print("╔══════╦══════════════╦══════════════╗")
+        print("║ Sec  ║ key A        ║ key B        ║")
+        for sector in range(max_sectors):
+            print(sep)
+            print(
+                f"║ {sector:03d}  ║ {fmt(keymap.get(sector * 2))} ║ {fmt(keymap.get(sector * 2 + 1))} ║"
+            )
+        print("╚══════╩══════════════╩══════════════╝")
+
+    def find_missing_keys(self, existing_keys: dict, max_num: int):
+        return {
+            i: (MfcKeyType.A if i % 2 == 0 else MfcKeyType.B)
+            for i in range(max_num)
+            if i not in existing_keys
+        }
+
+    def choose_random_known_key(self, keys_dict):
+        index = random.choice(list(keys_dict.keys()))
+        return (
+            (index // 2) * 4,
+            keys_dict[index],
+            MfcKeyType.B if index % 2 else MfcKeyType.A,
+        )
+
+    def mask_from_keys(
+        self, pos_container, total_bits=80, one_indexed=False, msb_left=True
+    ):
+        positions = (
+            pos_container.keys() if isinstance(pos_container, dict) else pos_container
+        )
+        field = ["0"] * total_bits
+        for p in positions:
+            try:
+                p = int(p)
+            except Exception:
+                continue
+            idx = p - 1 if one_indexed else p
+            if 0 <= idx < total_bits:
+                field[idx if msb_left else total_bits - 1 - idx] = "1"
+        bstr = "".join(field)
+        return bstr, bytes(int(bstr[i : i + 8], 2) for i in range(0, total_bits, 8))
+
+    def run_senested(self, current_keys_found, max_sectors_num):
+        print(
+            f" {CY}[+]{C0}  This card could be cracked using static nested attack (May take a few minutes)"
+        )
+        if input(f" {C0}[+]{C0}  Would you like to proceed? [y/n]: ").lower() != "y":
+            return current_keys_found
+        backdoor_key = "A396EFA4E24F"
+        if (
+            input(
+                f" {C0}[+]{C0}  Would you like to use default backdoor key? [y/n]: "
+            ).lower()
+            == "n"
+        ):
+            while True:
+                backdoor_key = input(
+                    f" {C0}[+]{C0}  Backdoor key (known: A396EFA4E24F, A31667A8CEC1, 518B3354E760): "
+                ).upper()
+                if re.fullmatch(r"[A-F0-9]{12}", backdoor_key):
+                    print(f" {CG}[+]{C0}  Valid key")
+                    break
+                print(f" {CR}[!]{C0}  Invalid format for key")
+        else:
+            print(f" {CY}[+]{C0}  Using default key A396EFA4E24F")
+        print(f" {CG}[+]{C0}  Running static nested..")
+        snested = HFMFStaticEncryptedNested.__new__(HFMFStaticEncryptedNested)
+        snested._device_cmd = self.cmd
+        missing_keys = self.find_missing_keys(current_keys_found, max_sectors_num * 2)
+        keys = list(missing_keys.items())
+        for i, (key_num, key_type) in enumerate(keys):
+            if current_keys_found.get(key_num) is not None:
+                print(f" {CG}[+]{C0}  Key {key_num} found by reuse")
+                continue
+            sector_num = key_num // 2
+            found_keymap = snested.senested(
+                backdoor_key, sector_num, sector_num + 1, max_sectors_num
+            )
+            next_key_num = keys[i + 1][0] if i + 1 < len(keys) else -1
+            if next_key_num == key_num + 1 and key_type == MfcKeyType.A:
+                current_keys_found[key_num] = bytes.fromhex(
+                    found_keymap["A"][sector_num]
+                )
+                current_keys_found[key_num + 1] = bytes.fromhex(
+                    found_keymap["B"][sector_num]
+                )
+            elif key_type == MfcKeyType.A:
+                current_keys_found[key_num] = bytes.fromhex(
+                    found_keymap["A"][sector_num]
+                )
+            else:
+                current_keys_found[key_num] = bytes.fromhex(
+                    found_keymap["B"][sector_num]
+                )
+            current_keys_found = dict(sorted(current_keys_found.items()))
+            _, mask_bytes = self.mask_from_keys(missing_keys)
+            neg = self.neg_bytes(mask_bytes)
+            current_keys_found = self.merge_found_sector_keys(
+                current_keys_found,
+                self.try_key(bytes.fromhex(found_keymap["A"][sector_num]), neg),
+            )
+            current_keys_found = self.merge_found_sector_keys(
+                current_keys_found,
+                self.try_key(bytes.fromhex(found_keymap["B"][sector_num]), neg),
+            )
+        return current_keys_found
+
+    def autopwn(self, key_known):
+        uid = self.getuid()
+        sak = self.getsak()
+        mf_size, max_sectors_num = self.get_mf_size(bytes.fromhex(sak))
+        print(f" {CG}[+]{C0}  Type: MIFARE Classic {CY}{mf_size}{C0}")
+        print(f" {CG}[+]{C0}  UID: {uid}")
+        print(f" {CG}[+]{C0}  SAK: {sak}")
+        nt_level = self.cmd.mf1_detect_prng()
+        print(
+            f" {CG}[+]{C0}  NT vulnerable: {CY}{self.from_nt_level_code_to_str(nt_level)}{C0}"
+        )
+
+        current_keys_found = {}
+        full_mask = self.bits_to_10byte_mask(max_sectors_num * 2)
+
+        if key_known is not None:
+            current_keys_found = self.merge_found_sector_keys(
+                current_keys_found, self.try_key(bytes.fromhex(key_known), full_mask)
+            )
+        current_keys_found = self.merge_found_sector_keys(
+            current_keys_found, self.try_key(bytes.fromhex("FFFFFFFFFFFF"), bytes(10))
+        )
+
+        if not current_keys_found:
+            print(f" {CR}[!]{C0}  No keys found yet, trying darkside..")
+            darkside = HFMFDarkside.__new__(HFMFDarkside)
+            HFMFDarkside.__init__(darkside)
+            darkside._device_cmd = self.cmd
+            darkside_key = darkside.recover_key(0x03, MfcKeyType.A)
+            if darkside_key is not None:
+                print(f" {CG}[+]{C0}  Darkside key found: {darkside_key}")
+                current_keys_found[0] = bytes.fromhex(darkside_key)
+                current_keys_found = dict(sorted(current_keys_found.items()))
+                print(f" {CG}[+]{C0}  Reuse key check..")
+                current_keys_found = self.merge_found_sector_keys(
+                    current_keys_found,
+                    self.try_key(bytes.fromhex(darkside_key), full_mask),
+                )
+            else:
+                print(f" {CR}[!]{C0}  Darkside failed!")
+
+        total = max_sectors_num * 2
+        if len(current_keys_found) == total:
+            print(f" {CG}[+]{C0}  All keys found")
+            return current_keys_found, max_sectors_num
+
+        if not current_keys_found:
+            return (
+                self.run_senested(current_keys_found, max_sectors_num),
+                max_sectors_num,
+            )
+
+        print(f" {CG}[+]{C0}  Some keys found, recovering remaining..")
+        if nt_level == 2:
+            print(
+                f" {CY}[+]{C0}  Hardened card — use 'hf mf hardnested' to recover remaining keys"
+            )
+        elif nt_level == 0:
+            current_keys_found = self.run_senested(current_keys_found, max_sectors_num)
+        else:
+            block_known, key_known_bytes, type_known = self.choose_random_known_key(
+                current_keys_found
+            )
+            missing_keys = self.find_missing_keys(current_keys_found, total)
+            nested = HFMFNested.__new__(HFMFNested)
+            BaseCLIUnit.__init__(nested)
+            nested._device_cmd = self.cmd
+            for missing_key_num, key_type_target in missing_keys.items():
+                if current_keys_found.get(missing_key_num) is not None:
+                    print(f" {CG}[+]{C0}  Key {missing_key_num} found by reuse")
+                    continue
+                nested_key = nested.recover_a_key(
+                    block_known,
+                    type_known,
+                    key_known_bytes,
+                    (missing_key_num // 2) * 4,
+                    key_type_target,
+                )
+                if nested_key is None:
+                    continue
+                print(
+                    f" {CG}[+]{C0}  Found key {missing_key_num}: {nested_key.upper()}"
+                )
+                current_keys_found[missing_key_num] = bytes.fromhex(nested_key)
+                current_keys_found = dict(sorted(current_keys_found.items()))
+                _, mask_bytes = self.mask_from_keys(missing_keys)
+                current_keys_found = self.merge_found_sector_keys(
+                    current_keys_found,
+                    self.try_key(bytes.fromhex(nested_key), self.neg_bytes(mask_bytes)),
+                )
+            if len(current_keys_found) < total:
+                current_keys_found = self.run_senested(
+                    current_keys_found, max_sectors_num
+                )
+
+        if len(current_keys_found) == total:
+            print(f" {CG}[+]{C0}  All keys found")
+        return current_keys_found, max_sectors_num
+
+    def save_keys_to_file(self, extracted_keys, max_sectors_num):
+        if input(f" {CY}[?]{C0}  Save keys to file? [y/n]: ").lower() != "y":
+            return
+        filename = input(
+            f" {C0}[+]{C0}  Enter base filename (without extension): "
+        ).strip()
+        if not filename:
+            print(f" {CR}[!]{C0}  No filename provided, skipping.")
+            return
+        dic_path = filename + ".dic"
+        uniq_keys = set(
+            v for v in extracted_keys.values() if isinstance(v, (bytes, bytearray))
+        )
+        with open(dic_path, "w") as f:
+            for key in uniq_keys:
+                f.write(key.hex().upper() + "\n")
+        print(f" {CG}[+]{C0}  Keys saved to {dic_path} (as .dic format)")
+        key_path = filename + ".key"
+        unknownkey = bytes(6)
+        with open(key_path, "wb") as f:
+            for sector_no in range(max_sectors_num):
+                f.write(extracted_keys.get(sector_no * 2, unknownkey))
+                f.write(extracted_keys.get(sector_no * 2 + 1, unknownkey))
+        print(f" {CG}[+]{C0}  Keys saved to {key_path} (as .key format)")
+
+    def dump_card_to_file(self, extracted_keys, max_sectors_num):
+        if input(f" {CY}[?]{C0}  Dump card to file? [y/n]: ").lower() != "y":
+            return
+        filename = input(
+            f" {C0}[+]{C0}  Enter dump filename (without extension): "
+        ).strip()
+        if not filename:
+            print(f" {CR}[!]{C0}  No filename provided, skipping.")
+            return
+        dump_path = filename + ".bin"
+        buffer = bytearray()
+        for s in range(max_sectors_num):
+            key_a = extracted_keys.get(s * 2)
+            key_b = extracted_keys.get(s * 2 + 1)
+            num_blocks, first_block = (
+                (4, s * 4) if s < 32 else (16, 128 + (s - 32) * 16)
+            )
+            for b in range(num_blocks):
+                block_num = first_block + b
+                block_data = None
+                if key_b is not None:
+                    try:
+                        block_data = self.cmd.mf1_read_one_block(
+                            block_num, MfcKeyType.B, key_b
+                        )
+                    except Exception:
+                        pass
+                if block_data is None and key_a is not None:
+                    try:
+                        block_data = self.cmd.mf1_read_one_block(
+                            block_num, MfcKeyType.A, key_a
+                        )
+                    except Exception:
+                        pass
+                if block_data is None:
+                    print(
+                        f" {CR}[!]{C0}  Block {block_num} unreadable, filling with zeros"
+                    )
+                    block_data = bytes(16)
+                buffer.extend(block_data)
+        with open(dump_path, "wb") as f:
+            f.write(buffer)
+        print(f" {CG}[+]{C0}  Card dumped to {dump_path}")
+
+    def on_exec(self, args: argparse.Namespace):
+        key_known: str = args.key
+        if key_known is not None and not re.match(r"^[a-fA-F0-9]{12}$", key_known):
+            print("key must include 12 HEX symbols")
+            return
+        extracted_keys, max_sectors_num = self.autopwn(key_known)
+        self.print_key_table(extracted_keys, max_sectors_num)
+        self.save_keys_to_file(extracted_keys, max_sectors_num)
+        self.dump_card_to_file(extracted_keys, max_sectors_num)
 
 @hf_mf.command('fchk')
 class HFMFFCHK(ReaderRequiredUnit):
