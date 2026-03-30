@@ -4849,8 +4849,8 @@ class DataModulation(BaseCLIUnit):
 
         # Measure run lengths (periods between transitions)
         runs = []
-        cur = bits[0]; 
-            count = 1
+        cur = bits[0]
+        count = 1
         for b in bits[1:]:
             if b == cur:
                 count += 1
@@ -4921,8 +4921,10 @@ class DataModulation(BaseCLIUnit):
         # Gap detection
         gap_threshold = mean // 2
         gaps = [i for i, b in enumerate(buf[200:]) if b < gap_threshold]
+
+
         if gaps:
             print(f" RTF gaps   : {CG}{len(gaps)}{C0} samples below 0x{gap_threshold:02x}"
-                  f" — gap commands present")
+                  f" ^`^t gap commands present")
         else:
-            print(f" RTF gaps   : {CR}none — no gap commands detected{C0}")
+            print(f" RTF gaps   : {CR}none ^`^t no gap commands detected{C0}")
