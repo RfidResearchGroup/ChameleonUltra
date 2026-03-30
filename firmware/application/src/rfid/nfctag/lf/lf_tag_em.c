@@ -5,6 +5,7 @@
 #include "bsp_delay.h"
 #include "fds_util.h"
 #include "nrf_gpio.h"
+#include "nrf_soc.h"
 #include "nrfx_lpcomp.h"
 #include "nrfx_pwm.h"
 #include "protocols/em410x.h"
@@ -137,6 +138,23 @@ static void pwm_init(void) {
 }
 
 static void lf_sense_enable(void) {
+    // PWM bit timing divides HFCLK by a fixed ratio. On HFINT (64 MHz RC,
+    // ±1.5% at 25°C after factory trim, wider over temperature) this gives a
+    // chip-to-chip spread that NRZ readers — which see cumulative error across
+    // runs of same-polarity bits with no intra-run resync — reject even when
+    // Manchester/FSK readers don't. Holding HFXO brings the PWM clock to
+    // ±40 ppm. We can't lock to the reader's carrier (tag-mode antenna taps
+    // on this board are envelope-only), so this is as good as it gets.
+    //
+    // Paired release in lf_sense_disable(). SD reference-counts HFXO requests,
+    // so this coexists with BLE. Both functions run from thread context
+    // (tag_mode_enter/tag_emulation_sense_end) where SVCs are safe.
+    sd_clock_hfclk_request();
+    uint32_t hfclk_running = 0;
+    while (!hfclk_running) {
+        sd_clock_hfclk_is_running(&hfclk_running);
+    }
+
     lpcomp_init();
     pwm_init();  // use precise hardware pwm to broadcast card id
     if (is_lf_field_exists()) {
@@ -149,6 +167,7 @@ static void lf_sense_disable(void) {
     nrfx_lpcomp_uninit();
     m_pwm_seq = NULL;
     m_is_lf_emulating = false;
+    sd_clock_hfclk_release();
 }
 
 static enum {
