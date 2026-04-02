@@ -753,6 +753,8 @@ hf_mfu = hf.subgroup("mfu", "MIFARE Ultralight / NTAG commands")
 
 lf = root.subgroup("lf", "Low Frequency commands")
 lf_em = lf.subgroup("em", "EM commands")
+lf_em_4x05 = lf_em.subgroup("4x05", "EM4x05/EM4x69 commands")
+
 lf_em_410x = lf_em.subgroup("410x", "EM410x commands")
 lf_hid = lf.subgroup("hid", "HID commands")
 lf_hid_prox = lf_hid.subgroup("prox", "HID Prox commands")
@@ -6734,3 +6736,130 @@ examples/notes:
             )
         else:
             print(f" [*] {color_string((CY, 'No response'))}")
+
+
+@lf_em_4x05.command("read")
+class LFEm4x05Read(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Scan EM4x05 or EM4x69 tag (reader-talk-first) and print config, UID"
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            pwd = int(args.pwd, 16) if hasattr(args, 'pwd') and args.pwd else 0
+        except ValueError:
+            print(f"{CR}Invalid password, expected hex{C0}")
+            return
+        (config, uid, uid_hi, is_em4x69, uid_block) = self.cmd.em4x05_scan(pwd=pwd)
+        tag_label = "EM4x69" if is_em4x69 else "EM4x05"
+        rl = bool((config >> 6) & 1)
+        print(f" Tag type : {CG}{tag_label}{C0}")
+        print(f" Config   : {CG}{config:#010x}{C0}")
+        print(f" UID block: {CG}{uid_block}{C0}")
+        if rl:
+            print(f" Auth     : {CG}LOGIN used (pwd={args.pwd.upper() if hasattr(args, 'pwd') and args.pwd else '00000000'}){C0}")
+        if is_em4x69:
+            uid64 = (uid_hi << 32) | uid
+            print(f" UID (64) : {CG}{uid64:016x}{C0}")
+        else:
+            print(f" UID      : {CG}{uid:08x}{C0}")
+
+
+@lf.command('sniff')
+class LFSniff(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Capture raw LF field ADC samples (125kHz, 8µs/sample). "
+            "~0x80 = field on, lower values = gap or no field."
+        )
+        parser.add_argument(
+            '--timeout', type=int, default=2000, metavar='MS',
+            help='Capture duration in milliseconds (default: 2000, max: 10000, firmware blocks for full duration)'
+        )
+        parser.add_argument(
+            '--out', type=str, default=None, metavar='FILE',
+            help='Save raw samples to binary file (for offline analysis)'
+        )
+        parser.add_argument(
+            '--hex', action='store_true',
+            help='Print hex dump of samples to screen'
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        timeout = max(1, min(10000, args.timeout))
+        print(f" Capturing LF field for {timeout}ms at 125kHz (8µs/sample)...")
+        resp = self.cmd.lf_sniff(timeout_ms=timeout)
+
+        if resp.status != Status.LF_TAG_OK or not resp.data:
+            print(f"{CR}No samples captured{C0}")
+            return
+
+        import chameleon_cli_unit as _self_mod
+        data = bytes(resp.data)
+        _self_mod._last_capture = data
+
+        n = len(data)
+        duration_ms = n * 8 / 1000
+        print(f" Captured : {CG}{n}{C0} bytes ({duration_ms:.1f}ms)")
+
+        mn = min(data)
+        mx = max(data)
+        mean = sum(data) // len(data)
+        print(f" Range    : {CG}0x{mn:02x}{C0} – {CG}0x{mx:02x}{C0}  mean: {CG}0x{mean:02x}{C0}")
+
+        # Detect real field gaps — they drop to near zero (0x00-0x40),
+        # well below the steady carrier (~0xb0). Use half of mean as threshold
+        # to avoid false positives from the antenna startup transient.
+        gap_threshold = mean // 2
+        # Skip first 200 samples (1.6ms) to ignore startup ringing
+        steady_data = data[200:]
+        gap_count = sum(1 for b in steady_data if b < gap_threshold)
+        if gap_count > 0:
+            print(f" Gaps     : {CG}{gap_count}{C0} samples below 0x{gap_threshold:02x} (real field drops)")
+        else:
+            print(f" Gaps     : {CR}none detected — flat carrier (no gap commands sent){C0}")
+
+        if args.hex:
+            print()
+            print(f"  addr  {'hex bytes':47s}  level")
+            print(f"  ----  {'-'*47}  ----------------")
+            for i in range(0, min(n, 256), 16):
+                row = data[i:i+16]
+                hex_part = ' '.join(f'{b:02x}' for b in row)
+                bar = ''
+                for b in row:
+                    if b < 0x10:
+                        bar += '_'   # gap / field off
+                    elif b < 0x40:
+                        bar += '.'   # ringing decay
+                    elif b < 0x80:
+                        bar += '-'   # low
+                    elif b < 0xa0:
+                        bar += '+'   # mid
+                    elif b < 0xc0:
+                        bar += 'o'   # steady carrier
+                    elif b < 0xe0:
+                        bar += 'O'   # high
+                    else:
+                        bar += '#'   # clipped 0xff
+                print(f"  {i:04x}  {hex_part:<47s}  {bar}")
+            if n > 256:
+                print(f"  ... ({n - 256} more bytes, use --out to save all)")
+            print()
+            print("  _ gap  . ringing  - low  + mid  o carrier  O high  # clipped")
+
+        if args.out:
+            try:
+                with open(args.out, 'wb') as f:
+                    f.write(data)
+                print(f" Saved    : {CG}{args.out}{C0} ({n} bytes)")
+            except Exception as e:
+                print(f"{CR}Failed to save: {e}{C0}")
+
+
+
