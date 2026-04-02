@@ -19,6 +19,7 @@
 /////////////////////////////////////////////////////////////////////
 #define     STATUS_LF_TAG_OK                        (0x40)  // Some of the low -frequency cards are successful!
 #define     STATUS_LF_TAG_NO_FOUND                  (0x41)  // Can't search for valid LF tags
+#define     STATUS_LF_TAG_LOGIN_REQUIRED            (0x42)  // Tag requires LOGIN before read
 
 /////////////////////////////////////////////////////////////////////
 // other status
