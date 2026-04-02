@@ -14,9 +14,11 @@
 #include "settings.h"
 #include "delayed_reset.h"
 #include "netdata.h"
+#if defined(PROJECT_CHAMELEON_ULTRA)
 #include "bsp_wdt.h"
 #include "lf_reader_generic.h"
 #include "lf_em4x05_data.h"
+#endif
 
 
 #define NRF_LOG_MODULE_NAME app_cmd
@@ -1732,6 +1734,7 @@ static data_frame_tx_t *cmd_processor_mf0_get_emulator_config(uint16_t cmd, uint
  * (cmd -> processor) function map, the map struct is:
  *       cmd code                               before process               cmd processor                                after process
  */
+#if defined(PROJECT_CHAMELEON_ULTRA)
 static data_frame_tx_t *cmd_processor_em4x05_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     em4x05_data_t tag = {0};
     status = scan_em4x05(&tag);
@@ -1750,6 +1753,8 @@ static data_frame_tx_t *cmd_processor_em4x05_scan(uint16_t cmd, uint16_t status,
     payload.is_em4x69 = tag.is_em4x69 ? 1 : 0;
     return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(payload), (uint8_t *)&payload);
 }
+
+#endif
 
 static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_APP_VERSION,              NULL,                        cmd_processor_get_app_version,               NULL                   },
