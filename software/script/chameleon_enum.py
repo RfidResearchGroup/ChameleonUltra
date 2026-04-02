@@ -75,6 +75,7 @@ class Command(enum.IntEnum):
     MF1_CHECK_KEYS_ON_BLOCK = 2015
     HF14A_GET_CONFIG = 2200
     HF14A_SET_CONFIG = 2201
+    HF14A_SNIFF = 2020
 
     EM410X_SCAN = 3000
     EM410X_WRITE_TO_T55XX = 3001
@@ -147,6 +148,9 @@ class Command(enum.IntEnum):
     PAC_GET_EMU_ID = 5007
     IOPROX_SET_EMU_ID = 5008
     IOPROX_GET_EMU_ID = 5009
+    EM4X05_SCAN = 3030
+    EM4X05_READSNIFF = 3032
+    LF_SNIFF = 3031
 
 
 @enum.unique

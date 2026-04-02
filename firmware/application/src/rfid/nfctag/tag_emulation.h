@@ -80,6 +80,7 @@ void tag_emulation_init(void);
 void tag_emulation_save(void);
 
 // Starting and ending of the emulation card
+void tag_emulation_load_data(void);
 void tag_emulation_sense_run(void);
 void tag_emulation_sense_end(void);
 
