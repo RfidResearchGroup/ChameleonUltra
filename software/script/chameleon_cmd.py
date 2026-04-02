@@ -425,6 +425,22 @@ class ChameleonCMD:
                 i += 14
         return resp
 
+    def hf14a_sniff(self, timeout_ms: int = 5000):
+        """
+        Capture ISO14443A reader frames while CU acts as a tag emulator.
+
+        The firmware installs a sniff callback into the HF14A stack for the
+        requested duration, then returns all captured frames packed as:
+          [2 bytes: bit count, big-endian] [N bytes: frame data, ceil(bits/8)] ...
+
+        :param timeout_ms: Listen duration in ms (1-30000, default 5000)
+        :return: Raw response — check .status and .data
+        """
+        timeout_ms = max(1, min(30000, timeout_ms))
+        payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF])
+        timeout_s = (timeout_ms // 1000) + 5
+        return self.device.send_cmd_sync(Command.HF14A_SNIFF, payload, timeout=timeout_s)
+
     @expect_response(Status.SUCCESS)
     def hf14a_get_config(self):
         """

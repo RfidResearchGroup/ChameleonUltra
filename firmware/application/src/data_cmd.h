@@ -78,6 +78,7 @@
 
 #define DATA_CMD_HF14A_GET_CONFIG               (2200)
 #define DATA_CMD_HF14A_SET_CONFIG               (2201)
+#define DATA_CMD_HF14A_SNIFF                    (2020)
 
 //
 // ******************************************************************
