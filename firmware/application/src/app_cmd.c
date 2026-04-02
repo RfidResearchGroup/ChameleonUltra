@@ -14,6 +14,11 @@
 #include "settings.h"
 #include "delayed_reset.h"
 #include "netdata.h"
+#if defined(PROJECT_CHAMELEON_ULTRA)
+#include "bsp_wdt.h"
+#include "lf_reader_generic.h"
+#include "lf_em4x05_data.h"
+#endif
 
 
 #define NRF_LOG_MODULE_NAME app_cmd
@@ -1729,6 +1734,28 @@ static data_frame_tx_t *cmd_processor_mf0_get_emulator_config(uint16_t cmd, uint
  * (cmd -> processor) function map, the map struct is:
  *       cmd code                               before process               cmd processor                                after process
  */
+#if defined(PROJECT_CHAMELEON_ULTRA)
+static data_frame_tx_t *cmd_processor_em4x05_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    em4x05_data_t tag = {0};
+    status = scan_em4x05(&tag);
+    if (status != STATUS_LF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    struct {
+        uint32_t config;
+        uint32_t uid;
+        uint32_t uid_hi;
+        uint8_t  is_em4x69;
+    } PACKED payload;
+    payload.config    = U32HTONL(tag.config);
+    payload.uid       = U32HTONL(tag.uid);
+    payload.uid_hi    = U32HTONL(tag.uid_hi);
+    payload.is_em4x69 = tag.is_em4x69 ? 1 : 0;
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(payload), (uint8_t *)&payload);
+}
+
+#endif
+
 static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_APP_VERSION,              NULL,                        cmd_processor_get_app_version,               NULL                   },
     {    DATA_CMD_CHANGE_DEVICE_MODE,           NULL,                        cmd_processor_change_device_mode,            NULL                   },
@@ -1808,6 +1835,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
 
     {    DATA_CMD_IOPROX_DECODE_RAW,            NULL,                        cmd_processor_ioprox_decode_raw,             NULL                   },
     {    DATA_CMD_IOPROX_COMPOSE_ID,            NULL,                        cmd_processor_ioprox_compose_id,             NULL                   },
+    {    DATA_CMD_EM4X05_SCAN,                  before_reader_run,           cmd_processor_em4x05_scan,                   NULL                   },
 
 #endif
 

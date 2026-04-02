@@ -173,4 +173,7 @@
 #define DATA_CMD_IOPROX_SET_EMU_ID              (5008)
 #define DATA_CMD_IOPROX_GET_EMU_ID              (5009)
 
+#define DATA_CMD_EM4X05_SCAN                    (3030)
+#define DATA_CMD_EM4X05_READSNIFF               (3032)
+
 #endif

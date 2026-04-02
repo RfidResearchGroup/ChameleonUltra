@@ -555,6 +555,30 @@ class ChameleonCMD:
             resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
         return resp
 
+
+    @expect_response(Status.LF_TAG_OK)
+    def em4x05_scan(self, pwd: int = 0):
+        """
+        Read an EM4x05 or EM4x69 tag (reader-talk-first).
+
+        Response payload (14 bytes, big-endian):
+          config    4 bytes  — block 0 configuration word
+          uid       4 bytes  — EM4x05 UID
+          uid_hi    4 bytes  — EM4x69 uid_hi (zero for plain EM4x05)
+          is_em4x69 1 byte   — 1 if a 64-bit EM4x69 UID was read
+          uid_block 1 byte   — block number UID was read from
+
+        :param pwd: 32-bit password for LOGIN (default 0x00000000)
+        :return: parsed tuple (config, uid, uid_hi, is_em4x69, uid_block)
+        """
+        pwd_bytes = struct.pack('!I', pwd & 0xFFFFFFFF)
+        resp = self.device.send_cmd_sync(Command.EM4X05_SCAN, pwd_bytes)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = struct.unpack('!IIIBB', resp.data[:14])
+        return resp
+
+
+
     @expect_response(Status.LF_TAG_OK)
     def viking_scan(self):
         """

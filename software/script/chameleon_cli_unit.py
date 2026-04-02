@@ -753,6 +753,7 @@ hf_mfu = hf.subgroup("mfu", "MIFARE Ultralight / NTAG commands")
 
 lf = root.subgroup("lf", "Low Frequency commands")
 lf_em = lf.subgroup("em", "EM commands")
+lf_em_4x05 = lf_em.subgroup("4x05", "EM4x05/EM4x69 commands")
 lf_em_410x = lf_em.subgroup("410x", "EM410x commands")
 lf_hid = lf.subgroup("hid", "HID commands")
 lf_hid_prox = lf_hid.subgroup("prox", "HID Prox commands")
@@ -6734,3 +6735,35 @@ examples/notes:
             )
         else:
             print(f" [*] {color_string((CY, 'No response'))}")
+
+
+@lf_em_4x05.command("read")
+class LFEm4x05Read(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Scan EM4x05 or EM4x69 tag (reader-talk-first) and print config, UID"
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            pwd = int(args.pwd, 16) if hasattr(args, 'pwd') and args.pwd else 0
+        except ValueError:
+            print(f"{CR}Invalid password, expected hex{C0}")
+            return
+        (config, uid, uid_hi, is_em4x69, uid_block) = self.cmd.em4x05_scan(pwd=pwd)
+        tag_label = "EM4x69" if is_em4x69 else "EM4x05"
+        rl = bool((config >> 6) & 1)
+        print(f" Tag type : {CG}{tag_label}{C0}")
+        print(f" Config   : {CG}{config:#010x}{C0}")
+        print(f" UID block: {CG}{uid_block}{C0}")
+        if rl:
+            print(f" Auth     : {CG}LOGIN used (pwd={args.pwd.upper() if hasattr(args, 'pwd') and args.pwd else '00000000'}){C0}")
+        if is_em4x69:
+            uid64 = (uid_hi << 32) | uid
+            print(f" UID (64) : {CG}{uid64:016x}{C0}")
+        else:
+            print(f" UID      : {CG}{uid:08x}{C0}")
+
+
