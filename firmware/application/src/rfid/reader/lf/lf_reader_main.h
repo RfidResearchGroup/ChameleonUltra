@@ -5,6 +5,9 @@
 
 #include "app_status.h"
 #include "lf_125khz_radio.h"
+#if defined(PROJECT_CHAMELEON_ULTRA)
+#include "lf_em4x05_data.h"
+#endif
 #include "lf_reader_data.h"
 
 void set_scan_tag_timeout(uint32_t ms);

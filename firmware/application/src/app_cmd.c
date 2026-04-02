@@ -14,6 +14,10 @@
 #include "settings.h"
 #include "delayed_reset.h"
 #include "netdata.h"
+#include "bsp_wdt.h"
+#include "lf_reader_generic.h"
+#include "lf_em4x05_data.h"
+#include "nfc_14a.h"
 
 
 #define NRF_LOG_MODULE_NAME app_cmd
@@ -1729,6 +1733,114 @@ static data_frame_tx_t *cmd_processor_mf0_get_emulator_config(uint16_t cmd, uint
  * (cmd -> processor) function map, the map struct is:
  *       cmd code                               before process               cmd processor                                after process
  */
+static data_frame_tx_t *cmd_processor_em4x05_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    em4x05_data_t tag = {0};
+    status = scan_em4x05(&tag);
+    if (status != STATUS_LF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    struct {
+        uint32_t config;
+        uint32_t uid;
+        uint32_t uid_hi;
+        uint8_t  is_em4x69;
+    } PACKED payload;
+    payload.config    = U32HTONL(tag.config);
+    payload.uid       = U32HTONL(tag.uid);
+    payload.uid_hi    = U32HTONL(tag.uid_hi);
+    payload.is_em4x69 = tag.is_em4x69 ? 1 : 0;
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(payload), (uint8_t *)&payload);
+}
+
+static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    /* Optional 2-byte big-endian timeout in ms from host (default 2000ms) */
+    uint32_t timeout_ms = 2000;
+    if (length >= 2) {
+        timeout_ms = ((uint32_t)data[0] << 8) | data[1];
+        if (timeout_ms == 0 || timeout_ms > 10000) timeout_ms = 2000;
+    }
+
+    static uint8_t sniff_buf[LF_SNIFF_MAX_SAMPLES];
+    size_t outlen = 0;
+    raw_read_to_buffer(sniff_buf, LF_SNIFF_MAX_SAMPLES, timeout_ms, &outlen);
+
+    if (outlen == 0) {
+        return data_frame_make(cmd, STATUS_LF_TAG_NO_FOUND, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, (uint16_t)outlen, sniff_buf);
+}
+#define HF_SNIFF_BUF_SIZE   3800   /* leave room for USB framing */
+#define HF_SNIFF_MAX_FRAMES  200
+
+static uint8_t  m_sniff_buf[HF_SNIFF_BUF_SIZE];
+static uint16_t m_sniff_buf_len = 0;
+static bool     m_sniff_active  = false;
+static uint16_t m_sniff_cb_count = 0;   /* debug: total callback invocations */
+
+static void hf14a_sniff_frame_cb(const uint8_t *data, uint16_t szBits) {
+    m_sniff_cb_count++;   /* count even if buffer full or inactive */
+    if (!m_sniff_active) return;
+    uint16_t szBytes = (szBits + 7) / 8;
+    /* Check space: 2 bytes header + data */
+    if (m_sniff_buf_len + 2 + szBytes > HF_SNIFF_BUF_SIZE) return;
+    /* Write bit count big-endian */
+    m_sniff_buf[m_sniff_buf_len++] = (szBits >> 8) & 0xFF;
+    m_sniff_buf[m_sniff_buf_len++] = szBits & 0xFF;
+    /* Write frame bytes */
+    memcpy(&m_sniff_buf[m_sniff_buf_len], data, szBytes);
+    m_sniff_buf_len += szBytes;
+}
+
+static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    /* Optional 2-byte big-endian timeout in ms (default 5000ms) */
+    uint32_t timeout_ms = 5000;
+    if (length >= 2) {
+        timeout_ms = ((uint32_t)data[0] << 8) | data[1];
+        if (timeout_ms == 0 || timeout_ms > 30000) timeout_ms = 5000;
+    }
+
+    /* Reload active slot data before sniffing.
+     * The NFCT anti-collision response is built from m_tag_information which
+     * points into the shared tag data buffer. After a slot switch the buffer
+     * may still contain the previous slot's UID if the FDS async load has not
+     * completed. A forced reload here ensures the correct UID is presented
+     * during the sniff session.
+     * A short settle delay follows to allow the reload to complete before
+     * the first field detection can trigger the anti-collision path. */
+    tag_emulation_load_data();
+    bsp_delay_ms(100);
+
+    /* Install sniff callback into the already-running tag emulation stack.
+     * Do NOT call tag_mode_enter() or sense_switch() here — those reinit
+     * NFCT and wipe the anti-collision data, breaking the emulation.
+     * The device must already be in emulator mode (hw mode --emulator)
+     * with a slot active before running this command. */
+    m_sniff_buf_len = 0;
+    m_sniff_cb_count = 0;
+    m_sniff_active  = true;
+    nfc_tag_14a_set_sniff_cb(hf14a_sniff_frame_cb);
+
+    /* Wait for duration, yielding each ms so USB stack stays alive.
+     * Feed watchdog every iteration — WDT timeout is 5000ms and the
+     * main loop cannot feed it while we are blocking here. */
+    autotimer *p_at = bsp_obtain_timer(0);
+    while (NO_TIMEOUT_1MS(p_at, timeout_ms)) {
+        bsp_delay_ms(1);
+        bsp_wdt_feed();
+    }
+    bsp_return_timer(p_at);
+
+    /* Remove callback and restore normal sense state */
+    m_sniff_active = false;
+    nfc_tag_14a_clear_sniff_cb();
+    tag_emulation_sense_run();  /* restore slot-based sense state */
+
+    if (m_sniff_buf_len == 0) {
+        return data_frame_make(cmd, STATUS_HF_TAG_NO, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_SUCCESS, m_sniff_buf_len, m_sniff_buf);
+}
+
 static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_APP_VERSION,              NULL,                        cmd_processor_get_app_version,               NULL                   },
     {    DATA_CMD_CHANGE_DEVICE_MODE,           NULL,                        cmd_processor_change_device_mode,            NULL                   },
@@ -1808,6 +1920,9 @@ static cmd_data_map_t m_data_cmd_map[] = {
 
     {    DATA_CMD_IOPROX_DECODE_RAW,            NULL,                        cmd_processor_ioprox_decode_raw,             NULL                   },
     {    DATA_CMD_IOPROX_COMPOSE_ID,            NULL,                        cmd_processor_ioprox_compose_id,             NULL                   },
+    {    DATA_CMD_EM4X05_SCAN,                  before_reader_run,           cmd_processor_em4x05_scan,                   NULL                   },
+    {    DATA_CMD_LF_SNIFF,                     before_reader_run,           cmd_processor_lf_sniff,                      NULL                   },
+    {    DATA_CMD_HF14A_SNIFF,                  NULL,                        cmd_processor_hf14a_sniff,                   NULL                   },
 
 #endif
 

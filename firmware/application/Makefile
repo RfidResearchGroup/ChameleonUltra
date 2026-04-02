@@ -35,8 +35,8 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/nfctag/lf/utils/circular_buffer.c \
   $(PROJ_DIR)/rfid/nfctag/lf/utils/manchester.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/em410x.c \
-  $(PROJ_DIR)/rfid/nfctag/lf/protocols/ioprox.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/hidprox.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/protocols/ioprox.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/viking.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/wiegand.c \
   $(PROJ_DIR)/utils/dataframe.c \
@@ -341,13 +341,15 @@ ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
     $(PROJ_DIR)/rfid/reader/hf/rc522.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_125khz_radio.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_em410x_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_em4x05_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_gap.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_reader_generic.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_reader_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_reader_main.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_t55xx_data.c \
-    $(PROJ_DIR)/rfid/reader/lf/lf_ioprox_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_hidprox_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_ioprox_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_viking_data.c \
-    $(PROJ_DIR)/rfid/reader/lf/lf_reader_generic.c \
 
   INC_FOLDERS +=\
     ${PROJ_DIR}/rfid/reader/ \
