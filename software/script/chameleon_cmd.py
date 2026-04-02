@@ -556,24 +556,6 @@ class ChameleonCMD:
         return resp
 
 
-
-    def lf_sniff(self, timeout_ms: int = 2000):
-        """
-        Capture raw LF field ADC samples.
-
-        The ChameleonUltra samples the LF antenna at 125kHz (8µs/sample).
-        Each byte is an 8-bit ADC value: ~0x80 = field on, lower = gap/no field.
-
-        :param timeout_ms: Capture duration in ms (1-10000, default 2000)
-        :return: Raw response object — check .status and .data
-        """
-        timeout_ms = max(1, min(10000, timeout_ms))
-        payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF])
-        timeout_s = (timeout_ms // 1000) + 2
-        return self.device.send_cmd_sync(Command.LF_SNIFF, payload, timeout=timeout_s)
-
-
-
     @expect_response(Status.LF_TAG_OK)
     def em4x05_scan(self, pwd: int = 0):
         """

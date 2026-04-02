@@ -1754,24 +1754,6 @@ static data_frame_tx_t *cmd_processor_em4x05_scan(uint16_t cmd, uint16_t status,
     return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(payload), (uint8_t *)&payload);
 }
 
-static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    /* Optional 2-byte big-endian timeout in ms from host (default 2000ms) */
-    uint32_t timeout_ms = 2000;
-    if (length >= 2) {
-        timeout_ms = ((uint32_t)data[0] << 8) | data[1];
-        if (timeout_ms == 0 || timeout_ms > 10000) timeout_ms = 2000;
-    }
-
-    static uint8_t sniff_buf[LF_SNIFF_MAX_SAMPLES];
-    size_t outlen = 0;
-    raw_read_to_buffer(sniff_buf, LF_SNIFF_MAX_SAMPLES, timeout_ms, &outlen);
-
-    if (outlen == 0) {
-        return data_frame_make(cmd, STATUS_LF_TAG_NO_FOUND, 0, NULL);
-    }
-    return data_frame_make(cmd, STATUS_LF_TAG_OK, (uint16_t)outlen, sniff_buf);
-}
-
 #endif
 
 static cmd_data_map_t m_data_cmd_map[] = {
@@ -1854,7 +1836,6 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_IOPROX_DECODE_RAW,            NULL,                        cmd_processor_ioprox_decode_raw,             NULL                   },
     {    DATA_CMD_IOPROX_COMPOSE_ID,            NULL,                        cmd_processor_ioprox_compose_id,             NULL                   },
     {    DATA_CMD_EM4X05_SCAN,                  before_reader_run,           cmd_processor_em4x05_scan,                   NULL                   },
-    {    DATA_CMD_LF_SNIFF,                     before_reader_run,           cmd_processor_lf_sniff,                      NULL                   },
 
 #endif
 
