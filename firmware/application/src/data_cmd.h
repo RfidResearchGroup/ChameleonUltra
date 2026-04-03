@@ -80,6 +80,7 @@
 
 #define DATA_CMD_HF14A_GET_CONFIG               (2200)
 #define DATA_CMD_HF14A_SET_CONFIG               (2201)
+#define DATA_CMD_HF14A_SNIFF                    (2020)
 
 //
 // ******************************************************************
@@ -174,5 +175,9 @@
 #define DATA_CMD_VIKING_GET_EMU_ID              (5005)
 #define DATA_CMD_IOPROX_SET_EMU_ID              (5008)
 #define DATA_CMD_IOPROX_GET_EMU_ID              (5009)
+
+#define DATA_CMD_EM4X05_SCAN                    (3030)
+#define DATA_CMD_EM4X05_READSNIFF               (3032)
+#define DATA_CMD_LF_SNIFF                       (3031)
 
 #endif
