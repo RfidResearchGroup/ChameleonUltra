@@ -1848,9 +1848,6 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
     return data_frame_make(cmd, STATUS_SUCCESS, m_sniff_buf_len, m_sniff_buf);
 }
 
-#endif
-
-
 /* ========================================================================
  * HF14A-4 ISO14443-4 T=CL emulation commands (6000-range)
  * ======================================================================== */
@@ -1924,7 +1921,7 @@ static data_frame_tx_t *cmd_processor_hf14a_4_static_resp(uint16_t cmd, uint16_t
     nfc_tag_14a_4_add_static_response(&data[1], cmd_len, &data[3 + cmd_len], (uint8_t)resp_len);
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
-#if defined(PROJECT_CHAMELEON_ULTRA)
+
 /**
  * HF14A scan keeping field alive after completion — identical to hf14a_scan
  * but registered without after_hf_reader_run so the field stays on and the
@@ -2078,7 +2075,6 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
  * Returns STATUS_HF_TAG_OK with packed data on success (partial data if
  * some APDUs fail — num_apdus reflects how many completed).
  */
-#if defined(PROJECT_CHAMELEON_ULTRA)
 static data_frame_tx_t *cmd_processor_hf14a_4_emv_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     static uint8_t out[NETDATA_MAX_DATA_LENGTH];
     uint16_t out_len = 0;
@@ -2244,14 +2240,13 @@ done:
     /* Return HF_TAG_OK even with 0 APDUs so Python can see tag info */
     return data_frame_make(cmd, STATUS_HF_TAG_OK, out_len, out);
 }
-#endif
 
 static data_frame_tx_t *cmd_processor_hf14a_4_debug_counters(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t buf[4];
     nfc_tag_14a_4_get_debug_counters(&buf[0], &buf[1], &buf[2], &buf[3]);
     return data_frame_make(cmd, STATUS_SUCCESS, 4, buf);
 }
-
+#endif
 static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_APP_VERSION,              NULL,                        cmd_processor_get_app_version,               NULL                   },
     {    DATA_CMD_CHANGE_DEVICE_MODE,           NULL,                        cmd_processor_change_device_mode,            NULL                   },
