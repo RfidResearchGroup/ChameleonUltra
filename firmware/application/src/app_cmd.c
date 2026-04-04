@@ -2445,8 +2445,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    6010,                                     NULL,                        cmd_processor_hf14a_4_debug_counters,        NULL                   },
     /* HF14A scan keeping field alive */
     {    DATA_CMD_HF14A_SCAN_KEEP,                before_hf_reader_run,        cmd_processor_hf14a_scan_keep,               NULL                   },
-};
 #endif
+};
 data_frame_tx_t *cmd_processor_get_device_capabilities(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     size_t count = ARRAYLEN(m_data_cmd_map);
     uint16_t commands[count];
