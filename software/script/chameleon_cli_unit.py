@@ -425,7 +425,7 @@ class MFUAuthArgsUnit(ReaderRequiredUnit):
         def key_parser(key: str) -> bytes:
             try:
                 key = bytes.fromhex(key)
-            except:
+            except ValueError:
                 raise ValueError("Key should be a hex string")
 
             if len(key) not in [4, 16]:
@@ -5699,7 +5699,7 @@ class LFIOProxRead(LFIOProxReadArgsUnit, ReaderRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         ver, fc, cn, raw8, *futureuse = self.cmd.ioprox_scan() 
-        print(f"ioProx XSF format")        
+        print("ioProx XSF format")
         print(f"   Version: {color_string((CG, ver))}")
         print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
         print(f"   ID: {color_string((CY, cn))}")
@@ -5734,9 +5734,9 @@ class LFIOProxWriteT55xx(LFIOProxIdArgsUnit, ReaderRequiredUnit):
             raw8
         )
         
-        result = self.cmd.ioprox_write_to_t55xx(payload16)
+        self.cmd.ioprox_write_to_t55xx(payload16)
 
-        print(f"ioProx XSF format")        
+        print("ioProx XSF format")
         print(f"   Version: {color_string((CG, ver))}")
         print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
         print(f"   ID: {color_string((CY, cn))}")
@@ -5784,9 +5784,9 @@ class LFIOProxEconfig(SlotIndexArgsAndGoUnit, LFIOProxIdArgsUnit):
                 raw8
             )
 
-            result = self.cmd.ioprox_set_emu_id(payload16)
+            self.cmd.ioprox_set_emu_id(payload16)
             
-            print(f"ioProx XSF format")        
+            print("ioProx XSF format")
             print(f"   Version: {color_string((CG, ver))}")
             print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
             print(f"   ID: {color_string((CY, cn))}")
@@ -5795,7 +5795,7 @@ class LFIOProxEconfig(SlotIndexArgsAndGoUnit, LFIOProxIdArgsUnit):
         else:
             # GET
             ver, fc, cn, raw8, *futureuse = self.cmd.ioprox_get_emu_id()
-            print(f"ioProx XSF format")        
+            print("ioProx XSF format")
             print(f"   Version: {color_string((CG, ver))}")
             print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
             print(f"   ID: {color_string((CY, cn))}")
@@ -5851,7 +5851,7 @@ class LFADCGenericRead(ReaderRequiredUnit):
                 avg += val
             print(f"avg: {hex(round(avg / len(resp)))}")
         else:
-            print(f"generic read error")
+            print("generic read error")
 
 
 @hw_slot.command("list")
@@ -6327,6 +6327,40 @@ class HWSettingsAnimation(DeviceRequiredUnit):
             print(color_string((CY, "Do not forget to store your settings in flash!")))
         else:
             print(AnimationMode(self.cmd.get_animation_mode()))
+
+
+@hw_settings.command("sleeptimeout")
+class HWSettingsSleepTimeout(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Get or set the wake timeout after a button press (5-60 seconds)"
+        parser.add_argument(
+            "-s",
+            "--seconds",
+            type=int,
+            required=False,
+            help="Wake timeout in seconds (5-60)",
+            metavar="SECONDS",
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.seconds is not None:
+            seconds = args.seconds
+            if seconds < 5:
+                print(color_string((CR, "Error: value is too low. Please enter a value between 5 and 60 seconds.")))
+                return
+            if seconds > 60:
+                print(color_string((CR, "Error: value is too high. Please enter a value between 5 and 60 seconds.")))
+                return
+            if seconds >= 30:
+                print(color_string((CY, "Warning: a long wake timeout will drain the battery faster.")))
+            self.cmd.set_sleep_timeout(seconds)
+            print(f"Wake timeout set to {seconds} seconds.")
+            print(color_string((CY, "Do not forget to store your settings in flash!")))
+        else:
+            current = self.cmd.get_sleep_timeout()
+            print(f"Current wake timeout: {current} seconds")
 
 
 @hw_settings.command("bleclearbonds")

@@ -8,7 +8,7 @@ from chameleon_enum import Command, SlotNumber, Status, TagSenseType, TagSpecifi
 from chameleon_enum import ButtonPressFunction, ButtonType, MifareClassicDarksideStatus
 from chameleon_enum import MfcKeyType, MfcValueBlockOperator
 
-CURRENT_VERSION_SETTINGS = 5
+CURRENT_VERSION_SETTINGS = 6
 
 new_key = b'\x20\x20\x66\x66'
 old_keys = [b'\x51\x24\x36\x48', b'\x19\x92\x04\x27']
@@ -1260,6 +1260,24 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(Command.SET_ANIMATION_MODE, data)
 
     @expect_response(Status.SUCCESS)
+    def get_sleep_timeout(self):
+        """
+        Get the wake timeout (in seconds) after a button wakeup
+        """
+        resp = self.device.send_cmd_sync(Command.GET_SLEEP_TIMEOUT)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = struct.unpack('!B', resp.data)[0]
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def set_sleep_timeout(self, seconds: int):
+        """
+        Set the wake timeout (in seconds) after a button wakeup
+        """
+        data = struct.pack('!B', seconds)
+        return self.device.send_cmd_sync(Command.SET_SLEEP_TIMEOUT, data)
+
+    @expect_response(Status.SUCCESS)
     def reset_settings(self):
         """
         Reset settings stored in flash memory
@@ -1398,7 +1416,7 @@ class ChameleonCMD:
     def get_device_settings(self):
         """
         Get all possible settings
-        For version 5:
+        For version 6:
         settings[0] = SETTINGS_CURRENT_VERSION; // current version
         settings[1] = settings_get_animation_config(); // animation mode
         settings[2] = settings_get_button_press_config('A'); // short A button press mode
@@ -1407,6 +1425,7 @@ class ChameleonCMD:
         settings[5] = settings_get_long_button_press_config('B'); // long B button press mode
         settings[6] = settings_get_ble_pairing_enable(); // does device require pairing
         settings[7:13] = settings_get_ble_pairing_key(); // BLE pairing key
+        settings[13] = sleep_timeout in seconds; // wake timeout after button wakeup
         """
         resp = self.device.send_cmd_sync(Command.GET_DEVICE_SETTINGS)
         if resp.status == Status.SUCCESS:
@@ -1417,8 +1436,8 @@ class ChameleonCMD:
                 raise ValueError("Settings version in app newer than Chameleon. "
                                  "Please upgrade Chameleon firmware")
             settings_version, animation_mode, btn_press_A, btn_press_B, btn_long_press_A, \
-                btn_long_press_B, ble_pairing_enable, ble_pairing_key = \
-                struct.unpack('!BBBBBBB6s', resp.data)
+                btn_long_press_B, ble_pairing_enable, ble_pairing_key, sleep_timeout = \
+                struct.unpack('!BBBBBBB6sB', resp.data)
             resp.parsed = {'settings_version': settings_version,
                            'animation_mode': animation_mode,
                            'btn_press_A': btn_press_A,
@@ -1426,7 +1445,8 @@ class ChameleonCMD:
                            'btn_long_press_A': btn_long_press_A,
                            'btn_long_press_B': btn_long_press_B,
                            'ble_pairing_enable': ble_pairing_enable,
-                           'ble_pairing_key': ble_pairing_key}
+                           'ble_pairing_key': ble_pairing_key,
+                           'sleep_timeout': sleep_timeout}
         return resp
 
     @expect_response(Status.SUCCESS)

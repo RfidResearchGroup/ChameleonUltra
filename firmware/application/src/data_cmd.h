@@ -46,6 +46,8 @@
 #define DATA_CMD_GET_BLE_PAIRING_ENABLE         (1036)
 #define DATA_CMD_SET_BLE_PAIRING_ENABLE         (1037)
 #define DATA_CMD_GET_ALL_SLOT_NICKS             (1038)
+#define DATA_CMD_GET_SLEEP_TIMEOUT              (1039)
+#define DATA_CMD_SET_SLEEP_TIMEOUT              (1040)
 
 //
 // ******************************************************************
