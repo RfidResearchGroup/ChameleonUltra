@@ -1924,7 +1924,7 @@ static data_frame_tx_t *cmd_processor_hf14a_4_static_resp(uint16_t cmd, uint16_t
     nfc_tag_14a_4_add_static_response(&data[1], cmd_len, &data[3 + cmd_len], (uint8_t)resp_len);
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
-
+#if defined(PROJECT_CHAMELEON_ULTRA)
 /**
  * HF14A scan keeping field alive after completion — identical to hf14a_scan
  * but registered without after_hf_reader_run so the field stays on and the
@@ -2078,6 +2078,7 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
  * Returns STATUS_HF_TAG_OK with packed data on success (partial data if
  * some APDUs fail — num_apdus reflects how many completed).
  */
+#if defined(PROJECT_CHAMELEON_ULTRA)
 static data_frame_tx_t *cmd_processor_hf14a_4_emv_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     static uint8_t out[NETDATA_MAX_DATA_LENGTH];
     uint16_t out_len = 0;
@@ -2243,7 +2244,7 @@ done:
     /* Return HF_TAG_OK even with 0 APDUs so Python can see tag info */
     return data_frame_make(cmd, STATUS_HF_TAG_OK, out_len, out);
 }
-
+#endif
 
 static data_frame_tx_t *cmd_processor_hf14a_4_debug_counters(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t buf[4];
@@ -2385,7 +2386,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_IOPROX_GET_EMU_ID,              NULL,                      cmd_processor_ioprox_get_emu_id,             NULL                   },  
     {    DATA_CMD_VIKING_SET_EMU_ID,              NULL,                      cmd_processor_viking_set_emu_id,             NULL                   },
     {    DATA_CMD_VIKING_GET_EMU_ID,              NULL,                      cmd_processor_viking_get_emu_id,             NULL                   },
-    /* ISO14443-4 T=CL emulation */
+#if defined(PROJECT_CHAMELEON_ULTRA)
+/* ISO14443-4 T=CL emulation */
     {    DATA_CMD_HF14A_4_APDU_RECV,              NULL,                        cmd_processor_hf14a_4_apdu_recv,             NULL                   },
     {    DATA_CMD_HF14A_4_APDU_SEND,              NULL,                        cmd_processor_hf14a_4_apdu_send,             NULL                   },
     {    DATA_CMD_HF14A_4_SET_ANTI_COLL,          NULL,                        cmd_processor_hf14a_4_set_anti_coll,         NULL                   },
@@ -2396,7 +2398,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     /* HF14A scan keeping field alive */
     {    DATA_CMD_HF14A_SCAN_KEEP,                before_hf_reader_run,        cmd_processor_hf14a_scan_keep,               NULL                   },
 };
-
+#endif
 data_frame_tx_t *cmd_processor_get_device_capabilities(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     size_t count = ARRAYLEN(m_data_cmd_map);
     uint16_t commands[count];
