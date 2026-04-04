@@ -18,11 +18,10 @@
 #include "bsp_wdt.h"
 #include "lf_reader_generic.h"
 #include "lf_em4x05_data.h"
+#include "rc522.h"
 #endif
 #include "nfc_14a.h"
 #include "nfc_14a_4.h"
-#include "rc522.h"
-
 
 #define NRF_LOG_MODULE_NAME app_cmd
 #include "nrf_log.h"
