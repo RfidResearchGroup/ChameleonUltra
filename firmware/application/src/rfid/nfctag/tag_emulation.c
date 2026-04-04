@@ -7,6 +7,7 @@
 #include "nfc_14a.h"
 #include "nfc_mf0_ntag.h"
 #include "nfc_mf1.h"
+#include "nfc_14a_4.h"
 #include "rgb_marquee.h"
 #include "tag_persistence.h"
 
@@ -110,6 +111,8 @@ static tag_base_handler_map_t tag_base_map[] = {
     {TAG_SENSE_HF, TAG_TYPE_MF0ICU2,     nfc_tag_mf0_ntag_data_loadcb, nfc_tag_mf0_ntag_data_savecb, nfc_tag_mf0_ntag_data_factory, &m_tag_data_hf},
     {TAG_SENSE_HF, TAG_TYPE_MF0UL11,     nfc_tag_mf0_ntag_data_loadcb, nfc_tag_mf0_ntag_data_savecb, nfc_tag_mf0_ntag_data_factory, &m_tag_data_hf},
     {TAG_SENSE_HF, TAG_TYPE_MF0UL21,     nfc_tag_mf0_ntag_data_loadcb, nfc_tag_mf0_ntag_data_savecb, nfc_tag_mf0_ntag_data_factory, &m_tag_data_hf},
+    // ISO14443-4 T=CL emulation
+    {TAG_SENSE_HF, TAG_TYPE_HF14A_4,     nfc_tag_14a_4_data_loadcb,    nfc_tag_14a_4_data_savecb,    nfc_tag_14a_4_data_factory,    &m_tag_data_hf},
 };
 
 static void tag_emulation_load_config(void);

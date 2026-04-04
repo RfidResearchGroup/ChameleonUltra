@@ -527,6 +527,10 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
                 }
                 // RATS instruction
                 if (p_data[0] == NFC_TAG_14A_CMD_RATS && nfc_tag_14a_checks_crc(p_data, 4)) {
+                    // Reset T=CL layer state for the new session
+                    if (m_tag_handler.cb_reset != NULL) {
+                        m_tag_handler.cb_reset();
+                    }
                     // Make sure the sub -packaging opens the support of ATS
                     if (auto_coll_res->ats->length > 0) {
                         // Take out FSD and return according to the maximum FSD
@@ -571,11 +575,10 @@ static inline void nrf_nfct_reset(void) {
     // Use Window Grid frame delay mode.
     nrf_nfct_frame_delay_mode_set(NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
 
-    /* Begin: Workaround for anomaly 25 */
-    /* Workaround for wrong SENSRES values require using SDD00001, but here SDD00100 is used
-       because it is required to operate with Windows Phone */
-    nrf_nfct_sensres_bit_frame_sdd_set(NRF_NFCT_SENSRES_BIT_FRAME_SDD_00100);
-    /* End: Workaround for anomaly 25 */
+    /* Use SDD00001 per ISO14443-3 standard.
+     * Note: SDD00100 was previously used for Windows Phone compatibility
+     * but breaks standard readers (including Proxmark3). SDD00001 is correct. */
+    nrf_nfct_sensres_bit_frame_sdd_set(NRF_NFCT_SENSRES_BIT_FRAME_SDD_00001);
 
     // Restore interrupts.
     nrf_nfct_int_enable(int_enabled);

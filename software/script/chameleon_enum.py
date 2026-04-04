@@ -68,6 +68,7 @@ class Command(enum.IntEnum):
     MF1_READ_ONE_BLOCK = 2008
     MF1_WRITE_ONE_BLOCK = 2009
     HF14A_RAW = 2010
+    HF14A_SCAN_KEEP = 2016
     MF1_MANIPULATE_VALUE_BLOCK = 2011
     MF1_CHECK_KEYS_OF_SECTORS = 2012
     MF1_HARDNESTED_ACQUIRE = 2013
@@ -135,6 +136,14 @@ class Command(enum.IntEnum):
 
     MF1_SET_FIELD_OFF_DO_RESET = 4038
     MF1_GET_FIELD_OFF_DO_RESET = 4039
+
+    # ISO14443-4 T=CL emulation
+    HF14A_4_APDU_RECV = 6000
+    HF14A_4_APDU_SEND = 6001
+    HF14A_4_SET_ANTI_COLL = 6002
+    HF14A_4_STATIC_RESP = 6003
+    HF14A_4_READER_APDU = 6004
+    HF14A_4_EMV_SCAN = 6005
 
     EM410X_SET_EMU_ID = 5000
     EM410X_GET_EMU_ID = 5001
@@ -328,7 +337,8 @@ class TagSpecificType(enum.IntEnum):
 
     # ST25TA series          2000
 
-    # HF14A-4 series         3000
+    # ISO14443-4 T=CL emulation
+    HF14A_4 = 3000
 
     @staticmethod
     def list(exclude_meta=True):

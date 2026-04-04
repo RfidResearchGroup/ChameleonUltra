@@ -235,6 +235,101 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.HF_TAG_OK)
+    def hf14a_scan_keep(self):
+        """
+        Scan ISO14443-A tag with full select + RATS, keeping field alive.
+
+        Identical to hf14a_scan but does NOT tear down the RF field afterward.
+        The card remains powered and in ISO14443-4 T=CL state so subsequent
+        hf14a_raw calls can exchange APDUs without re-selecting.
+        """
+        resp = self.device.send_cmd_sync(Command.HF14A_SCAN_KEEP)
+        if resp.status == Status.HF_TAG_OK:
+            offset = 0
+            data = []
+            while offset < len(resp.data):
+                uidlen, = struct.unpack_from('!B', resp.data, offset); offset += 1
+                uid, atqa, sak, atslen = struct.unpack_from(
+                    f'!{uidlen}s2s1sB', resp.data, offset)
+                offset += struct.calcsize(f'!{uidlen}s2s1sB')
+                ats, = struct.unpack_from(f'!{atslen}s', resp.data, offset)
+                offset += atslen
+                data.append({'uid': uid, 'atqa': atqa, 'sak': sak, 'ats': ats})
+            resp.parsed = data
+        return resp
+
+    def hf14a_4_set_anti_coll(self, uid: bytes, atqa: bytes, sak: int, ats: bytes):
+        """
+        Set UID / ATQA / SAK / ATS for the active HF14A_4 slot.
+
+        :param uid:  UID bytes (4 or 7 bytes)
+        :param atqa: ATQA 2 bytes (wire order, e.g. b'\x04\x00' for ATQA 00 04)
+        :param sak:  SAK byte value (int), use 0x20 for ISO14443-4
+        :param ats:  ATS bytes (without CRC)
+        """
+        uid_size = len(uid)
+        payload = (bytes([uid_size]) + bytes(uid) + bytes(atqa) +
+                   bytes([sak]) + bytes([len(ats)]) + bytes(ats))
+        return self.device.send_cmd_sync(Command.HF14A_4_SET_ANTI_COLL, payload)
+
+    def hf14a_4_apdu_recv(self):
+        """
+        Non-blocking poll for a pending APDU from the ISO14443-4 T=CL stack.
+
+        Returns immediately: STATUS_SUCCESS + APDU bytes if one is pending,
+        STATUS_HF_TAG_NO if no APDU is waiting.  Call in a tight loop from
+        the host side for relay/capture use cases.
+        """
+        return self.device.send_cmd_sync(Command.HF14A_4_APDU_RECV, b'', timeout=2)
+
+    def hf14a_4_apdu_send(self, resp: bytes):
+        """Send an APDU response to the ISO14443-4 T=CL stack."""
+        payload = bytes([(len(resp) >> 8) & 0xFF, len(resp) & 0xFF]) + bytes(resp)
+        return self.device.send_cmd_sync(Command.HF14A_4_APDU_SEND, payload)
+
+    def hf14a_4_add_static_response(self, cmd: bytes, resp: bytes):
+        """
+        Add a static APDU command→response pair to the HF14A_4 slot.
+
+        The firmware will automatically reply with resp whenever it receives
+        an APDU whose first len(cmd) bytes match cmd, without USB involvement.
+        Must be called before hw mode -e.
+        """
+        rlen = len(resp); payload = bytes([len(cmd)]) + bytes(cmd) + bytes([(rlen >> 8) & 0xFF, rlen & 0xFF]) + bytes(resp)
+        return self.device.send_cmd_sync(Command.HF14A_4_STATIC_RESP, payload)
+
+    def hf14a_4_reader_apdu(self, apdu: bytes):
+        """
+        Select card (with RATS) and send one ISO14443-4 T=CL APDU in a single
+        firmware call — avoiding the USB round-trip gap that would depower the card.
+
+        :param apdu: raw APDU bytes (no PCB wrapping needed)
+        :return: response object with resp.data = APDU response bytes (no PCB/CRC)
+        """
+        return self.device.send_cmd_sync(
+            Command.HF14A_4_READER_APDU, bytes(apdu), timeout=3)
+
+    def hf14a_4_emv_scan(self):
+        """
+        Full EMV card scan in a single firmware call.
+
+        The firmware performs the complete sequence (field cycle, select, RATS,
+        PPSE, SELECT AID, GPO, READ RECORDs) without returning to the host
+        between APDUs, avoiding the field-drop issue with separate calls.
+
+        Response format:
+            uid_len(1) uid(n) atqa(2) sak(1) ats_len(1) ats(m)
+            num_apdus(1)
+            for each APDU pair:
+                cmd_len(1) cmd(n) resp_len_le(2) resp(m)
+        """
+        resp = self.device.send_cmd_sync(Command.HF14A_4_EMV_SCAN, b'', timeout=10)
+        return resp
+
+    def hf14a_4_clear_static_responses(self):
+        """Clear all static APDU responses from the active HF14A_4 slot."""
+        return self.device.send_cmd_sync(Command.HF14A_4_STATIC_RESP, b'\x00')
+
     def hf14a_raw(self, options, resp_timeout_ms=100, data=[], bitlen=None):
         """
         Send raw cmd to 14a tag.
