@@ -1,5 +1,6 @@
 #include "lf_reader_main.h"
 
+#include <stdbool.h>
 #include "bsp_delay.h"
 #include "bsp_time.h"
 #include "hex_utils.h"
@@ -209,3 +210,35 @@ uint8_t write_pac_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_pass
  * Set the LF card scanning timeout value (in milliseconds).
  */
 void set_scan_tag_timeout(uint32_t ms) { g_timeout_readem_ms = ms; }
+
+#if defined(PROJECT_CHAMELEON_ULTRA)
+/**
+ * Write a single raw 32-bit word to a T55xx block.
+ *
+ * Unlike write_em410x_to_t55xx() and friends, this writes the exact word
+ * supplied with no protocol encoding — useful for custom configuration
+ * words, recovery of locked tags, or scripted programming.
+ *
+ * Only available on Chameleon Ultra (Lite has no LF writer hardware).
+ *
+ * @param block      Block number (0-7 for page 0, 0-3 for page 1)
+ * @param word       32-bit data word to write
+ * @param passwd     Password for password-protected write (ignored when use_passwd is false)
+ * @param use_passwd true = password-protected write, false = open write
+ * @param page1      true = target page 1, false = page 0
+ * @return           STATUS_LF_TAG_OK always (T55xx gives no ACK; verify by reading back)
+ */
+uint8_t lf_t55xx_write_block(uint8_t block, uint32_t word, uint32_t passwd, bool use_passwd, bool page1) {
+    uint8_t opcode = page1 ? T5577_OPCODE_PAGE1 : T5577_OPCODE_PAGE0;
+    uint32_t *pwd_ptr = use_passwd ? &passwd : NULL;
+
+    start_lf_125khz_radio();
+    bsp_delay_ms(1);  // Delay for a while after starting the field
+
+    t55xx_send_cmd(opcode, pwd_ptr, 0, &word, block);
+    t55xx_send_cmd(T5577_OPCODE_RESET, NULL, 0, NULL, 0);
+
+    stop_lf_125khz_radio();
+    return STATUS_LF_TAG_OK;
+}
+#endif

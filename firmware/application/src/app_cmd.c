@@ -833,17 +833,33 @@ static data_frame_tx_t *cmd_processor_viking_write_to_t55xx(uint16_t cmd, uint16
     return data_frame_make(cmd, status, 0, NULL);
 }
 
-static data_frame_tx_t *cmd_processor_pac_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+static data_frame_tx_t *cmd_processor_lf_t55xx_write(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     typedef struct {
-        uint8_t id[LF_PAC_TAG_ID_SIZE];
-        uint8_t new_key[4];
-        uint8_t old_keys[4];
+        uint8_t block;    /* block number */
+        uint8_t word[4];  /* 32-bit data word, big-endian */
+        uint8_t use_pwd;  /* 1 = password write, 0 = open write */
+        uint8_t pwd[4];   /* 32-bit password, big-endian (ignored when use_pwd == 0) */
+        uint8_t page1;    /* 1 = target page 1, 0 = page 0 */
     } PACKED payload_t;
-    payload_t *payload = (payload_t *)data;
-    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+
+    if (length < sizeof(payload_t)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-    status = write_pac_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+
+    payload_t *p = (payload_t *)data;
+
+    bool    page1     = (bool)p->page1;
+    uint8_t max_block = page1 ? 3u : 7u;
+
+    if (p->block > max_block) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    uint32_t word    = bytes_to_num(p->word, 4);
+    uint32_t passwd  = bytes_to_num(p->pwd,  4);
+    bool     use_pwd = (bool)p->use_pwd;
+
+    status = lf_t55xx_write_block(p->block, word, passwd, use_pwd, page1);
     return data_frame_make(cmd, status, 0, NULL);
 }
 
@@ -2361,6 +2377,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_IOPROX_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_ioprox_write_to_t55xx,         NULL                   },
     {    DATA_CMD_PAC_SCAN,                     before_reader_run,           cmd_processor_pac_scan,                      NULL                   },
     {    DATA_CMD_PAC_WRITE_TO_T55XX,           before_reader_run,           cmd_processor_pac_write_to_t55xx,            NULL                   },
+    {    DATA_CMD_LF_T55XX_WRITE,               before_reader_run,           cmd_processor_lf_t55xx_write,                NULL                   },
     {    DATA_CMD_ADC_GENERIC_READ,             before_reader_run,           cmd_processor_generic_read,                  NULL                   },
 
     {    DATA_CMD_HF14A_SET_FIELD_ON,           before_reader_run,           cmd_processor_hf14a_set_field_on,            NULL                   },

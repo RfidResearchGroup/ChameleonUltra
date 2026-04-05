@@ -764,6 +764,7 @@ lf_hid_prox = lf_hid.subgroup("prox", "HID Prox commands")
 lf_ioprox = lf.subgroup("ioprox", "ioProx commands")
 lf_pac = lf.subgroup("pac", "PAC/Stanley commands")
 lf_viking = lf.subgroup("viking", "Viking commands")
+lf_t55xx = lf.subgroup("t55xx", "T55xx raw commands")
 lf_generic = lf.subgroup("generic", "Generic commands")
 
 
@@ -6006,6 +6007,173 @@ class LFVikingWriteT55xx(LFVikingIdArgsUnit, ReaderRequiredUnit):
         id_bytes = bytes.fromhex(id_hex)
         self.cmd.viking_write_to_t55xx(id_bytes)
         print(f" - Viking ID(8H): {id_hex} write done.")
+
+
+@lf_t55xx.command("clone")
+class LFT55xxClone(ReaderRequiredUnit):
+    """
+    Clone a scanned or manually-specified LF card ID onto a blank T55xx tag.
+
+    Supported types and their required arguments:
+
+      em410x   --id <10 hex>         e.g. --id DEADBEEF88
+      electra  --id <26 hex>         e.g. --id DEADBEEF880102030405060708
+      hid      -f <format> --cn <n>  e.g. -f H10301 --fc 10 --cn 1234
+      ioprox   --ver <n> --fc <n> --cn <n>   OR   --raw8 <16 hex>
+      viking   --id <8 hex>          e.g. --id DEADBEEF
+
+    Only supported on Chameleon Ultra (Lite has no LF writer).
+    """
+
+    TYPES = ["em410x", "electra", "hid", "ioprox", "viking"]
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Clone a LF card ID onto a blank T55xx tag.\n"
+            "Supported types: em410x, electra, hid, ioprox, viking.\n"
+            "Only supported on Chameleon Ultra (Lite has no LF writer)."
+        )
+        parser.add_argument(
+            "-t", "--type",
+            type=str,
+            required=True,
+            choices=self.TYPES,
+            metavar="TYPE",
+            help="Card type: " + ", ".join(self.TYPES),
+        )
+        # EM410x / Electra / Viking
+        parser.add_argument(
+            "--id",
+            type=str,
+            required=False,
+            metavar="HEX",
+            help="Card ID in hex: 10 hex for em410x, 26 for electra, 8 for viking",
+        )
+        # HID Prox
+        parser.add_argument(
+            "-f", "--format",
+            type=str,
+            required=False,
+            choices=[x.name for x in HIDFormat],
+            metavar="FORMAT",
+            help="HID Prox format, e.g. H10301 (required for hid type)",
+        )
+        parser.add_argument(
+            "--fc",
+            type=int,
+            required=False,
+            metavar="INT",
+            help="Facility code (HID / ioProx)",
+        )
+        parser.add_argument(
+            "--cn",
+            type=int,
+            required=False,
+            metavar="INT",
+            help="Card number (HID / ioProx)",
+        )
+        parser.add_argument(
+            "--il",
+            type=int,
+            required=False,
+            metavar="INT",
+            help="Issue level (HID, optional)",
+        )
+        parser.add_argument(
+            "--oem",
+            type=int,
+            required=False,
+            metavar="INT",
+            help="OEM code (HID, optional)",
+        )
+        # ioProx
+        parser.add_argument(
+            "--ver",
+            type=int,
+            required=False,
+            metavar="INT",
+            help="Version byte (ioProx)",
+        )
+        parser.add_argument(
+            "--raw8",
+            type=str,
+            required=False,
+            metavar="HEX",
+            help="ioProx raw 8 bytes in hex, e.g. 007854E03A5D65AB",
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        t = args.type
+
+        if t in ("em410x", "electra"):
+            if args.id is None:
+                raise ArgsParserError("--id is required for em410x / electra")
+            expected = 10 if t == "em410x" else 26
+            if not re.match(r"^[a-fA-F0-9]{" + str(expected) + r"}$", args.id):
+                raise ArgsParserError(
+                    f"--id must be exactly {expected} hex characters for {t}"
+                )
+            id_bytes = bytes.fromhex(args.id)
+            self.cmd.em410x_write_to_t55xx(id_bytes)
+            label = "EM410x Electra" if t == "electra" else "EM410x"
+            print(f" - {label} ID cloned to T55xx: {args.id.upper()}")
+
+        elif t == "hid":
+            if args.format is None:
+                raise ArgsParserError("-f/--format is required for hid")
+            if args.cn is None:
+                raise ArgsParserError("--cn is required for hid")
+            fmt = HIDFormat[args.format]
+            fc  = args.fc  if args.fc  is not None else 0
+            il  = args.il  if args.il  is not None else 0
+            oem = args.oem if args.oem is not None else 0
+            LFHIDIdArgsUnit.check_limits(fmt.value, fc, args.cn, il, oem)
+            cn = args.cn
+            id_bytes = struct.pack(
+                ">BIBIBH",
+                fmt.value,
+                fc,
+                (cn >> 32),
+                cn & 0xFFFFFFFF,
+                il,
+                oem,
+            )
+            self.cmd.hidprox_write_to_t55xx(id_bytes)
+            print(f" - HID Prox cloned to T55xx")
+            print(f"   Format : {fmt.name}")
+            if fc:  print(f"   FC     : {fc}")
+            if il:  print(f"   IL     : {il}")
+            if oem: print(f"   OEM    : {oem}")
+            print(f"   CN     : {cn}")
+
+        elif t == "ioprox":
+            ver = args.ver if args.ver is not None else 1
+            fc  = int(args.fc, 0) if args.fc is not None else 0
+            cn  = args.cn  if args.cn  is not None else 0
+            if args.raw8 is not None:
+                raw8 = LFIOProxIdArgsUnit.parse_raw8(args.raw8)
+                ver, fc, cn, raw8, *_ = self.cmd.ioprox_decode_raw(raw8)
+            else:
+                res = self.cmd.ioprox_compose_id(ver, fc, cn)
+                raw8 = res[3]
+            payload16 = struct.pack(">BBH8s4x", ver & 0xFF, fc & 0xFF, cn & 0xFFFF, raw8)
+            self.cmd.ioprox_write_to_t55xx(payload16)
+            print(f" - ioProx cloned to T55xx")
+            print(f"   Ver    : {ver}")
+            print(f"   FC     : {fc} [0x{fc:02X}]")
+            print(f"   CN     : {cn}")
+            print(f"   Raw8   : {raw8.hex().upper()}")
+
+        elif t == "viking":
+            if args.id is None:
+                raise ArgsParserError("--id is required for viking")
+            if not re.match(r"^[a-fA-F0-9]{8}$", args.id):
+                raise ArgsParserError("--id must be exactly 8 hex characters for viking")
+            id_bytes = bytes.fromhex(args.id)
+            self.cmd.viking_write_to_t55xx(id_bytes)
+            print(f" - Viking ID cloned to T55xx: {args.id.upper()}")
 
 
 @lf_generic.command("adcread")
