@@ -425,6 +425,22 @@ class ChameleonCMD:
                 i += 14
         return resp
 
+    def hf14a_sniff(self, timeout_ms: int = 5000):
+        """
+        Capture ISO14443A reader frames while CU acts as a tag emulator.
+
+        The firmware installs a sniff callback into the HF14A stack for the
+        requested duration, then returns all captured frames packed as:
+          [2 bytes: bit count, big-endian] [N bytes: frame data, ceil(bits/8)] ...
+
+        :param timeout_ms: Listen duration in ms (1-30000, default 5000)
+        :return: Raw response — check .status and .data
+        """
+        timeout_ms = max(1, min(30000, timeout_ms))
+        payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF])
+        timeout_s = (timeout_ms // 1000) + 5
+        return self.device.send_cmd_sync(Command.HF14A_SNIFF, payload, timeout=timeout_s)
+
     @expect_response(Status.SUCCESS)
     def hf14a_get_config(self):
         """
@@ -555,6 +571,48 @@ class ChameleonCMD:
             resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
         return resp
 
+
+
+    def lf_sniff(self, timeout_ms: int = 2000):
+        """
+        Capture raw LF field ADC samples.
+
+        The ChameleonUltra samples the LF antenna at 125kHz (8µs/sample).
+        Each byte is an 8-bit ADC value: ~0x80 = field on, lower = gap/no field.
+
+        :param timeout_ms: Capture duration in ms (1-10000, default 2000)
+        :return: Raw response object — check .status and .data
+        """
+        timeout_ms = max(1, min(10000, timeout_ms))
+        payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF])
+        timeout_s = (timeout_ms // 1000) + 2
+        return self.device.send_cmd_sync(Command.LF_SNIFF, payload, timeout=timeout_s)
+
+
+
+    @expect_response(Status.LF_TAG_OK)
+    def em4x05_scan(self, pwd: int = 0):
+        """
+        Read an EM4x05 or EM4x69 tag (reader-talk-first).
+
+        Response payload (14 bytes, big-endian):
+          config    4 bytes  — block 0 configuration word
+          uid       4 bytes  — EM4x05 UID
+          uid_hi    4 bytes  — EM4x69 uid_hi (zero for plain EM4x05)
+          is_em4x69 1 byte   — 1 if a 64-bit EM4x69 UID was read
+          uid_block 1 byte   — block number UID was read from
+
+        :param pwd: 32-bit password for LOGIN (default 0x00000000)
+        :return: parsed tuple (config, uid, uid_hi, is_em4x69, uid_block)
+        """
+        pwd_bytes = struct.pack('!I', pwd & 0xFFFFFFFF)
+        resp = self.device.send_cmd_sync(Command.EM4X05_SCAN, pwd_bytes)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = struct.unpack('!IIIBB', resp.data[:14])
+        return resp
+
+
+
     @expect_response(Status.LF_TAG_OK)
     def viking_scan(self):
         """
@@ -579,6 +637,31 @@ class ChameleonCMD:
             raise ValueError("The id bytes length must equal 4")
         data = struct.pack(f'!4s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.VIKING_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
+    def pac_scan(self):
+        """
+        Read the card ID of PAC/Stanley.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.PAC_SCAN)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data[:8]
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def pac_write_to_t55xx(self, id_bytes: bytes):
+        """
+        Write PAC/Stanley card data to a T55XX tag.
+
+        :param id_bytes: 8-byte ASCII card ID
+        :return:
+        """
+        if len(id_bytes) != 8:
+            raise ValueError("The id bytes length must equal 8")
+        data = struct.pack(f'!8s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.PAC_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
     def adc_generic_read(self):
@@ -811,6 +894,28 @@ class ChameleonCMD:
         """
         resp = self.device.send_cmd_sync(Command.VIKING_GET_EMU_ID)
         resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def pac_set_emu_id(self, id: bytes):
+        """
+        Set the card ID emulated by PAC/Stanley.
+
+        :param id: 8-byte ASCII card ID
+        :return:
+        """
+        if len(id) != 8:
+            raise ValueError("The id bytes length must equal 8")
+        data = struct.pack('8s', id)
+        return self.device.send_cmd_sync(Command.PAC_SET_EMU_ID, data)
+
+    @expect_response(Status.SUCCESS)
+    def pac_get_emu_id(self):
+        """
+        Get the emulated PAC/Stanley card ID
+        """
+        resp = self.device.send_cmd_sync(Command.PAC_GET_EMU_ID)
+        resp.parsed = resp.data[:8]
         return resp
 
     @expect_response(Status.SUCCESS)

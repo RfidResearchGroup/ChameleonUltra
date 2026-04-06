@@ -78,6 +78,7 @@
 
 #define DATA_CMD_HF14A_GET_CONFIG               (2200)
 #define DATA_CMD_HF14A_SET_CONFIG               (2201)
+#define DATA_CMD_HF14A_SNIFF                    (2020)
 
 //
 // ******************************************************************
@@ -93,6 +94,8 @@
 #define DATA_CMD_EM410X_ELECTRA_WRITE_TO_T55XX  (3006)
 #define DATA_CMD_HIDPROX_SCAN                   (3002)
 #define DATA_CMD_HIDPROX_WRITE_TO_T55XX         (3003)
+#define DATA_CMD_PAC_SCAN                       (3014)
+#define DATA_CMD_PAC_WRITE_TO_T55XX             (3015)
 #define DATA_CMD_VIKING_SCAN                    (3004)
 #define DATA_CMD_VIKING_WRITE_TO_T55XX          (3005)
 #define DATA_CMD_ADC_GENERIC_READ               (3009)
@@ -170,7 +173,13 @@
 #define DATA_CMD_HIDPROX_GET_EMU_ID             (5003)
 #define DATA_CMD_VIKING_SET_EMU_ID              (5004)
 #define DATA_CMD_VIKING_GET_EMU_ID              (5005)
+#define DATA_CMD_PAC_SET_EMU_ID                 (5006)
+#define DATA_CMD_PAC_GET_EMU_ID                 (5007)
 #define DATA_CMD_IOPROX_SET_EMU_ID              (5008)
 #define DATA_CMD_IOPROX_GET_EMU_ID              (5009)
+
+#define DATA_CMD_EM4X05_SCAN                    (3030)
+#define DATA_CMD_EM4X05_READSNIFF               (3032)
+#define DATA_CMD_LF_SNIFF                       (3031)
 
 #endif
