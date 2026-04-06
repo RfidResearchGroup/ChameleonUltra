@@ -5554,7 +5554,6 @@ class HFMFUEDetect(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
             print(f"{actual_index:3d}: {color_string((CY, password.upper()))}")
 
 
-@lf_em_410x.command("read")
 @hf_mfu.command('nfcimport')
 class HFMFUNfcImport(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
     # Mapping from Flipper Zero device type strings to CU TagSpecificType
