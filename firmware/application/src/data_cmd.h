@@ -106,7 +106,7 @@
 #define DATA_CMD_IOPROX_WRITE_TO_T55XX          (3011)
 #define DATA_CMD_IOPROX_DECODE_RAW              (3012)
 #define DATA_CMD_IOPROX_COMPOSE_ID              (3013)
-#define DATA_CMD_LF_T55XX_WRITE                 (3014)
+#define DATA_CMD_LF_T55XX_WRITE                 (3016)
 
 //
 // ******************************************************************
