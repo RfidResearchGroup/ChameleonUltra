@@ -762,6 +762,7 @@ lf_em_410x = lf_em.subgroup("410x", "EM410x commands")
 lf_hid = lf.subgroup("hid", "HID commands")
 lf_hid_prox = lf_hid.subgroup("prox", "HID Prox commands")
 lf_ioprox = lf.subgroup("ioprox", "ioProx commands")
+lf_pac = lf.subgroup("pac", "PAC/Stanley commands")
 lf_viking = lf.subgroup("viking", "Viking commands")
 lf_generic = lf.subgroup("generic", "Generic commands")
 
@@ -3661,7 +3662,7 @@ class HFMFESave(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
         data = bytearray(0)
         max_blocks = self.device_com.data_max_length // 16
         while block_count > 0:
-            chunk_count = min(block_count, max_blocks)
+            chunk_count = min(block_count, max_blocks, 32)
             data.extend(self.cmd.mf1_read_emu_block_data(index, chunk_count))
             index += chunk_count
             block_count -= chunk_count
@@ -5699,12 +5700,12 @@ class LFIOProxRead(LFIOProxReadArgsUnit, ReaderRequiredUnit):
         return self.add_card_arg(parser, required=False)
 
     def on_exec(self, args: argparse.Namespace):
-        ver, fc, cn, raw8, *futureuse = self.cmd.ioprox_scan() 
-        print(f"ioProx XSF format")        
+        ver, fc, cn, raw8, *futureuse = self.cmd.ioprox_scan()
+        print(f"ioProx XSF format")
         print(f"   Version: {color_string((CG, ver))}")
         print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
         print(f"   ID: {color_string((CY, cn))}")
-        print(f"   Raw: {color_string((CY, raw8.hex().upper()))}")  
+        print(f"   Raw: {color_string((CY, raw8.hex().upper()))}")
 
 @lf_ioprox.command("write")
 class LFIOProxWriteT55xx(LFIOProxIdArgsUnit, ReaderRequiredUnit):
@@ -5724,9 +5725,9 @@ class LFIOProxWriteT55xx(LFIOProxIdArgsUnit, ReaderRequiredUnit):
             raw8 = self.parse_raw8(args.raw8)
             ver, fc, cn, raw8, *futureuse = self.cmd.ioprox_decode_raw(raw8)
         else:
-            res = self.cmd.ioprox_compose_id(args.ver, args.fc, args.cn)      
+            res = self.cmd.ioprox_compose_id(args.ver, args.fc, args.cn)
             raw8 = res[3]
-        
+
         payload16 = struct.pack(
             ">BBH8s4x",
             ver & 0xFF,
@@ -5734,14 +5735,14 @@ class LFIOProxWriteT55xx(LFIOProxIdArgsUnit, ReaderRequiredUnit):
             cn & 0xFFFF,
             raw8
         )
-        
+
         result = self.cmd.ioprox_write_to_t55xx(payload16)
 
-        print(f"ioProx XSF format")        
+        print(f"ioProx XSF format")
         print(f"   Version: {color_string((CG, ver))}")
         print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
         print(f"   ID: {color_string((CY, cn))}")
-        print(f"   Raw: {color_string((CY, raw8.hex().upper()))}") 
+        print(f"   Raw: {color_string((CY, raw8.hex().upper()))}")
         print("Write done.")
 
 @lf_ioprox.command("econfig")
@@ -5774,9 +5775,9 @@ class LFIOProxEconfig(SlotIndexArgsAndGoUnit, LFIOProxIdArgsUnit):
                 raw8 = self.parse_raw8(args.raw8)
                 ver, fc, cn, raw8, *futureuse = self.cmd.ioprox_decode_raw(raw8)
             else:
-                res = self.cmd.ioprox_compose_id(args.ver, args.fc, args.cn)      
+                res = self.cmd.ioprox_compose_id(args.ver, args.fc, args.cn)
                 raw8 = res[3]
-            
+
             payload16 = struct.pack(
                 ">BBH8s4x",
                 ver & 0xFF,
@@ -5786,21 +5787,200 @@ class LFIOProxEconfig(SlotIndexArgsAndGoUnit, LFIOProxIdArgsUnit):
             )
 
             result = self.cmd.ioprox_set_emu_id(payload16)
-            
-            print(f"ioProx XSF format")        
+
+            print(f"ioProx XSF format")
             print(f"   Version: {color_string((CG, ver))}")
             print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
             print(f"   ID: {color_string((CY, cn))}")
-            print(f"   Raw: {color_string((CY, raw8.hex().upper()))}") 
+            print(f"   Raw: {color_string((CY, raw8.hex().upper()))}")
 
         else:
             # GET
             ver, fc, cn, raw8, *futureuse = self.cmd.ioprox_get_emu_id()
-            print(f"ioProx XSF format")        
+            print(f"ioProx XSF format")
             print(f"   Version: {color_string((CG, ver))}")
             print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
             print(f"   ID: {color_string((CY, cn))}")
-            print(f"   Raw: {color_string((CY, raw8.hex().upper()))}") 
+            print(f"   Raw: {color_string((CY, raw8.hex().upper()))}")
+
+def pac_encode_raw(card_id: bytes) -> bytes:
+    """Encode 8-byte card ID to 16-byte T55XX bitstream (128 bits).
+
+    Frame: 0xFF sync (8 bits) + 12 × 10-bit UART frames.
+    UART frame: start(0) + 7 data bits LSB-first + odd parity + stop(1).
+    Payload: STX(0x02), '2', '0', card_id[0..7], XOR checksum.
+    """
+    payload = [0x02, 0x32, 0x30] + list(card_id)
+    xor_check = 0
+    for b in card_id:
+        xor_check ^= b
+    payload.append(xor_check)
+
+    bits = [1] * 8  # sync marker 0xFF
+    for byte_val in payload:
+        bits.append(0)  # start bit
+        ones = 0
+        for i in range(7):
+            bit = (byte_val >> i) & 1
+            bits.append(bit)
+            ones += bit
+        bits.append(0 if (ones & 1) else 1)  # odd parity
+        bits.append(1)  # stop bit
+
+    raw = bytearray(16)
+    for i in range(128):
+        if bits[i]:
+            raw[i >> 3] |= 1 << (7 - (i & 7))
+    return bytes(raw)
+
+
+def pac_decode_raw(raw: bytes) -> bytes:
+    """Decode 16-byte T55XX bitstream to 8-byte card ID.
+
+    Validates sync, UART framing, header, and checksum.
+    """
+    if len(raw) != 16:
+        raise ValueError("Raw data must be exactly 16 bytes (128 bits)")
+
+    def get_bit(pos):
+        return (raw[pos >> 3] >> (7 - (pos & 7))) & 1
+
+    # Sync marker
+    for i in range(8):
+        if not get_bit(i):
+            raise ValueError("Invalid sync marker (expected 0xFF)")
+
+    decoded = []
+    for f in range(12):
+        start = 8 + f * 10
+        if get_bit(start):
+            raise ValueError(f"Invalid start bit in UART frame {f}")
+        byte_val = 0
+        ones = 0
+        for i in range(7):
+            if get_bit(start + 1 + i):
+                byte_val |= 1 << i
+                ones += 1
+        if get_bit(start + 8):
+            ones += 1
+        if (ones & 1) == 0:
+            raise ValueError(f"Parity error in UART frame {f}")
+        if not get_bit(start + 9):
+            raise ValueError(f"Invalid stop bit in UART frame {f}")
+        decoded.append(byte_val)
+
+    if decoded[0] != 0x02:
+        raise ValueError(f"Invalid STX: 0x{decoded[0]:02X}")
+    if decoded[1] != 0x32 or decoded[2] != 0x30:
+        raise ValueError("Invalid header (expected '20')")
+
+    card_id = bytes(decoded[3:11])
+    xor_check = 0
+    for b in card_id:
+        xor_check ^= b
+    if xor_check != decoded[11]:
+        raise ValueError(f"Checksum error: expected 0x{xor_check:02X}, got 0x{decoded[11]:02X}")
+
+    return card_id
+
+
+@lf_pac.command('read')
+class LFPacRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Scan PAC/Stanley tag and print card ID'
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        card_id = self.cmd.pac_scan()
+        card_id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in card_id)
+        raw = pac_encode_raw(card_id)
+        print(f" PAC/Stanley - CN: {color_string((CG, card_id_ascii))} | Raw: {raw.hex().upper()}")
+
+
+class LFPacIdArgsUnit(DeviceRequiredUnit):
+    @staticmethod
+    def add_card_arg(parser: ArgumentParserNoExit, required=False):
+        group = parser.add_mutually_exclusive_group(required=required)
+        group.add_argument("--cn", type=str,
+                           help="Card number (8 ASCII characters, e.g. CARD0001)",
+                           metavar="<ascii>")
+        group.add_argument("--raw", type=str,
+                           help="T55XX bitstream (32 hex chars, PM3 raw format)",
+                           metavar="<hex>")
+        return parser
+
+    def before_exec(self, args: argparse.Namespace):
+        if not super().before_exec(args):
+            return False
+        if args.cn is not None:
+            if len(args.cn) != 8:
+                raise ArgsParserError("Card number must be exactly 8 characters")
+            try:
+                args.id = args.cn.encode('ascii').hex()
+            except UnicodeEncodeError:
+                raise ArgsParserError("Card number must be ASCII characters only")
+        elif args.raw is not None:
+            if not re.match(r"^[a-fA-F0-9]{32}$", args.raw):
+                raise ArgsParserError("Raw must be exactly 32 hex characters (128-bit T55XX bitstream)")
+            try:
+                card_id = pac_decode_raw(bytes.fromhex(args.raw))
+            except ValueError as e:
+                raise ArgsParserError(f"Invalid PAC raw data: {e}")
+            args.id = card_id.hex()
+        else:
+            args.id = None
+            return True
+        # PAC uses 7-bit UART frames; MSB of each byte is not encoded
+        id_bytes = bytes.fromhex(args.id)
+        if any(b > 0x7F for b in id_bytes):
+            raise ArgsParserError("PAC card IDs are 7-bit only (each byte must be 0x00-0x7F)")
+        return True
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        raise NotImplementedError("Please implement this")
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError("Please implement this")
+
+@lf_pac.command('write')
+class LFPacWriteT55xx(LFPacIdArgsUnit, ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Write PAC/Stanley id to T55xx'
+        return self.add_card_arg(parser, required=True)
+
+    def on_exec(self, args: argparse.Namespace):
+        id_bytes = bytes.fromhex(args.id)
+        self.cmd.pac_write_to_t55xx(id_bytes)
+        id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in id_bytes)
+        raw = pac_encode_raw(id_bytes)
+        print(f" - PAC/Stanley write done - CN: {id_ascii} | Raw: {raw.hex().upper()}")
+
+@lf_pac.command('econfig')
+class LFPacEconfig(SlotIndexArgsAndGoUnit, LFPacIdArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Set emulated PAC/Stanley card ID'
+        self.add_slot_args(parser)
+        self.add_card_arg(parser)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.id is not None:
+            slotinfo = self.cmd.get_slot_info()
+            selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+            lf_tag_type = TagSpecificType(slotinfo[selected - 1]['lf'])
+            if lf_tag_type != TagSpecificType.PAC:
+                print(f"{color_string((CR, 'WARNING'))}: Slot type not set to PAC.")
+            self.cmd.pac_set_emu_id(bytes.fromhex(args.id))
+            print(' - Set PAC/Stanley tag id success.')
+        else:
+            response = self.cmd.pac_get_emu_id()
+            card_id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in response)
+            raw = pac_encode_raw(response)
+            print(' - Get PAC/Stanley tag id success.')
+            print(f'CN: {card_id_ascii} | Raw: {raw.hex().upper()}')
 
 @lf_viking.command("read")
 class LFVikingRead(ReaderRequiredUnit):
@@ -5912,8 +6092,20 @@ class HWSlotList(DeviceRequiredUnit):
         for slot in SlotNumber:
             fwslot = SlotNumber.to_fw(slot)
             status = f"({color_string((CG, 'active'))})" if slot == selected else ""
-            hf_tag_type = TagSpecificType(slotinfo[fwslot]["hf"])
-            lf_tag_type = TagSpecificType(slotinfo[fwslot]["lf"])
+            try:
+                hf_tag_type = TagSpecificType(slotinfo[fwslot]["hf"])
+            except ValueError:
+                hf_tag_type = TagSpecificType.UNDEFINED
+                hf_unknown = slotinfo[fwslot]["hf"]
+            else:
+                hf_unknown = None
+            try:
+                lf_tag_type = TagSpecificType(slotinfo[fwslot]["lf"])
+            except ValueError:
+                lf_tag_type = TagSpecificType.UNDEFINED
+                lf_unknown = slotinfo[fwslot]["lf"]
+            else:
+                lf_unknown = None
             print(f' - {f"Slot {slot}:":{4+maxnamelength+1}} {status}')
 
             # HF
@@ -5927,7 +6119,9 @@ class HWSlotList(DeviceRequiredUnit):
                 f"   HF: " f'{slotnames[fwslot]["hf"]["name"]:{field_length}}', end=""
             )
             print(status, end="")
-            if hf_tag_type != TagSpecificType.UNDEFINED:
+            if hf_unknown is not None:
+                print(color_string((CR, f"Unknown ({hf_unknown})")))
+            elif hf_tag_type != TagSpecificType.UNDEFINED:
                 color = CY if enabled[fwslot]["hf"] else C0
                 print(color_string((color, hf_tag_type)))
             else:
@@ -5936,6 +6130,7 @@ class HWSlotList(DeviceRequiredUnit):
                 (not args.short)
                 and enabled[fwslot]["hf"]
                 and hf_tag_type != TagSpecificType.UNDEFINED
+                and hf_unknown is None
             ):
                 if current != slot:
                     self.cmd.set_active_slot(slot)
@@ -6001,7 +6196,9 @@ class HWSlotList(DeviceRequiredUnit):
                 f"   LF: " f'{slotnames[fwslot]["lf"]["name"]:{field_length}}', end=""
             )
             print(status, end="")
-            if lf_tag_type != TagSpecificType.UNDEFINED:
+            if lf_unknown is not None:
+                print(color_string((CR, f"Unknown ({lf_unknown})")))
+            elif lf_tag_type != TagSpecificType.UNDEFINED:
                 color = CY if enabled[fwslot]["lf"] else C0
                 print(color_string((color, lf_tag_type)))
             else:
@@ -6010,6 +6207,7 @@ class HWSlotList(DeviceRequiredUnit):
                 (not args.short)
                 and enabled[fwslot]["lf"]
                 and lf_tag_type != TagSpecificType.UNDEFINED
+                and lf_unknown is None
             ):
                 if current != slot:
                     self.cmd.set_active_slot(slot)
@@ -6039,6 +6237,12 @@ class HWSlotList(DeviceRequiredUnit):
                 if lf_tag_type == TagSpecificType.Viking:
                     id = self.cmd.viking_get_emu_id()
                     print(f"      {'ID:':40}{color_string((CY, id.hex().upper()))}")
+                if lf_tag_type == TagSpecificType.PAC:
+                    id = self.cmd.pac_get_emu_id()
+                    id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in id)
+                    raw = pac_encode_raw(id)
+                    print(f"      {'CN:':40}{color_string((CY, id_ascii))}")
+                    print(f"      {'Raw:':40}{color_string((CY, raw.hex().upper()))}")
         if current != selected:
             self.cmd.set_active_slot(selected)
 
@@ -6072,6 +6276,7 @@ class HWSlotType(TagTypeArgsUnit, SlotIndexArgsUnit):
         else:
             slot_num = SlotNumber.from_fw(self.cmd.get_active_slot())
         self.cmd.set_slot_tag_type(slot_num, tag_type)
+        self.cmd.set_slot_data_default(slot_num, tag_type)
         print(f" - Set slot {slot_num} tag type success.")
 
 
