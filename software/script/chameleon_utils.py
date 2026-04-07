@@ -56,6 +56,9 @@ class ArgumentParserNoExit(argparse.ArgumentParser):
     def exit(self, status: int = 0, message: Union[str, None] = None):
         if message:
             raise ParserExitIntercept(message)
+            # status=0 means help was printed; raise to stop argparse continuing
+            # to validate required args (which would cause a second print_help call)
+        raise ParserExitIntercept('')
 
     def error(self, message: str):
         args = {'prog': self.prog, 'message': message}
