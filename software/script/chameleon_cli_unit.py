@@ -8172,7 +8172,7 @@ class EMVScan(DeviceRequiredUnit):
         except Exception:
             time.sleep(0.3)
 
-        print(f' {CY}Scanning... (place card on antenna){C0}')
+        print(f' {CY}Scanning... (place card on antenna) [fw-canary:v5]{C0}')
 
         # Single firmware call — full EMV sequence without USB round-trips
         resp = cmd.hf14a_4_emv_scan()
@@ -8283,6 +8283,204 @@ class EMVScan(DeviceRequiredUnit):
                 records.append({'SFI': f'{sfi_n:02X}', 'RecordNum': f'{rec_n:02X}',
                                  'Offline': '01', 'Data': tlv_to_dict(r_body)})
             result['Application']['Records'] = records
+
+        # ---- Decode and display key card fields from EMV records --------
+        def _pan_luhn(pan: str) -> bool:
+            digits = [int(c) for c in pan if c.isdigit()]
+            digits.reverse()
+            total = sum(d if i % 2 == 0 else (d * 2 - 9 if d * 2 > 9 else d * 2)
+                        for i, d in enumerate(digits))
+            return total % 10 == 0
+
+        def _find_tag_all(data: bytes, *tags: int):
+            """Recursively find all values for any of the given tags."""
+            results = {}
+            for t in tags:
+                results[t] = []
+            i = 0
+            while i < len(data) - 1:
+                tl = 2 if (data[i] & 0x1F) == 0x1F else 1
+                if i + tl > len(data):
+                    break
+                cur_tag = int.from_bytes(data[i:i+tl], 'big')
+                i += tl
+                if i >= len(data):
+                    break
+                if data[i] & 0x80:
+                    nb = data[i] & 0x7F; i += 1
+                    vlen = int.from_bytes(data[i:i+nb], 'big'); i += nb
+                else:
+                    vlen = data[i]; i += 1
+                val = data[i:i+vlen]; i += vlen
+                if cur_tag in results:
+                    results[cur_tag].append(val)
+                # recurse into constructed TLV
+                if data[i - vlen - (1 if vlen < 128 else 2)] & 0x20 if False else                    (data[i - vlen - 1] & 0x20 if vlen < 128 else False):
+                    sub = _find_tag_all(val, *tags)
+                    for t in tags:
+                        results[t].extend(sub[t])
+            return results
+
+        # Simpler recursive TLV walker
+        def tlv_find(data: bytes, *want_tags: int) -> dict:
+            found = {t: [] for t in want_tags}
+            i = 0
+            while i < len(data):
+                if i + 1 >= len(data):
+                    break
+                b0 = data[i]
+                tl = 2 if (b0 & 0x1F) == 0x1F else 1
+                if i + tl > len(data):
+                    break
+                tag = int.from_bytes(data[i:i+tl], 'big')
+                i += tl
+                if i >= len(data):
+                    break
+                constructed = bool(b0 & 0x20)
+                if data[i] & 0x80:
+                    nb = data[i] & 0x7F; i += 1
+                    if i + nb > len(data):
+                        break
+                    vlen = int.from_bytes(data[i:i+nb], 'big'); i += nb
+                else:
+                    vlen = data[i]; i += 1
+                # For truncated TLV: read whatever bytes are available and
+                # continue parsing — don't break, so we can find tags inside
+                # truncated constructed TLV (e.g. 6F/A5 larger than received data)
+                truncated = (i + vlen > len(data))
+                val = data[i:i+vlen] if not truncated else data[i:]
+                i = (i + vlen) if not truncated else len(data)
+                if tag in found and not truncated:
+                    found[tag].append(val)
+                if constructed:
+                    sub = tlv_find(val, *want_tags)
+                    for t in want_tags:
+                        found[t].extend(sub[t])
+            return found
+
+        # Collect all response bodies for tag search.
+        # tlv_to_dict stores the VALUE (content) of the outermost tag —
+        # so rec['Data']['value'] is already the unwrapped inner bytes.
+        all_record_data = b''
+        for rec in result.get('Application', {}).get('Records', []):
+            raw_hex = rec.get('Data', {}).get('value', '')
+            try:
+                all_record_data += bytes.fromhex(raw_hex.replace(' ', ''))
+            except Exception:
+                pass
+        # Also include GPO and SELECT AID FCI values for label/name tags
+        extra_data = b''
+        for key in ('GPO', 'FCITemplate'):
+            v = result.get('Application', {}).get(key, {})
+            if isinstance(v, dict):
+                try:
+                    extra_data += bytes.fromhex(v.get('value', '').replace(' ', ''))
+                except Exception:
+                    pass
+        all_search_data = all_record_data + extra_data
+
+        # EMV tag definitions:
+        # 0x5A  = PAN
+        # 0x5F24 = Expiry Date (YYMMDD)
+        # 0x5F20 = Cardholder Name
+        # 0x5F28 = Issuer Country Code
+        # 0x8C / 0x8D = CDOL — skip
+        # 0x9F12 = Application Preferred Name
+        # 0x50   = Application Label
+        tags = tlv_find(all_record_data, 0x5A, 0x57, 0x5F24, 0x5F20, 0x5F28)
+        app_tags = tlv_find(all_search_data, 0x9F12, 0x50)
+        tags[0x9F12] = app_tags[0x9F12]
+        tags[0x50]   = app_tags[0x50]
+
+        print(f'')
+        print(f' {CG}── Card Details ──────────────────────{C0}')
+
+        # App label
+        for v in tags.get(0x50, []):
+            try:
+                lbl = v.decode('ascii', errors='replace').strip()
+                if lbl:
+                    print(f' {CG}App Label     :{C0} {CY}{lbl}{C0}')
+            except Exception:
+                pass
+
+        # PAN — prefer Track2 D-separator (authoritative, no padding ambiguity)
+        pan_hex = None
+        for v in tags.get(0x57, []):
+            t2 = v.hex().upper()
+            sep = t2.find('D')
+            if sep > 0:
+                pan_hex = t2[:sep]
+                break
+        if not pan_hex:
+            for v in tags.get(0x5A, []):
+                raw = v.hex().upper()
+                pan_hex = raw.rstrip('F') if raw.endswith('F') else raw
+                break
+        if pan_hex:
+            pan_fmt = ' '.join(pan_hex[i:i+4] for i in range(0, len(pan_hex), 4))
+            luhn_ok = _pan_luhn(pan_hex)
+            luhn_str = f'{CG}✓{C0}' if luhn_ok else f'{CR}✗{C0}'
+            print(f' {CG}PAN           :{C0} {CY}{pan_fmt}{C0}  Luhn: {luhn_str}')
+            result.setdefault('Decoded', {})['PAN'] = pan_hex
+        else:
+            print(f' {CR}PAN           : not found{C0}')
+
+        # Expiry — 5F24 is 3 bytes BCD: YYMMDD
+        expiry_found = False
+        for v in tags.get(0x5F24, []):
+            if len(v) == 3:
+                exp = v.hex().upper()
+                exp_fmt = f'20{exp[0:2]}/{exp[2:4]}'
+                print(f' {CG}Expiry        :{C0} {CY}{exp_fmt}{C0}')
+                result.setdefault('Decoded', {})['Expiry'] = exp_fmt
+                expiry_found = True
+        # Fallback: extract expiry from Track2 after D separator (YYMM)
+        if not expiry_found and pan_hex:
+            for v in tags.get(0x57, []):
+                t2 = v.hex().upper()
+                sep = t2.find('D')
+                if sep > 0 and len(t2) >= sep + 5:
+                    yymm = t2[sep+1:sep+5]
+                    if yymm.isdigit():
+                        exp_fmt = f'20{yymm[0:2]}/{yymm[2:4]}'
+                        print(f' {CG}Expiry        :{C0} {CY}{exp_fmt}{C0} (from Track2)')
+                        result.setdefault('Decoded', {})['Expiry'] = exp_fmt
+                        expiry_found = True
+                        break
+        if not expiry_found:
+            print(f' {CR}Expiry        : not found{C0}')
+
+        # Cardholder Name (tag 5F20: printable ASCII only)
+        for v in tags[0x5F20]:
+            try:
+                if v and all(0x20 <= b <= 0x7E for b in v):
+                    name = v.decode('ascii').strip()
+                    if name:
+                        print(f' {CG}Cardholder    :{C0} {CY}{name}{C0}')
+                        result.setdefault('Decoded', {})['CardholderName'] = name
+            except Exception:
+                pass
+
+        # Issuer Country Code (ISO 3166-1 numeric, BCD)
+        for v in tags[0x5F28]:
+            country = v.hex().upper().lstrip('0') or '0'
+            print(f' {CG}Issuer Country:{C0} {CY}{country}{C0}')
+            result.setdefault('Decoded', {})['IssuerCountry'] = country
+
+        # Application Preferred Name / Label
+        for v in tags[0x9F12]:
+            try:
+                print(f' {CG}App Name      :{C0} {CY}{v.decode("ascii", errors="replace").strip()}{C0}')
+            except Exception:
+                pass
+        for v in tags[0x50]:
+            try:
+                print(f' {CG}App Label     :{C0} {CY}{v.decode("ascii", errors="replace").strip()}{C0}')
+            except Exception:
+                pass
+
+        print(f' {CG}──────────────────────────────────────{C0}')
 
         json_str = jsonlib.dumps(result, indent=2)
         if args.file:
@@ -8634,5 +8832,3 @@ class EMVApdu(DeviceRequiredUnit):
                 break
 
         print(f'\n {C0}Relay ended. {exchange_count} APDU exchange(s) completed.{C0}')
-
-

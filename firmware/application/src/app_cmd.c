@@ -2110,7 +2110,7 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
 
     /* ISO14443-4 chaining: PCB bit5 (0x20) set means more blocks follow */
     while (resp_pcb & 0x20) {
-        uint8_t rack = 0xA2 | (blk_num & 0x01); /* R(ACK) */
+        uint8_t rack = 0xA2 | (resp_pcb & 0x01); /* R(ACK) block_num matches received I-block */
         uint8_t rack_frame[3];
         rack_frame[0] = rack;
         crc_14a_append(rack_frame, 1);
@@ -2135,6 +2135,81 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
     return data_frame_make(cmd, STATUS_HF_TAG_OK, resp_chain_len, resp_chain);
 }
 
+/* -----------------------------------------------------------------------
+ * tcl_apdu_: ISO 14443-4 APDU helper used by cmd_processor_hf14a_4_emv_scan.
+ * Sends one I-block, receives full response handling card-side chaining.
+ * ----------------------------------------------------------------------- */
+static bool tcl_apdu_(
+        const uint8_t *apdu, uint8_t apdu_sz,
+        uint8_t **rdata_ptr, uint16_t *rlen_ptr,
+        uint8_t *abuf, uint8_t *rbuf, uint8_t *chain_buf,
+        uint16_t *rbits_p, uint8_t *blk_p)
+{
+    /* Build I-block: PCB + APDU + CRC */
+    abuf[0] = 0x02 | (*blk_p & 0x01);
+    memcpy(&abuf[1], apdu, apdu_sz);
+    crc_14a_append(abuf, apdu_sz + 1);
+    uint8_t frame_len = apdu_sz + 3;   /* PCB + APDU + CRC */
+
+    /* Clear stale RxIRq before transmit.
+     * bytes_transfer only clears ComIrqReg bit7 (Set1).
+     * RxIRq (bit4) stays set from the previous receive and causes the
+     * wait-loop to exit instantly, returning garbage from FIFO. */
+    write_register_single(ComIrqReg, 0x7F);
+    pcd_14a_reader_timeout_set(600);
+    uint16_t rbits = 0;
+    uint8_t st = pcd_14a_reader_bytes_transfer(
+            PCD_TRANSCEIVE, abuf, frame_len, rbuf, &rbits, 70u * 8u);
+    if (st != STATUS_HF_TAG_OK || rbits < 24u) return false;
+
+    uint16_t rb = rbits / 8u;
+    uint8_t crc[2];
+    crc_14a_calculate(rbuf, rb - 2u, crc);
+    if (rbuf[rb-2] != crc[0] || rbuf[rb-1] != crc[1]) return false;
+
+    *blk_p ^= 1;
+    uint8_t  resp_pcb  = rbuf[0];
+    uint16_t chain_len = 0;
+    uint8_t  dlen      = (uint8_t)(rb - 3u);
+    if (dlen > 0 && dlen < 512u) {
+        memcpy(chain_buf, &rbuf[1], dlen);
+        chain_len = dlen;
+    }
+
+    /* Handle card-side chaining ---------------------------------------- */
+    while (resp_pcb & 0x20u) {
+        if ((resp_pcb & 0xC0u) != 0x00u) break;  /* not an I-block */
+
+        /* R(ACK) block_num must match the received I-block's block_num */
+        uint8_t rf[3];
+        rf[0] = 0xA2u | (resp_pcb & 0x01u);
+        crc_14a_append(rf, 1);
+
+        /* Use bytes_transfer for chain R(ACK) — clear stale RxIRq first */
+        write_register_single(ComIrqReg, 0x7F);
+        pcd_14a_reader_timeout_set(600);
+        uint16_t chain_rbits = 0;
+        uint8_t chain_st = pcd_14a_reader_bytes_transfer(
+                PCD_TRANSCEIVE, rf, 3, rbuf, &chain_rbits, 70u * 8u);
+        if (chain_st != STATUS_HF_TAG_OK || chain_rbits < 24u) break;
+        rb = chain_rbits / 8u;   /* bytes_transfer returns BIT count */
+
+        crc_14a_calculate(rbuf, rb - 2u, crc);
+        if (rbuf[rb-2] != crc[0] || rbuf[rb-1] != crc[1]) break;
+
+        resp_pcb = rbuf[0];
+        dlen = (uint8_t)(rb - 3u);
+        if (dlen > 0u && chain_len + dlen < 512u) {
+            memcpy(&chain_buf[chain_len], &rbuf[1], dlen);
+            chain_len += dlen;
+        }
+    }
+
+    *rdata_ptr = chain_buf;
+    *rlen_ptr  = chain_len;
+    return chain_len > 0u;
+}
+
 /**
  * HF14A-4 EMV scan — complete EMV card read in a single firmware call.
  *
@@ -2157,16 +2232,15 @@ static data_frame_tx_t *cmd_processor_hf14a_4_emv_scan(uint16_t cmd, uint16_t st
 
     /* ---- helpers -------------------------------------------------- */
     static uint8_t  abuf[64];   /* TX frame: PCB + APDU + CRC */
-    static uint8_t  rbuf[64];   /* single-frame receive buffer (RC522 FIFO = 64 bytes) */
+    static uint8_t  rbuf[70];   /* single-frame receive buffer: FIFO(64) + PCB(1) + CRC(2) + slack */
     static uint8_t  chain_buf[512]; /* reassembled chained response */
     uint16_t rbits;
     uint8_t  blk = 0;  /* alternating block number */
 
-    /* Send one I-block APDU, handling ISO14443-4 response chaining.
-     * The RC522 FIFO is 64 bytes. If the card chains its response
-     * (PCB bit4=1), we send R(ACK) blocks and reassemble here.
-     * Returns pointer into chain_buf, sets *rlen_ptr to total length. */
-    #define SEND_APDU(apdu_ptr, apdu_sz, rdata_ptr, rlen_ptr) ({         bool _ok = false;         uint8_t _pcb = 0x02 | (blk & 0x01);         abuf[0] = _pcb;         memcpy(&abuf[1], (apdu_ptr), (apdu_sz));         rbits = 0;         uint8_t _st = pcd_14a_reader_raw_cmd(             false, true, true, false, true, false,             600, ((apdu_sz) + 1) * 8, abuf,             rbuf, &rbits, sizeof(rbuf) * 8);         if (_st == STATUS_HF_TAG_OK && rbits > 0) {             uint16_t _rb = rbits;  /* raw_cmd checkCrc=false returns byte count */             /* Verify and strip CRC manually (checkCrc=false above) */             if (_rb >= 3) {                 uint8_t _crc[2]; crc_14a_calculate(rbuf, _rb - 2, _crc);                 if (rbuf[_rb-2] == _crc[0] && rbuf[_rb-1] == _crc[1]) {                     blk ^= 1;                     uint16_t _chain_len = 0;                     uint8_t _resp_pcb = rbuf[0];                     /* Copy data portion (strip PCB and CRC) */                     uint8_t _dlen = _rb - 3;                     if (_dlen > 0 && _chain_len + _dlen < sizeof(chain_buf)) {                         memcpy(&chain_buf[_chain_len], &rbuf[1], _dlen);                         _chain_len += _dlen;                     }                     /* Handle chaining: PCB bit5=1 (b6 in ISO14443-4) means more data */                     while (_resp_pcb & 0x20) {                         /* Send R(ACK) to request next block */                         uint8_t _rack = 0xA2 | (blk & 0x01);                         abuf[0] = _rack;                         crc_14a_append(abuf, 1);                         rbits = 0;                         _st = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE,                             abuf, 3, rbuf, &rbits, sizeof(rbuf) * 8);                         if (_st != STATUS_HF_TAG_OK || rbits < 24) break;                         _rb = rbits / 8;  /* bytes_transfer returns bits */                         crc_14a_calculate(rbuf, _rb - 2, _crc);                         if (rbuf[_rb-2] != _crc[0] || rbuf[_rb-1] != _crc[1]) break;                         blk ^= 1;                         _resp_pcb = rbuf[0];                         _dlen = _rb - 3;                         if (_dlen > 0 && _chain_len + _dlen < sizeof(chain_buf)) {                             memcpy(&chain_buf[_chain_len], &rbuf[1], _dlen);                             _chain_len += _dlen;                         }                     }                     *(rdata_ptr) = chain_buf;                     *(rlen_ptr)  = (_chain_len < sizeof(chain_buf) ? _chain_len : (uint16_t)(sizeof(chain_buf) - 1));                     _ok = true;                 }             }         }         _ok;     })
+    /* SEND_APDU: thin wrapper that calls the static tcl_apdu_ helper. */
+    #define SEND_APDU(ap, asz, rd, rl)         tcl_apdu_((ap),(asz),(rd),(rl),abuf,rbuf,chain_buf,&rbits,&blk)
+
+
 
     /* Append a cmd+resp pair to out buffer */
     #define APPEND_PAIR(cmd_ptr, cmd_sz, resp_ptr, resp_sz) do {         if (out_len + 1 + (cmd_sz) + 2 + (resp_sz) < NETDATA_MAX_DATA_LENGTH) {             out[out_len++] = (uint8_t)(cmd_sz);             memcpy(&out[out_len], (cmd_ptr), (cmd_sz)); out_len += (cmd_sz);             out[out_len++] = (uint8_t)((resp_sz) & 0xFF);             out[out_len++] = (uint8_t)((resp_sz) >> 8);             memcpy(&out[out_len], (resp_ptr), (resp_sz)); out_len += (resp_sz);         }     } while(0)
@@ -2242,6 +2316,23 @@ static data_frame_tx_t *cmd_processor_hf14a_4_emv_scan(uint16_t cmd, uint16_t st
     }
     APPEND_PAIR(ppse_cmd, sizeof(ppse_cmd), ppse_resp, ppse_rlen);
     num_apdus++;
+
+    /* ---- Re-establish T=CL after PPSE ----------------------------
+     * The PPSE exchange leaves the RC522 in an unknown internal state.
+     * Rather than trying to clear it piecemeal, do a full reset:
+     * turn the field off briefly, rescan the card, re-run RATS.
+     * This guarantees a clean RC522 state before SELECT AID.
+     * blk resets to 0 because a new T=CL session starts after RATS. */
+    pcd_14a_reader_antenna_off();
+    bsp_delay_ms(10);
+    {
+        picc_14a_tag_t tag2;
+        pcd_14a_reader_reset();
+        pcd_14a_reader_antenna_on();
+        bsp_delay_ms(8);
+        if (pcd_14a_reader_scan_auto(&tag2) != STATUS_HF_TAG_OK) goto done;
+    }
+    blk = 0;   /* new T=CL session: block number restarts at 0 */
 
     /* ---- Extract first AID from PPSE ----------------------------- */
     uint8_t aid[16]; uint8_t aid_len = 0;
