@@ -4,7 +4,7 @@
 #include "tag_emulation.h"
 
 #define MAX_NFC_RX_BUFFER_SIZE  257
-#define MAX_NFC_TX_BUFFER_SIZE  64
+#define MAX_NFC_TX_BUFFER_SIZE  512  /* must hold PCB + max APDU response */
 
 #define NFC_TAG_14A_CRC_LENGTH  2
 
