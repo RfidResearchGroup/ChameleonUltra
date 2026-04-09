@@ -18,6 +18,7 @@
 #include "bsp_wdt.h"
 #include "lf_reader_generic.h"
 #include "lf_em4x05_data.h"
+#include "lf_psk_reader.h"
 #endif
 #include "nfc_14a.h"
 
@@ -823,6 +824,35 @@ static data_frame_tx_t *cmd_processor_viking_write_to_t55xx(uint16_t cmd, uint16
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+static data_frame_tx_t *cmd_processor_indala_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t card_buffer[LF_INDALA_TAG_ID_SIZE] = {0x00};
+    status = scan_indala(card_buffer);
+    if (status != STATUS_LF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_buffer), card_buffer);
+}
+
+static data_frame_tx_t *cmd_processor_indala_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t id[LF_INDALA_TAG_ID_SIZE];
+        uint8_t new_key[4];
+        uint8_t old_keys[4];
+    } PACKED payload_t;
+    payload_t *payload = (payload_t *)data;
+    if (length < sizeof(payload_t)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    uint16_t tail = length - offsetof(payload_t, old_keys);
+    bool fc8 = (tail % 4 == 1) ? data[length - 1] : 0;
+    uint8_t key_count = (tail - (tail % 4 == 1 ? 1 : 0)) / 4;
+    if (key_count == 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    status = write_indala_to_t55xx(payload->id, payload->new_key, payload->old_keys, key_count, fc8);
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
 #define GENERIC_READ_LEN 800
 #define GENERIC_READ_TIMEOUT_MS 500
 static data_frame_tx_t *cmd_processor_generic_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -1070,6 +1100,26 @@ static data_frame_tx_t *cmd_processor_viking_get_emu_id(uint16_t cmd, uint16_t s
     }
     tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_VIKING);
     return data_frame_make(cmd, STATUS_SUCCESS, LF_VIKING_TAG_ID_SIZE, buffer->buffer);
+}
+
+static data_frame_tx_t *cmd_processor_indala_set_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != LF_INDALA_TAG_ID_SIZE) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_INDALA);
+    memcpy(buffer->buffer, data, LF_INDALA_TAG_ID_SIZE);
+    tag_emulation_load_by_buffer(TAG_TYPE_INDALA, false);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_indala_get_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    tag_slot_specific_type_t tag_types;
+    tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &tag_types);
+    if (tag_types.tag_lf != TAG_TYPE_INDALA) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_INDALA);
+    return data_frame_make(cmd, STATUS_SUCCESS, LF_INDALA_TAG_ID_SIZE, buffer->buffer);
 }
 
 static nfc_tag_14a_coll_res_reference_t *get_coll_res_data(bool write) {
@@ -1915,6 +1965,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_VIKING_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_viking_write_to_t55xx,         NULL                   },
     {    DATA_CMD_IOPROX_SCAN,                  before_reader_run,           cmd_processor_ioprox_scan,                   NULL                   },
     {    DATA_CMD_IOPROX_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_ioprox_write_to_t55xx,         NULL                   },
+    {    DATA_CMD_INDALA_SCAN,                  before_reader_run,           cmd_processor_indala_scan,                   NULL                   },
+    {    DATA_CMD_INDALA_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_indala_write_to_t55xx,         NULL                   },
     {    DATA_CMD_ADC_GENERIC_READ,             before_reader_run,           cmd_processor_generic_read,                  NULL                   },
 
     {    DATA_CMD_HF14A_SET_FIELD_ON,           before_reader_run,           cmd_processor_hf14a_set_field_on,            NULL                   },
@@ -1980,6 +2032,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_IOPROX_GET_EMU_ID,              NULL,                      cmd_processor_ioprox_get_emu_id,             NULL                   },  
     {    DATA_CMD_VIKING_SET_EMU_ID,              NULL,                      cmd_processor_viking_set_emu_id,             NULL                   },
     {    DATA_CMD_VIKING_GET_EMU_ID,              NULL,                      cmd_processor_viking_get_emu_id,             NULL                   },
+    {    DATA_CMD_INDALA_SET_EMU_ID,              NULL,                      cmd_processor_indala_set_emu_id,             NULL                   },
+    {    DATA_CMD_INDALA_GET_EMU_ID,              NULL,                      cmd_processor_indala_get_emu_id,             NULL                   },
 };
 
 data_frame_tx_t *cmd_processor_get_device_capabilities(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {

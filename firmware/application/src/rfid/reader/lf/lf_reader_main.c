@@ -5,9 +5,11 @@
 #include "hex_utils.h"
 #include "lf_125khz_radio.h"
 #include "lf_reader_data.h"
+#include "lf_psk_reader.h"
 #include "protocols/em410x.h"
-#include "protocols/ioprox.h"
 #include "protocols/hidprox.h"
+#include "protocols/indala.h"
+#include "protocols/ioprox.h"
 #include "protocols/t55xx.h"
 #include "protocols/viking.h"
 
@@ -191,3 +193,18 @@ uint8_t write_viking_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_pa
  * Set the LF card scanning timeout value (in milliseconds).
  */
 void set_scan_tag_timeout(uint32_t ms) { g_timeout_readem_ms = ms; }
+
+uint8_t scan_indala(uint8_t *data) {
+    if (psk_generic_read(&indala, data, g_timeout_readem_ms)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
+uint8_t write_indala_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool fc8) {
+    uint32_t blks[7] = {0x00};
+    uint8_t blk_count = indala_t55xx_writer(data, blks);
+    if (blk_count == 0) return STATUS_PAR_ERR;
+    if (fc8) { blks[0] = (blks[0] & ~T5577_PSKCF_MASK) | T5577_PSKCF_RF_8; }
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
