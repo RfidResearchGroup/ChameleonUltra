@@ -3,8 +3,10 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Added PAC/Stanley LF protocol support: read, emulate and T55xx clone (@kevihiiin, @danieltwagner)
  - Fix firmware application USB serial number (@taichunmin)
  - Added ioProx LF protocol support (read, emulate and T55xx clone)
+ - Added `hf mfu nfcimport` to import Flipper Zero `.nfc` files into MFU/NTAG emulator slots, with `--amiibo` flag for automatic PWD/PACK derivation (@fmuk)
  - Added commands to dump and clone Mifare tags
  - Fix bad missing tools warning (@suut)
  - Fix for FAST_READ command for nfc - mf0 tags

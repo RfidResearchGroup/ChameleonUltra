@@ -37,6 +37,7 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/nfctag/lf/utils/pskdemod.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/em410x.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/hidprox.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/protocols/pac.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/indala.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/ioprox.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/viking.c \
@@ -350,6 +351,7 @@ ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
     $(PROJ_DIR)/rfid/reader/lf/lf_reader_main.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_t55xx_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_hidprox_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_pac_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_ioprox_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_viking_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_psk_reader.c \
