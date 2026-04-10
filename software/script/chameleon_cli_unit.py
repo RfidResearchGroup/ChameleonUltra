@@ -718,6 +718,45 @@ class LFVikingIdArgsUnit(DeviceRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
+class LFIndalaIdArgsUnit(DeviceRequiredUnit):
+    @staticmethod
+    def add_card_arg(parser: ArgumentParserNoExit, required=False):
+        group = parser.add_mutually_exclusive_group(required=required)
+        group.add_argument("-r", "--raw", type=str,
+                           help="Raw 64-bit frame (16 hex chars)",
+                           metavar="<hex>")
+        group.add_argument("--fc", type=int, dest="_indala_fc",
+                           help="Facility code (26-bit format, use with --cn)",
+                           metavar="<dec>")
+        parser.add_argument("--cn", type=int, dest="_indala_cn",
+                            help="Card number (26-bit format, use with --fc)",
+                            metavar="<dec>")
+        return parser
+
+    def before_exec(self, args: argparse.Namespace):
+        if not super().before_exec(args):
+            return False
+        fc = getattr(args, '_indala_fc', None)
+        cn = getattr(args, '_indala_cn', None)
+        if fc is not None or cn is not None:
+            if fc is None or cn is None:
+                raise ArgsParserError("--fc and --cn must be used together")
+            if not (0 <= fc <= 255):
+                raise ArgsParserError("FC must be 0-255")
+            if not (0 <= cn <= 65535):
+                raise ArgsParserError("CN must be 0-65535")
+            args.raw = indala_encode_raw(fc, cn).hex()
+        if args.raw is not None and not re.match(r"^[a-fA-F0-9]{16}$", args.raw):
+            raise ArgsParserError("Raw must be exactly 16 hex characters")
+        return True
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        raise NotImplementedError("Please implement this")
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError("Please implement this")
+
+
 class TagTypeArgsUnit(DeviceRequiredUnit):
     @staticmethod
     def add_type_args(parser: ArgumentParserNoExit):
@@ -763,6 +802,7 @@ lf_hid_prox = lf_hid.subgroup("prox", "HID Prox commands")
 lf_ioprox = lf.subgroup("ioprox", "ioProx commands")
 lf_pac = lf.subgroup("pac", "PAC/Stanley commands")
 lf_viking = lf.subgroup("viking", "Viking commands")
+lf_indala = lf.subgroup("indala", "Indala commands")
 lf_generic = lf.subgroup("generic", "Generic commands")
 
 
@@ -6477,6 +6517,12 @@ class HWSlotList(DeviceRequiredUnit):
                     raw = pac_encode_raw(id)
                     print(f"      {'CN:':40}{color_string((CY, id_ascii))}")
                     print(f"      {'Raw:':40}{color_string((CY, raw.hex().upper()))}")
+                if lf_tag_type == TagSpecificType.Indala:
+                    raw = self.cmd.indala_get_emu_id()
+                    fc, cn = indala_decode_raw(raw)
+                    print(f"      {'Raw:':40}{color_string((CY, raw.hex().upper()))}")
+                    print(f"      {'FC:':40}{color_string((CG, fc))}")
+                    print(f"      {'Card:':40}{color_string((CG, cn))}")
         if current != selected:
             self.cmd.set_active_slot(selected)
 
@@ -6637,6 +6683,166 @@ class LFVikingEconfig(SlotIndexArgsAndGoUnit, LFVikingIdArgsUnit):
             response = self.cmd.viking_get_emu_id()
             print(" - Get Viking tag id success.")
             print(f"ID: {response.hex().upper()}")
+
+
+def indala_decode_raw(raw: bytes):
+    """Decode Indala 26-bit FC/CN from 8-byte raw frame (PM3-compatible bit mapping)."""
+    bits = []
+    for b in raw:
+        for i in range(7, -1, -1):
+            bits.append((b >> i) & 1)
+
+    fc = 0
+    fc |= bits[57] << 7
+    fc |= bits[49] << 6
+    fc |= bits[44] << 5
+    fc |= bits[47] << 4
+    fc |= bits[48] << 3
+    fc |= bits[53] << 2
+    fc |= bits[39] << 1
+    fc |= bits[58] << 0
+
+    cn = 0
+    cn |= bits[42] << 15
+    cn |= bits[45] << 14
+    cn |= bits[43] << 13
+    cn |= bits[40] << 12
+    cn |= bits[52] << 11
+    cn |= bits[36] << 10
+    cn |= bits[35] << 9
+    cn |= bits[51] << 8
+    cn |= bits[46] << 7
+    cn |= bits[33] << 6
+    cn |= bits[37] << 5
+    cn |= bits[54] << 4
+    cn |= bits[56] << 3
+    cn |= bits[59] << 2
+    cn |= bits[50] << 1
+    cn |= bits[41] << 0
+
+    return fc, cn
+
+
+def indala_encode_raw(fc: int, cn: int) -> bytes:
+    """Encode FC/CN into 8-byte Indala 26-bit raw frame (PM3-compatible bit mapping)."""
+    bits = [0] * 64
+
+    # preamble
+    bits[0] = 1
+    bits[2] = 1
+    bits[32] = 1
+
+    # fc
+    bits[57] = (fc >> 7) & 1
+    bits[49] = (fc >> 6) & 1
+    bits[44] = (fc >> 5) & 1
+    bits[47] = (fc >> 4) & 1
+    bits[48] = (fc >> 3) & 1
+    bits[53] = (fc >> 2) & 1
+    bits[39] = (fc >> 1) & 1
+    bits[58] = fc & 1
+
+    # cn
+    bits[42] = (cn >> 15) & 1
+    bits[45] = (cn >> 14) & 1
+    bits[43] = (cn >> 13) & 1
+    bits[40] = (cn >> 12) & 1
+    bits[52] = (cn >> 11) & 1
+    bits[36] = (cn >> 10) & 1
+    bits[35] = (cn >> 9) & 1
+    bits[51] = (cn >> 8) & 1
+    bits[46] = (cn >> 7) & 1
+    bits[33] = (cn >> 6) & 1
+    bits[37] = (cn >> 5) & 1
+    bits[54] = (cn >> 4) & 1
+    bits[56] = (cn >> 3) & 1
+    bits[59] = (cn >> 2) & 1
+    bits[50] = (cn >> 1) & 1
+    bits[41] = cn & 1
+
+    # checksum (sum of specific cn bits)
+    chk = sum([
+        (cn >> 14) & 1, (cn >> 12) & 1, (cn >> 9) & 1, (cn >> 8) & 1,
+        (cn >> 6) & 1, (cn >> 5) & 1, (cn >> 2) & 1, cn & 1,
+    ])
+    if chk % 2 == 0:
+        bits[62], bits[63] = 1, 0
+    else:
+        bits[62], bits[63] = 0, 1
+
+    # parity
+    p1, p2 = 1, 1
+    for i in range(33, 64):
+        if i % 2:
+            p1 ^= bits[i]
+        else:
+            p2 ^= bits[i]
+    bits[34] = p1
+    bits[38] = p2
+
+    raw = bytearray(8)
+    for i in range(64):
+        if bits[i]:
+            raw[i // 8] |= 1 << (7 - (i % 8))
+    return bytes(raw)
+
+
+def indala_format_output(raw: bytes) -> str:
+    """Format Indala raw bytes as PM3-style output string."""
+    fc, cn = indala_decode_raw(raw)
+    lines = [f"Indala (len 64)  Raw: {raw.hex().upper()}"]
+    lines.append(f"   Fmt 26  FC: {fc}  Card: {cn}")
+    return "\n".join(lines)
+
+
+@lf_indala.command("read")
+class LFIndalaRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Scan for an Indala tag"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        resp = self.cmd.indala_scan()
+        if resp.status != Status.LF_TAG_OK:
+            print(f" Indala scan failed: {resp.status}")
+            return
+        print(f" {indala_format_output(resp.parsed)}")
+
+
+@lf_indala.command("write")
+class LFIndalaWriteT55xx(LFIndalaIdArgsUnit, ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Clone Indala tag to T55XX (use -r <hex>, or --fc <n> --cn <n>)"
+        return self.add_card_arg(parser, required=True)
+
+    def on_exec(self, args: argparse.Namespace):
+        id_bytes = bytes.fromhex(args.raw)
+        self.cmd.indala_write_to_t55xx(id_bytes)
+        print(f" {indala_format_output(id_bytes)}")
+        print(f" Write done. Verify with 'lf indala read'.")
+
+
+@lf_indala.command("econfig")
+class LFIndalaEconfig(SlotIndexArgsAndGoUnit, LFIndalaIdArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Set or get emulated Indala card (use -r/--fc+--cn to set, omit to get)"
+        self.add_slot_args(parser)
+        self.add_card_arg(parser)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.raw is not None:
+            id_bytes = bytes.fromhex(args.raw)
+            self.cmd.indala_set_emu_id(id_bytes)
+            print(f" - Set emulated Indala:")
+            print(f"   {indala_format_output(id_bytes)}")
+        else:
+            response = self.cmd.indala_get_emu_id()
+            print(f" - Get emulated Indala:")
+            print(f"   {indala_format_output(response)}")
 
 
 @hw_slot.command("nick")

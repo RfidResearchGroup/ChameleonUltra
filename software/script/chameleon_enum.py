@@ -148,6 +148,10 @@ class Command(enum.IntEnum):
     PAC_GET_EMU_ID = 5007
     IOPROX_SET_EMU_ID = 5008
     IOPROX_GET_EMU_ID = 5009
+    INDALA_SET_EMU_ID = 5026
+    INDALA_GET_EMU_ID = 5027
+    INDALA_SCAN = 3035
+    INDALA_WRITE_TO_T55XX = 3036
     EM4X05_SCAN = 3030
     EM4X05_READSNIFF = 3032
     LF_SNIFF = 3031
@@ -298,7 +302,7 @@ class TagSpecificType(enum.IntEnum):
     # Paradox
 
     # PSK Tag-Talk-First      300
-    # Indala
+    Indala = 310
     # Keri
     # NexWatch
 
@@ -382,6 +386,8 @@ class TagSpecificType(enum.IntEnum):
             return "PAC/Stanley"
         elif self == TagSpecificType.Viking:
             return "Viking"
+        elif self == TagSpecificType.Indala:
+            return "Indala"
         elif self == TagSpecificType.MIFARE_Mini:
             return "Mifare Mini"
         elif self == TagSpecificType.MIFARE_1024:
