@@ -58,7 +58,7 @@ typedef enum {
     // Paradox
 
     //////// PSK Tag-Talk-First   300
-    // Indala
+    TAG_TYPE_INDALA = 310,
     // Keri
     // NexWatch
 
@@ -108,7 +108,8 @@ typedef enum {
     }
 
 #define TAG_SPECIFIC_TYPE_LF_VALUES \
-    TAG_TYPE_EM410X, TAG_TYPE_EM410X_ELECTRA, TAG_TYPE_PAC, TAG_TYPE_HID_PROX, TAG_TYPE_IOPROX, TAG_TYPE_VIKING
+    TAG_TYPE_EM410X, TAG_TYPE_EM410X_ELECTRA, TAG_TYPE_PAC, TAG_TYPE_HID_PROX, TAG_TYPE_IOPROX, TAG_TYPE_VIKING, \
+    TAG_TYPE_INDALA
 
 #define TAG_SPECIFIC_TYPE_HF_VALUES                                   \
     TAG_TYPE_MIFARE_Mini, TAG_TYPE_MIFARE_1024, TAG_TYPE_MIFARE_2048, \

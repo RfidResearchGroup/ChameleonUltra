@@ -105,6 +105,8 @@
 #define DATA_CMD_IOPROX_WRITE_TO_T55XX          (3011)
 #define DATA_CMD_IOPROX_DECODE_RAW              (3012)
 #define DATA_CMD_IOPROX_COMPOSE_ID              (3013)
+#define DATA_CMD_INDALA_SCAN                    (3035)
+#define DATA_CMD_INDALA_WRITE_TO_T55XX          (3036)
 
 //
 // ******************************************************************
@@ -177,6 +179,8 @@
 #define DATA_CMD_PAC_GET_EMU_ID                 (5007)
 #define DATA_CMD_IOPROX_SET_EMU_ID              (5008)
 #define DATA_CMD_IOPROX_GET_EMU_ID              (5009)
+#define DATA_CMD_INDALA_SET_EMU_ID              (5026)
+#define DATA_CMD_INDALA_GET_EMU_ID              (5027)
 
 #define DATA_CMD_EM4X05_SCAN                    (3030)
 #define DATA_CMD_EM4X05_READSNIFF               (3032)

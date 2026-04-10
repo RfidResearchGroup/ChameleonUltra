@@ -20,6 +20,8 @@ extern "C" {
 #define T5577_PSKCF_RF_2 0
 #define T5577_PSKCF_RF_4 0x00000400
 #define T5577_PSKCF_RF_8 0x00000800
+#define T5577_XMODE_BITRATE_RF_2 (0x0F << 18)
+#define T5577_PSKCF_MASK (T5577_PSKCF_RF_4 | T5577_PSKCF_RF_8)  // bits 11:10
 #define T5577_MODULATION_DIRECT 0
 #define T5577_MODULATION_PSK1 0x00001000
 #define T5577_MODULATION_PSK2 0x00002000
@@ -80,6 +82,12 @@ extern "C" {
     T5577_BITRATE_RF_32 |         \
     T5577_PWD |                   \
     (4 << T5577_MAXBLOCK_SHIFT))
+
+#define T5577_INDALA_64_CONFIG ( \
+    T5577_MODULATION_PSK1 |      \
+    T5577_BITRATE_RF_32 |        \
+    T5577_PWD |                  \
+    (2 << T5577_MAXBLOCK_SHIFT))
 
 void t55xx_write_data(uint32_t passwd, uint32_t *blks, uint8_t blk_count);
 void t55xx_reset_passwd(uint32_t old_passwd, uint32_t new_passwd);
