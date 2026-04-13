@@ -6244,18 +6244,20 @@ class LFVikingWriteT55xx(LFVikingIdArgsUnit, ReaderRequiredUnit):
         print(f" - Viking ID(8H): {id_hex} write done.")
 
 
-@lf_t55xx.command("clone")
+@lf.command("clone")
 class LFT55xxClone(ReaderRequiredUnit):
     """
-    Clone a scanned or manually-specified LF card ID onto a blank T55xx tag.
+    Clone a LF card ID onto a blank T55xx tag.
+
+    Usage: lf clone -t <type> [args]
 
     Supported types and their required arguments:
 
-      em410x   --id <10 hex>         e.g. --id DEADBEEF88
-      electra  --id <26 hex>         e.g. --id DEADBEEF880102030405060708
-      hid      -f <format> --cn <n>  e.g. -f H10301 --fc 10 --cn 1234
+      em410x   --id <10 hex>         e.g. lf clone -t em410x --id DEADBEEF88
+      electra  --id <26 hex>         e.g. lf clone -t electra --id DEADBEEF880102030405060708
+      hid      -f <format> --cn <n>  e.g. lf clone -t hid -f H10301 --fc 10 --cn 1234
       ioprox   --ver <n> --fc <n> --cn <n>   OR   --raw8 <16 hex>
-      viking   --id <8 hex>          e.g. --id DEADBEEF
+      viking   --id <8 hex>          e.g. lf clone -t viking --id DEADBEEF
 
     Only supported on Chameleon Ultra (Lite has no LF writer).
     """
@@ -6266,6 +6268,7 @@ class LFT55xxClone(ReaderRequiredUnit):
         parser = ArgumentParserNoExit()
         parser.description = (
             "Clone a LF card ID onto a blank T55xx tag.\n"
+            "Usage: lf clone -t <type> [args]\n"
             "Supported types: em410x, electra, hid, ioprox, viking.\n"
             "Only supported on Chameleon Ultra (Lite has no LF writer)."
         )
@@ -6385,7 +6388,7 @@ class LFT55xxClone(ReaderRequiredUnit):
 
         elif t == "ioprox":
             ver = args.ver if args.ver is not None else 1
-            fc  = int(args.fc) if args.fc is not None else 0
+            fc  = args.fc if args.fc is not None else 0
             cn  = args.cn  if args.cn  is not None else 0
             if args.raw8 is not None:
                 raw8 = LFIOProxIdArgsUnit.parse_raw8(args.raw8)
