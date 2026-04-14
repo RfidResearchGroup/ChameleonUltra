@@ -2159,7 +2159,7 @@ static bool tcl_apdu_(
     pcd_14a_reader_timeout_set(600);
     uint16_t rbits = 0;
     uint8_t st = pcd_14a_reader_bytes_transfer(
-            PCD_TRANSCEIVE, abuf, frame_len, rbuf, &rbits, 70u * 8u);
+            PCD_TRANSCEIVE, abuf, frame_len, rbuf, &rbits, 270u * 8u);
     if (st != STATUS_HF_TAG_OK || rbits < 24u) return false;
 
     uint16_t rb = rbits / 8u;
@@ -2177,8 +2177,39 @@ static bool tcl_apdu_(
     }
 
     /* Handle card-side chaining ---------------------------------------- */
+    uint16_t chain_rbits = 0;   /* hoisted: used in both WTX and R(ACK) paths */
+    uint8_t  chain_st    = STATUS_HF_TAG_OK;
     while (resp_pcb & 0x20u) {
-        if ((resp_pcb & 0xC0u) != 0x00u) break;  /* not an I-block */
+        if ((resp_pcb & 0xC0u) != 0x00u) {
+            /* S-block: handle S(WTX), reject others.
+             * Some Visa/MC cards send WTX (PCB=0xF2) before their FCI,
+             * requesting more processing time. We must echo it back.
+             * The WTXM byte was spuriously added to chain_buf — undo it. */
+            if ((resp_pcb & 0xF0u) == 0xF0u) {
+                chain_len -= dlen;       /* remove spurious WTXM byte(s) */
+                uint8_t wtx_r[4];
+                wtx_r[0] = resp_pcb;    /* mirror the S(WTX) PCB */
+                wtx_r[1] = rbuf[1];     /* WTXM from last received frame */
+                crc_14a_append(wtx_r, 2);
+                write_register_single(ComIrqReg, 0x7F);
+                pcd_14a_reader_timeout_set(600);
+                chain_rbits = 0;
+                chain_st = pcd_14a_reader_bytes_transfer(
+                        PCD_TRANSCEIVE, wtx_r, 4, rbuf, &chain_rbits, 270u * 8u);
+                if (chain_st != STATUS_HF_TAG_OK || chain_rbits < 24u) break;
+                rb = chain_rbits / 8u;
+                crc_14a_calculate(rbuf, rb - 2u, crc);
+                if (rbuf[rb-2] != crc[0] || rbuf[rb-1] != crc[1]) break;
+                resp_pcb = rbuf[0];
+                dlen = (uint8_t)(rb - 3u);
+                if (dlen > 0u && chain_len + dlen < 512u) {
+                    memcpy(&chain_buf[chain_len], &rbuf[1], dlen);
+                    chain_len += dlen;
+                }
+                continue; /* re-check while with new resp_pcb */
+            }
+            break; /* other S-blocks (DESELECT etc.): stop */
+        }
 
         /* R(ACK) block_num must match the received I-block's block_num */
         uint8_t rf[3];
@@ -2188,9 +2219,9 @@ static bool tcl_apdu_(
         /* Use bytes_transfer for chain R(ACK) — clear stale RxIRq first */
         write_register_single(ComIrqReg, 0x7F);
         pcd_14a_reader_timeout_set(600);
-        uint16_t chain_rbits = 0;
-        uint8_t chain_st = pcd_14a_reader_bytes_transfer(
-                PCD_TRANSCEIVE, rf, 3, rbuf, &chain_rbits, 70u * 8u);
+        chain_rbits = 0;
+        chain_st = pcd_14a_reader_bytes_transfer(
+                PCD_TRANSCEIVE, rf, 3, rbuf, &chain_rbits, 270u * 8u);
         if (chain_st != STATUS_HF_TAG_OK || chain_rbits < 24u) break;
         rb = chain_rbits / 8u;   /* bytes_transfer returns BIT count */
 
@@ -2232,7 +2263,7 @@ static data_frame_tx_t *cmd_processor_hf14a_4_emv_scan(uint16_t cmd, uint16_t st
 
     /* ---- helpers -------------------------------------------------- */
     static uint8_t  abuf[64];   /* TX frame: PCB + APDU + CRC */
-    static uint8_t  rbuf[70];   /* single-frame receive buffer: FIFO(64) + PCB(1) + CRC(2) + slack */
+    static uint8_t  rbuf[270];  /* single-frame receive buffer: up to 256 bytes data + PCB + CRC + slack (FSDI=8 → FSD=256) */
     static uint8_t  chain_buf[512]; /* reassembled chained response */
     uint16_t rbits;
     uint8_t  blk = 0;  /* alternating block number */
@@ -2359,27 +2390,95 @@ static data_frame_tx_t *cmd_processor_hf14a_4_emv_scan(uint16_t cmd, uint16_t st
     APPEND_PAIR(sel_cmd, sel_len, sel_resp, sel_rlen);
     num_apdus++;
 
-    /* ---- Step 4: GPO -------------------------------------------- */
-    static const uint8_t gpo_cmd[] = {0x80, 0xA8, 0x00, 0x00, 0x02, 0x83, 0x00, 0x00};
-    uint8_t *gpo_resp; uint16_t gpo_rlen;
-    if (!SEND_APDU(gpo_cmd, sizeof(gpo_cmd), &gpo_resp, &gpo_rlen)) goto done;
-    APPEND_PAIR(gpo_cmd, sizeof(gpo_cmd), gpo_resp, gpo_rlen);
+    /* ---- Step 4: GPO — parse PDOL from SELECT AID FCI, fill zeros ------- */
+    /* PDOL is tag 9F38 in the FCI (sel_resp). Parse it to know how many
+     * bytes the card expects. Fill all fields with zeros (offline scan). */
+    uint8_t pdol_len = 0;
+    for (uint8_t pi = 0; pi + 2 < sel_rlen; pi++) {
+        /* 2-byte tag detection: first byte has bits[4:0] == 0x1F */
+        uint8_t ptag1 = sel_resp[pi];
+        uint8_t ptag2 = (((ptag1 & 0x1F) == 0x1F) && pi+1 < sel_rlen) ? sel_resp[pi+1] : 0;
+        uint16_t ftag = ((ptag1 & 0x1F) == 0x1F) ? (((uint16_t)ptag1<<8)|ptag2) : ptag1;
+        uint8_t flen_off = (((ptag1 & 0x1F) == 0x1F)) ? 2 : 1;
+        if (pi + flen_off >= sel_rlen) break;
+        uint8_t flen = sel_resp[pi + flen_off];
+        if (ftag == 0x9F38) {
+            /* Sum DOL field lengths to get total PDOL data size */
+            uint8_t di = pi + flen_off + 1;
+            uint8_t dend = di + flen;
+            while (di < dend && di + 1 < sel_rlen) {
+                uint8_t dol_tl = ((sel_resp[di] & 0x1F) == 0x1F) ? 2 : 1;
+                if (di + dol_tl >= sel_rlen) break;
+                pdol_len += sel_resp[di + dol_tl];
+                di += dol_tl + 1;
+            }
+            break;
+        }
+        if (flen_off + flen < 255) pi += flen_off + flen - 1; else break;
+    }
+    /* ---- Step 5: GPO with PDOL retry --------------------------------
+     * When the FCI is truncated (45b for long cards), we can't read the
+     * full PDOL. Try progressively larger PDOL sizes (all zeros) until the
+     * card accepts. pdol_len from FCI parsing is tried first. Common sizes
+     * cover most Mastercard/Visa variants. */
+    static const uint8_t gpo_try_pl[] = {0, 4, 8, 12, 18, 22, 26, 29, 34, 38, 44};
+    uint8_t gpo_buf[8 + 44];  /* PCB(1)+header(7)+max_PDOL(44)+Le(1)+CRC(2) fits abuf[64] */
+    uint8_t gpo_len = 0;
+    uint8_t *gpo_resp = NULL; uint16_t gpo_rlen = 0;
+    if (pdol_len > 44) pdol_len = 0; /* clamp to abuf-safe size */
+    {
+        bool gpo_ok = false;
+        for (uint8_t ti = 0; ti <= sizeof(gpo_try_pl) && !gpo_ok; ti++) {
+            uint8_t pl = (ti == 0) ? pdol_len
+                                   : gpo_try_pl[ti - 1];
+            /* skip sizes we already tried */
+            bool dup = false;
+            for (uint8_t si = 0; si < ti && !dup; si++)
+                dup = ((si == 0 ? pdol_len : gpo_try_pl[si-1]) == pl);
+            if (dup) continue;
+            gpo_len = 0;
+            gpo_buf[gpo_len++]=0x80; gpo_buf[gpo_len++]=0xA8;
+            gpo_buf[gpo_len++]=0x00; gpo_buf[gpo_len++]=0x00;
+            gpo_buf[gpo_len++]=(uint8_t)(pl + 2); /* Lc */
+            gpo_buf[gpo_len++]=0x83;
+            gpo_buf[gpo_len++]=pl;
+            memset(&gpo_buf[gpo_len], 0x00, pl); gpo_len += pl;
+            gpo_buf[gpo_len++]=0x00; /* Le */
+            if (!SEND_APDU(gpo_buf, gpo_len, &gpo_resp, &gpo_rlen)) continue;
+            /* Accept if response template (0x77/0x80) or SW 9000 */
+            if (gpo_rlen >= 2) {
+                uint8_t s1 = gpo_resp[gpo_rlen-2];
+                uint8_t s2 = gpo_resp[gpo_rlen-1];
+                if (gpo_resp[0] == 0x77 || gpo_resp[0] == 0x80 ||
+                    (s1 == 0x90 && s2 == 0x00))
+                    gpo_ok = true;
+            }
+        }
+        if (!gpo_ok) goto done;
+    }
+    APPEND_PAIR(gpo_buf, gpo_len, gpo_resp, gpo_rlen);
     num_apdus++;
-
-    /* ---- Step 5: parse AFL and READ RECORDs --------------------- */
-    /* Find AFL in GPO response (tag 0x94 in format 2, or bytes 3+ in format 1) */
     uint8_t *afl = NULL; uint8_t afl_len = 0;
     if (gpo_rlen > 0 && gpo_resp[0] == 0x77) {
-        /* Format 2: search for tag 94 */
+        /* Format 2: find tag 94 */
         for (uint8_t i = 2; i + 1 < gpo_rlen; ) {
             uint8_t t = gpo_resp[i]; uint8_t l = gpo_resp[i+1];
             if (t == 0x94) { afl = &gpo_resp[i+2]; afl_len = l; break; }
             i += 2 + l;
         }
     } else if (gpo_rlen > 3 && gpo_resp[0] == 0x80) {
-        /* Format 1: skip tag(1)+len(1)+AIP(2) */
-        afl = &gpo_resp[3]; afl_len = gpo_rlen - 3 - 2; /* -2 for SW */
+        afl = &gpo_resp[3]; afl_len = gpo_rlen - 3 - 2;
     }
+    if (afl == NULL || afl_len == 0) goto done;
+
+    /* Copy AFL to local buffer before READ RECORDs.
+     * afl points into chain_buf which is overwritten by each SEND_APDU call.
+     * Without this copy, the 2nd+ AFL entries become garbage after the first
+     * READ RECORD, causing last=0xFF and up to 255 timeout loops per entry. */
+    static uint8_t afl_buf[32];  /* max 8 AFL entries × 4 bytes */
+    if (afl_len > sizeof(afl_buf)) afl_len = (uint8_t)sizeof(afl_buf);
+    memcpy(afl_buf, afl, afl_len);
+    afl = afl_buf;
 
     /* READ each record */
     for (uint8_t a = 0; a + 3 < afl_len; a += 4) {
