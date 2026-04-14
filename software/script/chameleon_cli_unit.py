@@ -6009,7 +6009,7 @@ class LFVikingWriteT55xx(LFVikingIdArgsUnit, ReaderRequiredUnit):
         print(f" - Viking ID(8H): {id_hex} write done.")
 
 
-@lf_t55xx.command("clone")
+@lf.command("clone")
 class LFT55xxClone(ReaderRequiredUnit):
     """
     Clone a scanned or manually-specified LF card ID onto a blank T55xx tag.
@@ -6105,6 +6105,10 @@ class LFT55xxClone(ReaderRequiredUnit):
         return parser
 
     def on_exec(self, args: argparse.Namespace):
+        # Clone requires LF writer — only available on Chameleon Ultra (not Lite)
+        if self.cmd.get_device_model() != 0:
+            print(f" - Error: LF clone requires Chameleon Ultra. Lite has no LF writer.")
+            return
         t = args.type
 
         if t in ("em410x", "electra"):
