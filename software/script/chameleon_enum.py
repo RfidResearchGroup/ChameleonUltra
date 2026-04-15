@@ -293,7 +293,6 @@ class TagSpecificType(enum.IntEnum):
     # Visa2000
     Viking = 170
     # Noralsy
-    # Jablotron
     Jablotron = 180
 
     # FSK Tag-Talk-First      200
