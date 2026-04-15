@@ -86,6 +86,8 @@ class Command(enum.IntEnum):
     VIKING_WRITE_TO_T55XX = 3005
     PAC_SCAN = 3014
     PAC_WRITE_TO_T55XX = 3015
+    JABLOTRON_SCAN = 3016
+    JABLOTRON_WRITE_TO_T55XX = 3017
     ADC_GENERIC_READ = 3009
     IOPROX_SCAN = 3010
     IOPROX_WRITE_TO_T55XX = 3011
@@ -148,6 +150,8 @@ class Command(enum.IntEnum):
     PAC_GET_EMU_ID = 5007
     IOPROX_SET_EMU_ID = 5008
     IOPROX_GET_EMU_ID = 5009
+    JABLOTRON_SET_EMU_ID = 5010
+    JABLOTRON_GET_EMU_ID = 5011
     EM4X05_SCAN = 3030
     EM4X05_READSNIFF = 3032
     LF_SNIFF = 3031
@@ -289,7 +293,7 @@ class TagSpecificType(enum.IntEnum):
     # Visa2000
     Viking = 170
     # Noralsy
-    # Jablotron
+    Jablotron = 180
 
     # FSK Tag-Talk-First      200
     HIDProx = 200
@@ -382,6 +386,8 @@ class TagSpecificType(enum.IntEnum):
             return "PAC/Stanley"
         elif self == TagSpecificType.Viking:
             return "Viking"
+        elif self == TagSpecificType.Jablotron:
+            return "Jablotron"
         elif self == TagSpecificType.MIFARE_Mini:
             return "Mifare Mini"
         elif self == TagSpecificType.MIFARE_1024:

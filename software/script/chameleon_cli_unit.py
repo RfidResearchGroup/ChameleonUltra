@@ -718,6 +718,28 @@ class LFVikingIdArgsUnit(DeviceRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
+class LFJablotronIdArgsUnit(DeviceRequiredUnit):
+    @staticmethod
+    def add_card_arg(parser: ArgumentParserNoExit, required=False):
+        parser.add_argument(
+            "--id", type=str, required=required, help="Jablotron tag id (5 bytes hex)", metavar="<hex>"
+        )
+        return parser
+
+    def before_exec(self, args: argparse.Namespace):
+        if not super().before_exec(args):
+            return False
+        if args.id is None or not re.match(r"^[a-fA-F0-9]{10}$", args.id):
+            raise ArgsParserError("ID must include 10 HEX symbols (5 bytes)")
+        return True
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        raise NotImplementedError("Please implement this")
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError("Please implement this")
+
+
 class TagTypeArgsUnit(DeviceRequiredUnit):
     @staticmethod
     def add_type_args(parser: ArgumentParserNoExit):
@@ -763,6 +785,7 @@ lf_hid_prox = lf_hid.subgroup("prox", "HID Prox commands")
 lf_ioprox = lf.subgroup("ioprox", "ioProx commands")
 lf_pac = lf.subgroup("pac", "PAC/Stanley commands")
 lf_viking = lf.subgroup("viking", "Viking commands")
+lf_jablotron = lf.subgroup("jablotron", "Jablotron commands")
 lf_generic = lf.subgroup("generic", "Generic commands")
 
 
@@ -6037,6 +6060,14 @@ class LFIOProxEconfig(SlotIndexArgsAndGoUnit, LFIOProxIdArgsUnit):
             print(f"   ID: {color_string((CY, cn))}")
             print(f"   Raw: {color_string((CY, raw8.hex().upper()))}")
 
+def jablotron_card_id(raw_bytes: bytes) -> int:
+    """Convert 5 raw Jablotron bytes to decimal card number via BCD."""
+    card_id = 0
+    for b in raw_bytes:
+        card_id = card_id * 100 + ((b >> 4) * 10) + (b & 0x0F)
+    return card_id
+
+
 def pac_encode_raw(card_id: bytes) -> bytes:
     """Encode 8-byte card ID to 16-byte T55XX bitstream (128 bits).
 
@@ -6471,6 +6502,11 @@ class HWSlotList(DeviceRequiredUnit):
                 if lf_tag_type == TagSpecificType.Viking:
                     id = self.cmd.viking_get_emu_id()
                     print(f"      {'ID:':40}{color_string((CY, id.hex().upper()))}")
+                if lf_tag_type == TagSpecificType.Jablotron:
+                    id = self.cmd.jablotron_get_emu_id()
+                    card_id = jablotron_card_id(id)
+                    print(f"      {'ID:':40}{color_string((CY, id.hex().upper()))}")
+                    print(f"      {'Card:':40}{color_string((CG, str(card_id)))}")
                 if lf_tag_type == TagSpecificType.PAC:
                     id = self.cmd.pac_get_emu_id()
                     id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in id)
@@ -6637,6 +6673,60 @@ class LFVikingEconfig(SlotIndexArgsAndGoUnit, LFVikingIdArgsUnit):
             response = self.cmd.viking_get_emu_id()
             print(" - Get Viking tag id success.")
             print(f"ID: {response.hex().upper()}")
+
+
+@lf_jablotron.command("read")
+class LFJablotronRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Scan Jablotron tag and print id"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        id = self.cmd.jablotron_scan()
+        card_id = jablotron_card_id(id)
+        print(f" Jablotron ID: {color_string((CG, id.hex().upper()))}")
+        print(f" Card number:  {color_string((CY, str(card_id)))}")
+
+
+@lf_jablotron.command("write")
+class LFJablotronWriteT55xx(LFJablotronIdArgsUnit, ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Write Jablotron id to t55xx"
+        return self.add_card_arg(parser, required=True)
+
+    def on_exec(self, args: argparse.Namespace):
+        id_hex = args.id
+        id_bytes = bytes.fromhex(id_hex)
+        self.cmd.jablotron_write_to_t55xx(id_bytes)
+        print(f" - Jablotron ID: {id_hex.upper()} write done.")
+
+
+@lf_jablotron.command("econfig")
+class LFJablotronEconfig(SlotIndexArgsAndGoUnit, LFJablotronIdArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Set emulated Jablotron card id"
+        self.add_slot_args(parser)
+        self.add_card_arg(parser)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.id is not None:
+            slotinfo = self.cmd.get_slot_info()
+            selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+            lf_tag_type = TagSpecificType(slotinfo[selected - 1]["lf"])
+            if lf_tag_type != TagSpecificType.Jablotron:
+                print(f"{color_string((CR, 'WARNING'))}: Slot type not set to Jablotron.")
+            self.cmd.jablotron_set_emu_id(bytes.fromhex(args.id))
+            print(" - Set Jablotron tag id success.")
+        else:
+            response = self.cmd.jablotron_get_emu_id()
+            card_id = jablotron_card_id(response)
+            print(" - Get Jablotron tag id success.")
+            print(f"ID: {response.hex().upper()}")
+            print(f"Card: {card_id}")
 
 
 @hw_slot.command("nick")

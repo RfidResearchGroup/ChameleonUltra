@@ -664,6 +664,31 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(Command.PAC_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
+    def jablotron_scan(self):
+        """
+        Read the card number of Jablotron.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.JABLOTRON_SCAN)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data[:5]
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def jablotron_write_to_t55xx(self, id_bytes: bytes):
+        """
+        Write Jablotron card number into T55XX.
+
+        :param id_bytes: 5-byte Jablotron card ID
+        :return:
+        """
+        if len(id_bytes) != 5:
+            raise ValueError("The id bytes length must equal 5")
+        data = struct.pack(f'!5s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.JABLOTRON_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
     def adc_generic_read(self):
         """
         Read the ADC when the field is on.
@@ -916,6 +941,28 @@ class ChameleonCMD:
         """
         resp = self.device.send_cmd_sync(Command.PAC_GET_EMU_ID)
         resp.parsed = resp.data[:8]
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def jablotron_set_emu_id(self, id: bytes):
+        """
+        Set the card number emulated by Jablotron.
+
+        :param id: 5-byte Jablotron card ID
+        :return:
+        """
+        if len(id) != 5:
+            raise ValueError("The id bytes length must equal 5")
+        data = struct.pack('5s', id)
+        return self.device.send_cmd_sync(Command.JABLOTRON_SET_EMU_ID, data)
+
+    @expect_response(Status.SUCCESS)
+    def jablotron_get_emu_id(self):
+        """
+        Get the emulated Jablotron card id
+        """
+        resp = self.device.send_cmd_sync(Command.JABLOTRON_GET_EMU_ID)
+        resp.parsed = resp.data[:5]
         return resp
 
     @expect_response(Status.SUCCESS)
