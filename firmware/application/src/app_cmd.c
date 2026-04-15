@@ -21,6 +21,12 @@
 #include "rc522.h"
 #endif
 #include "nfc_14a.h"
+/* Forward declarations for functions added to nfc_14a.c/h in this PR.
+ * These are declared here to avoid build failure if nfc_14a.h is not yet
+ * updated on the build system. */
+extern void nfc_tag_14a_set_tx_sniff_cb(void (*cb)(const uint8_t *, uint16_t));
+extern void nfc_tag_14a_clear_tx_sniff_cb(void);
+extern void nfc_tag_14a_set_sniff_passive(bool passive);
 #include "nfc_14a_4.h"
 
 #define NRF_LOG_MODULE_NAME app_cmd
@@ -1860,18 +1866,30 @@ static uint16_t m_sniff_buf_len = 0;
 static bool     m_sniff_active  = false;
 static uint16_t m_sniff_cb_count = 0;   /* debug: total callback invocations */
 
+/* Encode one frame into m_sniff_buf.
+ * Format: [szBits_be16][data...]
+ * Bit 15 of szBits: 0 = reader→card (RX), 1 = card→reader (TX).
+ * Real szBits always < 512 so bit15 is always free in genuine frames.
+ * Old parsers (bit15=0 for all frames) still work correctly. */
+static void hf14a_sniff_store(const uint8_t *data, uint16_t szBits, bool is_tx) {
+    uint16_t szBytes = (szBits + 7) / 8;
+    if (m_sniff_buf_len + 2 + szBytes > HF_SNIFF_BUF_SIZE) return;
+    uint16_t hdr = szBits | (is_tx ? 0x8000u : 0x0000u);
+    m_sniff_buf[m_sniff_buf_len++] = (hdr >> 8) & 0xFF;
+    m_sniff_buf[m_sniff_buf_len++] =  hdr        & 0xFF;
+    memcpy(&m_sniff_buf[m_sniff_buf_len], data, szBytes);
+    m_sniff_buf_len += szBytes;
+}
+
 static void hf14a_sniff_frame_cb(const uint8_t *data, uint16_t szBits) {
     m_sniff_cb_count++;   /* count even if buffer full or inactive */
     if (!m_sniff_active) return;
-    uint16_t szBytes = (szBits + 7) / 8;
-    /* Check space: 2 bytes header + data */
-    if (m_sniff_buf_len + 2 + szBytes > HF_SNIFF_BUF_SIZE) return;
-    /* Write bit count big-endian */
-    m_sniff_buf[m_sniff_buf_len++] = (szBits >> 8) & 0xFF;
-    m_sniff_buf[m_sniff_buf_len++] = szBits & 0xFF;
-    /* Write frame bytes */
-    memcpy(&m_sniff_buf[m_sniff_buf_len], data, szBytes);
-    m_sniff_buf_len += szBytes;
+    hf14a_sniff_store(data, szBits, false);  /* reader→card */
+}
+
+static void hf14a_sniff_tx_frame_cb(const uint8_t *data, uint16_t szBits) {
+    if (!m_sniff_active) return;
+    hf14a_sniff_store(data, szBits, true);   /* card→reader */
 }
 
 static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -1901,7 +1919,10 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
     m_sniff_buf_len = 0;
     m_sniff_cb_count = 0;
     m_sniff_active  = true;
+    /* passive mode intentionally disabled: CU acts as the card so it must
+     * respond normally to the reader (ATQA/UID/SAK). TX sniff captures responses. */
     nfc_tag_14a_set_sniff_cb(hf14a_sniff_frame_cb);
+    nfc_tag_14a_set_tx_sniff_cb(hf14a_sniff_tx_frame_cb);
 
     /* Wait for duration, yielding each ms so USB stack stays alive.
      * Feed watchdog every iteration — WDT timeout is 5000ms and the
@@ -1915,7 +1936,9 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
 
     /* Remove callback and restore normal sense state */
     m_sniff_active = false;
+    /* (passive mode was not enabled, nothing to restore) */
     nfc_tag_14a_clear_sniff_cb();
+    nfc_tag_14a_clear_tx_sniff_cb();
     tag_emulation_sense_run();  /* restore slot-based sense state */
 
     if (m_sniff_buf_len == 0) {
@@ -2416,46 +2439,85 @@ static data_frame_tx_t *cmd_processor_hf14a_4_emv_scan(uint16_t cmd, uint16_t st
         }
         if (flen_off + flen < 255) pi += flen_off + flen - 1; else break;
     }
-    /* ---- Step 5: GPO with PDOL retry --------------------------------
-     * When the FCI is truncated (45b for long cards), we can't read the
-     * full PDOL. Try progressively larger PDOL sizes (all zeros) until the
-     * card accepts. pdol_len from FCI parsing is tried first. Common sizes
-     * cover most Mastercard/Visa variants. */
-    static const uint8_t gpo_try_pl[] = {0, 4, 8, 12, 18, 22, 26, 29, 34, 38, 44};
-    uint8_t gpo_buf[8 + 44];  /* PCB(1)+header(7)+max_PDOL(44)+Le(1)+CRC(2) fits abuf[64] */
+    /* ---- Step 5: GPO -----------------------------------------------
+     * Build GPO from parsed PDOL. pdol_len from FCI may be 0 if truncated.
+     * BUILD_GPO fills the PDOL data: TTQ = A0 00 00 00 for first 4 bytes
+     * (MSD+EMV contactless, offline, no DDA), rest zeros.
+     * TTQ=A0000000 is the lowest-security POS profile; Mastercard and Visa
+     * contactless cards respond to it even without a full terminal setup. */
+    static uint8_t gpo_buf[8 + 44]; /* static: keep off stack */
+    /* PDOL template: TTQ first 4 bytes, zeros after.
+     * TTQ A0000000: MSD+EMV contactless capable, offline, no CDA/DDA. */
+    static const uint8_t gpo_pdol_template[44] = {
+        0xA0, 0x00, 0x00, 0x00,  /* TTQ (9F66): MSD+cEMV, offline, no DDA */
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  /* Amount Authorised (9F02) */
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  /* Amount Other (9F03) */
+        0x02, 0x08,                           /* Country Code (9F1A): Norway */
+        0x00, 0x00, 0x00, 0x00, 0x00,         /* TVR (95) */
+        0x09, 0x78,                           /* Currency (5F2A): EUR */
+        0x25, 0x01, 0x01,                     /* Date (9A) */
+        0x00,                                 /* Transaction Type (9C) */
+        0x00, 0x00, 0x00, 0x00,               /* Unpredictable Number (9F37) */
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  /* extra zeros */
+        0x00, 0x00, 0x00
+    };
     uint8_t gpo_len = 0;
     uint8_t *gpo_resp = NULL; uint16_t gpo_rlen = 0;
-    if (pdol_len > 44) pdol_len = 0; /* clamp to abuf-safe size */
-    {
-        bool gpo_ok = false;
-        for (uint8_t ti = 0; ti <= sizeof(gpo_try_pl) && !gpo_ok; ti++) {
-            uint8_t pl = (ti == 0) ? pdol_len
-                                   : gpo_try_pl[ti - 1];
-            /* skip sizes we already tried */
-            bool dup = false;
-            for (uint8_t si = 0; si < ti && !dup; si++)
-                dup = ((si == 0 ? pdol_len : gpo_try_pl[si-1]) == pl);
-            if (dup) continue;
-            gpo_len = 0;
-            gpo_buf[gpo_len++]=0x80; gpo_buf[gpo_len++]=0xA8;
-            gpo_buf[gpo_len++]=0x00; gpo_buf[gpo_len++]=0x00;
-            gpo_buf[gpo_len++]=(uint8_t)(pl + 2); /* Lc */
-            gpo_buf[gpo_len++]=0x83;
-            gpo_buf[gpo_len++]=pl;
-            memset(&gpo_buf[gpo_len], 0x00, pl); gpo_len += pl;
-            gpo_buf[gpo_len++]=0x00; /* Le */
-            if (!SEND_APDU(gpo_buf, gpo_len, &gpo_resp, &gpo_rlen)) continue;
-            /* Accept if response template (0x77/0x80) or SW 9000 */
-            if (gpo_rlen >= 2) {
-                uint8_t s1 = gpo_resp[gpo_rlen-2];
-                uint8_t s2 = gpo_resp[gpo_rlen-1];
-                if (gpo_resp[0] == 0x77 || gpo_resp[0] == 0x80 ||
-                    (s1 == 0x90 && s2 == 0x00))
-                    gpo_ok = true;
-            }
+    if (pdol_len > 44) pdol_len = 0;
+    #define BUILD_GPO(pl) do { \
+        gpo_len = 0; \
+        gpo_buf[gpo_len++]=0x80; gpo_buf[gpo_len++]=0xA8; \
+        gpo_buf[gpo_len++]=0x00; gpo_buf[gpo_len++]=0x00; \
+        gpo_buf[gpo_len++]=(uint8_t)((pl)+2); \
+        gpo_buf[gpo_len++]=0x83; gpo_buf[gpo_len++]=(pl); \
+        memcpy(&gpo_buf[gpo_len], gpo_pdol_template, \
+               (pl) <= sizeof(gpo_pdol_template) ? (pl) : sizeof(gpo_pdol_template)); \
+        if ((pl) > sizeof(gpo_pdol_template)) \
+            memset(&gpo_buf[gpo_len + sizeof(gpo_pdol_template)], 0, \
+                   (pl) - sizeof(gpo_pdol_template)); \
+        gpo_len += (pl); \
+        gpo_buf[gpo_len++]=0x00; \
+    } while(0)
+    #define GPO_OK(rp,rl) ((rl)>=2 && \
+        ((rp)[0]==0x77||(rp)[0]==0x80|| \
+         ((rp)[(rl)-2]==0x90&&(rp)[(rl)-1]==0x00)))
+    /* Attempt 1: use PDOL length from FCI (may be 0 if truncated) */
+    BUILD_GPO(pdol_len);
+    if (!SEND_APDU(gpo_buf, gpo_len, &gpo_resp, &gpo_rlen) ||
+        !GPO_OK(gpo_resp, gpo_rlen)) {
+        /* Attempt 2: try 4 bytes (TTQ only — some Visa/MC accept this) */
+        if (pdol_len != 4) {
+            BUILD_GPO(4);
+            if (SEND_APDU(gpo_buf, gpo_len, &gpo_resp, &gpo_rlen) &&
+                GPO_OK(gpo_resp, gpo_rlen)) goto gpo_done;
         }
-        if (!gpo_ok) goto done;
+        /* Attempt 3: try 29 bytes (common Mastercard/Visa PDOL size) */
+        if (pdol_len != 29) {
+            BUILD_GPO(29);
+            if (SEND_APDU(gpo_buf, gpo_len, &gpo_resp, &gpo_rlen) &&
+                GPO_OK(gpo_resp, gpo_rlen)) goto gpo_done;
+        }
+        /* Attempt 4: try 33 bytes (MC with Amount+Country+Currency fields) */
+        if (pdol_len != 33) {
+            BUILD_GPO(33);
+            if (SEND_APDU(gpo_buf, gpo_len, &gpo_resp, &gpo_rlen) &&
+                GPO_OK(gpo_resp, gpo_rlen)) goto gpo_done;
+        }
+        /* Attempts 5-7: additional MC sizes (+TermType, +DataAuth, +IssuerAppData) */
+        { static const uint8_t extra_pl[] = {34, 36, 38};
+          for (uint8_t ei = 0; ei < sizeof(extra_pl); ei++) {
+            uint8_t pl = extra_pl[ei];
+            if (pl == pdol_len || pl == 4 || pl == 29 || pl == 33) continue;
+            BUILD_GPO(pl);
+            if (SEND_APDU(gpo_buf, gpo_len, &gpo_resp, &gpo_rlen) &&
+                GPO_OK(gpo_resp, gpo_rlen)) goto gpo_done;
+          }
+        }
+        goto done;  /* all attempts failed */
     }
+    gpo_done:
+    #undef BUILD_GPO
+    #undef GPO_OK
     APPEND_PAIR(gpo_buf, gpo_len, gpo_resp, gpo_rlen);
     num_apdus++;
     uint8_t *afl = NULL; uint8_t afl_len = 0;
