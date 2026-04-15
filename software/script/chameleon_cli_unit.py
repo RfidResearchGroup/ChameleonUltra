@@ -6154,7 +6154,7 @@ class LFT55xxClone(ReaderRequiredUnit):
 
         elif t == "ioprox":
             ver = args.ver if args.ver is not None else 1
-            fc  = int(args.fc, 0) if args.fc is not None else 0
+            fc  = int(args.fc) if args.fc is not None else 0
             cn  = args.cn  if args.cn  is not None else 0
             if args.raw8 is not None:
                 raw8 = LFIOProxIdArgsUnit.parse_raw8(args.raw8)
