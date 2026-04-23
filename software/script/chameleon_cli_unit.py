@@ -7529,6 +7529,45 @@ def _decode_14a_frame_col(data: bytes, szBits: int):
     if not data:
         return '', C0
     b0 = data[0]
+    
+    # ---------------------------------------------------------------------
+    # ISO14443-A "reply" frames that often show as "unknown" in hf 14a sniff
+    # because the sniffer doesn't know if a frame is reader->card or card->reader.
+    # We infer by payload length/bits and known structures.
+    # ---------------------------------------------------------------------
+
+    # ATQA: Answer To Request (Type A) - always 2 bytes / 16 bits.
+    # Transmitted LSB first. Common MIFARE Classic ATQA is 0x0004 => "04 00".
+    if szBits == 16 and len(data) == 2:
+        atqa = data[0] | (data[1] << 8)  # LSB first in air
+        return f"ATQA (Answer To Request, Type A) = 0x{atqa:04X}", CG
+
+    # SAK: Select Acknowledge - always 1 byte / 8 bits.
+    # 0x08 is the classic "MIFARE Classic (UID complete, no ISO-DEP)" value.
+    if szBits == 8 and len(data) == 1:
+        sak = data[0]
+        # Reuse existing NXP SAK classification table if present
+        # (type_id_SAK_dict is defined near top of file).
+        try:
+            sak_type = type_id_SAK_dict.get(sak, "")
+        except Exception:
+            sak_type = ""
+        if sak_type:
+            return f"SAK (Select Acknowledge) = 0x{sak:02X}  [{sak_type}]", CG
+        return f"SAK (Select Acknowledge) = 0x{sak:02X}", CG
+
+    # Anticollision CL1 response: 4 UID bytes + BCC = 5 bytes / 40 bits.
+    # BCC is XOR of UID bytes.
+    if szBits == 40 and len(data) == 5:
+        uid0, uid1, uid2, uid3, bcc = data
+        calc = uid0 ^ uid1 ^ uid2 ^ uid3
+        if calc == bcc:
+            uid = bytes([uid0, uid1, uid2, uid3]).hex()
+            return f"ANTICOLL CL1 response: UID={uid}  BCC=0x{bcc:02X} (OK)", CG
+        # If BCC doesn't match, still label it as anticoll-like, but warn.
+        uid = bytes(data[:4]).hex()
+        return f"ANTICOLL-like: UID={uid}  BCC=0x{bcc:02X} (expected 0x{calc:02X})", CY
+
 
     # Short frames (7-bit)
     if szBits == 7:
