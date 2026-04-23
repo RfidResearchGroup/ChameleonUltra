@@ -7464,11 +7464,51 @@ class HF14ASniff(BaseCLIUnit):
         print()
         print(f"  {'#':>3}  {'dir':<3}  {'bits':>4}  {'hex data':<42}  decoded")
         print(f"  {'---':>3}  {'---':<3}  {'----':>4}  {'-'*42}  {'-'*35}")
+        # Context for MIFARE Classic authentication decoding (NT / NR||AR)
+        expect_nt = False
+        expect_nr_ar = False
+        last_auth_keytype = None
+        last_auth_block = None
 
         for n, (szBits, data, is_tx) in enumerate(frames):
-            hex_str        = ' '.join(f'{b:02x}' for b in data)
-            decoded, col   = _decode_14a_frame_col(data, szBits)
-            dir_str        = f'{CG}<<<{C0}' if is_tx else f'{CY}>>>{C0}'
+            hex_str = ' '.join(f'{b:02x}' for b in data)
+
+            # is_tx==True means CU transmitted (card -> reader).
+            # is_tx==False means reader -> card.
+            decoded_ctx = None
+            col_ctx = None
+
+            # Reader -> card: AUTH command (0x60/0x61 + block + CRC-A)
+            if (not is_tx) and szBits == 32 and len(data) == 4 and data[0] in (0x60, 0x61):
+                last_auth_keytype = 'A' if data[0] == 0x60 else 'B'
+                last_auth_block = data[1]
+                expect_nt = True
+                expect_nr_ar = False
+                decoded_ctx = f"MIFARE Classic AUTH Key{last_auth_keytype} block=0x{last_auth_block:02X} ({last_auth_block})"
+                col_ctx = CG
+
+            # Card -> reader: NT (32-bit) immediately after AUTH
+            elif is_tx and expect_nt and szBits == 32 and len(data) == 4:
+                nt = data.hex()
+                decoded_ctx = f"AUTH: NT (card nonce) = {nt}"
+                col_ctx = CG
+                expect_nt = False
+                expect_nr_ar = True
+
+            # Reader -> card: NR||AR (64-bit) immediately after NT (encrypted)
+            elif (not is_tx) and expect_nr_ar and szBits == 64 and len(data) == 8:
+                nr = data[:4].hex()
+                ar = data[4:].hex()
+                decoded_ctx = f"AUTH continuation: NR||AR (enc)  NR={nr}  AR={ar}"
+                col_ctx = CG
+                expect_nr_ar = False
+
+            # Fallback to generic frame decoder
+            decoded, col = _decode_14a_frame_col(data, szBits)
+            if decoded_ctx is not None:
+                decoded, col = decoded_ctx, col_ctx
+
+            dir_str = f'{CG}<<<{C0}' if is_tx else f'{CY}>>>{C0}'
             print(f"  {CY}{n+1:>3}{C0}  {dir_str}  {szBits:>4}  {hex_str:<42}  {col}{decoded}{C0}")
 
         # Summary block (pass only reader→card frames for protocol decode)
@@ -7535,12 +7575,21 @@ def _decode_14a_frame_col(data: bytes, szBits: int):
     # because the sniffer doesn't know if a frame is reader->card or card->reader.
     # We infer by payload length/bits and known structures.
     # ---------------------------------------------------------------------
-
-    # ATQA: Answer To Request (Type A) - always 2 bytes / 16 bits.
-    # Transmitted LSB first. Common MIFARE Classic ATQA is 0x0004 => "04 00".
+    # ATQA: Answer To Request (Type A) - 2 bytes / 16 bits (tag -> reader).
+    # Transmitted LSB first. Common MIFARE Classic ATQA is 0x0004 => '04 00'.
+    # Be conservative: avoid mislabeling common commands like 0x93 0x20 (ANTICOLL).
     if szBits == 16 and len(data) == 2:
-        atqa = data[0] | (data[1] << 8)  # LSB first in air
-        return f"ATQA (Answer To Request, Type A) = 0x{atqa:04X}", CG
+        not_atqa_prefixes = {
+            0x93, 0x95, 0x97,  # ANTICOLL / SELECT cascade levels
+            0x50,              # HLTA
+            0x60, 0x61,        # MIFARE Classic AUTH
+            0x30,              # READ
+            0xA0, 0xA2,        # WRITE variants
+            0xE0,              # RATS
+        }
+        if data[0] not in not_atqa_prefixes:
+            atqa = data[0] | (data[1] << 8)  # LSB first in air
+            return f"ATQA (Answer To Request, Type A) = 0x{atqa:04X}", CG
 
     # SAK: Select Acknowledge - always 1 byte / 8 bits.
     # 0x08 is the classic "MIFARE Classic (UID complete, no ISO-DEP)" value.
