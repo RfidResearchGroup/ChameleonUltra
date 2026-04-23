@@ -94,6 +94,7 @@ def check_tools():
         "nested",
         "darkside",
         "mfkey32v2",
+        "mfkey64",
         "staticnested_1nt",
         "staticnested_2x1nt_rf08s",
         "staticnested_2x1nt_rf08s_1key",
@@ -3378,7 +3379,64 @@ class HFMFVALUE(ReaderRequiredUnit):
 _KEY = re.compile("[a-fA-F0-9]{12}", flags=re.MULTILINE)
 
 
+# Sentinel values returned by _run_mfkey64 / _run_mfkey32v2_sniff
+# to distinguish "tool unavailable" from "tool ran but found no key".
+_TOOL_MISSING   = "MISSING"    # binary not found on disk
+_TOOL_BLOCKED   = "BLOCKED"    # binary exists but OS/AV prevented execution
+_TOOL_NO_KEY    = "NO_KEY"     # binary ran cleanly, no key found for these nonces
+
+
+def _sniff_tool_path(name):
+    """Return the Path to a cracking binary, or None if not present."""
+    suffix = ".exe" if sys.platform == "win32" else ""
+    p = default_cwd / (name + suffix)
+    return p if p.exists() else None
+
+
+def _run_mfkey64(uid, nt, nr, ar, at):
+    """
+    Run mfkey64 and return the recovered key string (12 hex chars), or one of
+    _TOOL_MISSING / _TOOL_BLOCKED / _TOOL_NO_KEY.
+
+    mfkey64 requires 5 args: uid nt {nr} {ar} {at}
+    When cracking a sniff pair (both at==\'\'):
+        at = nonce[1].nt  (the CU sent this as {at} after nonce[0]; the reader
+                           treated it as a fresh nt for the next auth round)
+    When cracking a single complete auth:
+        at = the directly captured {at} frame
+    """
+    path = _sniff_tool_path("mfkey64")
+    if path is None:
+        return _TOOL_MISSING
+    try:
+        result = subprocess.run(
+            [str(path), uid, nt, nr, ar, at],
+            capture_output=True,
+            timeout=30,
+            encoding="ascii",
+        )
+    except FileNotFoundError:
+        return _TOOL_MISSING
+    except PermissionError:
+        return _TOOL_BLOCKED
+    except OSError:
+        # Covers antivirus quarantine, wrong arch, etc.
+        return _TOOL_BLOCKED
+    except subprocess.TimeoutExpired:
+        return _TOOL_BLOCKED
+    if result.returncode not in (0, 1):
+        # Non-zero exit other than 1 (usage error) usually means OS blocked it
+        return _TOOL_BLOCKED
+    sea_obj = _KEY.search(result.stdout)
+    return sea_obj[0] if sea_obj is not None else _TOOL_NO_KEY
+
+
 def _run_mfkey32v2(items):
+    """
+    Used by HFMFELog (detection-log path) via multiprocessing Pool.
+    Returns (key_str, items) on success, None if not found, raises on binary errors
+    so the pool can propagate them.
+    """
     output_str = subprocess.run(
         [
             default_cwd / ("mfkey32v2.exe" if sys.platform == "win32" else "mfkey32v2"),
@@ -3398,6 +3456,39 @@ def _run_mfkey32v2(items):
     if sea_obj is not None:
         return sea_obj[0], items
     return None
+
+
+def _run_mfkey32v2_sniff(n0, n1):
+    """
+    Sniff-path wrapper for mfkey32v2.  Returns a key string, or one of
+    _TOOL_MISSING / _TOOL_BLOCKED / _TOOL_NO_KEY — never raises.
+    """
+    path = _sniff_tool_path("mfkey32v2")
+    if path is None:
+        return _TOOL_MISSING
+    try:
+        result = subprocess.run(
+            [
+                str(path),
+                n0["uid"], n0["nt"], n0["nr"], n0["ar"],
+                n1["nt"],  n1["nr"], n1["ar"],
+            ],
+            capture_output=True,
+            timeout=30,
+            encoding="ascii",
+        )
+    except FileNotFoundError:
+        return _TOOL_MISSING
+    except PermissionError:
+        return _TOOL_BLOCKED
+    except OSError:
+        return _TOOL_BLOCKED
+    except subprocess.TimeoutExpired:
+        return _TOOL_BLOCKED
+    if result.returncode not in (0, 1):
+        return _TOOL_BLOCKED
+    sea_obj = _KEY.search(result.stdout)
+    return sea_obj[0] if sea_obj is not None else _TOOL_NO_KEY
 
 
 class ItemGenerator:
@@ -7382,7 +7473,7 @@ class HF14ASniff(BaseCLIUnit):
 
         # Summary block (pass only reader→card frames for protocol decode)
         print()
-        _print_14a_sniff_summary([(s, d) for s, d, tx in frames if not tx])
+        _print_14a_sniff_summary(frames)  # full frames needed for nonce extraction
 
 
 
@@ -7605,6 +7696,70 @@ def _known_bertag(tag: int) -> str:
 
 
 
+def _extract_sniff_nonces(frames):
+    """
+    Extract MIFARE Classic auth nonces from a complete frame list (reader + card).
+
+    Walks frames looking for the 3-pass auth pattern:
+      1. reader→card  AUTH (0x60/0x61 + block)         -- not is_tx
+      2. card→reader  nt  (4 bytes, tag nonce)         -- is_tx
+      3. reader→card  {nr}{ar}  (8 bytes)              -- not is_tx
+
+    The current UID is tracked from SELECT (NVB=0x70) reader→card frames.
+
+    Returns a list of dicts: { uid, block, key_type, nt, nr, ar }
+    Paired nonces for the same (uid, block, key_type) appear consecutively.
+    """
+    nonces  = []
+    uid_hex = None
+
+    for i, (szBits, data, is_tx) in enumerate(frames):
+        if not data:
+            continue
+
+        # Track UID from completed SELECT (NVB=0x70), reader→card
+        if (not is_tx
+                and data[0] in (0x93, 0x95, 0x97)
+                and len(data) >= 6
+                and data[1] == 0x70):
+            # bytes [2:6] = UID0..UID3; skip cascade byte 0x88 for multi-level UIDs
+            if not (data[0] == 0x93 and data[2] == 0x88):
+                uid_hex = ''.join(f'{b:02X}' for b in data[2:6])
+
+        # AUTH command: reader→card, 0x60 (KeyA) or 0x61 (KeyB)
+        if not is_tx and data[0] in (0x60, 0x61) and len(data) >= 2:
+            key_type = 'A' if data[0] == 0x60 else 'B'
+            block    = data[1]
+
+            # frame i+1: card→reader, exactly 4 bytes = nt (tag nonce)
+            if i + 1 >= len(frames):
+                continue
+            _, d1, tx1 = frames[i + 1]
+            if not tx1 or len(d1) != 4:
+                continue
+            nt_hex = ''.join(f'{b:02X}' for b in d1)
+
+            # frame i+2: reader→card, exactly 8 bytes = {nr} || {ar}
+            if i + 2 >= len(frames):
+                continue
+            _, d2, tx2 = frames[i + 2]
+            if tx2 or len(d2) != 8:
+                continue
+            nr_hex = ''.join(f'{b:02X}' for b in d2[:4])
+            ar_hex = ''.join(f'{b:02X}' for b in d2[4:])
+
+            nonces.append({
+                'uid':      uid_hex or '00000000',
+                'block':    block,
+                'key_type': key_type,
+                'nt':       nt_hex,
+                'nr':       nr_hex,
+                'ar':       ar_hex,
+            })
+
+    return nonces
+
+
 def _print_14a_sniff_summary(frames):
     """Print a decoded summary of the sniff session."""
     uid_cl1    = None
@@ -7620,8 +7775,8 @@ def _print_14a_sniff_summary(frames):
     atc_tag    = None
     amount     = None
 
-    for szBits, data in frames:
-        if not data: 
+    for szBits, data, is_tx in frames:
+        if not data or is_tx:   # protocol decode uses reader→card frames only
             continue
         b0 = data[0]
 
@@ -7736,6 +7891,82 @@ def _print_14a_sniff_summary(frames):
         print(f" {CC}End      :{C0} HALT / DESELECT")
     if not uid_bytes and not aids and not auth_seen and not rats_seen:
         print(f" {CC}Note     :{C0} anti-collision incomplete — no SELECT seen (reader could not complete exchange)")
+
+    # ── Nonce cracking ─────────────────────────────────────────────────────
+    nonces = _extract_sniff_nonces(frames)
+    if nonces:
+        from collections import defaultdict
+        groups = defaultdict(list)
+        for n in nonces:
+            groups[(n['uid'], n['block'], n['key_type'])].append(n)
+
+        print()
+        print(f" {'-'*55}")
+        total = sum(len(v) for v in groups.values())
+        print(f" {CC}Nonces   :{C0} {total} auth exchange(s) captured")
+
+        for (uid, block, kt), ns in groups.items():
+            print(f"   Block {block} Key {kt}  uid={uid}")
+            for idx, n in enumerate(ns):
+                print(f"     [{idx}] nt={n['nt']}  nr={n['nr']}  ar={n['ar']}")
+
+            if len(ns) >= 2:
+                # Case A: two paired incomplete auths.
+                # ns[1].nt is the {at} the CU sent after exchange 0's {nr}/{ar};
+                # the reader treated it as the fresh nt for the next auth round.
+                # mfkey64 is deterministic; mfkey32v2 is a probabilistic fallback.
+                n0, n1 = ns[0], ns[1]
+                cmd64 = (f"mfkey64 {uid} {n0['nt']} {n0['nr']} {n0['ar']} {n1['nt']}")
+                cmd32 = (f"mfkey32v2 {uid} {n0['nt']} {n0['nr']} {n0['ar']}"
+                         f" {n1['nt']} {n1['nr']} {n1['ar']}")
+
+                # Always print both command strings so the user can run them
+                # manually even when the binaries are unavailable/blocked.
+                print(f"   {CC}mfkey64 :{C0} {cmd64}")
+                print(f"   {CC}mfkey32v2:{C0} {cmd32}")
+
+                key = _run_mfkey64(uid, n0['nt'], n0['nr'], n0['ar'], n1['nt'])
+
+                if key not in (_TOOL_MISSING, _TOOL_BLOCKED, _TOOL_NO_KEY):
+                    print(f"   {CG}Key: [{key.upper()}]{C0}")
+
+                elif key == _TOOL_MISSING:
+                    print(f"   {CY}mfkey64 binary not found in bin/ — "
+                          f"copy the command above and run it manually{C0}")
+
+                elif key == _TOOL_BLOCKED:
+                    print(f"   {CY}mfkey64 could not be executed "
+                          f"(antivirus / permissions) — "
+                          f"run the command above manually{C0}")
+
+                else:
+                    # _TOOL_NO_KEY — mfkey64 ran but found nothing (rare);
+                    # try mfkey32v2 as probabilistic fallback.
+                    result32 = _run_mfkey32v2_sniff(n0, n1)
+
+                    if result32 not in (_TOOL_MISSING, _TOOL_BLOCKED, _TOOL_NO_KEY):
+                        print(f"   {CG}Key: [{result32.upper()}]{C0} (via mfkey32v2)")
+
+                    elif result32 == _TOOL_MISSING:
+                        print(f"   {CY}mfkey64 found no key and mfkey32v2 is not in bin/ — "
+                              f"run the commands above manually{C0}")
+
+                    elif result32 == _TOOL_BLOCKED:
+                        print(f"   {CY}mfkey64 found no key and mfkey32v2 could not be "
+                              f"executed (antivirus / permissions) — "
+                              f"run the commands above manually{C0}")
+
+                    else:
+                        print(f"   {CR}Key not found by either tool — "
+                              f"capture more nonce exchanges and retry{C0}")
+
+            elif len(ns) == 1:
+                # Single capture — can't crack without a paired exchange
+                n = ns[0]
+                print(f"   {CY}Only one exchange captured — "
+                      f"need a second auth to crack{C0}")
+                print(f"   {CC}When paired, run:{C0} "
+                      f"mfkey64 {uid} {n['nt']} {n['nr']} {n['ar']} <nt2>")
 
 
 def _get_capture():
