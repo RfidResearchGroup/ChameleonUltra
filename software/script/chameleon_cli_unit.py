@@ -718,6 +718,111 @@ class LFVikingIdArgsUnit(DeviceRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
+IDTECK_PREAMBLE_HEX = "4944544B"
+IDTECK_PREAMBLE_INT = 0x4944544B
+
+
+def _idteck_compute_checksum(payload_lo3: int) -> int:
+    """Compute the IDTECK checksum byte from the low 3 bytes of the 4-byte payload.
+
+    Matches the formula used by Proxmark3 (cmdlfidteck.c): the checksum is the
+    sum of the three non-checksum payload bytes, taken modulo 256.
+    """
+    return ((payload_lo3 >> 16) + (payload_lo3 >> 8) + payload_lo3) & 0xFF
+
+
+def _idteck_compose_frame(card_id: int) -> bytes:
+    """Compose an 8-byte IDTECK frame from a 24-bit card ID.
+
+    The frame is preamble + [checksum][card_id bytes reversed] where the
+    reversal and checksum placement match the layout observed on real IDTECK
+    cards (see cmdlfidteck.c in the Proxmark3 client). This helper is exposed
+    for future CLI use (e.g. `lf idteck compose --cn`); it is not wired into
+    any command yet.
+    """
+    card_id &= 0xFFFFFF
+    # The card ID is stored with bytes reversed in the payload; mirror PM3.
+    reversed_id = ((card_id & 0xFF) << 16) | ((card_id >> 8) & 0xFF) << 8 | ((card_id >> 16) & 0xFF)
+    chksum = _idteck_compute_checksum(reversed_id)
+    payload = (chksum << 24) | reversed_id
+    return bytes.fromhex(IDTECK_PREAMBLE_HEX) + payload.to_bytes(4, "big")
+
+
+def _idteck_frame_info(frame: bytes) -> dict:
+    """Parse an 8-byte IDTECK frame into its components.
+
+    Returns a dict with: preamble_hex, preamble_valid, payload_hex, checksum,
+    checksum_expected, checksum_valid, card_id (24-bit extracted from payload
+    bytes 1-3 with the byte-reversal convention used by PM3).
+    """
+    if len(frame) != 8:
+        raise ValueError("IDTECK frame must be exactly 8 bytes")
+    preamble = int.from_bytes(frame[:4], "big")
+    payload = int.from_bytes(frame[4:], "big")
+    chksum = (payload >> 24) & 0xFF
+    lo3 = payload & 0xFFFFFF
+    expected = _idteck_compute_checksum(lo3)
+    card_id = ((lo3 >> 16) & 0xFF) | ((lo3 >> 8) & 0xFF) << 8 | (lo3 & 0xFF) << 16
+    return {
+        "preamble_hex": f"{preamble:08X}",
+        "preamble_valid": preamble == IDTECK_PREAMBLE_INT,
+        "payload_hex": f"{payload:08X}",
+        "checksum": chksum,
+        "checksum_expected": expected,
+        "checksum_valid": chksum == expected,
+        "card_id": card_id,
+    }
+
+
+class LFIdteckIdArgsUnit(DeviceRequiredUnit):
+    """Argument parser for IDTECK: 16-hex = full 64-bit frame (preamble + payload)."""
+
+    @staticmethod
+    def add_card_arg(parser: ArgumentParserNoExit, required=False):
+        parser.add_argument(
+            "--id", type=str, required=required,
+            help="IDTECK frame in hex: 16 chars for the full 64-bit frame, or "
+                 "8 chars for the 32-bit payload only (preamble 4944544B is auto-prepended).",
+            metavar="<hex>"
+        )
+        return parser
+
+    def before_exec(self, args: argparse.Namespace):
+        if not super().before_exec(args):
+            return False
+        if args.id is None:
+            # No id provided: the caller (e.g. econfig in readback form) is
+            # allowed to proceed without one. Subcommands that require an id
+            # declare it with required=True on the parser argument.
+            return True
+        if re.match(r"^[a-fA-F0-9]{16}$", args.id):
+            pass
+        elif re.match(r"^[a-fA-F0-9]{8}$", args.id):
+            args.id = IDTECK_PREAMBLE_HEX + args.id
+        else:
+            raise ArgsParserError("ID must be 8 or 16 HEX symbols")
+
+        # Informational checksum check: some readers validate a checksum on
+        # the payload; emit a warning when it does not match the computed
+        # value but do not block the operation, since not all IDTECK readers
+        # enforce it.
+        info = _idteck_frame_info(bytes.fromhex(args.id))
+        if not info["preamble_valid"]:
+            print(f"{color_string((CR, 'WARNING'))}: frame preamble {info['preamble_hex']} "
+                  f"is not the IDTECK {IDTECK_PREAMBLE_HEX} — reader will likely reject it")
+        if not info["checksum_valid"]:
+            print(f"{color_string((CY, 'note'))}: payload checksum 0x{info['checksum']:02X} "
+                  f"does not match computed 0x{info['checksum_expected']:02X} "
+                  f"(some readers ignore this, some may reject)")
+        return True
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        raise NotImplementedError("Please implement this")
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError("Please implement this")
+
+
 class TagTypeArgsUnit(DeviceRequiredUnit):
     @staticmethod
     def add_type_args(parser: ArgumentParserNoExit):
@@ -766,6 +871,7 @@ lf_pac = lf.subgroup("pac", "PAC/Stanley commands")
 lf_viking = lf.subgroup("viking", "Viking commands")
 lf_t55xx = lf.subgroup("t55xx", "T55xx raw commands")
 lf_generic = lf.subgroup("generic", "Generic commands")
+lf_idteck = lf.subgroup("idteck", "IDTECK commands")
 
 
 @root.command("clear")
@@ -6009,6 +6115,54 @@ class LFVikingWriteT55xx(LFVikingIdArgsUnit, ReaderRequiredUnit):
         print(f" - Viking ID(8H): {id_hex} write done.")
 
 
+@lf_idteck.command("write")
+class LFIdteckWriteT55xx(LFIdteckIdArgsUnit, ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Clone an IDTECK PSK1 frame onto a T55xx tag."
+        return self.add_card_arg(parser, required=True)
+
+    def on_exec(self, args: argparse.Namespace):
+        id_hex = args.id
+        id_bytes = bytes.fromhex(id_hex)
+        self.cmd.idteck_write_to_t55xx(id_bytes)
+        print(f" - IDTECK frame {id_hex} written to T55xx.")
+
+
+@lf_idteck.command("econfig")
+class LFIdteckEconfig(SlotIndexArgsAndGoUnit, LFIdteckIdArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Get or set the IDTECK emulated id on a slot. "
+            "Provide --id to set; omit it to read back the current value."
+        )
+        self.add_slot_args(parser)
+        self.add_card_arg(parser)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.id is not None:
+            slotinfo = self.cmd.get_slot_info()
+            selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+            lf_tag_type = TagSpecificType(slotinfo[selected - 1]["lf"])
+            if lf_tag_type != TagSpecificType.IDTECK:
+                print(f"{color_string((CR, 'WARNING'))}: Slot LF type is not IDTECK. "
+                      f"Set it with: hw slot type -s <n> -t IDTECK")
+            self.cmd.idteck_set_emu_id(bytes.fromhex(args.id))
+            print(f" - IDTECK emu id set to {args.id.upper()}.")
+        else:
+            response = self.cmd.idteck_get_emu_id()
+            info = _idteck_frame_info(response)
+            print(f" - IDTECK emu id: {response.hex().upper()}")
+            print(f"   Preamble : {info['preamble_hex']}"
+                  + ("" if info["preamble_valid"] else f"  {color_string((CR, '(not IDTK)'))}"))
+            print(f"   Payload  : {info['payload_hex']}")
+            print(f"   Card ID  : {info['card_id']} (0x{info['card_id']:06X})")
+            chk_tag = color_string((CG, "ok")) if info["checksum_valid"] else color_string((CY, "mismatch"))
+            print(f"   Checksum : 0x{info['checksum']:02X} (expected 0x{info['checksum_expected']:02X}, {chk_tag})")
+
+
 @lf.command("clone")
 class LFT55xxClone(ReaderRequiredUnit):
     """
@@ -6021,17 +6175,19 @@ class LFT55xxClone(ReaderRequiredUnit):
       hid      -f <format> --cn <n>  e.g. -f H10301 --fc 10 --cn 1234
       ioprox   --ver <n> --fc <n> --cn <n>   OR   --raw8 <16 hex>
       viking   --id <8 hex>          e.g. --id DEADBEEF
+      idteck   --id <16 hex>         e.g. --id 4944544BDEADBEEF
+                                      (or 8 hex for payload only; preamble auto-prepended)
 
     Only supported on Chameleon Ultra (Lite has no LF writer).
     """
 
-    TYPES = ["em410x", "electra", "hid", "ioprox", "viking"]
+    TYPES = ["em410x", "electra", "hid", "ioprox", "viking", "idteck"]
 
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = (
             "Clone a LF card ID onto a blank T55xx tag.\n"
-            "Supported types: em410x, electra, hid, ioprox, viking.\n"
+            "Supported types: em410x, electra, hid, ioprox, viking, idteck.\n"
             "Only supported on Chameleon Ultra (Lite has no LF writer)."
         )
         parser.add_argument(
@@ -6048,7 +6204,7 @@ class LFT55xxClone(ReaderRequiredUnit):
             type=str,
             required=False,
             metavar="HEX",
-            help="Card ID in hex: 10 hex for em410x, 26 for electra, 8 for viking",
+            help="Card ID in hex: 10 for em410x, 26 for electra, 8 for viking, 8 or 16 for idteck",
         )
         # HID Prox
         parser.add_argument(
@@ -6178,6 +6334,19 @@ class LFT55xxClone(ReaderRequiredUnit):
             id_bytes = bytes.fromhex(args.id)
             self.cmd.viking_write_to_t55xx(id_bytes)
             print(f" - Viking ID cloned to T55xx: {args.id.upper()}")
+
+        elif t == "idteck":
+            if args.id is None:
+                raise ArgsParserError("--id is required for idteck (8 or 16 hex)")
+            if re.match(r"^[a-fA-F0-9]{16}$", args.id):
+                id_hex = args.id
+            elif re.match(r"^[a-fA-F0-9]{8}$", args.id):
+                id_hex = "4944544B" + args.id  # prepend "IDTK" preamble
+            else:
+                raise ArgsParserError("--id must be 8 or 16 hex characters for idteck")
+            id_bytes = bytes.fromhex(id_hex)
+            self.cmd.idteck_write_to_t55xx(id_bytes)
+            print(f" - IDTECK frame cloned to T55xx: {id_hex.upper()}")
 
 
 @lf_generic.command("adcread")
@@ -6415,6 +6584,12 @@ class HWSlotList(DeviceRequiredUnit):
                     raw = pac_encode_raw(id)
                     print(f"      {'CN:':40}{color_string((CY, id_ascii))}")
                     print(f"      {'Raw:':40}{color_string((CY, raw.hex().upper()))}")
+                if lf_tag_type == TagSpecificType.IDTECK:
+                    frame = self.cmd.idteck_get_emu_id()
+                    info = _idteck_frame_info(frame)
+                    card_id_str = f"{info['card_id']} (0x{info['card_id']:06X})"
+                    print(f"      {'Frame:':40}{color_string((CY, frame.hex().upper()))}")
+                    print(f"      {'Card ID:':40}{color_string((CG, card_id_str))}")
         if current != selected:
             self.cmd.set_active_slot(selected)
 

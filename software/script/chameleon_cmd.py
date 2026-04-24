@@ -760,6 +760,19 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(Command.PAC_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
+    def idteck_write_to_t55xx(self, id_bytes: bytes):
+        """
+        Write an IDTECK 64-bit PSK1 frame onto a T55xx tag.
+
+        :param id_bytes: 8 bytes = full 64-bit frame (preamble 4 bytes + data 4 bytes)
+        :return:
+        """
+        if len(id_bytes) != 8:
+            raise ValueError("The id bytes length must equal 8")
+        data = struct.pack(f'!8s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.IDTECK_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
     def adc_generic_read(self):
         """
         Read the ADC when the field is on.
@@ -965,9 +978,30 @@ class ChameleonCMD:
         """
         Get the emulated ioProx card id
         """
-        resp = self.device.send_cmd_sync(Command.IOPROX_GET_EMU_ID)   
+        resp = self.device.send_cmd_sync(Command.IOPROX_GET_EMU_ID)
         if resp.status == Status.SUCCESS:
-            resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])    
+            resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def idteck_set_emu_id(self, id: bytes):
+        """
+        Set the 64-bit IDTECK frame emulated on the active slot.
+
+        :param id: 8 bytes (preamble + card data, big-endian)
+        """
+        if len(id) != 8:
+            raise ValueError("The id bytes length must equal 8")
+        return self.device.send_cmd_sync(Command.IDTECK_SET_EMU_ID, id)
+
+    @expect_response(Status.SUCCESS)
+    def idteck_get_emu_id(self):
+        """
+        Get the emulated IDTECK 64-bit frame.
+        """
+        resp = self.device.send_cmd_sync(Command.IDTECK_GET_EMU_ID)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data[:8]
         return resp
 
     @expect_response(Status.SUCCESS)
