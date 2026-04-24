@@ -765,7 +765,6 @@ lf_hid_prox = lf_hid.subgroup("prox", "HID Prox commands")
 lf_ioprox = lf.subgroup("ioprox", "ioProx commands")
 lf_pac = lf.subgroup("pac", "PAC/Stanley commands")
 lf_viking = lf.subgroup("viking", "Viking commands")
-lf_t55xx = lf.subgroup("t55xx", "T55xx raw commands")
 lf_generic = lf.subgroup("generic", "Generic commands")
 
 
@@ -6111,18 +6110,19 @@ class LFT55xxClone(ReaderRequiredUnit):
       electra  --id <26 hex>         e.g. --id DEADBEEF880102030405060708
       hid      -f <format> --cn <n>  e.g. -f H10301 --fc 10 --cn 1234
       ioprox   --ver <n> --fc <n> --cn <n>   OR   --raw8 <16 hex>
+      pac      --id <8 ASCII>        e.g. --id 11223344
       viking   --id <8 hex>          e.g. --id DEADBEEF
 
     Only supported on Chameleon Ultra (Lite has no LF writer).
     """
 
-    TYPES = ["em410x", "electra", "hid", "ioprox", "viking"]
+    TYPES = ["em410x", "electra", "hid", "ioprox", "pac", "viking"]
 
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = (
             "Clone a LF card ID onto a blank T55xx tag.\n"
-            "Supported types: em410x, electra, hid, ioprox, viking.\n"
+            "Supported types: em410x, electra, hid, ioprox, pac, viking.\n"
             "Only supported on Chameleon Ultra (Lite has no LF writer)."
         )
         parser.add_argument(
@@ -6139,7 +6139,7 @@ class LFT55xxClone(ReaderRequiredUnit):
             type=str,
             required=False,
             metavar="HEX",
-            help="Card ID in hex: 10 hex for em410x, 26 for electra, 8 for viking",
+            help="Card ID in hex: 10 hex for em410x, 26 for electra, 8 for viking; 8 ASCII chars for pac",
         )
         # HID Prox
         parser.add_argument(
@@ -6260,6 +6260,15 @@ class LFT55xxClone(ReaderRequiredUnit):
             print(f"   FC     : {fc} [0x{fc:02X}]")
             print(f"   CN     : {cn}")
             print(f"   Raw8   : {raw8.hex().upper()}")
+
+        elif t == "pac":
+            if args.id is None:
+                raise ArgsParserError("--id is required for pac (8 ASCII characters)")
+            if len(args.id) != 8:
+                raise ArgsParserError("--id must be exactly 8 ASCII characters for pac")
+            id_bytes = args.id.encode("ascii")
+            self.cmd.pac_write_to_t55xx(id_bytes)
+            print(f" - PAC/Stanley ID cloned to T55xx: {args.id}")
 
         elif t == "viking":
             if args.id is None:
