@@ -94,7 +94,7 @@ void light_up_by_slot(void) {
 void apply_slot_change(uint8_t slot_now, uint8_t slot_new) {
     uint8_t color_now = get_color_by_slot(slot_now);
     uint8_t color_new = get_color_by_slot(slot_new);
-    ledblink3(slot_now, color_now, slot_new, color_new);
+    rgb_marquee_slot_switch(slot_now, color_now, slot_new, color_new);
 }
 
 /**

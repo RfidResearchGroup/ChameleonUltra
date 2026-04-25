@@ -59,6 +59,36 @@ const uint16_t ats_fsdi_table[] = {
 static volatile bool m_is_responded = false;
 // Receiving buffer
 static uint8_t m_nfc_rx_buffer[MAX_NFC_RX_BUFFER_SIZE] = { 0x00 };
+
+/* Optional sniff callback — fires for every received frame */
+static nfc_tag_14a_sniff_cb_t m_sniff_cb = NULL;
+
+void nfc_tag_14a_set_sniff_cb(nfc_tag_14a_sniff_cb_t cb) {
+    m_sniff_cb = cb;
+}
+
+void nfc_tag_14a_clear_sniff_cb(void) {
+    m_sniff_cb = NULL;
+}
+
+/* TX sniff: captures card→reader frames at TX_FRAMESTART */
+static nfc_tag_14a_tx_sniff_cb_t m_tx_sniff_cb = NULL;
+
+void nfc_tag_14a_set_tx_sniff_cb(nfc_tag_14a_tx_sniff_cb_t cb) {
+    m_tx_sniff_cb = cb;
+}
+
+void nfc_tag_14a_clear_tx_sniff_cb(void) {
+    m_tx_sniff_cb = NULL;
+}
+
+/* Passive sniff mode: suppress all tag TX responses so the CU does not
+ * participate in anticollision and avoids colliding with the real card. */
+static bool m_sniff_passive = false;
+
+void nfc_tag_14a_set_sniff_passive(bool passive) {
+    m_sniff_passive = passive;
+}
 static uint8_t m_nfc_tx_buffer[MAX_NFC_TX_BUFFER_SIZE] = { 0x00 };
 // The N -secondary connection needs to use SAK, when the "third 'bit' in SAK is 1 is 1, the logo UID is incomplete
 static uint8_t m_uid_incomplete_sak[] = { 0x04, 0xda, 0x17 };
@@ -326,6 +356,11 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
         // Because of this error receiving event caused by this possible interference
         return;
     }
+
+    /* Sniff hook — fire before any tag response logic */
+    if (m_sniff_cb != NULL) {
+        m_sniff_cb(p_data, szDataBits);
+    }
     // Manually draw frame, separate data and strange school inspection
 #if !NFC_TAG_14A_RX_PARITY_AUTO_DEL_ENABLE
     if (szDataBits >= 9) {
@@ -350,9 +385,11 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
             if (auto_coll_res != NULL) {
                 // The status machine is set to the preparation state, and the next operation is to enter the card selection link
                 m_tag_state_14a = NFC_TAG_STATE_14A_READY;
-                // After receiving the WUPA or REQA instruction, we need to reply to ATQA
-                nfc_tag_14a_tx_bytes(auto_coll_res->atqa, 2, false);
-                // NRF_LOG_INFO("ATQA reply: %02x%02x", auto_coll_res->atqa[0], auto_coll_res->atqa[1]);
+                if (!m_sniff_passive) {
+                    // After receiving the WUPA or REQA instruction, we need to reply to ATQA
+                    nfc_tag_14a_tx_bytes(auto_coll_res->atqa, 2, false);
+                    // NRF_LOG_INFO("ATQA reply: %02x%02x", auto_coll_res->atqa[0], auto_coll_res->atqa[1]);
+                }
             } else {
                 m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
                 NRF_LOG_INFO("Auto anti-collision resource no exists.");
@@ -468,7 +505,9 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
             }
             // Incoming SELECT ALL for any cascade level
             if (szDataBits == 16 && p_data[1] == 0x20) {
-                nfc_tag_14a_tx_bytes(uid, 5, false);
+                if (!m_sniff_passive) {
+                    nfc_tag_14a_tx_bytes(uid, 5, false);
+                }
                 // NRF_LOG_INFO("[MFEMUL_SELECT] SEL Reply.");
                 break;
             }
@@ -482,10 +521,14 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
                     if (cl_finished) {
                         // NRF_LOG_INFO("[MFEMUL_SELECT] m_tag_state_14a = MFEMUL_WORK");
                         m_tag_state_14a = NFC_TAG_STATE_14A_ACTIVE;
-                        nfc_tag_14a_tx_bytes(auto_coll_res->sak, 1, true);
+                        if (!m_sniff_passive) {
+                            nfc_tag_14a_tx_bytes(auto_coll_res->sak, 1, true);
+                        }
                     } else {
                         // It is necessary to continue the level, so we need to respond to a data that marks the incomplete UID in SAK
-                        nfc_tag_14a_tx_bytes(m_uid_incomplete_sak, 3, false);
+                        if (!m_sniff_passive) {
+                            nfc_tag_14a_tx_bytes(m_uid_incomplete_sak, 3, false);
+                        }
                     }
                 } else {
                     // IDLE, not our UID
@@ -511,6 +554,10 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
                 }
                 // RATS instruction
                 if (p_data[0] == NFC_TAG_14A_CMD_RATS && nfc_tag_14a_checks_crc(p_data, 4)) {
+                    // Reset T=CL layer state for the new session
+                    if (m_tag_handler.cb_reset != NULL) {
+                        m_tag_handler.cb_reset();
+                    }
                     // Make sure the sub -packaging opens the support of ATS
                     if (auto_coll_res->ats->length > 0) {
                         // Take out FSD and return according to the maximum FSD
@@ -555,11 +602,10 @@ static inline void nrf_nfct_reset(void) {
     // Use Window Grid frame delay mode.
     nrf_nfct_frame_delay_mode_set(NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
 
-    /* Begin: Workaround for anomaly 25 */
-    /* Workaround for wrong SENSRES values require using SDD00001, but here SDD00100 is used
-       because it is required to operate with Windows Phone */
-    nrf_nfct_sensres_bit_frame_sdd_set(NRF_NFCT_SENSRES_BIT_FRAME_SDD_00100);
-    /* End: Workaround for anomaly 25 */
+    /* Use SDD00001 per ISO14443-3 standard.
+     * Note: SDD00100 was previously used for Windows Phone compatibility
+     * but breaks standard readers (including Proxmark3). SDD00001 is correct. */
+    nrf_nfct_sensres_bit_frame_sdd_set(NRF_NFCT_SENSRES_BIT_FRAME_SDD_00001);
 
     // Restore interrupts.
     nrf_nfct_int_enable(int_enabled);
@@ -632,7 +678,19 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
         }
         case NRFX_NFCT_EVT_TX_FRAMESTART: {
             // NRF_LOG_INFO("TX start.\n");
-            // NRF_LOG_INFO("TX config is %d.\n", nrf_nfct_tx_frame_config_get(NRF_NFCT));
+            if (m_tx_sniff_cb != NULL) {
+                uint32_t amt  = NRF_NFCT->TXD.AMOUNT;
+                uint16_t tx_bytes = (amt >> NFCT_TXD_AMOUNT_TXDATABYTES_Pos)
+                                  & (NFCT_TXD_AMOUNT_TXDATABYTES_Msk >> NFCT_TXD_AMOUNT_TXDATABYTES_Pos);
+                uint16_t tx_bits_rem = (amt >> NFCT_TXD_AMOUNT_TXDATABITS_Pos)
+                                     & (NFCT_TXD_AMOUNT_TXDATABITS_Msk >> NFCT_TXD_AMOUNT_TXDATABITS_Pos);
+                uint16_t tx_bits = (tx_bits_rem > 0)
+                                 ? ((tx_bytes - 1) * 8 + tx_bits_rem)
+                                 : (tx_bytes * 8);
+                if (tx_bits > 0 && tx_bytes <= MAX_NFC_TX_BUFFER_SIZE) {
+                    m_tx_sniff_cb(m_nfc_tx_buffer, tx_bits);
+                }
+            }
             break;
         }
         case NRFX_NFCT_EVT_TX_FRAMEEND: {

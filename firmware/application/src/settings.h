@@ -12,7 +12,9 @@
 typedef enum {
     SettingsAnimationModeFull = 0U,
     SettingsAnimationModeMinimal = 1U,
+    SettingsAnimationModeSymmetric = 3U,
     SettingsAnimationModeNone = 2U,
+    SettingsAnimationModeMAX = 4U,
 } settings_animation_mode_t;
 
 typedef enum {

@@ -97,14 +97,21 @@ elseif (CMAKE_SYSTEM_NAME MATCHES "Windows")
         endif()
     endif()
 
-    FetchContent_Declare(
-        pthreads4w
-        GIT_REPOSITORY "https://github.com/GerHobbelt/pthread-win32"
-        OVERRIDE_FIND_PACKAGE
-        EXCLUDE_FROM_ALL
-    )
-    find_package(pthreads4w CONFIG REQUIRED)
-    set(LIBTHREAD pthreads4w::pthreadVC3)
+    if(MSVC)
+        # MSVC has no native POSIX threads; use pthreads4w
+        FetchContent_Declare(
+            pthreads4w
+            GIT_REPOSITORY "https://github.com/GerHobbelt/pthread-win32"
+            OVERRIDE_FIND_PACKAGE
+            EXCLUDE_FROM_ALL
+        )
+        find_package(pthreads4w CONFIG REQUIRED)
+        set(LIBTHREAD pthreads4w::pthreadVC3)
+    else()
+        # MinGW/MSYS2 ships with winpthreads; use native threads
+        find_package(Threads REQUIRED)
+        set(LIBTHREAD Threads::Threads)
+    endif()
 
     set(LIBMATH "") # No separate math library needed on Windows
 else()
@@ -221,16 +228,18 @@ endif()
 add_executable(mfulc_des_brute mfulc_des_brute.c)
 target_include_directories(mfulc_des_brute PRIVATE ${SRC_DIR})
 target_link_libraries(mfulc_des_brute PRIVATE ${LIBTHREAD} OpenSSL::Crypto)
-target_compile_options(mfulc_des_brute PRIVATE -Wno-deprecated-declarations)
+if (MSVC)
+    target_compile_options(mfulc_des_brute PRIVATE /wd4996)  # disable "deprecated declaration" warning
+else()
+    target_compile_options(mfulc_des_brute PRIVATE -Wno-deprecated-declarations)
+endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "Android" OR CMAKE_SYSTEM_NAME MATCHES "Darwin")
     target_compile_definitions(mfulc_des_brute PRIVATE _GNU_SOURCE)
-    find_package(OpenSSL REQUIRED)
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     target_compile_definitions(mfulc_des_brute PRIVATE HAVE_STRUCT_TIMESPEC)
-    find_package(OpenSSL REQUIRED)
 endif()
-
+find_package(OpenSSL REQUIRED)
 
 # --- hardnested Executable ---
 add_executable(hardnested ${COMMON_FILES} ${HARDNESTED_SOURCES})

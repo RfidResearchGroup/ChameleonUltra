@@ -68,18 +68,31 @@ class Command(enum.IntEnum):
     MF1_READ_ONE_BLOCK = 2008
     MF1_WRITE_ONE_BLOCK = 2009
     HF14A_RAW = 2010
+    HF14A_SCAN_KEEP = 2016
     MF1_MANIPULATE_VALUE_BLOCK = 2011
     MF1_CHECK_KEYS_OF_SECTORS = 2012
     MF1_HARDNESTED_ACQUIRE = 2013
     MF1_ENC_NESTED_ACQUIRE = 2014
     MF1_CHECK_KEYS_ON_BLOCK = 2015
+    HF14A_GET_CONFIG = 2200
+    HF14A_SET_CONFIG = 2201
+    HF14A_SNIFF = 2020
 
     EM410X_SCAN = 3000
     EM410X_WRITE_TO_T55XX = 3001
+    EM410X_ELECTRA_WRITE_TO_T55XX = 3006
     HIDPROX_SCAN = 3002
     HIDPROX_WRITE_TO_T55XX = 3003
     VIKING_SCAN = 3004
     VIKING_WRITE_TO_T55XX = 3005
+    PAC_SCAN = 3014
+    PAC_WRITE_TO_T55XX = 3015
+    ADC_GENERIC_READ = 3009
+    IOPROX_SCAN = 3010
+    IOPROX_WRITE_TO_T55XX = 3011
+    IOPROX_DECODE_RAW = 3012
+    IOPROX_COMPOSE_ID = 3013
+    LF_T55XX_WRITE = 3016
 
     MF1_WRITE_EMU_BLOCK_DATA = 4000
     HF14A_SET_ANTI_COLL_DATA = 4001
@@ -127,12 +140,27 @@ class Command(enum.IntEnum):
     MF1_SET_FIELD_OFF_DO_RESET = 4038
     MF1_GET_FIELD_OFF_DO_RESET = 4039
 
+    # ISO14443-4 T=CL emulation
+    HF14A_4_APDU_RECV = 6000
+    HF14A_4_APDU_SEND = 6001
+    HF14A_4_SET_ANTI_COLL = 6002
+    HF14A_4_STATIC_RESP = 6003
+    HF14A_4_READER_APDU = 6004
+    HF14A_4_EMV_SCAN = 6005
+
     EM410X_SET_EMU_ID = 5000
     EM410X_GET_EMU_ID = 5001
     HIDPROX_SET_EMU_ID = 5002
     HIDPROX_GET_EMU_ID = 5003
     VIKING_SET_EMU_ID = 5004
     VIKING_GET_EMU_ID = 5005
+    PAC_SET_EMU_ID = 5006
+    PAC_GET_EMU_ID = 5007
+    IOPROX_SET_EMU_ID = 5008
+    IOPROX_GET_EMU_ID = 5009
+    EM4X05_SCAN = 3030
+    EM4X05_READSNIFF = 3032
+    LF_SNIFF = 3031
 
 
 @enum.unique
@@ -261,10 +289,12 @@ class TagSpecificType(enum.IntEnum):
     EM410X_16 = 101
     EM410X_32 = 102
     EM410X_64 = 103
+    EM410X_ELECTRA = 104
     # FDX-B
     # securakey
     # gallagher
     # PAC/Stanley
+    PAC = 150
     # Presco
     # Visa2000
     Viking = 170
@@ -273,7 +303,7 @@ class TagSpecificType(enum.IntEnum):
 
     # FSK Tag-Talk-First      200
     HIDProx = 200
-    # ioProx
+    ioProx = 201
     # AWID
     # Paradox
 
@@ -313,7 +343,8 @@ class TagSpecificType(enum.IntEnum):
 
     # ST25TA series          2000
 
-    # HF14A-4 series         3000
+    # ISO14443-4 T=CL emulation
+    HF14A_4 = 3000
 
     @staticmethod
     def list(exclude_meta=True):
@@ -352,8 +383,14 @@ class TagSpecificType(enum.IntEnum):
             return "EM410X/32"
         elif self == TagSpecificType.EM410X_64:
             return "EM410X/64"
+        elif self == TagSpecificType.EM410X_ELECTRA:
+            return "EM410X Electra"
         elif self == TagSpecificType.HIDProx:
             return "HIDProx"
+        elif self == TagSpecificType.ioProx:
+            return "ioProx"
+        elif self == TagSpecificType.PAC:
+            return "PAC/Stanley"
         elif self == TagSpecificType.Viking:
             return "Viking"
         elif self == TagSpecificType.MIFARE_Mini:
@@ -506,6 +543,7 @@ class MifareClassicDarksideStatus(enum.IntEnum):
 class AnimationMode(enum.IntEnum):
     FULL = 0
     MINIMAL = 1
+    SYMMETRIC = 3
     NONE = 2
 
     def __str__(self):
@@ -513,6 +551,8 @@ class AnimationMode(enum.IntEnum):
             return "Full animation"
         elif self == AnimationMode.MINIMAL:
             return "Minimal animation"
+        elif self == AnimationMode.SYMMETRIC:
+            return "Symmetric animation"
         elif self == AnimationMode.NONE:
             return "No animation"
 
@@ -630,4 +670,3 @@ class HIDFormat(enum.IntEnum):
         if self in descriptions:
             return descriptions[self]
         return "Invalid"
-

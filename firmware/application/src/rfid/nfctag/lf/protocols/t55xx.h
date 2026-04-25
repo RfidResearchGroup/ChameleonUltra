@@ -51,11 +51,23 @@ extern "C" {
     T5577_PWD |                   \
     (2 << T5577_MAXBLOCK_SHIFT))
 
+#define T5577_EM410X_ELECTRA_CONFIG ( \
+    T5577_BITRATE_RF_64 |            \
+    T5577_MODULATION_MANCHESTER |    \
+    T5577_PWD |                      \
+    (4 << T5577_MAXBLOCK_SHIFT))
+
 #define T5577_HIDPROX_CONFIG ( \
     T5577_BITRATE_RF_50 |      \
     T5577_MODULATION_FSK2a |   \
     T5577_PWD |                \
     (3 << T5577_MAXBLOCK_SHIFT))
+
+#define T5577_IOPROX_CONFIG ( \
+    T5577_BITRATE_RF_64 |      \
+    T5577_MODULATION_FSK2a |   \
+    T5577_PWD |                \
+    (2 << T5577_MAXBLOCK_SHIFT))
 
 #define T5577_VIKING_CONFIG (     \
     T5577_BITRATE_RF_32 |         \
@@ -63,9 +75,17 @@ extern "C" {
     T5577_PWD |                   \
     (2 << T5577_MAXBLOCK_SHIFT))
 
+#define T5577_PAC_CONFIG (        \
+    T5577_MODULATION_DIRECT |     \
+    T5577_BITRATE_RF_32 |         \
+    T5577_PWD |                   \
+    (4 << T5577_MAXBLOCK_SHIFT))
+
+#if defined(PROJECT_CHAMELEON_ULTRA)
 void t55xx_write_data(uint32_t passwd, uint32_t *blks, uint8_t blk_count);
 void t55xx_reset_passwd(uint32_t old_passwd, uint32_t new_passwd);
-
+void t55xx_send_cmd(uint8_t opcode, uint32_t *passwd, uint8_t data_len, uint32_t *data, uint8_t block);
+#endif
 #ifdef __cplusplus
 }
 #endif
