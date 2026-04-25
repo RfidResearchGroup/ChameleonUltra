@@ -94,6 +94,7 @@ def check_tools():
         "nested",
         "darkside",
         "mfkey32v2",
+        "mfkey64",
         "staticnested_1nt",
         "staticnested_2x1nt_rf08s",
         "staticnested_2x1nt_rf08s_1key",
@@ -764,7 +765,6 @@ lf_hid_prox = lf_hid.subgroup("prox", "HID Prox commands")
 lf_ioprox = lf.subgroup("ioprox", "ioProx commands")
 lf_pac = lf.subgroup("pac", "PAC/Stanley commands")
 lf_viking = lf.subgroup("viking", "Viking commands")
-lf_t55xx = lf.subgroup("t55xx", "T55xx raw commands")
 lf_generic = lf.subgroup("generic", "Generic commands")
 
 
@@ -3378,7 +3378,64 @@ class HFMFVALUE(ReaderRequiredUnit):
 _KEY = re.compile("[a-fA-F0-9]{12}", flags=re.MULTILINE)
 
 
+# Sentinel values returned by _run_mfkey64 / _run_mfkey32v2_sniff
+# to distinguish "tool unavailable" from "tool ran but found no key".
+_TOOL_MISSING   = "MISSING"    # binary not found on disk
+_TOOL_BLOCKED   = "BLOCKED"    # binary exists but OS/AV prevented execution
+_TOOL_NO_KEY    = "NO_KEY"     # binary ran cleanly, no key found for these nonces
+
+
+def _sniff_tool_path(name):
+    """Return the Path to a cracking binary, or None if not present."""
+    suffix = ".exe" if sys.platform == "win32" else ""
+    p = default_cwd / (name + suffix)
+    return p if p.exists() else None
+
+
+def _run_mfkey64(uid, nt, nr, ar, at):
+    """
+    Run mfkey64 and return the recovered key string (12 hex chars), or one of
+    _TOOL_MISSING / _TOOL_BLOCKED / _TOOL_NO_KEY.
+
+    mfkey64 requires 5 args: uid nt {nr} {ar} {at}
+    When cracking a sniff pair (both at==\'\'):
+        at = nonce[1].nt  (the CU sent this as {at} after nonce[0]; the reader
+                           treated it as a fresh nt for the next auth round)
+    When cracking a single complete auth:
+        at = the directly captured {at} frame
+    """
+    path = _sniff_tool_path("mfkey64")
+    if path is None:
+        return _TOOL_MISSING
+    try:
+        result = subprocess.run(
+            [str(path), uid, nt, nr, ar, at],
+            capture_output=True,
+            timeout=30,
+            encoding="ascii",
+        )
+    except FileNotFoundError:
+        return _TOOL_MISSING
+    except PermissionError:
+        return _TOOL_BLOCKED
+    except OSError:
+        # Covers antivirus quarantine, wrong arch, etc.
+        return _TOOL_BLOCKED
+    except subprocess.TimeoutExpired:
+        return _TOOL_BLOCKED
+    if result.returncode not in (0, 1):
+        # Non-zero exit other than 1 (usage error) usually means OS blocked it
+        return _TOOL_BLOCKED
+    sea_obj = _KEY.search(result.stdout)
+    return sea_obj[0] if sea_obj is not None else _TOOL_NO_KEY
+
+
 def _run_mfkey32v2(items):
+    """
+    Used by HFMFELog (detection-log path) via multiprocessing Pool.
+    Returns (key_str, items) on success, None if not found, raises on binary errors
+    so the pool can propagate them.
+    """
     output_str = subprocess.run(
         [
             default_cwd / ("mfkey32v2.exe" if sys.platform == "win32" else "mfkey32v2"),
@@ -3398,6 +3455,39 @@ def _run_mfkey32v2(items):
     if sea_obj is not None:
         return sea_obj[0], items
     return None
+
+
+def _run_mfkey32v2_sniff(n0, n1):
+    """
+    Sniff-path wrapper for mfkey32v2.  Returns a key string, or one of
+    _TOOL_MISSING / _TOOL_BLOCKED / _TOOL_NO_KEY — never raises.
+    """
+    path = _sniff_tool_path("mfkey32v2")
+    if path is None:
+        return _TOOL_MISSING
+    try:
+        result = subprocess.run(
+            [
+                str(path),
+                n0["uid"], n0["nt"], n0["nr"], n0["ar"],
+                n1["nt"],  n1["nr"], n1["ar"],
+            ],
+            capture_output=True,
+            timeout=30,
+            encoding="ascii",
+        )
+    except FileNotFoundError:
+        return _TOOL_MISSING
+    except PermissionError:
+        return _TOOL_BLOCKED
+    except OSError:
+        return _TOOL_BLOCKED
+    except subprocess.TimeoutExpired:
+        return _TOOL_BLOCKED
+    if result.returncode not in (0, 1):
+        return _TOOL_BLOCKED
+    sea_obj = _KEY.search(result.stdout)
+    return sea_obj[0] if sea_obj is not None else _TOOL_NO_KEY
 
 
 class ItemGenerator:
@@ -6020,18 +6110,19 @@ class LFT55xxClone(ReaderRequiredUnit):
       electra  --id <26 hex>         e.g. --id DEADBEEF880102030405060708
       hid      -f <format> --cn <n>  e.g. -f H10301 --fc 10 --cn 1234
       ioprox   --ver <n> --fc <n> --cn <n>   OR   --raw8 <16 hex>
+      pac      --id <8 ASCII>        e.g. --id 11223344
       viking   --id <8 hex>          e.g. --id DEADBEEF
 
     Only supported on Chameleon Ultra (Lite has no LF writer).
     """
 
-    TYPES = ["em410x", "electra", "hid", "ioprox", "viking"]
+    TYPES = ["em410x", "electra", "hid", "ioprox", "pac", "viking"]
 
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = (
             "Clone a LF card ID onto a blank T55xx tag.\n"
-            "Supported types: em410x, electra, hid, ioprox, viking.\n"
+            "Supported types: em410x, electra, hid, ioprox, pac, viking.\n"
             "Only supported on Chameleon Ultra (Lite has no LF writer)."
         )
         parser.add_argument(
@@ -6048,7 +6139,7 @@ class LFT55xxClone(ReaderRequiredUnit):
             type=str,
             required=False,
             metavar="HEX",
-            help="Card ID in hex: 10 hex for em410x, 26 for electra, 8 for viking",
+            help="Card ID in hex: 10 hex for em410x, 26 for electra, 8 for viking; 8 ASCII chars for pac",
         )
         # HID Prox
         parser.add_argument(
@@ -6169,6 +6260,15 @@ class LFT55xxClone(ReaderRequiredUnit):
             print(f"   FC     : {fc} [0x{fc:02X}]")
             print(f"   CN     : {cn}")
             print(f"   Raw8   : {raw8.hex().upper()}")
+
+        elif t == "pac":
+            if args.id is None:
+                raise ArgsParserError("--id is required for pac (8 ASCII characters)")
+            if len(args.id) != 8:
+                raise ArgsParserError("--id must be exactly 8 ASCII characters for pac")
+            id_bytes = args.id.encode("ascii")
+            self.cmd.pac_write_to_t55xx(id_bytes)
+            print(f" - PAC/Stanley ID cloned to T55xx: {args.id}")
 
         elif t == "viking":
             if args.id is None:
@@ -7373,16 +7473,56 @@ class HF14ASniff(BaseCLIUnit):
         print()
         print(f"  {'#':>3}  {'dir':<3}  {'bits':>4}  {'hex data':<42}  decoded")
         print(f"  {'---':>3}  {'---':<3}  {'----':>4}  {'-'*42}  {'-'*35}")
+        # Context for MIFARE Classic authentication decoding (NT / NR||AR)
+        expect_nt = False
+        expect_nr_ar = False
+        last_auth_keytype = None
+        last_auth_block = None
 
         for n, (szBits, data, is_tx) in enumerate(frames):
-            hex_str        = ' '.join(f'{b:02x}' for b in data)
-            decoded, col   = _decode_14a_frame_col(data, szBits)
-            dir_str        = f'{CG}<<<{C0}' if is_tx else f'{CY}>>>{C0}'
+            hex_str = ' '.join(f'{b:02x}' for b in data)
+
+            # is_tx==True means CU transmitted (card -> reader).
+            # is_tx==False means reader -> card.
+            decoded_ctx = None
+            col_ctx = None
+
+            # Reader -> card: AUTH command (0x60/0x61 + block + CRC-A)
+            if (not is_tx) and szBits == 32 and len(data) == 4 and data[0] in (0x60, 0x61):
+                last_auth_keytype = 'A' if data[0] == 0x60 else 'B'
+                last_auth_block = data[1]
+                expect_nt = True
+                expect_nr_ar = False
+                decoded_ctx = f"MIFARE Classic AUTH Key{last_auth_keytype} block=0x{last_auth_block:02X} ({last_auth_block})"
+                col_ctx = CG
+
+            # Card -> reader: NT (32-bit) immediately after AUTH
+            elif is_tx and expect_nt and szBits == 32 and len(data) == 4:
+                nt = data.hex()
+                decoded_ctx = f"AUTH: NT (card nonce) = {nt}"
+                col_ctx = CG
+                expect_nt = False
+                expect_nr_ar = True
+
+            # Reader -> card: NR||AR (64-bit) immediately after NT (encrypted)
+            elif (not is_tx) and expect_nr_ar and szBits == 64 and len(data) == 8:
+                nr = data[:4].hex()
+                ar = data[4:].hex()
+                decoded_ctx = f"AUTH continuation: NR||AR (enc)  NR={nr}  AR={ar}"
+                col_ctx = CG
+                expect_nr_ar = False
+
+            # Fallback to generic frame decoder
+            decoded, col = _decode_14a_frame_col(data, szBits)
+            if decoded_ctx is not None:
+                decoded, col = decoded_ctx, col_ctx
+
+            dir_str = f'{CG}<<<{C0}' if is_tx else f'{CY}>>>{C0}'
             print(f"  {CY}{n+1:>3}{C0}  {dir_str}  {szBits:>4}  {hex_str:<42}  {col}{decoded}{C0}")
 
         # Summary block (pass only reader→card frames for protocol decode)
         print()
-        _print_14a_sniff_summary([(s, d) for s, d, tx in frames if not tx])
+        _print_14a_sniff_summary(frames)  # full frames needed for nonce extraction
 
 
 
@@ -7438,6 +7578,54 @@ def _decode_14a_frame_col(data: bytes, szBits: int):
     if not data:
         return '', C0
     b0 = data[0]
+    
+    # ---------------------------------------------------------------------
+    # ISO14443-A "reply" frames that often show as "unknown" in hf 14a sniff
+    # because the sniffer doesn't know if a frame is reader->card or card->reader.
+    # We infer by payload length/bits and known structures.
+    # ---------------------------------------------------------------------
+    # ATQA: Answer To Request (Type A) - 2 bytes / 16 bits (tag -> reader).
+    # Transmitted LSB first. Common MIFARE Classic ATQA is 0x0004 => '04 00'.
+    # Be conservative: avoid mislabeling common commands like 0x93 0x20 (ANTICOLL).
+    if szBits == 16 and len(data) == 2:
+        not_atqa_prefixes = {
+            0x93, 0x95, 0x97,  # ANTICOLL / SELECT cascade levels
+            0x50,              # HLTA
+            0x60, 0x61,        # MIFARE Classic AUTH
+            0x30,              # READ
+            0xA0, 0xA2,        # WRITE variants
+            0xE0,              # RATS
+        }
+        if data[0] not in not_atqa_prefixes:
+            atqa = data[0] | (data[1] << 8)  # LSB first in air
+            return f"ATQA (Answer To Request, Type A) = 0x{atqa:04X}", CG
+
+    # SAK: Select Acknowledge - always 1 byte / 8 bits.
+    # 0x08 is the classic "MIFARE Classic (UID complete, no ISO-DEP)" value.
+    if szBits == 8 and len(data) == 1:
+        sak = data[0]
+        # Reuse existing NXP SAK classification table if present
+        # (type_id_SAK_dict is defined near top of file).
+        try:
+            sak_type = type_id_SAK_dict.get(sak, "")
+        except Exception:
+            sak_type = ""
+        if sak_type:
+            return f"SAK (Select Acknowledge) = 0x{sak:02X}  [{sak_type}]", CG
+        return f"SAK (Select Acknowledge) = 0x{sak:02X}", CG
+
+    # Anticollision CL1 response: 4 UID bytes + BCC = 5 bytes / 40 bits.
+    # BCC is XOR of UID bytes.
+    if szBits == 40 and len(data) == 5:
+        uid0, uid1, uid2, uid3, bcc = data
+        calc = uid0 ^ uid1 ^ uid2 ^ uid3
+        if calc == bcc:
+            uid = bytes([uid0, uid1, uid2, uid3]).hex()
+            return f"ANTICOLL CL1 response: UID={uid}  BCC=0x{bcc:02X} (OK)", CG
+        # If BCC doesn't match, still label it as anticoll-like, but warn.
+        uid = bytes(data[:4]).hex()
+        return f"ANTICOLL-like: UID={uid}  BCC=0x{bcc:02X} (expected 0x{calc:02X})", CY
+
 
     # Short frames (7-bit)
     if szBits == 7:
@@ -7605,6 +7793,70 @@ def _known_bertag(tag: int) -> str:
 
 
 
+def _extract_sniff_nonces(frames):
+    """
+    Extract MIFARE Classic auth nonces from a complete frame list (reader + card).
+
+    Walks frames looking for the 3-pass auth pattern:
+      1. reader→card  AUTH (0x60/0x61 + block)         -- not is_tx
+      2. card→reader  nt  (4 bytes, tag nonce)         -- is_tx
+      3. reader→card  {nr}{ar}  (8 bytes)              -- not is_tx
+
+    The current UID is tracked from SELECT (NVB=0x70) reader→card frames.
+
+    Returns a list of dicts: { uid, block, key_type, nt, nr, ar }
+    Paired nonces for the same (uid, block, key_type) appear consecutively.
+    """
+    nonces  = []
+    uid_hex = None
+
+    for i, (szBits, data, is_tx) in enumerate(frames):
+        if not data:
+            continue
+
+        # Track UID from completed SELECT (NVB=0x70), reader→card
+        if (not is_tx
+                and data[0] in (0x93, 0x95, 0x97)
+                and len(data) >= 6
+                and data[1] == 0x70):
+            # bytes [2:6] = UID0..UID3; skip cascade byte 0x88 for multi-level UIDs
+            if not (data[0] == 0x93 and data[2] == 0x88):
+                uid_hex = ''.join(f'{b:02X}' for b in data[2:6])
+
+        # AUTH command: reader→card, 0x60 (KeyA) or 0x61 (KeyB)
+        if not is_tx and data[0] in (0x60, 0x61) and len(data) >= 2:
+            key_type = 'A' if data[0] == 0x60 else 'B'
+            block    = data[1]
+
+            # frame i+1: card→reader, exactly 4 bytes = nt (tag nonce)
+            if i + 1 >= len(frames):
+                continue
+            _, d1, tx1 = frames[i + 1]
+            if not tx1 or len(d1) != 4:
+                continue
+            nt_hex = ''.join(f'{b:02X}' for b in d1)
+
+            # frame i+2: reader→card, exactly 8 bytes = {nr} || {ar}
+            if i + 2 >= len(frames):
+                continue
+            _, d2, tx2 = frames[i + 2]
+            if tx2 or len(d2) != 8:
+                continue
+            nr_hex = ''.join(f'{b:02X}' for b in d2[:4])
+            ar_hex = ''.join(f'{b:02X}' for b in d2[4:])
+
+            nonces.append({
+                'uid':      uid_hex or '00000000',
+                'block':    block,
+                'key_type': key_type,
+                'nt':       nt_hex,
+                'nr':       nr_hex,
+                'ar':       ar_hex,
+            })
+
+    return nonces
+
+
 def _print_14a_sniff_summary(frames):
     """Print a decoded summary of the sniff session."""
     uid_cl1    = None
@@ -7620,8 +7872,8 @@ def _print_14a_sniff_summary(frames):
     atc_tag    = None
     amount     = None
 
-    for szBits, data in frames:
-        if not data: 
+    for szBits, data, is_tx in frames:
+        if not data or is_tx:   # protocol decode uses reader→card frames only
             continue
         b0 = data[0]
 
@@ -7736,6 +7988,82 @@ def _print_14a_sniff_summary(frames):
         print(f" {CC}End      :{C0} HALT / DESELECT")
     if not uid_bytes and not aids and not auth_seen and not rats_seen:
         print(f" {CC}Note     :{C0} anti-collision incomplete — no SELECT seen (reader could not complete exchange)")
+
+    # ── Nonce cracking ─────────────────────────────────────────────────────
+    nonces = _extract_sniff_nonces(frames)
+    if nonces:
+        from collections import defaultdict
+        groups = defaultdict(list)
+        for n in nonces:
+            groups[(n['uid'], n['block'], n['key_type'])].append(n)
+
+        print()
+        print(f" {'-'*55}")
+        total = sum(len(v) for v in groups.values())
+        print(f" {CC}Nonces   :{C0} {total} auth exchange(s) captured")
+
+        for (uid, block, kt), ns in groups.items():
+            print(f"   Block {block} Key {kt}  uid={uid}")
+            for idx, n in enumerate(ns):
+                print(f"     [{idx}] nt={n['nt']}  nr={n['nr']}  ar={n['ar']}")
+
+            if len(ns) >= 2:
+                # Case A: two paired incomplete auths.
+                # ns[1].nt is the {at} the CU sent after exchange 0's {nr}/{ar};
+                # the reader treated it as the fresh nt for the next auth round.
+                # mfkey64 is deterministic; mfkey32v2 is a probabilistic fallback.
+                n0, n1 = ns[0], ns[1]
+                cmd64 = (f"mfkey64 {uid} {n0['nt']} {n0['nr']} {n0['ar']} {n1['nt']}")
+                cmd32 = (f"mfkey32v2 {uid} {n0['nt']} {n0['nr']} {n0['ar']}"
+                         f" {n1['nt']} {n1['nr']} {n1['ar']}")
+
+                # Always print both command strings so the user can run them
+                # manually even when the binaries are unavailable/blocked.
+                print(f"   {CC}mfkey64 :{C0} {cmd64}")
+                print(f"   {CC}mfkey32v2:{C0} {cmd32}")
+
+                key = _run_mfkey64(uid, n0['nt'], n0['nr'], n0['ar'], n1['nt'])
+
+                if key not in (_TOOL_MISSING, _TOOL_BLOCKED, _TOOL_NO_KEY):
+                    print(f"   {CG}Key: [{key.upper()}]{C0}")
+
+                elif key == _TOOL_MISSING:
+                    print(f"   {CY}mfkey64 binary not found in bin/ — "
+                          f"copy the command above and run it manually{C0}")
+
+                elif key == _TOOL_BLOCKED:
+                    print(f"   {CY}mfkey64 could not be executed "
+                          f"(antivirus / permissions) — "
+                          f"run the command above manually{C0}")
+
+                else:
+                    # _TOOL_NO_KEY — mfkey64 ran but found nothing (rare);
+                    # try mfkey32v2 as probabilistic fallback.
+                    result32 = _run_mfkey32v2_sniff(n0, n1)
+
+                    if result32 not in (_TOOL_MISSING, _TOOL_BLOCKED, _TOOL_NO_KEY):
+                        print(f"   {CG}Key: [{result32.upper()}]{C0} (via mfkey32v2)")
+
+                    elif result32 == _TOOL_MISSING:
+                        print(f"   {CY}mfkey64 found no key and mfkey32v2 is not in bin/ — "
+                              f"run the commands above manually{C0}")
+
+                    elif result32 == _TOOL_BLOCKED:
+                        print(f"   {CY}mfkey64 found no key and mfkey32v2 could not be "
+                              f"executed (antivirus / permissions) — "
+                              f"run the commands above manually{C0}")
+
+                    else:
+                        print(f"   {CR}Key not found by either tool — "
+                              f"capture more nonce exchanges and retry{C0}")
+
+            elif len(ns) == 1:
+                # Single capture — can't crack without a paired exchange
+                n = ns[0]
+                print(f"   {CY}Only one exchange captured — "
+                      f"need a second auth to crack{C0}")
+                print(f"   {CC}When paired, run:{C0} "
+                      f"mfkey64 {uid} {n['nt']} {n['nr']} {n['ar']} <nt2>")
 
 
 def _get_capture():
