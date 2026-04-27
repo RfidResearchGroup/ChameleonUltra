@@ -9,6 +9,7 @@
 #include "protocols/em410x.h"
 #include "protocols/ioprox.h"
 #include "protocols/hidprox.h"
+#include "protocols/idteck.h"
 #include "protocols/t55xx.h"
 #include "protocols/pac.h"
 #include "protocols/viking.h"
@@ -202,6 +203,16 @@ uint8_t write_viking_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_pa
 uint8_t write_pac_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = pac_t55xx_writer(data, blks);
+    if (blk_count == 0) return STATUS_PAR_ERR;
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
+/**
+ * Write IDTECK card data to t55xx (PSK1 RF/32, 64-bit frame).
+ */
+uint8_t write_idteck_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[7] = {0x00};
+    uint8_t blk_count = idteck_t55xx_writer(data, blks);
     if (blk_count == 0) return STATUS_PAR_ERR;
     return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
 }
