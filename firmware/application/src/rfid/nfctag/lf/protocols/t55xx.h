@@ -81,9 +81,11 @@ extern "C" {
     T5577_PWD |                   \
     (4 << T5577_MAXBLOCK_SHIFT))
 
+#if defined(PROJECT_CHAMELEON_ULTRA)
 void t55xx_write_data(uint32_t passwd, uint32_t *blks, uint8_t blk_count);
 void t55xx_reset_passwd(uint32_t old_passwd, uint32_t new_passwd);
-
+void t55xx_send_cmd(uint8_t opcode, uint32_t *passwd, uint8_t data_len, uint32_t *data, uint8_t block);
+#endif
 #ifdef __cplusplus
 }
 #endif

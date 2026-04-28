@@ -668,6 +668,7 @@ class ChameleonCMD:
 
 
 
+
     def lf_sniff(self, timeout_ms: int = 2000):
         """
         Capture raw LF field ADC samples.
