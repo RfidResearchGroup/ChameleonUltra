@@ -110,8 +110,8 @@ static void lpcomp_init(void) {
 static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
     if (event_type == NRFX_PWM_EVT_END_SEQ0) {
         // Fired at end of each loop iteration — check field without stopping PWM.
-        // Disable LPCOMP interrupts briefly while we sample to avoid re-entrancy.
-        NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_CROSS_Msk;
+        // Mask UP interrupt while sampling to prevent re-entrancy.
+        NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_UP_Msk;
         if (!is_lf_field_exists()) {
             // Field gone — stop the loop; pwm_handler will get EVT_STOPPED next.
             nrfx_pwm_stop(&m_broadcast, false);
