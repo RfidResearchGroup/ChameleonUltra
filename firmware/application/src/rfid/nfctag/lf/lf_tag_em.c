@@ -24,7 +24,6 @@
 NRF_LOG_MODULE_REGISTER();
 
 #define ANT_NO_MOD() nrf_gpio_pin_clear(LF_MOD)
-#define LF_125KHZ_BROADCAST_MAX (10)
 
 // Whether the USB light effect is allowed to enable
 extern bool g_usb_led_marquee_enable;
@@ -43,7 +42,8 @@ static void lf_field_lost(void) {
     g_is_tag_emulating = false;  // Reset the flag in the emulation
     m_is_lf_emulating = false;
     TAG_FIELD_LED_OFF()  // Make sure the indicator light of the LF field status
-    // LPCOMP stays enabled (DETECT_CROSS) — no INTENSET/INTENCLR needed.
+    // Re-arm LPCOMP so the next field appearance triggers lpcomp_event_handler.
+    NRF_LPCOMP->INTENSET = LPCOMP_INTENSET_UP_Msk;
     // call sleep_timer_start *after* unsetting g_is_tag_emulating
     sleep_timer_start(SLEEP_DELAY_MS_FIELD_125KHZ_LOST);  // Start the timer to enter the sleep
     NRF_LOG_INFO("LF FIELD LOST");
@@ -68,29 +68,39 @@ bool is_lf_field_exists(void) {
  * priority is set to APP_IRQ_PRIORITY_HIGH).
  */
 static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
-    if (!m_is_lf_emulating && event == NRF_LPCOMP_EVENT_UP) {
-        // Field appeared — start continuous looping broadcast.
-        // LPCOMP stays enabled so the DOWN event stops us when field is lost.
-        sleep_timer_stop();
-        m_is_lf_emulating = true;
-        g_is_tag_emulating = true;
-        g_usb_led_marquee_enable = false;
-        set_slot_light_color(RGB_BLUE);
-        TAG_FIELD_LED_ON()
-        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 1, NRFX_PWM_FLAG_LOOP);
-        NRF_LOG_INFO("LF FIELD DETECTED");
-    } else if (m_is_lf_emulating && event == NRF_LPCOMP_EVENT_DOWN) {
-        // Field dropped during emulation — stop PWM; pwm_handler will clean up.
-        nrfx_pwm_stop(&m_broadcast, false);
-        NRF_LOG_INFO("LF FIELD LOST (LPCOMP DOWN)");
+    // Only when the lf-frequency emulation is not launched, and the analog card is started
+    if (m_is_lf_emulating || event != NRF_LPCOMP_EVENT_UP) {
+        return;
     }
+
+    sleep_timer_stop();  // turn off dormant delay
+    // Disable LPCOMP during emulation — LF_RSSI fluctuates during load
+    // modulation and would trigger spurious DOWN events with DETECT_CROSS.
+    // Field-loss is checked periodically via EVT_END_SEQ0 in pwm_handler.
+    nrfx_lpcomp_disable();
+
+    // set the emulation status logo bit
+    m_is_lf_emulating = true;
+    g_is_tag_emulating = true;
+    // turn off USB light effect when emulating cards
+    g_usb_led_marquee_enable = false;
+
+    // LED status update
+    set_slot_light_color(RGB_BLUE);
+    TAG_FIELD_LED_ON()
+
+    // Loop continuously — no stop/restart gaps between sequence plays.
+    // Field-loss is detected in pwm_handler via EVT_END_SEQ0.
+    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 1, NRFX_PWM_FLAG_LOOP);
+
+    NRF_LOG_INFO("LF FIELD DETECTED");
 }
 
 static void lpcomp_init(void) {
     nrfx_lpcomp_config_t cfg = NRFX_LPCOMP_DEFAULT_CONFIG;
     cfg.input = LF_RSSI;
     cfg.hal.reference = NRF_LPCOMP_REF_SUPPLY_1_16;
-    cfg.hal.detection = NRF_LPCOMP_DETECT_CROSS;
+    cfg.hal.detection = NRF_LPCOMP_DETECT_UP;
     cfg.hal.hyst = NRF_LPCOMP_HYST_50mV;
 
     ret_code_t err_code = nrfx_lpcomp_init(&cfg, lpcomp_event_handler);
@@ -98,8 +108,18 @@ static void lpcomp_init(void) {
 }
 
 static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
-    // In LOOP mode this only fires when nrfx_pwm_stop() is called explicitly
-    // (triggered by LPCOMP DOWN event when field is lost).
+    if (event_type == NRFX_PWM_EVT_END_SEQ0) {
+        // Fired at end of each loop iteration — check field without stopping PWM.
+        // Disable LPCOMP interrupts briefly while we sample to avoid re-entrancy.
+        NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_CROSS_Msk;
+        if (!is_lf_field_exists()) {
+            // Field gone — stop the loop; pwm_handler will get EVT_STOPPED next.
+            nrfx_pwm_stop(&m_broadcast, false);
+        }
+        // Re-enable will happen either in lf_field_lost (via INTENSET) or stays
+        // suppressed while PWM keeps looping (we only need it after field_lost).
+        return;
+    }
     if (event_type != NRFX_PWM_EVT_STOPPED) {
         return;
     }
