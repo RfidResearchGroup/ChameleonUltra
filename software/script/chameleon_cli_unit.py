@@ -8607,6 +8607,7 @@ class EMVScan(DeviceRequiredUnit):
         except Exception:
             time.sleep(0.3)
 
+        print(f' {CY}Scanning... (place card on antenna){C0}')
         print(f' {CY}Scanning... (place card on antenna) [fw-canary:v5]{C0}')
 
         # Single firmware call — full EMV sequence without USB round-trips
@@ -9266,3 +9267,5 @@ class EMVApdu(DeviceRequiredUnit):
                 break
 
         print(f'\n {C0}Relay ended. {exchange_count} APDU exchange(s) completed.{C0}')
+
+
