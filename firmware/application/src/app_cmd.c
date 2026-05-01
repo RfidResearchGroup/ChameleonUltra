@@ -141,7 +141,7 @@ static data_frame_tx_t *cmd_processor_reset_settings(uint16_t cmd, uint16_t stat
 }
 
 static data_frame_tx_t *cmd_processor_get_device_settings(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t settings[7 + BLE_PAIRING_KEY_LEN] = {};
+    uint8_t settings[8 + BLE_PAIRING_KEY_LEN] = {};
     settings[0] = SETTINGS_CURRENT_VERSION; // current version
     settings[1] = settings_get_animation_config(); // animation mode
     settings[2] = settings_get_button_press_config('A'); // short A button press mode
@@ -150,7 +150,8 @@ static data_frame_tx_t *cmd_processor_get_device_settings(uint16_t cmd, uint16_t
     settings[5] = settings_get_long_button_press_config('B'); // long B button press mode
     settings[6] = settings_get_ble_pairing_enable(); // is device require pairing
     memcpy(settings + 7, settings_get_ble_connect_key(), BLE_PAIRING_KEY_LEN);
-    return data_frame_make(cmd, STATUS_SUCCESS, 7 + BLE_PAIRING_KEY_LEN, settings);
+    settings[7 + BLE_PAIRING_KEY_LEN] = settings_get_sleep_timeout() / 1000U; // wake timeout in seconds
+    return data_frame_make(cmd, STATUS_SUCCESS, 8 + BLE_PAIRING_KEY_LEN, settings);
 }
 
 static data_frame_tx_t *cmd_processor_set_animation_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -205,6 +206,19 @@ static data_frame_tx_t *cmd_processor_set_long_button_press_config(uint16_t cmd,
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     settings_set_long_button_press_config(data[0], data[1]);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_get_sleep_timeout(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t seconds = settings_get_sleep_timeout() / 1000U;
+    return data_frame_make(cmd, STATUS_SUCCESS, 1, &seconds);
+}
+
+static data_frame_tx_t *cmd_processor_set_sleep_timeout(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 1 || data[0] < SETTINGS_SLEEP_TIMEOUT_MIN_S || data[0] > SETTINGS_SLEEP_TIMEOUT_MAX_S) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    settings_set_sleep_timeout(data[0]);
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
@@ -2613,6 +2627,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_DEVICE_CAPABILITIES,      NULL,                        cmd_processor_get_device_capabilities,       NULL                   },
     {    DATA_CMD_GET_BLE_PAIRING_ENABLE,       NULL,                        cmd_processor_get_ble_pairing_enable,        NULL                   },
     {    DATA_CMD_SET_BLE_PAIRING_ENABLE,       NULL,                        cmd_processor_set_ble_pairing_enable,        NULL                   },
+    {    DATA_CMD_GET_SLEEP_TIMEOUT,            NULL,                        cmd_processor_get_sleep_timeout,             NULL                   },
+    {    DATA_CMD_SET_SLEEP_TIMEOUT,            NULL,                        cmd_processor_set_sleep_timeout,             NULL                   },
     {    DATA_CMD_GET_ALL_SLOT_NICKS,           NULL,                        cmd_processor_get_all_slot_nicks,            NULL                   },
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
