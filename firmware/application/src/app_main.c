@@ -479,7 +479,7 @@ static void check_wakeup_src(void) {
         light_up_by_slot();
 
         // If no operation follows, wait for the timeout and then deep hibernate
-        sleep_timer_start(SLEEP_DELAY_MS_BUTTON_WAKEUP);
+        sleep_timer_start(settings_get_sleep_timeout());
     } else if ((m_reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) ||
                (m_gpregret_val & RESET_ON_LF_FIELD_EXISTS_Msk)) {
         NRF_LOG_INFO("WakeUp from rfid field");
