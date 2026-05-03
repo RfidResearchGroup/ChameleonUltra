@@ -31,7 +31,9 @@ from chameleon_utils import (
     execute_tool,
     tqdm_if_exists,
     print_key_table,
+    default_cwd
 )
+
 from chameleon_utils import CLITree
 from chameleon_utils import CR, CG, CB, CC, CY, C0, color_string
 from chameleon_utils import print_mem_dump
@@ -66,8 +68,6 @@ type_id_SAK_dict = {
     0x28: "SmartMX with MIFARE Classic 1K",
     0x38: "SmartMX with MIFARE Classic 4K",
 }
-
-default_cwd = Path.cwd() / Path(__file__).with_name("bin")
 
 
 def load_key_file(import_key, keys):
