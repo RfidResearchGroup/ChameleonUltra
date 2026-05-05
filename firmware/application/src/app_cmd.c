@@ -551,7 +551,8 @@ static data_frame_tx_t *cmd_processor_hf14a_raw(uint16_t cmd, uint16_t status, u
 
     typedef struct {
         struct { // LSB -> MSB
-            uint8_t reserved : 2;
+            uint8_t reserved : 1;
+            uint8_t no_rats : 1;
 
             uint8_t check_response_crc : 1;
             uint8_t keep_rf_field : 1;
@@ -578,6 +579,7 @@ static data_frame_tx_t *cmd_processor_hf14a_raw(uint16_t cmd, uint16_t status, u
     NRF_LOG_INFO("auto_select        = %d", payload->options.auto_select);
     NRF_LOG_INFO("keep_rf_field      = %d", payload->options.keep_rf_field);
     NRF_LOG_INFO("check_response_crc = %d", payload->options.check_response_crc);
+    NRF_LOG_INFO("no_rats            = %d", payload->options.no_rats);
     NRF_LOG_INFO("reserved           = %d", payload->options.reserved);
 
     status = pcd_14a_reader_raw_cmd(
@@ -587,6 +589,7 @@ static data_frame_tx_t *cmd_processor_hf14a_raw(uint16_t cmd, uint16_t status, u
                  payload->options.auto_select,
                  payload->options.keep_rf_field,
                  payload->options.check_response_crc,
+                 payload->options.no_rats,
 
                  U16NTOHS(payload->resp_timeout),
 

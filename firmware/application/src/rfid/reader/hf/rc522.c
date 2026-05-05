@@ -1456,7 +1456,7 @@ inline void pcd_14a_reader_crc_computer(uint8_t use522CalcCRC) {
 * @retval   : Execution Status
 *
 */
-uint8_t pcd_14a_reader_raw_cmd(bool openRFField,  bool waitResp, bool appendCrc, bool autoSelect, bool keepField, bool checkCrc, uint16_t waitRespTimeout,
+uint8_t pcd_14a_reader_raw_cmd(bool openRFField,  bool waitResp, bool appendCrc, bool autoSelect, bool keepField, bool checkCrc, bool noRats, uint16_t waitRespTimeout,
                                uint16_t szDataSendBits, uint8_t *pDataSend, uint8_t *pDataRecv, uint16_t *pszDataRecv, uint16_t szDataRecvBitMax) {
     // Status code, default is OK.
     uint8_t status = STATUS_HF_TAG_OK;
@@ -1496,7 +1496,12 @@ uint8_t pcd_14a_reader_raw_cmd(bool openRFField,  bool waitResp, bool appendCrc,
 
     if (autoSelect) {
         picc_14a_tag_t ti;
+        int8_t saved_forcerats = hf14aconfig.forcerats;
+        if (noRats) {
+            hf14aconfig.forcerats = 2;  // skip RATS
+        }
         status = pcd_14a_reader_scan_once(&ti);
+        hf14aconfig.forcerats = saved_forcerats;
         // Determine whether the card search was successful
         if (status != STATUS_HF_TAG_OK) {
             pcd_14a_reader_antenna_off();
