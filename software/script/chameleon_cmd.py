@@ -349,7 +349,8 @@ class ChameleonCMD:
                 ("auto_select", ctypes.c_uint8, 1),
                 ("keep_rf_field", ctypes.c_uint8, 1),
                 ("check_response_crc", ctypes.c_uint8, 1),
-                ("reserved", ctypes.c_uint8, 2),
+                ("no_rats", ctypes.c_uint8, 1),
+                ("reserved", ctypes.c_uint8, 1),
             ]
 
         cs = CStruct()
@@ -359,6 +360,7 @@ class ChameleonCMD:
         cs.auto_select = options['auto_select']
         cs.keep_rf_field = options['keep_rf_field']
         cs.check_response_crc = options['check_response_crc']
+        cs.no_rats = options.get('no_rats', 0)
 
         if bitlen is None:
             bitlen = len(data) * 8  # bits = bytes * 8(bit)
