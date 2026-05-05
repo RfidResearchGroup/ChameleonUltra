@@ -7167,7 +7167,7 @@ class HF14ARaw(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.formatter_class = argparse.RawDescriptionHelpFormatter
-        parser.description = "Send raw command"
+        parser.description = "Send raw hex data to tag"
         parser.add_argument(
             "-a",
             "--activate-rf",
@@ -7182,10 +7182,12 @@ class HF14ARaw(ReaderRequiredUnit):
             action="store_true",
             default=False,
         )
-        # TODO: parser.add_argument('-3', '--type3-select-tag',
-        #           help="Active signal field ON with ISO14443-3 select (no RATS)", action='store_true', default=False,)
         parser.add_argument(
-            "-d", "--data", type=str, metavar="<hex>", help="Data to be sent"
+            "-3",
+            "--no-rats",
+            help="ISO14443-3 select only (skip RATS)",
+            action="store_true",
+            default=False,
         )
         parser.add_argument(
             "-b",
@@ -7226,16 +7228,30 @@ class HF14ARaw(ReaderRequiredUnit):
             "-t",
             "--timeout",
             type=int,
-            metavar="<dec>",
+            metavar="<ms>",
             help="Timeout in ms",
             default=100,
         )
+        parser.add_argument(
+            "-v",
+            "--verbose",
+            help="Verbose output",
+            action="store_true",
+            default=False,
+        )
+        parser.add_argument(
+            "data",
+            nargs="*",
+            metavar="<hex>",
+            help="Raw bytes to send (hex string, can be multiple args)",
+        )
         parser.epilog = """
 examples/notes:
-  hf 14a raw -b 7 -d 40 -k
-  hf 14a raw -d 43 -k
-  hf 14a raw -d 3000 -c
-  hf 14a raw -sc -d 6000
+  hf 14a raw -b 7 40 -k
+  hf 14a raw 43 -k
+  hf 14a raw -c 3000
+  hf 14a raw -sc 6000
+  hf 14a raw -3sc 6000
 """
         return parser
 
@@ -7247,29 +7263,37 @@ examples/notes:
             "auto_select": self.bool_to_bit(args.select_tag),
             "keep_rf_field": self.bool_to_bit(args.keep_rf),
             "check_response_crc": self.bool_to_bit(args.crc_clear),
-            # 'auto_type3_select': self.bool_to_bit(args.type3-select-tag),
+            "no_rats": self.bool_to_bit(args.no_rats),
         }
-        data: str = args.data
-        if data is not None:
-            data = data.replace(" ", "")
-            if re.match(r"^[0-9a-fA-F]+$", data):
-                if len(data) % 2 != 0:
+
+        # Concatenate all positional hex args, stripping spaces
+        hex_str = "".join(args.data).replace(" ", "")
+        if hex_str:
+            if re.match(r"^[0-9a-fA-F]+$", hex_str):
+                if len(hex_str) % 2 != 0:
                     print(
                         f" [!] {color_string((CR, 'The length of the data must be an integer multiple of 2.'))}"
                     )
                     return
                 else:
-                    data_bytes = bytes.fromhex(data)
+                    data_bytes = bytes.fromhex(hex_str)
             else:
                 print(f" [!] {color_string((CR, 'The data must be a HEX string'))}")
                 return
         else:
             data_bytes = []
+
         if args.bits is not None and args.crc:
             print(
                 f" [!] {color_string((CR, '--bits and --crc are mutually exclusive'))}"
             )
             return
+
+        if args.verbose:
+            print(f" - options: {options}")
+            print(f" - timeout: {args.timeout} ms")
+            if data_bytes:
+                print(f" - data: {data_bytes.hex()}")
 
         # Exec 14a raw cmd.
         resp = self.cmd.hf14a_raw(options, args.timeout, data_bytes, args.bits)
