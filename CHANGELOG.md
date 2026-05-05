@@ -3,6 +3,8 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Changed `hf 14a raw` CLI parameters to align with Proxmark3: replaced `-d`/`--data` with positional hex args, added `-3`/`--no-rats`, `-v`/`--verbose` (@azuwis)
+ - Added `no_rats` parameter to `hf 14a raw` for ISO14443-3 select only (skip RATS) (@azuwis)
  - Added PAC/Stanley LF protocol support: read, emulate and T55xx clone (@kevihiiin, @danieltwagner)
  - Fix firmware application USB serial number (@taichunmin)
  - Added ioProx LF protocol support (read, emulate and T55xx clone)
