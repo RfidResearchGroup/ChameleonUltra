@@ -7560,6 +7560,218 @@ class HF14ASniff(BaseCLIUnit):
 
 
 
+@hf_14a.command("auth-trace")
+class HF14AAuthTrace(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.formatter_class = argparse.RawDescriptionHelpFormatter
+        parser.description = (
+            "Run a full reader-side ISO14443A + MIFARE Classic Crypto1 auth "
+            "against a real card and print every wire frame: REQA → ATQA → "
+            "anticoll/SELECT → SAK → (RATS/ATS) → AUTH(0x60/0x61) → NT → "
+            "NR||AR (enc) → AT (enc), with host-side Crypto1 decryption of "
+            "the auth sub-frames for verification."
+        )
+        parser.add_argument(
+            "--blk", "--block", type=int, required=True, metavar="<dec>",
+            help="Target block number"
+        )
+        keytype_group = parser.add_mutually_exclusive_group()
+        keytype_group.add_argument("-a", "-A", action="store_true", help="Use Key A (default)")
+        keytype_group.add_argument("-b", "-B", action="store_true", help="Use Key B")
+        parser.add_argument(
+            "-k", "--key", type=str, required=True, metavar="<hex>",
+            help="6-byte sector key (12 hex chars)"
+        )
+        parser.epilog = """
+examples:
+  hf 14a auth-trace --blk 0 -k FFFFFFFFFFFF
+  hf 14a auth-trace --blk 4 -b -k A0A1A2A3A4A5
+"""
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        # Validate key
+        key_hex = args.key.replace(" ", "")
+        if not re.match(r"^[0-9a-fA-F]{12}$", key_hex):
+            print(f" [!] {color_string((CR, 'Key must be exactly 12 hex characters'))}")
+            return
+        key_bytes = bytes.fromhex(key_hex)
+        key_type = 0x61 if args.b else 0x60
+        block = args.blk
+
+        print(f" Running auth trace: block={block} keyType={'B' if args.b else 'A'} key={key_hex.upper()}")
+        print(" Place CU on a MIFARE Classic card now.")
+        print()
+
+        try:
+            resp = self.cmd.hf14a_auth_trace(block, key_type, key_bytes)
+        except Exception as e:
+            if 'CMDInvalid' in type(e).__name__ or '2017' in str(e):
+                print(f"{CR}Command not supported — reflash firmware to enable hf 14a auth-trace{C0}")
+            else:
+                print(f"{CR}{e}{C0}")
+            return
+
+        # Status legend:
+        #   HF_TAG_OK   — auth succeeded, full trace
+        #   HF_TAG_NO   — no card / scan failed
+        #   MF_ERR_AUTH — auth failed (wrong key / wrong block), partial trace returned
+        #   HF_ERR_STAT — no NT received, partial trace returned
+        if resp.status == Status.HF_TAG_NO:
+            print(f"{CR} No 14443A tag in field — auth aborted{C0}")
+            return
+
+        if not resp.data:
+            print(f"{CR} No frames returned (status={Status(resp.status).name}){C0}")
+            return
+
+        # Parse packed frame buffer — same format as hf 14a sniff.
+        # [bits_be16][data...]; bit15 of bits = direction (1 = card→reader).
+        buf = bytes(resp.data)
+        frames = []  # (szBits, data, is_tx)
+        i = 0
+        while i + 2 <= len(buf):
+            hdr = (buf[i] << 8) | buf[i + 1]
+            i += 2
+            is_tx = bool(hdr & 0x8000)
+            szBits = hdr & 0x7FFF
+            if szBits == 0:
+                break
+            szBytes = (szBits + 7) // 8
+            if i + szBytes > len(buf):
+                break
+            raw = buf[i:i + szBytes]
+            i += szBytes
+            # Auth-trace stores parity-stripped data (firmware byte/bits
+            # transfer primitives strip parity automatically), so szBits is
+            # always a multiple of 8 — no unwrap needed.
+            frames.append((szBits, raw, is_tx))
+
+        if not frames:
+            print(f"{CR}No frames decoded{C0}")
+            return
+
+        # Header
+        rx_count = sum(1 for _, _, tx in frames if not tx)
+        tx_count = sum(1 for _, _, tx in frames if tx)
+        status_label = {
+            Status.HF_TAG_OK:    f"{CG}auth OK{C0}",
+            Status.MF_ERR_AUTH:  f"{CR}auth FAILED{C0}",
+            Status.HF_ERR_STAT:  f"{CR}no NT received{C0}",
+        }.get(Status(resp.status), f"{CY}status={Status(resp.status).name}{C0}")
+        print(f" Captured : {CG}{len(frames)}{C0} frame(s)  "
+              f"({CY}{rx_count}{C0} reader→card  {CG}{tx_count}{C0} card→reader)  "
+              f"{status_label}")
+        print()
+        print(f"  {'#':>3}  {'dir':<3}  {'bits':>4}  {'hex data':<42}  decoded")
+        print(f"  {'---':>3}  {'---':<3}  {'----':>4}  {'-' * 42}  {'-' * 35}")
+
+        # Auth-state tracker — annotate AUTH cmd, NT, NR||AR, AT specifically.
+        auth_state = 'idle'    # idle → cmd_seen → nt_seen → nr_ar_seen → done
+        last_auth_keytype = None
+        last_auth_block = None
+        nt_int = None
+        nr_ar_enc = None
+        at_enc = None
+        uid_bytes = b''
+
+        for n, (szBits, data, is_tx) in enumerate(frames):
+            hex_str = ' '.join(f'{b:02x}' for b in data)
+            decoded_ctx = None
+            col_ctx = None
+
+            # Capture UID from the first anticoll RX (CL1 response): 5 bytes.
+            # If first byte is 0x88 it's a cascading 7-byte UID — second segment
+            # gives bytes 3..6. For 4-byte UID, all four bytes are here.
+            if is_tx and szBits == 40 and len(data) == 5 and not uid_bytes:
+                if data[0] == 0x88:
+                    uid_bytes = data[1:4]  # CT|UID0|UID1|UID2|BCC
+                else:
+                    uid_bytes = data[0:4]
+            elif is_tx and szBits == 40 and len(data) == 5 and len(uid_bytes) == 3:
+                uid_bytes = uid_bytes + data[0:4]  # 7-byte UID complete
+
+            # AUTH cmd: 0x60/0x61 + block + 2 CRC bytes, reader→card, 32 bits
+            if (not is_tx) and szBits == 32 and len(data) == 4 and data[0] in (0x60, 0x61):
+                last_auth_keytype = 'A' if data[0] == 0x60 else 'B'
+                last_auth_block = data[1]
+                auth_state = 'cmd_seen'
+                decoded_ctx = f"AUTH Key{last_auth_keytype} block=0x{last_auth_block:02X} ({last_auth_block}) +CRC"
+                col_ctx = CG
+
+            # NT: 4 bytes, card→reader, immediately after AUTH cmd
+            elif is_tx and auth_state == 'cmd_seen' and szBits == 32 and len(data) == 4:
+                nt_int = int.from_bytes(data, 'big')
+                auth_state = 'nt_seen'
+                decoded_ctx = f"NT (card nonce, plaintext) = {data.hex().upper()}"
+                col_ctx = CG
+
+            # NR||AR encrypted: 8 bytes, reader→card, after NT
+            elif (not is_tx) and auth_state == 'nt_seen' and szBits == 64 and len(data) == 8:
+                nr_ar_enc = bytes(data)
+                auth_state = 'nr_ar_seen'
+                decoded_ctx = f"NR||AR (enc)  NR={data[:4].hex().upper()}  AR={data[4:].hex().upper()}"
+                col_ctx = CG
+
+            # AT encrypted: 4 bytes, card→reader, after NR||AR
+            elif is_tx and auth_state == 'nr_ar_seen' and szBits == 32 and len(data) == 4:
+                at_enc = bytes(data)
+                auth_state = 'done'
+                decoded_ctx = f"AT (enc) = {data.hex().upper()}"
+                col_ctx = CG
+
+            decoded, col = _decode_14a_frame_col(data, szBits)
+            if decoded_ctx is not None:
+                decoded, col = decoded_ctx, col_ctx
+
+            dir_str = f'{CG}<<<{C0}' if is_tx else f'{CY}>>>{C0}'
+            print(f"  {CY}{n + 1:>3}{C0}  {dir_str}  {szBits:>4}  {hex_str:<42}  {col}{decoded}{C0}")
+
+        # Crypto1 verification block — if we have NT + NR||AR, decrypt AR/AT
+        # and confirm they match prng_successor(NT, 32) / prng_successor(NT, 64).
+        print()
+        if nt_int is not None and nr_ar_enc is not None and len(uid_bytes) >= 4:
+            uid32 = int.from_bytes(uid_bytes[-4:], 'big')  # last 4 bytes for cascade≥2
+            print(f" {CC}Crypto1 analysis:{C0}")
+            print(f"   UID (low 4 bytes) : {uid_bytes[-4:].hex().upper()}")
+            print(f"   NT (plaintext)    : {nt_int:08X}")
+            print(f"   NR (fixed in fw)  : 12345678  (encrypted on wire: {nr_ar_enc[:4].hex().upper()})")
+            ar_expected = Crypto1.prng_next(nt_int, 32)
+            at_expected = Crypto1.prng_next(nt_int, 64)
+            print(f"   AR expected       : {ar_expected:08X}  = prng_successor(NT, 32)")
+            print(f"   AR (encrypted)    : {nr_ar_enc[4:].hex().upper()}")
+            if at_enc is not None:
+                # Re-run Crypto1 forward to recover ks2 (keystream over AT).
+                state = Crypto1()
+                state.key = key_hex
+                state.lfsr48_u32(uid32 ^ nt_int, False)                            # ks0
+                state.lfsr48_u32(int.from_bytes(nr_ar_enc[:4], 'big'), True)       # ks1
+                state.lfsr48_u32(0, False)                                          # consume ks2 (AR keystream)
+                ks_at = state.lfsr48_u32(0, False)                                  # ks3 (AT keystream)
+                at_int = int.from_bytes(at_enc, 'big')
+                at_decoded = at_int ^ ks_at
+                ok = (at_decoded == at_expected)
+                colour = CG if ok else CR
+                mark = '✓' if ok else '✗'
+                print(f"   AT expected       : {at_expected:08X}  = prng_successor(NT, 64)")
+                print(f"   AT (encrypted)    : {at_enc.hex().upper()}")
+                print(f"   AT decrypted      : {colour}{at_decoded:08X}{C0}  {colour}{mark} "
+                      f"{'MATCH — auth verified' if ok else 'MISMATCH — wrong key or replay'}{C0}")
+                # Cross-check against mfkey32 prediction too.
+                nr_enc_int = int.from_bytes(nr_ar_enc[:4], 'big')
+                ar_enc_int = int.from_bytes(nr_ar_enc[4:], 'big')
+                key_match = Crypto1.mfkey32_is_reader_has_key(uid32, nt_int, nr_enc_int, ar_enc_int, key_hex)
+                if key_match:
+                    print(f"   mfkey32 forward   : {CG}key {key_hex.upper()} verified against NT/NR/AR{C0}")
+            else:
+                print(f"   {CR}AT not received — auth was rejected by the card{C0}")
+        elif nt_int is not None:
+            print(f" {CY}Auth aborted before NR||AR — NT={nt_int:08X}, no further analysis{C0}")
+
+
+
+
 
 def _decode_sw(sw1: int, sw2: int) -> str:
     """Decode an ISO 7816-4 status word pair."""
