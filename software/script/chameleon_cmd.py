@@ -371,8 +371,7 @@ class ChameleonCMD:
 
         data = bytes(cs)+struct.pack(f'!HH{len(data)}s', resp_timeout_ms, bitlen, bytearray(data))
         resp = self.device.send_cmd_sync(Command.HF14A_RAW, data, timeout=(resp_timeout_ms // 1000) + 1)
-        resp.parsed = resp.data
-        return resp
+        return resp.data
 
     @expect_response(Status.HF_TAG_OK)
     def mf1_manipulate_value_block(self, src_block, src_type: MfcKeyType, src_key, operator: MfcValueBlockOperator, operand, dst_block, dst_type: MfcKeyType, dst_key):
