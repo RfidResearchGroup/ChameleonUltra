@@ -535,28 +535,38 @@ class ChameleonCMD:
         timeout_s = (timeout_ms // 1000) + 5
         return self.device.send_cmd_sync(Command.HF14A_SNIFF, payload, timeout=timeout_s)
 
-    def hf14a_auth_trace(self, block: int, key_type: int, key: bytes):
+    def hf14a_auth_trace(self, block: int, key_type: int, key: bytes, timeout_ms: int = 5000):
         """
         Run a full reader-side ISO14443A + MIFARE Classic Crypto1 auth flow
         against a real card and return every wire frame for inspection.
 
-        The firmware performs anticoll + SELECT + (optional RATS) + AUTH and
-        packs all frames — synthesized anticoll plus the live AUTH/NT/NR||AR/AT
-        — into the same buffer format used by hf14a_sniff:
+        The firmware polls for a tag in the field for up to `timeout_ms`
+        milliseconds, then performs anticoll + SELECT + (optional RATS) +
+        AUTH and packs all frames — synthesized anticoll plus the live
+        AUTH/NT/NR||AR/AT — into the same buffer format used by hf14a_sniff:
           [2 bytes: bit count, big-endian] [N bytes: frame data, ceil(bits/8)] ...
         Bit 15 of the bit-count header: 0 = reader→card, 1 = card→reader.
 
-        :param block:    target block number (0-255)
-        :param key_type: 0x60 (Key A) or 0x61 (Key B)
-        :param key:      6-byte sector key
+        :param block:      target block number (0-255)
+        :param key_type:   0x60 (Key A) or 0x61 (Key B)
+        :param key:        6-byte sector key
+        :param timeout_ms: tag-presence polling timeout in ms (1-30000)
         :return: Raw response — check .status and .data
         """
         if key_type not in (0x60, 0x61):
             raise ValueError("key_type must be 0x60 (Key A) or 0x61 (Key B)")
         if len(key) != 6:
             raise ValueError("key must be exactly 6 bytes")
-        payload = bytes([key_type, block & 0xFF]) + bytes(key)
-        return self.device.send_cmd_sync(Command.HF14A_AUTH_TRACE, payload, timeout=3)
+        timeout_ms = max(1, min(30000, int(timeout_ms)))
+        payload = (
+            bytes([key_type, block & 0xFF])
+            + bytes(key)
+            + bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF])
+        )
+        # Add a couple of seconds of slack on top of the device-side polling
+        # window so the USB/BLE round-trip doesn't time out before firmware
+        # gives up on its own.
+        return self.device.send_cmd_sync(Command.HF14A_AUTH_TRACE, payload, timeout=(timeout_ms // 1000) + 3)
 
     @expect_response(Status.SUCCESS)
     def hf14a_get_config(self):

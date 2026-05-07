@@ -7583,10 +7583,15 @@ class HF14AAuthTrace(ReaderRequiredUnit):
             "-k", "--key", type=str, required=True, metavar="<hex>",
             help="6-byte sector key (12 hex chars)"
         )
+        parser.add_argument(
+            "-t", "--timeout", type=int, default=5000, metavar="<ms>",
+            help="Tag-presence polling timeout in ms (1-30000, default 5000)"
+        )
         parser.epilog = """
 examples:
   hf 14a auth-trace --blk 0 -k FFFFFFFFFFFF
   hf 14a auth-trace --blk 4 -b -k A0A1A2A3A4A5
+  hf 14a auth-trace --blk 0 -k FFFFFFFFFFFF -t 10000   # wait up to 10s for tag
 """
         return parser
 
@@ -7599,13 +7604,15 @@ examples:
         key_bytes = bytes.fromhex(key_hex)
         key_type = 0x61 if args.b else 0x60
         block = args.blk
+        timeout_ms = max(1, min(30000, int(args.timeout)))
 
         print(f" Running auth trace: block={block} keyType={'B' if args.b else 'A'} key={key_hex.upper()}")
-        print(" Place CU on a MIFARE Classic card now.")
+        print(f" Waiting up to {timeout_ms} ms for a MIFARE Classic card... "
+              f"({CY}place CU on a card now{C0})")
         print()
 
         try:
-            resp = self.cmd.hf14a_auth_trace(block, key_type, key_bytes)
+            resp = self.cmd.hf14a_auth_trace(block, key_type, key_bytes, timeout_ms=timeout_ms)
         except Exception as e:
             if 'CMDInvalid' in type(e).__name__ or '2017' in str(e):
                 print(f"{CR}Command not supported — reflash firmware to enable hf 14a auth-trace{C0}")
