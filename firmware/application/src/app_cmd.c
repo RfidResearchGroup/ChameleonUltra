@@ -2069,8 +2069,14 @@ static uint8_t auth_trace_do_auth(picc_14a_tag_t *tag, uint8_t type, uint8_t blo
 }
 
 static data_frame_tx_t *cmd_processor_hf14a_auth_trace(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    /* Payload: [type:1][block:1][key:6] = 8 bytes */
-    if (length != 8) {
+    /* Payload: [type:1][block:1][key:6][timeout_ms_be16:2] = 10 bytes.
+     * Backward-compatible short form [type:1][block:1][key:6] = 8 bytes still
+     * accepted; default 5000ms. */
+    uint32_t timeout_ms = 5000;
+    if (length == 10) {
+        timeout_ms = ((uint32_t)data[8] << 8) | data[9];
+        if (timeout_ms == 0 || timeout_ms > 30000) timeout_ms = 5000;
+    } else if (length != 8) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     uint8_t type    = data[0];
@@ -2082,9 +2088,29 @@ static data_frame_tx_t *cmd_processor_hf14a_auth_trace(uint16_t cmd, uint16_t st
 
     m_auth_trace_len = 0;
 
-    /* Step 1: full anticoll + SELECT + RATS via existing primitive */
+    /* Step 1: poll for a tag in the field until present or timeout.
+     * scan_auto internally tries twice with REQA; if no card is present
+     * each attempt fails fast (~3-5 ms) and we back off briefly between
+     * iterations to keep the WDT happy and avoid hammering the RC522.
+     * The antenna is already on (before_hf_reader_run hook) and stays on
+     * for the whole polling window — same behaviour as a desktop reader. */
     picc_14a_tag_t tag;
-    uint8_t scan_status = pcd_14a_reader_scan_auto(&tag);
+    uint8_t scan_status = STATUS_HF_TAG_NO;
+    autotimer *p_at = bsp_obtain_timer(0);
+    while (NO_TIMEOUT_1MS(p_at, timeout_ms)) {
+        scan_status = pcd_14a_reader_scan_auto(&tag);
+        if (scan_status == STATUS_HF_TAG_OK) {
+            break;
+        }
+        /* 50 ms back-off between attempts — yields to USB/BLE main loop
+         * and keeps the WDT fed (timeout is 5000 ms). */
+        for (int i = 0; i < 50; i++) {
+            bsp_delay_ms(1);
+            bsp_wdt_feed();
+        }
+    }
+    bsp_return_timer(p_at);
+
     if (scan_status != STATUS_HF_TAG_OK) {
         return data_frame_make(cmd, STATUS_HF_TAG_NO, 0, NULL);
     }
