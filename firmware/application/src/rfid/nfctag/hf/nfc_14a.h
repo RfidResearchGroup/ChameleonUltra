@@ -36,10 +36,11 @@
 
 // ISO14443-A Universal state machine
 typedef enum {
-    NFC_TAG_STATE_14A_IDLE,     // Leisure, you can wait for any instructions
-    NFC_TAG_STATE_14A_READY,    // Select card status, currently the standard 14A anti -rushing collision
-    NFC_TAG_STATE_14A_ACTIVE,   // Select cards or other instructions to enter the working status, which can receive all data
-    NFC_TAG_STATE_14A_HALTED,   // The label stops working status and can only be awakened by Halt or other special instructions (non -labels)
+    NFC_TAG_STATE_14A_IDLE,        // Leisure, you can wait for any instructions
+    NFC_TAG_STATE_14A_READY,       // Select card status, currently the standard 14A anti -rushing collision
+    NFC_TAG_STATE_14A_ACTIVE,      // Select cards or other instructions to enter the working status, which can receive all data
+    NFC_TAG_STATE_14A_HALTED,      // The label stops working status and can only be awakened by Halt or other special instructions (non -labels)
+    NFC_TAG_STATE_14A_PROPRIETARY, // Card is in proprietary state; all commands handled only by state_handler
 } nfc_tag_14a_state_t;
 
 // UID of the length in the enumeration specification
