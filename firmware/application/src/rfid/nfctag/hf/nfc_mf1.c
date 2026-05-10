@@ -1147,11 +1147,6 @@ int nfc_tag_mf1_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer)
         nfc_tag_14a_set_handler(&handler_for_14a);
         NRF_LOG_INFO("HF mf1 config 'field_off_do_reset' = %d", m_tag_information->config.field_off_do_reset);
         nfc_tag_14a_set_reset_enable(m_tag_information->config.field_off_do_reset);
-        // Default PRNG type to WEAK (1) if not explicitly set (new slot = all zeros = STATIC)
-        // WEAK produces real MFC LFSR nonces, compatible with readers that fingerprint PRNG type.
-        if (m_tag_information->config.prng_type == 0) {
-            m_tag_information->config.prng_type = 1;
-        }
         NRF_LOG_INFO("HF mf1 data load finish.");
     } else {
         NRF_LOG_ERROR("nfc_tag_mf1_information_t too big.");
@@ -1200,7 +1195,8 @@ bool nfc_tag_mf1_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     p_mf1_information->config.detection_enable = false;
     p_mf1_information->config.field_off_do_reset = false;
 
-    // zero for reserved byte
+    // PRNG type defaults to WEAK (1) — real MFC LFSR, compatible with Eltis readers
+    p_mf1_information->config.prng_type = 1;
     p_mf1_information->config.reserved1 = 0x00;
     p_mf1_information->config.reserved2 = 0x00;
     p_mf1_information->config.reserved3 = 0x00;
