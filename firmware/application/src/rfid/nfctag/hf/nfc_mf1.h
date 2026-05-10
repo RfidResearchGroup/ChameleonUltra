@@ -78,8 +78,10 @@ typedef struct {
      * Alternatively, enabling this configuration for resetting the NFC after leaving the rf field can also solve the aforementioned problem.
      */
     uint8_t field_off_do_reset: 1;
+    // PRNG type: 0=static 1=weak/LFSR(default) 2=hard/rand
+    uint8_t prng_type: 2;
     // reserved
-    uint8_t reserved1: 3;
+    uint8_t reserved1: 1;
     uint8_t reserved2;
     uint8_t reserved3;
 } nfc_tag_mf1_configure_t;

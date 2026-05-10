@@ -312,24 +312,23 @@ void ValueToBlock(uint8_t *Block, uint32_t Value) {
  */
 static uint32_t m_prng_state = 0;
 
-/** @brief Current PRNG type: 0=static(fixed), 1=weak(LFSR), 2=hard(rand) */
-static uint8_t m_prng_type = 1;  // default WEAK — real MFC LFSR behaviour
-
 /** @brief Seed the LFSR PRNG from hardware RNG value obtained at boot. */
 void nfc_tag_mf1_prng_seed(uint32_t seed) {
     m_prng_state = seed;
 }
 
 void nfc_tag_mf1_set_prng_type(uint8_t type) {
-    if (type <= 2) m_prng_type = type;
+    if (type <= 2) {
+        m_tag_information->config.prng_type = type;
+    }
 }
 
 uint8_t nfc_tag_mf1_get_prng_type(void) {
-    return m_prng_type;
+    return m_tag_information->config.prng_type;
 }
 
 /** @brief MF1 Get a random number.
- *  PRNG type is runtime-configurable via DATA_CMD_MF1_SET_PRNG_TYPE:
+ *  PRNG type is per-slot, persisted in FDS via the config struct.
  *    0 = STATIC  — fixed nonce (0x01020304), for testing
  *    1 = WEAK    — real Mifare Classic 16-bit LFSR (default, passes Eltis fingerprint)
  *    2 = HARD    — rand() seeded from hardware RNG (original behaviour)
@@ -337,10 +336,11 @@ uint8_t nfc_tag_mf1_get_prng_type(void) {
  * @param isNested  true if this is a nested authentication
  */
 void nfc_tag_mf1_random_nonce(uint8_t nonce[4], bool isNested) {
-    if (m_prng_type == 0) {
+    uint8_t prng_type = m_tag_information->config.prng_type;
+    if (prng_type == 0) {
         // STATIC — always return same nonce (clone-card behaviour)
         nonce[0] = 0x01; nonce[1] = 0x02; nonce[2] = 0x03; nonce[3] = 0x04;
-    } else if (m_prng_type == 1) {
+    } else if (prng_type == 1) {
         // WEAK — real MFC LFSR, advance 32 clocks per call
         m_prng_state = prng_successor(m_prng_state, 32);
         num_to_bytes(m_prng_state, 4, nonce);
@@ -1147,6 +1147,11 @@ int nfc_tag_mf1_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer)
         nfc_tag_14a_set_handler(&handler_for_14a);
         NRF_LOG_INFO("HF mf1 config 'field_off_do_reset' = %d", m_tag_information->config.field_off_do_reset);
         nfc_tag_14a_set_reset_enable(m_tag_information->config.field_off_do_reset);
+        // Default PRNG type to WEAK (1) if not explicitly set (new slot = all zeros = STATIC)
+        // WEAK produces real MFC LFSR nonces, compatible with readers that fingerprint PRNG type.
+        if (m_tag_information->config.prng_type == 0) {
+            m_tag_information->config.prng_type = 1;
+        }
         NRF_LOG_INFO("HF mf1 data load finish.");
     } else {
         NRF_LOG_ERROR("nfc_tag_mf1_information_t too big.");
