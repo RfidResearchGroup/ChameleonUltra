@@ -46,8 +46,6 @@
 #define DATA_CMD_GET_BLE_PAIRING_ENABLE         (1036)
 #define DATA_CMD_SET_BLE_PAIRING_ENABLE         (1037)
 #define DATA_CMD_GET_ALL_SLOT_NICKS             (1038)
-#define DATA_CMD_GET_SLEEP_TIMEOUT              (1039)
-#define DATA_CMD_SET_SLEEP_TIMEOUT              (1040)
 
 //
 // ******************************************************************
@@ -70,7 +68,6 @@
 #define DATA_CMD_MF1_WRITE_ONE_BLOCK            (2009)
 #define DATA_CMD_HF14A_RAW                      (2010)
 #define DATA_CMD_HF14A_SCAN_KEEP                (2016)  /* scan+RATS, keep field alive for APDU exchange */
-#define DATA_CMD_HF14A_AUTH_TRACE               (2017)  /* full anticoll + Crypto1 auth, every frame returned for inspection */
 #define DATA_CMD_MF1_MANIPULATE_VALUE_BLOCK     (2011)
 #define DATA_CMD_MF1_CHECK_KEYS_OF_SECTORS      (2012)
 #define DATA_CMD_MF1_HARDNESTED_ACQUIRE         (2013)
@@ -160,6 +157,8 @@
 #define DATA_CMD_MF0_NTAG_GET_EMULATOR_CONFIG   (4037)
 #define DATA_CMD_MF1_SET_FIELD_OFF_DO_RESET     (4038)
 #define DATA_CMD_MF1_GET_FIELD_OFF_DO_RESET     (4039)
+#define DATA_CMD_MF1_GET_PRNG_TYPE              (4040)  // 0=static 1=weak(LFSR) 2=hard(rand)
+#define DATA_CMD_MF1_SET_PRNG_TYPE              (4041)
 //
 // ******************************************************************
 
