@@ -166,5 +166,6 @@ void nfc_tag_mf1_set_write_mode(nfc_tag_mf1_write_mode_t write_mode);
 nfc_tag_mf1_write_mode_t nfc_tag_mf1_get_write_mode(void);
 void nfc_tag_mf1_set_field_off_do_reset(bool enable);
 bool nfc_tag_mf1_is_field_off_do_reset(void);
+void nfc_tag_mf1_prng_seed(uint32_t seed);  // seed MFC LFSR PRNG from hardware RNG
 
 #endif

@@ -3,6 +3,7 @@
 #include "nfc_mf1.h"
 #include "nfc_14a.h"
 #include "hex_utils.h"
+#include "mf1_crapto1.h"  // for prng_successor — real MFC LFSR PRNG
 #include "fds_util.h"
 #include "tag_persistence.h"
 
@@ -306,21 +307,28 @@ void ValueToBlock(uint8_t *Block, uint32_t Value) {
     Block[11] = Block[3];
 }
 
-/** @brief MF1 Get a random number
- * @param nonce      Random number buffer
+/** @brief Persistent LFSR state for Mifare Classic-compatible nonce generation.
+ *  Seeded from hardware RNG at boot via nfc_tag_mf1_prng_seed().
+ */
+static uint32_t m_prng_state = 0;
+
+/** @brief Seed the LFSR PRNG from hardware RNG value obtained at boot. */
+void nfc_tag_mf1_prng_seed(uint32_t seed) {
+    m_prng_state = seed;
+}
+
+/** @brief MF1 Get a random number using the real Mifare Classic 16-bit LFSR PRNG.
+ *  Uses prng_successor() to advance a single persistent LFSR state, producing
+ *  WEAK nonces that pass PRNG fingerprint checks by readers such as Eltis which
+ *  verify that successive nonces follow the MFC LFSR relationship.
+ * @param nonce     4-byte nonce output buffer
+ * @param isNested  true if this is a nested authentication
  */
 void nfc_tag_mf1_random_nonce(uint8_t nonce[4], bool isNested) {
-    // Use RAND to quickly generate random numbers, less performance loss
-    // isNested provides more randomness for hardnested attack
-    if (isNested) {
-        nonce[0] = rand() & 0xff;
-        nonce[1] = rand() & 0xff;
-        nonce[2] = rand() & 0xff;
-        nonce[3] = rand() & 0xff;
-    } else {
-        // fast for most readers
-        num_to_bytes(rand(), 4, nonce);
-    }
+    // Advance LFSR by 32 clocks per call — matches real MFC chip inter-auth timing.
+    // Both first and nested auth use the same LFSR continuation, as on a real card.
+    m_prng_state = prng_successor(m_prng_state, 32);
+    num_to_bytes(m_prng_state, 4, nonce);
 }
 
 /**
