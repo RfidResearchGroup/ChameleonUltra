@@ -12,6 +12,7 @@
 #include "nrf_delay.h"
 #include "nrf_drv_gpiote.h"
 #include "nrf_drv_rng.h"
+#include "nfc_mf1.h"         // for nfc_tag_mf1_prng_seed
 #include "nrf_power.h"
 #include "nrf_pwr_mgmt.h"
 #include "nrfx_nfct.h"
@@ -136,6 +137,11 @@ void rng_drv_and_srand_init(void) {
 
     // Finally initialize the srand seeds in the c standard library
     srand(rand_int);
+
+    // Seed the MFC LFSR PRNG with the same hardware random value.
+    // This makes nonce generation follow the real Mifare Classic LFSR pattern
+    // so readers that fingerprint PRNG type (e.g. Eltis) accept the emulated card.
+    nfc_tag_mf1_prng_seed(rand_int);
 }
 
 /**@brief Initialize GPIO matrix library
@@ -479,7 +485,7 @@ static void check_wakeup_src(void) {
         light_up_by_slot();
 
         // If no operation follows, wait for the timeout and then deep hibernate
-        sleep_timer_start(settings_get_sleep_timeout());
+        sleep_timer_start(SLEEP_DELAY_MS_BUTTON_WAKEUP);
     } else if ((m_reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) ||
                (m_gpregret_val & RESET_ON_LF_FIELD_EXISTS_Msk)) {
         NRF_LOG_INFO("WakeUp from rfid field");
