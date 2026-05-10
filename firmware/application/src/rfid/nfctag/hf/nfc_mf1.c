@@ -312,23 +312,49 @@ void ValueToBlock(uint8_t *Block, uint32_t Value) {
  */
 static uint32_t m_prng_state = 0;
 
+/** @brief Current PRNG type: 0=static(fixed), 1=weak(LFSR), 2=hard(rand) */
+static uint8_t m_prng_type = 1;  // default WEAK — real MFC LFSR behaviour
+
 /** @brief Seed the LFSR PRNG from hardware RNG value obtained at boot. */
 void nfc_tag_mf1_prng_seed(uint32_t seed) {
     m_prng_state = seed;
 }
 
-/** @brief MF1 Get a random number using the real Mifare Classic 16-bit LFSR PRNG.
- *  Uses prng_successor() to advance a single persistent LFSR state, producing
- *  WEAK nonces that pass PRNG fingerprint checks by readers such as Eltis which
- *  verify that successive nonces follow the MFC LFSR relationship.
+void nfc_tag_mf1_set_prng_type(uint8_t type) {
+    if (type <= 2) m_prng_type = type;
+}
+
+uint8_t nfc_tag_mf1_get_prng_type(void) {
+    return m_prng_type;
+}
+
+/** @brief MF1 Get a random number.
+ *  PRNG type is runtime-configurable via DATA_CMD_MF1_SET_PRNG_TYPE:
+ *    0 = STATIC  — fixed nonce (0x01020304), for testing
+ *    1 = WEAK    — real Mifare Classic 16-bit LFSR (default, passes Eltis fingerprint)
+ *    2 = HARD    — rand() seeded from hardware RNG (original behaviour)
  * @param nonce     4-byte nonce output buffer
  * @param isNested  true if this is a nested authentication
  */
 void nfc_tag_mf1_random_nonce(uint8_t nonce[4], bool isNested) {
-    // Advance LFSR by 32 clocks per call — matches real MFC chip inter-auth timing.
-    // Both first and nested auth use the same LFSR continuation, as on a real card.
-    m_prng_state = prng_successor(m_prng_state, 32);
-    num_to_bytes(m_prng_state, 4, nonce);
+    if (m_prng_type == 0) {
+        // STATIC — always return same nonce (clone-card behaviour)
+        nonce[0] = 0x01; nonce[1] = 0x02; nonce[2] = 0x03; nonce[3] = 0x04;
+    } else if (m_prng_type == 1) {
+        // WEAK — real MFC LFSR, advance 32 clocks per call
+        m_prng_state = prng_successor(m_prng_state, 32);
+        num_to_bytes(m_prng_state, 4, nonce);
+    } else {
+        // HARD — original rand() behaviour
+        if (isNested) {
+            nonce[0] = rand() & 0xff;
+            nonce[1] = rand() & 0xff;
+            nonce[2] = rand() & 0xff;
+            nonce[3] = rand() & 0xff;
+        } else {
+            num_to_bytes(rand(), 4, nonce);
+        }
+    }
 }
 
 /**

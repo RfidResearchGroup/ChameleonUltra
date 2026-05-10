@@ -167,5 +167,7 @@ nfc_tag_mf1_write_mode_t nfc_tag_mf1_get_write_mode(void);
 void nfc_tag_mf1_set_field_off_do_reset(bool enable);
 bool nfc_tag_mf1_is_field_off_do_reset(void);
 void nfc_tag_mf1_prng_seed(uint32_t seed);  // seed MFC LFSR PRNG from hardware RNG
+void nfc_tag_mf1_set_prng_type(uint8_t type);  // 0=static 1=weak(LFSR) 2=hard(rand)
+uint8_t nfc_tag_mf1_get_prng_type(void);
 
 #endif
