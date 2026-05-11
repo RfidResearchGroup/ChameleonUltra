@@ -6455,6 +6455,15 @@ class HWSlotList(DeviceRequiredUnit):
                         f'      {"Log (mfkey32) mode:":40}'
                         f'{enabled_str if config["detection"] else disabled_str}'
                     )
+                    try:
+                        prng_resp = self.cmd.mf1_get_prng_type()
+                        prng_type = MifareClassicPrngType(prng_resp.parsed)
+                        print(
+                            f'      {"PRNG type:":40}'
+                            f'{color_string((CY, str(prng_type)))}'
+                        )
+                    except Exception:
+                        pass
 
             # LF
             field_length = maxnamelength + slotnames[fwslot]["lf"]["metalen"] + 1
@@ -6516,6 +6525,43 @@ class HWSlotList(DeviceRequiredUnit):
                     print(f"      {'Raw:':40}{color_string((CY, raw.hex().upper()))}")
         if current != selected:
             self.cmd.set_active_slot(selected)
+
+
+@hw_slot.command("prng")
+class HWSlotPrng(SlotIndexArgsAndGoUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Get or set the PRNG type for the MF1 emulator of a slot. "
+            "PRNG controls the nonce used during MIFARE Classic authentication: "
+            "0=Static (fixed), 1=Weak (LFSR/predictable), 2=Hard (unpredictable). "
+            "Omit --type to read the current setting."
+        )
+        self.add_slot_args(parser)
+        parser.add_argument(
+            "-t",
+            "--type",
+            type=int,
+            choices=[0, 1, 2],
+            metavar="<0|1|2>",
+            help="PRNG type: 0=Static, 1=Weak, 2=Hard",
+            default=None,
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.type is None:
+            # Read current PRNG type
+            resp = self.cmd.mf1_get_prng_type()
+            try:
+                prng_type = MifareClassicPrngType(resp.parsed)
+                print(f" - Slot {self.slot_num} PRNG type: {color_string((CY, str(prng_type)))} ({resp.parsed})")
+            except ValueError:
+                print(f" - Slot {self.slot_num} PRNG type: {color_string((CR, f'unknown ({resp.parsed})'))} ")
+        else:
+            self.cmd.mf1_set_prng_type(args.type)
+            prng_type = MifareClassicPrngType(args.type)
+            print(f" - Slot {self.slot_num} PRNG type set to: {color_string((CG, str(prng_type)))} ({args.type})")
 
 
 @hw_slot.command("change")

@@ -1391,6 +1391,26 @@ class ChameleonCMD:
         data = struct.pack('!B', mode)
         return self.device.send_cmd_sync(Command.MF1_SET_WRITE_MODE, data)
 
+    def mf1_get_prng_type(self):
+        """
+        Get PRNG type used for MF1 auth nonce:
+          0 = Static  (fixed nonce)
+          1 = Weak    (LFSR-based, predictable)
+          2 = Hard    (unpredictable)
+        """
+        resp = self.device.send_cmd_sync(Command.MF1_GET_PRNG_TYPE)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data[0]
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mf1_set_prng_type(self, prng_type: int):
+        """
+        Set PRNG type (0=Static, 1=Weak, 2=Hard)
+        """
+        data = struct.pack('!B', prng_type)
+        return self.device.send_cmd_sync(Command.MF1_SET_PRNG_TYPE, data)
+
     @expect_response(Status.SUCCESS)
     def slot_data_config_save(self):
         """
