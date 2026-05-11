@@ -523,11 +523,11 @@ static data_frame_tx_t *cmd_processor_hf14a_set_field_on(uint16_t cmd, uint16_t 
     if (mode != DEVICE_MODE_READER) {
         return data_frame_make(cmd, STATUS_DEVICE_MODE_ERROR, 0, NULL);
     }
-    
+
     // Reset and turn on the antenna
     pcd_14a_reader_reset();
     pcd_14a_reader_antenna_on();
-    
+
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
@@ -536,10 +536,10 @@ static data_frame_tx_t *cmd_processor_hf14a_set_field_off(uint16_t cmd, uint16_t
     if (mode != DEVICE_MODE_READER) {
         return data_frame_make(cmd, STATUS_DEVICE_MODE_ERROR, 0, NULL);
     }
-    
+
     // Turn off the antenna
     pcd_14a_reader_antenna_off();
-    
+
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
@@ -724,11 +724,11 @@ static data_frame_tx_t *cmd_processor_hidprox_write_to_t55xx(uint16_t cmd, uint1
     }
 
     uint8_t format = payload->id[0];
-    uint32_t fc = bytes_to_num(payload->id+1, 4);
+    uint32_t fc = bytes_to_num(payload->id + 1, 4);
     uint64_t cn = payload->id[5];
-    cn = (cn << 32) | (bytes_to_num(payload->id+6, 4));
+    cn = (cn << 32) | (bytes_to_num(payload->id + 6, 4));
     uint32_t il = payload->id[10];
-    uint32_t oem = bytes_to_num(payload->id+11, 2);
+    uint32_t oem = bytes_to_num(payload->id + 11, 2);
     status = write_hidprox_to_t55xx(format, fc, cn, il, oem, payload->old_key, payload->new_keys, (length - offsetof(payload_t, new_keys)) / sizeof(payload->new_keys));
     return data_frame_make(cmd, status, 0, NULL);
 }
@@ -756,7 +756,7 @@ static data_frame_tx_t *cmd_processor_ioprox_scan(uint16_t cmd, uint16_t status,
 static data_frame_tx_t *cmd_processor_ioprox_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     typedef struct {
         uint8_t card_data[16];  // ioprox_codec_t->data layout: version, facility code, card number, raw8
-        uint8_t new_key[4];  
+        uint8_t new_key[4];
         uint8_t old_keys[4];  // we can have more than one... struct just to compute offsets with min 1 key
     } PACKED payload_t;
 
@@ -764,7 +764,7 @@ static data_frame_tx_t *cmd_processor_ioprox_write_to_t55xx(uint16_t cmd, uint16
 
     // Validate packet length
     if (length < sizeof(payload_t) ||
-        (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+            (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
@@ -772,11 +772,11 @@ static data_frame_tx_t *cmd_processor_ioprox_write_to_t55xx(uint16_t cmd, uint16
 
     // Pass card_data (including raw8 at index 4-11) directly to the T55xx writer.
     status = write_ioprox_to_t55xx(
-        payload->card_data, 
-        payload->new_key, 
-        payload->old_keys, 
-        old_cnt
-    );
+                 payload->card_data,
+                 payload->new_key,
+                 payload->old_keys,
+                 old_cnt
+             );
 
     return data_frame_make(cmd, status, 0, NULL);
 }
@@ -791,14 +791,14 @@ static data_frame_tx_t *cmd_processor_ioprox_write_to_t55xx(uint16_t cmd, uint16
  */
 static data_frame_tx_t *cmd_processor_ioprox_decode_raw(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length != 8) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
-    
+
     uint8_t output[16];
     uint8_t result = decode_ioprox_raw(data, output);
-    
+
     if (result != STATUS_SUCCESS) {
         return data_frame_make(cmd, STATUS_CMD_ERR, 0, NULL);
     }
-    
+
     return data_frame_make(cmd, STATUS_SUCCESS, 16, output);
 }
 
@@ -812,11 +812,11 @@ static data_frame_tx_t *cmd_processor_ioprox_decode_raw(uint16_t cmd, uint16_t s
  */
 static data_frame_tx_t *cmd_processor_ioprox_compose_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length != 4) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
-    
+
     uint8_t output[16];
     memset(output, 0, sizeof(output));
     uint8_t result = encode_ioprox_params(data[0], data[1], (data[2] << 8) | data[3], output);
-    
+
     if (result != STATUS_SUCCESS) {
         return data_frame_make(cmd, STATUS_CMD_ERR, 0, NULL);
     }
@@ -904,7 +904,7 @@ static data_frame_tx_t *cmd_processor_lf_t55xx_write(uint16_t cmd, uint16_t stat
 #define GENERIC_READ_LEN 800
 #define GENERIC_READ_TIMEOUT_MS 500
 static data_frame_tx_t *cmd_processor_generic_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t *outdata = malloc(GENERIC_READ_LEN); 
+    uint8_t *outdata = malloc(GENERIC_READ_LEN);
 
     if (outdata == NULL) {
         return data_frame_make(cmd, STATUS_MEM_ERR, 0, NULL);
@@ -1279,7 +1279,7 @@ static data_frame_tx_t *cmd_processor_mf1_write_emu_block_data(uint16_t cmd, uin
     uint8_t block_index = data[0];
     uint8_t block_count = (length - 1) / NFC_TAG_MF1_DATA_SIZE;
     if (block_index + block_count > NFC_TAG_MF1_BLOCK_MAX) {
-       return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_MIFARE_4096);
     nfc_tag_mf1_information_t *info = (nfc_tag_mf1_information_t *)buffer->buffer;
@@ -2032,7 +2032,7 @@ static uint8_t auth_trace_do_auth(picc_14a_tag_t *tag, uint8_t type, uint8_t blo
     /* Capture NT — 32 bits, card→reader */
     auth_trace_store(answer, 32, true);
     uint32_t nt = ((uint32_t)answer[0] << 24) | ((uint32_t)answer[1] << 16)
-                | ((uint32_t)answer[2] <<  8) |  (uint32_t)answer[3];
+                  | ((uint32_t)answer[2] <<  8) |  (uint32_t)answer[3];
 
     /* Initialise Crypto1 with key (LSB-first, MIFARE convention) */
     uint64_t ui64Key = 0;
@@ -2071,7 +2071,7 @@ static uint8_t auth_trace_do_auth(picc_14a_tag_t *tag, uint8_t type, uint8_t blo
 
     /* Verify AT == prng_successor(nt, 64) ^ ks3 */
     uint32_t at_recv = ((uint32_t)answer[0] << 24) | ((uint32_t)answer[1] << 16)
-                     | ((uint32_t)answer[2] <<  8) |  (uint32_t)answer[3];
+                       | ((uint32_t)answer[2] <<  8) |  (uint32_t)answer[3];
     uint32_t ntpp    = prng_successor(nt_succ, 32) ^ crypto1_word(&pcs, 0, 0);
     status = (ntpp == at_recv) ? STATUS_HF_TAG_OK : STATUS_MF_ERR_AUTH;
 
@@ -2276,11 +2276,16 @@ static data_frame_tx_t *cmd_processor_hf14a_4_set_anti_coll(uint16_t cmd, uint16
     nfc_tag_14a_coll_res_reference_t *info = get_coll_res_data(true);
     if (info == NULL) return data_frame_make(cmd, STATUS_HF_TAG_NO, 0, NULL);
     uint16_t offset = 0;
-    *(info->size) = (nfc_tag_14a_uid_size)data[offset]; offset++;
-    memcpy(info->uid,  &data[offset], *(info->size));    offset += *(info->size);
-    memcpy(info->atqa, &data[offset], 2);                offset += 2;
-    info->sak[0]      = data[offset];                    offset++;
-    info->ats->length = data[offset];                    offset++;
+    *(info->size) = (nfc_tag_14a_uid_size)data[offset];
+    offset++;
+    memcpy(info->uid,  &data[offset], *(info->size));
+    offset += *(info->size);
+    memcpy(info->atqa, &data[offset], 2);
+    offset += 2;
+    info->sak[0]      = data[offset];
+    offset++;
+    info->ats->length = data[offset];
+    offset++;
     memcpy(info->ats->data, &data[offset], info->ats->length);
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
@@ -2319,11 +2324,14 @@ static data_frame_tx_t *cmd_processor_hf14a_scan_keep(uint16_t cmd, uint16_t sta
     uint8_t payload[1 + sizeof(taginfo.uid) + sizeof(taginfo.atqa) + sizeof(taginfo.sak) + 1 + 254];
     uint16_t offset = 0;
     payload[offset++] = taginfo.uid_len;
-    memcpy(&payload[offset], taginfo.uid, taginfo.uid_len); offset += taginfo.uid_len;
-    memcpy(&payload[offset], taginfo.atqa, sizeof(taginfo.atqa)); offset += sizeof(taginfo.atqa);
+    memcpy(&payload[offset], taginfo.uid, taginfo.uid_len);
+    offset += taginfo.uid_len;
+    memcpy(&payload[offset], taginfo.atqa, sizeof(taginfo.atqa));
+    offset += sizeof(taginfo.atqa);
     payload[offset++] = taginfo.sak;
     payload[offset++] = taginfo.ats_len;
-    memcpy(&payload[offset], taginfo.ats, taginfo.ats_len); offset += taginfo.ats_len;
+    memcpy(&payload[offset], taginfo.ats, taginfo.ats_len);
+    offset += taginfo.ats_len;
     return data_frame_make(cmd, STATUS_HF_TAG_OK, offset, payload);
 }
 
@@ -2367,7 +2375,7 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
         return data_frame_make(cmd, STATUS_HF_TAG_NO, 2, dbg);
     }
     NRF_LOG_INFO("14A4_READER_APDU: scan_auto OK sak=%02x ats_len=%d",
-                  taginfo.sak, taginfo.ats_len);
+                 taginfo.sak, taginfo.ats_len);
 
     /* Step 3: wrap APDU in I-block (PCB=0x02) and send */
     uint8_t frame_buf[64];
@@ -2381,14 +2389,15 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
     pcd_14a_reader_timeout_set(600);
     resp_bits = 0;
     status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE,
-                frame_buf, frame_len, resp_buf, &resp_bits, U8ARR_BIT_LEN(resp_buf));
+                                           frame_buf, frame_len, resp_buf, &resp_bits, U8ARR_BIT_LEN(resp_buf));
     pcd_14a_reader_timeout_set(DEF_COM_TIMEOUT);
 
     NRF_LOG_INFO("14A4_READER_APDU: APDU transfer status=%d resp_bits=%d", status, resp_bits);
 
     if (status != STATUS_HF_TAG_OK || resp_bits < 8) {
         uint8_t dbg[6] = {0x03, status, (uint8_t)frame_len,
-                          frame_buf[0], frame_buf[1], frame_buf[2]};
+                          frame_buf[0], frame_buf[1], frame_buf[2]
+                         };
         return data_frame_make(cmd, STATUS_HF_TAG_NO, 6, dbg);
     }
 
@@ -2401,7 +2410,7 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
     /* Verify first block CRC and begin chaining reassembly */
     uint8_t crc_calc[2];
     crc_14a_calculate(resp_buf, resp_bytes - 2, crc_calc);
-    if (resp_buf[resp_bytes-2] != crc_calc[0] || resp_buf[resp_bytes-1] != crc_calc[1]) {
+    if (resp_buf[resp_bytes - 2] != crc_calc[0] || resp_buf[resp_bytes - 1] != crc_calc[1]) {
         return data_frame_make(cmd, STATUS_HF_ERR_CRC, resp_bytes, resp_buf);
     }
 
@@ -2424,12 +2433,12 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
         resp_bits = 0;
         pcd_14a_reader_timeout_set(600);
         status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE,
-                    rack_frame, 3, resp_buf, &resp_bits, U8ARR_BIT_LEN(resp_buf));
+                                               rack_frame, 3, resp_buf, &resp_bits, U8ARR_BIT_LEN(resp_buf));
         pcd_14a_reader_timeout_set(DEF_COM_TIMEOUT);
         if (status != STATUS_HF_TAG_OK || resp_bits < 24) break;
         resp_bytes = resp_bits / 8;
         crc_14a_calculate(resp_buf, resp_bytes - 2, crc_calc);
-        if (resp_buf[resp_bytes-2] != crc_calc[0] || resp_buf[resp_bytes-1] != crc_calc[1]) break;
+        if (resp_buf[resp_bytes - 2] != crc_calc[0] || resp_buf[resp_bytes - 1] != crc_calc[1]) break;
         resp_pcb = resp_buf[0];
         dlen = resp_bytes - 3;
         if (dlen > 0 && resp_chain_len + dlen < sizeof(resp_chain)) {
@@ -2447,11 +2456,10 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
  * Sends one I-block, receives full response handling card-side chaining.
  * ----------------------------------------------------------------------- */
 static bool tcl_apdu_(
-        const uint8_t *apdu, uint8_t apdu_sz,
-        uint8_t **rdata_ptr, uint16_t *rlen_ptr,
-        uint8_t *abuf, uint8_t *rbuf, uint8_t *chain_buf,
-        uint16_t *rbits_p, uint8_t *blk_p)
-{
+    const uint8_t *apdu, uint8_t apdu_sz,
+    uint8_t **rdata_ptr, uint16_t *rlen_ptr,
+    uint8_t *abuf, uint8_t *rbuf, uint8_t *chain_buf,
+    uint16_t *rbits_p, uint8_t *blk_p) {
     /* Build I-block: PCB + APDU + CRC */
     abuf[0] = 0x02 | (*blk_p & 0x01);
     memcpy(&abuf[1], apdu, apdu_sz);
@@ -2466,13 +2474,13 @@ static bool tcl_apdu_(
     pcd_14a_reader_timeout_set(600);
     uint16_t rbits = 0;
     uint8_t st = pcd_14a_reader_bytes_transfer(
-            PCD_TRANSCEIVE, abuf, frame_len, rbuf, &rbits, 270u * 8u);
+                     PCD_TRANSCEIVE, abuf, frame_len, rbuf, &rbits, 270u * 8u);
     if (st != STATUS_HF_TAG_OK || rbits < 24u) return false;
 
     uint16_t rb = rbits / 8u;
     uint8_t crc[2];
     crc_14a_calculate(rbuf, rb - 2u, crc);
-    if (rbuf[rb-2] != crc[0] || rbuf[rb-1] != crc[1]) return false;
+    if (rbuf[rb - 2] != crc[0] || rbuf[rb - 1] != crc[1]) return false;
 
     *blk_p ^= 1;
     uint8_t  resp_pcb  = rbuf[0];
@@ -2502,11 +2510,11 @@ static bool tcl_apdu_(
                 pcd_14a_reader_timeout_set(600);
                 chain_rbits = 0;
                 chain_st = pcd_14a_reader_bytes_transfer(
-                        PCD_TRANSCEIVE, wtx_r, 4, rbuf, &chain_rbits, 270u * 8u);
+                               PCD_TRANSCEIVE, wtx_r, 4, rbuf, &chain_rbits, 270u * 8u);
                 if (chain_st != STATUS_HF_TAG_OK || chain_rbits < 24u) break;
                 rb = chain_rbits / 8u;
                 crc_14a_calculate(rbuf, rb - 2u, crc);
-                if (rbuf[rb-2] != crc[0] || rbuf[rb-1] != crc[1]) break;
+                if (rbuf[rb - 2] != crc[0] || rbuf[rb - 1] != crc[1]) break;
                 resp_pcb = rbuf[0];
                 dlen = (uint8_t)(rb - 3u);
                 if (dlen > 0u && chain_len + dlen < 512u) {
@@ -2528,12 +2536,12 @@ static bool tcl_apdu_(
         pcd_14a_reader_timeout_set(600);
         chain_rbits = 0;
         chain_st = pcd_14a_reader_bytes_transfer(
-                PCD_TRANSCEIVE, rf, 3, rbuf, &chain_rbits, 270u * 8u);
+                       PCD_TRANSCEIVE, rf, 3, rbuf, &chain_rbits, 270u * 8u);
         if (chain_st != STATUS_HF_TAG_OK || chain_rbits < 24u) break;
         rb = chain_rbits / 8u;   /* bytes_transfer returns BIT count */
 
         crc_14a_calculate(rbuf, rb - 2u, crc);
-        if (rbuf[rb-2] != crc[0] || rbuf[rb-1] != crc[1]) break;
+        if (rbuf[rb - 2] != crc[0] || rbuf[rb - 1] != crc[1]) break;
 
         resp_pcb = rbuf[0];
         dlen = (uint8_t)(rb - 3u);
@@ -2576,12 +2584,12 @@ static data_frame_tx_t *cmd_processor_hf14a_4_emv_scan(uint16_t cmd, uint16_t st
     uint8_t  blk = 0;  /* alternating block number */
 
     /* SEND_APDU: thin wrapper that calls the static tcl_apdu_ helper. */
-    #define SEND_APDU(ap, asz, rd, rl)         tcl_apdu_((ap),(asz),(rd),(rl),abuf,rbuf,chain_buf,&rbits,&blk)
+#define SEND_APDU(ap, asz, rd, rl)         tcl_apdu_((ap),(asz),(rd),(rl),abuf,rbuf,chain_buf,&rbits,&blk)
 
 
 
     /* Append a cmd+resp pair to out buffer */
-    #define APPEND_PAIR(cmd_ptr, cmd_sz, resp_ptr, resp_sz) do {         if (out_len + 1 + (cmd_sz) + 2 + (resp_sz) < NETDATA_MAX_DATA_LENGTH) {             out[out_len++] = (uint8_t)(cmd_sz);             memcpy(&out[out_len], (cmd_ptr), (cmd_sz)); out_len += (cmd_sz);             out[out_len++] = (uint8_t)((resp_sz) & 0xFF);             out[out_len++] = (uint8_t)((resp_sz) >> 8);             memcpy(&out[out_len], (resp_ptr), (resp_sz)); out_len += (resp_sz);         }     } while(0)
+#define APPEND_PAIR(cmd_ptr, cmd_sz, resp_ptr, resp_sz) do {         if (out_len + 1 + (cmd_sz) + 2 + (resp_sz) < NETDATA_MAX_DATA_LENGTH) {             out[out_len++] = (uint8_t)(cmd_sz);             memcpy(&out[out_len], (cmd_ptr), (cmd_sz)); out_len += (cmd_sz);             out[out_len++] = (uint8_t)((resp_sz) & 0xFF);             out[out_len++] = (uint8_t)((resp_sz) >> 8);             memcpy(&out[out_len], (resp_ptr), (resp_sz)); out_len += (resp_sz);         }     } while(0)
 
     /* ---- Step 1: scan_auto ----------------------------------------- */
     bsp_delay_ms(10);
@@ -2626,11 +2634,14 @@ static data_frame_tx_t *cmd_processor_hf14a_4_emv_scan(uint16_t cmd, uint16_t st
 
     /* ---- Pack tag info ------------------------------------------- */
     out[out_len++] = tag.uid_len;
-    memcpy(&out[out_len], tag.uid, tag.uid_len); out_len += tag.uid_len;
-    memcpy(&out[out_len], tag.atqa, 2); out_len += 2;
+    memcpy(&out[out_len], tag.uid, tag.uid_len);
+    out_len += tag.uid_len;
+    memcpy(&out[out_len], tag.atqa, 2);
+    out_len += 2;
     out[out_len++] = tag.sak;
     out[out_len++] = tag.ats_len;
-    memcpy(&out[out_len], tag.ats, tag.ats_len); out_len += tag.ats_len;
+    memcpy(&out[out_len], tag.ats, tag.ats_len);
+    out_len += tag.ats_len;
 
     /* Placeholder for num_apdus — fill in at end */
     uint16_t num_apdus_offset = out_len;
@@ -2645,7 +2656,8 @@ static data_frame_tx_t *cmd_processor_hf14a_4_emv_scan(uint16_t cmd, uint16_t st
         0x32, 0x50, 0x41, 0x59, 0x2E, 0x53, 0x59, 0x53, 0x2E,
         0x44, 0x44, 0x46, 0x30, 0x31, 0x00
     };
-    uint8_t *ppse_resp = NULL; uint16_t ppse_rlen = 0;
+    uint8_t *ppse_resp = NULL;
+    uint16_t ppse_rlen = 0;
     {
         bool _ppse_ok = SEND_APDU(ppse_cmd, sizeof(ppse_cmd), &ppse_resp, &ppse_rlen);
         if (!_ppse_ok) {
@@ -2673,11 +2685,12 @@ static data_frame_tx_t *cmd_processor_hf14a_4_emv_scan(uint16_t cmd, uint16_t st
     blk = 0;   /* new T=CL session: block number restarts at 0 */
 
     /* ---- Extract first AID from PPSE ----------------------------- */
-    uint8_t aid[16]; uint8_t aid_len = 0;
+    uint8_t aid[16];
+    uint8_t aid_len = 0;
     for (uint8_t i = 0; i + 1 < ppse_rlen; i++) {
-        if (ppse_resp[i] == 0x4F && ppse_resp[i+1] > 0 && ppse_resp[i+1] <= 16) {
-            aid_len = ppse_resp[i+1];
-            memcpy(aid, &ppse_resp[i+2], aid_len);
+        if (ppse_resp[i] == 0x4F && ppse_resp[i + 1] > 0 && ppse_resp[i + 1] <= 16) {
+            aid_len = ppse_resp[i + 1];
+            memcpy(aid, &ppse_resp[i + 2], aid_len);
             break;
         }
     }
@@ -2686,13 +2699,17 @@ static data_frame_tx_t *cmd_processor_hf14a_4_emv_scan(uint16_t cmd, uint16_t st
     /* ---- Step 3: SELECT AID -------------------------------------- */
     uint8_t sel_cmd[32];
     uint8_t sel_len = 0;
-    sel_cmd[sel_len++] = 0x00; sel_cmd[sel_len++] = 0xA4;
-    sel_cmd[sel_len++] = 0x04; sel_cmd[sel_len++] = 0x00;
+    sel_cmd[sel_len++] = 0x00;
+    sel_cmd[sel_len++] = 0xA4;
+    sel_cmd[sel_len++] = 0x04;
+    sel_cmd[sel_len++] = 0x00;
     sel_cmd[sel_len++] = aid_len;
-    memcpy(&sel_cmd[sel_len], aid, aid_len); sel_len += aid_len;
+    memcpy(&sel_cmd[sel_len], aid, aid_len);
+    sel_len += aid_len;
     sel_cmd[sel_len++] = 0x00;
 
-    uint8_t *sel_resp; uint16_t sel_rlen;
+    uint8_t *sel_resp;
+    uint16_t sel_rlen;
     if (!SEND_APDU(sel_cmd, sel_len, &sel_resp, &sel_rlen)) goto done;
     APPEND_PAIR(sel_cmd, sel_len, sel_resp, sel_rlen);
     num_apdus++;
@@ -2704,8 +2721,8 @@ static data_frame_tx_t *cmd_processor_hf14a_4_emv_scan(uint16_t cmd, uint16_t st
     for (uint8_t pi = 0; pi + 2 < sel_rlen; pi++) {
         /* 2-byte tag detection: first byte has bits[4:0] == 0x1F */
         uint8_t ptag1 = sel_resp[pi];
-        uint8_t ptag2 = (((ptag1 & 0x1F) == 0x1F) && pi+1 < sel_rlen) ? sel_resp[pi+1] : 0;
-        uint16_t ftag = ((ptag1 & 0x1F) == 0x1F) ? (((uint16_t)ptag1<<8)|ptag2) : ptag1;
+        uint8_t ptag2 = (((ptag1 & 0x1F) == 0x1F) && pi + 1 < sel_rlen) ? sel_resp[pi + 1] : 0;
+        uint16_t ftag = ((ptag1 & 0x1F) == 0x1F) ? (((uint16_t)ptag1 << 8) | ptag2) : ptag1;
         uint8_t flen_off = (((ptag1 & 0x1F) == 0x1F)) ? 2 : 1;
         if (pi + flen_off >= sel_rlen) break;
         uint8_t flen = sel_resp[pi + flen_off];
@@ -2721,7 +2738,8 @@ static data_frame_tx_t *cmd_processor_hf14a_4_emv_scan(uint16_t cmd, uint16_t st
             }
             break;
         }
-        if (flen_off + flen < 255) pi += flen_off + flen - 1; else break;
+        if (flen_off + flen < 255) pi += flen_off + flen - 1;
+        else break;
     }
     /* ---- Step 5: GPO -----------------------------------------------
      * Build GPO from parsed PDOL. pdol_len from FCI may be 0 if truncated.
@@ -2746,9 +2764,10 @@ static data_frame_tx_t *cmd_processor_hf14a_4_emv_scan(uint16_t cmd, uint16_t st
         0x00, 0x00, 0x00
     };
     uint8_t gpo_len = 0;
-    uint8_t *gpo_resp = NULL; uint16_t gpo_rlen = 0;
+    uint8_t *gpo_resp = NULL;
+    uint16_t gpo_rlen = 0;
     if (pdol_len > 44) pdol_len = 0;
-    #define BUILD_GPO(pl) do { \
+#define BUILD_GPO(pl) do { \
         gpo_len = 0; \
         gpo_buf[gpo_len++]=0x80; gpo_buf[gpo_len++]=0xA8; \
         gpo_buf[gpo_len++]=0x00; gpo_buf[gpo_len++]=0x00; \
@@ -2762,58 +2781,62 @@ static data_frame_tx_t *cmd_processor_hf14a_4_emv_scan(uint16_t cmd, uint16_t st
         gpo_len += (pl); \
         gpo_buf[gpo_len++]=0x00; \
     } while(0)
-    #define GPO_OK(rp,rl) ((rl)>=2 && \
+#define GPO_OK(rp,rl) ((rl)>=2 && \
         ((rp)[0]==0x77||(rp)[0]==0x80|| \
          ((rp)[(rl)-2]==0x90&&(rp)[(rl)-1]==0x00)))
     /* Attempt 1: use PDOL length from FCI (may be 0 if truncated) */
     BUILD_GPO(pdol_len);
     if (!SEND_APDU(gpo_buf, gpo_len, &gpo_resp, &gpo_rlen) ||
-        !GPO_OK(gpo_resp, gpo_rlen)) {
+            !GPO_OK(gpo_resp, gpo_rlen)) {
         /* Attempt 2: try 4 bytes (TTQ only — some Visa/MC accept this) */
         if (pdol_len != 4) {
             BUILD_GPO(4);
             if (SEND_APDU(gpo_buf, gpo_len, &gpo_resp, &gpo_rlen) &&
-                GPO_OK(gpo_resp, gpo_rlen)) goto gpo_done;
+                    GPO_OK(gpo_resp, gpo_rlen)) goto gpo_done;
         }
         /* Attempt 3: try 29 bytes (common Mastercard/Visa PDOL size) */
         if (pdol_len != 29) {
             BUILD_GPO(29);
             if (SEND_APDU(gpo_buf, gpo_len, &gpo_resp, &gpo_rlen) &&
-                GPO_OK(gpo_resp, gpo_rlen)) goto gpo_done;
+                    GPO_OK(gpo_resp, gpo_rlen)) goto gpo_done;
         }
         /* Attempt 4: try 33 bytes (MC with Amount+Country+Currency fields) */
         if (pdol_len != 33) {
             BUILD_GPO(33);
             if (SEND_APDU(gpo_buf, gpo_len, &gpo_resp, &gpo_rlen) &&
-                GPO_OK(gpo_resp, gpo_rlen)) goto gpo_done;
+                    GPO_OK(gpo_resp, gpo_rlen)) goto gpo_done;
         }
         /* Attempts 5-7: additional MC sizes (+TermType, +DataAuth, +IssuerAppData) */
-        { static const uint8_t extra_pl[] = {34, 36, 38};
-          for (uint8_t ei = 0; ei < sizeof(extra_pl); ei++) {
-            uint8_t pl = extra_pl[ei];
-            if (pl == pdol_len || pl == 4 || pl == 29 || pl == 33) continue;
-            BUILD_GPO(pl);
-            if (SEND_APDU(gpo_buf, gpo_len, &gpo_resp, &gpo_rlen) &&
-                GPO_OK(gpo_resp, gpo_rlen)) goto gpo_done;
-          }
+        {
+            static const uint8_t extra_pl[] = {34, 36, 38};
+            for (uint8_t ei = 0; ei < sizeof(extra_pl); ei++) {
+                uint8_t pl = extra_pl[ei];
+                if (pl == pdol_len || pl == 4 || pl == 29 || pl == 33) continue;
+                BUILD_GPO(pl);
+                if (SEND_APDU(gpo_buf, gpo_len, &gpo_resp, &gpo_rlen) &&
+                        GPO_OK(gpo_resp, gpo_rlen)) goto gpo_done;
+            }
         }
         goto done;  /* all attempts failed */
     }
-    gpo_done:
-    #undef BUILD_GPO
-    #undef GPO_OK
+gpo_done:
+#undef BUILD_GPO
+#undef GPO_OK
     APPEND_PAIR(gpo_buf, gpo_len, gpo_resp, gpo_rlen);
     num_apdus++;
-    uint8_t *afl = NULL; uint8_t afl_len = 0;
+    uint8_t *afl = NULL;
+    uint8_t afl_len = 0;
     if (gpo_rlen > 0 && gpo_resp[0] == 0x77) {
         /* Format 2: find tag 94 */
-        for (uint8_t i = 2; i + 1 < gpo_rlen; ) {
-            uint8_t t = gpo_resp[i]; uint8_t l = gpo_resp[i+1];
-            if (t == 0x94) { afl = &gpo_resp[i+2]; afl_len = l; break; }
+        for (uint8_t i = 2; i + 1 < gpo_rlen;) {
+            uint8_t t = gpo_resp[i];
+            uint8_t l = gpo_resp[i + 1];
+            if (t == 0x94) { afl = &gpo_resp[i + 2]; afl_len = l; break; }
             i += 2 + l;
         }
     } else if (gpo_rlen > 3 && gpo_resp[0] == 0x80) {
-        afl = &gpo_resp[3]; afl_len = gpo_rlen - 3 - 2;
+        afl = &gpo_resp[3];
+        afl_len = gpo_rlen - 3 - 2;
     }
     if (afl == NULL || afl_len == 0) goto done;
 
@@ -2829,12 +2852,13 @@ static data_frame_tx_t *cmd_processor_hf14a_4_emv_scan(uint16_t cmd, uint16_t st
     /* READ each record */
     for (uint8_t a = 0; a + 3 < afl_len; a += 4) {
         uint8_t sfi    = (afl[a] >> 3) & 0x1F;
-        uint8_t rec_s  = afl[a+1];
-        uint8_t rec_e  = afl[a+2];
+        uint8_t rec_s  = afl[a + 1];
+        uint8_t rec_e  = afl[a + 2];
         if (sfi == 0 || rec_s > rec_e) continue;
         for (uint8_t r = rec_s; r <= rec_e; r++) {
             uint8_t rr_cmd[5] = {0x00, 0xB2, r, (uint8_t)((sfi << 3) | 4), 0x00};
-            uint8_t *rr_resp; uint16_t rr_rlen;
+            uint8_t *rr_resp;
+            uint16_t rr_rlen;
             if (!SEND_APDU(rr_cmd, 5, &rr_resp, &rr_rlen)) {
                 /* RC522 FIFO is 64 bytes — records > 61 bytes fail.
                  * Skip silently rather than aborting the whole scan. */
@@ -2923,7 +2947,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
 
     {    DATA_CMD_EM410X_SCAN,                  before_reader_run,           cmd_processor_em410x_scan,                   NULL                   },
     {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_em410x_write_to_t55xx,         NULL                   },
-    {    DATA_CMD_EM410X_ELECTRA_WRITE_TO_T55XX,before_reader_run,           cmd_processor_em410x_electra_write_to_t55xx, NULL                   },
+    {    DATA_CMD_EM410X_ELECTRA_WRITE_TO_T55XX, before_reader_run,           cmd_processor_em410x_electra_write_to_t55xx, NULL                   },
     {    DATA_CMD_HIDPROX_SCAN,                 before_reader_run,           cmd_processor_hidprox_scan,                  NULL                   },
     {    DATA_CMD_HIDPROX_WRITE_TO_T55XX,       before_reader_run,           cmd_processor_hidprox_write_to_t55xx,        NULL                   },
     {    DATA_CMD_VIKING_SCAN,                  before_reader_run,           cmd_processor_viking_scan,                   NULL                   },
@@ -2998,14 +3022,14 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_HIDPROX_SET_EMU_ID,             NULL,                      cmd_processor_hidprox_set_emu_id,            NULL                   },
     {    DATA_CMD_HIDPROX_GET_EMU_ID,             NULL,                      cmd_processor_hidprox_get_emu_id,            NULL                   },
     {    DATA_CMD_IOPROX_SET_EMU_ID,              NULL,                      cmd_processor_ioprox_set_emu_id,             NULL                   },
-    {    DATA_CMD_IOPROX_GET_EMU_ID,              NULL,                      cmd_processor_ioprox_get_emu_id,             NULL                   },  
+    {    DATA_CMD_IOPROX_GET_EMU_ID,              NULL,                      cmd_processor_ioprox_get_emu_id,             NULL                   },
     {    DATA_CMD_VIKING_SET_EMU_ID,              NULL,                      cmd_processor_viking_set_emu_id,             NULL                   },
     {    DATA_CMD_VIKING_GET_EMU_ID,              NULL,                      cmd_processor_viking_get_emu_id,             NULL                   },
     {    DATA_CMD_PAC_SET_EMU_ID,                 NULL,                      cmd_processor_pac_set_emu_id,                NULL                   },
     {    DATA_CMD_PAC_GET_EMU_ID,                 NULL,                      cmd_processor_pac_get_emu_id,                NULL                   },
     /* ISO14443-4 T=CL emulation */
 #if defined(PROJECT_CHAMELEON_ULTRA)
-/* ISO14443-4 T=CL emulation */
+    /* ISO14443-4 T=CL emulation */
     {    DATA_CMD_HF14A_4_APDU_RECV,              NULL,                        cmd_processor_hf14a_4_apdu_recv,             NULL                   },
     {    DATA_CMD_HF14A_4_APDU_SEND,              NULL,                        cmd_processor_hf14a_4_apdu_send,             NULL                   },
     {    DATA_CMD_HF14A_4_SET_ANTI_COLL,          NULL,                        cmd_processor_hf14a_4_set_anti_coll,         NULL                   },

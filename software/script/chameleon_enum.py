@@ -600,11 +600,13 @@ class ButtonPressFunction(enum.IntEnum):
             return "Toggle NFC Field Generator"
         return "None"
 
+
 @enum.unique
 class MfcValueBlockOperator(enum.IntEnum):
     DECREMENT = 0xC0
     INCREMENT = 0xC1
     RESTORE = 0xC2
+
 
 @enum.unique
 class HIDFormat(enum.IntEnum):

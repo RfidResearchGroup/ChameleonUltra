@@ -73,7 +73,7 @@ typedef struct {
     uint8_t mode_gen2_magic: 1;
     /**
      * Should the NFC peripheral be reset after losing the RF field?
-     * This configuration can fix the issue where some card readers cause the CU to enter a strange state of no response/incorrect response. 
+     * This configuration can fix the issue where some card readers cause the CU to enter a strange state of no response/incorrect response.
      * Once in this state, the device must be restarted to resolve the issue.
      * Alternatively, enabling this configuration for resetting the NFC after leaving the rf field can also solve the aforementioned problem.
      */

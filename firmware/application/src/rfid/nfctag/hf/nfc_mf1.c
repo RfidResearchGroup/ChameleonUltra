@@ -339,7 +339,10 @@ void nfc_tag_mf1_random_nonce(uint8_t nonce[4], bool isNested) {
     uint8_t prng_type = m_tag_information->config.prng_type;
     if (prng_type == 0) {
         // STATIC — always return same nonce (clone-card behaviour)
-        nonce[0] = 0x01; nonce[1] = 0x02; nonce[2] = 0x03; nonce[3] = 0x04;
+        nonce[0] = 0x01;
+        nonce[1] = 0x02;
+        nonce[2] = 0x03;
+        nonce[3] = 0x04;
     } else if (prng_type == 1) {
         // WEAK — real MFC LFSR, advance 32 clocks per call
         m_prng_state = prng_successor(m_prng_state, 32);

@@ -20,10 +20,12 @@ THREAD_BLOCKING_TIMEOUT = 0.1
 # TODO: client settings
 DEBUG = False
 
+
 class TransportType(Enum):
     NONE = auto()
     SERIAL = auto()
     SOCKET = auto()
+
 
 class NotOpenException(Exception):
     """
@@ -104,7 +106,8 @@ class ChameleonCom:
                     self.transport_type = TransportType.SOCKET
                 else:
                     if ANDROID:
-                        sys.exit(color_string(CR, 'COM port is not supported on Android, make a USB-serial to TCP communication bridge'))
+                        sys.exit(color_string(
+                            CR, 'COM port is not supported on Android, make a USB-serial to TCP communication bridge'))
                     self.transport = serial.Serial(port=port, baudrate=115200)
                     self.transport_type = TransportType.SERIAL
             except Exception as e:
@@ -262,7 +265,8 @@ class ChameleonCom:
                                 except ValueError:
                                     status_string = f"{data_status:30x}"
                                     response = data_response.hex() if data_response is not None else ""
-                                    print(f"<={color_string((CC, command_string.ljust(40)), (CR, status_string), (CY, response))}")
+                                    print(
+                                        f"<={color_string((CC, command_string.ljust(40)), (CR, status_string), (CY, response))}")
                             if data_cmd in self.wait_response_map:
                                 # call processor
                                 if 'callback' in self.wait_response_map[data_cmd]:

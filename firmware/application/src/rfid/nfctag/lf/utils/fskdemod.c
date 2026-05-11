@@ -25,7 +25,7 @@ void fsk_free(fsk_t *m) {
 }
 
 /**
- * Changed from fixed BITRATE constant to dynamic parameter to allow 
+ * Changed from fixed BITRATE constant to dynamic parameter to allow
  * multiple protocols with different speeds.
  */
 bool fsk_feed(fsk_t *m, uint16_t sample, bool *bit) {
@@ -39,12 +39,12 @@ bool fsk_feed(fsk_t *m, uint16_t sample, bool *bit) {
 
     // Reset counter and clear sample buffer for the next bit
     m->c = 0;
-    memset(m->samples, 0, sizeof(uint16_t) * m->bitrate); 
+    memset(m->samples, 0, sizeof(uint16_t) * m->bitrate);
     return true;
 }
 
 /**
- * Changed from fixed BITRATE constant to dynamic parameter to allow 
+ * Changed from fixed BITRATE constant to dynamic parameter to allow
  * multiple protocols with different speeds.
  */
 fsk_t *fsk_alloc(uint8_t bitrate) {

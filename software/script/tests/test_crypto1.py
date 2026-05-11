@@ -9,6 +9,7 @@ config_path = CURRENT_DIR.rsplit(os.sep, 1)[0]
 sys.path.append(config_path)
 print(config_path)
 
+
 class TestCrypto1(unittest.TestCase):
 
     def test_key_getter_setter(self):
@@ -64,21 +65,22 @@ class TestCrypto1(unittest.TestCase):
 
     def test_mfkey32_is_reader_has_key_true(self):
         self.assertTrue(Crypto1.mfkey32_is_reader_has_key(
-            uid = 0x65535D33, 
-            nt = 0x2C198BE4, 
-            nrEnc = 0xFEDAC6D2, 
-            arEnc = 0xCF0A3C7E, 
-            key = 'A9AC67832330'
+            uid=0x65535D33,
+            nt=0x2C198BE4,
+            nrEnc=0xFEDAC6D2,
+            arEnc=0xCF0A3C7E,
+            key='A9AC67832330'
         ))
-    
+
     def test_mfkey32_is_reader_has_key_false(self):
         self.assertFalse(Crypto1.mfkey32_is_reader_has_key(
-            uid = 0x65535D33, 
-            nt = 0x2C198BE4, 
-            nrEnc = 0xFEDAC6D2, 
-            arEnc = 0xCF0A3C7E, 
-            key = 'FFFFFFFFFFFF'
+            uid=0x65535D33,
+            nt=0x2C198BE4,
+            nrEnc=0xFEDAC6D2,
+            arEnc=0xCF0A3C7E,
+            key='FFFFFFFFFFFF'
         ))
+
 
 if __name__ == '__main__':
     unittest.main()

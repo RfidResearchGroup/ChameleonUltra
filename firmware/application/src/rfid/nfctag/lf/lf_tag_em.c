@@ -336,7 +336,8 @@ bool lf_tag_data_factory(uint8_t slot, tag_specific_type_t tag_type, uint8_t *ta
 bool lf_tag_em410x_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     static const uint8_t tag_id_base[LF_EM410X_TAG_ID_SIZE] = {0xDE, 0xAD, 0xBE, 0xEF, 0x88};
     static const uint8_t tag_id_electra[LF_EM410X_ELECTRA_TAG_ID_SIZE] = {0xDE, 0xAD, 0xBE, 0xEF, 0x88,
-                                                                          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+                                                                          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+                                                                         };
 
     switch (tag_type) {
         case TAG_TYPE_EM410X_ELECTRA:
@@ -365,8 +366,8 @@ bool lf_tag_hidprox_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
  * @return Whether the format is successful, if the formatting is successful, it will return to True, otherwise False will be returned
  */
 bool lf_tag_ioprox_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
-    uint8_t tag_id[16] = { 
-        0x01,0xAA,0x30,0x39,0x00,0x78,0x6A,0xA0,0x33,0x09,0xCF,0xEF,0x00,0x00,0x00,0x00
+    uint8_t tag_id[16] = {
+        0x01, 0xAA, 0x30, 0x39, 0x00, 0x78, 0x6A, 0xA0, 0x33, 0x09, 0xCF, 0xEF, 0x00, 0x00, 0x00, 0x00
     };
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
 }

@@ -105,20 +105,20 @@ extern "C" {
 
 
 uint8_t darkside_recover_key(
-    uint8_t targetBlk,
-    uint8_t targetTyp,
-    uint8_t firstRecover,
-    uint8_t ntSyncMax,
-    DarksideCore_t *dc,
-    mf1_darkside_status_t *darkside_status
+uint8_t targetBlk,
+uint8_t targetTyp,
+uint8_t firstRecover,
+uint8_t ntSyncMax,
+DarksideCore_t *dc,
+mf1_darkside_status_t *darkside_status
 );
 
 uint8_t nested_distance_detect(
-    uint8_t block,
-    uint8_t type,
-    uint8_t *key,
-    uint8_t *uid,
-    uint32_t *distance
+uint8_t block,
+uint8_t type,
+uint8_t *key,
+uint8_t *uid,
+uint32_t *distance
 );
 
 #define NESTED_CORE_PARAM_DEF \
@@ -137,17 +137,17 @@ void antenna_switch_delay(uint32_t delay_ms);
 uint16_t auth_key_use_522_hw(uint8_t block, uint8_t type, uint8_t *key);
 
 uint16_t mf1_toolbox_check_keys_of_sectors(
-    mf1_toolbox_check_keys_of_sectors_in_t *in,
-    mf1_toolbox_check_keys_of_sectors_out_t *out
+mf1_toolbox_check_keys_of_sectors_in_t *in,
+mf1_toolbox_check_keys_of_sectors_out_t *out
 );
 
 uint16_t mf1_toolbox_check_keys_on_block(
-    mf1_toolbox_check_keys_on_block_in_t *in,
-    mf1_toolbox_check_keys_on_block_out_t *out
+mf1_toolbox_check_keys_on_block_in_t *in,
+mf1_toolbox_check_keys_on_block_out_t *out
 );
 
 uint8_t mf1_hardnested_nonces_acquire(bool slow, uint8_t blkKnown, uint8_t typKnown, uint64_t keyKnown,
-                                      uint8_t targetBlk, uint8_t targetTyp, uint8_t *nonces, uint16_t noncesMax, uint8_t *num_nonces);
+uint8_t targetBlk, uint8_t targetTyp, uint8_t *nonces, uint16_t noncesMax, uint8_t *num_nonces);
 
 uint8_t mf1_static_encrypted_nonces_acquire(uint64_t keyKnown, uint8_t sector_count, uint8_t starting_sector, uint8_t sector_data[40][sizeof(mf1_static_nonce_sector_t)], uint8_t *sectors_acquired, uint32_t *cardUid);
 

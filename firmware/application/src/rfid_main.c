@@ -47,7 +47,7 @@ void tag_mode_enter(void) {
             pcd_14a_reader_antenna_off();
             m_is_field_on = false;
         }
-        
+
         // uninit reader
         lf_125khz_radio_uninit();
         pcd_14a_reader_uninit();

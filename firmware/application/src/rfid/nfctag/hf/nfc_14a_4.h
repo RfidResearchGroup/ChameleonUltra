@@ -34,7 +34,8 @@ typedef struct __attribute__((packed)) {
     uint8_t cmd[NFC_14A_4_MAX_STATIC_CMD_LEN];
     uint8_t resp_len;
     uint8_t resp[NFC_14A_4_MAX_STATIC_RESP_LEN];
-} nfc_tag_14a_4_static_response_t;
+}
+nfc_tag_14a_4_static_response_t;
 
 /**
  * Per-slot persistent data layout stored in FDS flash.
@@ -44,7 +45,8 @@ typedef struct __attribute__((packed)) {
     nfc_tag_14a_coll_res_entity_t res_coll;
     uint8_t                       static_resp_count;
     nfc_tag_14a_4_static_response_t static_resp[NFC_14A_4_MAX_STATIC_RESPONSES];
-} nfc_tag_14a_4_information_t;
+}
+nfc_tag_14a_4_information_t;
 
 /* Anti-collision resource — used by get_coll_res_data in app_cmd.c */
 nfc_tag_14a_coll_res_reference_t *nfc_tag_14a_4_get_coll_res(void);
@@ -56,7 +58,7 @@ bool nfc_tag_14a_4_data_factory(uint8_t slot, tag_specific_type_t tag_type);
 
 /* Static response table management (called before hw mode -e) */
 void nfc_tag_14a_4_add_static_response(const uint8_t *cmd,  uint8_t cmd_len,
-                                        const uint8_t *resp, uint16_t resp_len);
+                                       const uint8_t *resp, uint16_t resp_len);
 void nfc_tag_14a_4_clear_static_responses(void);
 
 /* APDU relay — host-driven responses */

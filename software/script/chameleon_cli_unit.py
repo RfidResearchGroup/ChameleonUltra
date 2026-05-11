@@ -632,6 +632,7 @@ class LFHIDIdReadArgsUnit(DeviceRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         raise NotImplementedError()
 
+
 class LFIOProxIdArgsUnit(DeviceRequiredUnit):
     """
     IOProx identity arguments:
@@ -643,9 +644,11 @@ class LFIOProxIdArgsUnit(DeviceRequiredUnit):
     @staticmethod
     def add_card_arg(parser: ArgumentParserNoExit, required=False):
         parser.add_argument("--ver", type=int, required=False, help="ioProx version", metavar="<int>")
-        parser.add_argument("--fc",  type=str, required=False, help="ioProx facility code, e.g., 83 or 0x53", metavar="<str>")
+        parser.add_argument("--fc",  type=str, required=False,
+                            help="ioProx facility code, e.g., 83 or 0x53", metavar="<str>")
         parser.add_argument("--cn",  type=int, required=required, help="ioProx card number", metavar="<int>")
-        parser.add_argument("--raw8", type=str, required=False, help="ioProx raw 8 bytes hex (e.g. 00AABBCCDDEEFF55)", metavar="<hex8>")
+        parser.add_argument("--raw8", type=str, required=False,
+                            help="ioProx raw 8 bytes hex (e.g. 00AABBCCDDEEFF55)", metavar="<hex8>")
         return parser
 
     @staticmethod
@@ -678,7 +681,7 @@ class LFIOProxIdArgsUnit(DeviceRequiredUnit):
         if args.ver is not None:
             self._check_u8("version", args.ver)
         if args.fc is not None:
-            val = int(args.fc, 0) 
+            val = int(args.fc, 0)
             self._check_u8("facility", val)
             args.fc = val
         if args.cn is not None:
@@ -696,6 +699,7 @@ class LFIOProxReadArgsUnit(DeviceRequiredUnit):
     def add_card_arg(parser: ArgumentParserNoExit, required=False):
         parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
         return parser
+
 
 class LFVikingIdArgsUnit(DeviceRequiredUnit):
     @staticmethod
@@ -1909,7 +1913,7 @@ class HFMFHardNested(ReaderRequiredUnit):
                     # Found the target line, now extract the key using regex
                     # Regex now looks for 12 hex chars specifically after the prefix
                     sea_obj = re.search(
-                        r"([a-fA-F0-9]{12})", line_stripped[len(key_prefix) :]
+                        r"([a-fA-F0-9]{12})", line_stripped[len(key_prefix):]
                     )
                     if sea_obj:
                         key_list.append(sea_obj.group(1))
@@ -2144,7 +2148,7 @@ class HFMFStaticEncryptedNested(ReaderRequiredUnit):
             )
             for i in tqdm_if_exists(range(0, len(keys_bytes), 64)):
                 data = self.cmd.mf1_check_keys_on_block(
-                    sector * 4 + 3, 0x61, keys_bytes[i : i + 64]
+                    sector * 4 + 3, 0x61, keys_bytes[i: i + 64]
                 )
                 if data:
                     key = data.hex().zfill(12)
@@ -2195,7 +2199,7 @@ class HFMFStaticEncryptedNested(ReaderRequiredUnit):
                     )
                     for i in tqdm_if_exists(range(0, len(keys_bytes), 64)):
                         data = self.cmd.mf1_check_keys_on_block(
-                            sector * 4 + 3, 0x60, keys_bytes[i : i + 64]
+                            sector * 4 + 3, 0x60, keys_bytes[i: i + 64]
                         )
                         if data:
                             key = data.hex().zfill(12)
@@ -2326,7 +2330,7 @@ class HFMFAutopwn(ReaderRequiredUnit):
             if 0 <= idx < total_bits:
                 field[idx if msb_left else total_bits - 1 - idx] = "1"
         bstr = "".join(field)
-        return bstr, bytes(int(bstr[i : i + 8], 2) for i in range(0, total_bits, 8))
+        return bstr, bytes(int(bstr[i: i + 8], 2) for i in range(0, total_bits, 8))
 
     def run_senested(self, current_keys_found, max_sectors_num):
         print(
@@ -2690,7 +2694,7 @@ class HFMFFCHK(ReaderRequiredUnit):
 
         for i in range(0, len(keys), chunkSize):
             # print("mask = {}".format(mask.hex(sep=' ', bytes_per_sep=1)))
-            chunkKeys = keys[i : i + chunkSize]
+            chunkKeys = keys[i: i + chunkSize]
             print(
                 f' - progress of checking keys... {color_string((CY, i))} / {len(keys)} ({color_string((CY, f"{100 * i / len(keys):.1f}"))} %)'
             )
@@ -3113,7 +3117,7 @@ class HFMFClone(MF1AuthArgsUnit):
                 raise Exception(f"No key found for sector {s}")
             # iterate over blocks
             for b in range(4):
-                block_data = buffer[(4 * s + b) * 16 : (4 * s + b + 1) * 16]
+                block_data = buffer[(4 * s + b) * 16: (4 * s + b + 1) * 16]
                 # special case for last block of each sector
                 if b == 3:
                     # check ACL option
@@ -3380,9 +3384,9 @@ _KEY = re.compile("[a-fA-F0-9]{12}", flags=re.MULTILINE)
 
 # Sentinel values returned by _run_mfkey64 / _run_mfkey32v2_sniff
 # to distinguish "tool unavailable" from "tool ran but found no key".
-_TOOL_MISSING   = "MISSING"    # binary not found on disk
-_TOOL_BLOCKED   = "BLOCKED"    # binary exists but OS/AV prevented execution
-_TOOL_NO_KEY    = "NO_KEY"     # binary ran cleanly, no key found for these nonces
+_TOOL_MISSING = "MISSING"    # binary not found on disk
+_TOOL_BLOCKED = "BLOCKED"    # binary exists but OS/AV prevented execution
+_TOOL_NO_KEY = "NO_KEY"     # binary ran cleanly, no key found for these nonces
 
 
 def _sniff_tool_path(name):
@@ -3692,7 +3696,7 @@ class HFMFELoad(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
         max_blocks = (self.device_com.data_max_length - 1) // 16
         while index + 16 < len(buffer):
             # split a block from buffer
-            block_data = buffer[index : index + 16 * max_blocks]
+            block_data = buffer[index: index + 16 * max_blocks]
             n_blocks = len(block_data) // 16
             index += 16 * n_blocks
             # load to device
@@ -3762,7 +3766,7 @@ class HFMFESave(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
         with open(file, "wb") as fd:
             if content_type == "hex":
                 for i in range(len(data) // 16):
-                    fd.write(binascii.hexlify(data[i * 16 : (i + 1) * 16]) + b"\n")
+                    fd.write(binascii.hexlify(data[i * 16: (i + 1) * 16]) + b"\n")
             else:
                 fd.write(data)
         print("\n - Read success")
@@ -4347,7 +4351,7 @@ class HFMFUELOAD(DeviceRequiredUnit):
             if offset >= len(data):
                 page_data = bytes.fromhex("00000000") * cur_count
             else:
-                page_data = data[offset : offset + 4 * cur_count]
+                page_data = data[offset: offset + 4 * cur_count]
 
             self.cmd.mfu_write_emu_page_data(page, page_data)
             page += cur_count
@@ -4427,7 +4431,7 @@ class HFMFUESAVE(DeviceRequiredUnit):
                 data = self.cmd.mfu_read_emu_page_data(page, cur_count)
                 if save_as_eml:
                     for i in range(0, len(data), 4):
-                        fd.write(data[i : i + 4].hex() + "\n")
+                        fd.write(data[i: i + 4].hex() + "\n")
                 else:
                     fd.write(data)
 
@@ -5268,7 +5272,7 @@ class HFMFUULCG(ReaderRequiredUnit):
                     ][0]
                     full_key = full_key_line.split("Full key (hex): ")[1].strip()
                     key_segment_values[key_segment_idx] = full_key[
-                        (8 * key_segment_idx) :
+                        (8 * key_segment_idx):
                     ][:8]
                     key_found = True
                     crack_effect.add_cracked_block(
@@ -5322,7 +5326,7 @@ class HFMFUULCG(ReaderRequiredUnit):
                 # Write 4 blocks of 4 bytes each
                 for i in range(4):
                     block = 44 + i
-                    data = bytes(key_swapped[i * 4 : (i + 1) * 4])
+                    data = bytes(key_swapped[i * 4: (i + 1) * 4])
                     self.write_block(block, data)
                 print("[+] Key restored on the card")
 
@@ -5698,6 +5702,7 @@ class LFHIDProxRead(LFHIDIdReadArgsUnit, ReaderRequiredUnit):
             print(f" OEM: {color_string((CG, oem))}")
         print(f" CN: {color_string((CG, cn))}")
 
+
 @lf_hid_prox.command("write")
 class LFHIDProxWriteT55xx(LFHIDIdArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -5783,6 +5788,7 @@ class LFHIDProxEconfig(SlotIndexArgsAndGoUnit, LFHIDIdArgsUnit):
                 print(f"   OEM: {color_string((CG, oem))}")
             print(f"   CN: {color_string((CG, cn))}")
 
+
 @lf_ioprox.command("read")
 class LFIOProxRead(LFIOProxReadArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -5798,6 +5804,7 @@ class LFIOProxRead(LFIOProxReadArgsUnit, ReaderRequiredUnit):
         print(f"   ID: {color_string((CY, cn))}")
         print(f"   Raw: {color_string((CY, raw8.hex().upper()))}")
 
+
 @lf_ioprox.command("write")
 class LFIOProxWriteT55xx(LFIOProxIdArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -5808,8 +5815,8 @@ class LFIOProxWriteT55xx(LFIOProxIdArgsUnit, ReaderRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         # defaults
         ver = args.ver if args.ver is not None else 1
-        fc  = args.fc  if args.fc  is not None else 0
-        cn  = args.cn  if args.cn  is not None else 0
+        fc = args.fc if args.fc is not None else 0
+        cn = args.cn if args.cn is not None else 0
 
         # raw8 priority
         if args.raw8 is not None:
@@ -5835,6 +5842,7 @@ class LFIOProxWriteT55xx(LFIOProxIdArgsUnit, ReaderRequiredUnit):
         print(f"   Raw: {color_string((CY, raw8.hex().upper()))}")
         print("Write done.")
 
+
 @lf_ioprox.command("econfig")
 class LFIOProxEconfig(SlotIndexArgsAndGoUnit, LFIOProxIdArgsUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -5857,8 +5865,8 @@ class LFIOProxEconfig(SlotIndexArgsAndGoUnit, LFIOProxIdArgsUnit):
 
             # defaults
             ver = args.ver if args.ver is not None else 1
-            fc  = args.fc  if args.fc  is not None else 0
-            cn  = args.cn  if args.cn  is not None else 0
+            fc = args.fc if args.fc is not None else 0
+            cn = args.cn if args.cn is not None else 0
 
             # raw8 priority
             if args.raw8 is not None:
@@ -5892,6 +5900,7 @@ class LFIOProxEconfig(SlotIndexArgsAndGoUnit, LFIOProxIdArgsUnit):
             print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
             print(f"   ID: {color_string((CY, cn))}")
             print(f"   Raw: {color_string((CY, raw8.hex().upper()))}")
+
 
 def pac_encode_raw(card_id: bytes) -> bytes:
     """Encode 8-byte card ID to 16-byte T55XX bitstream (128 bits).
@@ -6033,6 +6042,7 @@ class LFPacIdArgsUnit(DeviceRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         raise NotImplementedError("Please implement this")
 
+
 @lf_pac.command('write')
 class LFPacWriteT55xx(LFPacIdArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -6046,6 +6056,7 @@ class LFPacWriteT55xx(LFPacIdArgsUnit, ReaderRequiredUnit):
         id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in id_bytes)
         raw = pac_encode_raw(id_bytes)
         print(f" - PAC/Stanley write done - CN: {id_ascii} | Raw: {raw.hex().upper()}")
+
 
 @lf_pac.command('econfig')
 class LFPacEconfig(SlotIndexArgsAndGoUnit, LFPacIdArgsUnit):
@@ -6071,6 +6082,7 @@ class LFPacEconfig(SlotIndexArgsAndGoUnit, LFPacIdArgsUnit):
             raw = pac_encode_raw(response)
             print(' - Get PAC/Stanley tag id success.')
             print(f'CN: {card_id_ascii} | Raw: {raw.hex().upper()}')
+
 
 @lf_viking.command("read")
 class LFVikingRead(ReaderRequiredUnit):
@@ -6220,8 +6232,8 @@ class LFT55xxClone(ReaderRequiredUnit):
             if args.cn is None:
                 raise ArgsParserError("--cn is required for hid")
             fmt = HIDFormat[args.format]
-            fc  = args.fc  if args.fc  is not None else 0
-            il  = args.il  if args.il  is not None else 0
+            fc = args.fc if args.fc is not None else 0
+            il = args.il if args.il is not None else 0
             oem = args.oem if args.oem is not None else 0
             LFHIDIdArgsUnit.check_limits(fmt.value, fc, args.cn, il, oem)
             cn = args.cn
@@ -6237,15 +6249,18 @@ class LFT55xxClone(ReaderRequiredUnit):
             self.cmd.hidprox_write_to_t55xx(id_bytes)
             print(f" - HID Prox cloned to T55xx")
             print(f"   Format : {fmt.name}")
-            if fc:  print(f"   FC     : {fc}")
-            if il:  print(f"   IL     : {il}")
-            if oem: print(f"   OEM    : {oem}")
+            if fc:
+                print(f"   FC     : {fc}")
+            if il:
+                print(f"   IL     : {il}")
+            if oem:
+                print(f"   OEM    : {oem}")
             print(f"   CN     : {cn}")
 
         elif t == "ioprox":
             ver = args.ver if args.ver is not None else 1
-            fc  = int(args.fc) if args.fc is not None else 0
-            cn  = args.cn  if args.cn  is not None else 0
+            fc = int(args.fc) if args.fc is not None else 0
+            cn = args.cn if args.cn is not None else 0
             if args.raw8 is not None:
                 raw8 = LFIOProxIdArgsUnit.parse_raw8(args.raw8)
                 ver, fc, cn, raw8, *_ = self.cmd.ioprox_decode_raw(raw8)
@@ -6293,7 +6308,7 @@ class LFADCGenericRead(ReaderRequiredUnit):
             print(f"generic read data[{len(resp)}]:")
             width = 50
             for i in range(0, len(resp), width):
-                chunk = resp[i : i + width]
+                chunk = resp[i: i + width]
                 hexpart = " ".join(f"{b:02x}" for b in chunk)
                 binpart = "".join("1" if b >= 0xBF else "0" for b in chunk)
                 print(f"{i:04x} {hexpart:<{width * 3}} {binpart}")
@@ -6509,11 +6524,11 @@ class HWSlotList(DeviceRequiredUnit):
                         print(f"      {'OEM:':40}{color_string((CG, oem))}")
                     print(f"      {'CN:':40}{color_string((CG, cn))}")
                 if lf_tag_type == TagSpecificType.ioProx:
-                    ver, fc, cn, raw8, *futureuse = self.cmd.ioprox_get_emu_id()             
+                    ver, fc, cn, raw8, *futureuse = self.cmd.ioprox_get_emu_id()
                     print(f"      {'Version:':40}{color_string((CG, ver))}")
                     print(f"      {'Facility:':40}{color_string((CG, f'{fc} [0x{fc:02X}]'))}")
                     print(f"      {'ID:':40}{color_string((CY, cn))}")
-                    print(f"      {'Raw:':40}{color_string((CY, raw8.hex().upper()))}")                   
+                    print(f"      {'Raw:':40}{color_string((CY, raw8.hex().upper()))}")
                 if lf_tag_type == TagSpecificType.Viking:
                     id = self.cmd.viking_get_emu_id()
                     print(f"      {'ID:':40}{color_string((CY, id.hex().upper()))}")
@@ -7356,7 +7371,8 @@ class LFEm4x05Read(ReaderRequiredUnit):
         print(f" Config   : {CG}{config:#010x}{C0}")
         print(f" UID block: {CG}{uid_block}{C0}")
         if rl:
-            print(f" Auth     : {CG}LOGIN used (pwd={args.pwd.upper() if hasattr(args, 'pwd') and args.pwd else '00000000'}){C0}")
+            print(
+                f" Auth     : {CG}LOGIN used (pwd={args.pwd.upper() if hasattr(args, 'pwd') and args.pwd else '00000000'}){C0}")
         if is_em4x69:
             uid64 = (uid_hi << 32) | uid
             print(f" UID (64) : {CG}{uid64:016x}{C0}")
@@ -7506,9 +7522,9 @@ class HF14ASniff(BaseCLIUnit):
         frames = []  # (szBits, data, is_tx)
         i = 0
         while i + 2 <= len(buf):
-            hdr    = (buf[i] << 8) | buf[i+1]
+            hdr = (buf[i] << 8) | buf[i+1]
             i += 2
-            is_tx  = bool(hdr & 0x8000)
+            is_tx = bool(hdr & 0x8000)
             szBits = hdr & 0x7FFF
             if szBits == 0:
                 break
@@ -7605,8 +7621,6 @@ class HF14ASniff(BaseCLIUnit):
         # Summary block (pass only reader→card frames for protocol decode)
         print()
         _print_14a_sniff_summary(frames)  # full frames needed for nonce extraction
-
-
 
 
 @hf_14a.command("auth-trace")
@@ -7833,9 +7847,6 @@ examples:
             print(f" {CY}Auth aborted before NR||AR — NT={nt_int:08X}, no further analysis{C0}")
 
 
-
-
-
 def _decode_sw(sw1: int, sw2: int) -> str:
     """Decode an ISO 7816-4 status word pair."""
     exact = {
@@ -7873,20 +7884,27 @@ def _decode_sw(sw1: int, sw2: int) -> str:
     key = (sw1 << 8) | sw2
     if key in exact:
         return exact[key]
-    if sw1 == 0x61: return f'Response bytes available: {sw2}'
-    if sw1 == 0x62: return f'Warning — no info change: {sw2:02X}'
-    if sw1 == 0x63: return f'Warning — state changed: {sw2:02X}'
-    if sw1 == 0x6C: return f'Wrong Le — use {sw2}'
-    if sw1 == 0x90: return 'OK'
-    if sw1 == 0x91: return 'Proprietary OK'
+    if sw1 == 0x61:
+        return f'Response bytes available: {sw2}'
+    if sw1 == 0x62:
+        return f'Warning — no info change: {sw2:02X}'
+    if sw1 == 0x63:
+        return f'Warning — state changed: {sw2:02X}'
+    if sw1 == 0x6C:
+        return f'Wrong Le — use {sw2}'
+    if sw1 == 0x90:
+        return 'OK'
+    if sw1 == 0x91:
+        return 'Proprietary OK'
     return ''
+
 
 def _decode_14a_frame_col(data: bytes, szBits: int):
     """Return (description, colour) for a 14A frame."""
     if not data:
         return '', C0
     b0 = data[0]
-    
+
     # ---------------------------------------------------------------------
     # ISO14443-A "reply" frames that often show as "unknown" in hf 14a sniff
     # because the sniffer doesn't know if a frame is reader->card or card->reader.
@@ -7934,10 +7952,9 @@ def _decode_14a_frame_col(data: bytes, szBits: int):
         uid = bytes(data[:4]).hex()
         return f"ANTICOLL-like: UID={uid}  BCC=0x{bcc:02X} (expected 0x{calc:02X})", CY
 
-
     # Short frames (7-bit)
     if szBits == 7:
-        if b0 == 0x26: 
+        if b0 == 0x26:
             return 'REQA', CG
         if b0 == 0x52:
             return 'WUPA', CG
@@ -7978,25 +7995,25 @@ def _decode_14a_frame_col(data: bytes, szBits: int):
     # RATS
     if b0 == 0xe0:
         fsdi = (data[1] >> 4) if len(data) > 1 else 0
-        cid  = (data[1] & 0xf) if len(data) > 1 else 0
+        cid = (data[1] & 0xf) if len(data) > 1 else 0
         return f'RATS  FSDI={fsdi} CID={cid}', CC
 
     # MIFARE Classic commands
-    if b0 == 0x60: 
+    if b0 == 0x60:
         return f'AUTH KeyA  block={data[1]}' if len(data) > 1 else 'AUTH KeyA', CR
-    if b0 == 0x61: 
+    if b0 == 0x61:
         return f'AUTH KeyB  block={data[1]}' if len(data) > 1 else 'AUTH KeyB', CR
     # Encrypted nonce / auth response (follows AUTH, first byte varies)
-    if szBits == 72: 
+    if szBits == 72:
         return '(encrypted nonce — auth challenge/response)', CC
 
-    if b0 == 0x30: 
+    if b0 == 0x30:
         return f'READ  block={data[1]}' if len(data) > 1 else 'READ', CC
-    if b0 == 0xa0: 
+    if b0 == 0xa0:
         return f'WRITE block={data[1]}' if len(data) > 1 else 'WRITE', CY
-    if b0 == 0x40: 
+    if b0 == 0x40:
         return 'MAGIC WUPC1', CY
-    if b0 == 0x43: 
+    if b0 == 0x43:
         return 'MAGIC WUPC2', CY
     if b0 == 0x41:
         return 'MAGIC WIPE', CR
@@ -8014,13 +8031,13 @@ def _decode_14a_frame_col(data: bytes, szBits: int):
                 aid_raw = bytes(data[5:5+data[4]])
                 name = _known_aid(aid_raw)
                 label = f'SELECT AID  {aid.upper()}'
-                if name: 
+                if name:
                     label += f'  ({name})'
                 return label, CY
             return 'SELECT', CY
         # READ BINARY
         if cla == 0x00 and ins == 0xb0:
-            return f'READ BINARY  off={p1<<8|p2} len={data[4] if len(data)>4 else 0}', CC
+            return f'READ BINARY  off={p1 << 8 | p2} len={data[4] if len(data) > 4 else 0}', CC
         # READ RECORD
         if cla == 0x00 and ins == 0xb2:
             sfi = p2 >> 3
@@ -8035,7 +8052,7 @@ def _decode_14a_frame_col(data: bytes, szBits: int):
             return 'GPO  (Get Processing Options)', CY
         # GENERATE AC
         if cla == 0x80 and ins == 0xae:
-            actype = {0x00:'AAC', 0x40:'TC', 0x80:'ARQC'}.get(p1 & 0xc0, f'AC/{p1:02x}')
+            actype = {0x00: 'AAC', 0x40: 'TC', 0x80: 'ARQC'}.get(p1 & 0xc0, f'AC/{p1:02x}')
             return f'GENERATE AC  requesting {actype}', CR
         # VERIFY
         if cla == 0x00 and ins == 0x20:
@@ -8067,8 +8084,6 @@ def _decode_14a_frame_col(data: bytes, szBits: int):
     return f'unknown (0x{b0:02x})', CC
 
 
-
-
 def _known_aid(aid: bytes) -> str:
     table = {
         bytes.fromhex('a0000000031010'): 'Visa Credit/Debit',
@@ -8086,8 +8101,6 @@ def _known_aid(aid: bytes) -> str:
     return table.get(aid, '')
 
 
-
-
 def _known_bertag(tag: int) -> str:
     table = {
         0x9f36: 'ATC',
@@ -8097,8 +8110,6 @@ def _known_bertag(tag: int) -> str:
         0x9f4e: 'Merchant Name',
     }
     return table.get(tag, '')
-
-
 
 
 def _extract_sniff_nonces(frames):
@@ -8115,7 +8126,7 @@ def _extract_sniff_nonces(frames):
     Returns a list of dicts: { uid, block, key_type, nt, nr, ar }
     Paired nonces for the same (uid, block, key_type) appear consecutively.
     """
-    nonces  = []
+    nonces = []
     uid_hex = None
 
     for i, (szBits, data, is_tx) in enumerate(frames):
@@ -8134,7 +8145,7 @@ def _extract_sniff_nonces(frames):
         # AUTH command: reader→card, 0x60 (KeyA) or 0x61 (KeyB)
         if not is_tx and data[0] in (0x60, 0x61) and len(data) >= 2:
             key_type = 'A' if data[0] == 0x60 else 'B'
-            block    = data[1]
+            block = data[1]
 
             # frame i+1: card→reader, exactly 4 bytes = nt (tag nonce)
             if i + 1 >= len(frames):
@@ -8167,18 +8178,18 @@ def _extract_sniff_nonces(frames):
 
 def _print_14a_sniff_summary(frames):
     """Print a decoded summary of the sniff session."""
-    uid_cl1    = None
-    uid_cl2    = None
-    uid_cl3    = None
-    aids       = []
+    uid_cl1 = None
+    uid_cl2 = None
+    uid_cl3 = None
+    aids = []
     auth_blocks = []   # (key_type, block)
-    auth_seen  = False
-    arqc_seen  = False
-    tc_seen    = False
-    halted     = False
-    rats_seen  = False
-    atc_tag    = None
-    amount     = None
+    auth_seen = False
+    arqc_seen = False
+    tc_seen = False
+    halted = False
+    rats_seen = False
+    atc_tag = None
+    amount = None
 
     for szBits, data, is_tx in frames:
         if not data or is_tx:   # protocol decode uses reader→card frames only
@@ -8216,7 +8227,7 @@ def _print_14a_sniff_summary(frames):
             aid = bytes(data[5:5+data[4]])
             name = _known_aid(aid)
             entry = aid.hex().upper()
-            if name: 
+            if name:
                 entry += f'  ({name})'
             if entry not in aids:
                 aids.append(entry)
@@ -8233,7 +8244,7 @@ def _print_14a_sniff_summary(frames):
         if b0 == 0x80 and len(data) > 2 and data[1] == 0xae:
             if (data[2] & 0xc0) == 0x80:
                 arqc_seen = True
-            if (data[2] & 0xc0) == 0x40: 
+            if (data[2] & 0xc0) == 0x40:
                 tc_seen = True
 
         # GET DATA — ATC
@@ -8382,8 +8393,6 @@ def _get_capture():
     return _m._last_capture
 
 
-
-
 @data.command('hexsamples')
 class DataHexsamples(BaseCLIUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -8408,22 +8417,21 @@ class DataHexsamples(BaseCLIUnit):
         for b in chunk:
             if b < 0x10:
                 bar += '_'
-            elif b < 0x40: 
+            elif b < 0x40:
                 bar += '.'
-            elif b < 0x80: 
+            elif b < 0x80:
                 bar += '-'
-            elif b < 0xa0: 
+            elif b < 0xa0:
                 bar += '+'
-            elif b < 0xc0: 
+            elif b < 0xc0:
                 bar += 'o'
-            elif b < 0xe0: 
+            elif b < 0xe0:
                 bar += 'O'
             else:
                 bar += '#'
-        print(f" {row // 16 :02d} | {hex_part:<47s} | {bar}")
+        print(f" {row // 16:02d} | {hex_part:<47s} | {bar}")
         print()
         print(" _ gap  . ringing  - low  + mid  o carrier  O high  # clipped")
-
 
 
 @data.command('plot')
@@ -8446,9 +8454,9 @@ class DataPlot(BaseCLIUnit):
             return
 
         start = max(0, args.start)
-        end   = min(len(buf), start + args.len)
-        view  = list(buf[start:end])
-        n     = len(view)
+        end = min(len(buf), start + args.len)
+        view = list(buf[start:end])
+        n = len(view)
 
         # X axis: time in µs (1 sample = 8µs)
         xs = [((start + i) * 8) for i in range(n)]
@@ -8494,13 +8502,11 @@ class DataPlot(BaseCLIUnit):
         print(f" Samples {start}–{end}  range 0x{mn:02x}–0x{mx:02x}  mean 0x{mean:02x}")
         print()
         levels = [0xe0, 0xc0, 0xa0, 0x80, 0x60, 0x40, 0x20, 0x00]
-        labels = ['0xff','0xc0','0xa0','0x80','0x60','0x40','0x20','0x00']
+        labels = ['0xff', '0xc0', '0xa0', '0x80', '0x60', '0x40', '0x20', '0x00']
         for thresh, lbl in zip(levels, labels):
             row = ''.join('#' if v >= thresh else ' ' for v in buckets)
             print(f" {lbl} |{row}|")
         print(f"        +{'-'*len(buckets)}+")
-
-
 
 
 def _plot_matplotlib(xs, ys, mean, threshold, start, end):
@@ -8554,8 +8560,6 @@ def _plot_matplotlib(xs, ys, mean, threshold, start, end):
     plt.show()
 
 
-
-
 def _plot_pyqtgraph(xs, ys, mean, threshold, start, end):
     import sys
     from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel
@@ -8590,8 +8594,8 @@ def _plot_pyqtgraph(xs, ys, mean, threshold, start, end):
     for i in range(len(ys)-1):
         if ys[i] < threshold:
             r = pg.LinearRegionItem([xs[i], xs[i+1]],
-                                     brush=pg.mkBrush(255, 61, 87, 40),
-                                     pen=pg.mkPen(None), movable=False)
+                                    brush=pg.mkBrush(255, 61, 87, 40),
+                                    pen=pg.mkPen(None), movable=False)
             plot.addItem(r)
 
     # Legend / info panel
@@ -8610,8 +8614,6 @@ def _plot_pyqtgraph(xs, ys, mean, threshold, start, end):
 
     win.show()
     app.exec_()
-
-
 
 
 @data.command('manrawdecode')
@@ -8689,7 +8691,7 @@ class DataManrawdecode(BaseCLIUnit):
             return
 
         bits_str = ''.join(str(b) for b in decoded_bits)
-        hex_str  = hex(int(bits_str, 2))[2:] if decoded_bits else ''
+        hex_str = hex(int(bits_str, 2))[2:] if decoded_bits else ''
 
         print(f" Clock    : RF/{args.clock}  ({args.clock} Tc = {args.clock*8}µs/bit)")
         print(f" Threshold: 0x{threshold:02x}  Inverted: {args.invert}")
@@ -8701,8 +8703,6 @@ class DataManrawdecode(BaseCLIUnit):
         if hex_str:
             print()
             print(f" Hex: {CG}{hex_str[:64]}{C0}{'...' if len(hex_str) > 64 else ''}")
-
-
 
 
 @data.command('modulation')
@@ -8720,8 +8720,8 @@ class DataModulation(BaseCLIUnit):
 
         n = len(buf)
         mean = sum(buf) // n
-        mn   = min(buf)
-        mx   = max(buf)
+        mn = min(buf)
+        mx = max(buf)
         threshold = mean // 2
 
         print(f" Samples  : {CG}{n}{C0}  ({n*8}µs)")
@@ -8811,7 +8811,6 @@ class DataModulation(BaseCLIUnit):
         gap_threshold = mean // 2
         gaps = [i for i, b in enumerate(buf[200:]) if b < gap_threshold]
 
-
         if gaps:
             print(f" RTF gaps   : {CG}{len(gaps)}{C0} samples below 0x{gap_threshold:02x}"
                   f" ^`^t gap commands present")
@@ -8865,13 +8864,14 @@ class EMVScan(DeviceRequiredUnit):
         parser = ArgumentParserNoExit()
         parser.description = 'EMV contactless card scan (reader mode) — like PM3 emv scan -at'
         parser.add_argument('-f', '--file', default='', metavar='<path>',
-            help='Save results to JSON file (PM3-compatible format)')
+                            help='Save results to JSON file (PM3-compatible format)')
         parser.add_argument('-s', '--slot', type=int, default=None,
-            metavar='<1-8>', help='Also load scanned card into this slot for emulation')
+                            metavar='<1-8>', help='Also load scanned card into this slot for emulation')
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        import time, json as jsonlib
+        import time
+        import json as jsonlib
         cmd = self.cmd
 
         # Ensure reader mode
@@ -8894,27 +8894,38 @@ class EMVScan(DeviceRequiredUnit):
         d = bytes(resp.data)
         off = 0
 
-        uid_len = d[off]; off += 1
-        uid  = d[off:off+uid_len]; off += uid_len
-        atqa = d[off:off+2]; off += 2
-        sak  = d[off]; off += 1
-        ats_len = d[off]; off += 1
-        ats  = d[off:off+ats_len]; off += ats_len
+        uid_len = d[off]
+        off += 1
+        uid = d[off:off+uid_len]
+        off += uid_len
+        atqa = d[off:off+2]
+        off += 2
+        sak = d[off]
+        off += 1
+        ats_len = d[off]
+        off += 1
+        ats = d[off:off+ats_len]
+        off += ats_len
 
-        uid_str  = ' '.join(f'{b:02X}' for b in uid)
+        uid_str = ' '.join(f'{b:02X}' for b in uid)
         atqa_str = ' '.join(f'{b:02X}' for b in atqa)
-        ats_str  = ' '.join(f'{b:02X}' for b in ats)
+        ats_str = ' '.join(f'{b:02X}' for b in ats)
         print(f' {CG}UID : {uid_str}{C0}')
         print(f' {CG}ATQA: {atqa_str}  SAK: {sak:02X}{C0}')
         print(f' {CG}ATS : {ats_str}{C0}')
 
-        num_apdus = d[off]; off += 1
+        num_apdus = d[off]
+        off += 1
         pairs = []
         for _ in range(num_apdus):
-            cl = d[off]; off += 1
-            c  = d[off:off+cl]; off += cl
-            rl = d[off] | (d[off+1] << 8); off += 2
-            r  = d[off:off+rl]; off += rl
+            cl = d[off]
+            off += 1
+            c = d[off:off+cl]
+            off += cl
+            rl = d[off] | (d[off+1] << 8)
+            off += 2
+            r = d[off:off+rl]
+            off += rl
             pairs.append((c, r))
 
         if not pairs:
@@ -8929,35 +8940,51 @@ class EMVScan(DeviceRequiredUnit):
         }}
 
         def tlv_to_dict(data):
-            if not data: return {}
+            if not data:
+                return {}
             i = 0
             tl = 2 if (data[i] & 0x1F) == 0x1F else 1
-            tag_hex = data[:tl].hex().upper(); i += tl
-            if i >= len(data): return {}
+            tag_hex = data[:tl].hex().upper()
+            i += tl
+            if i >= len(data):
+                return {}
             if data[i] & 0x80:
-                nb = data[i] & 0x7F; i += 1
-                vlen = int.from_bytes(data[i:i+nb], 'big'); i += nb
+                nb = data[i] & 0x7F
+                i += 1
+                vlen = int.from_bytes(data[i:i+nb], 'big')
+                i += nb
             else:
-                vlen = data[i]; i += 1
+                vlen = data[i]
+                i += 1
             val = data[i:i+vlen]
             return {'tag': tag_hex, 'length': f'{vlen:02X}',
                     'value': ' '.join(f'{b:02X}' for b in val)}
 
         def find_tag(data, tag):
-            results = []; i = 0
+            results = []
+            i = 0
             while i < len(data) - 1:
                 tl = 2 if (data[i] & 0x1F) == 0x1F else 1
-                if i + tl > len(data): break
-                cur = data[i:i+tl]; i += tl
-                if i >= len(data): break
+                if i + tl > len(data):
+                    break
+                cur = data[i:i+tl]
+                i += tl
+                if i >= len(data):
+                    break
                 if data[i] & 0x80:
-                    nb = data[i] & 0x7F; i += 1
-                    vlen = int.from_bytes(data[i:i+nb], 'big'); i += nb
+                    nb = data[i] & 0x7F
+                    i += 1
+                    vlen = int.from_bytes(data[i:i+nb], 'big')
+                    i += nb
                 else:
-                    vlen = data[i]; i += 1
-                val = data[i:i+vlen]; i += vlen
-                if int.from_bytes(cur, 'big') == tag: results.append(val)
-                elif cur[0] & 0x20: results.extend(find_tag(val, tag))
+                    vlen = data[i]
+                    i += 1
+                val = data[i:i+vlen]
+                i += vlen
+                if int.from_bytes(cur, 'big') == tag:
+                    results.append(val)
+                elif cur[0] & 0x20:
+                    results.extend(find_tag(val, tag))
             return results
 
         # PPSE
@@ -8977,7 +9004,7 @@ class EMVScan(DeviceRequiredUnit):
             aid_str = ' '.join(f'{b:02X}' for b in aid_bytes)
             print(f' {CG}SELECT AID OK ({len(sel_resp)}b){C0}')
             result['Application'] = {'AID': aid_str,
-                                       'FCITemplate': tlv_to_dict(sel_body)}
+                                     'FCITemplate': tlv_to_dict(sel_body)}
 
         if len(pairs) >= 3:
             gpo_cmd, gpo_resp = pairs[2]
@@ -8991,7 +9018,7 @@ class EMVScan(DeviceRequiredUnit):
                 r_body = rb[:-2] if len(rb) >= 2 else rb
                 print(f' {CG}READ RECORD SFI={sfi_n} rec={rec_n} OK ({len(rb)}b){C0}')
                 records.append({'SFI': f'{sfi_n:02X}', 'RecordNum': f'{rec_n:02X}',
-                                 'Offline': '01', 'Data': tlv_to_dict(r_body)})
+                                'Offline': '01', 'Data': tlv_to_dict(r_body)})
             result['Application']['Records'] = records
 
         # ---- Decode and display key card fields from EMV records --------
@@ -9017,15 +9044,19 @@ class EMVScan(DeviceRequiredUnit):
                 if i >= len(data):
                     break
                 if data[i] & 0x80:
-                    nb = data[i] & 0x7F; i += 1
-                    vlen = int.from_bytes(data[i:i+nb], 'big'); i += nb
+                    nb = data[i] & 0x7F
+                    i += 1
+                    vlen = int.from_bytes(data[i:i+nb], 'big')
+                    i += nb
                 else:
-                    vlen = data[i]; i += 1
-                val = data[i:i+vlen]; i += vlen
+                    vlen = data[i]
+                    i += 1
+                val = data[i:i+vlen]
+                i += vlen
                 if cur_tag in results:
                     results[cur_tag].append(val)
                 # recurse into constructed TLV
-                if data[i - vlen - (1 if vlen < 128 else 2)] & 0x20 if False else                    (data[i - vlen - 1] & 0x20 if vlen < 128 else False):
+                if data[i - vlen - (1 if vlen < 128 else 2)] & 0x20 if False else (data[i - vlen - 1] & 0x20 if vlen < 128 else False):
                     sub = _find_tag_all(val, *tags)
                     for t in tags:
                         results[t].extend(sub[t])
@@ -9048,12 +9079,15 @@ class EMVScan(DeviceRequiredUnit):
                     break
                 constructed = bool(b0 & 0x20)
                 if data[i] & 0x80:
-                    nb = data[i] & 0x7F; i += 1
+                    nb = data[i] & 0x7F
+                    i += 1
                     if i + nb > len(data):
                         break
-                    vlen = int.from_bytes(data[i:i+nb], 'big'); i += nb
+                    vlen = int.from_bytes(data[i:i+nb], 'big')
+                    i += nb
                 else:
-                    vlen = data[i]; i += 1
+                    vlen = data[i]
+                    i += 1
                 # For truncated TLV: read whatever bytes are available and
                 # continue parsing — don't break, so we can find tags inside
                 # truncated constructed TLV (e.g. 6F/A5 larger than received data)
@@ -9100,7 +9134,7 @@ class EMVScan(DeviceRequiredUnit):
         tags = tlv_find(all_record_data, 0x5A, 0x57, 0x5F24, 0x5F20, 0x5F28)
         app_tags = tlv_find(all_search_data, 0x9F12, 0x50)
         tags[0x9F12] = app_tags[0x9F12]
-        tags[0x50]   = app_tags[0x50]
+        tags[0x50] = app_tags[0x50]
 
         print(f'')
         print(f' {CG}── Card Details ──────────────────────{C0}')
@@ -9194,7 +9228,8 @@ class EMVScan(DeviceRequiredUnit):
         json_str = jsonlib.dumps(result, indent=2)
         if args.file:
             try:
-                with open(args.file, 'w') as fp: fp.write(json_str)
+                with open(args.file, 'w') as fp:
+                    fp.write(json_str)
                 print(f'\n {CG}Saved to {args.file}{C0}')
             except Exception as e:
                 print(f' {CR}Save failed: {e}{C0}')
@@ -9236,7 +9271,8 @@ class EMVDebug(DeviceRequiredUnit):
         print(f' {CY}T=CL debug counters:{C0}')
         print(f'   I-blocks received : {d[0]}')
         print(f'   I-blocks sent     : {d[1]}')
-        print(f'   Last rx PCB       : {d[2]:02x}  (blk_num={(d[2] & 0x01)}, chain={(d[2]>>5)&1}, cid={(d[2]>>4)&1})')
+        print(
+            f'   Last rx PCB       : {d[2]:02x}  (blk_num={(d[2] & 0x01)}, chain={(d[2] >> 5) & 1}, cid={(d[2] >> 4) & 1})')
         print(f'   Last static match : {"yes" if d[3] else "no"}')
 
 
@@ -9260,17 +9296,17 @@ class EMVLoad(DeviceRequiredUnit):
         parser = ArgumentParserNoExit()
         parser.description = 'Load EMV APDU responses into HF14A_4 slot for autonomous emulation'
         parser.add_argument('-f', '--file', default='', metavar='<path>',
-            help='Load from PM3 emv scan JSON file')
+                            help='Load from PM3 emv scan JSON file')
         parser.add_argument('-s', '--slot', type=int, default=None,
-            metavar='<1-8>', help='Target slot when using --file (default: active)')
+                            metavar='<1-8>', help='Target slot when using --file (default: active)')
         parser.add_argument('--clear', action='store_true',
-            help='Clear all static responses from active slot')
+                            help='Clear all static responses from active slot')
         parser.add_argument('--cmd', default='', metavar='<hex>',
-            help='Command APDU prefix to match (hex)')
+                            help='Command APDU prefix to match (hex)')
         parser.add_argument('--resp', default='', metavar='<hex>',
-            help='Response APDU to return (hex)')
+                            help='Response APDU to return (hex)')
         parser.add_argument('--defaults', action='store_true',
-            help='Load built-in Mastercard test responses')
+                            help='Load built-in Mastercard test responses')
         return parser
 
     def on_exec(self, args: argparse.Namespace):
@@ -9343,7 +9379,8 @@ class EMVLoad(DeviceRequiredUnit):
 
     def _load_from_json(self, filepath, target_slot, cmd):
         """Load card data from a PM3 emv scan JSON file."""
-        import json as jsonlib, os
+        import json as jsonlib
+        import os
         if not os.path.exists(filepath):
             print(f' {CR}File not found: {filepath}{C0}')
             return
@@ -9356,12 +9393,12 @@ class EMVLoad(DeviceRequiredUnit):
 
         # Parse card info
         try:
-            card    = data['Card']['Contactless']
-            uid     = bytes.fromhex(card['UID'].replace(' ', ''))
-            atqa    = bytes.fromhex(card['ATQA'].replace(' ', ''))
-            sak     = int(card['SAK'], 16)
+            card = data['Card']['Contactless']
+            uid = bytes.fromhex(card['UID'].replace(' ', ''))
+            atqa = bytes.fromhex(card['ATQA'].replace(' ', ''))
+            sak = int(card['SAK'], 16)
             ats_raw = bytes.fromhex(card['ATS'].replace(' ', ''))
-            ats     = ats_raw[:ats_raw[0]] if ats_raw else b''
+            ats = ats_raw[:ats_raw[0]] if ats_raw else b''
         except Exception as e:
             print(f' {CR}Card info parse error: {e}{C0}')
             return
@@ -9416,12 +9453,12 @@ class EMVLoad(DeviceRequiredUnit):
 
         try:
             for rec in data['Application'].get('Records', []):
-                sfi_n  = int(rec['SFI'], 16)
-                rec_n  = int(rec['RecordNum'], 16)
-                v      = rec['Data']['value'].replace(' ', '')
-                l      = rec['Data']['length']
-                tag    = rec['Data'].get('tag', '70')
-                p2     = (sfi_n << 3) | 4
+                sfi_n = int(rec['SFI'], 16)
+                rec_n = int(rec['RecordNum'], 16)
+                v = rec['Data']['value'].replace(' ', '')
+                l = rec['Data']['length']
+                tag = rec['Data'].get('tag', '70')
+                p2 = (sfi_n << 3) | 4
                 static_pairs.append((
                     bytes([0x00, 0xB2, rec_n, p2, 0x00]),
                     tlv_resp(tag, l, v),
@@ -9471,7 +9508,7 @@ class EMVApdu(DeviceRequiredUnit):
         parser = ArgumentParserNoExit()
         parser.description = 'ISO14443-4 T=CL interactive APDU relay (manual response mode)'
         parser.add_argument('--timeout', type=int, default=15000, metavar='<ms>',
-            help='Total relay timeout in ms (default: 15000)')
+                            help='Total relay timeout in ms (default: 15000)')
         return parser
 
     def on_exec(self, args: argparse.Namespace):

@@ -611,11 +611,11 @@ static inline void nrf_nfct_reset(void) {
     nrf_nfct_int_enable(int_enabled);
 
     // Disable interrupts associated with data exchange.
-    nrf_nfct_int_disable(NRF_NFCT_INT_RXFRAMESTART_MASK | 
-        NRF_NFCT_INT_RXFRAMEEND_MASK   | 
-        NRF_NFCT_INT_RXERROR_MASK      | 
-        NRF_NFCT_INT_TXFRAMESTART_MASK | 
-        NRF_NFCT_INT_TXFRAMEEND_MASK);
+    nrf_nfct_int_disable(NRF_NFCT_INT_RXFRAMESTART_MASK |
+                         NRF_NFCT_INT_RXFRAMEEND_MASK   |
+                         NRF_NFCT_INT_RXERROR_MASK      |
+                         NRF_NFCT_INT_TXFRAMESTART_MASK |
+                         NRF_NFCT_INT_TXFRAMEEND_MASK);
 }
 
 static inline void nfc_fdt_reset(void) {
@@ -668,7 +668,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
 
             if (reset_if_field_lost) {
                 // Fix a bug where certain special conditions prevent triggering TX start events and actually transmit incorrect data to the card reader.
-                // After more more more testing, I found that simply going into sleep mode and restarting can restore work. 
+                // After more more more testing, I found that simply going into sleep mode and restarting can restore work.
                 // Therefore, I suspect that there may be some issues with the NFC peripheral that require a reset to resolve.
                 nrf_nfct_reset();
             }
@@ -681,12 +681,12 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             if (m_tx_sniff_cb != NULL) {
                 uint32_t amt  = NRF_NFCT->TXD.AMOUNT;
                 uint16_t tx_bytes = (amt >> NFCT_TXD_AMOUNT_TXDATABYTES_Pos)
-                                  & (NFCT_TXD_AMOUNT_TXDATABYTES_Msk >> NFCT_TXD_AMOUNT_TXDATABYTES_Pos);
+                                    & (NFCT_TXD_AMOUNT_TXDATABYTES_Msk >> NFCT_TXD_AMOUNT_TXDATABYTES_Pos);
                 uint16_t tx_bits_rem = (amt >> NFCT_TXD_AMOUNT_TXDATABITS_Pos)
-                                     & (NFCT_TXD_AMOUNT_TXDATABITS_Msk >> NFCT_TXD_AMOUNT_TXDATABITS_Pos);
+                                       & (NFCT_TXD_AMOUNT_TXDATABITS_Msk >> NFCT_TXD_AMOUNT_TXDATABITS_Pos);
                 uint16_t tx_bits = (tx_bits_rem > 0)
-                                 ? ((tx_bytes - 1) * 8 + tx_bits_rem)
-                                 : (tx_bytes * 8);
+                                   ? ((tx_bytes - 1) * 8 + tx_bits_rem)
+                                   : (tx_bytes * 8);
                 if (tx_bits > 0 && tx_bytes <= MAX_NFC_TX_BUFFER_SIZE) {
                     m_tx_sniff_cb(m_nfc_tx_buffer, tx_bits);
                 }
