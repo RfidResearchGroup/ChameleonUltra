@@ -7155,7 +7155,10 @@ class HWRaw(DeviceRequiredUnit):
         except ValueError:
             pass
         print(status_string)
-        print(f"   Data (HEX): {response.data.hex()}")
+        if response.data:
+            print(f"   Data (HEX): {response.data.hex()}")
+        else:
+            print(f"   Data (HEX): (none)")
 
 
 @hf_14a.command("raw")
@@ -7744,24 +7747,31 @@ examples:
             print(f"   UID (low 4 bytes) : {uid_bytes[-4:].hex().upper()}")
             print(f"   NT (plaintext)    : {nt_int:08X}")
             print(f"   NR (fixed in fw)  : 12345678  (encrypted on wire: {nr_ar_enc[:4].hex().upper()})")
-            ar_expected = Crypto1.prng_next(nt_int, 32)
-            at_expected = Crypto1.prng_next(nt_int, 64)
-            print(f"   AR expected       : {ar_expected:08X}  = prng_successor(NT, 32)")
-            print(f"   AR (encrypted)    : {nr_ar_enc[4:].hex().upper()}")
+            ar_expected = Crypto1.prng_next(nt_int, 64)
+            at_expected = Crypto1.prng_next(nt_int, 96)
             if at_enc is not None:
-                # Re-run Crypto1 forward to recover ks2 (keystream over AT).
+                # Re-run Crypto1 forward to recover ks2 (AR keystream) and ks3 (AT keystream).
                 state = Crypto1()
                 state.key = key_hex
                 state.lfsr48_u32(uid32 ^ nt_int, False)                            # ks0
                 state.lfsr48_u32(int.from_bytes(nr_ar_enc[:4], 'big'), True)       # ks1
-                state.lfsr48_u32(0, False)                                          # consume ks2 (AR keystream)
+                ks_ar = state.lfsr48_u32(0, False)                                  # ks2 (AR keystream)
                 ks_at = state.lfsr48_u32(0, False)                                  # ks3 (AT keystream)
+                ar_int = int.from_bytes(nr_ar_enc[4:], 'big')
+                ar_decoded = ar_int ^ ks_ar
+                ar_ok = (ar_decoded == ar_expected)
+                ar_colour = CG if ar_ok else CR
+                ar_mark = '✓' if ar_ok else '✗'
+                print(f"   AR expected       : {ar_expected:08X}  = prng_successor(NT, 64)")
+                print(f"   AR (encrypted)    : {nr_ar_enc[4:].hex().upper()}")
+                print(f"   AR decrypted      : {ar_colour}{ar_decoded:08X}{C0}  {ar_colour}{ar_mark} "
+                      f"{'MATCH' if ar_ok else 'MISMATCH — wrong key or replay'}{C0}")
                 at_int = int.from_bytes(at_enc, 'big')
                 at_decoded = at_int ^ ks_at
                 ok = (at_decoded == at_expected)
                 colour = CG if ok else CR
                 mark = '✓' if ok else '✗'
-                print(f"   AT expected       : {at_expected:08X}  = prng_successor(NT, 64)")
+                print(f"   AT expected       : {at_expected:08X}  = prng_successor(NT, 96)")
                 print(f"   AT (encrypted)    : {at_enc.hex().upper()}")
                 print(f"   AT decrypted      : {colour}{at_decoded:08X}{C0}  {colour}{mark} "
                       f"{'MATCH — auth verified' if ok else 'MISMATCH — wrong key or replay'}{C0}")
@@ -7852,9 +7862,9 @@ def _decode_14a_frame_col(data: bytes, szBits: int):
             atqa = data[0] | (data[1] << 8)  # LSB first in air
             return f"ATQA (Answer To Request, Type A) = 0x{atqa:04X}", CG
 
-    # SAK: Select Acknowledge - always 1 byte / 8 bits.
-    # 0x08 is the classic "MIFARE Classic (UID complete, no ISO-DEP)" value.
-    if szBits == 8 and len(data) == 1:
+    # SAK: Select Acknowledge — 1 byte on air, but the trace may include the
+    # 2-byte CRC-A appended, giving 3 bytes / 24 bits total.
+    if (szBits == 8 and len(data) == 1) or (szBits == 24 and len(data) == 3):
         sak = data[0]
         # Reuse existing NXP SAK classification table if present
         # (type_id_SAK_dict is defined near top of file).
