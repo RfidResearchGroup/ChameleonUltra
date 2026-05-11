@@ -208,6 +208,19 @@ static data_frame_tx_t *cmd_processor_set_long_button_press_config(uint16_t cmd,
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
+static data_frame_tx_t *cmd_processor_get_sleep_timeout(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t seconds = settings_get_sleep_timeout() / 1000U;
+    return data_frame_make(cmd, STATUS_SUCCESS, 1, &seconds);
+}
+
+static data_frame_tx_t *cmd_processor_set_sleep_timeout(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 1 || data[0] < SETTINGS_SLEEP_TIMEOUT_MIN_S || data[0] > SETTINGS_SLEEP_TIMEOUT_MAX_S) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    settings_set_sleep_timeout(data[0]);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
 static data_frame_tx_t *cmd_processor_get_ble_pairing_enable(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t is_enable = settings_get_ble_pairing_enable();
     return data_frame_make(cmd, STATUS_SUCCESS, 1, &is_enable);
@@ -1871,6 +1884,262 @@ static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, ui
     }
     return data_frame_make(cmd, STATUS_LF_TAG_OK, (uint16_t)outlen, sniff_buf);
 }
+
+/* ========================================================================
+ * HF14A AUTH TRACE — full anticoll + Crypto1 auth flow, every frame returned.
+ *
+ * Performs a complete reader-side auth sequence against a real MIFARE Classic
+ * tag and packs every wire frame (synthesized anticoll + actual auth) into the
+ * same trace-buffer format used by `hf 14a sniff`, so the existing host-side
+ * decoder can render the full exchange.
+ *
+ * Buffer format (identical to hf 14a sniff): [bits_be16][data...] per frame.
+ * Bit15 of the bit-count header: 0 = reader→card, 1 = card→reader.
+ *
+ * Request payload: [type:1][block:1][key:6]   — 8 bytes total
+ *   type:  PICC_AUTHENT1A (0x60) or PICC_AUTHENT1B (0x61)
+ *   block: target block number
+ *   key:   6-byte sector key
+ *
+ * Response payload: packed frame buffer, decoded host-side.
+ * Status: STATUS_HF_TAG_OK if the auth completed (NT, NR||AR, AT all captured),
+ *         STATUS_HF_TAG_NO if no card was found,
+ *         STATUS_MF_ERR_AUTH if AT was wrong or missing (partial trace returned),
+ *         STATUS_PAR_ERR on bad payload length.
+ * ======================================================================== */
+#define HF_AUTH_TRACE_BUF_SIZE 256
+
+static uint8_t  m_auth_trace_buf[HF_AUTH_TRACE_BUF_SIZE];
+static uint16_t m_auth_trace_len = 0;
+
+/* Append one frame to the trace buffer, mirroring hf14a_sniff_store(). */
+static void auth_trace_store(const uint8_t *data, uint16_t szBits, bool is_tx) {
+    uint16_t szBytes = (szBits + 7) / 8;
+    if (m_auth_trace_len + 2 + szBytes > HF_AUTH_TRACE_BUF_SIZE) return;
+    uint16_t hdr = szBits | (is_tx ? 0x8000u : 0x0000u);
+    m_auth_trace_buf[m_auth_trace_len++] = (hdr >> 8) & 0xFF;
+    m_auth_trace_buf[m_auth_trace_len++] =  hdr        & 0xFF;
+    memcpy(&m_auth_trace_buf[m_auth_trace_len], data, szBytes);
+    m_auth_trace_len += szBytes;
+}
+
+/* Synthesize the anticoll/SELECT/SAK/RATS/ATS frames from a populated tag
+ * struct. The wire frames during scan_auto are perfectly determined by the
+ * tag descriptor, so we reconstruct them rather than tap rc522.c.
+ *
+ * For 4-byte UID (cascade=1): CL1 with full UID.
+ * For 7-byte UID (cascade=2): CL1 with CT||UID0..2, CL2 with UID3..6.
+ * For 10-byte UID (cascade=3): CL1, CL2, CL3.
+ *
+ * The "first SAK" for an incomplete UID has bit 2 set (cascade flag); we
+ * synthesize it as 0x04 (cascade required, no further info), which matches
+ * what every real cascading tag returns. Final SAK is the captured tag->sak.
+ */
+static void auth_trace_emit_anticoll(const picc_14a_tag_t *tag) {
+    /* 1. REQA — 7 bits, reader→card */
+    uint8_t reqa = PICC_REQIDL;
+    auth_trace_store(&reqa, 7, false);
+
+    /* 2. ATQA — 16 bits, card→reader */
+    auth_trace_store(tag->atqa, 16, true);
+
+    /* 3. Anticoll/SELECT cycles — one per cascade level */
+    const uint8_t cascade_anticoll[3] = { PICC_ANTICOLL1, PICC_ANTICOLL2, PICC_ANTICOLL3 };
+    uint8_t uid_pos = 0;
+    for (uint8_t cl = 0; cl < tag->cascade; cl++) {
+        bool is_last = (cl == (uint8_t)(tag->cascade - 1));
+
+        /* Anticoll request: <SEL> 0x20 — 16 bits, reader→card */
+        uint8_t anticoll[2] = { cascade_anticoll[cl], 0x20 };
+        auth_trace_store(anticoll, 16, false);
+
+        /* Anticoll response: CT||UID3 + BCC for non-last, or UID4 + BCC for last
+         * with full UID inline. 5 bytes / 40 bits, card→reader. */
+        uint8_t resp[5];
+        if (is_last) {
+            /* Last level — 4 bytes of UID at the end of tag->uid */
+            memcpy(resp, &tag->uid[uid_pos], 4);
+        } else {
+            /* Cascading — CT (0x88) + 3 bytes UID */
+            resp[0] = 0x88;
+            memcpy(&resp[1], &tag->uid[uid_pos], 3);
+            uid_pos += 3;
+        }
+        resp[4] = resp[0] ^ resp[1] ^ resp[2] ^ resp[3];  /* BCC */
+        auth_trace_store(resp, 40, true);
+
+        /* SELECT: <SEL> 0x70 + 5-byte CT/UID/BCC + 2-byte CRC = 9 bytes / 72 bits */
+        uint8_t sel[9] = { cascade_anticoll[cl], 0x70 };
+        memcpy(&sel[2], resp, 5);
+        crc_14a_calculate(sel, 7, &sel[7]);
+        auth_trace_store(sel, 72, false);
+
+        /* SAK: 1 byte SAK + 2-byte CRC = 24 bits, card→reader.
+         * Intermediate cascades: synthesize SAK=0x04 (cascade bit set, generic).
+         * Last cascade: real tag->sak. */
+        uint8_t sak_frame[3];
+        sak_frame[0] = is_last ? tag->sak : 0x04;
+        crc_14a_calculate(sak_frame, 1, &sak_frame[1]);
+        auth_trace_store(sak_frame, 24, true);
+    }
+
+    /* 4. RATS / ATS — only if scan_auto did RATS and the tag responded */
+    if (tag->ats_len > 0) {
+        /* RATS request: 0xE0 0x40 + 2-byte CRC = 4 bytes / 32 bits, reader→card.
+         * 0x40 = FSDI=4 (FSD=48), CID=0 — same as pcd_14a_reader_ats_request(). */
+        uint8_t rats[4] = { PICC_RATS, 0x40 };
+        crc_14a_calculate(rats, 2, &rats[2]);
+        auth_trace_store(rats, 32, false);
+
+        /* ATS response: ats_len bytes (CRC was stripped by rc522 layer) +
+         * recomputed 2-byte CRC, card→reader. */
+        if ((uint16_t)tag->ats_len + 2 <= 64) {
+            uint8_t ats_frame[64];
+            memcpy(ats_frame, tag->ats, tag->ats_len);
+            crc_14a_calculate(ats_frame, tag->ats_len, &ats_frame[tag->ats_len]);
+            auth_trace_store(ats_frame, (tag->ats_len + 2) * 8, true);
+        }
+    }
+}
+
+/* Software-side MIFARE Classic auth tap. Mirrors mf1_toolbox.c::authex() but
+ * stores every TX/RX frame into the trace buffer instead of just returning a
+ * status. Fixed reader nonce 12345678 is used (same as authex). */
+static uint8_t auth_trace_do_auth(picc_14a_tag_t *tag, uint8_t type, uint8_t blockNo, const uint8_t *key6) {
+    struct Crypto1State pcs = { 0, 0 };
+    static const uint8_t nr[4] = { 0x12, 0x34, 0x56, 0x78 };  /* fixed reader nonce */
+    uint8_t  par[8]            = { 0 };
+    uint8_t  mf_nr_ar[8]       = { 0 };
+    uint8_t  answer[8]         = { 0 };
+    uint8_t  parity_resp[8]    = { 0 };
+    uint16_t len               = 0;
+    uint8_t  status;
+
+    /* AUTH command frame: [type, blockNo, CRC, CRC] — 32 bits, reader→card */
+    uint8_t auth_cmd[4] = { type, blockNo };
+    crc_14a_calculate(auth_cmd, 2, &auth_cmd[2]);
+    auth_trace_store(auth_cmd, 32, false);
+
+    /* Send AUTH, expect 4-byte NT (plaintext on first auth). We use the same
+     * primitive as authex's send_cmd() under the non-encrypted path. */
+    pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, auth_cmd, 4, answer, &len, U8ARR_BIT_LEN(answer));
+    if (len != 32) {
+        return STATUS_HF_ERR_STAT;  /* no NT — partial trace already in buffer */
+    }
+
+    /* Capture NT — 32 bits, card→reader */
+    auth_trace_store(answer, 32, true);
+    uint32_t nt = ((uint32_t)answer[0] << 24) | ((uint32_t)answer[1] << 16)
+                | ((uint32_t)answer[2] <<  8) |  (uint32_t)answer[3];
+
+    /* Initialise Crypto1 with key (LSB-first, MIFARE convention) */
+    uint64_t ui64Key = 0;
+    for (int i = 0; i < 6; i++) ui64Key |= (uint64_t)key6[i] << ((5 - i) * 8);
+    crypto1_init(&pcs, ui64Key);
+
+    /* First auth: feed (nt ^ uid) as plaintext into the cipher */
+    uint32_t uid32 = get_u32_tag_uid(tag);
+    crypto1_word(&pcs, nt ^ uid32, 0);
+
+    /* Encrypt NR + parity */
+    for (int pos = 0; pos < 4; pos++) {
+        mf_nr_ar[pos] = crypto1_byte(&pcs, nr[pos], 0) ^ nr[pos];
+        par[pos]      = filter(pcs.odd) ^ oddparity8(nr[pos]);
+    }
+    /* Compute AR = prng_successor(nt, 32) and encrypt byte-by-byte */
+    uint32_t nt_succ = prng_successor(nt, 32);
+    for (int pos = 4; pos < 8; pos++) {
+        nt_succ = prng_successor(nt_succ, 8);
+        mf_nr_ar[pos] = crypto1_byte(&pcs, 0x00, 0) ^ (nt_succ & 0xFF);
+        par[pos]      = filter(pcs.odd) ^ oddparity8(nt_succ & 0xFF);
+    }
+
+    /* Capture NR||AR (encrypted) — 64 bits, reader→card. Stored before the
+     * actual transfer so we still have the trace if the transfer fails. */
+    auth_trace_store(mf_nr_ar, 64, false);
+
+    /* Send NR||AR with manual parity, expect 4-byte AT */
+    pcd_14a_reader_bits_transfer(mf_nr_ar, 64, par, answer, parity_resp, &len, U8ARR_BIT_LEN(answer));
+    if (len != 32) {
+        return STATUS_MF_ERR_AUTH;  /* no AT — auth was rejected, partial trace */
+    }
+
+    /* Capture AT — 32 bits, card→reader (still encrypted on the wire) */
+    auth_trace_store(answer, 32, true);
+
+    /* Verify AT == prng_successor(nt, 64) ^ ks3 */
+    uint32_t at_recv = ((uint32_t)answer[0] << 24) | ((uint32_t)answer[1] << 16)
+                     | ((uint32_t)answer[2] <<  8) |  (uint32_t)answer[3];
+    uint32_t ntpp    = prng_successor(nt_succ, 32) ^ crypto1_word(&pcs, 0, 0);
+    status = (ntpp == at_recv) ? STATUS_HF_TAG_OK : STATUS_MF_ERR_AUTH;
+
+    /* Auth state may be left armed in the RC522 — clear it for safety so
+     * subsequent reader operations start clean. */
+    pcd_14a_reader_mf1_unauth();
+    return status;
+}
+
+static data_frame_tx_t *cmd_processor_hf14a_auth_trace(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    /* Payload: [type:1][block:1][key:6][timeout_ms_be16:2] = 10 bytes.
+     * Backward-compatible short form [type:1][block:1][key:6] = 8 bytes still
+     * accepted; default 5000ms. */
+    uint32_t timeout_ms = 5000;
+    if (length == 10) {
+        timeout_ms = ((uint32_t)data[8] << 8) | data[9];
+        if (timeout_ms == 0 || timeout_ms > 30000) timeout_ms = 5000;
+    } else if (length != 8) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    uint8_t type    = data[0];
+    uint8_t block   = data[1];
+    uint8_t *key    = &data[2];
+    if (type != PICC_AUTHENT1A && type != PICC_AUTHENT1B) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    m_auth_trace_len = 0;
+
+    /* Step 1: poll for a tag in the field until present or timeout.
+     * scan_auto internally tries twice with REQA; if no card is present
+     * each attempt fails fast (~3-5 ms) and we back off briefly between
+     * iterations to keep the WDT happy and avoid hammering the RC522.
+     * The antenna is already on (before_hf_reader_run hook) and stays on
+     * for the whole polling window — same behaviour as a desktop reader. */
+    picc_14a_tag_t tag;
+    uint8_t scan_status = STATUS_HF_TAG_NO;
+    autotimer *p_at = bsp_obtain_timer(0);
+    while (NO_TIMEOUT_1MS(p_at, timeout_ms)) {
+        scan_status = pcd_14a_reader_scan_auto(&tag);
+        if (scan_status == STATUS_HF_TAG_OK) {
+            break;
+        }
+        /* 50 ms back-off between attempts — yields to USB/BLE main loop
+         * and keeps the WDT fed (timeout is 5000 ms). */
+        for (int i = 0; i < 50; i++) {
+            bsp_delay_ms(1);
+            bsp_wdt_feed();
+        }
+    }
+    bsp_return_timer(p_at);
+
+    if (scan_status != STATUS_HF_TAG_OK) {
+        return data_frame_make(cmd, STATUS_HF_TAG_NO, 0, NULL);
+    }
+
+    /* Step 2: synthesize the wire frames that scan_auto just produced */
+    auth_trace_emit_anticoll(&tag);
+
+    /* Step 3: perform the auth, tapping every TX/RX into the same buffer */
+    uint8_t auth_status = auth_trace_do_auth(&tag, type, block, key);
+
+    /* Always return the buffer — even on auth failure, the partial trace is
+     * useful for diagnosing why (wrong key vs. wrong block vs. no NT etc.). */
+    if (m_auth_trace_len == 0) {
+        return data_frame_make(cmd, auth_status, 0, NULL);
+    }
+    return data_frame_make(cmd, auth_status, m_auth_trace_len, m_auth_trace_buf);
+}
+
 #define HF_SNIFF_BUF_SIZE   3800   /* leave room for USB framing */
 #define HF_SNIFF_MAX_FRAMES  200
 
@@ -2626,6 +2895,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_DEVICE_CAPABILITIES,      NULL,                        cmd_processor_get_device_capabilities,       NULL                   },
     {    DATA_CMD_GET_BLE_PAIRING_ENABLE,       NULL,                        cmd_processor_get_ble_pairing_enable,        NULL                   },
     {    DATA_CMD_SET_BLE_PAIRING_ENABLE,       NULL,                        cmd_processor_set_ble_pairing_enable,        NULL                   },
+    {    DATA_CMD_GET_SLEEP_TIMEOUT,            NULL,                        cmd_processor_get_sleep_timeout,             NULL                   },
+    {    DATA_CMD_SET_SLEEP_TIMEOUT,            NULL,                        cmd_processor_set_sleep_timeout,             NULL                   },
     {    DATA_CMD_GET_ALL_SLOT_NICKS,           NULL,                        cmd_processor_get_all_slot_nicks,            NULL                   },
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
@@ -2673,6 +2944,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_EM4X05_SCAN,                  before_reader_run,           cmd_processor_em4x05_scan,                   NULL                   },
     {    DATA_CMD_LF_SNIFF,                     before_reader_run,           cmd_processor_lf_sniff,                      NULL                   },
     {    DATA_CMD_HF14A_SNIFF,                  NULL,                        cmd_processor_hf14a_sniff,                   NULL                   },
+    {    DATA_CMD_HF14A_AUTH_TRACE,             before_hf_reader_run,        cmd_processor_hf14a_auth_trace,              after_hf_reader_run    },
 
 #endif
 
