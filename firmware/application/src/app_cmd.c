@@ -19,6 +19,8 @@
 #include "lf_reader_generic.h"
 #include "lf_em4x05_data.h"
 #include "rc522.h"
+#include "mf1_crapto1.h"
+#include "parity.h"
 #endif
 #include "nfc_14a.h"
 /* Forward declarations for functions added to nfc_14a.c/h in this PR.
