@@ -1615,7 +1615,7 @@ static data_frame_tx_t *cmd_processor_mf1_set_prng_type(uint16_t cmd, uint16_t s
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     nfc_tag_mf1_set_prng_type(data[0]);
-    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+    return data_frame_make(cmd, STATUS_SUCCESS, 1, &data[0]);  // echo back the set value
 }
 
 static data_frame_tx_t *cmd_processor_mf1_get_gen1a_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
