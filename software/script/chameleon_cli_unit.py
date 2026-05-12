@@ -755,6 +755,7 @@ hf = root.subgroup("hf", "High Frequency commands")
 hf_14a = hf.subgroup("14a", "ISO14443-a commands")
 hf_mf = hf.subgroup("mf", "MIFARE Classic commands")
 hf_mfu = hf.subgroup("mfu", "MIFARE Ultralight / NTAG commands")
+hf_des = hf.subgroup("des", "MIFARE DESFire commands")
 
 lf = root.subgroup("lf", "Low Frequency commands")
 lf_em = lf.subgroup("em", "EM commands")
@@ -1305,10 +1306,10 @@ class HFMFNested(ReaderRequiredUnit):
             block_known, type_known, key_known_bytes, block_target, type_target
         )
         if key is None:
-            print(color_string((CY, "No key found, you can retry.")))
+            print(color_string((CY, "\nNo key found, you can retry.")))
         else:
             print(
-                f" - Block {block_target} Type {type_target.name} Key Found: {color_string((CG, key))}"
+                f"\n - Block {block_target} Type {type_target.name} Key Found: {color_string((CG, key))}"
             )
         return
 
@@ -9578,3 +9579,662 @@ class EMVApdu(DeviceRequiredUnit):
                 break
 
         print(f'\n {C0}Relay ended. {exchange_count} APDU exchange(s) completed.{C0}')
+
+
+# ---------------------------------------------------------------------------
+# hf des — MIFARE DESFire commands
+# ---------------------------------------------------------------------------
+
+
+def _des_raw(cmd, keep_field=True, activate=False, wait_resp=True, append_crc=False,
+             data=b'', timeout_ms=200):
+    """Helper used inside HfDes* commands — wraps cmd.hf14a_raw options."""
+    options = {
+        'activate_rf_field':  1 if activate else 0,
+        'wait_response':      1 if wait_resp else 0,
+        'append_crc':         1 if append_crc else 0,
+        'auto_select':        0,
+        'keep_rf_field':      1 if keep_field else 0,
+        'check_response_crc': 0,
+    }
+    return cmd.hf14a_raw(options=options, resp_timeout_ms=timeout_ms, data=list(data))
+
+
+def _des_select(cmd):
+    """
+    Field-on + ISO14443-A select via hf14a_scan.
+    Returns (uid_bytes, sak, ats).
+    hf14a_scan returns a list of tag dicts (via @expect_response which unwraps .parsed).
+    """
+    tags = cmd.hf14a_scan()
+    if not tags:
+        raise RuntimeError("No 14443A tag in field")
+    tag = tags[0]
+    uid_bytes = tag['uid']
+    sak = tag['sak'][0]   # sak is a 1-byte bytes object
+    ats = tag['ats']
+    return uid_bytes, sak, ats
+
+
+def _des_wrap(cmd_byte: int, data: bytes = b'') -> bytes:
+    """
+    Wrap a native DESFire command in an ISO 7816-4 envelope:
+        CLA=90  INS=cmd  P1=00  P2=00  [Lc data]  Le=00
+    This is the 'native ISO' framing DESFire EV1+ accepts over T=CL.
+    """
+    if data:
+        return bytes([0x90, cmd_byte, 0x00, 0x00, len(data)]) + data + bytes([0x00])
+    else:
+        return bytes([0x90, cmd_byte, 0x00, 0x00, 0x00])
+
+
+def _des_transceive(cmd, des_cmd: int, data: bytes = b'', timeout_ms=500) -> bytes:
+    """
+    Send one native DESFire command via ISO-wrapped APDU over T=CL.
+    Uses hf14a_4_reader_apdu which handles RATS, CRC32, and PCB framing in firmware.
+    Returns payload bytes with the DESFire status byte appended:
+        [...payload..., status]
+    where status 0x00=OK, 0xAF=more data, other=error.
+    Raises RuntimeError on comms failure.
+    """
+    apdu = _des_wrap(des_cmd, data)
+    resp = cmd.hf14a_4_reader_apdu(apdu)
+    if resp.status not in (Status.SUCCESS, Status.HF_TAG_OK):
+        raise RuntimeError(f"No response to command 0x{des_cmd:02X}")
+    rdata = resp.data
+    if not rdata or len(rdata) < 2:
+        raise RuntimeError(f"Empty response to command 0x{des_cmd:02X}")
+    # ISO response: [...payload...] SW1 SW2
+    # DESFire status is in SW2 (SW1=0x91 for native wrapped)
+    sw1, sw2 = rdata[-2], rdata[-1]
+    if sw1 != 0x91:
+        raise RuntimeError(f"Unexpected SW1=0x{sw1:02X} SW2=0x{sw2:02X}")
+    payload = rdata[:-2]
+    # Return payload + DESFire status byte so callers can check for 0xAF (more frames)
+    return payload + bytes([sw2])
+
+
+def _desfire_auth_des(cmd, key: bytes, key_no: int = 0) -> bool:
+    """
+    DESFire native D40 authentication (DES/2TDEA, command 0x0A).
+    Returns True on success, False on wrong key.
+    Raises RuntimeError on comms failure.
+    """
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    from cryptography.hazmat.backends import default_backend
+    import os
+
+    if len(key) == 8:
+        key2tdea = key + key
+    elif len(key) == 16:
+        key2tdea = key
+    else:
+        raise ValueError(f"DES key must be 8 or 16 bytes, got {len(key)}")
+
+    # Step 1: send Authenticate command (0x0A + key_no)
+    resp = _des_transceive(cmd, 0x0A, bytes([key_no]))
+    status = resp[-1]
+    if status != 0xAF:
+        return False
+    enc_rnd_b = resp[:-1]
+    if len(enc_rnd_b) != 8:
+        raise RuntimeError(f"Expected 8-byte encRndB, got {len(enc_rnd_b)}")
+
+    # Step 2: decrypt RndB with IV=0
+    iv = bytes(8)
+    cipher = Cipher(algorithms.TripleDES(key2tdea), modes.CBC(iv), backend=default_backend())
+    dec = cipher.decryptor()
+    rnd_b = dec.update(enc_rnd_b) + dec.finalize()
+
+    # Step 3: rotate RndB left by 1 byte
+    rnd_b_rot = rnd_b[1:] + rnd_b[:1]
+
+    # Step 4: generate RndA and encrypt RndA || RndB' in CBC (IV = encRndB)
+    rnd_a = os.urandom(8)
+    cipher2 = Cipher(algorithms.TripleDES(key2tdea), modes.CBC(enc_rnd_b), backend=default_backend())
+    enc2 = cipher2.encryptor()
+    enc_both = enc2.update(rnd_a + rnd_b_rot) + enc2.finalize()
+
+    # Step 5: send AF + enc(RndA || RndB') as additional frame
+    resp2 = _des_transceive(cmd, 0xAF, enc_both)
+    status2 = resp2[-1]
+    if status2 != 0x00:
+        return False
+
+    # Step 6: verify enc(RndA')
+    enc_rnd_a_card = resp2[:-1]
+    if len(enc_rnd_a_card) != 8:
+        raise RuntimeError(f"Expected 8-byte encRndA', got {len(enc_rnd_a_card)}")
+    iv3 = enc_both[-8:]
+    cipher3 = Cipher(algorithms.TripleDES(key2tdea), modes.CBC(iv3), backend=default_backend())
+    dec3 = cipher3.decryptor()
+    rnd_a_card = dec3.update(enc_rnd_a_card) + dec3.finalize()
+    rnd_a_rot = rnd_a[1:] + rnd_a[:1]
+    return rnd_a_card == rnd_a_rot
+
+
+def _desfire_auth_aes(cmd, key: bytes, key_no: int = 0) -> bool:
+    """
+    DESFire EV1 AES authentication (command 0xAA).
+    Returns True on success, False on wrong key.
+    """
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    from cryptography.hazmat.backends import default_backend
+    import os
+
+    if len(key) != 16:
+        raise ValueError(f"AES key must be 16 bytes, got {len(key)}")
+
+    # Step 1: send AuthenticateAES (0xAA + key_no)
+    resp = _des_transceive(cmd, 0xAA, bytes([key_no]))
+    status = resp[-1]
+    if status != 0xAF:
+        return False
+    enc_rnd_b = resp[:-1]
+    if len(enc_rnd_b) != 16:
+        raise RuntimeError(f"Expected 16-byte encRndB, got {len(enc_rnd_b)}")
+
+    # Step 2: decrypt RndB with IV=0
+    iv = bytes(16)
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    dec = cipher.decryptor()
+    rnd_b = dec.update(enc_rnd_b) + dec.finalize()
+
+    # Step 3: rotate RndB left 1
+    rnd_b_rot = rnd_b[1:] + rnd_b[:1]
+
+    # Step 4: generate RndA, encrypt RndA || RndB' with IV = encRndB
+    rnd_a = os.urandom(16)
+    cipher2 = Cipher(algorithms.AES(key), modes.CBC(enc_rnd_b), backend=default_backend())
+    enc2 = cipher2.encryptor()
+    enc_both = enc2.update(rnd_a + rnd_b_rot) + enc2.finalize()
+
+    # Step 5: send AF + enc(RndA || RndB')
+    resp2 = _des_transceive(cmd, 0xAF, enc_both)
+    status2 = resp2[-1]
+    if status2 != 0x00:
+        return False
+
+    # Step 6: verify enc(RndA')
+    enc_rnd_a_card = resp2[:-1]
+    if len(enc_rnd_a_card) != 16:
+        raise RuntimeError(f"Expected 16-byte encRndA', got {len(enc_rnd_a_card)}")
+    iv3 = enc_both[-16:]
+    cipher3 = Cipher(algorithms.AES(key), modes.CBC(iv3), backend=default_backend())
+    dec3 = cipher3.decryptor()
+    rnd_a_card = dec3.update(enc_rnd_a_card) + dec3.finalize()
+    rnd_a_rot = rnd_a[1:] + rnd_a[:1]
+    return rnd_a_card == rnd_a_rot
+
+
+def _desfire_auth_3k3des(cmd, key: bytes, key_no: int = 0) -> bool:
+    """
+    DESFire EV1 3K3DES (3-key Triple-DES) authentication (command 0x1A).
+    Key must be 24 bytes. Returns True on success, False on wrong key.
+    """
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    from cryptography.hazmat.backends import default_backend
+    import os
+
+    if len(key) != 24:
+        raise ValueError(f"3K3DES key must be 24 bytes, got {len(key)}")
+
+    # Step 1: send Authenticate3K3DES (0x1A + key_no)
+    resp = _des_transceive(cmd, 0x1A, bytes([key_no]))
+    status = resp[-1]
+    if status != 0xAF:
+        return False
+    enc_rnd_b = resp[:-1]
+    if len(enc_rnd_b) != 8:
+        raise RuntimeError(f"Expected 8-byte encRndB, got {len(enc_rnd_b)}")
+
+    # Step 2: decrypt RndB with IV=0 using 3K3DES (EDE3)
+    iv = bytes(8)
+    cipher = Cipher(algorithms.TripleDES(key), modes.CBC(iv), backend=default_backend())
+    dec = cipher.decryptor()
+    rnd_b = dec.update(enc_rnd_b) + dec.finalize()
+
+    # Step 3: rotate RndB left by 1 byte
+    rnd_b_rot = rnd_b[1:] + rnd_b[:1]
+
+    # Step 4: generate RndA, encrypt RndA || RndB' with IV = encRndB
+    rnd_a = os.urandom(8)
+    cipher2 = Cipher(algorithms.TripleDES(key), modes.CBC(enc_rnd_b), backend=default_backend())
+    enc2 = cipher2.encryptor()
+    enc_both = enc2.update(rnd_a + rnd_b_rot) + enc2.finalize()
+
+    # Step 5: send AF + enc(RndA || RndB')
+    resp2 = _des_transceive(cmd, 0xAF, enc_both)
+    status2 = resp2[-1]
+    if status2 != 0x00:
+        return False
+
+    # Step 6: verify enc(RndA')
+    enc_rnd_a_card = resp2[:-1]
+    if len(enc_rnd_a_card) != 8:
+        raise RuntimeError(f"Expected 8-byte encRndA', got {len(enc_rnd_a_card)}")
+    iv3 = enc_both[-8:]
+    cipher3 = Cipher(algorithms.TripleDES(key), modes.CBC(iv3), backend=default_backend())
+    dec3 = cipher3.decryptor()
+    rnd_a_card = dec3.update(enc_rnd_a_card) + dec3.finalize()
+    rnd_a_rot = rnd_a[1:] + rnd_a[:1]
+    return rnd_a_card == rnd_a_rot
+
+
+def _desfire_get_app_ids(cmd) -> list:
+    """Send GetApplicationIDs (0x6A) and return list of 3-byte AIDs."""
+    resp = _des_transceive(cmd, 0x6A)
+    status = resp[-1]
+    payload = resp[:-1]
+    aids = []
+    # Fixed: iterate full payload in 3-byte steps (previous code used len-2, dropping the last AID)
+    for i in range(0, len(payload), 3):
+        if i + 3 <= len(payload):
+            aids.append(payload[i:i+3])
+    while status == 0xAF:
+        resp = _des_transceive(cmd, 0xAF)
+        status = resp[-1]
+        payload = resp[:-1]
+        for i in range(0, len(payload), 3):
+            if i + 3 <= len(payload):
+                aids.append(payload[i:i+3])
+    return aids
+
+
+def _desfire_select_app(cmd, aid: bytes):
+    """Send SelectApplication (0x5A) for a 3-byte AID."""
+    resp = _des_transceive(cmd, 0x5A, aid)
+    return resp[-1] == 0x00
+
+
+def _desfire_get_version(cmd) -> dict:
+    """Send GetVersion (0x60) and return a dict of card info."""
+    resp = _des_transceive(cmd, 0x60)
+    info = {}
+    payload = resp[:-1]
+    if len(payload) >= 7:
+        info['hw_vendor']  = payload[0]
+        info['hw_type']    = payload[1]
+        info['hw_subtype'] = payload[2]
+        info['hw_major']   = payload[3]
+        info['hw_minor']   = payload[4]
+        info['hw_storage'] = payload[5]
+        info['hw_proto']   = payload[6]
+    if resp[-1] == 0xAF:
+        resp2 = _des_transceive(cmd, 0xAF)
+        p2 = resp2[:-1]
+        if len(p2) >= 7:
+            info['sw_vendor']  = p2[0]
+            info['sw_type']    = p2[1]
+            info['sw_subtype'] = p2[2]
+            info['sw_major']   = p2[3]
+            info['sw_minor']   = p2[4]
+            info['sw_storage'] = p2[5]
+            info['sw_proto']   = p2[6]
+        if resp2[-1] == 0xAF:
+            resp3 = _des_transceive(cmd, 0xAF)
+            p3 = resp3[:-1]
+            if len(p3) >= 14:
+                info['uid']       = p3[:7].hex().upper()
+                info['batch']     = p3[7:12].hex().upper()
+                info['prod_week'] = p3[12]
+                info['prod_year'] = p3[13]
+    return info
+
+
+_DESFIRE_HW_TYPE = {0x01: "DESFire", 0x81: "DESFire (SW)"}
+_DESFIRE_HW_SUBTYPE = {0x01: "EV1", 0x02: "EV2", 0x03: "EV3", 0x00: "MF3ICD40"}
+_DESFIRE_STORAGE = {
+    0x16: "2 KB", 0x18: "4 KB", 0x1A: "8 KB",
+}
+
+
+@hf_des.command("info")
+class HfDesInfo(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Get MIFARE DESFire card information (version, UID, AIDs)."
+        parser.epilog = "examples:\n  hf des info\n"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            uid_bytes, sak, ats = _des_select(self.cmd)
+        except RuntimeError as e:
+            print(f" {CR}[!] {e}{C0}")
+            return
+
+        print(f" UID           : {uid_bytes.hex().upper()}")
+        print(f" SAK           : 0x{sak:02X}")
+
+        try:
+            ver = _desfire_get_version(self.cmd)
+            hw_subtype = _DESFIRE_HW_SUBTYPE.get(ver.get('hw_subtype', 0), f"0x{ver.get('hw_subtype',0):02X}")
+            storage    = _DESFIRE_STORAGE.get(ver.get('hw_storage', 0), f"0x{ver.get('hw_storage',0):02X}")
+            print(f" HW version    : {ver.get('hw_major', '?')}.{ver.get('hw_minor', '?')}  "
+                  f"({hw_subtype})  storage: {storage}")
+            print(f" SW version    : {ver.get('sw_major', '?')}.{ver.get('sw_minor', '?')}")
+            if 'uid' in ver:
+                print(f" Card UID      : {ver['uid']}")
+            if 'batch' in ver:
+                print(f" Batch no      : {ver['batch']}")
+            if 'prod_week' in ver:
+                print(f" Production    : week {ver['prod_week']:02d} / 20{ver['prod_year']:02d}")
+        except Exception as e:
+            print(f" {CY}[!] GetVersion failed: {e}{C0}")
+
+        try:
+            aids = _desfire_get_app_ids(self.cmd)
+            if aids:
+                print(f"\n Applications  : {len(aids)} found")
+                for aid in aids:
+                    print(f"   AID: {aid.hex().upper()}  ({int.from_bytes(aid, 'little'):06X})")
+            else:
+                print(f"\n Applications  : none")
+        except Exception as e:
+            print(f" {CY}[!] GetApplicationIDs failed: {e}{C0}")
+
+
+@hf_des.command("chk")
+class HfDesChk(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Check DESFire keys against a card (dictionary / pattern / single key). "
+            "Tries DES, 2TDEA, and AES for each key. "
+            "Iterates all AIDs on card unless --aid is specified."
+        )
+        parser.add_argument("--aid", type=str, default=None, metavar="<hex>",
+                            help="Target AID (3 hex bytes, e.g. 123456). Default: PICC master (000000) + all apps.")
+        parser.add_argument("-n", "--keyno", type=int, default=0, metavar="<0-13>",
+                            help="Key number to authenticate with (default: 0)")
+        parser.add_argument("-k", "--key", type=str, default=None, metavar="<hex>",
+                            help="Single key to try (8, 16 or 24 hex bytes)")
+        parser.add_argument("-f", "--file", type=str, default=None, metavar="<file>",
+                            help="Dictionary file (one hex key per line)")
+        parser.add_argument("--pattern1b", action="store_true",
+                            help="Try all 1-byte patterns (0000..00, 0101..01, ..., FFFF..FF) for DES and AES")
+        parser.add_argument("--pattern2b", action="store_true",
+                            help="Try all 2-byte patterns for AES (0000..00 to FFFF..FF, step 0x0101)")
+        parser.add_argument("-t", "--timeout", type=int, default=5000, metavar="<ms>",
+                            help="Card presence timeout ms (default 5000)")
+        parser.epilog = (
+            "examples:\n"
+            "  hf des chk                              -> try built-in defaults on all AIDs\n"
+            "  hf des chk --aid 123456 -k 00112233445566778899AABBCCDDEEFF\n"
+            "  hf des chk -f mykeys.txt\n"
+            "  hf des chk --pattern1b\n"
+        )
+        return parser
+
+    # ---- built-in default keys (matches PM3 mfdes_default_keys.dic) ----
+    # DES / 2TDEA keys (8 bytes each)
+    DES_DEFAULTS = [
+        bytes(8),                                                        # NXP Default DES
+        bytes([0xFF]*8),
+        bytes.fromhex('7544d1652bc9bd43'),
+        bytes.fromhex('0011223344556677'),
+        bytes.fromhex('1122334455667788'),
+        bytes.fromhex('a0a1a2a3a4a5a6a7'),
+        bytes.fromhex('d3f7d3f7d3f7d3f7'),
+    ]
+    # AES-128 keys (16 bytes each)
+    AES_DEFAULTS = [
+        bytes(16),                                                       # NXP Default AES
+        bytes([0x79,0x70,0x25,0x53]*4),                                  # TI TRF7970A
+        bytes.fromhex('00112233445566778899AABBCCDDEEFF'),               # TI TRF7970A sloa213
+        bytes.fromhex('4E617468616E2E4C6920546564647920'),
+        bytes.fromhex('43464F494D48504E4C4359454E528841'),               # NHIF
+        bytes.fromhex('6AC292FAA1315B4D858AB3A3D7D5933A'),
+        bytes.fromhex('404142434445464748494a4b4c4d4e4f'),
+        bytes.fromhex('3112B738D8862CCD34302EB299AAB456'),               # Gallagher AES
+        bytes.fromhex('47454D5850524553534F53414D504C45'),               # Gemalto
+        bytes.fromhex('2b7e151628aed2a6abf7158809cf4f3c'),
+        bytes.fromhex('fbeed618357133667c85e08f7236a8de'),
+        bytes.fromhex('f7ddac306ae266ccf90bc11ee46d513b'),
+        bytes.fromhex('54686973206973206D79206B65792020'),
+        bytes.fromhex('a0a1a2a3a4a5a6a7a0a1a2a3a4a5a6a7'),
+        bytes.fromhex('b0b1b2b3b4b5b6b7b0b1b2b3b4b5b6b7'),
+        bytes.fromhex('a0a1a2a3b0b1b2b3c0c1c2c3d0d1d2d3'),
+        bytes.fromhex('d3f7d3f7d3f7d3f7d3f7d3f7d3f7d3f7'),
+        bytes.fromhex('C238E449F725B1510EAA699550CABA16'),               # J2A040
+        bytes([0x11]*16),
+        bytes([0x22]*16),
+        bytes([0x33]*16),
+        bytes([0x44]*16),
+        bytes([0x55]*16),
+        bytes([0x66]*16),
+        bytes([0x77]*16),
+        bytes([0x88]*16),
+        bytes([0x99]*16),
+        bytes([0xAA]*16),
+        bytes([0xBB]*16),
+        bytes([0xCC]*16),
+        bytes([0xDD]*16),
+        bytes([0xEE]*16),
+        bytes([0xFF]*16),
+        bytes(range(16)),                                                # 000102...0f
+        bytes(range(1, 17)),                                             # 010203...10
+        bytes([0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,
+               0x08,0x09,0x10,0x11,0x12,0x13,0x14,0x15]),
+        bytes([0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,
+               0x09,0x10,0x11,0x12,0x13,0x14,0x15,0x16]),
+        bytes([0x16,0x15,0x14,0x13,0x12,0x11,0x10,0x09,
+               0x08,0x07,0x06,0x05,0x04,0x03,0x02,0x01]),
+        bytes([0x15,0x14,0x13,0x12,0x11,0x10,0x09,0x08,
+               0x07,0x06,0x05,0x04,0x03,0x02,0x01,0x00]),
+        bytes([0x0f,0x0e,0x0d,0x0c,0x0b,0x0a,0x09,0x08,
+               0x07,0x06,0x05,0x04,0x03,0x02,0x01,0x00]),
+        bytes([0x10,0x0f,0x0e,0x0d,0x0c,0x0b,0x0a,0x09,
+               0x08,0x07,0x06,0x05,0x04,0x03,0x02,0x01]),
+        bytes([0x30,0x31,0x32,0x33,0x34,0x35,0x36,0x37,
+               0x38,0x39,0x3a,0x3b,0x3c,0x3d,0x3e,0x3f]),
+        bytes.fromhex('9CABF398358405AE2F0E2B3D31C99A8A'),
+        bytes.fromhex('605F5E5D5C5B5A59605F5E5D5C5B5A59'),              # access control
+        bytes.fromhex('22094904FF22677E5D28C6E3ED4F694C'),
+        bytes([0x40+i for i in range(16)]),
+    ]
+    # 3K3DES keys (24 bytes each)
+    TDEA3_DEFAULTS = [
+        bytes(24),                                                       # NXP Default 3K3DES
+        bytes.fromhex('00112233445566778899AABBCCDDEEFF0102030405060708'),
+        bytes([0xFF]*24),
+        bytes.fromhex('d3f7d3f7d3f7d3f7d3f7d3f7d3f7d3f7d3f7d3f7d3f7d3f7'),
+    ]
+
+    def _build_key_lists(self, args):
+        des_keys   = list(self.DES_DEFAULTS)
+        aes_keys   = list(self.AES_DEFAULTS)
+        tdea3_keys = list(self.TDEA3_DEFAULTS)
+
+        if args.key:
+            raw = bytes.fromhex(args.key.replace(" ", ""))
+            if len(raw) == 8:
+                return [raw], [], []
+            elif len(raw) == 16:
+                return [], [raw], []
+            elif len(raw) == 24:
+                return [], [], [raw]
+            else:
+                raise ValueError("Key must be 8, 16 or 24 bytes")
+
+        if args.file:
+            des_keys, aes_keys, tdea3_keys = [], [], []
+            with open(args.file) as fh:
+                for line in fh:
+                    # Strip inline comments (text after #) then whitespace
+                    line = line.split('#')[0].strip()
+                    if not line:
+                        continue
+                    try:
+                        raw = bytes.fromhex(line.split()[0])
+                    except ValueError:
+                        continue
+                    if len(raw) == 8:
+                        des_keys.append(raw)
+                    elif len(raw) == 16:
+                        aes_keys.append(raw)
+                    elif len(raw) == 24:
+                        tdea3_keys.append(raw)
+            return des_keys, aes_keys, tdea3_keys
+
+        if args.pattern1b:
+            des_keys   = [bytes([i]*8)  for i in range(256)]
+            aes_keys   = [bytes([i]*16) for i in range(256)]
+            tdea3_keys = [bytes([i]*24) for i in range(256)]
+            return des_keys, aes_keys, tdea3_keys
+
+        if args.pattern2b:
+            des_keys, aes_keys, tdea3_keys = [], [], []
+            for i in range(0x10000):
+                hi, lo = (i >> 8) & 0xFF, i & 0xFF
+                des_keys.append(bytes([hi, lo]*4))
+                aes_keys.append(bytes([hi, lo]*8))
+                tdea3_keys.append(bytes([hi, lo]*12))
+            return des_keys, aes_keys, tdea3_keys
+
+        return des_keys, aes_keys, tdea3_keys
+
+    def _try_key(self, aid_label, key_no, key, algo):
+        """
+        Try one key against a DESFire AID+keyno.
+
+        A failed authentication leaves the DESFire session in an aborted state.
+        We must reset it before the next attempt by issuing SelectApplication(000000)
+        (which selects the PICC master app and clears any partial auth state).
+        If that APDU itself fails (e.g. card went away), fall back to a full
+        ISO14443-A re-select so the RF field / T=CL layer is re-established.
+        """
+        # --- Reset DESFire session state ---
+        try:
+            _desfire_select_app(self.cmd, bytes([0x00, 0x00, 0x00]))
+        except Exception:
+            # SelectApp(000000) failed — card may have dropped; do a full re-select
+            try:
+                _des_select(self.cmd)
+            except Exception:
+                return False
+
+        # Select the target application (skip for PICC master 000000)
+        if aid_label != "000000":
+            aid_bytes = bytes.fromhex(aid_label)
+            try:
+                if not _desfire_select_app(self.cmd, aid_bytes):
+                    return False
+            except Exception:
+                return False
+
+        try:
+            if algo == 'DES':
+                return _desfire_auth_des(self.cmd, key, key_no)
+            elif algo == 'AES':
+                return _desfire_auth_aes(self.cmd, key, key_no)
+            else:  # 3K3DES
+                return _desfire_auth_3k3des(self.cmd, key, key_no)
+        except Exception:
+            return False
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+            from cryptography.hazmat.backends import default_backend
+        except ImportError:
+            print(f" {CR}[!] 'cryptography' library required: pip install cryptography{C0}")
+            return
+
+        try:
+            des_keys, aes_keys, tdea3_keys = self._build_key_lists(args)
+        except Exception as e:
+            print(f" {CR}[!] {e}{C0}")
+            return
+
+        key_no = args.keyno
+
+        # Select card and get AID list
+        print(f" Selecting card...")
+        try:
+            uid_bytes, sak, _ = _des_select(self.cmd)
+        except RuntimeError as e:
+            print(f" {CR}[!] {e}{C0}")
+            return
+        print(f" UID: {uid_bytes.hex().upper()}  SAK: 0x{sak:02X}")
+        # Determine target AIDs
+        if args.aid:
+            aid_list = [args.aid.upper().zfill(6)]
+        else:
+            try:
+                raw_aids = _desfire_get_app_ids(self.cmd)
+                aid_list = ["000000"] + [a.hex().upper() for a in raw_aids]
+            except Exception as e:
+                print(f" {CY}[!] Could not enumerate AIDs: {e} — trying PICC only{C0}")
+                aid_list = ["000000"]
+
+        total_des   = len(des_keys)
+        total_aes   = len(aes_keys)
+        total_tdea3 = len(tdea3_keys)
+        total_keys  = (total_des + total_aes + total_tdea3) * len(aid_list)
+        print(f" AIDs to check  : {len(aid_list)}  ({', '.join(aid_list)})")
+        print(f" DES keys       : {total_des}")
+        print(f" AES-128 keys   : {total_aes}")
+        print(f" 3K3DES keys    : {total_tdea3}")
+        print(f" Total attempts : {total_keys}")
+        print()
+
+        found = []
+        checked = 0
+        start = time.time()
+
+        for aid in aid_list:
+            print(f" Checking AID {CY}{aid}{C0}  key#{key_no} ...")
+            aid_found = False
+
+            for key in des_keys:
+                checked += 1
+                ok = self._try_key(aid, key_no, key, 'DES')
+                if ok:
+                    msg = f"  {CG}[+] AID {aid}  DES/2TDEA  key#{key_no}  key: {key.hex().upper()}{C0}"
+                    print(msg)
+                    found.append(('DES', aid, key_no, key.hex().upper()))
+                    aid_found = True
+                    break
+                else:
+                    print(f"   {CR}✗{C0} DES    {key.hex().upper()}")
+
+            if not aid_found:
+                for key in aes_keys:
+                    checked += 1
+                    ok = self._try_key(aid, key_no, key, 'AES')
+                    if ok:
+                        msg = f"  {CG}[+] AID {aid}  AES-128    key#{key_no}  key: {key.hex().upper()}{C0}"
+                        print(msg)
+                        found.append(('AES', aid, key_no, key.hex().upper()))
+                        aid_found = True
+                        break
+                    else:
+                        print(f"   {CR}✗{C0} AES    {key.hex().upper()}")
+
+            if not aid_found:
+                for key in tdea3_keys:
+                    checked += 1
+                    ok = self._try_key(aid, key_no, key, '3K3DES')
+                    if ok:
+                        msg = f"  {CG}[+] AID {aid}  3K3DES     key#{key_no}  key: {key.hex().upper()}{C0}"
+                        print(msg)
+                        found.append(('3K3DES', aid, key_no, key.hex().upper()))
+                        aid_found = True
+                        break
+                    else:
+                        print(f"   {CR}✗{C0} 3K3DES {key.hex().upper()}")
+
+            if not aid_found:
+                print(f"  {CY}[-] AID {aid}  no key found{C0}\n")
+
+        elapsed = time.time() - start
+        print()
+        print(f"Checked {checked} combinations in {elapsed:.1f}s")
+        if found:
+            print(f"\n {CG}Found {len(found)} key(s):{C0}")
+            for algo, aid, kno, key_hex in found:
+                print(f"\n   {CG}{algo:8s}  AID {aid}  key#{kno}  {key_hex}{C0}")
+        else:
+            print(f"\n {CR}No keys found{C0}")
