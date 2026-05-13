@@ -9848,45 +9848,78 @@ def _desfire_select_app(cmd, aid: bytes):
 
 
 def _desfire_get_version(cmd) -> dict:
-    """Send GetVersion (0x60) and return a dict of card info."""
+    """Send GetVersion (0x60) and return a dict of card info.
+
+    HW frame: vendor(0) type(1) subtype(2) major(3) minor(4) storage(5) protocol(6)
+    SW frame: same layout.
+    UID frame: uid(0:7) batch(7:12) prod_week(12) prod_year(13)
+
+    Per-field length guards make the parser robust against short frames.
+    If the SW frame returns no payload (some reader/BLE stacks don't relay it)
+    sw_major, sw_storage and sw_proto are derived from the HW frame values.
+    """
     resp = _des_transceive(cmd, 0x60)
-    info = {}
-    payload = resp[:-1]
-    if len(payload) >= 7:
-        info['hw_vendor']  = payload[0]
-        info['hw_type']    = payload[1]
-        info['hw_subtype'] = payload[2]
-        info['hw_major']   = payload[3]
-        info['hw_minor']   = payload[4]
-        info['hw_storage'] = payload[5]
-        info['hw_proto']   = payload[6]
+    info: dict = {}
+    hw = resp[:-1]
+    # HW frame — individual guards so a short frame still populates what it has
+    if len(hw) >= 1: info['hw_vendor']  = hw[0]
+    if len(hw) >= 2: info['hw_type']    = hw[1]
+    if len(hw) >= 3: info['hw_subtype'] = hw[2]
+    if len(hw) >= 4: info['hw_major']   = hw[3]
+    if len(hw) >= 5: info['hw_minor']   = hw[4]
+    if len(hw) >= 6: info['hw_storage'] = hw[5]
+    if len(hw) >= 7: info['hw_proto']   = hw[6]
+
     if resp[-1] == 0xAF:
         resp2 = _des_transceive(cmd, 0xAF)
-        p2 = resp2[:-1]
-        if len(p2) >= 7:
-            info['sw_vendor']  = p2[0]
-            info['sw_type']    = p2[1]
-            info['sw_subtype'] = p2[2]
-            info['sw_major']   = p2[3]
-            info['sw_minor']   = p2[4]
-            info['sw_storage'] = p2[5]
-            info['sw_proto']   = p2[6]
+        sw = resp2[:-1]
+        # SW frame — same per-field guards
+        if len(sw) >= 1: info['sw_vendor']  = sw[0]
+        if len(sw) >= 2: info['sw_type']    = sw[1]
+        if len(sw) >= 3: info['sw_subtype'] = sw[2]
+        if len(sw) >= 4: info['sw_major']   = sw[3]
+        if len(sw) >= 5: info['sw_minor']   = sw[4]
+        if len(sw) >= 6: info['sw_storage'] = sw[5]
+        if len(sw) >= 7: info['sw_proto']   = sw[6]
+
+        # Fallback: derive SW fields from HW when SW frame payload is empty
+        if 'sw_major' not in info and 'hw_major' in info:
+            info['sw_major'] = _DESFIRE_HW_MAJOR_TO_SW_MAJOR.get(
+                info['hw_major'], info['hw_major'])
+            info['sw_minor'] = 0
+        if 'sw_storage' not in info: info['sw_storage'] = info.get('hw_storage')
+        if 'sw_proto'   not in info: info['sw_proto']   = info.get('hw_proto')
+
         if resp2[-1] == 0xAF:
             resp3 = _des_transceive(cmd, 0xAF)
             p3 = resp3[:-1]
-            if len(p3) >= 14:
-                info['uid']       = p3[:7].hex().upper()
-                info['batch']     = p3[7:12].hex().upper()
-                info['prod_week'] = p3[12]
-                info['prod_year'] = p3[13]
+            if len(p3) >= 7:  info['uid']       = p3[:7].hex().upper()
+            if len(p3) >= 12: info['batch']     = p3[7:12].hex().upper()
+            if len(p3) >= 13: info['prod_week'] = p3[12]
+            if len(p3) >= 14: info['prod_year'] = p3[13]
     return info
 
 
-_DESFIRE_HW_TYPE = {0x01: "DESFire", 0x81: "DESFire (SW)"}
-_DESFIRE_HW_SUBTYPE = {0x01: "EV1", 0x02: "EV2", 0x03: "EV3", 0x00: "MF3ICD40"}
-_DESFIRE_STORAGE = {
-    0x16: "2 KB", 0x18: "4 KB", 0x1A: "8 KB",
+_DESFIRE_HW_TYPE  = {0x01: "DESFire", 0x81: "DESFire (SW)"}
+# Keyed on hw_major (payload[3]), matching PM3 logic.
+# hw_subtype (payload[2]) is always 0x01 for all EV variants and cannot
+# distinguish EV1 from EV2/EV3.
+_DESFIRE_HW_MAJOR = {
+    0x00: "MF3ICD40 (D40)",
+    0x01: "EV1",
+    0x12: "EV2",
+    0x30: "Light",
+    0x33: "EV3",
 }
+_DESFIRE_STORAGE  = {0x16: "2 KB", 0x18: "4 KB", 0x1A: "8 KB"}
+_DESFIRE_PROTOCOL = {
+    0x03: "ISO 14443-3",
+    0x04: "ISO 14443-4",
+    0x05: "ISO 14443-3, 14443-4",
+}
+# hw_major -> SW major (EV generation number), used as fallback when the SW
+# frame returns no data (some reader/BLE stacks don't relay it).
+_DESFIRE_HW_MAJOR_TO_SW_MAJOR = {0x01: 1, 0x12: 2, 0x30: 3, 0x33: 3}
 
 
 @hf_des.command("info")
@@ -9909,11 +9942,31 @@ class HfDesInfo(ReaderRequiredUnit):
 
         try:
             ver = _desfire_get_version(self.cmd)
-            hw_subtype = _DESFIRE_HW_SUBTYPE.get(ver.get('hw_subtype', 0), f"0x{ver.get('hw_subtype',0):02X}")
-            storage    = _DESFIRE_STORAGE.get(ver.get('hw_storage', 0), f"0x{ver.get('hw_storage',0):02X}")
-            print(f" HW version    : {ver.get('hw_major', '?')}.{ver.get('hw_minor', '?')}  "
-                  f"({hw_subtype})  storage: {storage}")
-            print(f" SW version    : {ver.get('sw_major', '?')}.{ver.get('sw_minor', '?')}")
+
+            def _fmtver(major, minor):
+                """Format as PM3-style bare hex digits: 0x33, 0x00 -> '33.0'"""
+                return f"{major:x}.{minor:x}" if minor else f"{major:x}.0"
+
+            hw_maj = ver.get('hw_major')
+            hw_min = ver.get('hw_minor', 0)
+            sw_maj = ver.get('sw_major')
+            sw_min = ver.get('sw_minor', 0)
+
+            hw_gen  = _DESFIRE_HW_MAJOR.get(hw_maj, f"hw_major 0x{hw_maj:02X}") \
+                      if hw_maj is not None else "?"
+            hw_stor = _DESFIRE_STORAGE.get(ver.get('hw_storage'),
+                      f"0x{ver['hw_storage']:02X}" if 'hw_storage' in ver else "?")
+            sw_stor = _DESFIRE_STORAGE.get(ver.get('sw_storage'),
+                      f"0x{ver['sw_storage']:02X}" if 'sw_storage' in ver else "?")
+            proto   = _DESFIRE_PROTOCOL.get(ver.get('sw_proto'),
+                      f"0x{ver['sw_proto']:02X}" if 'sw_proto' in ver else "?")
+
+            hw_ver_str = _fmtver(hw_maj, hw_min) if hw_maj is not None else "?"
+            sw_ver_str = _fmtver(sw_maj, sw_min) if sw_maj is not None else "?"
+
+            print(f" HW version    : {hw_ver_str}  ({hw_gen})  storage: {hw_stor}")
+            print(f" SW version    : {sw_ver_str}  storage: {sw_stor}")
+            print(f" Protocol      : {proto}")
             if 'uid' in ver:
                 print(f" Card UID      : {ver['uid']}")
             if 'batch' in ver:
