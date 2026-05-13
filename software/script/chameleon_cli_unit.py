@@ -2494,6 +2494,7 @@ class HFMFAutopwn(ReaderRequiredUnit):
             nested = HFMFNested.__new__(HFMFNested)
             BaseCLIUnit.__init__(nested)
             nested._device_cmd = self.cmd
+            hardnested = None
             for missing_key_num, key_type_target in missing_keys.items():
                 if current_keys_found.get(missing_key_num) is not None:
                     print(f" {CG}[+]{C0}  Key {missing_key_num} found by reuse")
@@ -2506,16 +2507,38 @@ class HFMFAutopwn(ReaderRequiredUnit):
                     key_type_target,
                 )
                 if nested_key is None:
-                    continue
-                print(
-                    f" {CG}[+]{C0}  Found key {missing_key_num}: {nested_key.upper()}"
-                )
-                current_keys_found[missing_key_num] = bytes.fromhex(nested_key)
+                    if hardnested is None:
+                        hardnested = HFMFHardNested.__new__(HFMFHardNested)
+                        BaseCLIUnit.__init__(hardnested)
+                        hardnested._device_cmd = self.cmd
+                    hn_key = hardnested.recover_key(
+                        False,
+                        block_known,
+                        type_known,
+                        key_known_bytes,
+                        (missing_key_num // 2) * 4,
+                        key_type_target,
+                        False,
+                        200,
+                        3,
+                    )
+                    if hn_key is None:
+                        continue
+                    current_keys_found[missing_key_num] = bytes.fromhex(hn_key)
+                    print(
+                        f" {CG}[+]{C0}  Found key {missing_key_num}: {hn_key.upper()}"
+                    )
+                else:
+                    print(
+                        f" {CG}[+]{C0}  Found key {missing_key_num}: {nested_key.upper()}"
+                    )
+                    current_keys_found[missing_key_num] = bytes.fromhex(nested_key)
                 current_keys_found = dict(sorted(current_keys_found.items()))
                 _, mask_bytes = self.mask_from_keys(missing_keys)
+                new_key = current_keys_found[missing_key_num]
                 current_keys_found = self.merge_found_sector_keys(
                     current_keys_found,
-                    self.try_key(bytes.fromhex(nested_key), self.neg_bytes(mask_bytes)),
+                    self.try_key(new_key, self.neg_bytes(mask_bytes)),
                 )
             if len(current_keys_found) < total:
                 current_keys_found = self.run_senested(
