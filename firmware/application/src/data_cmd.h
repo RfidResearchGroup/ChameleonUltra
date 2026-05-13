@@ -46,6 +46,8 @@
 #define DATA_CMD_GET_BLE_PAIRING_ENABLE         (1036)
 #define DATA_CMD_SET_BLE_PAIRING_ENABLE         (1037)
 #define DATA_CMD_GET_ALL_SLOT_NICKS             (1038)
+#define DATA_CMD_GET_SLEEP_TIMEOUT              (1039)
+#define DATA_CMD_SET_SLEEP_TIMEOUT              (1040)
 
 //
 // ******************************************************************
@@ -67,6 +69,8 @@
 #define DATA_CMD_MF1_READ_ONE_BLOCK             (2008)
 #define DATA_CMD_MF1_WRITE_ONE_BLOCK            (2009)
 #define DATA_CMD_HF14A_RAW                      (2010)
+#define DATA_CMD_HF14A_SCAN_KEEP                (2016)  /* scan+RATS, keep field alive for APDU exchange */
+#define DATA_CMD_HF14A_AUTH_TRACE               (2017)  /* full anticoll + Crypto1 auth, every frame returned for inspection */
 #define DATA_CMD_MF1_MANIPULATE_VALUE_BLOCK     (2011)
 #define DATA_CMD_MF1_CHECK_KEYS_OF_SECTORS      (2012)
 #define DATA_CMD_MF1_HARDNESTED_ACQUIRE         (2013)
@@ -107,6 +111,7 @@
 #define DATA_CMD_IOPROX_COMPOSE_ID              (3013)
 #define DATA_CMD_INDALA_SCAN                    (3035)
 #define DATA_CMD_INDALA_WRITE_TO_T55XX          (3036)
+#define DATA_CMD_LF_T55XX_WRITE                 (3016)
 
 //
 // ******************************************************************
@@ -169,6 +174,14 @@
 
 //
 // ******************************************************************
+/* ISO14443-4 T=CL emulation commands */
+#define DATA_CMD_HF14A_4_APDU_RECV              (6000)  /* non-blocking poll: firmware->host APDU */
+#define DATA_CMD_HF14A_4_APDU_SEND              (6001)  /* host->firmware APDU response */
+#define DATA_CMD_HF14A_4_SET_ANTI_COLL          (6002)  /* set UID/ATQA/SAK/ATS */
+#define DATA_CMD_HF14A_4_STATIC_RESP            (6003)  /* add/clear static APDU response pair */
+#define DATA_CMD_HF14A_4_READER_APDU            (6004)  /* select+RATS+send APDU, keep field   */
+#define DATA_CMD_HF14A_4_EMV_SCAN               (6005)  /* full EMV scan in one call            */
+
 #define DATA_CMD_EM410X_SET_EMU_ID              (5000)
 #define DATA_CMD_EM410X_GET_EMU_ID              (5001)
 #define DATA_CMD_HIDPROX_SET_EMU_ID             (5002)

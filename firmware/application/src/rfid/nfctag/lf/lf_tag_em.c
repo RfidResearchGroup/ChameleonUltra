@@ -29,11 +29,9 @@
 NRF_LOG_MODULE_REGISTER();
 
 #define ANT_NO_MOD() nrf_gpio_pin_clear(LF_MOD)
-#define ANT_MOD()    nrf_gpio_pin_set(LF_MOD)
-#define LF_125KHZ_BROADCAST_MAX (10)
-// PSK entries are 64x shorter (8µs vs 512µs), so 10 repeats = only ~163ms.
-// PM3 captures ~314ms; a gap mid-capture corrupts the demod. 30 repeats = ~491ms, gap-free.
-// Tested: broadcast=100 increases PM3 errCnt (more frames in fixed-size capture = more errors).
+// PSK timer-based modulation needs a repeat counter (PWM FLAG_LOOP is for ASK/FSK only).
+// PSK entries are 64x shorter (8µs vs 512µs); 30 repeats ≈ 491ms, which keeps the PM3
+// reader's ~314ms capture window gap-free. (broadcast=100 raised PM3 errCnt.)
 #define LF_PSK_BROADCAST_MAX (30)
 
 // Whether the USB light effect is allowed to enable
@@ -114,7 +112,6 @@ static void psk_timer_handler(nrf_timer_event_t event, void *ctx) {
 }
 
 static bool is_psk_tag_type(tag_specific_type_t type);
-static uint16_t get_broadcast_count(void);
 static void psk_full_teardown(void);
 static void psk_timer_init(void);
 static void psk_timer_start(void);
@@ -125,7 +122,8 @@ static void lf_field_lost(void) {
     g_is_tag_emulating = false;  // Reset the flag in the emulation
     m_is_lf_emulating = false;
     TAG_FIELD_LED_OFF()  // Make sure the indicator light of the LF field status
-    NRF_LPCOMP->INTENSET = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
+    // Re-arm LPCOMP so the next field appearance triggers lpcomp_event_handler.
+    NRF_LPCOMP->INTENSET = LPCOMP_INTENSET_UP_Msk;
     // call sleep_timer_start *after* unsetting g_is_tag_emulating
     sleep_timer_start(SLEEP_DELAY_MS_FIELD_125KHZ_LOST);  // Start the timer to enter the sleep
     NRF_LOG_INFO("LF FIELD LOST");
@@ -150,12 +148,15 @@ bool is_lf_field_exists(void) {
  * priority is set to APP_IRQ_PRIORITY_HIGH).
  */
 static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
-    // Only when the lf -frequency emulation is not launched, and the analog card is started
+    // Only when the lf-frequency emulation is not launched, and the analog card is started
     if (m_is_lf_emulating || event != NRF_LPCOMP_EVENT_UP) {
         return;
     }
 
     sleep_timer_stop();  // turn off dormant delay
+    // Disable LPCOMP during emulation — LF_RSSI fluctuates during load
+    // modulation and would trigger spurious DOWN events with DETECT_CROSS.
+    // Field-loss is checked periodically via EVT_END_SEQ0 in pwm_handler.
     nrfx_lpcomp_disable();
 
     // set the emulation status logo bit
@@ -168,12 +169,14 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     set_slot_light_color(RGB_BLUE);
     TAG_FIELD_LED_ON()
 
-    // Start modulation: PSK uses Timer+GPIO (jitter-free), ASK/FSK use PWM
+    // Start modulation: PSK uses Timer+GPIO (jitter-free), ASK/FSK use looped PWM.
+    // Field-loss for the PWM path is detected in pwm_handler via EVT_END_SEQ0.
     if (is_psk_tag_type(m_tag_type)) {
         psk_timer_start();
     } else {
-        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, get_broadcast_count(), NRFX_PWM_FLAG_STOP);
+        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 1, NRFX_PWM_FLAG_LOOP);
     }
+
     NRF_LOG_INFO("LF FIELD DETECTED");
 }
 
@@ -189,21 +192,23 @@ static void lpcomp_init(void) {
 }
 
 static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
+    if (event_type == NRFX_PWM_EVT_END_SEQ0) {
+        // Fired at end of each loop iteration — check field without stopping PWM.
+        // Mask UP interrupt while sampling to prevent re-entrancy.
+        NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_UP_Msk;
+        if (!is_lf_field_exists()) {
+            // Field gone — stop the loop; pwm_handler will get EVT_STOPPED next.
+            nrfx_pwm_stop(&m_broadcast, false);
+        }
+        // Re-enable will happen either in lf_field_lost (via INTENSET) or stays
+        // suppressed while PWM keeps looping (we only need it after field_lost).
+        return;
+    }
     if (event_type != NRFX_PWM_EVT_STOPPED) {
         return;
     }
-
-    // after last broadcast, force NO_MOD on antenna to measure field.
     ANT_NO_MOD();
-    bsp_delay_ms(1);
-    // We don't need any events, but only need to detect the state of the field
-    NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
-    if (is_lf_field_exists()) {
-        nrfx_lpcomp_disable();
-        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, get_broadcast_count(), NRFX_PWM_FLAG_STOP);
-    } else {
-        lf_field_lost();
-    }
+    lf_field_lost();
 }
 
 static void pwm_init_with_clock(nrf_pwm_clk_t clk) {
@@ -226,10 +231,6 @@ static void pwm_init_with_clock(nrf_pwm_clk_t clk) {
 
 static bool is_psk_tag_type(tag_specific_type_t type) {
     return type == TAG_TYPE_INDALA;
-}
-
-static uint16_t get_broadcast_count(void) {
-    return is_psk_tag_type(m_tag_type) ? LF_PSK_BROADCAST_MAX : LF_125KHZ_BROADCAST_MAX;
 }
 
 static void pwm_init(void) {

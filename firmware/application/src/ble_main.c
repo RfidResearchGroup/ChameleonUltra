@@ -90,7 +90,7 @@ BLE_ADVERTISING_DEF(m_advertising);                                             
 
 uint16_t          batt_lvl_in_milli_volts = 0;
 uint8_t           percentage_batt_lvl = 0;
-static nrf_saadc_value_t adc_buf[ADC_BUF_SIZE][ADC_BUF_COUNT];
+static nrf_saadc_value_t adc_buf[ADC_BUF_COUNT][ADC_BUF_SIZE];
 static uint16_t   m_conn_handle          = BLE_CONN_HANDLE_INVALID;                 /**< Handle of the current connection. */
 static uint16_t   m_ble_nus_max_data_len = BLE_GATT_ATT_MTU_DEFAULT - 3;            /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
 lf_adc_callback_t m_lf_adc_callback      = NULL;

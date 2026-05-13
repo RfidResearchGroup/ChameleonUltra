@@ -4,7 +4,7 @@
 #include "tag_emulation.h"
 
 #define MAX_NFC_RX_BUFFER_SIZE  257
-#define MAX_NFC_TX_BUFFER_SIZE  64
+#define MAX_NFC_TX_BUFFER_SIZE  512  /* must hold PCB + max APDU response */
 
 #define NFC_TAG_14A_CRC_LENGTH  2
 
@@ -90,6 +90,19 @@ typedef void (*nfc_tag_14a_sniff_cb_t)(const uint8_t *data, uint16_t szBits);
 
 void nfc_tag_14a_set_sniff_cb(nfc_tag_14a_sniff_cb_t cb);
 void nfc_tag_14a_clear_sniff_cb(void);
+
+/* TX sniff callback — fires at TX_FRAMESTART with the frame the tag is about
+ * to send (card→reader direction).  Same signature as the RX sniff callback.
+ * Install alongside nfc_tag_14a_set_sniff_cb() to capture both directions. */
+typedef void (*nfc_tag_14a_tx_sniff_cb_t)(const uint8_t *data, uint16_t szBits);
+
+void nfc_tag_14a_set_tx_sniff_cb(nfc_tag_14a_tx_sniff_cb_t cb);
+void nfc_tag_14a_clear_tx_sniff_cb(void);
+
+/* Passive sniff mode: when true, suppresses all CU anticollision responses
+ * (ATQA, UID, SAK) so the CU does not collide with real cards in the field.
+ * Enable before starting a sniff session, disable on completion. */
+void nfc_tag_14a_set_sniff_passive(bool passive);
 typedef void (*nfc_tag_14a_state_handler_t)(uint8_t *data, uint16_t szBits);
 typedef nfc_tag_14a_coll_res_reference_t *(*nfc_tag_14a_coll_handler_t)(void);
 
