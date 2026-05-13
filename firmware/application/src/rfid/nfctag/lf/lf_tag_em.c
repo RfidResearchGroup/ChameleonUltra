@@ -120,10 +120,9 @@ static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
         if (!is_lf_field_exists()) {
             // Field gone — stop the loop; pwm_handler will get EVT_STOPPED next.
             nrfx_pwm_stop(&m_broadcast, false);
-        } else {
-            // Field still present — restore modulation for the next sequence.
-            ANT_MOD();
         }
+        // If field still present: PWM peripheral resumes LF_MOD toggling on next
+        // sequence automatically — no explicit re-enable needed.
         // Re-enable will happen either in lf_field_lost (via INTENSET) or stays
         // suppressed while PWM keeps looping (we only need it after field_lost).
         return;
