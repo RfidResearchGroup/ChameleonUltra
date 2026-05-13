@@ -135,7 +135,7 @@ def print_mem_dump(bindata, blocksize):
     print(f"[=] ----+{hexadecimal_len*'-'}+{ascii_len*'-'}")
 
     blocks = [bindata[i:i+blocksize] for i in range(0, len(bindata), blocksize)]
-    blk_index = 1
+    blk_index = 0
     for b in blocks:
         hexstr = ' '.join(b.hex()[i:i+2] for i in range(0, len(b.hex()), 2))
         asciistr = ''.join([chr(b[i]) if (b[i] > 31 and b[i] < 127) else '.' for i in range(0, len(b), 1)])
