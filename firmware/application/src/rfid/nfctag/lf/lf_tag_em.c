@@ -109,12 +109,20 @@ static void lpcomp_init(void) {
 
 static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
     if (event_type == NRFX_PWM_EVT_END_SEQ0) {
-        // Fired at end of each loop iteration — check field without stopping PWM.
-        // Mask UP interrupt while sampling to prevent re-entrancy.
+        // Fired at end of each loop iteration — check whether the external field
+        // is still present. The LF_RSSI peak-detector has a ~2 ms time constant,
+        // so we must silence LF_MOD before sampling, otherwise the local
+        // modulation drive keeps the detector charged and is_lf_field_exists()
+        // always returns true even when the reader has gone away.
         NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_UP_Msk;
+        ANT_NO_MOD();                    // kill local drive
+        bsp_delay_ms(2);                 // wait for peak detector to settle
         if (!is_lf_field_exists()) {
             // Field gone — stop the loop; pwm_handler will get EVT_STOPPED next.
             nrfx_pwm_stop(&m_broadcast, false);
+        } else {
+            // Field still present — restore modulation for the next sequence.
+            ANT_MOD();
         }
         // Re-enable will happen either in lf_field_lost (via INTENSET) or stays
         // suppressed while PWM keeps looping (we only need it after field_lost).
