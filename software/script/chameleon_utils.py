@@ -126,20 +126,22 @@ def print_help(self):
         print('')
         self.help_requested = True
 
-def print_mem_dump(bindata, blocksize):
+def print_mem_dump(bindata, blocksize, blocks_per_sector=4):
 
     hexadecimal_len = blocksize*3+1
     ascii_len = blocksize+1
-    print(f"[=] ----+{hexadecimal_len*'-'}+{ascii_len*'-'}")
-    print(f"[=] blk | data{(hexadecimal_len-5)*' '}| ascii")
-    print(f"[=] ----+{hexadecimal_len*'-'}+{ascii_len*'-'}")
+    print(f"[=] ----+-----+{hexadecimal_len*'-'}+{ascii_len*'-'}")
+    print(f"[=] sec | blk | data{(hexadecimal_len-5)*' '}| ascii")
+    print(f"[=] ----+-----+{hexadecimal_len*'-'}+{ascii_len*'-'}")
 
     blocks = [bindata[i:i+blocksize] for i in range(0, len(bindata), blocksize)]
     blk_index = 0
     for b in blocks:
+        sec_index = blk_index // blocks_per_sector
+        sec_str = f"{sec_index:2}" if blk_index % blocks_per_sector == 0 else "  "
         hexstr = ' '.join(b.hex()[i:i+2] for i in range(0, len(b.hex()), 2))
         asciistr = ''.join([chr(b[i]) if (b[i] > 31 and b[i] < 127) else '.' for i in range(0, len(b), 1)])
-        print(f"[=] {blk_index:3} | {hexstr.upper()} | {asciistr} ")
+        print(f"[=]  {sec_str} | {blk_index:3} | {hexstr.upper()} | {asciistr} ")
         blk_index += 1
 
 
