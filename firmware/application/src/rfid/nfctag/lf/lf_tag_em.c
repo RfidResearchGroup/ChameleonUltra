@@ -89,9 +89,11 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     set_slot_light_color(RGB_BLUE);
     TAG_FIELD_LED_ON()
 
-    // Loop continuously — no stop/restart gaps between sequence plays.
-    // Field-loss is detected in pwm_handler via EVT_END_SEQ0.
-    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 1, NRFX_PWM_FLAG_LOOP);
+    // Play a finite burst then stop — field check happens in EVT_STOPPED after
+    // PWM has fully released LF_MOD, so ANT_NO_MOD() and the settle delay are
+    // effective. NRFX_PWM_FLAG_LOOP kept the pin owned by the peripheral,
+    // making the field check always read "present" due to self-drive on LF_RSSI.
+    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
 
     NRF_LOG_INFO("LF FIELD DETECTED");
 }
@@ -108,30 +110,20 @@ static void lpcomp_init(void) {
 }
 
 static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
-    if (event_type == NRFX_PWM_EVT_END_SEQ0) {
-        // Fired at end of each loop iteration — check whether the external field
-        // is still present. The LF_RSSI peak-detector has a ~2 ms time constant,
-        // so we must silence LF_MOD before sampling, otherwise the local
-        // modulation drive keeps the detector charged and is_lf_field_exists()
-        // always returns true even when the reader has gone away.
-        NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_UP_Msk;
-        ANT_NO_MOD();                    // kill local drive
-        bsp_delay_ms(2);                 // wait for peak detector to settle
-        if (!is_lf_field_exists()) {
-            // Field gone — stop the loop; pwm_handler will get EVT_STOPPED next.
-            nrfx_pwm_stop(&m_broadcast, false);
-        }
-        // If field still present: PWM peripheral resumes LF_MOD toggling on next
-        // sequence automatically — no explicit re-enable needed.
-        // Re-enable will happen either in lf_field_lost (via INTENSET) or stays
-        // suppressed while PWM keeps looping (we only need it after field_lost).
-        return;
-    }
     if (event_type != NRFX_PWM_EVT_STOPPED) {
         return;
     }
+    // PWM has fully stopped — LF_MOD is released back to GPIO.
+    // Now ANT_NO_MOD() and the settle delay are effective.
     ANT_NO_MOD();
-    lf_field_lost();
+    bsp_delay_ms(2);  // let peak detector drain: ~2 ms time constant on LF_RSSI
+    if (is_lf_field_exists()) {
+        // Field still present — play another finite burst then check again.
+        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
+    } else {
+        // Field gone — clean up.
+        lf_field_lost();
+    }
 }
 
 static void pwm_init(void) {
