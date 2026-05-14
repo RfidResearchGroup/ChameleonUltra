@@ -24,6 +24,7 @@
 NRF_LOG_MODULE_REGISTER();
 
 #define ANT_NO_MOD() nrf_gpio_pin_clear(LF_MOD)
+#define LF_125KHZ_BROADCAST_MAX (10)
 
 // Whether the USB light effect is allowed to enable
 extern bool g_usb_led_marquee_enable;
@@ -74,9 +75,6 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     }
 
     sleep_timer_stop();  // turn off dormant delay
-    // Disable LPCOMP during emulation — LF_RSSI fluctuates during load
-    // modulation and would trigger spurious DOWN events with DETECT_CROSS.
-    // Field-loss is checked periodically via EVT_END_SEQ0 in pwm_handler.
     nrfx_lpcomp_disable();
 
     // set the emulation status logo bit
@@ -89,9 +87,8 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     set_slot_light_color(RGB_BLUE);
     TAG_FIELD_LED_ON()
 
-    // Loop continuously — no stop/restart gaps between sequence plays.
-    // Field-loss is detected in pwm_handler via EVT_END_SEQ0.
-    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 1, NRFX_PWM_FLAG_LOOP);
+    // use precise hardware timer to broadcast card id
+    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, LF_125KHZ_BROADCAST_MAX, NRFX_PWM_FLAG_STOP);
 
     NRF_LOG_INFO("LF FIELD DETECTED");
 }
@@ -108,23 +105,26 @@ static void lpcomp_init(void) {
 }
 
 static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
-    if (event_type == NRFX_PWM_EVT_END_SEQ0) {
-        // Fired at end of each loop iteration — check field without stopping PWM.
-        // Mask UP interrupt while sampling to prevent re-entrancy.
-        NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_UP_Msk;
-        if (!is_lf_field_exists()) {
-            // Field gone — stop the loop; pwm_handler will get EVT_STOPPED next.
-            nrfx_pwm_stop(&m_broadcast, false);
-        }
-        // Re-enable will happen either in lf_field_lost (via INTENSET) or stays
-        // suppressed while PWM keeps looping (we only need it after field_lost).
-        return;
-    }
     if (event_type != NRFX_PWM_EVT_STOPPED) {
         return;
     }
+
+    // After the last broadcast, force NO_MOD on antenna and wait for the
+    // envelope detector on LF_RSSI to discharge before sampling. The
+    // peak-detector RC at that node has a time constant of roughly 2 ms,
+    // so a 2 ms quiet window gives ~1 tau of decay, enough to drop the
+    // post-envelope voltage below the LPCOMP UP threshold when the reader
+    // is gone. Without this, residual modulation energy reads as
+    // "field present" and lf_field_lost() is never reached.
     ANT_NO_MOD();
-    lf_field_lost();
+    bsp_delay_ms(2);
+    NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
+    if (is_lf_field_exists()) {
+        nrfx_lpcomp_disable();
+        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, LF_125KHZ_BROADCAST_MAX, NRFX_PWM_FLAG_STOP);
+    } else {
+        lf_field_lost();
+    }
 }
 
 static void pwm_init(void) {
