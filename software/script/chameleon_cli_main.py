@@ -149,10 +149,9 @@ class ChameleonCLI:
                 chameleon_utils.ArgsParserError,
                 chameleon_com.CMDInvalidException,
                 TimeoutError) as e:
-            print(color_string((CR, str(e))))
+                print(color_string((CR, str(e))))
             except Exception:
-                print(f"CLI exception: {color_string((CR, traceback.format_exc()))}")
-
+            
     def startCLI(self):
         """
             start listen input.
