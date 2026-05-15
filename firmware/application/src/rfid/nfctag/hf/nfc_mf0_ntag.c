@@ -696,7 +696,7 @@ static bool check_ro_lock_on_page(int block_num) {
                 //the BL bit only freezes the lock bytes !
                 return (m_tag_information->memory[2][2] & 8) != 0;
             default:
-                return (m_tag_information->memory[2][2] & 9) != 0; 
+                return (m_tag_information->memory[2][2] & 9) != 0;
         }
         // bits 0 and 3
     } else if (block_num <= MF0ICU1_PAGES) {
@@ -805,26 +805,25 @@ static bool check_ro_lock_on_page(int block_num) {
                     // the lock configuration. We only check the actual lock bits (L0-L15) in bytes 0-1.
                     return locked_small_range;
                 default:
-                return locked_small_range | locked_large_range;
+                    return locked_small_range | locked_large_range;
             }
         } else {
             //Check the block locking bits to see if we can touch the dynamic locks bytes for NTAG tags
-            if(block_num == user_memory_end)
-            {
+            if (block_num == user_memory_end) {
                 switch (m_tag_type) {
                     case TAG_TYPE_NTAG_213:
                     case TAG_TYPE_NTAG_215:
                     case TAG_TYPE_NTAG_216: {
                         uint8_t block_bytes = m_tag_information->memory[user_memory_end][2];
                         uint16_t block_world = 0;
-                        
+
                         // Each bit in block_bytes maps to 2 bits in block_world
                         for (int i = 0; i < 8; i++) {
                             if (block_bytes & (0x01 << i)) {
                                 block_world |= (0x0003 << (i * 2));
                             }
                         }
-                        
+
                         p_lock_bytes = m_tag_information->memory[user_memory_end];
                         uint16_t lock_word = (((uint16_t)p_lock_bytes[1]) << 8) | (uint16_t)p_lock_bytes[0];
                         return (lock_word & block_world) != 0;
@@ -864,7 +863,7 @@ static int handle_write_command(uint8_t block_num, uint8_t *p_data) {
         default:
             out_of_bounds = block_num >= block_max;
             break;
-    }   
+    }
     // Reject out-of-bounds writes (except config pages)
     if (out_of_bounds) {
         NRF_LOG_ERROR("Write failed: block_num %08x >= block_max %08x", block_num, block_max);
@@ -1007,10 +1006,10 @@ static void handle_pwd_auth_command(uint8_t *p_data) {
     if (m_tag_information->config.detection_enable && m_auth_log.count < MF0_NTAG_AUTH_LOG_MAX) {
         memcpy(m_auth_log.logs[m_auth_log.count].pwd, &p_data[1], 4);
         m_auth_log.count++;
-        NRF_LOG_INFO("NTAG password: %02x%02x%02x%02x", 
+        NRF_LOG_INFO("NTAG password: %02x%02x%02x%02x",
                      p_data[1], p_data[2], p_data[3], p_data[4]);
     }
-    
+
     if (pwd != supplied_pwd) {
         if (auth_lim) {
             cnt_data[MF0_NTAG_AUTHLIM_OFF_IN_CTR] &= ~MF0_NTAG_AUTHLIM_MASK_IN_CTR;

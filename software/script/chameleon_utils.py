@@ -64,67 +64,69 @@ class ArgumentParserNoExit(argparse.ArgumentParser):
         args = {'prog': self.prog, 'message': message}
         raise ArgsParserError('%(prog)s: error: %(message)s\n' % args)
 
+
 def print_help(self):
-        """
-        Colorize argparse help
-        """
-        print("-" * 80)
-        print(color_string((CR, self.prog)))
-        
-        # Get the help text and split it, filtering out leading empty lines
-        raw_lines = self.format_help().splitlines()
-        lines = [line for line in raw_lines if line.strip() or line == '']
-        
-        # Find the usage block safely
-        usage_start = -1
-        for i, line in enumerate(lines):
-            if line.strip().startswith('usage:'):
-                usage_start = i
-                break
-        
-        if usage_start != -1:
-            # We found a usage line, extract the block until the first empty line
-            try:
-                empty_after_usage = lines.index('', usage_start)
-                usage = lines[usage_start:empty_after_usage]
-                
-                # Apply coloring to the usage string
-                usage[0] = usage[0].replace('usage:', f'{color_string((CG, "usage:"))}\n ')
-                usage[0] = usage[0].replace(self.prog, color_string((CR, self.prog)))
-                
-                # Reformat indentation and print
-                usage_to_print = [usage[0]] + [x[4:] for x in usage[1:]] + ['']
-                print('\n'.join(usage_to_print))
-                
-                # Advance lines pointer to after the usage block
-                lines = lines[empty_after_usage + 1:]
-            except ValueError:
-                # If no empty line found, just print what we have
-                print('\n'.join(lines[usage_start:]))
-                lines = []
-        
-        # Print description if available
-        if lines and lines[0].strip() != '':
-            try:
-                desc_end = lines.index('')
-                desc = lines[:desc_end]
-                print(color_string((CC, "\n".join(desc))))
-                lines = lines[desc_end + 1:]
-            except ValueError:
-                pass
+    """
+    Colorize argparse help
+    """
+    print("-" * 80)
+    print(color_string((CR, self.prog)))
 
-        # Handle options and positional arguments without crashing on strict matches
-        for line in lines:
-            clean_line = line.strip().lower()
-            if clean_line == 'positional arguments:':
-                print(color_string((CG, line)))
-            elif clean_line in ['options:', 'optional arguments:']:
-                print(color_string((CG, line)))
-            else:
-                print(line)
+    # Get the help text and split it, filtering out leading empty lines
+    raw_lines = self.format_help().splitlines()
+    lines = [line for line in raw_lines if line.strip() or line == '']
 
-        print('')
-        self.help_requested = True
+    # Find the usage block safely
+    usage_start = -1
+    for i, line in enumerate(lines):
+        if line.strip().startswith('usage:'):
+            usage_start = i
+            break
+
+    if usage_start != -1:
+        # We found a usage line, extract the block until the first empty line
+        try:
+            empty_after_usage = lines.index('', usage_start)
+            usage = lines[usage_start:empty_after_usage]
+
+            # Apply coloring to the usage string
+            usage[0] = usage[0].replace('usage:', f'{color_string((CG, "usage:"))}\n ')
+            usage[0] = usage[0].replace(self.prog, color_string((CR, self.prog)))
+
+            # Reformat indentation and print
+            usage_to_print = [usage[0]] + [x[4:] for x in usage[1:]] + ['']
+            print('\n'.join(usage_to_print))
+
+            # Advance lines pointer to after the usage block
+            lines = lines[empty_after_usage + 1:]
+        except ValueError:
+            # If no empty line found, just print what we have
+            print('\n'.join(lines[usage_start:]))
+            lines = []
+
+    # Print description if available
+    if lines and lines[0].strip() != '':
+        try:
+            desc_end = lines.index('')
+            desc = lines[:desc_end]
+            print(color_string((CC, "\n".join(desc))))
+            lines = lines[desc_end + 1:]
+        except ValueError:
+            pass
+
+    # Handle options and positional arguments without crashing on strict matches
+    for line in lines:
+        clean_line = line.strip().lower()
+        if clean_line == 'positional arguments:':
+            print(color_string((CG, line)))
+        elif clean_line in ['options:', 'optional arguments:']:
+            print(color_string((CG, line)))
+        else:
+            print(line)
+
+    print('')
+    self.help_requested = True
+
 
 def print_mem_dump(bindata, blocksize):
 

@@ -353,11 +353,13 @@ void tag_emulation_delete_data(uint8_t slot, tag_sense_type_t sense_type) {
         case TAG_SENSE_HF: {
             slotConfig.slots[slot].tag_hf = TAG_TYPE_UNDEFINED;
             slotConfig.slots[slot].enabled_hf = false;
-        } break;
+        }
+        break;
         case TAG_SENSE_LF: {
             slotConfig.slots[slot].tag_lf = TAG_TYPE_UNDEFINED;
             slotConfig.slots[slot].enabled_lf = false;
-        } break;
+        }
+        break;
         default:
             break;
     }
@@ -416,7 +418,7 @@ void tag_emulation_sense_switch(tag_sense_type_t type, bool enable) {
             break;
         case TAG_SENSE_HF:
             if (enable && (slotConfig.slots[slot].enabled_hf) &&
-                (slotConfig.slots[slot].tag_hf != TAG_TYPE_UNDEFINED)) {
+                    (slotConfig.slots[slot].tag_hf != TAG_TYPE_UNDEFINED)) {
                 nfc_tag_14a_sense_switch(true);
             } else {
                 nfc_tag_14a_sense_switch(false);
@@ -424,7 +426,7 @@ void tag_emulation_sense_switch(tag_sense_type_t type, bool enable) {
             break;
         case TAG_SENSE_LF:
             if (enable && (slotConfig.slots[slot].enabled_lf) &&
-                (slotConfig.slots[slot].tag_lf != TAG_TYPE_UNDEFINED)) {
+                    (slotConfig.slots[slot].tag_lf != TAG_TYPE_UNDEFINED)) {
                 lf_tag_125khz_sense_switch(true);
             } else {
                 lf_tag_125khz_sense_switch(false);

@@ -13,6 +13,7 @@ CURRENT_VERSION_SETTINGS = 6
 new_key = b'\x20\x20\x66\x66'
 old_keys = [b'\x51\x24\x36\x48', b'\x19\x92\x04\x27']
 
+
 class ChameleonCMD:
     """
         Chameleon cmd function
@@ -248,7 +249,8 @@ class ChameleonCMD:
             offset = 0
             data = []
             while offset < len(resp.data):
-                uidlen, = struct.unpack_from('!B', resp.data, offset); offset += 1
+                uidlen, = struct.unpack_from('!B', resp.data, offset)
+                offset += 1
                 uid, atqa, sak, atslen = struct.unpack_from(
                     f'!{uidlen}s2s1sB', resp.data, offset)
                 offset += struct.calcsize(f'!{uidlen}s2s1sB')
@@ -295,7 +297,8 @@ class ChameleonCMD:
         an APDU whose first len(cmd) bytes match cmd, without USB involvement.
         Must be called before hw mode -e.
         """
-        rlen = len(resp); payload = bytes([len(cmd)]) + bytes(cmd) + bytes([(rlen >> 8) & 0xFF, rlen & 0xFF]) + bytes(resp)
+        rlen = len(resp)
+        payload = bytes([len(cmd)]) + bytes(cmd) + bytes([(rlen >> 8) & 0xFF, rlen & 0xFF]) + bytes(resp)
         return self.device.send_cmd_sync(Command.HF14A_4_STATIC_RESP, payload)
 
     def hf14a_4_reader_apdu(self, apdu: bytes):
@@ -608,7 +611,7 @@ class ChameleonCMD:
                 fmt = '!H13s'
             else:
                 fmt = '!H5s'
-            resp.parsed = struct.unpack(fmt, resp.data[:struct.calcsize(fmt)]) # tag type + uid
+            resp.parsed = struct.unpack(fmt, resp.data[:struct.calcsize(fmt)])  # tag type + uid
         return resp
 
     @expect_response(Status.LF_TAG_OK)
@@ -659,9 +662,9 @@ class ChameleonCMD:
         """
         resp = self.device.send_cmd_sync(Command.IOPROX_SCAN)
         if resp.status == Status.LF_TAG_OK:
-            resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])  
+            resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
         return resp
-        
+
     @expect_response(Status.LF_TAG_OK)
     def ioprox_write_to_t55xx(self, id_bytes: bytes):
         """
@@ -674,7 +677,7 @@ class ChameleonCMD:
         fmt = f'!16s4s{4 * len(old_keys)}s'
         data = struct.pack(fmt, id_bytes, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.IOPROX_WRITE_TO_T55XX, data)
-        
+
     @expect_response(Status.SUCCESS)
     def ioprox_decode_raw(self, raw8_bytes):
         """
@@ -698,9 +701,6 @@ class ChameleonCMD:
             resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
         return resp
 
-
-
-
     def lf_sniff(self, timeout_ms: int = 2000):
         """
         Capture raw LF field ADC samples.
@@ -715,8 +715,6 @@ class ChameleonCMD:
         payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF])
         timeout_s = (timeout_ms // 1000) + 2
         return self.device.send_cmd_sync(Command.LF_SNIFF, payload, timeout=timeout_s)
-
-
 
     @expect_response(Status.LF_TAG_OK)
     def em4x05_scan(self, pwd: int = 0):
@@ -739,8 +737,6 @@ class ChameleonCMD:
             resp.parsed = struct.unpack('!IIIBB', resp.data[:14])
         return resp
 
-
-
     @expect_response(Status.LF_TAG_OK)
     def viking_scan(self):
         """
@@ -750,7 +746,7 @@ class ChameleonCMD:
         """
         resp = self.device.send_cmd_sync(Command.VIKING_SCAN)
         if resp.status == Status.LF_TAG_OK:
-            resp.parsed = resp.data # uid
+            resp.parsed = resp.data  # uid
         return resp
 
     @expect_response(Status.LF_TAG_OK)
@@ -979,7 +975,7 @@ class ChameleonCMD:
         if resp.status == Status.SUCCESS:
             resp.parsed = struct.unpack('>BIBIBH', resp.data[:13])
         return resp
-        
+
     @expect_response(Status.SUCCESS)
     def ioprox_set_emu_id(self, id: bytes):
         """
@@ -997,9 +993,9 @@ class ChameleonCMD:
         """
         Get the emulated ioProx card id
         """
-        resp = self.device.send_cmd_sync(Command.IOPROX_GET_EMU_ID)   
+        resp = self.device.send_cmd_sync(Command.IOPROX_GET_EMU_ID)
         if resp.status == Status.SUCCESS:
-            resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])    
+            resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
         return resp
 
     @expect_response(Status.SUCCESS)
@@ -1391,6 +1387,26 @@ class ChameleonCMD:
         data = struct.pack('!B', mode)
         return self.device.send_cmd_sync(Command.MF1_SET_WRITE_MODE, data)
 
+    def mf1_get_prng_type(self):
+        """
+        Get PRNG type used for MF1 auth nonce:
+          0 = Static  (fixed nonce)
+          1 = Weak    (LFSR-based, predictable)
+          2 = Hard    (unpredictable)
+        """
+        resp = self.device.send_cmd_sync(Command.MF1_GET_PRNG_TYPE)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data[0]
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mf1_set_prng_type(self, prng_type: int):
+        """
+        Set PRNG type (0=Static, 1=Weak, 2=Hard)
+        """
+        data = struct.pack('!B', prng_type)
+        return self.device.send_cmd_sync(Command.MF1_SET_PRNG_TYPE, data)
+
     @expect_response(Status.SUCCESS)
     def slot_data_config_save(self):
         """
@@ -1713,7 +1729,7 @@ class ChameleonCMD:
     def set_ble_pairing_enable(self, enabled: bool):
         data = struct.pack('!B', enabled)
         return self.device.send_cmd_sync(Command.SET_BLE_PAIRING_ENABLE, data)
-    
+
     @expect_response(Status.SUCCESS)
     def mf1_get_field_off_do_reset(self):
         resp = self.device.send_cmd_sync(Command.MF1_GET_FIELD_OFF_DO_RESET)

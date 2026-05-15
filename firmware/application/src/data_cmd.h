@@ -160,6 +160,8 @@
 #define DATA_CMD_MF0_NTAG_GET_EMULATOR_CONFIG   (4037)
 #define DATA_CMD_MF1_SET_FIELD_OFF_DO_RESET     (4038)
 #define DATA_CMD_MF1_GET_FIELD_OFF_DO_RESET     (4039)
+#define DATA_CMD_MF1_GET_PRNG_TYPE              (4040)  // 0=static 1=weak(LFSR) 2=hard(rand)
+#define DATA_CMD_MF1_SET_PRNG_TYPE              (4041)
 //
 // ******************************************************************
 

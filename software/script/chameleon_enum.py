@@ -144,6 +144,9 @@ class Command(enum.IntEnum):
     MF1_SET_FIELD_OFF_DO_RESET = 4038
     MF1_GET_FIELD_OFF_DO_RESET = 4039
 
+    MF1_GET_PRNG_TYPE = 4040
+    MF1_SET_PRNG_TYPE = 4041
+
     # ISO14443-4 T=CL emulation
     HF14A_4_APDU_RECV = 6000
     HF14A_4_APDU_SEND = 6001
@@ -597,11 +600,13 @@ class ButtonPressFunction(enum.IntEnum):
             return "Toggle NFC Field Generator"
         return "None"
 
+
 @enum.unique
 class MfcValueBlockOperator(enum.IntEnum):
     DECREMENT = 0xC0
     INCREMENT = 0xC1
     RESTORE = 0xC2
+
 
 @enum.unique
 class HIDFormat(enum.IntEnum):

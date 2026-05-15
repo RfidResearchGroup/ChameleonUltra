@@ -1114,8 +1114,8 @@ uint8_t mf1_hardnested_nonces_acquire(bool slow, uint8_t blkKnown, uint8_t typKn
                                       uint8_t targetBlk, uint8_t targetTyp, uint8_t *nonces, uint16_t noncesMax, uint8_t *num_nonces) {
     struct Crypto1State mpcs = { 0, 0 };
     struct Crypto1State *pcs = &mpcs;
-    uint8_t answer[] 	     = { 0x00, 0x00, 0x00, 0x00 };
-    uint8_t parity[] 	     = { 0x00, 0x00, 0x00, 0x00 };
+    uint8_t answer[]         = { 0x00, 0x00, 0x00, 0x00 };
+    uint8_t parity[]         = { 0x00, 0x00, 0x00, 0x00 };
     uint8_t nt_par_enc       = 0;
     uint8_t status           = STATUS_HF_TAG_NO;
     uint32_t cuid            = 0;   // cuid can be fixed when selecting card

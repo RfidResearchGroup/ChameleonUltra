@@ -94,7 +94,7 @@ static uint8_t m_large_resp_count = 0;
 /* ------------------------------------------------------------------ */
 
 void nfc_tag_14a_4_add_static_response(const uint8_t *cmd,  uint8_t cmd_len,
-                                        const uint8_t *resp, uint16_t resp_len) {
+                                       const uint8_t *resp, uint16_t resp_len) {
     if (cmd_len > NFC_14A_4_MAX_STATIC_CMD_LEN) cmd_len = NFC_14A_4_MAX_STATIC_CMD_LEN;
 
     if (resp_len > NFC_14A_4_MAX_STATIC_RESP_LEN) {
@@ -132,7 +132,7 @@ void nfc_tag_14a_4_clear_static_responses(void) {
 }
 
 static bool find_static_response(const uint8_t *apdu, uint16_t apdu_len,
-                                  uint8_t **resp_out, uint16_t *resp_len_out) {
+                                 uint8_t **resp_out, uint16_t *resp_len_out) {
     /* Flash-backed table */
     for (uint8_t i = 0; i < m_static_resp_count; i++) {
         nfc_tag_14a_4_static_response_t *e = &m_static_resp[i];
@@ -259,7 +259,7 @@ static void nfc_tag_14a_4_state_handler(uint8_t *data, uint16_t szBytes) {
         m_dbg_iblocks_rx++;
         m_dbg_last_rx_pcb = pcb;
         NRF_LOG_INFO("14A4 I-block #%d: reader_blk=%d m_block_num=%d apdu_len=%d",
-                      m_dbg_iblocks_rx, reader_blknum, m_block_num, apdu_len);
+                     m_dbg_iblocks_rx, reader_blknum, m_block_num, apdu_len);
 
         /* Block number check per ISO14443-4 §7.5.3.3:
          * If block number matches expected, process new APDU.
@@ -292,10 +292,10 @@ static void nfc_tag_14a_4_state_handler(uint8_t *data, uint16_t szBytes) {
             uint8_t  *static_resp = NULL;
             uint16_t  static_len  = 0;
             bool _found = find_static_response(m_apdu_buf, apdu_len,
-                                      &static_resp, &static_len);
+                                               &static_resp, &static_len);
             m_dbg_last_match = _found ? 1 : 0;
             NRF_LOG_INFO("14A4 find_static: found=%d static_len=%d resp_count=%d",
-                          _found, static_len, m_static_resp_count);
+                         _found, static_len, m_static_resp_count);
             if (_found) {
                 m_dbg_iblocks_tx++;
                 memcpy(m_resp_buf, static_resp, static_len);
@@ -350,7 +350,7 @@ void nfc_tag_14a_4_reset_handler(void) {
 }
 
 void nfc_tag_14a_4_get_debug_counters(uint8_t *rx, uint8_t *tx,
-                                       uint8_t *last_pcb, uint8_t *last_match) {
+                                      uint8_t *last_pcb, uint8_t *last_match) {
     *rx = m_dbg_iblocks_rx;
     *tx = m_dbg_iblocks_tx;
     *last_pcb = m_dbg_last_rx_pcb;
@@ -379,7 +379,7 @@ int nfc_tag_14a_4_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffe
     int info_size = sizeof(nfc_tag_14a_4_information_t);
     if (buffer->length < info_size) {
         NRF_LOG_ERROR("14A-4 loadcb: buffer too small (%d < %d)",
-                       buffer->length, info_size);
+                      buffer->length, info_size);
         return info_size;
     }
     m_tag_information = (nfc_tag_14a_4_information_t *)buffer->buffer;
@@ -398,9 +398,9 @@ int nfc_tag_14a_4_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffe
     };
     nfc_tag_14a_set_handler(&handler);
     NRF_LOG_INFO("14A-4 loadcb OK: SAK=%02x uid_sz=%d static_resp=%d",
-                  m_tag_information->res_coll.sak[0],
-                  m_tag_information->res_coll.size,
-                  m_static_resp_count);
+                 m_tag_information->res_coll.sak[0],
+                 m_tag_information->res_coll.size,
+                 m_static_resp_count);
     return info_size;
 }
 
