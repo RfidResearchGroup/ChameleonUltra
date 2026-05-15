@@ -1,0 +1,11 @@
+# Ignore the binaries folder
+bin/
+# Ignore the python library cache
+script/__pycache__
+# Ignore the compilers output folder
+src/out
+# Ignore the compiled scripts
+script/*.pyc
+# Ignore pyinstaller folders
+build/
+dist/

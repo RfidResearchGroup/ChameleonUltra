@@ -1,0 +1,74 @@
+# This is just a placeholder while the whole PyInstaller thing gets figured out
+name: Client build
+
+on:
+  workflow_call:
+    inputs:
+      checkout-sha:
+        required: false
+        type: string
+
+jobs:
+  build_client:
+    name: Build client
+    strategy:
+      matrix:
+        include: 
+          - name: windows
+            os: windows-latest
+            pre_command: |
+              ? .
+            bundle_command: |
+              Compress-Archive -Path software\dist\* -DestinationPath client-windows.zip
+          - name: linux
+            os: ubuntu-latest
+            pre_command: |
+              true
+            bundle_command: |
+              (cd software/dist && zip -r "$OLDPWD/client-linux.zip" .)
+          - name: macos
+            os: macos-latest
+            pre_command: |
+              true
+            bundle_command: |
+              (cd software/dist && zip -r "$OLDPWD/client-macos.zip" .)
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout-sha == null && github.sha || inputs.checkout-sha }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PyInstaller and client dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r software/script/requirements.txt
+      - name: Run OS specific setup
+        run: ${{ matrix.pre_command }}
+      - name: Compile native code
+        run: |
+          cd software/src
+          mkdir out
+          cd out
+          cmake ..
+          cmake --build . --config Release
+      - name: Run PyInstaller
+        run: |
+          cd software
+          pyinstaller pyinstaller.spec
+      - name: Upload built client
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-${{ matrix.name }}
+          path: software/dist/*
+      - name: Zip up client for release
+        run: ${{ matrix.bundle_command }}
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts-${{ matrix.name }}
+          path: client-${{ matrix.name }}.zip
