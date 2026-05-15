@@ -145,10 +145,13 @@ class ChameleonCLI:
             if error is not None:
                 raise error
 
-        except (chameleon_utils.UnexpectedResponseError, chameleon_utils.ArgsParserError) as e:
+            except (chameleon_utils.UnexpectedResponseError,
+                chameleon_utils.ArgsParserError,
+                chameleon_com.CMDInvalidException,
+                TimeoutError) as e:
             print(color_string((CR, str(e))))
-        except Exception:
-            print(f"CLI exception: {color_string((CR, traceback.format_exc()))}")
+            except Exception:
+                print(f"CLI exception: {color_string((CR, traceback.format_exc()))}")
 
     def startCLI(self):
         """
