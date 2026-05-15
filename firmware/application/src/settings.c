@@ -286,7 +286,7 @@ uint8_t *settings_get_ble_connect_key(void) {
  * @param key Ble connect key for your device
  */
 void settings_set_ble_connect_key(uint8_t *key) {
-    memcpy(config.ble_connect_key, key, BLE_PAIRING_KEY_LEN);
+    memcpy(config.ble_connect_key, key, sizeof(config.ble_connect_key));
 }
 
 void settings_set_ble_pairing_enable(bool enable) {
