@@ -72,17 +72,28 @@ default_cwd = Path.cwd() / Path(__file__).with_name("bin")
 
 def load_key_file(import_key, keys):
     """
-    Load key file and append its content to the provided set of keys.
-    Each key is expected to be on a new line in the file.
+    Load binary key file and append its content to the provided set of keys.
+    Each key is 6 bytes concatenated.
     """
     with open(import_key.name, "rb") as file:
-        keys.update(
-            line.encode("utf-8") for line in file.read().decode("utf-8").splitlines()
-        )
+        data = file.read()
+    for i in range(0, len(data), 6):
+        key = data[i:i+6]
+        if len(key) == 6:
+            keys.add(key)
     return keys
 
 
 def load_dic_file(import_dic, keys):
+    """
+    Load dictionary file and append its content to the provided set of keys.
+    Each key is a 12-char hex string on a new line.
+    """
+    with open(import_dic.name, "r") as file:
+        for line in file:
+            line = line.strip()
+            if line:
+                keys.add(bytes.fromhex(line))
     return keys
 
 
