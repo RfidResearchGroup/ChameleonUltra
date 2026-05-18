@@ -10392,56 +10392,65 @@ class HfDesChk(ReaderRequiredUnit):
         checked = 0
         start = time.time()
 
-        for aid in aid_list:
-            print(f" Checking AID {CY}{aid}{C0}  key#{key_no} ...")
-            aid_found = False
-            # First attempt per AID does a full field cycle + RATS inside the
-            # firmware; subsequent attempts reuse the active T=CL session.
-            skip = False
+        try:
+            for aid in aid_list:
+                print(f" Checking AID {CY}{aid}{C0}  key#{key_no} ...")
+                aid_found = False
+                # First attempt per AID does a full field cycle + RATS inside the
+                # firmware; subsequent attempts reuse the active T=CL session.
+                skip = False
 
-            for key in des_keys:
-                checked += 1
-                ok = self._try_key(aid, key_no, key, 'DES', skip_scan=skip)
-                skip = True
-                if ok:
-                    msg = f"  {CG}[+] AID {aid}  DES/2TDEA  key#{key_no}  key: {key.hex().upper()}{C0}"
-                    print(msg)
-                    found.append(('DES', aid, key_no, key.hex().upper()))
-                    aid_found = True
-                    break
-                else:
-                    print(f"   {CR}✗{C0} DES    {key.hex().upper()}")
-
-            if not aid_found:
-                for key in aes_keys:
+                for key in des_keys:
                     checked += 1
-                    ok = self._try_key(aid, key_no, key, 'AES', skip_scan=skip)
+                    ok = self._try_key(aid, key_no, key, 'DES', skip_scan=skip)
                     skip = True
                     if ok:
-                        msg = f"  {CG}[+] AID {aid}  AES-128    key#{key_no}  key: {key.hex().upper()}{C0}"
+                        msg = f"  {CG}[+] AID {aid}  DES/2TDEA  key#{key_no}  key: {key.hex().upper()}{C0}"
                         print(msg)
-                        found.append(('AES', aid, key_no, key.hex().upper()))
+                        found.append(('DES', aid, key_no, key.hex().upper()))
                         aid_found = True
                         break
                     else:
-                        print(f"   {CR}✗{C0} AES    {key.hex().upper()}")
+                        print(f"   {CR}✗{C0} DES    {key.hex().upper()}")
 
-            if not aid_found:
-                for key in tdea3_keys:
-                    checked += 1
-                    ok = self._try_key(aid, key_no, key, '3K3DES', skip_scan=skip)
-                    skip = True
-                    if ok:
-                        msg = f"  {CG}[+] AID {aid}  3K3DES     key#{key_no}  key: {key.hex().upper()}{C0}"
-                        print(msg)
-                        found.append(('3K3DES', aid, key_no, key.hex().upper()))
-                        aid_found = True
-                        break
-                    else:
-                        print(f"   {CR}✗{C0} 3K3DES {key.hex().upper()}")
+                if not aid_found:
+                    for key in aes_keys:
+                        checked += 1
+                        ok = self._try_key(aid, key_no, key, 'AES', skip_scan=skip)
+                        skip = True
+                        if ok:
+                            msg = f"  {CG}[+] AID {aid}  AES-128    key#{key_no}  key: {key.hex().upper()}{C0}"
+                            print(msg)
+                            found.append(('AES', aid, key_no, key.hex().upper()))
+                            aid_found = True
+                            break
+                        else:
+                            print(f"   {CR}✗{C0} AES    {key.hex().upper()}")
 
-            if not aid_found:
-                print(f"  {CY}[-] AID {aid}  no key found{C0}\n")
+                if not aid_found:
+                    for key in tdea3_keys:
+                        checked += 1
+                        ok = self._try_key(aid, key_no, key, '3K3DES', skip_scan=skip)
+                        skip = True
+                        if ok:
+                            msg = f"  {CG}[+] AID {aid}  3K3DES     key#{key_no}  key: {key.hex().upper()}{C0}"
+                            print(msg)
+                            found.append(('3K3DES', aid, key_no, key.hex().upper()))
+                            aid_found = True
+                            break
+                        else:
+                            print(f"   {CR}✗{C0} 3K3DES {key.hex().upper()}")
+
+                if not aid_found:
+                    print(f"  {CY}[-] AID {aid}  no key found{C0}\n")
+
+        except KeyboardInterrupt:
+            print(f"\n {CY}[!] Interrupted{C0}")
+        finally:
+            try:
+                self.cmd.hf14a_set_field_off()
+            except Exception:
+                pass
 
         elapsed = time.time() - start
         print()
@@ -10452,10 +10461,6 @@ class HfDesChk(ReaderRequiredUnit):
                 print(f"\n   {CG}{algo:8s}  AID {aid}  key#{kno}  {key_hex}{C0}")
         else:
             print(f"\n {CR}No keys found{C0}")
-        try:
-            self.cmd.hf14a_set_field_off()
-        except Exception:
-            pass
 
 
 @hf_des.command("auth")
@@ -10541,25 +10546,27 @@ class HfDesAuth(ReaderRequiredUnit):
         print()
 
         try:
-            resp = self.cmd.hf14a_4_desfire_auth_check(
-                algo_code, args.keyno, aid, key, skip_scan=False)
-        except Exception as e:
-            print(f" {CR}[!] Command error: {e}{C0}")
-            return
+            try:
+                resp = self.cmd.hf14a_4_desfire_auth_check(
+                    algo_code, args.keyno, aid, key, skip_scan=False)
+            except Exception as e:
+                print(f" {CR}[!] Command error: {e}{C0}")
+                return
 
-        if resp.status == Status.HF_TAG_NO:
-            print(f" {CR}[!] No card detected{C0}")
-            return
-        if resp.status not in (Status.SUCCESS, Status.HF_TAG_OK):
-            print(f" {CR}[!] Firmware error: {resp.status}{C0}")
-            return
+            if resp.status == Status.HF_TAG_NO:
+                print(f" {CR}[!] No card detected{C0}")
+                return
+            if resp.status not in (Status.SUCCESS, Status.HF_TAG_OK):
+                print(f" {CR}[!] Firmware error: {resp.status}{C0}")
+                return
 
-        passed = bool(resp.data) and resp.data[0] == 0x01
-        if passed:
-            print(f" {CG}[+] Authenticated — key is correct{C0}")
-        else:
-            print(f" {CR}[-] Authentication failed — wrong key{C0}")
-        try:
-            self.cmd.hf14a_set_field_off()
-        except Exception:
-            pass
+            passed = bool(resp.data) and resp.data[0] == 0x01
+            if passed:
+                print(f" {CG}[+] Authenticated — key is correct{C0}")
+            else:
+                print(f" {CR}[-] Authentication failed — wrong key{C0}")
+        finally:
+            try:
+                self.cmd.hf14a_set_field_off()
+            except Exception:
+                pass
