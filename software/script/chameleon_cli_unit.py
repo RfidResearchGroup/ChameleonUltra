@@ -10452,3 +10452,106 @@ class HfDesChk(ReaderRequiredUnit):
                 print(f"\n   {CG}{algo:8s}  AID {aid}  key#{kno}  {key_hex}{C0}")
         else:
             print(f"\n {CR}No keys found{C0}")
+
+
+@hf_des.command("auth")
+class HfDesAuth(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Authenticate against a DESFire application with a single key "
+            "using the firmware auth-check command (one round trip)."
+        )
+        parser.add_argument("--aid",   type=str, default="000000", metavar="<hex>",
+                            help="Target AID, 3 hex bytes (default: 000000 = PICC master)")
+        parser.add_argument("-n", "--keyno", type=int, default=0, metavar="<0-13>",
+                            help="Key slot number (default: 0)")
+        parser.add_argument("-k", "--key",  type=str, required=True, metavar="<hex>",
+                            help="Key hex bytes: 8 (DES), 16 (2TDEA/AES-128), or 24 (3K3DES)")
+        parser.add_argument("-t", "--type", type=str, default=None, metavar="<des|2tdea|aes|3k3des>",
+                            help="Force algo type. Default: inferred from key length "
+                                 "(8B→DES, 16B→AES-128, 24B→3K3DES)")
+        parser.epilog = (
+            "examples:\n"
+            "  hf des auth -k 00000000000000000000000000000000\n"
+            "  hf des auth --aid 123456 -n 1 -k AABBCCDDEEFF00112233445566778899\n"
+            "  hf des auth -k 0011223344556677 -t 2tdea\n"
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        from chameleon_enum import Status
+
+        try:
+            key = bytes.fromhex(args.key.replace(" ", ""))
+        except ValueError:
+            print(f" {CR}[!] Invalid key hex{C0}")
+            return
+
+        aid_str = args.aid.upper().zfill(6)
+        try:
+            aid = bytes.fromhex(aid_str)
+            if len(aid) != 3:
+                raise ValueError
+        except ValueError:
+            print(f" {CR}[!] AID must be exactly 3 hex bytes (e.g. 000000 or 123456){C0}")
+            return
+
+        # Determine algo code
+        forced = (args.type or "").lower().replace("-", "")
+        if forced in ("des",):
+            if len(key) not in (8, 16):
+                print(f" {CR}[!] DES key must be 8 or 16 bytes{C0}"); return
+            algo_code = 0 if len(key) == 8 else 1
+            algo_name = "DES" if len(key) == 8 else "2TDEA"
+        elif forced in ("2tdea", "tdea2"):
+            if len(key) != 16:
+                print(f" {CR}[!] 2TDEA key must be 16 bytes{C0}"); return
+            algo_code, algo_name = 1, "2TDEA"
+        elif forced in ("aes", "aes128", "aes-128"):
+            if len(key) != 16:
+                print(f" {CR}[!] AES-128 key must be 16 bytes{C0}"); return
+            algo_code, algo_name = 2, "AES-128"
+        elif forced in ("3k3des", "3des", "tdea3"):
+            if len(key) != 24:
+                print(f" {CR}[!] 3K3DES key must be 24 bytes{C0}"); return
+            algo_code, algo_name = 3, "3K3DES"
+        elif forced == "":
+            # Infer from key length: 8→DES, 16→AES-128, 24→3K3DES
+            if len(key) == 8:
+                algo_code, algo_name = 0, "DES"
+            elif len(key) == 16:
+                algo_code, algo_name = 2, "AES-128"
+            elif len(key) == 24:
+                algo_code, algo_name = 3, "3K3DES"
+            else:
+                print(f" {CR}[!] Key must be 8, 16 or 24 bytes (got {len(key)}){C0}"); return
+        else:
+            print(f" {CR}[!] Unknown type '{args.type}' — use des, 2tdea, aes, or 3k3des{C0}")
+            return
+
+        print(f" AID     : {aid_str}")
+        print(f" Key#    : {args.keyno}")
+        print(f" Algo    : {algo_name}")
+        print(f" Key     : {key.hex().upper()}")
+        print()
+
+        try:
+            resp = self.cmd.hf14a_4_desfire_auth_check(
+                algo_code, args.keyno, aid, key, skip_scan=False)
+        except Exception as e:
+            print(f" {CR}[!] Command error: {e}{C0}")
+            return
+
+        if resp.status == Status.HF_TAG_NO:
+            print(f" {CR}[!] No card detected{C0}")
+            return
+        if resp.status not in (Status.SUCCESS, Status.HF_TAG_OK):
+            print(f" {CR}[!] Firmware error: {resp.status}{C0}")
+            return
+
+        passed = bool(resp.data) and resp.data[0] == 0x01
+        if passed:
+            print(f" {CG}[+] Authenticated — key is correct{C0}")
+        else:
+            print(f" {CR}[-] Authentication failed — wrong key{C0}")
