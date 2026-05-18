@@ -362,6 +362,14 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(
             Command.HF14A_4_DESFIRE_AUTH_CHECK, payload, timeout=5)
 
+    def hf14a_set_field_off(self):
+        """Turn off the HF reader RF field."""
+        return self.device.send_cmd_sync(Command.HF14A_SET_FIELD_OFF, b'', timeout=2)
+
+    def hf14a_set_field_on(self):
+        """Turn on the HF reader RF field."""
+        return self.device.send_cmd_sync(Command.HF14A_SET_FIELD_ON, b'', timeout=2)
+
     def hf14a_4_clear_static_responses(self):
         """Clear all static APDU responses from the active HF14A_4 slot."""
         return self.device.send_cmd_sync(Command.HF14A_4_STATIC_RESP, b'\x00')

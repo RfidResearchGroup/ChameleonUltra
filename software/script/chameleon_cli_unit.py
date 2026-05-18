@@ -10452,6 +10452,10 @@ class HfDesChk(ReaderRequiredUnit):
                 print(f"\n   {CG}{algo:8s}  AID {aid}  key#{kno}  {key_hex}{C0}")
         else:
             print(f"\n {CR}No keys found{C0}")
+        try:
+            self.cmd.hf14a_set_field_off()
+        except Exception:
+            pass
 
 
 @hf_des.command("auth")
@@ -10555,3 +10559,7 @@ class HfDesAuth(ReaderRequiredUnit):
             print(f" {CG}[+] Authenticated — key is correct{C0}")
         else:
             print(f" {CR}[-] Authentication failed — wrong key{C0}")
+        try:
+            self.cmd.hf14a_set_field_off()
+        except Exception:
+            pass
