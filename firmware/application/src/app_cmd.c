@@ -3267,7 +3267,7 @@ static void df_rand_bytes(uint8_t *buf, uint8_t n) {
         (void)sd_rand_application_bytes_available_get(&avail);
         uint8_t take = (avail > (n - got)) ? (n - got) : avail;
         if (take > 0) {
-            (void)sd_rand_application_bytes_get(buf + got, take);
+            (void)sd_rand_application_vector_get(buf + got, take);
             got += take;
         }
     }
@@ -3300,7 +3300,7 @@ static data_frame_tx_t *cmd_processor_hf14a_4_desfire_auth_check(
 
     /* For DES/3DES, build the effective key: single DES → double to 2TDEA */
     uint8_t  tdes_key[24];
-    uint8_t  tdes_key_len;
+    uint8_t  tdes_key_len = 0;   /* initialised to silence -Wmaybe-uninitialized (AES path never reads it) */
     if (algo == 0) {
         memcpy(tdes_key,     key, 8);
         memcpy(tdes_key + 8, key, 8);   /* expand single DES → 2TDEA */
@@ -3341,7 +3341,6 @@ static data_frame_tx_t *cmd_processor_hf14a_4_desfire_auth_check(
     uint8_t   result_byte = 0;
 
     /* -------- Step 2: SelectApplication ----------------------------------- */
-    uint8_t sel_apdu[8] = { 0x90, 0x5A, 0x00, 0x00, 0x03, aid[0], aid[1], aid[2] };  /* Le=0x00 appended by desWrap equivalent */
     /* DESFire native: 90 5A 00 00 03 AID[3] 00 */
     uint8_t sel_full[9] = { 0x90, 0x5A, 0x00, 0x00, 0x03, aid[0], aid[1], aid[2], 0x00 };
     if (!DF_SEND(sel_full, 9, &rdata, &rlen)) goto auth_fail;
@@ -3377,10 +3376,9 @@ static data_frame_tx_t *cmd_processor_hf14a_4_desfire_auth_check(
         uint8_t enc_both[32];
         df_aes_cbc_encrypt(key, enc_rnd_b, plain, enc_both, 2);
 
-        uint8_t auth2[37] = { 0x90, 0xAF, 0x00, 0x00, 0x20 };
-        memcpy(&auth2[5], enc_both, 32); auth2[37] = 0; /* actually length 37 with Le */
-        uint8_t auth2_full[38]; memcpy(auth2_full, auth2, 37); auth2_full[37] = 0x00;
-        if (!DF_SEND(auth2_full, 38, &rdata, &rlen)) goto auth_fail;
+        uint8_t auth2[38] = { 0x90, 0xAF, 0x00, 0x00, 0x20 };
+        memcpy(&auth2[5], enc_both, 32); auth2[37] = 0x00;  /* Le */
+        if (!DF_SEND(auth2, 38, &rdata, &rlen)) goto auth_fail;
         if (rlen < 18 || rdata[rlen-2] != 0x91 || rdata[rlen-1] != 0x00) goto auth_fail;
 
         /* Verify encRndA': decrypt with IV = last 16 bytes of enc_both */
