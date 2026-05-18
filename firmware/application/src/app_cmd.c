@@ -2921,6 +2921,508 @@ done:
     return data_frame_make(cmd, STATUS_HF_TAG_OK, out_len, out);
 }
 
+
+/* ==========================================================================
+ * DESFire Mutual Authentication Check  (DATA_CMD_HF14A_4_DESFIRE_AUTH_CHECK)
+ *
+ * Performs the full DESFire auth sequence in one firmware call:
+ *   [optional field cycle + scan + RATS] → SelectApplication → Auth1 → Auth2
+ *
+ * Request payload:
+ *   Byte 0:     algo      0=DES  1=2TDEA  2=AES128  3=3K3DES
+ *   Byte 1:     key_slot  0-13
+ *   Byte 2:     flags     bit0 = skip_scan (card already in T=CL, no field cycle)
+ *   Bytes 3-5:  aid[3]    AID bytes LSB-first as received from GetApplicationIDs
+ *   Bytes 6+:   key       8 bytes (DES), 16 bytes (2TDEA / AES128), 24 bytes (3K3DES)
+ *
+ * Response payload:
+ *   Byte 0:  1 = authenticated successfully, 0 = auth failed / wrong key
+ *   STATUS_HF_TAG_NO if card not present, STATUS_PAR_ERR for bad params.
+ * ========================================================================== */
+
+#include "nrf_soc.h"   /* sd_ecb_block_encrypt, sd_rand_application_bytes_get */
+
+/* --------------------------------------------------------------------------
+ * AES-128  (hardware ECB encrypt via SoftDevice; software inverse cipher)
+ * -------------------------------------------------------------------------- */
+
+static uint8_t df_xtime(uint8_t x) { return (uint8_t)((x << 1) ^ ((x & 0x80) ? 0x1b : 0)); }
+static uint8_t df_gmul(uint8_t a, uint8_t b) {
+    uint8_t p = 0;
+    for (int i = 0; i < 8; i++) { if (b & 1) p ^= a; a = df_xtime(a); b >>= 1; }
+    return p;
+}
+
+/* Forward S-box (256 bytes) */
+static const uint8_t DF_SBOX[256] = {
+    0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,
+    0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,
+    0xb7,0xfd,0x93,0x26,0x36,0x3f,0xf7,0xcc,0x34,0xa5,0xe5,0xf1,0x71,0xd8,0x31,0x15,
+    0x04,0xc7,0x23,0xc3,0x18,0x96,0x05,0x9a,0x07,0x12,0x80,0xe2,0xeb,0x27,0xb2,0x75,
+    0x09,0x83,0x2c,0x1a,0x1b,0x6e,0x5a,0xa0,0x52,0x3b,0xd6,0xb3,0x29,0xe3,0x2f,0x84,
+    0x53,0xd1,0x00,0xed,0x20,0xfc,0xb1,0x5b,0x6a,0xcb,0xbe,0x39,0x4a,0x4c,0x58,0xcf,
+    0xd0,0xef,0xaa,0xfb,0x43,0x4d,0x33,0x85,0x45,0xf9,0x02,0x7f,0x50,0x3c,0x9f,0xa8,
+    0x51,0xa3,0x40,0x8f,0x92,0x9d,0x38,0xf5,0xbc,0xb6,0xda,0x21,0x10,0xff,0xf3,0xd2,
+    0xcd,0x0c,0x13,0xec,0x5f,0x97,0x44,0x17,0xc4,0xa7,0x7e,0x3d,0x64,0x5d,0x19,0x73,
+    0x60,0x81,0x4f,0xdc,0x22,0x2a,0x90,0x88,0x46,0xee,0xb8,0x14,0xde,0x5e,0x0b,0xdb,
+    0xe0,0x32,0x3a,0x0a,0x49,0x06,0x24,0x5c,0xc2,0xd3,0xac,0x62,0x91,0x95,0xe4,0x79,
+    0xe7,0xc8,0x37,0x6d,0x8d,0xd5,0x4e,0xa9,0x6c,0x56,0xf4,0xea,0x65,0x7a,0xae,0x08,
+    0xba,0x78,0x25,0x2e,0x1c,0xa6,0xb4,0xc6,0xe8,0xdd,0x74,0x1f,0x4b,0xbd,0x8b,0x8a,
+    0x70,0x3e,0xb5,0x66,0x48,0x03,0xf6,0x0e,0x61,0x35,0x57,0xb9,0x86,0xc1,0x1d,0x9e,
+    0xe1,0xf8,0x98,0x11,0x69,0xd9,0x8e,0x94,0x9b,0x1e,0x87,0xe9,0xce,0x55,0x28,0xdf,
+    0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16
+};
+
+/* Inverse S-box (256 bytes) — verified against JS desfire_crypto.js */
+static const uint8_t DF_ISBOX[256] = {
+    0x52,0x09,0x6a,0xd5,0x30,0x36,0xa5,0x38,0xbf,0x40,0xa3,0x9e,0x81,0xf3,0xd7,0xfb,
+    0x7c,0xe3,0x39,0x82,0x9b,0x2f,0xff,0x87,0x34,0x8e,0x43,0x44,0xc4,0xde,0xe9,0xcb,
+    0x54,0x7b,0x94,0x32,0xa6,0xc2,0x23,0x3d,0xee,0x4c,0x95,0x0b,0x42,0xfa,0xc3,0x4e,
+    0x08,0x2e,0xa1,0x66,0x28,0xd9,0x24,0xb2,0x76,0x5b,0xa2,0x49,0x6d,0x8b,0xd1,0x25,
+    0x72,0xf8,0xf6,0x64,0x86,0x68,0x98,0x16,0xd4,0xa4,0x5c,0xcc,0x5d,0x65,0xb6,0x92,
+    0x6c,0x70,0x48,0x50,0xfd,0xed,0xb9,0xda,0x5e,0x15,0x46,0x57,0xa7,0x8d,0x9d,0x84,
+    0x90,0xd8,0xab,0x00,0x8c,0xbc,0xd3,0x0a,0xf7,0xe4,0x58,0x05,0xb8,0xb3,0x45,0x06,
+    0xd0,0x2c,0x1e,0x8f,0xca,0x3f,0x0f,0x02,0xc1,0xaf,0xbd,0x03,0x01,0x13,0x8a,0x6b,
+    0x3a,0x91,0x11,0x41,0x4f,0x67,0xdc,0xea,0x97,0xf2,0xcf,0xce,0xf0,0xb4,0xe6,0x73,
+    0x96,0xac,0x74,0x22,0xe7,0xad,0x35,0x85,0xe2,0xf9,0x37,0xe8,0x1c,0x75,0xdf,0x6e,
+    0x47,0xf1,0x1a,0x71,0x1d,0x29,0xc5,0x89,0x6f,0xb7,0x62,0x0e,0xaa,0x18,0xbe,0x1b,
+    0xfc,0x56,0x3e,0x4b,0xc6,0xd2,0x79,0x20,0x9a,0xdb,0xc0,0xfe,0x78,0xcd,0x5a,0xf4,
+    0x1f,0xdd,0xa8,0x33,0x88,0x07,0xc7,0x31,0xb1,0x12,0x10,0x59,0x27,0x80,0xec,0x5f,
+    0x60,0x51,0x7f,0xa9,0x19,0xb5,0x4a,0x0d,0x2d,0xe5,0x7a,0x9f,0x93,0xc9,0x9c,0xef,
+    0xa0,0xe0,0x3b,0x4d,0xae,0x2a,0xf5,0xb0,0xc8,0xeb,0xbb,0x3c,0x83,0x53,0x99,0x61,
+    0x17,0x2b,0x04,0x7e,0xba,0x77,0xd6,0x26,0xe1,0x69,0x14,0x63,0x55,0x21,0x0c,0x7d
+};
+
+/* AES-128 Rcon table */
+static const uint8_t DF_RCON[10] = {0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80,0x1b,0x36};
+
+/* AES-128 key expansion — produces 44 words (11 round keys). */
+static void df_aes_key_expand(const uint8_t key[16], uint8_t w[176]) {
+    memcpy(w, key, 16);
+    for (int i = 4; i < 44; i++) {
+        uint8_t tmp[4];
+        memcpy(tmp, &w[(i-1)*4], 4);
+        if (i % 4 == 0) {
+            uint8_t t = tmp[0];
+            tmp[0] = DF_SBOX[tmp[1]] ^ DF_RCON[i/4 - 1];
+            tmp[1] = DF_SBOX[tmp[2]];
+            tmp[2] = DF_SBOX[tmp[3]];
+            tmp[3] = DF_SBOX[t];
+        }
+        uint8_t *prev = &w[(i-4)*4];
+        uint8_t *cur  = &w[i*4];
+        cur[0] = prev[0] ^ tmp[0]; cur[1] = prev[1] ^ tmp[1];
+        cur[2] = prev[2] ^ tmp[2]; cur[3] = prev[3] ^ tmp[3];
+    }
+}
+
+/* AES state: column-major s[row][col] */
+typedef uint8_t df_aes_state_t[4][4];
+
+static void df_load_state(df_aes_state_t s, const uint8_t b[16]) {
+    for (int c = 0; c < 4; c++) for (int r = 0; r < 4; r++) s[r][c] = b[c*4+r];
+}
+static void df_save_state(uint8_t b[16], const df_aes_state_t s) {
+    for (int c = 0; c < 4; c++) for (int r = 0; r < 4; r++) b[c*4+r] = s[r][c];
+}
+static void df_add_rk(df_aes_state_t s, const uint8_t *w) {
+    for (int c = 0; c < 4; c++) for (int r = 0; r < 4; r++) s[r][c] ^= w[c*4+r];
+}
+
+/* AES-128 hardware ECB encrypt (SoftDevice-safe). */
+static void df_aes_ecb_hw(const uint8_t key[16], const uint8_t pt[16], uint8_t ct[16]) {
+    nrf_ecb_hal_data_t ecb;
+    memcpy(ecb.key,       key, 16);
+    memcpy(ecb.cleartext, pt,  16);
+    (void)sd_ecb_block_encrypt(&ecb);
+    memcpy(ct, ecb.ciphertext, 16);
+}
+
+/* AES-128 software ECB decrypt (inverse cipher per FIPS 197). */
+static void df_aes_ecb_decrypt(const uint8_t key[16], const uint8_t ct[16], uint8_t pt[16]) {
+    uint8_t w[176];
+    df_aes_key_expand(key, w);
+
+    df_aes_state_t s;
+    df_load_state(s, ct);
+    df_add_rk(s, &w[40*4]);    /* initial AddRoundKey with last round key */
+
+    for (int rnd = 9; rnd >= 0; rnd--) {
+        /* InvShiftRows: rows 1,2,3 rotate RIGHT by 1,2,3 */
+        for (int r = 1; r < 4; r++) {
+            uint8_t tmp[4]; memcpy(tmp, s[r], 4);
+            for (int c = 0; c < 4; c++) s[r][c] = tmp[(c + (4-r)) % 4];
+        }
+        /* InvSubBytes */
+        for (int r = 0; r < 4; r++) for (int c = 0; c < 4; c++) s[r][c] = DF_ISBOX[s[r][c]];
+        /* AddRoundKey */
+        df_add_rk(s, &w[rnd*16]);
+        /* InvMixColumns (skip for round 0) */
+        if (rnd > 0) {
+            for (int c = 0; c < 4; c++) {
+                uint8_t a[4]; a[0]=s[0][c]; a[1]=s[1][c]; a[2]=s[2][c]; a[3]=s[3][c];
+                s[0][c] = df_gmul(0x0e,a[0])^df_gmul(0x0b,a[1])^df_gmul(0x0d,a[2])^df_gmul(0x09,a[3]);
+                s[1][c] = df_gmul(0x09,a[0])^df_gmul(0x0e,a[1])^df_gmul(0x0b,a[2])^df_gmul(0x0d,a[3]);
+                s[2][c] = df_gmul(0x0d,a[0])^df_gmul(0x09,a[1])^df_gmul(0x0e,a[2])^df_gmul(0x0b,a[3]);
+                s[3][c] = df_gmul(0x0b,a[0])^df_gmul(0x0d,a[1])^df_gmul(0x09,a[2])^df_gmul(0x0e,a[3]);
+            }
+        }
+    }
+    df_save_state(pt, s);
+}
+
+/* AES-128 CBC decrypt: output = n*16 plaintext bytes. */
+static void df_aes_cbc_decrypt(const uint8_t key[16], const uint8_t iv[16],
+                                const uint8_t *ct, uint8_t *pt, uint8_t nblocks) {
+    uint8_t prev[16]; memcpy(prev, iv, 16);
+    for (uint8_t i = 0; i < nblocks; i++) {
+        uint8_t dec[16];
+        df_aes_ecb_decrypt(key, ct, dec);
+        for (int j = 0; j < 16; j++) pt[j] = dec[j] ^ prev[j];
+        memcpy(prev, ct, 16);
+        ct += 16; pt += 16;
+    }
+}
+
+/* AES-128 CBC encrypt: output = n*16 ciphertext bytes. */
+static void df_aes_cbc_encrypt(const uint8_t key[16], const uint8_t iv[16],
+                                const uint8_t *pt, uint8_t *ct, uint8_t nblocks) {
+    uint8_t prev[16]; memcpy(prev, iv, 16);
+    for (uint8_t i = 0; i < nblocks; i++) {
+        uint8_t xb[16];
+        for (int j = 0; j < 16; j++) xb[j] = pt[j] ^ prev[j];
+        df_aes_ecb_hw(key, xb, ct);
+        memcpy(prev, ct, 16);
+        ct += 16; pt += 16;
+    }
+}
+
+/* --------------------------------------------------------------------------
+ * DES / 3DES  (pure software, standard FIPS permutation tables)
+ * -------------------------------------------------------------------------- */
+
+/* All tables use 1-based bit numbering from the MSB of a 64-bit word. */
+static const uint8_t DES_IP[64] = {
+    58,50,42,34,26,18,10,2, 60,52,44,36,28,20,12,4,
+    62,54,46,38,30,22,14,6, 64,56,48,40,32,24,16,8,
+    57,49,41,33,25,17, 9,1, 59,51,43,35,27,19,11,3,
+    61,53,45,37,29,21,13,5, 63,55,47,39,31,23,15,7
+};
+static const uint8_t DES_FP[64] = {
+    40,8,48,16,56,24,64,32, 39,7,47,15,55,23,63,31,
+    38,6,46,14,54,22,62,30, 37,5,45,13,53,21,61,29,
+    36,4,44,12,52,20,60,28, 35,3,43,11,51,19,59,27,
+    34,2,42,10,50,18,58,26, 33,1,41, 9,49,17,57,25
+};
+static const uint8_t DES_E[48] = {
+    32,1,2,3,4,5, 4,5,6,7,8,9, 8,9,10,11,12,13, 12,13,14,15,16,17,
+    16,17,18,19,20,21, 20,21,22,23,24,25, 24,25,26,27,28,29, 28,29,30,31,32,1
+};
+static const uint8_t DES_P[32] = {
+    16,7,20,21,29,12,28,17, 1,15,23,26, 5,18,31,10,
+     2,8,24,14,32,27, 3, 9,19,13,30, 6,22,11, 4,25
+};
+static const uint8_t DES_PC1[56] = {
+    57,49,41,33,25,17,9,1,58,50,42,34,26,18,10,2,59,51,43,35,27,19,11,3,60,52,44,36,
+    63,55,47,39,31,23,15,7,62,54,46,38,30,22,14,6,61,53,45,37,29,21,13,5,28,20,12,4
+};
+static const uint8_t DES_PC2[48] = {
+    14,17,11,24,1,5,3,28,15,6,21,10,23,19,12,4,26,8,16,7,27,20,13,2,
+    41,52,31,37,47,55,30,40,51,45,33,48,44,49,39,56,34,53,46,42,50,36,29,32
+};
+static const uint8_t DES_SHIFTS[16] = {1,1,2,2,2,2,2,2,1,2,2,2,2,2,2,1};
+static const uint8_t DES_S[8][64] = {
+    {14,4,13,1,2,15,11,8,3,10,6,12,5,9,0,7,0,15,7,4,14,2,13,1,10,6,12,11,9,5,3,8,
+      4,1,14,8,13,6,2,11,15,12,9,7,3,10,5,0,15,12,8,2,4,9,1,7,5,11,3,14,10,0,6,13},
+    {15,1,8,14,6,11,3,4,9,7,2,13,12,0,5,10,3,13,4,7,15,2,8,14,12,0,1,10,6,9,11,5,
+      0,14,7,11,10,4,13,1,5,8,12,6,9,3,2,15,13,8,10,1,3,15,4,2,11,6,7,12,0,5,14,9},
+    {10,0,9,14,6,3,15,5,1,13,12,7,11,4,2,8,13,7,0,9,3,4,6,10,2,8,5,14,12,11,15,1,
+     13,6,4,9,8,15,3,0,11,1,2,12,5,10,14,7,1,10,13,0,6,9,8,7,4,15,14,3,11,5,2,12},
+    { 7,13,14,3,0,6,9,10,1,2,8,5,11,12,4,15,13,8,11,5,6,15,0,3,4,7,2,12,1,10,14,9,
+     10,6,9,0,12,11,7,13,15,1,3,14,5,2,8,4,3,15,0,6,10,1,13,8,9,4,5,11,12,7,2,14},
+    { 2,12,4,1,7,10,11,6,8,5,3,15,13,0,14,9,14,11,2,12,4,7,13,1,5,0,15,10,3,9,8,6,
+      4,2,1,11,10,13,7,8,15,9,12,5,6,3,0,14,11,8,12,7,1,14,2,13,6,15,0,9,10,4,5,3},
+    {12,1,10,15,9,2,6,8,0,13,3,4,14,7,5,11,10,15,4,2,7,12,9,5,6,1,13,14,0,11,3,8,
+      9,14,15,5,2,8,12,3,7,0,4,10,1,13,11,6,4,3,2,12,9,5,15,10,11,14,1,7,6,0,8,13},
+    { 4,11,2,14,15,0,8,13,3,12,9,7,5,10,6,1,13,0,11,7,4,9,1,10,14,3,5,12,2,15,8,6,
+      1,4,11,13,12,3,7,14,10,15,6,8,0,5,9,2,6,11,13,8,1,4,10,7,9,5,0,15,14,2,3,12},
+    {13,2,8,4,6,15,11,1,10,9,3,14,5,0,12,7,1,15,13,8,10,3,7,4,12,5,6,11,0,14,9,2,
+      7,11,4,1,9,12,14,2,0,6,10,13,15,3,5,8,2,1,14,7,4,10,8,13,15,12,9,0,3,5,6,11}
+};
+
+static uint64_t df_perm(uint64_t v, const uint8_t *tbl, int n) {
+    uint64_t r = 0;
+    for (int i = 0; i < n; i++) r = (r << 1) | ((v >> (64 - tbl[i])) & 1);
+    return r;
+}
+static uint64_t df_perm48(uint64_t v, const uint8_t *tbl) {
+    uint64_t r = 0;
+    for (int i = 0; i < 48; i++) r = (r << 1) | ((v >> (64 - tbl[i])) & 1);
+    return r;
+}
+static uint64_t df_perm32(uint32_t v, const uint8_t *tbl) {
+    uint64_t r = 0;
+    for (int i = 0; i < 32; i++) r = (r << 1) | ((v >> (32 - tbl[i])) & 1);
+    return r;
+}
+
+/* Single DES block: key and block as 8-byte arrays. */
+static void df_des_block(const uint8_t key[8], const uint8_t in[8], uint8_t out[8], bool enc) {
+    /* Load big-endian 64-bit values */
+    uint64_t K64 = 0, M = 0;
+    for (int i = 0; i < 8; i++) { K64 = (K64<<8)|key[i]; M = (M<<8)|in[i]; }
+
+    /* Key schedule: PC1, 16 round subkeys */
+    uint64_t cd = df_perm(K64, DES_PC1, 56);
+    uint32_t C = (uint32_t)(cd >> 28) & 0x0FFFFFFF;
+    uint32_t D = (uint32_t)(cd)       & 0x0FFFFFFF;
+    uint64_t SK[16];
+    for (int r = 0; r < 16; r++) {
+        uint8_t s = DES_SHIFTS[r];
+        C = ((C << s) | (C >> (28-s))) & 0x0FFFFFFF;
+        D = ((D << s) | (D >> (28-s))) & 0x0FFFFFFF;
+        uint64_t cd2 = ((uint64_t)C << 28) | D;
+        SK[r] = df_perm48(cd2 << 8, DES_PC2); /* shift left 8 to align for 64-bit perm */
+    }
+
+    /* IP */
+    uint64_t perm_m = df_perm(M, DES_IP, 64);
+    uint32_t L = (uint32_t)(perm_m >> 32);
+    uint32_t R = (uint32_t)(perm_m);
+
+    /* 16 rounds */
+    for (int r = 0; r < 16; r++) {
+        uint64_t sk = enc ? SK[r] : SK[15-r];
+        /* E expansion: R (32-bit) → 48 bits */
+        uint64_t R64 = (uint64_t)R << 32; /* align R to top 32 bits for perm */
+        uint64_t ER = 0;
+        for (int i = 0; i < 48; i++) ER = (ER<<1)|((R64>>(64-DES_E[i]))&1);
+        uint64_t X = ER ^ sk;
+        /* S-boxes: 6 bits → 4 bits each */
+        uint32_t S = 0;
+        for (int b = 0; b < 8; b++) {
+            uint8_t six = (uint8_t)((X >> (42 - b*6)) & 0x3F);
+            uint8_t row = ((six & 0x20) >> 4) | (six & 0x01);
+            uint8_t col = (six >> 1) & 0x0F;
+            S = (S << 4) | (DES_S[b][row*16+col] & 0x0F);
+        }
+        /* P permutation */
+        uint32_t F = (uint32_t)df_perm32(S, DES_P);
+        uint32_t tmp = R;
+        R = L ^ F;
+        L = tmp;
+    }
+
+    /* FP (swap L and R before final permutation) */
+    uint64_t pre = ((uint64_t)R << 32) | L;
+    uint64_t C64 = df_perm(pre, DES_FP, 64);
+    for (int i = 7; i >= 0; i--) { out[i] = (uint8_t)(C64 & 0xFF); C64 >>= 8; }
+}
+
+/* 3DES (2TDEA: key=16B, or 3K3DES: key=24B). Single block EDE or DED. */
+static void df_tdes_block(const uint8_t *key, uint8_t key_len, const uint8_t in[8], uint8_t out[8], bool enc) {
+    const uint8_t *k1 = key;
+    const uint8_t *k2 = key + 8;
+    const uint8_t *k3 = (key_len >= 24) ? key + 16 : key;  /* 3K3DES or 2TDEA */
+    uint8_t tmp1[8], tmp2[8];
+    if (enc) {
+        df_des_block(k1, in,   tmp1, true);
+        df_des_block(k2, tmp1, tmp2, false);
+        df_des_block(k3, tmp2, out,  true);
+    } else {
+        df_des_block(k3, in,   tmp1, false);
+        df_des_block(k2, tmp1, tmp2, true);
+        df_des_block(k1, tmp2, out,  false);
+    }
+}
+
+/* DES/3DES CBC decrypt: 1 block (8 bytes). iv stays unchanged. */
+static void df_des_cbc_decrypt1(const uint8_t *key, uint8_t key_len,
+                                  const uint8_t iv[8], const uint8_t ct[8], uint8_t pt[8]) {
+    uint8_t tmp[8];
+    df_tdes_block(key, key_len, ct, tmp, false);
+    for (int i = 0; i < 8; i++) pt[i] = tmp[i] ^ iv[i];
+}
+
+/* DES/3DES CBC encrypt: nblocks*8 bytes. */
+static void df_des_cbc_encrypt(const uint8_t *key, uint8_t key_len,
+                                 const uint8_t iv[8], const uint8_t *pt, uint8_t *ct, uint8_t nblocks) {
+    uint8_t prev[8]; memcpy(prev, iv, 8);
+    for (uint8_t i = 0; i < nblocks; i++) {
+        uint8_t xb[8];
+        for (int j = 0; j < 8; j++) xb[j] = pt[j] ^ prev[j];
+        df_tdes_block(key, key_len, xb, ct, true);
+        memcpy(prev, ct, 8);
+        ct += 8; pt += 8;
+    }
+}
+
+/* --------------------------------------------------------------------------
+ * Random bytes via SoftDevice RNG
+ * -------------------------------------------------------------------------- */
+static void df_rand_bytes(uint8_t *buf, uint8_t n) {
+    uint8_t avail = 0;
+    uint8_t got   = 0;
+    while (got < n) {
+        (void)sd_rand_application_bytes_available_get(&avail);
+        uint8_t take = (avail > (n - got)) ? (n - got) : avail;
+        if (take > 0) {
+            (void)sd_rand_application_vector_get(buf + got, take);
+            got += take;
+        }
+    }
+}
+
+/* --------------------------------------------------------------------------
+ * DESFire mutual auth check
+ *
+ * Request payload layout (see header comment above):
+ *   [0] algo  [1] key_slot  [2] flags  [3..5] aid  [6..] key
+ * -------------------------------------------------------------------------- */
+static data_frame_tx_t *cmd_processor_hf14a_4_desfire_auth_check(
+        uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+
+    if (length < 7) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+
+    uint8_t  algo     = data[0];
+    uint8_t  key_slot = data[1];
+    bool     skip_scan= (data[2] & 0x01) != 0;
+    uint8_t  aid[3]   = { data[3], data[4], data[5] };
+    uint8_t *key      = &data[6];
+    uint8_t  key_len  = (uint8_t)(length - 6);
+
+    /* Validate key length */
+    uint8_t expected_key_len = (algo == 2) ? 16 :            /* AES128      */
+                               (algo == 3) ? 24 :            /* 3K3DES      */
+                               (algo == 1) ? 16 :            /* 2TDEA       */
+                                              8;             /* DES (single) */
+    if (key_len != expected_key_len) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+
+    /* For DES/3DES, build the effective key: single DES → double to 2TDEA */
+    uint8_t  tdes_key[24];
+    uint8_t  tdes_key_len = 0;   /* initialised to silence -Wmaybe-uninitialized (AES path never reads it) */
+    if (algo == 0) {
+        memcpy(tdes_key,     key, 8);
+        memcpy(tdes_key + 8, key, 8);   /* expand single DES → 2TDEA */
+        tdes_key_len = 16;
+    } else if (algo != 2) {
+        memcpy(tdes_key, key, key_len);
+        tdes_key_len = key_len;
+    }
+
+    /* -------- Step 1: field management + card selection ------------------- */
+    static uint8_t  abuf[64];
+    static uint8_t  rbuf[270];
+    static uint8_t  chain_buf[512];
+    uint16_t rbits;
+    uint8_t  blk = 0;
+
+    if (!skip_scan) {
+        /* Full field cycle + ISO14443-4 activation */
+        pcd_14a_reader_antenna_off();
+        bsp_delay_ms(5);
+        pcd_14a_reader_reset();
+        pcd_14a_reader_antenna_on();
+        bsp_delay_ms(8);
+        pcd_14a_reader_timeout_set(200);
+        picc_14a_tag_t taginfo;
+        status = pcd_14a_reader_scan_auto(&taginfo);
+        if (status != STATUS_HF_TAG_OK) {
+            pcd_14a_reader_timeout_set(DEF_COM_TIMEOUT);
+            return data_frame_make(cmd, STATUS_HF_TAG_NO, 0, NULL);
+        }
+    }
+    blk = 0;  /* reset I-block alternation */
+
+#define DF_SEND(ap, asz, rd, rl)  tcl_apdu_((ap),(asz),(rd),(rl),abuf,rbuf,chain_buf,&rbits,&blk)
+
+    uint8_t  *rdata = NULL;
+    uint16_t  rlen  = 0;
+    uint8_t   result_byte = 0;
+
+    /* -------- Step 2: SelectApplication ----------------------------------- */
+    /* DESFire native: 90 5A 00 00 03 AID[3] 00 */
+    uint8_t sel_full[9] = { 0x90, 0x5A, 0x00, 0x00, 0x03, aid[0], aid[1], aid[2], 0x00 };
+    if (!DF_SEND(sel_full, 9, &rdata, &rlen)) goto auth_fail;
+    /* Expect 91 00 */
+    if (rlen < 2 || rdata[rlen-2] != 0x91 || rdata[rlen-1] != 0x00) goto auth_fail;
+
+    /* -------- Step 3: Authenticate step 1 --------------------------------- */
+    {
+        uint8_t auth_cmd = (algo == 2) ? 0xAA :  /* AES */
+                           (algo == 3) ? 0x1A :  /* 3K3DES / ISO auth */
+                                         0x0A;   /* DES / 2TDEA legacy */
+        uint8_t slot_hex = key_slot & 0x7F;
+        uint8_t auth1[8] = { 0x90, auth_cmd, 0x00, 0x00, 0x01, slot_hex, 0x00 };
+        if (!DF_SEND(auth1, 7, &rdata, &rlen)) goto auth_fail;
+        /* Expect 91 AF + encrypted RndB */
+        if (rlen < 2 || rdata[rlen-2] != 0x91 || rdata[rlen-1] != 0xAF) goto auth_fail;
+    }
+
+    /* -------- Step 4: Decrypt RndB, build Auth2 payload ------------------- */
+    if (algo == 2) {
+        /* AES-128: 16-byte RndB, 32-byte auth2 payload */
+        if (rlen < 18) goto auth_fail;           /* 16 encRndB + 91 AF */
+        uint8_t enc_rnd_b[16]; memcpy(enc_rnd_b, rdata, 16);
+        uint8_t rnd_b[16];
+        static const uint8_t zero16[16] = {0};
+        df_aes_cbc_decrypt(key, zero16, enc_rnd_b, rnd_b, 1);
+
+        uint8_t rnd_a[16]; df_rand_bytes(rnd_a, 16);
+        /* RndB' = rotate_left_8(RndB): shift one byte left */
+        uint8_t rnd_b_rot[16]; memcpy(rnd_b_rot, rnd_b+1, 15); rnd_b_rot[15] = rnd_b[0];
+
+        uint8_t plain[32]; memcpy(plain, rnd_a, 16); memcpy(plain+16, rnd_b_rot, 16);
+        uint8_t enc_both[32];
+        df_aes_cbc_encrypt(key, enc_rnd_b, plain, enc_both, 2);
+
+        uint8_t auth2[38] = { 0x90, 0xAF, 0x00, 0x00, 0x20 };
+        memcpy(&auth2[5], enc_both, 32); auth2[37] = 0x00;  /* Le */
+        if (!DF_SEND(auth2, 38, &rdata, &rlen)) goto auth_fail;
+        if (rlen < 18 || rdata[rlen-2] != 0x91 || rdata[rlen-1] != 0x00) goto auth_fail;
+
+        /* Verify encRndA': decrypt with IV = last 16 bytes of enc_both */
+        uint8_t dec_rnd_a[16];
+        df_aes_cbc_decrypt(key, &enc_both[16], rdata, dec_rnd_a, 1);
+        /* card returns rotate_left_8(RndA): compare */
+        uint8_t rnd_a_rot[16]; memcpy(rnd_a_rot, rnd_a+1, 15); rnd_a_rot[15] = rnd_a[0];
+        if (memcmp(dec_rnd_a, rnd_a_rot, 16) != 0) goto auth_fail;
+
+    } else {
+        /* DES / 2TDEA / 3K3DES: 8-byte blocks */
+        if (rlen < 10) goto auth_fail;           /* 8 encRndB + 91 AF */
+        uint8_t enc_rnd_b[8]; memcpy(enc_rnd_b, rdata, 8);
+        uint8_t rnd_b[8];
+        static const uint8_t zero8[8] = {0};
+        df_des_cbc_decrypt1(tdes_key, tdes_key_len, zero8, enc_rnd_b, rnd_b);
+
+        uint8_t rnd_a[8]; df_rand_bytes(rnd_a, 8);
+        uint8_t rnd_b_rot[8]; memcpy(rnd_b_rot, rnd_b+1, 7); rnd_b_rot[7] = rnd_b[0];
+
+        uint8_t plain[16]; memcpy(plain, rnd_a, 8); memcpy(plain+8, rnd_b_rot, 8);
+        uint8_t enc_both[16];
+        df_des_cbc_encrypt(tdes_key, tdes_key_len, enc_rnd_b, plain, enc_both, 2);
+
+        uint8_t auth2_full[22] = { 0x90, 0xAF, 0x00, 0x00, 0x10 };
+        memcpy(&auth2_full[5], enc_both, 16); auth2_full[21] = 0x00;
+        if (!DF_SEND(auth2_full, 22, &rdata, &rlen)) goto auth_fail;
+        if (rlen < 10 || rdata[rlen-2] != 0x91 || rdata[rlen-1] != 0x00) goto auth_fail;
+
+        /* Verify encRndA' */
+        uint8_t dec_rnd_a[8];
+        df_des_cbc_decrypt1(tdes_key, tdes_key_len, &enc_both[8], rdata, dec_rnd_a);
+        uint8_t rnd_a_rot[8]; memcpy(rnd_a_rot, rnd_a+1, 7); rnd_a_rot[7] = rnd_a[0];
+        if (memcmp(dec_rnd_a, rnd_a_rot, 8) != 0) goto auth_fail;
+    }
+
+    result_byte = 1;  /* authenticated */
+
+auth_fail:
+#undef DF_SEND
+    pcd_14a_reader_timeout_set(DEF_COM_TIMEOUT);
+    return data_frame_make(cmd, STATUS_HF_TAG_OK, 1, &result_byte);
+}
+
 static data_frame_tx_t *cmd_processor_hf14a_4_debug_counters(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t buf[4];
     nfc_tag_14a_4_get_debug_counters(&buf[0], &buf[1], &buf[2], &buf[3]);
@@ -3083,6 +3585,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_HF14A_4_STATIC_RESP,            NULL,                        cmd_processor_hf14a_4_static_resp,           NULL                   },
     {    DATA_CMD_HF14A_4_READER_APDU,            before_hf_reader_run,        cmd_processor_hf14a_4_reader_apdu,           NULL                   },
     {    DATA_CMD_HF14A_4_EMV_SCAN,               before_hf_reader_run,        cmd_processor_hf14a_4_emv_scan,              NULL                   },
+    {    DATA_CMD_HF14A_4_DESFIRE_AUTH_CHECK,     before_hf_reader_run,        cmd_processor_hf14a_4_desfire_auth_check,    NULL                   },
     {    6010,                                     NULL,                        cmd_processor_hf14a_4_debug_counters,        NULL                   },
     /* HF14A scan keeping field alive */
     {    DATA_CMD_HF14A_SCAN_KEEP,                before_hf_reader_run,        cmd_processor_hf14a_scan_keep,               NULL                   },

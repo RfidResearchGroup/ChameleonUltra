@@ -329,6 +329,47 @@ class ChameleonCMD:
         resp = self.device.send_cmd_sync(Command.HF14A_4_EMV_SCAN, b'', timeout=10)
         return resp
 
+    def hf14a_4_desfire_auth_check(self, algo: int, key_no: int,
+                                    aid: bytes, key: bytes,
+                                    skip_scan: bool = False):
+        """
+        DESFire mutual authentication check in a single firmware call.
+
+        The firmware performs the complete sequence (optional field cycle +
+        RATS, SelectApplication, Authenticate step1, Authenticate step2)
+        without returning to the host between APDUs.
+
+        :param algo:      0=DES  1=2TDEA  2=AES-128  3=3K3DES
+        :param key_no:    Key slot number (0-13)
+        :param aid:       3-byte AID (bytes)
+        :param key:       Key bytes (8 / 16 / 24 bytes depending on algo)
+        :param skip_scan: If True, skip field cycle + RATS (card already active).
+                          Safe to set for subsequent attempts on the same AID.
+        :return: response object; resp.data[0] == 1 means authenticated.
+                 STATUS_HF_TAG_OK with data[0]==0 means wrong key.
+                 STATUS_HF_TAG_NO means no card present.
+        """
+        if len(aid) != 3:
+            raise ValueError(f"AID must be 3 bytes, got {len(aid)}")
+        expected = {0: 8, 1: 16, 2: 16, 3: 24}.get(algo)
+        if expected is None:
+            raise ValueError(f"Unknown algo {algo}")
+        if len(key) != expected:
+            raise ValueError(f"algo={algo} requires {expected}-byte key, got {len(key)}")
+        payload = bytes([algo & 0xFF,
+                         key_no & 0xFF,
+                         0x01 if skip_scan else 0x00]) + aid + key
+        return self.device.send_cmd_sync(
+            Command.HF14A_4_DESFIRE_AUTH_CHECK, payload, timeout=5)
+
+    def hf14a_set_field_off(self):
+        """Turn off the HF reader RF field."""
+        return self.device.send_cmd_sync(Command.HF14A_SET_FIELD_OFF, b'', timeout=2)
+
+    def hf14a_set_field_on(self):
+        """Turn on the HF reader RF field."""
+        return self.device.send_cmd_sync(Command.HF14A_SET_FIELD_ON, b'', timeout=2)
+
     def hf14a_4_clear_static_responses(self):
         """Clear all static APDU responses from the active HF14A_4 slot."""
         return self.device.send_cmd_sync(Command.HF14A_4_STATIC_RESP, b'\x00')
