@@ -10323,53 +10323,33 @@ class HfDesChk(ReaderRequiredUnit):
 
         return des_keys, aes_keys, tdea3_keys
 
-    def _try_key(self, aid_label, key_no, key, algo):
+    def _try_key(self, aid_label: str, key_no: int, key: bytes, algo: str,
+                 skip_scan: bool = False) -> bool:
         """
-        Try one key against a DESFire AID+keyno.
+        Try one key against a DESFire AID+keyno using the single-call firmware
+        command (DATA_CMD_HF14A_4_DESFIRE_AUTH_CHECK).
 
-        A failed authentication leaves the DESFire session in an aborted state.
-        We must reset it before the next attempt by issuing SelectApplication(000000)
-        (which selects the PICC master app and clears any partial auth state).
-        If that APDU itself fails (e.g. card went away), fall back to a full
-        ISO14443-A re-select so the RF field / T=CL layer is re-established.
+        The firmware handles the complete sequence — optional field cycle +
+        RATS, SelectApplication, Authenticate steps 1 & 2 — in one round trip,
+        eliminating 3 of the 4 BLE/USB round trips needed by the old approach.
+
+        skip_scan=True skips the field cycle and RATS; safe for every attempt
+        after the first on a given AID (card stays in T=CL active state).
         """
-        # --- Reset DESFire session state ---
+        from chameleon_enum import Status
+        aid_bytes = bytes.fromhex(aid_label)
+        algo_code = (0 if len(key) == 8 else 1) if algo == 'DES' else \
+                    (2                          if algo == 'AES' else 3)
         try:
-            _desfire_select_app(self.cmd, bytes([0x00, 0x00, 0x00]))
-        except Exception:
-            # SelectApp(000000) failed — card may have dropped; do a full re-select
-            try:
-                _des_select(self.cmd)
-            except Exception:
+            resp = self.cmd.hf14a_4_desfire_auth_check(
+                algo_code, key_no, aid_bytes, key, skip_scan)
+            if resp.status not in (Status.SUCCESS, Status.HF_TAG_OK):
                 return False
-
-        # Select the target application (skip for PICC master 000000)
-        if aid_label != "000000":
-            aid_bytes = bytes.fromhex(aid_label)
-            try:
-                if not _desfire_select_app(self.cmd, aid_bytes):
-                    return False
-            except Exception:
-                return False
-
-        try:
-            if algo == 'DES':
-                return _desfire_auth_des(self.cmd, key, key_no)
-            elif algo == 'AES':
-                return _desfire_auth_aes(self.cmd, key, key_no)
-            else:  # 3K3DES
-                return _desfire_auth_3k3des(self.cmd, key, key_no)
+            return bool(resp.data) and resp.data[0] == 0x01
         except Exception:
             return False
 
     def on_exec(self, args: argparse.Namespace):
-        try:
-            from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-            from cryptography.hazmat.backends import default_backend
-        except ImportError:
-            print(f" {CR}[!] 'cryptography' library required: pip install cryptography{C0}")
-            return
-
         try:
             des_keys, aes_keys, tdea3_keys = self._build_key_lists(args)
         except Exception as e:
@@ -10415,10 +10395,14 @@ class HfDesChk(ReaderRequiredUnit):
         for aid in aid_list:
             print(f" Checking AID {CY}{aid}{C0}  key#{key_no} ...")
             aid_found = False
+            # First attempt per AID does a full field cycle + RATS inside the
+            # firmware; subsequent attempts reuse the active T=CL session.
+            skip = False
 
             for key in des_keys:
                 checked += 1
-                ok = self._try_key(aid, key_no, key, 'DES')
+                ok = self._try_key(aid, key_no, key, 'DES', skip_scan=skip)
+                skip = True
                 if ok:
                     msg = f"  {CG}[+] AID {aid}  DES/2TDEA  key#{key_no}  key: {key.hex().upper()}{C0}"
                     print(msg)
@@ -10431,7 +10415,8 @@ class HfDesChk(ReaderRequiredUnit):
             if not aid_found:
                 for key in aes_keys:
                     checked += 1
-                    ok = self._try_key(aid, key_no, key, 'AES')
+                    ok = self._try_key(aid, key_no, key, 'AES', skip_scan=skip)
+                    skip = True
                     if ok:
                         msg = f"  {CG}[+] AID {aid}  AES-128    key#{key_no}  key: {key.hex().upper()}{C0}"
                         print(msg)
@@ -10444,7 +10429,8 @@ class HfDesChk(ReaderRequiredUnit):
             if not aid_found:
                 for key in tdea3_keys:
                     checked += 1
-                    ok = self._try_key(aid, key_no, key, '3K3DES')
+                    ok = self._try_key(aid, key_no, key, '3K3DES', skip_scan=skip)
+                    skip = True
                     if ok:
                         msg = f"  {CG}[+] AID {aid}  3K3DES     key#{key_no}  key: {key.hex().upper()}{C0}"
                         print(msg)
