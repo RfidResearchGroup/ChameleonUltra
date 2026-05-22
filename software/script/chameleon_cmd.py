@@ -68,6 +68,23 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
+    def get_bootloader_version(self):
+        """Get bootloader version (read from DFU settings flash page)"""
+        resp = self.device.send_cmd_sync(Command.GET_BOOTLOADER_VERSION)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = struct.unpack('!BB', resp.data)   # (major, minor)
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def get_free_memory(self):
+        """Get heap memory usage (free / total bytes)"""
+        resp = self.device.send_cmd_sync(Command.GET_FREE_MEMORY)
+        if resp.status == Status.SUCCESS:
+            free_bytes, total_bytes = struct.unpack('!II', resp.data)
+            resp.parsed = {'free': free_bytes, 'total': total_bytes}
+        return resp
+
+    @expect_response(Status.SUCCESS)
     def get_device_mode(self):
         resp = self.device.send_cmd_sync(Command.GET_DEVICE_MODE)
         if resp.status == Status.SUCCESS:
@@ -76,8 +93,7 @@ class ChameleonCMD:
 
     def is_device_reader_mode(self) -> bool:
         """
-            Get device mode, reader or tag.
-
+        Get device mode, reader or tag.
         :return: True is reader mode, else tag mode
         """
         return self.get_device_mode()
