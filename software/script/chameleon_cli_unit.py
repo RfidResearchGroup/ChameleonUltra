@@ -1107,7 +1107,35 @@ class HWVersion(DeviceRequiredUnit):
         model = ["Ultra", "Lite"][self.cmd.get_device_model()]
         print(f" - Chameleon {model}, Version: {fw_version} ({git_version})")
 
+@hw.command("blver")
+class HWBootloaderVersion(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Get bootloader version"
+        return parser
 
+    def on_exec(self, args: argparse.Namespace):
+        major, minor = self.cmd.get_bootloader_version()
+        print(f" - Bootloader Version: v{major}.{minor}")
+
+
+@hw.command("freemem")
+class HWFreeMemory(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Get device heap memory usage"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        mem = self.cmd.get_free_memory()
+        free  = mem['free']
+        total = mem['total']
+        used  = total - free
+        pct   = (used / total * 100.0) if total > 0 else 0.0
+        print(f" - Heap free  : {free:,} bytes")
+        print(f" - Heap used  : {used:,} bytes")
+        print(f" - Heap total : {total:,} bytes  ({pct:.1f}% used)")
+        
 @hf_14a.command("config")
 class HF14AConfig(DeviceRequiredUnit):
     class Config(Enum):
