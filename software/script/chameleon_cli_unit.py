@@ -1115,9 +1115,11 @@ class HWBootloaderVersion(DeviceRequiredUnit):
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        major, minor = self.cmd.get_bootloader_version()
-        print(f" - Bootloader Version: v{major}.{minor}")
-
+        try:
+            major, minor = self.cmd.get_bootloader_version()
+            print(f" - Bootloader Version: v{major}.{minor}")
+        except chameleon_com.CMDInvalidException:
+            print(" - Bootloader version not supported by current firmware, please update")
 
 @hw.command("freemem")
 class HWFreeMemory(DeviceRequiredUnit):
@@ -1127,14 +1129,17 @@ class HWFreeMemory(DeviceRequiredUnit):
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        mem = self.cmd.get_free_memory()
-        free  = mem['free']
-        total = mem['total']
-        used  = total - free
-        pct   = (used / total * 100.0) if total > 0 else 0.0
-        print(f" - Heap free  : {free:,} bytes")
-        print(f" - Heap used  : {used:,} bytes")
-        print(f" - Heap total : {total:,} bytes  ({pct:.1f}% used)")
+        try:
+            mem = self.cmd.get_free_memory()
+            free  = mem['free']
+            total = mem['total']
+            used  = total - free
+            pct   = (used / total * 100.0) if total > 0 else 0.0
+            print(f" - Heap free  : {free:,} bytes")
+            print(f" - Heap used  : {used:,} bytes")
+            print(f" - Heap total : {total:,} bytes  ({pct:.1f}% used)")
+        except chameleon_com.CMDInvalidException:
+            print(" - Free memory not supported by current firmware, please update")
         
 @hf_14a.command("config")
 class HF14AConfig(DeviceRequiredUnit):
