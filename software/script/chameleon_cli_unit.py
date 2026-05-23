@@ -24,6 +24,12 @@ import hardnested_utils
 
 import chameleon_com
 import chameleon_cmd
+from hf14a_sniff_io import (
+    write_cusn,
+    read_cusn,
+    parse_cusn_buffer,
+    write_pm3_trace,
+)
 from chameleon_utils import (
     ArgumentParserNoExit,
     ArgsParserError,
@@ -7664,6 +7670,12 @@ class HF14ASniff(BaseCLIUnit):
             '--timeout', type=int, default=5000, metavar='MS',
             help='Listen duration in milliseconds (default: 5000, max: 30000, firmware blocks for full duration)'
         )
+        parser.add_argument(
+            '--save', type=str, default=None, metavar='FILE',
+            help='Save capture to native .cusn file for later re-analysis '
+                 '(hf 14a sniff-load) or conversion to pm3 trace format '
+                 '(hf 14a sniff-export-pm3).'
+        )
         return parser
 
     def on_exec(self, args: argparse.Namespace):
@@ -7695,6 +7707,19 @@ class HF14ASniff(BaseCLIUnit):
         # Bit 15 of szBits: 0 = reader→card, 1 = card→reader (new firmware).
         # Old firmware always sends bit15=0; parser is backward compatible.
         buf = bytes(resp.data)
+
+        # If --save given, write the raw response buffer to a native file
+        # BEFORE parsing — that way even malformed captures can be recovered
+        # for later inspection.
+        if args.save:
+            try:
+                total = write_cusn(args.save, buf,
+                                   has_directions=True,
+                                   parity_stripped=False)
+                print(f" Saved    : {CG}{args.save}{C0} ({total} bytes, CUSN v1)")
+            except Exception as e:
+                print(f"{CR}Failed to save capture: {e}{C0}")
+
         frames = []  # (szBits, data, is_tx)
         i = 0
         while i + 2 <= len(buf):
@@ -7797,6 +7822,166 @@ class HF14ASniff(BaseCLIUnit):
         # Summary block (pass only reader→card frames for protocol decode)
         print()
         _print_14a_sniff_summary(frames)  # full frames needed for nonce extraction
+
+
+@hf_14a.command('sniff-load')
+class HF14ASniffLoad(BaseCLIUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            'Re-analyze a previously saved hf 14a sniff capture (CUSN format). '
+            'Produces the same decoded display as a live sniff, but offline — '
+            'no device required.'
+        )
+        parser.add_argument(
+            '-i', '--input', type=str, required=True, metavar='FILE',
+            help='Path to .cusn file saved with hf 14a sniff --save'
+        )
+        return parser
+
+    def before_exec(self, args: argparse.Namespace):
+        # Offline operation — no device needed.
+        return True
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            buf, has_dir, _ = read_cusn(args.input)
+        except Exception as e:
+            print(f"{CR}Failed to load: {e}{C0}")
+            return
+
+        frames = parse_cusn_buffer(buf, has_directions=has_dir)
+        if not frames:
+            print(f"{CR}No frames decoded from file{C0}")
+            return
+
+        rx_count = sum(1 for _, _, tx in frames if not tx)
+        tx_count = sum(1 for _, _, tx in frames if tx)
+        print(f" Loaded   : {CG}{len(frames)}{C0} frame(s) from {args.input}")
+        if has_dir and tx_count > 0:
+            print(f"            ({CY}{rx_count}{C0} reader→card  "
+                  f"{CG}{tx_count}{C0} card→reader)")
+        elif not has_dir:
+            print(f"{CY}            (capture has no direction info — "
+                  f"all frames shown as reader→card){C0}")
+        print()
+
+        print(f"  {'#':>3}  {'dir':<3}  {'bits':>4}  {'hex data':<42}  decoded")
+        print(f"  {'---':>3}  {'---':<3}  {'----':>4}  {'-'*42}  {'-'*35}")
+
+        # Same MIFARE Classic auth-decode context tracking as live sniff
+        expect_nt = False
+        expect_nr_ar = False
+        last_auth_keytype = None
+        last_auth_block = None
+
+        for n, (szBits, data, is_tx) in enumerate(frames):
+            hex_str = ' '.join(f'{b:02x}' for b in data)
+
+            decoded_ctx = None
+            col_ctx = None
+
+            if (not is_tx) and szBits == 32 and len(data) == 4 and data[0] in (0x60, 0x61):
+                last_auth_keytype = 'A' if data[0] == 0x60 else 'B'
+                last_auth_block = data[1]
+                expect_nt = True
+                expect_nr_ar = False
+                decoded_ctx = (f"MIFARE Classic AUTH Key{last_auth_keytype} "
+                               f"block=0x{last_auth_block:02X} ({last_auth_block})")
+                col_ctx = CG
+
+            elif is_tx and expect_nt and szBits == 32 and len(data) == 4:
+                nt = data.hex()
+                decoded_ctx = f"AUTH: NT (card nonce) = {nt}"
+                col_ctx = CG
+                expect_nt = False
+                expect_nr_ar = True
+
+            elif (not is_tx) and expect_nr_ar and szBits == 64 and len(data) == 8:
+                nr = data[:4].hex()
+                ar = data[4:].hex()
+                decoded_ctx = f"AUTH continuation: NR||AR (enc)  NR={nr}  AR={ar}"
+                col_ctx = CG
+                expect_nr_ar = False
+
+            decoded, col = _decode_14a_frame_col(data, szBits)
+            if decoded_ctx is not None:
+                decoded, col = decoded_ctx, col_ctx
+
+            dir_str = f'{CG}<<<{C0}' if is_tx else f'{CY}>>>{C0}'
+            print(f"  {CY}{n+1:>3}{C0}  {dir_str}  {szBits:>4}  "
+                  f"{hex_str:<42}  {col}{decoded}{C0}")
+
+        print()
+        _print_14a_sniff_summary(frames)
+
+
+@hf_14a.command('sniff-export-pm3')
+class HF14ASniffExportPm3(BaseCLIUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            'Convert a saved CUSN sniff capture to pm3 trace format for use '
+            'with Proxmark3 client: '
+            'pm3 --> trace load -f file.trace; hf 14a list. '
+            'Timestamps are synthesized — Chameleon sniff captures do not '
+            'include per-frame timing.'
+        )
+        parser.add_argument(
+            '-i', '--input', type=str, required=True, metavar='FILE',
+            help='Input .cusn file (saved with hf 14a sniff --save)'
+        )
+        parser.add_argument(
+            '-o', '--output', type=str, required=True, metavar='FILE',
+            help='Output .trace file (pm3 trace load -f compatible)'
+        )
+        parser.add_argument(
+            '--magic', type=str, default='PM3T', metavar='4CHARS',
+            help="Header magic (default 'PM3T' for Iceman fork). "
+                 "Set to 'NONE' to omit magic — some pm3 versions auto-detect."
+        )
+        return parser
+
+    def before_exec(self, args: argparse.Namespace):
+        return True
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            buf, has_dir, _ = read_cusn(args.input)
+        except Exception as e:
+            print(f"{CR}Failed to read input: {e}{C0}")
+            return
+
+        frames = parse_cusn_buffer(buf, has_directions=has_dir)
+        if not frames:
+            print(f"{CR}No frames in capture{C0}")
+            return
+
+        if args.magic.upper() == 'NONE':
+            magic = b''
+        else:
+            magic = args.magic.encode('ascii')
+            if len(magic) != 4:
+                print(f"{CR}--magic must be exactly 4 chars (or NONE){C0}")
+                return
+
+        try:
+            total = write_pm3_trace(args.output, frames, magic=magic)
+        except Exception as e:
+            print(f"{CR}Failed to write pm3 trace: {e}{C0}")
+            return
+
+        print(f" Converted: {CG}{len(frames)}{C0} frame(s) → "
+              f"{CG}{args.output}{C0} ({total} bytes)")
+        if magic:
+            print(f" Magic    : {magic!r}")
+        else:
+            print(f" Magic    : (none)")
+        print(f"{CY} Note     : timestamps are synthesized "
+              f"(Chameleon sniff has no real timing data){C0}")
+        print(f" Load in pm3:")
+        print(f"   trace load -f {args.output}")
+        print(f"   hf 14a list")
 
 
 @hf_14a.command("auth-trace")
