@@ -5,6 +5,10 @@ configure the device once over USB/BLE, walk away with the device, run
 captures or workflows using the two physical buttons, then come back and
 pull the results.
 
+arm        → "I'm starting a session"      (one gesture per session)
+trigger    → "capture now"                  (many gestures per session)
+disarm     → "I'm done, back to normal"    (one gesture per session)
+
 This guide walks through bench-testing the feature end-to-end. It assumes
 you have a ChameleonUltra (not Lite — the only mode that does anything
 useful, AuthTrace, needs reader hardware) and that you've built and flashed
