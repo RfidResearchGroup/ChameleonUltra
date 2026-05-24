@@ -144,21 +144,29 @@ static void buffer_reset(void) {
 
 /* -------------------------------------------------------------------------
  * Reader-mode lifecycle
+ *
+ * We use the SAME pattern as the standard before_hf_reader_run /
+ * after_hf_reader_run hooks: antenna is powered ONLY during an actual
+ * capture session, never while idle in ARMED state. Sustained reader
+ * mode with antenna on causes unexplained device resets - BLE/USB/power
+ * management code assumes reader mode is transient.
  * ------------------------------------------------------------------------- */
 
 static bool acquire_reader_mode(void) {
     if (get_device_mode() != DEVICE_MODE_READER) {
         reader_mode_enter();
     }
-    pcd_14a_reader_reset();
-    pcd_14a_reader_antenna_on();
-    /* same 8ms PICC power-on delay as before_hf_reader_run() */
-    bsp_delay_ms(8);
+    /* Antenna stays OFF here - run_session() powers it for the duration
+     * of one capture and turns it off again on the way out. */
     return get_device_mode() == DEVICE_MODE_READER;
 }
 
 static void release_reader_mode(void) {
+    /* Ensure antenna is off (defensive - run_session should have done
+     * it already) and step back to tag-emulation mode so the device
+     * returns to its normal idle posture after disarming. */
     pcd_14a_reader_antenna_off();
+    tag_mode_enter();
 }
 
 /* -------------------------------------------------------------------------
@@ -174,11 +182,11 @@ static standalone_rc_t run_session(void) {
 
     standalone_feedback(SL_FB_BUSY_START);
 
-    /* Reset the field briefly so subsequent triggers don't see a
-     * still-authenticated card. Cheap (~16ms total) and matches what
-     * before_hf_reader_run does at the start of each CMD 2017 invocation. */
-    pcd_14a_reader_antenna_off();
-    bsp_delay_ms(8);
+    /* Power antenna for this session only (off both before and after,
+     * so we never leave the field on while idle - see commentary above
+     * acquire_reader_mode). Same shape as before_hf_reader_run +
+     * after_hf_reader_run on a normal CMD 2017 invocation. */
+    pcd_14a_reader_reset();
     pcd_14a_reader_antenna_on();
     bsp_delay_ms(8);
 
@@ -189,6 +197,8 @@ static standalone_rc_t run_session(void) {
 
     uint16_t trace_len = 0;
     const uint8_t *trace = hf14a_auth_trace_get_buf(&trace_len);
+
+    pcd_14a_reader_antenna_off();   /* mandatory - mirror after_hf_reader_run */
 
     bool stored = append_session(status, trace, trace_len);
     if (!stored) {

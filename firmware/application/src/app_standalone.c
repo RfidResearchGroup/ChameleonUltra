@@ -113,7 +113,7 @@ static const standalone_mode_iface_t *active_mode(void) {
  * ------------------------------------------------------------------------- */
 
 static standalone_rc_t persist_state_save(void) {
-    standalone_persist_t rec = {
+    standalone_persist_t rec __attribute__((aligned(4))) = {
         .version  = STANDALONE_PERSIST_VERSION,
         .mode     = (uint8_t)m_ctx.mode,
         .flags    = m_ctx.flags,
@@ -146,14 +146,24 @@ static void persist_state_load(void) {
     m_ctx.flags = rec.flags;
 }
 
+/* FDS write staging buffer for config records. Living in .bss guarantees
+ * 4-byte alignment by the linker (uint32_t backing storage). Stack-local
+ * arrays with __attribute__((aligned(4))) *should* work too but we hit a
+ * runtime crash with that approach on first-time SET_CONFIG; the static
+ * buffer matches the settings.c pattern that is known to work. */
+static uint32_t m_cfg_save_buf[(STANDALONE_CONFIG_MAX_BYTES + 3) / 4];
+
 static standalone_rc_t persist_config_save(standalone_mode_t mode,
                                            const uint8_t *cfg, size_t len) {
     if (len > STANDALONE_CONFIG_MAX_BYTES) return STANDALONE_RC_INVALID_CFG;
     if (len == 0) return STANDALONE_RC_OK;   /* nothing to write */
 
+    memset(m_cfg_save_buf, 0, sizeof(m_cfg_save_buf));
+    memcpy(m_cfg_save_buf, cfg, len);
+
     bool ok = fds_write_sync(FDS_STANDALONE_FILE_ID,
                              FDS_KEY_STANDALONE_CONFIG_BASE + (uint16_t)mode,
-                             (uint16_t)len, (void *)cfg);
+                             (uint16_t)len, m_cfg_save_buf);
     if (!ok) {
         NRF_LOG_WARNING("standalone: fds_write_sync(cfg %u) failed", mode);
         return STANDALONE_RC_INTERNAL;

@@ -134,6 +134,14 @@ data_frame_tx_t *cmd_handler_standalone_set_config(uint16_t cmd, uint16_t status
     const uint8_t    *cfg     = (length > 1) ? &data[1] : NULL;
     size_t            cfg_len = length - 1;
 
+    /* Sanity-check length before handing off to FDS - a cfg blob larger
+     * than our staging buffer would just trip persist_config_save's
+     * STANDALONE_RC_INVALID_CFG check, but bouncing it here keeps the
+     * status code accurate (PAR_ERR vs INTERNAL). */
+    if (cfg_len > 64 /* STANDALONE_CONFIG_MAX_BYTES */) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
     standalone_rc_t rc = app_standalone_set_config(mode, cfg, cfg_len);
     return data_frame_make(cmd, rc_to_status(rc), 0, NULL);
 }

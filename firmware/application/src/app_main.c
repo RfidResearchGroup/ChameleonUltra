@@ -232,12 +232,6 @@ static void timer_button_event_handle(void *arg) {
                 m_last_btn_press = app_timer_cnt_get();
             }
         }
-        /* Chord detection: both buttons currently held -> arm a chord. */
-        if (m_is_a_btn_press && m_is_b_btn_press && !m_chord_active) {
-            m_chord_active = true;
-            m_chord_start  = app_timer_cnt_get();
-            NRF_LOG_INFO("CHORD_START");
-        }
     }
 
     if (nrf_gpio_pin_read(pin) == 0) {
@@ -271,6 +265,60 @@ static void timer_button_event_handle(void *arg) {
                 m_is_btn_long_press = is_long_press;
             }
         }
+    }
+
+    /* Chord-detection rescue path.
+     *
+     * The GPIOTE driver shares a single debounce timer between both buttons,
+     * and every press/release event restarts it. When both buttons change
+     * state within the 50ms debounce window, the first event's pending timer
+     * is overwritten by the second, so only the second pin gets its press/
+     * release flag updated by the per-pin code above. That leaves the chord-
+     * detect condition (both press flags simultaneously true) impossible to
+     * reach for fast simultaneous chords.
+     *
+     * To recover, after the per-pin handling, sample the OTHER button's
+     * level directly. If it's currently held but our flag says released
+     * (or vice-versa), synthesize the missing transition so both flags
+     * always reflect actual hardware state. The button enable/disable
+     * settings are still respected.
+     *
+     * This path only kicks in when the two buttons race; single-button use
+     * is unaffected. */
+    nrf_drv_gpiote_pin_t other = (pin == BUTTON_1) ? BUTTON_2 : BUTTON_1;
+    bool other_high = (nrf_gpio_pin_read(other) == 1);
+
+    if (other == BUTTON_1) {
+        bool enabled = settings_get_button_press_config('b') != SettingsButtonDisable;
+        if (enabled) {
+            if (other_high && !m_is_b_btn_press) {
+                m_is_b_btn_press = true;
+                NRF_LOG_INFO("BUTTON_B_PRESS_SYNTH");
+            } else if (!other_high && m_is_b_btn_press) {
+                m_is_b_btn_release = true;
+                m_is_b_btn_press   = false;
+                NRF_LOG_INFO("BUTTON_B_RELEASE_SYNTH");
+            }
+        }
+    } else {  /* other == BUTTON_2 */
+        bool enabled = settings_get_button_press_config('a') != SettingsButtonDisable;
+        if (enabled) {
+            if (other_high && !m_is_a_btn_press) {
+                m_is_a_btn_press = true;
+                NRF_LOG_INFO("BUTTON_A_PRESS_SYNTH");
+            } else if (!other_high && m_is_a_btn_press) {
+                m_is_a_btn_release = true;
+                m_is_a_btn_press   = false;
+                NRF_LOG_INFO("BUTTON_A_RELEASE_SYNTH");
+            }
+        }
+    }
+
+    /* Chord detection: both buttons currently held -> arm a chord. */
+    if (m_is_a_btn_press && m_is_b_btn_press && !m_chord_active) {
+        m_chord_active = true;
+        m_chord_start  = app_timer_cnt_get();
+        NRF_LOG_INFO("CHORD_START");
     }
 }
 
