@@ -522,7 +522,7 @@ class ChameleonCMD:
                 i += 14
         return resp
 
-    def hf14a_sniff(self, timeout_ms: int = 5000):
+    def hf14a_trace(self, timeout_ms: int = 5000):
         """
         Capture ISO14443A reader frames while CU acts as a tag emulator.
 
@@ -546,7 +546,7 @@ class ChameleonCMD:
         The firmware polls for a tag in the field for up to `timeout_ms`
         milliseconds, then performs anticoll + SELECT + (optional RATS) +
         AUTH and packs all frames — synthesized anticoll plus the live
-        AUTH/NT/NR||AR/AT — into the same buffer format used by hf14a_sniff:
+        AUTH/NT/NR||AR/AT — into the same buffer format used by hf14a_trace:
           [2 bytes: bit count, big-endian] [N bytes: frame data, ceil(bits/8)] ...
         Bit 15 of the bit-count header: 0 = reader→card, 1 = card→reader.
 

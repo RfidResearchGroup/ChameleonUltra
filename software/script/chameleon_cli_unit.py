@@ -24,7 +24,7 @@ import hardnested_utils
 
 import chameleon_com
 import chameleon_cmd
-from hf14a_sniff_io import (
+from hf14a_trace_io import (
     write_cusn,
     read_cusn,
     parse_cusn_buffer,
@@ -7657,8 +7657,8 @@ class LFSniff(ReaderRequiredUnit):
 
 
 @hf_14a.command("info")
-@hf_14a.command('sniff')
-class HF14ASniff(BaseCLIUnit):
+@hf_14a.command('trace')
+class HF14ATrace(BaseCLIUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = (
@@ -7673,8 +7673,8 @@ class HF14ASniff(BaseCLIUnit):
         parser.add_argument(
             '--save', type=str, default=None, metavar='FILE',
             help='Save capture to native .cusn file for later re-analysis '
-                 '(hf 14a sniff-load) or conversion to pm3 trace format '
-                 '(hf 14a sniff-export-pm3).'
+                 '(hf 14a trace-load) or conversion to pm3 trace format '
+                 '(hf 14a trace-export-pm3).'
         )
         return parser
 
@@ -7685,10 +7685,10 @@ class HF14ASniff(BaseCLIUnit):
         print()
 
         try:
-            resp = self.cmd.hf14a_sniff(timeout_ms=timeout)
+            resp = self.cmd.hf14a_trace(timeout_ms=timeout)
         except Exception as e:
             if 'CMDInvalid' in type(e).__name__ or '2020' in str(e):
-                print(f"{CR}Command not supported — reflash firmware to enable hf 14a sniff{C0}")
+                print(f"{CR}Command not supported — reflash firmware to enable hf 14a trace{C0}")
             else:
                 print(f"{CR}{e}{C0}")
             return
@@ -7821,21 +7821,21 @@ class HF14ASniff(BaseCLIUnit):
 
         # Summary block (pass only reader→card frames for protocol decode)
         print()
-        _print_14a_sniff_summary(frames)  # full frames needed for nonce extraction
+        _print_14a_trace_summary(frames)  # full frames needed for nonce extraction
 
 
-@hf_14a.command('sniff-load')
-class HF14ASniffLoad(BaseCLIUnit):
+@hf_14a.command('trace-load')
+class HF14ATraceLoad(BaseCLIUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = (
-            'Re-analyze a previously saved hf 14a sniff capture (CUSN format). '
+            'Re-analyze a previously saved hf 14a trace capture (CUSN format). '
             'Produces the same decoded display as a live sniff, but offline — '
             'no device required.'
         )
         parser.add_argument(
             '-i', '--input', type=str, required=True, metavar='FILE',
-            help='Path to .cusn file saved with hf 14a sniff --save'
+            help='Path to .cusn file saved with hf 14a trace --save'
         )
         return parser
 
@@ -7913,11 +7913,11 @@ class HF14ASniffLoad(BaseCLIUnit):
                   f"{hex_str:<42}  {col}{decoded}{C0}")
 
         print()
-        _print_14a_sniff_summary(frames)
+        _print_14a_trace_summary(frames)
 
 
-@hf_14a.command('sniff-export-pm3')
-class HF14ASniffExportPm3(BaseCLIUnit):
+@hf_14a.command('trace-export-pm3')
+class HF14ATraceExportPm3(BaseCLIUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = (
@@ -7929,7 +7929,7 @@ class HF14ASniffExportPm3(BaseCLIUnit):
         )
         parser.add_argument(
             '-i', '--input', type=str, required=True, metavar='FILE',
-            help='Input .cusn file (saved with hf 14a sniff --save)'
+            help='Input .cusn file (saved with hf 14a trace --save)'
         )
         parser.add_argument(
             '-o', '--output', type=str, required=True, metavar='FILE',
@@ -8057,7 +8057,7 @@ examples:
             print(f"{CR} No frames returned (status={Status(resp.status).name}){C0}")
             return
 
-        # Parse packed frame buffer — same format as hf 14a sniff.
+        # Parse packed frame buffer — same format as hf 14a trace.
         # [bits_be16][data...]; bit15 of bits = direction (1 = card→reader).
         buf = bytes(resp.data)
         frames = []  # (szBits, data, is_tx)
@@ -8267,7 +8267,7 @@ def _decode_14a_frame_col(data: bytes, szBits: int):
     b0 = data[0]
 
     # ---------------------------------------------------------------------
-    # ISO14443-A "reply" frames that often show as "unknown" in hf 14a sniff
+    # ISO14443-A "reply" frames that often show as "unknown" in hf 14a trace
     # because the sniffer doesn't know if a frame is reader->card or card->reader.
     # We infer by payload length/bits and known structures.
     # ---------------------------------------------------------------------
@@ -8537,7 +8537,7 @@ def _extract_sniff_nonces(frames):
     return nonces
 
 
-def _print_14a_sniff_summary(frames):
+def _print_14a_trace_summary(frames):
     """Print a decoded summary of the sniff session."""
     uid_cl1 = None
     uid_cl2 = None
