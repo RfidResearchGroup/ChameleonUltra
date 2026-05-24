@@ -13,6 +13,11 @@ SRC_FILES += \
   $(PROJ_DIR)/ble_main.c \
   $(PROJ_DIR)/rfid_main.c \
   $(PROJ_DIR)/settings.c \
+  $(PROJ_DIR)/app_standalone.c \
+  $(PROJ_DIR)/app_cmd_standalone.c \
+  $(PROJ_DIR)/standalone_led.c \
+  $(PROJ_DIR)/standalone_modes/mode_authtrace.c \
+  $(PROJ_DIR)/standalone_modes/mode_slot_cycle.c \
   $(PROJ_DIR)/usb_main.c \
   $(PROJ_DIR)/rgb_marquee.c \
   $(PROJ_DIR)/bsp/bsp_delay.c \

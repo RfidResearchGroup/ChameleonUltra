@@ -1776,6 +1776,120 @@ class ChameleonCMD:
         data = struct.pack('!B', enabled)
         return self.device.send_cmd_sync(Command.MF1_SET_FIELD_OFF_DO_RESET, data)
 
+    # ===================================================================
+    # Standalone (host-less) modes subsystem
+    # ===================================================================
+
+    def standalone_get_mode(self):
+        """Read the current standalone state, mode, and flags.
+
+        Response payload: {u8 state, u8 mode, u8 flags, u8 reserved}.
+        Returns tuple (state: StandaloneState, mode: StandaloneMode,
+                       flags: StandaloneFlag).
+        """
+        from chameleon_enum import StandaloneMode, StandaloneState, StandaloneFlag
+        resp = self.device.send_cmd_sync(Command.STANDALONE_GET_MODE, b'')
+        if resp.status != Status.SUCCESS or len(resp.data) < 4:
+            raise UnexpectedResponseError(
+                f"STANDALONE_GET_MODE failed: status={resp.status} "
+                f"data_len={len(resp.data) if resp.data else 0}"
+            )
+        state_v, mode_v, flags_v, _reserved = struct.unpack('<BBBB', resp.data[:4])
+        return (StandaloneState(state_v),
+                StandaloneMode(mode_v),
+                StandaloneFlag(flags_v))
+
+    def standalone_set_mode(self, mode, flags=0):
+        """Select a standalone mode (persisted to FDS).
+
+        Modes with destructive capabilities (AUTOCLONE, READ_REPLAY) require
+        StandaloneFlag.HOST_OPTED_IN in `flags` or the firmware returns
+        STATUS_PAR_ERR.
+
+        On success returns the same tuple as standalone_get_mode().
+        On error returns the raw response object so the caller can inspect
+        resp.status.
+        """
+        from chameleon_enum import StandaloneMode, StandaloneState, StandaloneFlag
+        payload = struct.pack('<BB', int(mode), int(flags))
+        resp = self.device.send_cmd_sync(Command.STANDALONE_SET_MODE, payload)
+        if resp.status != Status.SUCCESS:
+            return resp
+        state_v, mode_v, flags_v, _reserved = struct.unpack('<BBBB', resp.data[:4])
+        return (StandaloneState(state_v),
+                StandaloneMode(mode_v),
+                StandaloneFlag(flags_v))
+
+    def standalone_get_config(self, mode) -> bytes:
+        """Read the persisted config blob for a given mode.
+
+        Returns raw bytes; each mode defines its own format.
+        Empty bytes if no config has ever been written for this mode.
+        """
+        payload = struct.pack('<B', int(mode))
+        resp = self.device.send_cmd_sync(Command.STANDALONE_GET_CONFIG, payload)
+        if resp.status != Status.SUCCESS:
+            raise UnexpectedResponseError(
+                f"STANDALONE_GET_CONFIG failed: status={resp.status}"
+            )
+        # Response: { u8 mode, u8 cfg_len, u8[cfg_len] cfg }
+        if len(resp.data) < 2:
+            return b''
+        cfg_len = resp.data[1]
+        return bytes(resp.data[2:2 + cfg_len])
+
+    def standalone_set_config(self, mode, cfg: bytes):
+        """Persist a mode-specific config blob (max 64 bytes)."""
+        payload = struct.pack('<B', int(mode)) + bytes(cfg)
+        return self.device.send_cmd_sync(Command.STANDALONE_SET_CONFIG, payload)
+
+    def standalone_get_result(self):
+        """Pull one chunk of the active mode's result buffer.
+
+        The firmware tracks an internal read cursor; call repeatedly until
+        the returned chunk is empty. Use standalone_clear_result() to
+        reset the cursor and discard the underlying buffer.
+
+        Returns tuple (total_size: int, chunk: bytes).
+        """
+        resp = self.device.send_cmd_sync(Command.STANDALONE_GET_RESULT, b'',
+                                         timeout=5)
+        if resp.status != Status.SUCCESS:
+            raise UnexpectedResponseError(
+                f"STANDALONE_GET_RESULT failed: status={resp.status}"
+            )
+        if len(resp.data) < 4:
+            return (0, b'')
+        total_size = struct.unpack('<I', resp.data[:4])[0]
+        chunk      = bytes(resp.data[4:])
+        return (total_size, chunk)
+
+    def standalone_drain_result(self) -> bytes:
+        """Loop GET_RESULT until the chunk is empty; assemble full buffer."""
+        out = bytearray()
+        while True:
+            total_size, chunk = self.standalone_get_result()
+            if not chunk:
+                break
+            out.extend(chunk)
+            if total_size > 0 and len(out) >= total_size:
+                break
+        return bytes(out)
+
+    def standalone_clear_result(self):
+        """Discard the active mode's result buffer."""
+        return self.device.send_cmd_sync(Command.STANDALONE_CLEAR_RESULT, b'')
+
+    def standalone_trigger(self):
+        """Fire the active mode's primary action (equivalent to BOTH_SHORT).
+
+        If standalone is disarmed, this performs an implicit arm first.
+        Destructive modes still require HOST_OPTED_IN; otherwise returns
+        STATUS_PAR_ERR.
+        """
+        return self.device.send_cmd_sync(Command.STANDALONE_TRIGGER, b'',
+                                         timeout=10)
+
 
 def test_fn():
     # connect to chameleon

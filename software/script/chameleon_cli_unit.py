@@ -50,6 +50,7 @@ from chameleon_enum import (
     MfcValueBlockOperator,
 )
 from chameleon_enum import HIDFormat
+from chameleon_enum import StandaloneMode, StandaloneState, StandaloneFlag
 from crypto1 import Crypto1
 
 # NXP IDs based on https://www.nxp.com/docs/en/application-note/AN10833.pdf
@@ -867,6 +868,7 @@ lf_em = lf.subgroup("em", "EM commands")
 lf_em_4x05 = lf_em.subgroup("4x05", "EM4x05/EM4x69 commands")
 data = root.subgroup('data', 'Data analysis and visualization commands')
 emv = root.subgroup('emv', 'EMV contactless payment card commands')
+standalone = root.subgroup('standalone', 'Host-less standalone modes')
 
 
 lf_em_410x = lf_em.subgroup("410x", "EM410x commands")
@@ -10466,3 +10468,421 @@ class HfDesChk(ReaderRequiredUnit):
                 print(f"\n   {CG}{algo:8s}  AID {aid}  key#{kno}  {key_hex}{C0}")
         else:
             print(f"\n {CR}No keys found{C0}")
+
+# =============================================================================
+# Standalone (host-less) modes subsystem
+# =============================================================================
+
+
+# --- AuthTrace wire format ---------------------------------------------------
+# Result buffer is a stream of sessions:
+#   For each session:
+#     u8  session_num
+#     u8  status       (STATUS_HF_* from hf14a_auth_trace_run)
+#     u16 trace_len_le
+#     u8[trace_len] trace_bytes
+#
+# Inside trace_bytes, each frame is:
+#   u16 hdr_be        (bit 15 = direction: 1=card->reader, 0=reader->card,
+#                      bits 14..0 = frame length in BITS)
+#   u8[ceil(szBits/8)] frame_bytes
+# -----------------------------------------------------------------------------
+
+AUTHTRACE_STATUS_NAMES = {
+    0x00: "ok",
+    0x01: "no_tag",
+    0x02: "err_stat",
+    0x06: "auth_fail",
+    0x60: "par_err",
+    0x68: "success",
+}
+
+
+def parse_authtrace_frames(trace: bytes):
+    """Decode the inner frame stream of one session."""
+    frames = []
+    off = 0
+    while off + 2 <= len(trace):
+        hdr      = (trace[off] << 8) | trace[off + 1]
+        is_tx    = bool(hdr & 0x8000)
+        sz_bits  = hdr & 0x7FFF
+        sz_bytes = (sz_bits + 7) // 8
+        off += 2
+        if off + sz_bytes > len(trace):
+            break
+        frames.append({
+            "dir":  "tag->reader" if is_tx else "reader->tag",
+            "bits": sz_bits,
+            "data": trace[off:off + sz_bytes].hex(),
+        })
+        off += sz_bytes
+    return frames
+
+
+def parse_authtrace_buffer(raw: bytes):
+    """Walk the session stream."""
+    sessions = []
+    off = 0
+    while off + 4 <= len(raw):
+        session_num = raw[off]
+        status      = raw[off + 1]
+        trace_len   = raw[off + 2] | (raw[off + 3] << 8)
+        off += 4
+        if off + trace_len > len(raw):
+            break
+        trace_bytes = raw[off:off + trace_len]
+        off += trace_len
+        sessions.append({
+            "session_num": session_num,
+            "status_code": status,
+            "status_name": AUTHTRACE_STATUS_NAMES.get(status, f"0x{status:02x}"),
+            "trace_len":   trace_len,
+            "frames":      parse_authtrace_frames(trace_bytes),
+        })
+    return sessions
+
+
+def authtrace_summarise(sessions):
+    out = []
+    for s in sessions:
+        tx = sum(1 for f in s["frames"] if f["dir"] == "tag->reader")
+        rx = len(s["frames"]) - tx
+        out.append(
+            f"  #{s['session_num']:<3} {s['status_name']:<10} "
+            f"{len(s['frames']):>2} frames  ({rx} reader->tag, "
+            f"{tx} tag->reader, {s['trace_len']} bytes)"
+        )
+    return "\n".join(out)
+
+
+def authtrace_pretty_dump(sessions):
+    """Proxmark3-style per-frame dump."""
+    out = []
+    for s in sessions:
+        out.append(f"\n=== session #{s['session_num']}  "
+                   f"status={s['status_name']} ===")
+        for f in s["frames"]:
+            arrow = "<--" if f["dir"] == "tag->reader" else "-->"
+            out.append(f"  {arrow}  [{f['bits']:>3} bits]  {f['data']}")
+    return "\n".join(out)
+
+
+# --- Commands ----------------------------------------------------------------
+
+@standalone.command('status')
+class StandaloneStatus(DeviceRequiredUnit):
+    """
+    Show the current standalone state, mode, and flags.
+
+    Usage:
+        standalone status
+    """
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Show standalone subsystem state'
+        return parser
+
+    def on_exec(self, args):
+        state, mode, flags = self.cmd.standalone_get_mode()
+        state_col = CG if state != StandaloneState.DISARMED else CY
+        print(f" state: {color_string((state_col, state.name))}")
+        print(f"  mode: {color_string((CC, mode.name))}")
+        flag_str = ", ".join(f.name for f in StandaloneFlag
+                             if f != StandaloneFlag.NONE and (flags & f)) \
+                   or "(none)"
+        print(f" flags: {flag_str}")
+
+
+@standalone.command('set-mode')
+class StandaloneSetMode(DeviceRequiredUnit):
+    """
+    Select the active standalone mode.
+
+    Examples:
+        standalone set-mode authtrace
+        standalone set-mode slot-cycle
+        standalone set-mode autoclone --opt-in
+        standalone set-mode disabled       (returns to normal button config)
+    """
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Set standalone mode'
+        parser.add_argument('mode', help='mode name (authtrace, slot-cycle, '
+                                         'autoclone, read-replay, dict-check, '
+                                         'disabled)')
+        parser.add_argument('--opt-in', action='store_true',
+                            help='set HOST_OPTED_IN flag (required for '
+                                 'autoclone and read-replay)')
+        parser.add_argument('--quiet-buzzer', action='store_true')
+        parser.add_argument('--quiet-led',    action='store_true')
+        return parser
+
+    def on_exec(self, args):
+        try:
+            mode = StandaloneMode.from_name(args.mode)
+        except ValueError as e:
+            print(color_string((CR, str(e))))
+            return
+
+        flags = StandaloneFlag.NONE
+        if args.opt_in:        flags |= StandaloneFlag.HOST_OPTED_IN
+        if args.quiet_buzzer:  flags |= StandaloneFlag.BUZZER_QUIET
+        if args.quiet_led:     flags |= StandaloneFlag.LED_QUIET
+
+        result = self.cmd.standalone_set_mode(mode, flags)
+        if not isinstance(result, tuple):
+            if result.status == Status.PAR_ERR:
+                print(color_string((CR,
+                    f"refused: mode '{mode.name}' requires --opt-in")))
+            else:
+                print(color_string((CR,
+                    f"set-mode failed: status={result.status}")))
+            return
+
+        state, mode_now, flags_now = result
+        print(color_string((CG,
+            f"ok: state={state.name} mode={mode_now.name} "
+            f"flags={int(flags_now):#04x}")))
+
+
+@standalone.command('trigger')
+class StandaloneTrigger(DeviceRequiredUnit):
+    """
+    Fire the active mode's primary action (equivalent to pressing both
+    buttons briefly on the device).
+
+    For authtrace, this runs one scan session against whatever tag is in
+    the field right now.
+    """
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Trigger active standalone mode'
+        return parser
+
+    def on_exec(self, args):
+        resp = self.cmd.standalone_trigger()
+        if resp.status == Status.SUCCESS:
+            print(color_string((CG, "triggered")))
+        elif resp.status == Status.HF_TAG_NO:
+            print(color_string((CY, "no tag in field")))
+        elif resp.status == Status.DEVICE_MODE_ERROR:
+            print(color_string((CR, "mode not armed or invalid state")))
+        elif resp.status == Status.PAR_ERR:
+            print(color_string((CR, "refused (likely missing opt-in)")))
+        else:
+            print(color_string((CR, f"trigger failed: status={resp.status}")))
+
+
+@standalone.command('get-result')
+class StandaloneGetResult(DeviceRequiredUnit):
+    """
+    Pull the active mode's result buffer.
+
+    For authtrace, decodes session-tagged wire traces. Default output is
+    a one-line summary per session; --dump prints every captured frame
+    in Proxmark3 style; --json emits structured data; --raw dumps the
+    binary blob (use with -f to save for external decoders).
+    """
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Read standalone result buffer'
+        parser.add_argument('-f', '--file', default=None, metavar='<path>',
+                            help='write output to file instead of stdout')
+        group = parser.add_mutually_exclusive_group()
+        group.add_argument('--raw',  action='store_true',
+                           help='dump raw bytes (no parsing)')
+        group.add_argument('--json', action='store_true',
+                           help='emit parsed sessions as JSON')
+        group.add_argument('--dump', action='store_true',
+                           help='dump every frame in each session')
+        return parser
+
+    def on_exec(self, args):
+        import json as jsonlib
+        from pathlib import Path
+
+        _state, mode, _flags = self.cmd.standalone_get_mode()
+        raw = self.cmd.standalone_drain_result()
+        if not raw:
+            print(color_string((CY, "no result data")))
+            return
+
+        if args.raw or (args.file and not (args.json or args.dump)):
+            if args.file:
+                Path(args.file).write_bytes(raw)
+                print(color_string((CG, f"{len(raw)} bytes -> {args.file}")))
+            else:
+                print(color_string((CY,
+                    f"{len(raw)} raw bytes (use -f to save, or --json/--dump "
+                    f"to format)")))
+            return
+
+        if mode != StandaloneMode.AUTHTRACE:
+            print(color_string((CY,
+                f"got {len(raw)} bytes; mode={mode.name} has no parser. "
+                f"use --raw -f <path> to dump.")))
+            return
+
+        sessions = parse_authtrace_buffer(raw)
+        print(color_string((CG, f"{len(sessions)} authtrace sessions")))
+
+        if args.json:
+            out = jsonlib.dumps(sessions, indent=2)
+            if args.file:
+                Path(args.file).write_text(out)
+                print(color_string((CG, f"-> {args.file}")))
+            else:
+                print(out)
+            return
+
+        if args.dump:
+            out = authtrace_pretty_dump(sessions)
+            if args.file:
+                Path(args.file).write_text(out + "\n")
+                print(color_string((CG, f"-> {args.file}")))
+            else:
+                print(out)
+            return
+
+        # default summary
+        print(authtrace_summarise(sessions))
+
+
+@standalone.command('clear-result')
+class StandaloneClearResult(DeviceRequiredUnit):
+    """Discard the active mode's result buffer."""
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Clear standalone result buffer'
+        return parser
+
+    def on_exec(self, args):
+        resp = self.cmd.standalone_clear_result()
+        if resp.status == Status.SUCCESS:
+            print(color_string((CG, "cleared")))
+        else:
+            print(color_string((CR, f"clear failed: status={resp.status}")))
+
+
+@standalone.command('config')
+class StandaloneConfig(DeviceRequiredUnit):
+    """
+    View or set the per-mode config blob.
+
+    AuthTrace config format (16 bytes):
+        u8  version=1
+        u8  type        (0x60=KEY_A, 0x61=KEY_B)
+        u8  block       (target block number)
+        u8  reserved0
+        u16 timeout_ms  (100..30000)
+        u8  key[6]      (candidate sector key)
+        u8  reserved1[4]
+
+    Examples:
+        standalone config authtrace                       (read current)
+        standalone config authtrace --block 4 --key-type A
+        standalone config authtrace --key FFFFFFFFFFFF --timeout 5000
+    """
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Read or write mode-specific config'
+        parser.add_argument('mode', help='target mode name')
+        parser.add_argument('--block',    type=int, default=None,
+                            help='[authtrace] target block (0-255)')
+        parser.add_argument('--key-type', choices=['A', 'B'], default=None,
+                            help='[authtrace] MIFARE key type')
+        parser.add_argument('--key',      default=None,
+                            help='[authtrace] 12-hex-char sector key '
+                                 '(e.g. FFFFFFFFFFFF)')
+        parser.add_argument('--timeout',  type=int, default=None,
+                            help='[authtrace] tag-poll timeout in ms '
+                                 '(100-30000)')
+        return parser
+
+    def on_exec(self, args):
+        try:
+            mode = StandaloneMode.from_name(args.mode)
+        except ValueError as e:
+            print(color_string((CR, str(e))))
+            return
+
+        any_setter = any(v is not None for v in
+                         (args.block, args.key_type, args.key, args.timeout))
+
+        if not any_setter:
+            blob = self.cmd.standalone_get_config(mode)
+            if not blob:
+                print(color_string((CY, f"no persisted config for {mode.name}")))
+                return
+            if mode == StandaloneMode.AUTHTRACE and len(blob) >= 16:
+                ver, typ, block, _r0, timeout = struct.unpack(
+                    '<BBBBH', blob[:6])
+                key = blob[6:12].hex()
+                kname = {0x60: 'A', 0x61: 'B'}.get(typ, f'?(0x{typ:02x})')
+                print(f"  version:  {ver}")
+                print(f"  type:     {kname} (0x{typ:02x})")
+                print(f"  block:    {block}")
+                print(f"  timeout:  {timeout} ms")
+                print(f"  key:      {key}")
+            else:
+                print(f"  raw ({len(blob)} bytes): {blob.hex()}")
+            return
+
+        if mode != StandaloneMode.AUTHTRACE:
+            print(color_string((CR,
+                f"config writes only implemented for authtrace; "
+                f"raw set-config required for {mode.name}")))
+            return
+
+        existing = self.cmd.standalone_get_config(mode)
+        if len(existing) >= 16:
+            ver     = existing[0]
+            typ     = existing[1]
+            block   = existing[2]
+            timeout = existing[4] | (existing[5] << 8)
+            key     = bytes(existing[6:12])
+        else:
+            ver, typ, block, timeout = 1, 0x60, 4, 3000
+            key = b'\xff' * 6
+
+        if args.block    is not None: block   = args.block
+        if args.timeout  is not None: timeout = args.timeout
+        if args.key_type is not None:
+            typ = 0x60 if args.key_type == 'A' else 0x61
+        if args.key is not None:
+            try:
+                key = bytes.fromhex(args.key)
+            except ValueError:
+                print(color_string((CR, "key must be hex")))
+                return
+            if len(key) != 6:
+                print(color_string((CR,
+                    f"key must be 6 bytes; got {len(key)}")))
+                return
+
+        if not (100 <= timeout <= 30000):
+            print(color_string((CR, "timeout must be 100..30000 ms")))
+            return
+        if not (0 <= block <= 255):
+            print(color_string((CR, "block must be 0..255")))
+            return
+
+        cfg = struct.pack('<BBBBH', ver, typ, block, 0, timeout) \
+              + key + b'\x00' * 4
+        assert len(cfg) == 16
+
+        resp = self.cmd.standalone_set_config(mode, cfg)
+        if resp.status == Status.SUCCESS:
+            kname = {0x60: 'A', 0x61: 'B'}[typ]
+            print(color_string((CG,
+                f"ok: type={kname} block={block} timeout={timeout}ms "
+                f"key={key.hex()}")))
+        else:
+            print(color_string((CR,
+                f"set-config failed: status={resp.status}")))

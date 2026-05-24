@@ -19,6 +19,14 @@
 #define FDS_SETTINGS_RECORD_KEY             0x1
 
 /*
+ * Standalone (host-less) modes subsystem.
+ * Record keys allocated locally in app_standalone.c:
+ *   0x0001          - state record (mode + flags)
+ *   0x0100 + mode   - per-mode config blob
+ */
+#define FDS_STANDALONE_FILE_ID              0x1010
+
+/*
  * Each card slot has two types of data, high and low frequency
  * FDS file ID follows the card slot, starting from 0x1100 to 0x1107
  * FDS record key mirrors TAG_SENSE_LF/HF so is 1 for LF, 2 for HF (currently)

@@ -2132,15 +2132,33 @@ static data_frame_tx_t *cmd_processor_hf14a_auth_trace(uint16_t cmd, uint16_t st
     uint32_t timeout_ms = 5000;
     if (length == 10) {
         timeout_ms = ((uint32_t)data[8] << 8) | data[9];
-        if (timeout_ms == 0 || timeout_ms > 30000) timeout_ms = 5000;
     } else if (length != 8) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-    uint8_t type    = data[0];
-    uint8_t block   = data[1];
-    uint8_t *key    = &data[2];
+    uint8_t  type  = data[0];
+    uint8_t  block = data[1];
+    uint8_t *key   = &data[2];
+
+    uint8_t rc = hf14a_auth_trace_run(type, block, key, timeout_ms);
+
+    uint16_t buf_len = 0;
+    const uint8_t *buf = hf14a_auth_trace_get_buf(&buf_len);
+    if (buf_len == 0) {
+        return data_frame_make(cmd, rc, 0, NULL);
+    }
+    return data_frame_make(cmd, rc, buf_len, (uint8_t *)buf);
+}
+
+/* Reusable core - same logic as before, now callable from other firmware
+ * paths (notably the standalone subsystem). Behaviour and timing are
+ * identical to the pre-refactor cmd_processor_hf14a_auth_trace(). */
+uint8_t hf14a_auth_trace_run(uint8_t type, uint8_t block,
+                             const uint8_t key[6], uint32_t timeout_ms) {
     if (type != PICC_AUTHENT1A && type != PICC_AUTHENT1B) {
-        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+        return STATUS_PAR_ERR;
+    }
+    if (timeout_ms == 0 || timeout_ms > 30000) {
+        timeout_ms = 5000;
     }
 
     m_auth_trace_len = 0;
@@ -2150,7 +2168,7 @@ static data_frame_tx_t *cmd_processor_hf14a_auth_trace(uint16_t cmd, uint16_t st
      * each attempt fails fast (~3-5 ms) and we back off briefly between
      * iterations to keep the WDT happy and avoid hammering the RC522.
      * The antenna is already on (before_hf_reader_run hook) and stays on
-     * for the whole polling window — same behaviour as a desktop reader. */
+     * for the whole polling window - same behaviour as a desktop reader. */
     picc_14a_tag_t tag;
     uint8_t scan_status = STATUS_HF_TAG_NO;
     autotimer *p_at = bsp_obtain_timer(0);
@@ -2159,7 +2177,7 @@ static data_frame_tx_t *cmd_processor_hf14a_auth_trace(uint16_t cmd, uint16_t st
         if (scan_status == STATUS_HF_TAG_OK) {
             break;
         }
-        /* 50 ms back-off between attempts — yields to USB/BLE main loop
+        /* 50 ms back-off between attempts - yields to USB/BLE main loop
          * and keeps the WDT fed (timeout is 5000 ms). */
         for (int i = 0; i < 50; i++) {
             bsp_delay_ms(1);
@@ -2169,21 +2187,19 @@ static data_frame_tx_t *cmd_processor_hf14a_auth_trace(uint16_t cmd, uint16_t st
     bsp_return_timer(p_at);
 
     if (scan_status != STATUS_HF_TAG_OK) {
-        return data_frame_make(cmd, STATUS_HF_TAG_NO, 0, NULL);
+        return STATUS_HF_TAG_NO;
     }
 
     /* Step 2: synthesize the wire frames that scan_auto just produced */
     auth_trace_emit_anticoll(&tag);
 
     /* Step 3: perform the auth, tapping every TX/RX into the same buffer */
-    uint8_t auth_status = auth_trace_do_auth(&tag, type, block, key);
+    return auth_trace_do_auth(&tag, type, block, key);
+}
 
-    /* Always return the buffer — even on auth failure, the partial trace is
-     * useful for diagnosing why (wrong key vs. wrong block vs. no NT etc.). */
-    if (m_auth_trace_len == 0) {
-        return data_frame_make(cmd, auth_status, 0, NULL);
-    }
-    return data_frame_make(cmd, auth_status, m_auth_trace_len, m_auth_trace_buf);
+const uint8_t *hf14a_auth_trace_get_buf(uint16_t *out_len) {
+    if (out_len) *out_len = m_auth_trace_len;
+    return m_auth_trace_buf;
 }
 
 #define HF_SNIFF_BUF_SIZE   3800   /* leave room for USB framing */
@@ -3087,6 +3103,15 @@ static cmd_data_map_t m_data_cmd_map[] = {
     /* HF14A scan keeping field alive */
     {    DATA_CMD_HF14A_SCAN_KEEP,                before_hf_reader_run,        cmd_processor_hf14a_scan_keep,               NULL                   },
 #endif
+
+    /* Standalone (host-less) modes subsystem */
+    {    DATA_CMD_STANDALONE_GET_MODE,            NULL,                        cmd_handler_standalone_get_mode,             NULL                   },
+    {    DATA_CMD_STANDALONE_SET_MODE,            NULL,                        cmd_handler_standalone_set_mode,             NULL                   },
+    {    DATA_CMD_STANDALONE_GET_CONFIG,          NULL,                        cmd_handler_standalone_get_config,           NULL                   },
+    {    DATA_CMD_STANDALONE_SET_CONFIG,          NULL,                        cmd_handler_standalone_set_config,           NULL                   },
+    {    DATA_CMD_STANDALONE_GET_RESULT,          NULL,                        cmd_handler_standalone_get_result,           NULL                   },
+    {    DATA_CMD_STANDALONE_CLEAR_RESULT,        NULL,                        cmd_handler_standalone_clear_result,         NULL                   },
+    {    DATA_CMD_STANDALONE_TRIGGER,             NULL,                        cmd_handler_standalone_trigger,              NULL                   },
 };
 data_frame_tx_t *cmd_processor_get_device_capabilities(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     size_t count = ARRAYLEN(m_data_cmd_map);
