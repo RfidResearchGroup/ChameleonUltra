@@ -137,7 +137,9 @@ typedef struct standalone_mode_iface {
 
 extern const standalone_mode_iface_t mode_autoclone_iface;
 extern const standalone_mode_iface_t mode_read_replay_iface;
-extern const standalone_mode_iface_t mode_authtrace_iface;
+#if defined(PROJECT_CHAMELEON_ULTRA)
+extern const standalone_mode_iface_t mode_authtrace_iface;     /* needs reader hw */
+#endif
 extern const standalone_mode_iface_t mode_slot_cycle_iface;
 extern const standalone_mode_iface_t mode_dict_check_iface;
 

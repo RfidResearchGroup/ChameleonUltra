@@ -83,7 +83,7 @@ static const standalone_mode_iface_t * const m_modes[] = {
 #if CONFIG_STANDALONE_READ_REPLAY
     &mode_read_replay_iface,
 #endif
-#if CONFIG_STANDALONE_AUTHTRACE
+#if CONFIG_STANDALONE_AUTHTRACE && defined(PROJECT_CHAMELEON_ULTRA)
     &mode_authtrace_iface,
 #endif
 #if CONFIG_STANDALONE_SLOT_CYCLE

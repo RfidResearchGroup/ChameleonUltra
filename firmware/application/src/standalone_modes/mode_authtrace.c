@@ -37,9 +37,18 @@
  *   u8  status         STATUS_HF_* code from hf14a_auth_trace_run()
  *   u16 trace_len      length of the embedded trace bytes
  *   u8  trace[trace_len]   verbatim wire trace, same format as CMD 2017
+ *
+ * Build gate: PROJECT_CHAMELEON_ULTRA only. CU Lite has no RC522 / reader
+ * hardware so the entire mode is omitted from Lite builds. The mode
+ * descriptor (mode_authtrace_iface) is similarly omitted - see the
+ * matching gate around its extern decl in app_standalone.h and the
+ * conditional registry entry in app_standalone.c.
  */
 
 #include "app_standalone.h"
+
+#if defined(PROJECT_CHAMELEON_ULTRA)
+
 #include "standalone_led.h"
 
 #include <string.h>
@@ -334,3 +343,5 @@ const standalone_mode_iface_t mode_authtrace_iface = {
     .read_result     = read_result,
     .clear_result    = clear_result,
 };
+
+#endif /* PROJECT_CHAMELEON_ULTRA */
