@@ -1865,15 +1865,19 @@ class ChameleonCMD:
         return (total_size, chunk)
 
     def standalone_drain_result(self) -> bytes:
-        """Loop GET_RESULT until the chunk is empty; assemble full buffer."""
+        """Loop GET_RESULT until the firmware returns an empty chunk.
+
+        The firmware advances an internal read cursor on each call and
+        sends 4 zero bytes (total=0, chunk empty) once all data has been
+        read.  Do NOT break on total_size == len(out) -- total_size only
+        reflects the current chunk size, not the full buffer size.
+        """
         out = bytearray()
         while True:
             total_size, chunk = self.standalone_get_result()
             if not chunk:
                 break
             out.extend(chunk)
-            if total_size > 0 and len(out) >= total_size:
-                break
         return bytes(out)
 
     def standalone_clear_result(self):
