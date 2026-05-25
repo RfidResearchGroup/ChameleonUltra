@@ -161,6 +161,56 @@ def compute_parity_bytes(data: bytes) -> bytes:
     return bytes(out)
 
 
+def read_pm3_trace(path: str) -> List[Tuple[int, bytes, bool]]:
+    """Read a PM3 binary trace file and return a list of (szBits, data, is_tx).
+
+    Handles both headered files (PM3T / any 4-char magic + 12B header)
+    and raw headerless files (frame records start at offset 0).
+
+    is_tx=True means card→reader (bit15 of len_flags set).
+    """
+    import math as _math
+
+    with open(path, 'rb') as f:
+        raw = f.read()
+
+    # Detect header: if first 4 bytes look like ASCII magic and bytes 4-8
+    # are a plausible little-endian version (≤ 10), treat as headered.
+    pos = 0
+    if len(raw) >= 16:
+        magic = raw[:4]
+        version = struct.unpack_from('<I', raw, 4)[0]
+        if all(0x20 <= b <= 0x7E for b in magic) and version <= 10:
+            pos = 16  # skip 16-byte header (magic + version + num_frames + flags)
+
+    frames = []
+    while pos + 8 <= len(raw):
+        ts, duration, len_flags = struct.unpack_from('<IHH', raw, pos)
+        pos += 8
+        is_tx  = bool(len_flags & 0x8000)
+        n      = len_flags & 0x7FFF
+        if n == 0 or n > 512:
+            break
+        par_bytes = _math.ceil(n / 8)
+        pos += par_bytes          # skip parity
+        if pos + n > len(raw):
+            break
+        data = raw[pos:pos + n]
+        pos += n
+
+        # Recover szBits from duration (128 carrier ticks per bit at 106 kbps).
+        # Guard against PM3 storing inter-frame gap as duration for responses:
+        # if duration/128 < n*8/4, the value is not a frame duration — use n*8.
+        sz_from_dur = round(duration / 128)
+        min_ok = _math.ceil(n * 8 / 4)
+        szBits = sz_from_dur if (0 < sz_from_dur <= n * 8
+                                  and sz_from_dur >= min_ok) else n * 8
+
+        frames.append((szBits, data, is_tx))
+
+    return frames
+
+
 def write_pm3_trace(path: str, frames: List[Tuple[int, bytes, bool]],
                     magic: bytes = b'PM3T') -> int:
     """Write a pm3-compatible trace file from a list of (szBits, data, is_tx).
