@@ -170,7 +170,9 @@ data_frame_tx_t *cmd_handler_standalone_get_result(uint16_t cmd, uint16_t status
         return data_frame_make(cmd, rc_to_status(rc), 0, NULL);
     }
 
-    /* total_size reflects this chunk; host typically just iterates. */
+    /* total_size = this chunk's byte count. Host loops until it receives
+     * an empty chunk (4 zero bytes), which the firmware sends when the
+     * read cursor reaches the end of the buffer. */
     uint32_t total = (uint32_t)chunk_len;
     resp[0] = (uint8_t)(total      );
     resp[1] = (uint8_t)(total >>  8);
