@@ -89,6 +89,12 @@ typedef enum {
     AT_SCANNING,
 } at_state_t;
 
+/* Result buffer — top-level word-aligned static so it can be passed directly
+ * to app_standalone_save_result_buf() without a second staging copy.
+ * uint32_t[] guarantees 4-byte BSS alignment required by fds_write_sync. */
+static uint32_t m_result_words[(RESULT_BUFFER_BYTES + 3) / 4];
+#define m_result_buf ((uint8_t *)m_result_words)
+
 static struct {
     cfg_t       cfg;
     at_state_t  state;
@@ -97,7 +103,6 @@ static struct {
     uint8_t     session_count;
     bool        reader_mode_acquired;
     bool        active;
-    uint8_t     buffer[RESULT_BUFFER_BYTES];
 } m_st;
 
 /* -------------------------------------------------------------------------
@@ -133,7 +138,7 @@ static bool append_session(uint8_t status, const uint8_t *trace, uint16_t trace_
     size_t need = SESSION_HDR_BYTES + trace_len;
     if (bytes_free() < need) return false;
 
-    uint8_t *p = &m_st.buffer[m_st.write_cursor];
+    uint8_t *p = &m_result_buf[m_st.write_cursor];
     p[0] = m_st.session_count;
     p[1] = status;
     p[2] = (uint8_t)(trace_len      );
@@ -218,6 +223,10 @@ static standalone_rc_t run_session(void) {
     NRF_LOG_INFO("authtrace: session #%u status=0x%02x trace=%u bytes",
                  m_st.session_count - 1, status, trace_len);
 
+    /* Persist the updated buffer to flash so captures survive a reboot. */
+    app_standalone_save_result_buf(STANDALONE_MODE_AUTHTRACE,
+                                   m_result_words, m_st.write_cursor);
+
     if (status == STATUS_HF_TAG_OK) {
         standalone_feedback(SL_FB_SUCCESS);
         return STANDALONE_RC_OK;
@@ -246,8 +255,29 @@ static standalone_rc_t on_enter(const uint8_t *cfg, size_t cfg_len) {
 
     m_st.state  = AT_IDLE;
     m_st.active = true;
-    /* DO NOT reset buffer here - re-arming may want to add to an existing
-     * capture. Explicit BOTH_VLONG or CLEAR_RESULT discards. */
+    /* Restore any previously captured sessions from flash so captures
+     * survive a reboot and remain available until explicitly cleared. */
+    size_t loaded = 0;
+    standalone_rc_t lrc = app_standalone_load_result_buf(
+        STANDALONE_MODE_AUTHTRACE,
+        m_result_words, RESULT_BUFFER_BYTES, &loaded);
+    if (lrc == STANDALONE_RC_OK && loaded > 0) {
+        m_st.write_cursor = loaded;
+        /* Scan the buffer to recount sessions */
+        size_t off = 0;
+        m_st.session_count = 0;
+        while (off + 4 <= m_st.write_cursor) {
+            uint16_t tlen = (uint16_t)m_result_buf[off + 2]
+                          | ((uint16_t)m_result_buf[off + 3] << 8);
+            off += 4 + tlen;
+            m_st.session_count++;
+        }
+        NRF_LOG_INFO("authtrace: restored %u session(s) from flash",
+                     m_st.session_count);
+    } else {
+        /* No persisted data — read_cursor and write_cursor stay at 0
+         * (buffer_reset was called above if coming from a BOTH_VLONG). */
+    }
 
     m_st.reader_mode_acquired = acquire_reader_mode();
     if (!m_st.reader_mode_acquired) {
@@ -285,6 +315,7 @@ static standalone_rc_t on_button(standalone_button_evt_t evt) {
 
         case STANDALONE_BTN_BOTH_VLONG:        /* destructive: discard all */
             buffer_reset();
+            app_standalone_save_result_buf(STANDALONE_MODE_AUTHTRACE, NULL, 0);
             NRF_LOG_INFO("authtrace: sessions cleared");
             standalone_feedback(SL_FB_SUCCESS);
             return STANDALONE_RC_OK;
@@ -315,7 +346,7 @@ static standalone_rc_t read_result(uint8_t *out, size_t out_max, size_t *out_len
     size_t remaining = m_st.write_cursor - m_st.read_cursor;
     size_t take      = (remaining < out_max) ? remaining : out_max;
 
-    memcpy(out, &m_st.buffer[m_st.read_cursor], take);
+    memcpy(out, &m_result_buf[m_st.read_cursor], take);
     m_st.read_cursor += take;
     *out_len = take;
     return STANDALONE_RC_OK;
@@ -323,6 +354,8 @@ static standalone_rc_t read_result(uint8_t *out, size_t out_max, size_t *out_len
 
 static void clear_result(void) {
     buffer_reset();
+    /* Clear the persisted copy too so rebooting doesn't restore stale data. */
+    app_standalone_save_result_buf(STANDALONE_MODE_AUTHTRACE, NULL, 0);
 }
 
 /* -------------------------------------------------------------------------
