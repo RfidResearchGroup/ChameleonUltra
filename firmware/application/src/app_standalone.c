@@ -44,6 +44,8 @@
 
 #define FDS_KEY_STANDALONE_STATE        0x0001
 #define FDS_KEY_STANDALONE_CONFIG_BASE  0x0100   /* + mode_id */
+/* Result buffer key base — matches app_standalone.h declaration */
+/* FDS_KEY_STANDALONE_RESULT_BASE = 0x0200 defined in app_standalone.h */
 
 #define STANDALONE_CONFIG_MAX_BYTES     64
 #define STANDALONE_TICK_THROTTLE_MS     100      /* mode on_tick rate */
@@ -184,6 +186,90 @@ static standalone_rc_t persist_config_load(standalone_mode_t mode,
         return STANDALONE_RC_NO_RESULT;
     }
     *out_len = len;
+    return STANDALONE_RC_OK;
+}
+
+/* -------------------------------------------------------------------------
+ * Result-buffer persistence
+ *
+ * Wire format in flash: [u32 byte_len_le][byte_len bytes of buffer data]
+ * byte_len == 0 means the record exists but the buffer is cleared.
+ * A missing record is treated identically to byte_len == 0.
+ *
+ * Uses a file-static staging buffer so fds_write_sync always gets a
+ * word-aligned pointer (same pattern as m_cfg_save_buf above).
+ * ------------------------------------------------------------------------- */
+static uint32_t m_result_save_buf[(STANDALONE_RESULT_PERSIST_MAX + 3) / 4];
+
+standalone_rc_t app_standalone_save_result_buf(standalone_mode_t mode,
+                                               const uint32_t *buf_words,
+                                               size_t byte_len) {
+    if (mode >= STANDALONE_MODE__COUNT) return STANDALONE_RC_INVALID_CFG;
+
+    /* Pack header + data into the staging buffer */
+    size_t total = 4 + byte_len;
+    if (total > STANDALONE_RESULT_PERSIST_MAX) {
+        NRF_LOG_WARNING("standalone: result too large to persist (%u bytes)", byte_len);
+        byte_len = STANDALONE_RESULT_PERSIST_MAX - 4;
+        total    = STANDALONE_RESULT_PERSIST_MAX;
+    }
+
+    uint8_t *p = (uint8_t *)m_result_save_buf;
+    p[0] = (uint8_t)(byte_len      );
+    p[1] = (uint8_t)(byte_len >>  8);
+    p[2] = (uint8_t)(byte_len >> 16);
+    p[3] = (uint8_t)(byte_len >> 24);
+    if (byte_len > 0 && buf_words != NULL) {
+        memcpy(p + 4, buf_words, byte_len);
+    }
+
+    bool ok = fds_write_sync(FDS_STANDALONE_FILE_ID,
+                             FDS_KEY_STANDALONE_RESULT_BASE + (uint16_t)mode,
+                             (uint16_t)total, m_result_save_buf);
+    if (!ok) {
+        NRF_LOG_WARNING("standalone: fds_write_sync(result %u) failed", mode);
+        return STANDALONE_RC_INTERNAL;
+    }
+    NRF_LOG_DEBUG("standalone: persisted %u result bytes for mode %u", byte_len, mode);
+    return STANDALONE_RC_OK;
+}
+
+standalone_rc_t app_standalone_load_result_buf(standalone_mode_t mode,
+                                               uint32_t *buf_words,
+                                               size_t word_buf_bytes,
+                                               size_t *out_byte_len) {
+    if (mode >= STANDALONE_MODE__COUNT) return STANDALONE_RC_INVALID_CFG;
+    if (buf_words == NULL || out_byte_len == NULL) return STANDALONE_RC_INVALID_CFG;
+
+    uint16_t len = (uint16_t)sizeof(m_result_save_buf);
+    bool ok = fds_read_sync(FDS_STANDALONE_FILE_ID,
+                            FDS_KEY_STANDALONE_RESULT_BASE + (uint16_t)mode,
+                            &len, (uint8_t *)m_result_save_buf);
+    if (!ok || len < 4) {
+        *out_byte_len = 0;
+        return STANDALONE_RC_NO_RESULT;
+    }
+
+    uint8_t *p = (uint8_t *)m_result_save_buf;
+    size_t data_len = (size_t)p[0]
+                    | ((size_t)p[1] <<  8)
+                    | ((size_t)p[2] << 16)
+                    | ((size_t)p[3] << 24);
+
+    if (data_len == 0) {
+        *out_byte_len = 0;
+        return STANDALONE_RC_NO_RESULT;
+    }
+
+    if (data_len > word_buf_bytes) {
+        NRF_LOG_WARNING("standalone: persisted result %u > buf %u, truncating",
+                        data_len, word_buf_bytes);
+        data_len = word_buf_bytes;
+    }
+
+    memcpy(buf_words, p + 4, data_len);
+    *out_byte_len = data_len;
+    NRF_LOG_DEBUG("standalone: loaded %u result bytes for mode %u", data_len, mode);
     return STANDALONE_RC_OK;
 }
 

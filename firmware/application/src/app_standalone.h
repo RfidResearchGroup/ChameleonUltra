@@ -161,6 +161,36 @@ standalone_rc_t     app_standalone_get_config(standalone_mode_t mode,
                                               uint8_t *cfg, size_t cfg_max,
                                               size_t *cfg_len);
 
+/* -------------------------------------------------------------------------
+ * Result-buffer persistence.
+ *
+ * Modes that produce results (authtrace etc.) should call
+ * app_standalone_save_result_buf() after each successful append so captures
+ * survive a reboot.  The framework loads the persisted buffer back in
+ * on_enter so previously captured sessions are immediately available.
+ *
+ * FDS key layout (file FDS_STANDALONE_FILE_ID = 0x1010):
+ *   0x0001              state (mode + flags)
+ *   0x0100 + mode_id    per-mode config blob
+ *   0x0200 + mode_id    per-mode result buffer
+ *
+ * buf_words must be a word-aligned (uint32_t[]) backing array — the caller
+ * owns the buffer, the framework only writes to/from flash.  byte_len is
+ * the number of valid bytes; 0 clears the persisted record.
+ * ------------------------------------------------------------------------- */
+#define FDS_KEY_STANDALONE_RESULT_BASE  0x0200   /* + mode_id */
+
+/* Maximum result bytes the framework will persist in a single FDS record. */
+#define STANDALONE_RESULT_PERSIST_MAX   2084u    /* 4-byte header + 2080 data */
+
+standalone_rc_t app_standalone_save_result_buf(standalone_mode_t mode,
+                                               const uint32_t *buf_words,
+                                               size_t byte_len);
+standalone_rc_t app_standalone_load_result_buf(standalone_mode_t mode,
+                                               uint32_t *buf_words,
+                                               size_t word_buf_bytes,
+                                               size_t *out_byte_len);
+
 /* Returns true if event was consumed; false to let normal button cfg handle it. */
 bool                app_standalone_on_button(standalone_button_evt_t evt);
 
