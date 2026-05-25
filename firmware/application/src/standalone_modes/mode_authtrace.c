@@ -103,6 +103,7 @@ static struct {
     uint8_t     session_count;
     bool        reader_mode_acquired;
     bool        active;
+    bool        result_loaded;   /* true once FDS result has been read into RAM */
 } m_st;
 
 /* -------------------------------------------------------------------------
@@ -154,6 +155,37 @@ static void buffer_reset(void) {
     m_st.write_cursor  = 0;
     m_st.read_cursor   = 0;
     m_st.session_count = 0;
+    /* Keep result_loaded = true after a clear — we know the FDS state
+     * matches (empty), so no need to re-load on the next read. */
+}
+
+/* Load the persisted result buffer from FDS if not already in RAM.
+ * Called lazily from read_result() so GET_RESULT works even before
+ * the mode has been armed (on_enter never called after a reboot). */
+static void ensure_result_loaded(void) {
+    if (m_st.result_loaded) return;
+    m_st.result_loaded = true;
+
+    size_t loaded = 0;
+    standalone_rc_t rc = app_standalone_load_result_buf(
+        STANDALONE_MODE_AUTHTRACE,
+        m_result_words, RESULT_BUFFER_BYTES, &loaded);
+
+    if (rc == STANDALONE_RC_OK && loaded > 0) {
+        m_st.write_cursor  = loaded;
+        m_st.read_cursor   = 0;
+        /* Rescan header chain to recount sessions */
+        size_t off = 0;
+        m_st.session_count = 0;
+        while (off + 4 <= m_st.write_cursor) {
+            uint16_t tlen = (uint16_t)m_result_buf[off + 2]
+                          | ((uint16_t)m_result_buf[off + 3] << 8);
+            off += 4 + tlen;
+            m_st.session_count++;
+        }
+        NRF_LOG_INFO("authtrace: lazy-loaded %u session(s) from flash",
+                     m_st.session_count);
+    }
 }
 
 /* -------------------------------------------------------------------------
@@ -255,29 +287,12 @@ static standalone_rc_t on_enter(const uint8_t *cfg, size_t cfg_len) {
 
     m_st.state  = AT_IDLE;
     m_st.active = true;
-    /* Restore any previously captured sessions from flash so captures
-     * survive a reboot and remain available until explicitly cleared. */
-    size_t loaded = 0;
-    standalone_rc_t lrc = app_standalone_load_result_buf(
-        STANDALONE_MODE_AUTHTRACE,
-        m_result_words, RESULT_BUFFER_BYTES, &loaded);
-    if (lrc == STANDALONE_RC_OK && loaded > 0) {
-        m_st.write_cursor = loaded;
-        /* Scan the buffer to recount sessions */
-        size_t off = 0;
-        m_st.session_count = 0;
-        while (off + 4 <= m_st.write_cursor) {
-            uint16_t tlen = (uint16_t)m_result_buf[off + 2]
-                          | ((uint16_t)m_result_buf[off + 3] << 8);
-            off += 4 + tlen;
-            m_st.session_count++;
-        }
-        NRF_LOG_INFO("authtrace: restored %u session(s) from flash",
-                     m_st.session_count);
-    } else {
-        /* No persisted data — read_cursor and write_cursor stay at 0
-         * (buffer_reset was called above if coming from a BOTH_VLONG). */
-    }
+
+    /* Load any persisted sessions from flash (if not already in RAM from a
+     * prior GET_RESULT call since boot). Resets read_cursor so the host
+     * sees the full session list from the start on each new arm. */
+    ensure_result_loaded();
+    m_st.read_cursor = 0;
 
     m_st.reader_mode_acquired = acquire_reader_mode();
     if (!m_st.reader_mode_acquired) {
@@ -338,6 +353,10 @@ static size_t get_result_size(void) {
 static standalone_rc_t read_result(uint8_t *out, size_t out_max, size_t *out_len) {
     if (out == NULL || out_len == NULL) return STANDALONE_RC_INVALID_CFG;
 
+    /* Lazy-load from FDS so GET_RESULT works even before the mode has
+     * been armed (i.e. on_enter never called after a reboot). */
+    ensure_result_loaded();
+
     if (m_st.read_cursor >= m_st.write_cursor) {
         *out_len = 0;
         return STANDALONE_RC_NO_RESULT;
@@ -354,7 +373,7 @@ static standalone_rc_t read_result(uint8_t *out, size_t out_max, size_t *out_len
 
 static void clear_result(void) {
     buffer_reset();
-    /* Clear the persisted copy too so rebooting doesn't restore stale data. */
+    m_st.result_loaded = true;   /* RAM now matches FDS (both empty) */
     app_standalone_save_result_buf(STANDALONE_MODE_AUTHTRACE, NULL, 0);
 }
 
