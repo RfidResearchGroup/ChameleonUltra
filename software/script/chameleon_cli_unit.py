@@ -8138,6 +8138,10 @@ def _decode_14a_frame_col(data: bytes, szBits: int):
             return 'WUPA', CG
         return f'short(0x{b0:02x})', CC
 
+    # Sub-byte noise frames (< 7 bits) — field activation artefacts
+    if szBits < 7:
+        return f'field noise ({szBits} bit)', CC
+
     # Anti-collision / Select
     if b0 == 0x93:
         if len(data) > 1 and data[1] == 0x70:
@@ -10600,6 +10604,7 @@ def authtrace_pretty_dump(sessions):
         )
         expect_nt     = False
         expect_nr_ar  = False
+        expect_at     = False
         last_keytype  = None
         last_block    = None
         for n, (sz_bits, data, is_tx) in enumerate(frames):
@@ -10625,6 +10630,12 @@ def authtrace_pretty_dump(sessions):
                 decoded_ctx  = f"NR={nr}  AR={ar}  (mfkey32 input)"
                 col_ctx      = CG
                 expect_nr_ar = False
+                expect_at    = True
+
+            elif is_tx and expect_at and sz_bits == 32 and len(data) == 4:
+                decoded_ctx  = f"AT (auth ack, encrypted) = {data.hex().upper()}"
+                col_ctx      = CG
+                expect_at    = False
 
             if decoded_ctx is None:
                 decoded, col = _decode_14a_frame_col(data, sz_bits)
