@@ -713,6 +713,7 @@ class StandaloneMode(enum.IntEnum):
     AUTHTRACE   = 0x03   # active reader; logs auth exchanges (mfkey-ready)
     SLOT_CYCLE  = 0x04
     DICT_CHECK  = 0x05
+    EMUL_TRACE  = 0x06   # CU as card; logs reader auth exchanges (mfkey-ready)
 
     @classmethod
     def from_name(cls, name: str) -> "StandaloneMode":

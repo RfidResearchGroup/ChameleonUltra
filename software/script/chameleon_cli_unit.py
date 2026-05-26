@@ -10609,7 +10609,7 @@ class StandaloneSetMode(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Set standalone mode'
-        parser.add_argument('mode', help='mode name (authtrace, slot-cycle, '
+        parser.add_argument('mode', help='mode name (authtrace, emul-trace, slot-cycle, '
                                          'autoclone, read-replay, dict-check, '
                                          'disabled)')
         parser.add_argument('--opt-in', action='store_true',
@@ -10814,6 +10814,12 @@ class StandaloneConfig(DeviceRequiredUnit):
 
         any_setter = any(v is not None for v in
                          (args.block, args.key_type, args.key, args.timeout))
+
+        if mode == StandaloneMode.EMUL_TRACE:
+            print(color_string((CY,
+                "emul_trace has no config — it uses the active emulation slot as-is.\n"
+                "Set up your slot normally, then arm the mode.")))
+            return
 
         if not any_setter:
             blob = self.cmd.standalone_get_config(mode)
