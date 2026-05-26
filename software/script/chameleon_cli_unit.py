@@ -10721,7 +10721,7 @@ class StandaloneGetResult(DeviceRequiredUnit):
                     f"to format)")))
             return
 
-        if mode != StandaloneMode.AUTHTRACE:
+        if mode not in (StandaloneMode.AUTHTRACE, StandaloneMode.EMUL_TRACE):
             print(color_string((CY,
                 f"got {len(raw)} bytes; mode={mode.name} has no parser. "
                 f"use --raw -f <path> to dump.")))
