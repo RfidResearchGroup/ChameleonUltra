@@ -12,6 +12,7 @@
 #include "data_cmd.h"
 #include "app_status.h"
 #include "dataframe.h"
+#include "fds.h"
 
 #include <string.h>
 
@@ -49,17 +50,29 @@ static uint16_t rc_to_status(standalone_rc_t rc) {
 
 /* 7000 GET_MODE
  * Request:  empty
- * Response: { u8 state, u8 mode, u8 flags, u8 reserved }
+ * Response: { u8 state, u8 mode, u8 flags, u8 reserved,
+ *             u16 fds_words_used_le, u16 fds_words_available_le,
+ *             u8 fds_valid_records, u8 fds_dirty_records }  (10 bytes)
  */
 data_frame_tx_t *cmd_handler_standalone_get_mode(uint16_t cmd, uint16_t status,
                                                  uint16_t length, uint8_t *data) {
     (void)status; (void)length; (void)data;
-    uint8_t resp[4] = {
+    uint8_t resp[10] = {
         (uint8_t)app_standalone_get_state(),
         (uint8_t)app_standalone_get_mode(),
         app_standalone_get_flags(),
         0,
+        0, 0, 0, 0, 0, 0,   /* FDS stats filled below */
     };
+    fds_stat_t stat;
+    if (fds_stat(&stat) == NRF_SUCCESS) {
+        resp[4] = (uint8_t)(stat.words_used         );
+        resp[5] = (uint8_t)(stat.words_used      >> 8);
+        resp[6] = (uint8_t)(stat.words_available     );
+        resp[7] = (uint8_t)(stat.words_available >> 8);
+        resp[8] = (uint8_t)(stat.valid_records);
+        resp[9] = (uint8_t)(stat.dirty_records);
+    }
     return data_frame_make(cmd, STATUS_SUCCESS, sizeof(resp), resp);
 }
 
