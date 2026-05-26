@@ -10689,7 +10689,7 @@ class StandaloneStatus(DeviceRequiredUnit):
         return parser
 
     def on_exec(self, args):
-        state, mode, flags = self.cmd.standalone_get_mode()
+        state, mode, flags, fds = self.cmd.standalone_get_mode()
         state_col = CG if state != StandaloneState.DISARMED else CY
         print(f" state: {color_string((state_col, state.name))}")
         print(f"  mode: {color_string((CC, mode.name))}")
@@ -10697,6 +10697,16 @@ class StandaloneStatus(DeviceRequiredUnit):
                              if f != StandaloneFlag.NONE and (flags & f)) \
                    or "(none)"
         print(f" flags: {flag_str}")
+        if fds is not None:
+            used  = fds['words_used']
+            avail = fds['words_available']
+            total = used + avail
+            pct   = int(used * 100 / total) if total else 0
+            dirty = fds['dirty_records']
+            valid = fds['valid_records']
+            gc_hint = f"  {CY}(GC recommended){C0}" if dirty > 4 else ""
+            print(f" flash: {used}/{total} words used ({pct}%)  "
+                  f"valid={valid} dirty={dirty}{gc_hint}")
 
 
 @standalone.command('set-mode')
@@ -10810,7 +10820,7 @@ class StandaloneGetResult(DeviceRequiredUnit):
         import json as jsonlib
         from pathlib import Path
 
-        _state, mode, _flags = self.cmd.standalone_get_mode()
+        _state, mode, _flags, _fds = self.cmd.standalone_get_mode()
         raw = self.cmd.standalone_drain_result()
         if not raw:
             print(color_string((CY, "no result data")))

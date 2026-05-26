@@ -1781,11 +1781,13 @@ class ChameleonCMD:
     # ===================================================================
 
     def standalone_get_mode(self):
-        """Read the current standalone state, mode, and flags.
+        """Read current standalone state, mode, flags, and FDS stats.
 
-        Response payload: {u8 state, u8 mode, u8 flags, u8 reserved}.
-        Returns tuple (state: StandaloneState, mode: StandaloneMode,
-                       flags: StandaloneFlag).
+        Response: {u8 state, u8 mode, u8 flags, u8 reserved,
+                   u16 words_used_le, u16 words_available_le,
+                   u8 valid_records, u8 dirty_records}  (10 bytes).
+        Older firmware returns 4 bytes; fds field is None in that case.
+        Returns tuple (state, mode, flags, fds_or_None).
         """
         from chameleon_enum import StandaloneMode, StandaloneState, StandaloneFlag
         resp = self.device.send_cmd_sync(Command.STANDALONE_GET_MODE, b'')
@@ -1795,9 +1797,15 @@ class ChameleonCMD:
                 f"data_len={len(resp.data) if resp.data else 0}"
             )
         state_v, mode_v, flags_v, _reserved = struct.unpack('<BBBB', resp.data[:4])
+        fds = None
+        if len(resp.data) >= 10:
+            wu, wa, vr, dr = struct.unpack('<HHBB', resp.data[4:10])
+            fds = {'words_used': wu, 'words_available': wa,
+                   'valid_records': vr, 'dirty_records': dr}
         return (StandaloneState(state_v),
                 StandaloneMode(mode_v),
-                StandaloneFlag(flags_v))
+                StandaloneFlag(flags_v),
+                fds)
 
     def standalone_set_mode(self, mode, flags=0):
         """Select a standalone mode (persisted to FDS).
