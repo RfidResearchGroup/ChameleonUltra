@@ -110,9 +110,9 @@
 #define DATA_CMD_IOPROX_DECODE_RAW              (3012)
 #define DATA_CMD_IOPROX_COMPOSE_ID              (3013)
 #define DATA_CMD_LF_T55XX_WRITE                 (3016)
-#define DATA_CMD_JABLOTRON_WRITE_TO_T55XX       (3017)
 #define DATA_CMD_IDTECK_WRITE_TO_T55XX          (3018)
 #define DATA_CMD_JABLOTRON_SCAN                 (3019)
+#define DATA_CMD_JABLOTRON_WRITE_TO_T55XX       (3020)
 
 //
 // ******************************************************************
