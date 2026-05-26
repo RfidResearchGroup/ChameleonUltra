@@ -3,6 +3,7 @@
 #include "nfc_mf1.h"
 #include "nfc_14a.h"
 #include "hex_utils.h"
+#include "mf1_crapto1.h"  // for prng_successor — real MFC LFSR PRNG
 #include "fds_util.h"
 #include "tag_persistence.h"
 
@@ -306,20 +307,56 @@ void ValueToBlock(uint8_t *Block, uint32_t Value) {
     Block[11] = Block[3];
 }
 
-/** @brief MF1 Get a random number
- * @param nonce      Random number buffer
+/** @brief Persistent LFSR state for Mifare Classic-compatible nonce generation.
+ *  Seeded from hardware RNG at boot via nfc_tag_mf1_prng_seed().
+ */
+static uint32_t m_prng_state = 0;
+
+/** @brief Seed the LFSR PRNG from hardware RNG value obtained at boot. */
+void nfc_tag_mf1_prng_seed(uint32_t seed) {
+    m_prng_state = seed;
+}
+
+void nfc_tag_mf1_set_prng_type(uint8_t type) {
+    if (type <= 2) {
+        m_tag_information->config.prng_type = type;
+    }
+}
+
+uint8_t nfc_tag_mf1_get_prng_type(void) {
+    return m_tag_information->config.prng_type;
+}
+
+/** @brief MF1 Get a random number.
+ *  PRNG type is per-slot, persisted in FDS via the config struct.
+ *    0 = STATIC  — fixed nonce (0x01020304), for testing
+ *    1 = WEAK    — real Mifare Classic 16-bit LFSR (default, passes Eltis fingerprint)
+ *    2 = HARD    — rand() seeded from hardware RNG (original behaviour)
+ * @param nonce     4-byte nonce output buffer
+ * @param isNested  true if this is a nested authentication
  */
 void nfc_tag_mf1_random_nonce(uint8_t nonce[4], bool isNested) {
-    // Use RAND to quickly generate random numbers, less performance loss
-    // isNested provides more randomness for hardnested attack
-    if (isNested) {
-        nonce[0] = rand() & 0xff;
-        nonce[1] = rand() & 0xff;
-        nonce[2] = rand() & 0xff;
-        nonce[3] = rand() & 0xff;
+    uint8_t prng_type = m_tag_information->config.prng_type;
+    if (prng_type == 0) {
+        // STATIC — always return same nonce (clone-card behaviour)
+        nonce[0] = 0x01;
+        nonce[1] = 0x02;
+        nonce[2] = 0x03;
+        nonce[3] = 0x04;
+    } else if (prng_type == 1) {
+        // WEAK — real MFC LFSR, advance 32 clocks per call
+        m_prng_state = prng_successor(m_prng_state, 32);
+        num_to_bytes(m_prng_state, 4, nonce);
     } else {
-        // fast for most readers
-        num_to_bytes(rand(), 4, nonce);
+        // HARD — original rand() behaviour
+        if (isNested) {
+            nonce[0] = rand() & 0xff;
+            nonce[1] = rand() & 0xff;
+            nonce[2] = rand() & 0xff;
+            nonce[3] = rand() & 0xff;
+        } else {
+            num_to_bytes(rand(), 4, nonce);
+        }
     }
 }
 
@@ -1161,7 +1198,8 @@ bool nfc_tag_mf1_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     p_mf1_information->config.detection_enable = false;
     p_mf1_information->config.field_off_do_reset = false;
 
-    // zero for reserved byte
+    // PRNG type defaults to WEAK (1) — real MFC LFSR, compatible with Eltis readers
+    p_mf1_information->config.prng_type = 1;
     p_mf1_information->config.reserved1 = 0x00;
     p_mf1_information->config.reserved2 = 0x00;
     p_mf1_information->config.reserved3 = 0x00;

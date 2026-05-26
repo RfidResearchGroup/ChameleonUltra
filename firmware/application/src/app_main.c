@@ -12,6 +12,7 @@
 #include "nrf_delay.h"
 #include "nrf_drv_gpiote.h"
 #include "nrf_drv_rng.h"
+#include "nfc_mf1.h"         // for nfc_tag_mf1_prng_seed
 #include "nrf_power.h"
 #include "nrf_pwr_mgmt.h"
 #include "nrfx_nfct.h"
@@ -61,7 +62,7 @@ static bool m_is_a_btn_release = false;
 static bool m_system_off_processing = false;
 
 // NFC field generator state
-volatile bool m_is_field_on = false;  
+volatile bool m_is_field_on = false;
 
 // cpu reset reason
 static uint32_t m_reset_source;
@@ -136,6 +137,11 @@ void rng_drv_and_srand_init(void) {
 
     // Finally initialize the srand seeds in the c standard library
     srand(rand_int);
+
+    // Seed the MFC LFSR PRNG with the same hardware random value.
+    // This makes nonce generation follow the real Mifare Classic LFSR pattern
+    // so readers that fingerprint PRNG type (e.g. Eltis) accept the emulated card.
+    nfc_tag_mf1_prng_seed(rand_int);
 }
 
 /**@brief Initialize GPIO matrix library
@@ -150,27 +156,27 @@ static void gpio_te_init(void) {
 static void field_generator_rainbow_loop(void) {
     static uint8_t color_index = 0;
     static uint32_t last_update = 0;
-    
+
     if (!m_is_field_on) return;
-    
+
     uint32_t now = app_timer_cnt_get();
-    
+
     if (app_timer_cnt_diff_compute(now, last_update) < APP_TIMER_TICKS(100)) {
         return;
     }
     last_update = now;
-    
+
     // Rainbow colors
     const uint8_t colors[] = {RGB_RED, RGB_YELLOW, RGB_GREEN, RGB_CYAN, RGB_BLUE, RGB_MAGENTA};
-    
+
     set_slot_light_color(colors[color_index]);
     uint32_t *led_pins = hw_get_led_array();
-    
+
     // Light up all LEDs with current color
     for (int i = 0; i < RGB_LIST_NUM; i++) {
         nrf_gpio_pin_set(led_pins[i]);
     }
-    
+
     color_index = (color_index + 1) % 6;
 }
 #endif
@@ -198,9 +204,9 @@ static void timer_button_event_handle(void *arg) {
         NRF_LOG_INFO("BUTTON press during shutdown");
         return;
     }
-    
+
     nrf_drv_gpiote_pin_t pin = *(nrf_drv_gpiote_pin_t *)arg;
-    
+
     // Check here if the current GPIO is at the pressed level
     if (nrf_gpio_pin_read(pin) == 1) {
         if (pin == BUTTON_1) {
@@ -667,11 +673,11 @@ static void btn_fn_copy_lf(uint8_t slot, tag_specific_type_t type) {
             size = LF_HIDPROX_TAG_ID_SIZE;
             data = id_buffer;
             break;
-		case TAG_TYPE_IOPROX:
-			status = scan_ioprox(id_buffer, 0);
-			size = LF_IOPROX_TAG_ID_SIZE;
-			data = id_buffer;
-			break;
+        case TAG_TYPE_IOPROX:
+            status = scan_ioprox(id_buffer, 0);
+            size = LF_IOPROX_TAG_ID_SIZE;
+            data = id_buffer;
+            break;
         case TAG_TYPE_EM410X:
         case TAG_TYPE_EM410X_ELECTRA: {
             status = scan_em410x(id_buffer);
@@ -853,16 +859,16 @@ static void run_button_function_by_settings(settings_button_function_t sbf) {
                     nrf_gpio_pin_set(READER_POWER);     // reader power enable
                     nrf_gpio_cfg_output(HF_ANT_SEL);
                     nrf_gpio_pin_clear(HF_ANT_SEL);     // hf ant switch to reader mode
-                    
+
                     pcd_14a_reader_init();
                     bsp_delay_ms(10);
                 }
-                
+
                 pcd_14a_reader_reset();
                 pcd_14a_reader_antenna_on();
                 m_is_field_on = true;
                 NRF_LOG_INFO("NFC field ON");
-                
+
                 // Set initial rainbow state
                 set_slot_light_color(RGB_RED);
                 uint32_t *led_pins = hw_get_led_array();
@@ -878,7 +884,7 @@ static void run_button_function_by_settings(settings_button_function_t sbf) {
                 pcd_14a_reader_antenna_off();
                 m_is_field_on = false;
                 NRF_LOG_INFO("NFC field OFF");
-                
+
                 // If we're not in reader mode, clean up the hardware
                 device_mode_t current_mode = get_device_mode();
                 if (current_mode != DEVICE_MODE_READER) {
@@ -886,7 +892,7 @@ static void run_button_function_by_settings(settings_button_function_t sbf) {
                     nrf_gpio_pin_clear(READER_POWER);   // reader power disable
                     nrf_gpio_pin_set(HF_ANT_SEL);       // hf ant switch back to tag mode
                 }
-                
+
                 // Restore normal LED
                 light_up_by_slot();
 
@@ -1034,17 +1040,17 @@ int main(void) {
         lesc_event_process();
         // Button event process
         button_press_process();
-        
+
 #if defined(PROJECT_CHAMELEON_ULTRA)
         // Field generator rainbow animation
         field_generator_rainbow_loop();
 #endif
-        
+
         // Led blink at usb status (only if field generator is off)
         if (!m_is_field_on) {
             blink_usb_led_status();
         }
-        
+
         // Data pack process
         data_frame_process();
         // Log print process

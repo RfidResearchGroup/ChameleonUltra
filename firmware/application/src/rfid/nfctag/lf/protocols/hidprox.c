@@ -228,10 +228,10 @@ const protocol hidprox = {
     .get_data = (codec_get_data)hidprox_get_data,
     .modulator = (modulator)hidprox_modulator,
     .decoder =
-        {
-            .start = (decoder_start)hidprox_decoder_start,
-            .feed = (decoder_feed)hidprox_decoder_feed,
-        },
+    {
+        .start = (decoder_start)hidprox_decoder_start,
+        .feed = (decoder_feed)hidprox_decoder_feed,
+    },
 };
 
 uint8_t hidprox_t55xx_writer(wiegand_card_t *card, uint32_t *blks) {

@@ -87,9 +87,19 @@ extern "C" {
     T5577_PWD |                   \
     (2 << T5577_MAXBLOCK_SHIFT))
 
+// IDTECK: PSK1 at RF/32, subcarrier = carrier/2 (RF_2), 2 data blocks (64-bit frame).
+#define T5577_IDTECK_CONFIG (     \
+    T5577_BITRATE_RF_32 |         \
+    T5577_MODULATION_PSK1 |       \
+    T5577_PSKCF_RF_2 |            \
+    T5577_PWD |                   \
+    (2 << T5577_MAXBLOCK_SHIFT))
+
+#if defined(PROJECT_CHAMELEON_ULTRA)
 void t55xx_write_data(uint32_t passwd, uint32_t *blks, uint8_t blk_count);
 void t55xx_reset_passwd(uint32_t old_passwd, uint32_t new_passwd);
-
+void t55xx_send_cmd(uint8_t opcode, uint32_t *passwd, uint8_t data_len, uint32_t *data, uint8_t block);
+#endif
 #ifdef __cplusplus
 }
 #endif

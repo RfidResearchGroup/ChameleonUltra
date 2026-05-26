@@ -26,6 +26,8 @@ Read the [available documentation](https://github.com/RfidResearchGroup/Chameleo
 
 * [ChameleonUltraGUI](https://github.com/GameTec-live/ChameleonUltraGUI)
 * [MTools BLE](https://github.com/RfidResearchGroup/ChameleonUltra/wiki/mtoolsble)
+* [Mifare Chameleon Tool (iOS only, Beta)](https://apps.apple.com/it/app/mifare-chameleon-tool/id6761231484)
+* [Chameleon Ultra (Sailfish OS only)](https://sailfishos-chum.github.io/apps/harbour-chameleon-ultra)
 
 # Videos
 
