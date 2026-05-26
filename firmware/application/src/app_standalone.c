@@ -10,6 +10,7 @@
  */
 
 #include "app_standalone.h"
+#include "standalone_led.h"
 
 #include <string.h>
 
@@ -321,17 +322,20 @@ static void transition_arm(void) {
     if (!mode_permitted(m, m_ctx.flags)) {
         NRF_LOG_WARNING("standalone: mode %u not permitted (missing opt-in)",
                         m_ctx.mode);
+        standalone_feedback(SL_FB_DENIED);
         return;
     }
 
     standalone_rc_t rc = enter_mode(m);
     if (rc != STANDALONE_RC_OK) {
         NRF_LOG_WARNING("standalone: on_enter returned %d", rc);
+        standalone_feedback(SL_FB_ERROR);
         return;
     }
 
     m_ctx.state = STANDALONE_STATE_ARMED_IDLE;
     NRF_LOG_INFO("standalone: armed in mode %u", m_ctx.mode);
+    standalone_feedback(SL_FB_ARMED);
 }
 
 static void transition_disarm(void) {
@@ -339,6 +343,7 @@ static void transition_disarm(void) {
     (void)exit_mode(m);
     m_ctx.state = STANDALONE_STATE_DISARMED;
     NRF_LOG_INFO("standalone: disarmed");
+    standalone_feedback(SL_FB_DISARMED);
 }
 
 /* -------------------------------------------------------------------------
