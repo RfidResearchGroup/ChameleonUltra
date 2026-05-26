@@ -2,49 +2,36 @@
  * mode_emultrace.c
  *
  * Standalone mode: CU acts as an emulated card and captures the complete
- * wire exchange when a real reader authenticates to it — REQA, ATQA,
- * anticollision, SELECT, SAK, auth command, NT, NR||AR, AT.
+ * wire exchange when a real reader authenticates to it.
  *
- * This is the card-side counterpart to mode_authtrace (which has CU
- * acting as a reader against a real card). Both produce the same session
- * wire format and both feed mfkey32v2.
- *
- * Works on ChameleonLite as well as Ultra — NFCT only, no RC522.
+ * Card-side counterpart to mode_authtrace. Both produce the same session
+ * wire format and both feed mfkey32v2. Works on Lite and Ultra.
  *
  * Mechanism:
- *   on_enter() installs RX + TX sniff callbacks onto the already-running
- *   NFCT emulation stack (same technique as CMD 2017 / hf 14a sniff, but
- *   non-blocking). Normal tag emulation continues uninterrupted; CU still
- *   responds to the reader correctly.
+ *   on_enter() installs RX + TX sniff callbacks on the running NFCT
+ *   emulation stack. Normal tag emulation continues — CU still responds
+ *   to the reader correctly.
  *
- *   Session boundaries are detected by a fresh REQA (7-bit, 0x26) arriving
- *   while the current-session accumulator already has frames. When a new
- *   REQA arrives, the current session is committed to the result buffer and
- *   a fresh accumulator begins.
+ *   IMPORTANT: The sniff callbacks fire from the NFCT interrupt handler.
+ *   All they do is copy bytes into the accumulator and set a volatile flag.
+ *   All heavy work (LED feedback, FDS writes) happens in on_tick(), which
+ *   runs in main-loop context where blocking is safe.
  *
- *   Sessions are persisted to FDS after each commit so they survive a
- *   reboot (same API as mode_authtrace).
+ * Session boundary:
+ *   A new REQA (7 bits, 0x26) arriving while the accumulator is non-empty
+ *   sets m_session_ready. on_tick() detects this and commits the buffered
+ *   session. Additionally, if no new frame arrives for IDLE_COMMIT_TICKS
+ *   and the accumulator is non-empty, on_tick() commits automatically.
  *
- * Button mapping while armed (chord-only):
- *   BOTH_SHORT   Manually commit whatever is in the current accumulator
- *                as a session (useful if the session boundary detection
- *                didn't fire e.g. reader never sent a second REQA)
- *   BOTH_LONG    Arm / disarm (handled by framework)
- *   BOTH_VLONG   Discard all stored sessions + clear FDS record
+ * Button mapping while armed:
+ *   BOTH_SHORT   Force-commit whatever is in the accumulator now
+ *   BOTH_LONG    Arm / disarm (framework)
+ *   BOTH_VLONG   Discard all sessions + clear FDS
  *
- * Config: none — uses the active emulation slot as configured by the
- * user's normal slot settings. No separate config blob needed.
+ * Config: none — uses the active emulation slot as configured.
  *
- * Result wire format: identical to mode_authtrace.c
- *   For each session:
- *     u8  session_num
- *     u8  status       (0x00 = ok, 0x01 = partial / manually committed)
- *     u16 trace_len_le
- *     u8[trace_len] trace_bytes
- *   Each trace_bytes frame:
- *     u16 hdr_be       bit15=1: card→reader (TX), bit15=0: reader→card (RX)
- *                      bits14..0: frame size in bits
- *     u8[ceil(bits/8)] frame data
+ * Result wire format: identical to mode_authtrace.c (session header +
+ * direction-tagged frames).
  */
 
 #include "app_standalone.h"
@@ -55,6 +42,7 @@
 #include "nrf_log.h"
 #include "rfid/nfctag/hf/nfc_14a.h"
 #include "tag_emulation.h"
+#include "app_timer.h"      /* app_timer_cnt_get / app_timer_cnt_diff_compute */
 
 /* -------------------------------------------------------------------------
  * Constants
@@ -64,14 +52,14 @@
 #define MAX_TRACE_BYTES          256
 #define SESSION_HDR_BYTES        4
 #define RESULT_BUFFER_BYTES      (MAX_SESSIONS * (SESSION_HDR_BYTES + MAX_TRACE_BYTES))
+#define SESSION_ACCUM_BYTES      (MAX_TRACE_BYTES + 32)
 
-/* Current-session accumulator — one ongoing reader interaction */
-#define SESSION_ACCUM_BYTES      (MAX_TRACE_BYTES + 32)  /* a bit of headroom */
+/* Auto-commit after this many ticks of no frames (~2s at 32768 Hz) */
+#define IDLE_COMMIT_TICKS        APP_TIMER_TICKS(2000)
 
 #define STATUS_OK                0x00
-#define STATUS_PARTIAL           0x01   /* manually committed, may be incomplete */
+#define STATUS_PARTIAL           0x01
 
-/* REQA: 7 bits, value 0x26 */
 #define REQA_BITS                7u
 #define REQA_VALUE               0x26u
 
@@ -82,20 +70,24 @@
 static uint32_t m_result_words[(RESULT_BUFFER_BYTES + 3) / 4];
 #define m_result_buf ((uint8_t *)m_result_words)
 
-/* Current-session accumulator (in ISR/callback context — keep simple) */
+/* Current-session accumulator */
 static uint8_t  m_accum[SESSION_ACCUM_BYTES];
 static uint16_t m_accum_len;
 
+/* Flags written from ISR, read from main-loop on_tick */
+static volatile bool    m_session_ready;     /* REQA boundary detected       */
+static volatile uint32_t m_last_frame_ticks; /* tick of most recent frame    */
+
 static struct {
-    size_t  write_cursor;
-    size_t  read_cursor;
-    uint8_t session_count;
-    bool    active;
-    bool    result_loaded;
+    size_t   write_cursor;
+    size_t   read_cursor;
+    uint8_t  session_count;
+    bool     active;
+    bool     result_loaded;
 } m_st;
 
 /* -------------------------------------------------------------------------
- * Buffer helpers
+ * Buffer helpers (main-loop context only)
  * ------------------------------------------------------------------------- */
 
 static void buffer_reset(void) {
@@ -108,25 +100,17 @@ static void accum_reset(void) {
     m_accum_len = 0;
 }
 
-/* Append one frame to the accumulator (called from sniff callbacks) */
-static void accum_frame(const uint8_t *data, uint16_t szBits, bool is_tx) {
-    uint16_t szBytes = (szBits + 7) / 8;
-    if (m_accum_len + 2 + szBytes > SESSION_ACCUM_BYTES) return;
-    uint16_t hdr = szBits | (is_tx ? 0x8000u : 0x0000u);
-    m_accum[m_accum_len++] = (hdr >> 8) & 0xFF;
-    m_accum[m_accum_len++] =  hdr       & 0xFF;
-    memcpy(&m_accum[m_accum_len], data, szBytes);
-    m_accum_len += szBytes;
-}
-
-/* Commit the current accumulator as a new session in the result buffer */
+/* Commit the current accumulator as a session — MAIN LOOP ONLY */
 static bool commit_session(uint8_t status) {
     if (m_accum_len == 0) return false;
 
     uint16_t trace_len = m_accum_len;
     if (trace_len > MAX_TRACE_BYTES) trace_len = MAX_TRACE_BYTES;
     size_t need = SESSION_HDR_BYTES + trace_len;
-    if (RESULT_BUFFER_BYTES - m_st.write_cursor < need) return false;
+    if (RESULT_BUFFER_BYTES - m_st.write_cursor < need) {
+        standalone_feedback(SL_FB_ERROR);
+        return false;
+    }
 
     uint8_t *p = &m_result_buf[m_st.write_cursor];
     p[0] = m_st.session_count;
@@ -137,19 +121,20 @@ static bool commit_session(uint8_t status) {
     m_st.write_cursor += need;
     m_st.session_count++;
 
-    NRF_LOG_INFO("emultrace: committed session #%u status=0x%02x trace=%u bytes",
+    NRF_LOG_INFO("emultrace: session #%u status=0x%02x trace=%u bytes",
                  m_st.session_count - 1, status, trace_len);
 
     accum_reset();
 
-    /* Persist to flash after each commit */
+    /* Persist and give feedback — safe here in main-loop context */
     app_standalone_save_result_buf(STANDALONE_MODE_EMUL_TRACE,
                                    m_result_words, m_st.write_cursor);
+    standalone_feedback(SL_FB_SUCCESS);
     return true;
 }
 
 /* -------------------------------------------------------------------------
- * Lazy FDS load (same pattern as mode_authtrace)
+ * Lazy FDS load
  * ------------------------------------------------------------------------- */
 
 static void ensure_result_loaded(void) {
@@ -177,29 +162,38 @@ static void ensure_result_loaded(void) {
 }
 
 /* -------------------------------------------------------------------------
- * NFCT sniff callbacks
+ * NFCT sniff callbacks — ISR CONTEXT
  *
- * Called from the NFCT event handler while tag emulation is running.
- * Keep these fast and non-blocking.
- * ------------------------------------------------------------------------- */
+ * Rules: no blocking, no FDS, no LED. Only memcpy and flag writes.
+ * -------------------------------------------------------------------------
+ */
+
+static void accum_frame_isr(const uint8_t *data, uint16_t szBits, bool is_tx) {
+    uint16_t szBytes = (szBits + 7) / 8;
+    if (m_accum_len + 2 + szBytes > SESSION_ACCUM_BYTES) return;
+    uint16_t hdr = szBits | (is_tx ? 0x8000u : 0x0000u);
+    m_accum[m_accum_len++] = (hdr >> 8) & 0xFF;
+    m_accum[m_accum_len++] =  hdr       & 0xFF;
+    memcpy(&m_accum[m_accum_len], data, szBytes);
+    m_accum_len += szBytes;
+    m_last_frame_ticks = app_timer_cnt_get();
+}
 
 static void emultrace_rx_cb(const uint8_t *data, uint16_t szBits) {
     if (!m_st.active) return;
 
-    /* REQA = start of a new reader interaction.
-     * If we already have frames in the accumulator, commit the previous
-     * session before starting fresh. */
+    /* New REQA while we have frames — signal a completed session.
+     * Set the flag; on_tick() does the actual commit. */
     if (szBits == REQA_BITS && data[0] == REQA_VALUE && m_accum_len > 0) {
-        commit_session(STATUS_OK);
-        standalone_feedback(SL_FB_SUCCESS);
+        m_session_ready = true;
     }
 
-    accum_frame(data, szBits, false);   /* reader→card */
+    accum_frame_isr(data, szBits, false);   /* reader→card */
 }
 
 static void emultrace_tx_cb(const uint8_t *data, uint16_t szBits) {
     if (!m_st.active) return;
-    accum_frame(data, szBits, true);    /* card→reader (CU's own response) */
+    accum_frame_isr(data, szBits, true);    /* card→reader */
 }
 
 /* -------------------------------------------------------------------------
@@ -207,37 +201,75 @@ static void emultrace_tx_cb(const uint8_t *data, uint16_t szBits) {
  * ------------------------------------------------------------------------- */
 
 static standalone_rc_t on_enter(const uint8_t *cfg, size_t cfg_len) {
-    (void)cfg; (void)cfg_len;   /* no config for this mode */
+    (void)cfg; (void)cfg_len;
 
     accum_reset();
-    m_st.active = true;
+    m_session_ready    = false;
+    m_last_frame_ticks = 0;
+    m_st.active        = true;
 
     ensure_result_loaded();
 
-    /* Install sniff callbacks onto the running NFCT emulation stack.
-     * Do NOT call tag_mode_enter() here — that would reinitialise NFCT
-     * and wipe the anti-collision data. The device must already be in
-     * emulator mode (normal default). */
-    tag_emulation_load_data();   /* ensure the active slot's UID is loaded */
+    tag_emulation_load_data();
 
     nfc_tag_14a_set_sniff_cb(emultrace_rx_cb);
     nfc_tag_14a_set_tx_sniff_cb(emultrace_tx_cb);
 
-    NRF_LOG_INFO("emultrace: armed — sniff callbacks installed");
+    NRF_LOG_INFO("emultrace: armed");
     return STANDALONE_RC_OK;
 }
 
 static standalone_rc_t on_exit(void) {
-    /* Remove callbacks first, then commit any partial session */
     nfc_tag_14a_clear_sniff_cb();
     nfc_tag_14a_clear_tx_sniff_cb();
 
+    m_st.active     = false;
+    m_session_ready = false;
+
+    /* Commit any partial accumulator */
     if (m_accum_len > 0) {
         commit_session(STATUS_PARTIAL);
     }
 
-    m_st.active = false;
-    NRF_LOG_INFO("emultrace: disarmed — sniff callbacks removed");
+    NRF_LOG_INFO("emultrace: disarmed");
+    return STANDALONE_RC_OK;
+}
+
+static standalone_rc_t on_tick(uint32_t now_ticks) {
+    if (!m_st.active) return STANDALONE_RC_OK;
+
+    /* Case 1: REQA boundary detected by RX callback */
+    if (m_session_ready) {
+        m_session_ready = false;
+        /* The REQA itself is already in the accumulator. We want to commit
+         * everything UP TO the REQA (i.e., the previous session). Trim the
+         * last frame (REQA = 2 hdr bytes + 1 data byte = 3 bytes) before
+         * committing, then re-add it to the fresh accumulator. */
+        if (m_accum_len >= 3) {
+            uint16_t save_len = m_accum_len - 3;
+            uint8_t  reqa_frame[3];
+            memcpy(reqa_frame, &m_accum[save_len], 3);
+            m_accum_len = save_len;
+            commit_session(STATUS_OK);
+            /* Seed the new session with the REQA */
+            memcpy(m_accum, reqa_frame, 3);
+            m_accum_len = 3;
+        } else {
+            commit_session(STATUS_OK);
+        }
+        return STANDALONE_RC_OK;
+    }
+
+    /* Case 2: Idle timeout — reader walked away */
+    if (m_accum_len > 0 && m_last_frame_ticks != 0) {
+        uint32_t elapsed = app_timer_cnt_diff_compute(now_ticks,
+                                                      m_last_frame_ticks);
+        if (elapsed >= IDLE_COMMIT_TICKS) {
+            m_last_frame_ticks = 0;
+            commit_session(STATUS_OK);
+        }
+    }
+
     return STANDALONE_RC_OK;
 }
 
@@ -246,11 +278,10 @@ static standalone_rc_t on_button(standalone_button_evt_t evt) {
 
     switch (evt) {
         case STANDALONE_BTN_BOTH_SHORT:
-            /* Manually commit the current accumulator */
             if (m_accum_len > 0) {
+                m_session_ready    = false;
+                m_last_frame_ticks = 0;
                 commit_session(STATUS_PARTIAL);
-                standalone_feedback(SL_FB_SUCCESS);
-                NRF_LOG_INFO("emultrace: manual commit");
             } else {
                 standalone_feedback(SL_FB_ERROR);
             }
@@ -259,9 +290,11 @@ static standalone_rc_t on_button(standalone_button_evt_t evt) {
         case STANDALONE_BTN_BOTH_VLONG:
             accum_reset();
             buffer_reset();
-            m_st.result_loaded = true;   /* RAM is authoritative now */
+            m_session_ready    = false;
+            m_last_frame_ticks = 0;
+            m_st.result_loaded = true;
             app_standalone_save_result_buf(STANDALONE_MODE_EMUL_TRACE, NULL, 0);
-            NRF_LOG_INFO("emultrace: sessions cleared");
+            NRF_LOG_INFO("emultrace: cleared");
             standalone_feedback(SL_FB_SUCCESS);
             return STANDALONE_RC_OK;
 
@@ -301,6 +334,8 @@ static standalone_rc_t read_result(uint8_t *out, size_t out_max, size_t *out_len
 static void clear_result(void) {
     accum_reset();
     buffer_reset();
+    m_session_ready    = false;
+    m_last_frame_ticks = 0;
     m_st.result_loaded = true;
     app_standalone_save_result_buf(STANDALONE_MODE_EMUL_TRACE, NULL, 0);
 }
@@ -314,11 +349,11 @@ const standalone_mode_iface_t mode_emultrace_iface = {
     .name            = "emul_trace",
     .writes_tag      = false,
     .writes_slot     = false,
-    .wants_tick      = false,
+    .wants_tick      = true,    /* needed for idle-timeout and session commit */
     .on_enter        = on_enter,
     .on_exit         = on_exit,
     .on_button       = on_button,
-    .on_tick         = NULL,
+    .on_tick         = on_tick,
     .get_result_size = get_result_size,
     .read_result     = read_result,
     .clear_result    = clear_result,
