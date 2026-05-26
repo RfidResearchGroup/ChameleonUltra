@@ -37,6 +37,9 @@
 #ifndef CONFIG_STANDALONE_DICT_CHECK
 #define CONFIG_STANDALONE_DICT_CHECK  0  /* not yet implemented */
 #endif
+#ifndef CONFIG_STANDALONE_EMUL_TRACE
+#define CONFIG_STANDALONE_EMUL_TRACE  1
+#endif
 
 /* -------------------------------------------------------------------------
  * FDS record keys (file ID FDS_STANDALONE_FILE_ID defined in fds_ids.h)
@@ -93,6 +96,9 @@ static const standalone_mode_iface_t * const m_modes[] = {
 #endif
 #if CONFIG_STANDALONE_DICT_CHECK
     &mode_dict_check_iface,
+#endif
+#if CONFIG_STANDALONE_EMUL_TRACE
+    &mode_emultrace_iface,
 #endif
 };
 

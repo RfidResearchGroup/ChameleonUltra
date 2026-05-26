@@ -25,6 +25,7 @@ static chameleon_rgb_type_t m_palette[STANDALONE_MODE__COUNT] = {
     [STANDALONE_MODE_AUTHTRACE]   = RGB_MAGENTA,
     [STANDALONE_MODE_SLOT_CYCLE]  = RGB_YELLOW,
     [STANDALONE_MODE_DICT_CHECK]  = RGB_WHITE,
+    [STANDALONE_MODE_EMUL_TRACE]  = RGB_CYAN,
 };
 
 static bool m_initialised = false;

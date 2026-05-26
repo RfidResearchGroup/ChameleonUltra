@@ -51,6 +51,7 @@ typedef enum {
     STANDALONE_MODE_AUTHTRACE   = 0x03,  /* active reader; logs auth exchanges */
     STANDALONE_MODE_SLOT_CYCLE  = 0x04,
     STANDALONE_MODE_DICT_CHECK  = 0x05,
+    STANDALONE_MODE_EMUL_TRACE  = 0x06,  /* CU as card, trace reader auth exchanges */
 
     STANDALONE_MODE__COUNT              /* sentinel - keep last */
 } standalone_mode_t;
@@ -142,6 +143,7 @@ extern const standalone_mode_iface_t mode_authtrace_iface;     /* needs reader h
 #endif
 extern const standalone_mode_iface_t mode_slot_cycle_iface;
 extern const standalone_mode_iface_t mode_dict_check_iface;
+extern const standalone_mode_iface_t mode_emultrace_iface;     /* NFCT, works on Lite */
 
 /* -------------------------------------------------------------------------
  * Public API
