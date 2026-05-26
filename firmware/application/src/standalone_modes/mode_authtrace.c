@@ -358,6 +358,9 @@ static standalone_rc_t read_result(uint8_t *out, size_t out_max, size_t *out_len
     ensure_result_loaded();
 
     if (m_st.read_cursor >= m_st.write_cursor) {
+        /* Auto-reset so the next drain starts from the beginning.
+         * Data is only truly gone when clear_result() is called. */
+        m_st.read_cursor = 0;
         *out_len = 0;
         return STANDALONE_RC_NO_RESULT;
     }
