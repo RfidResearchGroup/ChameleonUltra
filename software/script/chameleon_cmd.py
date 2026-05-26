@@ -1784,7 +1784,7 @@ class ChameleonCMD:
         """Read current standalone state, mode, flags, and FDS stats.
 
         Response: {u8 state, u8 mode, u8 flags, u8 reserved,
-                   u16 words_used_le, u16 words_available_le,
+                   u16 words_used_le, u16 pages_available_le,
                    u8 valid_records, u8 dirty_records}  (10 bytes).
         Older firmware returns 4 bytes; fds field is None in that case.
         Returns tuple (state, mode, flags, fds_or_None).
@@ -1800,7 +1800,7 @@ class ChameleonCMD:
         fds = None
         if len(resp.data) >= 10:
             wu, wa, vr, dr = struct.unpack('<HHBB', resp.data[4:10])
-            fds = {'words_used': wu, 'words_available': wa,
+            fds = {'words_used': wu, 'pages_available': wa,
                    'valid_records': vr, 'dirty_records': dr}
         return (StandaloneState(state_v),
                 StandaloneMode(mode_v),

@@ -10699,13 +10699,11 @@ class StandaloneStatus(DeviceRequiredUnit):
         print(f" flags: {flag_str}")
         if fds is not None:
             used  = fds['words_used']
-            avail = fds['words_available']
-            total = used + avail
-            pct   = int(used * 100 / total) if total else 0
+            pages = fds['pages_available']
             dirty = fds['dirty_records']
             valid = fds['valid_records']
             gc_hint = f"  {CY}(GC recommended){C0}" if dirty > 4 else ""
-            print(f" flash: {used}/{total} words used ({pct}%)  "
+            print(f" flash: {used} words used  {pages} pages free  "
                   f"valid={valid} dirty={dirty}{gc_hint}")
 
 
