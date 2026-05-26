@@ -66,10 +66,10 @@ data_frame_tx_t *cmd_handler_standalone_get_mode(uint16_t cmd, uint16_t status,
     };
     fds_stat_t stat;
     if (fds_stat(&stat) == NRF_SUCCESS) {
-        resp[4] = (uint8_t)(stat.words_used         );
-        resp[5] = (uint8_t)(stat.words_used      >> 8);
-        resp[6] = (uint8_t)(stat.words_available     );
-        resp[7] = (uint8_t)(stat.words_available >> 8);
+        resp[4] = (uint8_t)(stat.words_used          );
+        resp[5] = (uint8_t)(stat.words_used       >> 8);
+        resp[6] = (uint8_t)(stat.pages_available     );
+        resp[7] = (uint8_t)(stat.pages_available  >> 8);
         resp[8] = (uint8_t)(stat.valid_records);
         resp[9] = (uint8_t)(stat.dirty_records);
     }
