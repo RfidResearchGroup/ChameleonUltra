@@ -1,9 +1,20 @@
 #!/usr/bin/env python3
+import os
+import sys
+import unittest
+
+sys.path.append('..')
+
 import hardnested_utils
 from chameleon_cmd import ChameleonCMD
-from chameleon_com import ChameleonCom, OpenFailException
-import sys
-sys.path.append('..')
+from chameleon_com import ChameleonCom
+
+
+def open_test_device():
+    port = os.environ.get("CHAMELEON_PORT")
+    if not port:
+        raise unittest.SkipTest("set CHAMELEON_PORT to run hardware tests")
+    return ChameleonCom().open(port)
 
 
 def test_hardnested_acquire():
@@ -24,10 +35,7 @@ def test_hardnested_acquire():
     #   (4byte uid of card) - (block_target 1byte) - (type_target 1byte) - (nonces from device Nbytes)
 
     # ------------------------     open the device     ------------------------
-    try:
-        cml = ChameleonCom().open('com19')
-    except OpenFailException:
-        cml = ChameleonCom().open('/dev/ttyACM0')
+    cml = open_test_device()
     cml_cmd = ChameleonCMD(cml)
 
     # ------------------------ SET DEVICE MODE ------------------------

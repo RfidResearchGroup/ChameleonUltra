@@ -12,6 +12,10 @@ from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.history import FileHistory
 from chameleon_utils import CR, CG, CY, color_string
 
+
+EXIT_SUCCESS = 0
+EXIT_NONINTERACTIVE = 2
+
 ULTRA = r"""
                                                                 ╦ ╦╦ ╔╦╗╦═╗╔═╗
                                                    ███████      ║ ║║  ║ ╠╦╝╠═╣
@@ -181,9 +185,47 @@ class ChameleonCLI:
             self.exec_cmd(cmd_str)
 
 
-if __name__ == '__main__':
+def build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Chameleon Ultra CLI")
+    parser.add_argument(
+        "-c",
+        "--command",
+        action="append",
+        help="execute one CLI command and exit; may be passed more than once",
+    )
+    return parser
+
+
+def main(argv=None) -> int:
     if sys.version_info < (3, 9):
         raise Exception("This script requires at least Python 3.9")
+
+    parser = build_arg_parser()
+    args = parser.parse_args(argv)
+
     colorama.init(autoreset=True)
     chameleon_cli_unit.check_tools()
-    ChameleonCLI().startCLI()
+
+    cli = ChameleonCLI()
+    if args.command:
+        for command in args.command:
+            try:
+                cli.exec_cmd(command)
+            except SystemExit as e:
+                # The interactive "exit" command uses a non-zero sentinel to
+                # break the prompt loop. Treat it as success for one-shot use.
+                if e.code == 996:
+                    return EXIT_SUCCESS
+                raise
+        return EXIT_SUCCESS
+
+    if not sys.stdin.isatty():
+        parser.error("an interactive terminal is required unless --command is used")
+        return EXIT_NONINTERACTIVE
+
+    cli.startCLI()
+    return EXIT_SUCCESS
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
