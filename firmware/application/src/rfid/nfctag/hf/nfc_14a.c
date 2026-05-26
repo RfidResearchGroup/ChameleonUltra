@@ -684,9 +684,15 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
                                     & (NFCT_TXD_AMOUNT_TXDATABYTES_Msk >> NFCT_TXD_AMOUNT_TXDATABYTES_Pos);
                 uint16_t tx_bits_rem = (amt >> NFCT_TXD_AMOUNT_TXDATABITS_Pos)
                                        & (NFCT_TXD_AMOUNT_TXDATABITS_Msk >> NFCT_TXD_AMOUNT_TXDATABITS_Pos);
-                uint16_t tx_bits = (tx_bits_rem > 0)
-                                   ? ((tx_bytes - 1) * 8 + tx_bits_rem)
-                                   : (tx_bytes * 8);
+                /* TXDATABYTES = number of complete bytes; TXDATABITS = remaining bits in the
+                 * last (partial) byte.  Total bits = TXDATABYTES*8 + TXDATABITS.
+                 *
+                 * Previous formula "(tx_bytes-1)*8 + tx_bits_rem" was wrong for frames sent
+                 * via nfc_tag_14a_tx_bits() / NFC_14A_TX_BITS_CORE where AMOUNT holds the
+                 * raw bit count directly.  For those frames TXDATABYTES encodes the byte
+                 * count of the wrapped buffer and TXDATABITS the remainder — the correct
+                 * total is simply tx_bytes*8 + tx_bits_rem. */
+                uint16_t tx_bits = tx_bytes * 8 + tx_bits_rem;
                 if (tx_bits > 0 && tx_bytes <= MAX_NFC_TX_BUFFER_SIZE) {
                     m_tx_sniff_cb(m_nfc_tx_buffer, tx_bits);
                 }
