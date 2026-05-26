@@ -10498,8 +10498,31 @@ AUTHTRACE_STATUS_NAMES = {
 }
 
 
+def _strip_parity(raw: bytes, sz_bits: int):
+    """Strip ISO14443-A parity bits (one per byte) from a frame.
+
+    Returns (stripped_bytes, data_bits).
+    Short frames (<8 bits) and frames whose bit count is not a multiple of 9
+    are returned as-is — they have no parity.
+    """
+    if sz_bits >= 8 and sz_bits % 9 == 0:
+        n_bytes = sz_bits // 9
+        all_bits = []
+        for byte in raw:
+            for b in range(8):
+                all_bits.append((byte >> b) & 1)
+        stripped = []
+        for nb in range(n_bytes):
+            val = 0
+            for b in range(8):
+                val |= all_bits[nb * 9 + b] << b
+            stripped.append(val)
+        return bytes(stripped), n_bytes * 8
+    return raw, sz_bits
+
+
 def parse_authtrace_frames(trace: bytes):
-    """Decode the inner frame stream of one session."""
+    """Decode inner frame stream; strip parity; return list of (szBits, data, is_tx)."""
     frames = []
     off = 0
     while off + 2 <= len(trace):
@@ -10510,17 +10533,15 @@ def parse_authtrace_frames(trace: bytes):
         off += 2
         if off + sz_bytes > len(trace):
             break
-        frames.append({
-            "dir":  "tag->reader" if is_tx else "reader->tag",
-            "bits": sz_bits,
-            "data": trace[off:off + sz_bytes].hex(),
-        })
+        raw = trace[off:off + sz_bytes]
+        data, sz_bits = _strip_parity(raw, sz_bits)
+        frames.append((sz_bits, bytes(data), is_tx))
         off += sz_bytes
     return frames
 
 
 def parse_authtrace_buffer(raw: bytes):
-    """Walk the session stream."""
+    """Walk the session stream; return list of session dicts."""
     sessions = []
     off = 0
     while off + 4 <= len(raw):
@@ -10545,25 +10566,98 @@ def parse_authtrace_buffer(raw: bytes):
 def authtrace_summarise(sessions):
     out = []
     for s in sessions:
-        tx = sum(1 for f in s["frames"] if f["dir"] == "tag->reader")
-        rx = len(s["frames"]) - tx
+        frames = s["frames"]
+        tx  = sum(1 for _, _, is_tx in frames if is_tx)
+        rx  = len(frames) - tx
+        nonces = _extract_sniff_nonces(frames)
+        nonce_info = f"  {CG}{len(nonces)} nonce pair(s){C0}" if nonces else ""
         out.append(
             f"  #{s['session_num']:<3} {s['status_name']:<10} "
-            f"{len(s['frames']):>2} frames  ({rx} reader->tag, "
-            f"{tx} tag->reader, {s['trace_len']} bytes)"
+            f"{len(frames):>2} frames  ({rx} reader\u2192card, "
+            f"{tx} card\u2192reader){nonce_info}"
         )
     return "\n".join(out)
 
 
 def authtrace_pretty_dump(sessions):
-    """Proxmark3-style per-frame dump."""
+    """Full decoded per-frame dump matching hf 14a sniff/trace output style."""
     out = []
     for s in sessions:
-        out.append(f"\n=== session #{s['session_num']}  "
-                   f"status={s['status_name']} ===")
-        for f in s["frames"]:
-            arrow = "<--" if f["dir"] == "tag->reader" else "-->"
-            out.append(f"  {arrow}  [{f['bits']:>3} bits]  {f['data']}")
+        frames = s["frames"]
+        tx_count = sum(1 for _, _, is_tx in frames if is_tx)
+        rx_count = len(frames) - tx_count
+        out.append(
+            f"\n{CG}=== session #{s['session_num']}  "
+            f"status={s['status_name']}  "
+            f"{len(frames)} frames  "
+            f"({rx_count} reader\u2192card  {tx_count} card\u2192reader) ==={C0}"
+        )
+        out.append(
+            f"  {'#':>3}  {'dir':<3}  {'bits':>4}  {'hex data':<42}  decoded"
+        )
+        out.append(
+            f"  {'---':>3}  {'---':<3}  {'----':>4}  {'-'*42}  {'-'*35}"
+        )
+        expect_nt     = False
+        expect_nr_ar  = False
+        last_keytype  = None
+        last_block    = None
+        for n, (sz_bits, data, is_tx) in enumerate(frames):
+            hex_str = ' '.join(f'{b:02x}' for b in data)
+            decoded_ctx = None
+            col_ctx     = None
+
+            if not is_tx and sz_bits == 32 and len(data) == 4 and data[0] in (0x60, 0x61):
+                last_keytype = 'A' if data[0] == 0x60 else 'B'
+                last_block   = data[1]
+                expect_nt    = True
+                expect_nr_ar = False
+                decoded_ctx  = f"MIFARE AUTH Key{last_keytype} block=0x{last_block:02X} ({last_block})"
+                col_ctx      = CG
+            elif is_tx and expect_nt and sz_bits == 32 and len(data) == 4:
+                decoded_ctx  = f"NT (card nonce) = {data.hex().upper()}"
+                col_ctx      = CG
+                expect_nt    = False
+                expect_nr_ar = True
+            elif not is_tx and expect_nr_ar and sz_bits == 64 and len(data) == 8:
+                nr = data[:4].hex().upper()
+                ar = data[4:].hex().upper()
+                decoded_ctx  = f"NR={nr}  AR={ar}  (mfkey32 input)"
+                col_ctx      = CG
+                expect_nr_ar = False
+
+            if decoded_ctx is None:
+                decoded, col = _decode_14a_frame_col(data, sz_bits)
+            else:
+                decoded, col = decoded_ctx, col_ctx
+
+            dir_str = f'{CG}<<<{C0}' if is_tx else f'{CY}>>>{C0}'
+            out.append(
+                f"  {CY}{n+1:>3}{C0}  {dir_str}  {sz_bits:>4}  "
+                f"{hex_str:<42}  {col}{decoded}{C0}"
+            )
+
+        # Nonce summary + mfkey32v2 invocations
+        nonces = _extract_sniff_nonces(frames)
+        if nonces:
+            out.append(f"\n  {CG}Auth nonces captured:{C0}")
+            pairs_by_key = {}
+            for nc in nonces:
+                k = (nc['uid'], nc['block'], nc['key_type'])
+                pairs_by_key.setdefault(k, []).append(nc)
+            for (uid, block, kt), pair_list in pairs_by_key.items():
+                out.append(
+                    f"    UID={uid}  block=0x{block:02X}  Key{kt}  "
+                    f"{len(pair_list)} pair(s)"
+                )
+                if len(pair_list) >= 2:
+                    n0, n1 = pair_list[0], pair_list[1]
+                    cmd = (
+                        f"mfkey32v2 {uid} "
+                        f"{n0['nt']} {n0['nr']} {n0['ar']} "
+                        f"{n1['nt']} {n1['nr']} {n1['ar']}"
+                    )
+                    out.append(f"    {CG}mfkey32v2: {cmd}{C0}")
     return "\n".join(out)
 
 
@@ -10728,10 +10822,23 @@ class StandaloneGetResult(DeviceRequiredUnit):
             return
 
         sessions = parse_authtrace_buffer(raw)
-        print(color_string((CG, f"{len(sessions)} authtrace sessions")))
+        mode_label = mode.name.lower().replace('_', '-')
+        print(color_string((CG, f"{len(sessions)} {mode_label} session(s)")))
 
         if args.json:
-            out = jsonlib.dumps(sessions, indent=2)
+            # Convert frames tuples to JSON-serializable dicts
+            json_sessions = []
+            for s in sessions:
+                json_sessions.append({
+                    "session_num": s["session_num"],
+                    "status_name": s["status_name"],
+                    "status_code": s["status_code"],
+                    "frames": [
+                        {"bits": bits, "data": data.hex(), "is_tx": is_tx}
+                        for bits, data, is_tx in s["frames"]
+                    ],
+                })
+            out = jsonlib.dumps(json_sessions, indent=2)
             if args.file:
                 Path(args.file).write_text(out)
                 print(color_string((CG, f"-> {args.file}")))
