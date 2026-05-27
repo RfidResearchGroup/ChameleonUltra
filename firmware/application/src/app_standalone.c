@@ -460,8 +460,6 @@ standalone_rc_t app_standalone_clear_result(void) {
 
 size_t app_standalone_get_stored_size(standalone_mode_t mode) {
     if (mode >= STANDALONE_MODE__COUNT) return 0;
-    /* Read just the 4-byte length header from the FDS result record without
-     * loading the full payload into m_result_save_buf. */
     uint32_t hdr = 0;
     uint16_t len = 4;
     bool ok = fds_read_sync(FDS_STANDALONE_FILE_ID,
@@ -473,6 +471,20 @@ size_t app_standalone_get_stored_size(standalone_mode_t mode) {
                     | (size_t)((hdr >> 16) & 0xFF) << 16
                     | (size_t)((hdr >> 24) & 0xFF) << 24;
     return byte_len;
+}
+
+size_t app_standalone_get_result_avail(standalone_mode_t mode) {
+    if (mode >= STANDALONE_MODE__COUNT) return 0;
+    /* For the active mode, prefer in-memory size which includes data
+     * captured this session even if FDS write hasn't succeeded. */
+    if (mode == m_ctx.mode) {
+        const standalone_mode_iface_t *m = active_mode();
+        if (m != NULL && m->get_result_size != NULL) {
+            size_t ram_size = m->get_result_size();
+            if (ram_size > 0) return ram_size;
+        }
+    }
+    return app_standalone_get_stored_size(mode);
 }
 
 standalone_rc_t app_standalone_trigger(void) {
