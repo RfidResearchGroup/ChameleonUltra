@@ -129,6 +129,10 @@ typedef struct standalone_mode_iface {
     size_t            (*get_result_size)(void);
     standalone_rc_t   (*read_result)(uint8_t *out, size_t out_max, size_t *out_len);
     void              (*clear_result)(void);
+    /* Optional: load result data from FDS into RAM if not already loaded.
+     * Called by standalone ls to show data for all modes without arming.
+     * NULL for modes that produce no results (e.g. slot_cycle). */
+    void              (*ensure_loaded)(void);
 } standalone_mode_iface_t;
 
 /* -------------------------------------------------------------------------
