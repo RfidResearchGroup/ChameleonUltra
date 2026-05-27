@@ -194,6 +194,7 @@
 #define DATA_CMD_STANDALONE_GET_RESULT          (7004)
 #define DATA_CMD_STANDALONE_CLEAR_RESULT        (7005)
 #define DATA_CMD_STANDALONE_TRIGGER             (7006)
+#define DATA_CMD_STANDALONE_GET_SIZES           (7007)
 
 #define DATA_CMD_EM410X_SET_EMU_ID              (5000)
 #define DATA_CMD_EM410X_GET_EMU_ID              (5001)
