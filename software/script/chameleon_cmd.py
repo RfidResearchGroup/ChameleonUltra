@@ -1902,6 +1902,20 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(Command.STANDALONE_TRIGGER, b'',
                                          timeout=10)
 
+    def standalone_get_sizes(self) -> list:
+        """Return stored byte count for each mode, indexed by mode_id.
+
+        Queries CMD 7007. Each element is bytes stored in the FDS result
+        record for that mode; 0 means no data stored.
+        """
+        resp = self.device.send_cmd_sync(Command.STANDALONE_GET_SIZES, b'')
+        if resp.status != Status.SUCCESS or not resp.data:
+            return []
+        n = len(resp.data) // 4
+        import struct
+        return [struct.unpack_from('<I', resp.data, i * 4)[0] for i in range(n)]
+
+
 
 def test_fn():
     # connect to chameleon
