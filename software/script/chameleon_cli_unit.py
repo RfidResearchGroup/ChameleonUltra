@@ -8324,6 +8324,18 @@ def _extract_sniff_nonces(frames):
             if not (data[0] == 0x93 and data[2] == 0x88):
                 uid_hex = ''.join(f'{b:02X}' for b in data[2:6])
 
+        # Fallback: extract UID from anticollision response (card→reader, 40 bits).
+        # This fires when no SELECT frame is present (common in authtrace captures
+        # where hf14a_auth_trace_run synthesises the anticollision exchange).
+        if (is_tx
+                and szBits == 40
+                and len(data) == 5
+                and uid_hex is None):
+            # 5 bytes = UID[0..3] + BCC; verify BCC
+            bcc = data[0] ^ data[1] ^ data[2] ^ data[3]
+            if bcc == data[4]:
+                uid_hex = ''.join(f'{b:02X}' for b in data[0:4])
+
         # AUTH command: reader→card, 0x60 (KeyA) or 0x61 (KeyB)
         if not is_tx and data[0] in (0x60, 0x61) and len(data) >= 2:
             key_type = 'A' if data[0] == 0x60 else 'B'
