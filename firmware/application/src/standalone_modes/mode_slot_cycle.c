@@ -187,4 +187,5 @@ const standalone_mode_iface_t mode_slot_cycle_iface = {
     .get_result_size = NULL,
     .read_result     = NULL,
     .clear_result    = NULL,
+    .ensure_loaded   = NULL,
 };
