@@ -222,7 +222,7 @@ data_frame_tx_t *cmd_handler_standalone_get_sizes(uint16_t cmd, uint16_t status,
     (void)status; (void)length; (void)data;
     uint8_t resp[STANDALONE_MODE__COUNT * 4];
     for (int m = 0; m < STANDALONE_MODE__COUNT; m++) {
-        size_t sz = app_standalone_get_stored_size((standalone_mode_t)m);
+        size_t sz = app_standalone_get_result_avail((standalone_mode_t)m);
         int off = m * 4;
         resp[off + 0] = (uint8_t)(sz      );
         resp[off + 1] = (uint8_t)(sz >>  8);
