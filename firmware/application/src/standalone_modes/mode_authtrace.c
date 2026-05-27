@@ -397,6 +397,7 @@ const standalone_mode_iface_t mode_authtrace_iface = {
     .get_result_size = get_result_size,
     .read_result     = read_result,
     .clear_result    = clear_result,
+    .ensure_loaded   = ensure_result_loaded,
 };
 
 #endif /* PROJECT_CHAMELEON_ULTRA */
