@@ -193,8 +193,9 @@ standalone_rc_t app_standalone_load_result_buf(standalone_mode_t mode,
                                                size_t word_buf_bytes,
                                                size_t *out_byte_len);
 
-/* Returns the number of bytes stored in the FDS result record for a given
- * mode without loading the data.  Returns 0 if no record exists. */
+/* Returns available result bytes for a mode — checks RAM for the active
+ * mode, FDS for all others. This is what standalone ls should use. */
+size_t app_standalone_get_result_avail(standalone_mode_t mode);
 size_t app_standalone_get_stored_size(standalone_mode_t mode);
 
 /* Returns true if event was consumed; false to let normal button cfg handle it. */
