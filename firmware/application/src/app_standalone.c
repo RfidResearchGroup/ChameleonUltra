@@ -475,16 +475,13 @@ size_t app_standalone_get_stored_size(standalone_mode_t mode) {
 
 size_t app_standalone_get_result_avail(standalone_mode_t mode) {
     if (mode >= STANDALONE_MODE__COUNT) return 0;
-    /* For the active mode, prefer in-memory size which includes data
-     * captured this session even if FDS write hasn't succeeded. */
-    if (mode == m_ctx.mode) {
-        const standalone_mode_iface_t *m = active_mode();
-        if (m != NULL && m->get_result_size != NULL) {
-            size_t ram_size = m->get_result_size();
-            if (ram_size > 0) return ram_size;
-        }
-    }
-    return app_standalone_get_stored_size(mode);
+    const standalone_mode_iface_t *m = find_mode(mode);
+    if (m == NULL || m->get_result_size == NULL) return 0;
+    /* Trigger lazy-load from FDS into the mode's RAM buffer if not already
+     * done.  Each mode has its own static buffer so multiple modes can be
+     * loaded simultaneously without conflict. */
+    if (m->ensure_loaded != NULL) m->ensure_loaded();
+    return m->get_result_size();
 }
 
 standalone_rc_t app_standalone_trigger(void) {
