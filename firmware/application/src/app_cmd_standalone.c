@@ -210,3 +210,24 @@ data_frame_tx_t *cmd_handler_standalone_trigger(uint16_t cmd, uint16_t status,
     standalone_rc_t rc = app_standalone_trigger();
     return data_frame_make(cmd, rc_to_status(rc), 0, NULL);
 }
+
+/* 7007 GET_SIZES
+ * Request:  empty
+ * Response: { u32 byte_len_le } × STANDALONE_MODE__COUNT
+ *           One u32 per mode_id (0..N), value = bytes stored in FDS.
+ *           Zero = no data stored for that mode.
+ */
+data_frame_tx_t *cmd_handler_standalone_get_sizes(uint16_t cmd, uint16_t status,
+                                                  uint16_t length, uint8_t *data) {
+    (void)status; (void)length; (void)data;
+    uint8_t resp[STANDALONE_MODE__COUNT * 4];
+    for (int m = 0; m < STANDALONE_MODE__COUNT; m++) {
+        size_t sz = app_standalone_get_stored_size((standalone_mode_t)m);
+        int off = m * 4;
+        resp[off + 0] = (uint8_t)(sz      );
+        resp[off + 1] = (uint8_t)(sz >>  8);
+        resp[off + 2] = (uint8_t)(sz >> 16);
+        resp[off + 3] = (uint8_t)(sz >> 24);
+    }
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(resp), resp);
+}
