@@ -1040,11 +1040,12 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                             // Let the label sleep.According to the ISO14443 agreement, the second byte should be 0.
                             if (p_data[1] == 0x00) {
                                 // If everything is normal, then we should make the card directly to sleep, and cannot respond to any message to the read head
+                                nfc_tag_mf1_reset_handler();
                                 nfc_tag_14a_set_state(NFC_TAG_STATE_14A_HALTED);
                             } else {
                                 mf1_response_4bit_auto_encrypt(NAK_INVALID_OPERATION_TBIV);
+                                nfc_tag_mf1_reset_handler();
                             }
-                            nfc_tag_mf1_reset_handler();
                             break;
                         }
                         default: {
