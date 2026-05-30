@@ -40,19 +40,19 @@ APP_USBD_CDC_ACM_GLOBAL_DEF(m_app_cdc_acm,
 volatile bool g_usb_connected = false;
 volatile bool g_usb_port_opened = false;
 volatile bool g_usb_led_marquee_enable = true;
+static uint8_t cdc_data_buffer[NRF_DRV_USBD_EPSIZE];
 
 /** @brief User event handler @ref app_usbd_cdc_acm_user_ev_handler_t */
 static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst, app_usbd_cdc_acm_user_event_t event) {
-    static uint8_t cdc_data_buffer[1];
+
     // app_usbd_cdc_acm_t const *p_cdc_acm = app_usbd_cdc_acm_class_get(p_inst);
 
     switch (event) {
         case APP_USBD_CDC_ACM_USER_EVT_PORT_OPEN: {
-            /*
-             *theProbabilityOfTheEntireUsbReceivingDataIsTheAppUsbdCdcAcmRead *AppUsbdCdcAcmReadFunctionIsNotASeriousReception,ItIsGivenAPointer,AndThenWaitForTheUsbBuffer *SoYouNeedToInitializeTheHeadPointerFirstWhenTheAppUsbdCdcAcmUserEvtPortOpenIsInitialized *IfTheAppUsbdCdcAcmUserEvtRxDoneUsesASubscribed0ToAccessTheBuffer,ItWillCauseTheFirstByteToLoseTheFirstSendEssence
-             */
-            ret_code_t ret = app_usbd_cdc_acm_read(&m_app_cdc_acm, cdc_data_buffer, 1);
+            // Setup first transfer
+            ret_code_t ret = app_usbd_cdc_acm_read_any(&m_app_cdc_acm, cdc_data_buffer, sizeof(cdc_data_buffer));
             UNUSED_VARIABLE(ret);
+
             NRF_LOG_INFO("CDC ACM port opened");
             g_usb_port_opened = true;
             break;
@@ -68,16 +68,13 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst, app_usb
             break;
 
         case APP_USBD_CDC_ACM_USER_EVT_RX_DONE: {
-            ret_code_t ret;
-            //Take out the first byte first
-            data_frame_receive(cdc_data_buffer, 1);
-            do {
-                ret = app_usbd_cdc_acm_read(&m_app_cdc_acm, cdc_data_buffer, 1);
-                if (ret == NRF_SUCCESS) {
-                    // The byte after success
-                    data_frame_receive(cdc_data_buffer, 1);
-                }
-            } while (ret == NRF_SUCCESS);
+            // Get amount of data transfered to process data
+            size_t size = app_usbd_cdc_acm_rx_size(&m_app_cdc_acm);
+            data_frame_receive(cdc_data_buffer, size);
+
+            // Setup next transfer
+            ret_code_t ret = app_usbd_cdc_acm_read_any(&m_app_cdc_acm, cdc_data_buffer, sizeof(cdc_data_buffer));
+            UNUSED_VARIABLE(ret);
             break;
         }
         default:

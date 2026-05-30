@@ -72,6 +72,7 @@ typedef enum {
     C1K48S,
     AVIG56,
     IR56,
+    ACTPHID,
 } card_format_t;
 
 // Structure for defined Wiegand card formats available for packing/unpacking

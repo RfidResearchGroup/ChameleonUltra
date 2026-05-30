@@ -77,7 +77,7 @@ endif()
 
 
 # --- Platform specific settings ---
-if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+if (CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "Android" OR CMAKE_SYSTEM_NAME MATCHES "Darwin")
     MESSAGE(STATUS "Run on linux.")
     if (CMAKE_BUILD_TYPE STREQUAL "Release")
         set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3")
@@ -97,14 +97,21 @@ elseif (CMAKE_SYSTEM_NAME MATCHES "Windows")
         endif()
     endif()
 
-    FetchContent_Declare(
-        pthreads4w
-        GIT_REPOSITORY "https://github.com/GerHobbelt/pthread-win32"
-        OVERRIDE_FIND_PACKAGE
-        EXCLUDE_FROM_ALL
-    )
-    find_package(pthreads4w CONFIG REQUIRED)
-    set(LIBTHREAD pthreads4w::pthreadVC3)
+    if(MSVC)
+        # MSVC has no native POSIX threads; use pthreads4w
+        FetchContent_Declare(
+            pthreads4w
+            GIT_REPOSITORY "https://github.com/GerHobbelt/pthread-win32"
+            OVERRIDE_FIND_PACKAGE
+            EXCLUDE_FROM_ALL
+        )
+        find_package(pthreads4w CONFIG REQUIRED)
+        set(LIBTHREAD pthreads4w::pthreadVC3)
+    else()
+        # MinGW/MSYS2 ships with winpthreads; use native threads
+        find_package(Threads REQUIRED)
+        set(LIBTHREAD Threads::Threads)
+    endif()
 
     set(LIBMATH "") # No separate math library needed on Windows
 else()
@@ -126,7 +133,7 @@ endif()
 add_executable(nested ${COMMON_FILES} ${NESTED_UTIL} nested.c)
 target_include_directories(nested PRIVATE ${SRC_DIR})
 target_link_libraries(nested PRIVATE ${LIBTHREAD}) # Link common thread lib
-if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+if (CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "Android" OR CMAKE_SYSTEM_NAME MATCHES "Darwin")
     target_compile_definitions(nested PRIVATE _GNU_SOURCE)
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
@@ -138,7 +145,7 @@ endif()
 add_executable(staticnested ${COMMON_FILES} ${NESTED_UTIL} staticnested.c)
 target_include_directories(staticnested PRIVATE ${SRC_DIR})
 target_link_libraries(staticnested PRIVATE ${LIBTHREAD}) # Link common thread lib
-if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+if (CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "Android" OR CMAKE_SYSTEM_NAME MATCHES "Darwin")
     target_compile_definitions(staticnested PRIVATE _GNU_SOURCE)
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
@@ -150,7 +157,7 @@ endif()
 add_executable(darkside ${COMMON_FILES} ${MFKEY_UTIL} darkside.c)
 target_include_directories(darkside PRIVATE ${SRC_DIR})
 # darkside doesn't seem to need pthreads based on original file
-if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+if (CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "Android" OR CMAKE_SYSTEM_NAME MATCHES "Darwin")
     target_compile_definitions(darkside PRIVATE _GNU_SOURCE)
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
@@ -161,7 +168,7 @@ endif()
 add_executable(mfkey32 ${COMMON_FILES} mfkey32.c)
 target_include_directories(mfkey32 PRIVATE ${SRC_DIR})
 # mfkey32 doesn't seem to need pthreads based on original file
-if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+if (CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "Android" OR CMAKE_SYSTEM_NAME MATCHES "Darwin")
     target_compile_definitions(mfkey32 PRIVATE _GNU_SOURCE)
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
@@ -172,7 +179,7 @@ endif()
 add_executable(mfkey32v2 ${COMMON_FILES} mfkey32v2.c)
 target_include_directories(mfkey32v2 PRIVATE ${SRC_DIR})
 # mfkey32v2 doesn't seem to need pthreads based on original file
-if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+if (CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "Android" OR CMAKE_SYSTEM_NAME MATCHES "Darwin")
     target_compile_definitions(mfkey32v2 PRIVATE _GNU_SOURCE)
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
@@ -183,7 +190,7 @@ endif()
 add_executable(mfkey64 ${COMMON_FILES} mfkey64.c)
 target_include_directories(mfkey64 PRIVATE ${SRC_DIR})
 # mfkey64 doesn't seem to need pthreads based on original file
-if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+if (CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "Android" OR CMAKE_SYSTEM_NAME MATCHES "Darwin")
     target_compile_definitions(mfkey64 PRIVATE _GNU_SOURCE)
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
@@ -192,7 +199,7 @@ endif()
 
 add_executable(staticnested_1nt ${COMMON_FILES} staticnested_1nt.c)
 target_include_directories(staticnested_1nt PRIVATE ${SRC_DIR})
-if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+if (CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "Android" OR CMAKE_SYSTEM_NAME MATCHES "Darwin")
     target_compile_definitions(staticnested_1nt PRIVATE _GNU_SOURCE)
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
@@ -201,7 +208,7 @@ endif()
 
 add_executable(staticnested_2x1nt_rf08s ${COMMON_FILES} staticnested_2x1nt_rf08s.c)
 target_include_directories(staticnested_2x1nt_rf08s PRIVATE ${SRC_DIR})
-if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+if (CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "Android" OR CMAKE_SYSTEM_NAME MATCHES "Darwin")
     target_compile_definitions(staticnested_2x1nt_rf08s PRIVATE _GNU_SOURCE)
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
@@ -210,13 +217,29 @@ endif()
 
 add_executable(staticnested_2x1nt_rf08s_1key ${COMMON_FILES} staticnested_2x1nt_rf08s_1key.c)
 target_include_directories(staticnested_2x1nt_rf08s_1key PRIVATE ${SRC_DIR})
-if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+if (CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "Android" OR CMAKE_SYSTEM_NAME MATCHES "Darwin")
     target_compile_definitions(staticnested_2x1nt_rf08s_1key PRIVATE _GNU_SOURCE)
 endif()
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     target_compile_definitions(staticnested_2x1nt_rf08s_1key PRIVATE HAVE_STRUCT_TIMESPEC)
 endif()
 
+# --- mfulc_des_brute Executable ---
+add_executable(mfulc_des_brute mfulc_des_brute.c)
+target_include_directories(mfulc_des_brute PRIVATE ${SRC_DIR})
+target_link_libraries(mfulc_des_brute PRIVATE ${LIBTHREAD} OpenSSL::Crypto)
+if (MSVC)
+    target_compile_options(mfulc_des_brute PRIVATE /wd4996)  # disable "deprecated declaration" warning
+else()
+    target_compile_options(mfulc_des_brute PRIVATE -Wno-deprecated-declarations)
+endif()
+if (CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "Android" OR CMAKE_SYSTEM_NAME MATCHES "Darwin")
+    target_compile_definitions(mfulc_des_brute PRIVATE _GNU_SOURCE)
+endif()
+if (CMAKE_SYSTEM_NAME MATCHES "Windows")
+    target_compile_definitions(mfulc_des_brute PRIVATE HAVE_STRUCT_TIMESPEC)
+endif()
+find_package(OpenSSL REQUIRED)
 
 # --- hardnested Executable ---
 add_executable(hardnested ${COMMON_FILES} ${HARDNESTED_SOURCES})
@@ -230,7 +253,7 @@ target_include_directories(hardnested PRIVATE
 )
 target_compile_options(hardnested PRIVATE -Wall)
 
-if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+if (CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "Android" OR CMAKE_SYSTEM_NAME MATCHES "Darwin")
     target_compile_definitions(hardnested PRIVATE _GNU_SOURCE)
 endif()
 

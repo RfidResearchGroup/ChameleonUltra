@@ -818,27 +818,7 @@ void nrfx_nfct_irq_handler(void)
 
         NRFX_NFCT_CB_HANDLE(m_nfct_cb.config.cb, nfct_evt);
 
-        /* Clear TXFRAMESTART EVENT so it can be checked in hal_nfc_send */
-        nrf_nfct_event_clear(NRF_NFCT_EVENT_TXFRAMESTART);
-
         NRFX_LOG_DEBUG("Rx fend");
-    }
-
-    if (NRFX_NFCT_EVT_ACTIVE(TXFRAMEEND))
-    {
-        nrf_nfct_event_clear(NRF_NFCT_EVENT_TXFRAMEEND);
-
-        nrfx_nfct_evt_t nfct_evt =
-        {
-            .evt_id = NRFX_NFCT_EVT_TX_FRAMEEND
-        };
-
-        /* Disable TX END event to ignore frame transmission other than READ response */
-        nrf_nfct_int_disable(NRFX_NFCT_TX_INT_MASK);
-
-        NRFX_NFCT_CB_HANDLE(m_nfct_cb.config.cb, nfct_evt);
-
-        NRFX_LOG_DEBUG("Tx fend");
     }
 
     if (NRFX_NFCT_EVT_ACTIVE(SELECTED))
@@ -912,6 +892,23 @@ void nrfx_nfct_irq_handler(void)
 
             m_nfct_cb.config.cb(&nfct_evt);
         }
+    }
+
+    if (NRFX_NFCT_EVT_ACTIVE(TXFRAMEEND))
+    {
+        nrf_nfct_event_clear(NRF_NFCT_EVENT_TXFRAMEEND);
+
+        nrfx_nfct_evt_t nfct_evt =
+        {
+            .evt_id = NRFX_NFCT_EVT_TX_FRAMEEND
+        };
+
+        /* Disable TX END event to ignore frame transmission other than READ response */
+        nrf_nfct_int_disable(NRFX_NFCT_TX_INT_MASK);
+
+        NRFX_NFCT_CB_HANDLE(m_nfct_cb.config.cb, nfct_evt);
+
+        NRFX_LOG_DEBUG("Tx fend");
     }
 }
 

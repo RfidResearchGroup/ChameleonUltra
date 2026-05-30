@@ -1,5 +1,3 @@
-#include "lf_hidprox_data.h"
-
 #include <stdio.h>
 
 #include "bsp_delay.h"
@@ -8,8 +6,10 @@
 #include "lf_125khz_radio.h"
 #include "lf_reader_data.h"
 #include "lf_reader_main.h"
+#include "nrfx_saadc.h"
 #include "protocols/hidprox.h"
 #include "time.h"
+#include "rfid_main.h"
 
 #define NRF_LOG_MODULE_NAME lf_read
 #include "nrf_log.h"
@@ -21,23 +21,22 @@ NRF_LOG_MODULE_REGISTER();
 
 static circular_buffer cb;
 
-// saadc irq is used to sample ANT GPIO level.
-void saadc_cb(int16_t *vals, size_t size) {
+// saadc irq is used to sample ANT GPIO.
+static void saadc_cb(nrf_saadc_value_t *vals, size_t size) {
     for (int i = 0; i < size; i++) {
-        uint16_t val = vals[i];
+        nrf_saadc_value_t val = vals[i];
         if (!cb_push_back(&cb, &val)) {
             return;
         }
     }
 }
 
-void init_hidprox_hw(void) {
-    register_saadc_callback(saadc_cb);
-    lf_125khz_radio_saadc_init();
+static void init_hidprox_hw(void) {
+    lf_125khz_radio_saadc_enable(saadc_cb);
 }
 
-void uninit_hidprox_hw(void) {
-    unregister_saadc_callback();
+static void uninit_hidprox_hw(void) {
+    lf_125khz_radio_saadc_disable();
 }
 
 bool hidprox_read(uint8_t *data, uint8_t format_hint, uint32_t timeout_ms) {

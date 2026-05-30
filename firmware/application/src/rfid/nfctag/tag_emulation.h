@@ -80,6 +80,7 @@ void tag_emulation_init(void);
 void tag_emulation_save(void);
 
 // Starting and ending of the emulation card
+void tag_emulation_load_data(void);
 void tag_emulation_sense_run(void);
 void tag_emulation_sense_end(void);
 
@@ -104,7 +105,7 @@ uint8_t tag_emulation_get_slot(void);
 // Switch the card slot to control whether the passing parameter control is closed during the switching period to listen to
 void tag_emulation_change_slot(uint8_t index, bool sense_disable);
 // Get the card slot to enable the state
-bool tag_emulation_slot_is_enabled(uint8_t slot, tag_sense_type_t sense_type);
+bool is_slot_enabled(uint8_t slot, tag_sense_type_t sense_type);
 // Set the card slot to enable
 void tag_emulation_slot_set_enable(uint8_t slot, tag_sense_type_t sense_type, bool enable);
 // Get the emulation card type of the corresponding card slot

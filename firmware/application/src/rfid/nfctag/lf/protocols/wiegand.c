@@ -18,6 +18,7 @@
 #define PREAMBLE_34BIT (0x009)
 #define PREAMBLE_35BIT (0x005)
 #define PREAMBLE_36BIT (0x003)
+#define PREAMBLE_ACTP  (0x095)
 
 /**@brief Set a bit in the uint64 word.
  *
@@ -99,7 +100,7 @@ static uint64_t pack_h10301(wiegand_card_t *card) {
 
 static wiegand_card_t *unpack_h10301(uint64_t hi, uint64_t lo) {
     if (!((IS_SET(lo, 0) == oddparity32((lo >> 1) & 0xfff)) &&
-          (IS_SET(lo, 25) == evenparity32((lo >> 13) & 0xfff)))) {
+            (IS_SET(lo, 25) == evenparity32((lo >> 13) & 0xfff)))) {
         return NULL;
     }
     wiegand_card_t *d = wiegand_card_alloc();
@@ -191,8 +192,8 @@ static uint64_t pack_2804w(wiegand_card_t *card) {
 
 static wiegand_card_t *unpack_2804w(uint64_t hi, uint64_t lo) {
     if (!(((lo >> 27) & 0x1) == (evenparity32((lo >> 14) & 0x1fff)) &&
-          (((lo >> 25) & 0x1) == (oddparity32(lo & 0xDB6DB6))) &&
-          (((lo >> 0) & 0x1) == (oddparity32((lo >> 1) & 0x7ffffff))))) {
+            (((lo >> 25) & 0x1) == (oddparity32(lo & 0xDB6DB6))) &&
+            (((lo >> 0) & 0x1) == (oddparity32((lo >> 1) & 0x7ffffff))))) {
         return NULL;
     }
     wiegand_card_t *d = wiegand_card_alloc();
@@ -232,7 +233,7 @@ static uint64_t pack_atsw30(wiegand_card_t *card) {
 
 static wiegand_card_t *unpack_atsw30(uint64_t hi, uint64_t lo) {
     if (!(IS_SET(lo, 29) == evenparity32((lo >> 17) & 0xfff) &&
-          IS_SET(lo, 0) == oddparity32((lo >> 1) & 0xffff))) {
+            IS_SET(lo, 0) == oddparity32((lo >> 1) & 0xffff))) {
         return NULL;
     }
     wiegand_card_t *d = wiegand_card_alloc();
@@ -307,7 +308,7 @@ static wiegand_card_t *unpack_kastle(uint64_t hi, uint64_t lo) {
         return NULL;
     }
     if (!(IS_SET(lo, 31) == evenparity32((lo >> 15) & 0xffff) &&
-          IS_SET(lo, 0) == oddparity32((lo >> 1) & 0x1ffff))) {
+            IS_SET(lo, 0) == oddparity32((lo >> 1) & 0x1ffff))) {
         return NULL;
     }
     wiegand_card_t *d = wiegand_card_alloc();
@@ -365,7 +366,7 @@ static uint64_t pack_d10202(wiegand_card_t *card) {
 
 static wiegand_card_t *unpack_d10202(uint64_t hi, uint64_t lo) {
     if (!((IS_SET(lo, 32) == evenparity32((lo >> 16) & 0xffff)) &&
-          (IS_SET(lo, 0) == oddparity32((lo >> 1) & 0xffff)))) {
+            (IS_SET(lo, 0) == oddparity32((lo >> 1) & 0xffff)))) {
         return NULL;
     }
     wiegand_card_t *d = wiegand_card_alloc();
@@ -391,7 +392,7 @@ static uint64_t pack_h10306(wiegand_card_t *card) {
 
 static wiegand_card_t *unpack_h10306(uint64_t hi, uint64_t lo) {
     if (!((IS_SET(lo, 33) == evenparity32((lo >> 17) & 0xffff)) &&
-          (IS_SET(lo, 0) == oddparity32((lo >> 1) & 0xffff)))) {
+            (IS_SET(lo, 0) == oddparity32((lo >> 1) & 0xffff)))) {
         return NULL;
     }
     wiegand_card_t *d = wiegand_card_alloc();
@@ -417,7 +418,7 @@ static uint64_t pack_n10002(wiegand_card_t *card) {
 
 static wiegand_card_t *unpack_n10002(uint64_t hi, uint64_t lo) {
     if (!((IS_SET(lo, 33) == evenparity32((lo >> 17) & 0xffff)) &&
-          (IS_SET(lo, 0) == oddparity32((lo >> 1) & 0xffff)))) {
+            (IS_SET(lo, 0) == oddparity32((lo >> 1) & 0xffff)))) {
         return NULL;
     }
     wiegand_card_t *d = wiegand_card_alloc();
@@ -478,7 +479,7 @@ static uint64_t pack_bqt34(wiegand_card_t *card) {
 
 static wiegand_card_t *unpack_bqt34(uint64_t hi, uint64_t lo) {
     if (!((IS_SET(lo, 33) == evenparity32((lo >> 17) & 0xffff)) &&
-          (IS_SET(lo, 0) == oddparity32((lo >> 1) & 0xffff)))) {
+            (IS_SET(lo, 0) == oddparity32((lo >> 1) & 0xffff)))) {
         return NULL;
     }
     wiegand_card_t *d = wiegand_card_alloc();
@@ -507,8 +508,8 @@ static uint64_t pack_c1k35s(wiegand_card_t *card) {
 
 static wiegand_card_t *unpack_c1k35s(uint64_t hi, uint64_t lo) {
     if (!(IS_SET(lo, 33) == (evenparity32((lo >> 1) & 0xDB6DB6DB)) &&
-          IS_SET(lo, 0) == (oddparity32((lo >> 2) & 0xDB6DB6DB)) &&
-          IS_SET(lo, 34) == (oddparity32(((lo >> 32) & 0x3) ^ (lo & 0xFFFFFFFF))))) {
+            IS_SET(lo, 0) == (oddparity32((lo >> 2) & 0xDB6DB6DB)) &&
+            IS_SET(lo, 34) == (oddparity32(((lo >> 32) & 0x3) ^ (lo & 0xFFFFFFFF))))) {
         return NULL;
     }
     wiegand_card_t *d = wiegand_card_alloc();
@@ -538,7 +539,38 @@ static uint64_t pack_c15001(wiegand_card_t *card) {
 
 static wiegand_card_t *unpack_c15001(uint64_t hi, uint64_t lo) {
     if (!(IS_SET(lo, 35) == evenparity32((lo >> 18) & 0x1ffff) &&
-          IS_SET(lo, 0) == oddparity32((lo >> 1) & 0x1ffff))) {
+            IS_SET(lo, 0) == oddparity32((lo >> 1) & 0x1ffff))) {
+        return NULL;
+    }
+    wiegand_card_t *d = wiegand_card_alloc();
+    d->oem = (lo >> 25) & 0x3ff;
+    d->facility_code = (lo >> 17) & 0xff;
+    d->card_number = (lo >> 1) & 0xffff;
+    return d;
+}
+
+static uint64_t pack_actprox(wiegand_card_t *card) {
+    if (card->oem == 0) {
+        card->oem = 900;
+    }
+    uint64_t bits = PREAMBLE_ACTP;
+    bits <<= 1;
+    bits = (bits << 10) | (card->oem & 0x3ff);
+    bits = (bits << 8) | (card->facility_code & 0xff);
+    bits = (bits << 16) | (card->card_number & 0xffff);
+    bits <<= 1;
+    if (evenparity32((bits >> 18) & 0x1ffff)) {
+        SET_BIT64(bits, 35);
+    }
+    if (oddparity32((bits >> 1) & 0x1ffff)) {
+        SET_BIT64(bits, 0);
+    }
+    return bits;
+}
+
+static wiegand_card_t *unpack_actprox(uint64_t hi, uint64_t lo) {
+    if (!(IS_SET(lo, 35) == evenparity32((lo >> 18) & 0x1ffff) &&
+            IS_SET(lo, 0) == oddparity32((lo >> 1) & 0x1ffff))) {
         return NULL;
     }
     wiegand_card_t *d = wiegand_card_alloc();
@@ -566,7 +598,7 @@ static uint64_t pack_s12906(wiegand_card_t *card) {
 
 static wiegand_card_t *unpack_s12906(uint64_t hi, uint64_t lo) {
     if (!(IS_SET(lo, 35) == oddparity32((lo >> 18) & 0x1ffff) &&
-          IS_SET(lo, 0) == oddparity32((lo >> 1) & 0x3ffff))) {
+            IS_SET(lo, 0) == oddparity32((lo >> 1) & 0x3ffff))) {
         return NULL;
     }
     wiegand_card_t *d = wiegand_card_alloc();
@@ -593,7 +625,7 @@ static uint64_t pack_sie36(wiegand_card_t *card) {
 
 static wiegand_card_t *unpack_sie36(uint64_t hi, uint64_t lo) {
     if (!(IS_SET(lo, 35) == oddparity32((lo & 0xB6DB6DB6) ^ ((lo >> 32) & 0x05)) &&
-          IS_SET(lo, 0) == evenparity32((lo & 0xDB6DB6DA) ^ ((lo >> 32) & 0x06)))) {
+            IS_SET(lo, 0) == evenparity32((lo & 0xDB6DB6DA) ^ ((lo >> 32) & 0x06)))) {
         return NULL;
     }
     wiegand_card_t *d = wiegand_card_alloc();
@@ -632,9 +664,9 @@ static wiegand_card_t *unpack_h10320(uint64_t hi, uint64_t lo) {
     }
 
     if (!((IS_SET(lo, 3) == evenparity32((lo >> 4) & 0x88888888)) &&
-          (IS_SET(lo, 2) == oddparity32((lo >> 4) & 0x44444444)) &&
-          (IS_SET(lo, 1) == evenparity32((lo >> 4) & 0x22222222)) &&
-          (IS_SET(lo, 0) == evenparity32((lo >> 4) & 0x11111111)))) {
+            (IS_SET(lo, 2) == oddparity32((lo >> 4) & 0x44444444)) &&
+            (IS_SET(lo, 1) == evenparity32((lo >> 4) & 0x22222222)) &&
+            (IS_SET(lo, 0) == evenparity32((lo >> 4) & 0x11111111)))) {
         return NULL;
     }
 
@@ -671,7 +703,7 @@ static uint64_t pack_h10302(wiegand_card_t *card) {
 
 static wiegand_card_t *unpack_h10302(uint64_t hi, uint64_t lo) {
     if (!(IS_SET(lo, 36) == evenparity32((lo >> 18) & 0x3ffff) &&
-          IS_SET(lo, 0) == oddparity32((lo >> 1) & 0x3ffff))) {
+            IS_SET(lo, 0) == oddparity32((lo >> 1) & 0x3ffff))) {
         return NULL;
     }
     wiegand_card_t *d = wiegand_card_alloc();
@@ -696,7 +728,7 @@ static uint64_t pack_h10304(wiegand_card_t *card) {
 
 static wiegand_card_t *unpack_h10304(uint64_t hi, uint64_t lo) {
     if (!(IS_SET(lo, 36) == evenparity32((lo >> 18) & 0x3ffff) &&
-          IS_SET(lo, 0) == oddparity32((lo >> 1) & 0x3ffff))) {
+            IS_SET(lo, 0) == oddparity32((lo >> 1) & 0x3ffff))) {
         return NULL;
     }
     wiegand_card_t *d = wiegand_card_alloc();
@@ -748,8 +780,8 @@ static wiegand_card_t *unpack_hgeneric37(uint64_t hi, uint64_t lo) {
         return NULL;
     }
     if (!(IS_SET(lo, 36) == evenparity32((lo >> 4) & 0x11111111) &&
-          IS_SET(lo, 34) == oddparity32(lo & 0x44444444) &&
-          IS_SET(lo, 33) == evenparity32(lo & 0x22222222))) {
+            IS_SET(lo, 34) == oddparity32(lo & 0x44444444) &&
+            IS_SET(lo, 33) == evenparity32(lo & 0x22222222))) {
         return NULL;
     }
     wiegand_card_t *d = wiegand_card_alloc();
@@ -774,7 +806,7 @@ static uint64_t pack_mdi37(wiegand_card_t *card) {
 
 static wiegand_card_t *unpack_mdi37(uint64_t hi, uint64_t lo) {
     if (!(IS_SET(lo, 36) == evenparity32((lo >> 18) & 0x3ffff) &&
-          IS_SET(lo, 0) == oddparity32((lo >> 1) & 0x3ffff))) {
+            IS_SET(lo, 0) == oddparity32((lo >> 1) & 0x3ffff))) {
         return NULL;
     }
     wiegand_card_t *d = wiegand_card_alloc();
@@ -784,10 +816,10 @@ static wiegand_card_t *unpack_mdi37(uint64_t hi, uint64_t lo) {
 }
 
 // ref:
-// https://github.com/TeCHiScy/proxmark3/blob/d83196fb3549f236c0a58a309fdbd89c0487085c/client/src/wiegand_formats.c#L1457
+// https://github.com/RfidResearchGroup/proxmark3/blob/master/client/src/wiegand_formats.c
 // https://github.com/Proxmark/proxmark3/blob/master/client/hidcardformats.c
 // https://acre.my.site.com/knowledgearticles/s/article/x107
-// https://www.everythingid.com.au/hid-card-formats-i-15?srsltid=AfmBOor2UAGlvB7R6Zmj7B7rtL-LExfBjh7I3ZEyoLLbg7Pk7UbC1za-
+// https://www.everythingid.com.au/hid-card-formats-i-15
 static const card_format_table_t formats[] = {
     {H10301, pack_h10301, unpack_h10301, 26, {1, 0xFF, 0xFFFF, 0, 0}},           // HID H10301 26-bit
     {IND26, pack_ind26, unpack_ind26, 26, {1, 0xFFF, 0xFFF, 0, 0}},              // Indala 26-bit
@@ -819,6 +851,7 @@ static const card_format_table_t formats[] = {
     {P10004, pack_p10004, unpack_p10004, 37, {0, 0x1FFF, 0x3FFFF, 0, 0}},        // HID P10004 37-bit PCSC
     {HGEN37, pack_hgeneric37, unpack_hgeneric37, 37, {1, 0, 0xFFFFFFFF, 0, 0}},  // HID Generic 37-bit
     {MDI37, pack_mdi37, unpack_mdi37, 37, {1, 0xF, 0x1FFFFFFF, 0, 0}},           // PointGuard MDI 37-bit
+    {ACTPHID, pack_actprox, unpack_actprox, 36, {1, 0xFF, 0xFFFF, 0x3FF, 0}},   // HID ACTProx 36-bit
 };
 
 uint64_t pack(wiegand_card_t *card) {

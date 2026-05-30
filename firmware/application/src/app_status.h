@@ -1,7 +1,6 @@
 #ifndef STATUS_H
 #define STATUS_H
 
-
 /////////////////////////////////////////////////////////////////////
 // 14a status
 /////////////////////////////////////////////////////////////////////
@@ -19,10 +18,8 @@
 // lf status
 /////////////////////////////////////////////////////////////////////
 #define     STATUS_LF_TAG_OK                        (0x40)  // Some of the low -frequency cards are successful!
-#define     STATUS_EM410X_TAG_NO_FOUND              (0x41)  // Can't search for valid EM410X tags
-#define     STATUS_LF_TAG_NO_FOUND                  (0x42)  // Can't search for valid LF tag
-#define     STATUS_HIDPROX_TAG_NO_FOUND             (0x43)  // Can't search for valid HIDProx tags
-
+#define     STATUS_LF_TAG_NO_FOUND                  (0x41)  // Can't search for valid LF tags
+#define     STATUS_LF_TAG_LOGIN_REQUIRED            (0x42)  // Tag requires LOGIN before read
 
 /////////////////////////////////////////////////////////////////////
 // other status
@@ -35,4 +32,9 @@
 #define     STATUS_FLASH_WRITE_FAIL                 (0x70)  // Flash writing failed
 #define     STATUS_FLASH_READ_FAIL                  (0x71)  // Flash read failed
 #define     STATUS_INVALID_SLOT_TYPE                (0x72)  // Invalid slot type
+#define     STATUS_MEM_ERR                          (0x73)  // Can't allocate memory or work with memory error
+#define     STATUS_CREATE_RESPONSE_ERR              (0x74)  // Can't create response for command
+#define     STATUS_CMD_ERR                          (0x75)  // Execution of command failed
+
+
 #endif

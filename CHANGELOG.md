@@ -3,9 +3,36 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Added IDTECK LF protocol support: tag emulation (PSK1 RF/32) and T55xx clone. No reader path yet; PSK demodulation on the envelope-only receive chain is left for a follow-up.
+ - Added PAC/Stanley LF protocol support: read, emulate and T55xx clone (@kevihiiin, @danieltwagner)
+ - Fix firmware application USB serial number (@taichunmin)
+ - Added ioProx LF protocol support (read, emulate and T55xx clone)
+ - Added `hf mfu nfcimport` to import Flipper Zero `.nfc` files into MFU/NTAG emulator slots, with `--amiibo` flag for automatic PWD/PACK derivation (@fmuk)
+ - Added commands to dump and clone Mifare tags
+ - Fix bad missing tools warning (@suut)
+ - Fix for FAST_READ command for nfc - mf0 tags
+ - Rewrite of the dynamic and static locks logic for NTAG213, NTAG215 and NTAG216; we shouldn't take into account the block lock bits
+ - Fixed an issue where we wouldn't be able to change CFG0 and CFG1 for NTAG213, NTAG215 and NTG216 once a password was added even if the cfg bit was reset.
+ - Fix for static nested key recovery (@jekkos)
+ - Fix LEDs being stuck on after battery check (@suut)
+ - Add TCP support for the CLI (@suut)
+ - Fix build on Android in Termux (@suut)
+ - Fix the issue where some reader cause CU to enter a strange state (@xianglin1998)
+ - The transmission performance of USB has been improved (@xianglin1998)
+ - Added cmd for set mf1 config 'field_off_do_reset' (@xianglin1998)
+ - Fix Windows build (@suut)
+ - Added `hf 14a config` to deal with badly configured cards (@azuwis)
+ - New Symmetrical LED Animation Mode and Improved Minimal Mode (@WillyJL)
+ - Fix MF1 state reset logic and access control conditions (@unkernet)
+
+## [v2.1.0][2025-09-02]
+ - Added UV, formatter and linter. Contribution guidelines. (@GameTec-live)
+ - Extend max packet data size from 512 to 4096 bytes (@Foxushka)
+ - HID Prox support (@TeCHiScy)
+ - `hf mf elog --decrypt` skip records with found keys (@taichunmin)
  - Added cmd for fetching all slots nicks (@Foxushka)
  - Added `hf mf senested` for recovering keys from static encrypted cards via backdoor (https://eprint.iacr.org/2024/1275) (@Foxushka)
- - Added cmd for faster bulk key checking on one block (~33 keys per second) (@Foxushka)
+ - Added cmd for faster bulk key checking on one block (~33 keys per second) (@Foxushka, @taichunmin)
  - Added cmd to acquire nonces for static encrypted cards via backdoor (@Foxushka) 
  - Added `firmware/docker-compose.yml` to build firmware in local docker (@taichunmin)
  - Added cmd to acquire nonces for hardnested(Protocol doc need update) (@xianglin1998)
