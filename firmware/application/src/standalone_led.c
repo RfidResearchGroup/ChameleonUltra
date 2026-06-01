@@ -26,6 +26,7 @@ static chameleon_rgb_type_t m_palette[STANDALONE_MODE__COUNT] = {
     [STANDALONE_MODE_SLOT_CYCLE]  = RGB_YELLOW,
     [STANDALONE_MODE_DICT_CHECK]  = RGB_WHITE,
     [STANDALONE_MODE_EMUL_TRACE]  = RGB_CYAN,
+    [STANDALONE_MODE_RELAY]       = RGB_BLUE,
 };
 
 static bool m_initialised = false;
@@ -102,6 +103,15 @@ void standalone_led_init(void) {
 
 void standalone_led_clear(void) {
     leds_all_off();
+}
+
+void standalone_led_solid(void) {
+    if (!m_initialised) return;
+    standalone_mode_t mode = app_standalone_get_mode();
+    chameleon_rgb_type_t col =
+        (mode < STANDALONE_MODE__COUNT) ? m_palette[mode] : RGB_WHITE;
+    set_slot_light_color(col);
+    leds_all_on();
 }
 
 void standalone_led_set_mode_color(standalone_mode_t      mode,

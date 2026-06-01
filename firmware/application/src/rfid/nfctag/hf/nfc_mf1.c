@@ -312,6 +312,8 @@ void ValueToBlock(uint8_t *Block, uint32_t Value) {
  */
 static uint32_t m_prng_state = 0;
 
+/* Relay is now handled by nfc_relay_tag.c — no relay state here. */
+
 /** @brief Seed the LFSR PRNG from hardware RNG value obtained at boot. */
 void nfc_tag_mf1_prng_seed(uint32_t seed) {
     m_prng_state = seed;
@@ -670,6 +672,10 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
             if (szDataBits == 64) {
                 //NR + AR responded to the card reader
                 append_mf1_auth_log_step2(p_data, &p_data[4]);
+
+                //NR + AR — relay now handled by nfc_relay_tag.c (slot-independent)
+                if (false) { break; /* placeholder */
+                }
 #ifdef NFC_MF1_FAST_SIM
                 // Reader delivers an encrypted nonce. We use it to setup the crypto1 LFSR in nonlinear feedback mode. Furthermore it delivers an encrypted answer. Decrypt and check it
                 Crypto1Auth(&p_data[0]);
@@ -1289,3 +1295,67 @@ void nfc_tag_mf1_set_field_off_do_reset(bool enable) {
 bool nfc_tag_mf1_is_field_off_do_reset(void) {
     return m_tag_information->config.field_off_do_reset;
 }
+
+/* -------------------------------------------------------------------------
+ * Relay mode hooks — called from mode_relay.c to override NFCT identity
+ * with the real card's identity pre-read by the RELAY_READER peer.
+ * ------------------------------------------------------------------------- */
+
+/* Override the NFCT anti-collision response with the real card's identity.
+ *
+ * m_tag_information->res_coll is the entity that get_mifare_coll_res()
+ * returns pointers into.  We update it directly so NFCT uses the relay
+ * identity even before the first field activation (which is when
+ * get_mifare_coll_res() would normally be called).
+ */
+/* Relay mode owns these buffers for the duration of the relay session.
+ * m_shadow_coll_res pointers are set to point here so the 14A ISR
+ * sees the relay identity on every REQA, regardless of slot config. */
+static uint8_t                  s_relay_uid[7]  = {0};
+static uint8_t                  s_relay_atqa[2] = {0};
+static uint8_t                  s_relay_sak[1]  = {0};
+static nfc_tag_14a_uid_size    s_relay_uid_size = NFC_TAG_14A_UID_SINGLE_SIZE;
+static nfc_14a_ats_t            s_relay_ats     = {0};
+
+void nfc_mf1_relay_set_coll_res(const uint8_t *uid, uint8_t uid_len,
+                                 const uint8_t atqa[2], uint8_t sak) {
+    uint8_t ulen = (uid_len > 7) ? 7 : uid_len;
+
+    /* Populate relay-owned buffers */
+    memcpy(s_relay_uid,  uid,  ulen);
+    memcpy(s_relay_atqa, atqa, 2);
+    s_relay_sak[0]  = sak;
+    s_relay_uid_size = (uid_len <= 4)
+        ? NFC_TAG_14A_UID_SINGLE_SIZE : NFC_TAG_14A_UID_DOUBLE_SIZE;
+    memset(&s_relay_ats, 0, sizeof(s_relay_ats));
+
+    /* Point shadow pointers directly at our buffers — bypasses both the
+     * use_mf1_coll_res / block-0 path AND the m_tag_information NULL check.
+     * The 14A ISR reads m_shadow_coll_res on every REQA so this takes
+     * effect on the very next field activation. */
+    m_shadow_coll_res.uid  = s_relay_uid;
+    m_shadow_coll_res.atqa = s_relay_atqa;
+    m_shadow_coll_res.sak  = s_relay_sak;
+    m_shadow_coll_res.size = (nfc_tag_14a_uid_size *)&s_relay_uid_size;
+    m_shadow_coll_res.ats  = &s_relay_ats;
+
+    /* Also keep m_tag_information in sync if it exists */
+    if (m_tag_information != NULL) {
+        m_tag_information->config.use_mf1_coll_res = false;
+        memcpy(m_tag_information->res_coll.uid,  uid,  ulen);
+        memcpy(m_tag_information->res_coll.atqa, atqa, 2);
+        m_tag_information->res_coll.sak[0] = sak;
+        m_tag_information->res_coll.size   = s_relay_uid_size;
+    }
+
+    NRF_LOG_INFO("relay: coll_res UID=%02X%02X%02X%02X",
+                 uid[0], uid[1], uid[2], uid[3]);
+    NRF_LOG_INFO("relay: ATQA=%02X%02X SAK=%02X", atqa[0], atqa[1], sak);
+}
+
+/* -------------------------------------------------------------------------
+ * Relay mode hooks
+ * ------------------------------------------------------------------------- */
+
+/* Relay is now fully handled by nfc_relay_tag.c — no relay hooks here. */
+

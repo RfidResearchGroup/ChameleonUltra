@@ -7,6 +7,7 @@
  * Wire formats are little-endian (matches existing CU commands).
  */
 
+#include "ble_relay.h"
 #include "app_standalone.h"
 #include "app_cmd.h"
 #include "data_cmd.h"
@@ -229,5 +230,44 @@ data_frame_tx_t *cmd_handler_standalone_get_sizes(uint16_t cmd, uint16_t status,
         resp[off + 2] = (uint8_t)(sz >> 16);
         resp[off + 3] = (uint8_t)(sz >> 24);
     }
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(resp), resp);
+}
+
+/* 7008 RELAY_DIAG
+ * Request:  empty
+ * Response: { u32 adv_reports, u32 relay_hits, u8 ble_state, u8 ble_role,
+ *             u8 sub_state, u8 card_found, u8 identity_rx,
+ *             u8 uid_len, u8[7] uid,
+ *             u8[2] atqa, u8 sak, u8 cascade }   (25 bytes)
+ */
+extern void mode_relay_get_diag(uint8_t *out_sub, uint8_t *out_card_found,
+                                 uint8_t *out_identity_rx,
+                                 uint8_t *out_uid, uint8_t *out_uid_len);
+
+data_frame_tx_t *cmd_handler_standalone_relay_diag(uint16_t cmd, uint16_t status,
+                                                   uint16_t length, uint8_t *data) {
+    (void)status; (void)length; (void)data;
+    uint32_t reports = ble_relay_get_adv_reports();
+    uint32_t hits    = ble_relay_get_relay_hits();
+    uint8_t  ble_state   = (uint8_t)ble_relay_get_state();
+    uint8_t  ble_role    = ble_relay_get_role();
+    uint8_t  sub = 0, card_found = 0, identity_rx = 0;
+    uint8_t  uid[7] = {0};
+    uint8_t  uid_len = 0;
+    if (app_standalone_get_mode() == STANDALONE_MODE_RELAY) {
+        mode_relay_get_diag(&sub, &card_found, &identity_rx, uid, &uid_len);
+    }
+    uint8_t resp[21];  /* 4+4+1+1+1+1+1+1+7 = 21 bytes */
+    resp[0] = (uint8_t)(reports      ); resp[1]  = (uint8_t)(reports >>  8);
+    resp[2] = (uint8_t)(reports >> 16); resp[3]  = (uint8_t)(reports >> 24);
+    resp[4] = (uint8_t)(hits         ); resp[5]  = (uint8_t)(hits    >>  8);
+    resp[6] = (uint8_t)(hits    >> 16); resp[7]  = (uint8_t)(hits    >> 24);
+    resp[8]  = ble_state;
+    resp[9]  = ble_role;
+    resp[10] = sub;
+    resp[11] = card_found;
+    resp[12] = identity_rx;
+    resp[13] = uid_len;
+    for (int i = 0; i < 7; i++) resp[14 + i] = (i < uid_len) ? uid[i] : 0;
     return data_frame_make(cmd, STATUS_SUCCESS, sizeof(resp), resp);
 }

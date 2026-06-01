@@ -1846,8 +1846,12 @@ class ChameleonCMD:
         cfg_len = resp.data[1]
         return bytes(resp.data[2:2 + cfg_len])
 
-    def standalone_set_config(self, mode, cfg: bytes):
-        """Persist a mode-specific config blob (max 64 bytes)."""
+    def standalone_set_config(self, mode, cfg):
+        """Persist a mode-specific config blob (max 64 bytes).
+        cfg can be a hex string (e.g. 'D0070000') or bytes.
+        """
+        if isinstance(cfg, str):
+            cfg = bytes.fromhex(cfg)
         payload = struct.pack('<B', int(mode)) + bytes(cfg)
         return self.device.send_cmd_sync(Command.STANDALONE_SET_CONFIG, payload)
 
@@ -1901,6 +1905,32 @@ class ChameleonCMD:
         """
         return self.device.send_cmd_sync(Command.STANDALONE_TRIGGER, b'',
                                          timeout=10)
+
+    def relay_get_diag(self) -> dict:
+        """Return relay diagnostic info: counters, BLE state, sub-state, UID."""
+        resp = self.device.send_cmd_sync(Command.STANDALONE_RELAY_DIAG, b'')
+        if resp.status != Status.SUCCESS or len(resp.data) < 8:
+            return {}
+        import struct
+        d = resp.data
+        result = {
+            'adv_reports':  struct.unpack_from('<I', d, 0)[0],
+            'relay_hits':   struct.unpack_from('<I', d, 4)[0],
+            'ble_state':    d[8]  if len(d) > 8  else 0,
+            'ble_role':     d[9]  if len(d) > 9  else 0,
+            'sub_state':    d[10] if len(d) > 10 else 0,
+            'card_found':   d[11] if len(d) > 11 else 0,
+            'identity_rx':  d[12] if len(d) > 12 else 0,
+            'uid_len':      d[13] if len(d) > 13 else 0,
+            'uid':          list(d[14:14+7]) if len(d) >= 21 else [],
+        }
+        return result
+
+    def relay_get_adv_reports(self) -> int:
+        return self.relay_get_diag().get('adv_reports', 0)
+
+    def relay_get_relay_hits(self) -> int:
+        return self.relay_get_diag().get('relay_hits', 0)
 
     def standalone_get_sizes(self) -> list:
         """Return stored byte count for each mode, indexed by mode_id.

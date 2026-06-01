@@ -43,6 +43,7 @@ void standalone_feedback(standalone_feedback_t fb);
 void standalone_feedback_for_mode(standalone_feedback_t fb,
                                   standalone_mode_t      mode);
 void standalone_led_clear(void);
+void standalone_led_solid(void); /* solid LEDs in current mode colour */
 void standalone_led_set_mode_color(standalone_mode_t       mode,
                                    chameleon_rgb_type_t    color);
 

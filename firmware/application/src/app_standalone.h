@@ -52,6 +52,7 @@ typedef enum {
     STANDALONE_MODE_SLOT_CYCLE  = 0x04,
     STANDALONE_MODE_DICT_CHECK  = 0x05,
     STANDALONE_MODE_EMUL_TRACE  = 0x06,  /* CU as card, trace reader auth exchanges */
+    STANDALONE_MODE_RELAY       = 0x07,  /* two-CU BLE relay — Ultra only           */
 
     STANDALONE_MODE__COUNT              /* sentinel - keep last */
 } standalone_mode_t;
@@ -148,6 +149,9 @@ extern const standalone_mode_iface_t mode_authtrace_iface;     /* needs reader h
 extern const standalone_mode_iface_t mode_slot_cycle_iface;
 extern const standalone_mode_iface_t mode_dict_check_iface;
 extern const standalone_mode_iface_t mode_emultrace_iface;     /* NFCT, works on Lite */
+#if defined(PROJECT_CHAMELEON_ULTRA)
+extern const standalone_mode_iface_t mode_relay_iface;         /* BLE peer relay, Ultra only */
+#endif
 
 /* -------------------------------------------------------------------------
  * Public API

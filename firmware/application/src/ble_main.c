@@ -384,7 +384,12 @@ static void conn_params_init(void) {
  *
  * @param[in] ble_adv_evt  Advertising event.
  */
+static bool g_relay_adv_active = false;
+
 static void on_adv_evt(ble_adv_evt_t ble_adv_evt) {
+    /* Relay mode owns the advertising handle — ignore module events */
+    if (g_relay_adv_active) return;
+
     switch (ble_adv_evt) {
         case BLE_ADV_EVT_FAST:
             NRF_LOG_INFO("BLE_ADV_EVT_FAST");
@@ -583,6 +588,90 @@ static void whitelist_set(pm_peer_id_list_skip_t skip) {
 
     err_code = pm_whitelist_set(peer_ids, peer_id_count);
     APP_ERROR_CHECK(err_code);
+}
+
+/**@brief Relay mode advertising — uses existing adv handle.
+ *
+ * First call: stop connectable advertising, reconfigure as non-connectable
+ * relay broadcasting.  Subsequent calls: update data in-place without
+ * stopping (sd_ble_gap_adv_set_configure params=NULL) so the advertising
+ * stream is never interrupted and the ble_advertising module cannot
+ * accidentally overwrite the relay payload.
+ */
+static uint8_t  s_relay_raw[31];
+static uint16_t s_relay_raw_len = 0;
+
+void ble_main_relay_adv_set(const uint8_t *raw_adv, uint8_t len) {
+    if (len > sizeof(s_relay_raw)) len = sizeof(s_relay_raw);
+    s_relay_raw_len = len;
+    if (len && raw_adv) memcpy(s_relay_raw, raw_adv, len);
+
+    ble_gap_adv_data_t adv_data = {
+        .adv_data      = { .p_data = s_relay_raw, .len = s_relay_raw_len },
+        .scan_rsp_data = { .p_data = NULL, .len = 0 },
+    };
+
+    if (!g_relay_adv_active) {
+        /* First call: take over advertising as non-connectable */
+        sd_ble_gap_adv_stop(m_advertising.adv_handle);
+
+        ble_gap_adv_params_t params;
+        memset(&params, 0, sizeof(params));
+        params.properties.type = BLE_GAP_ADV_TYPE_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
+        params.interval        = 80;    /* 50 ms — more frequent for faster discovery */
+        params.duration        = BLE_GAP_ADV_TIMEOUT_GENERAL_UNLIMITED;
+        params.primary_phy     = BLE_GAP_PHY_1MBPS;
+
+        ret_code_t rc = sd_ble_gap_adv_set_configure(
+            &m_advertising.adv_handle, &adv_data, &params);
+        if (rc != NRF_SUCCESS) {
+            NRF_LOG_WARNING("relay: adv_set_configure rc=%u", rc);
+            return;
+        }
+        rc = sd_ble_gap_adv_start(m_advertising.adv_handle, APP_BLE_CONN_CFG_TAG);
+        if (rc == NRF_SUCCESS) {
+            g_relay_adv_active = true;
+            NRF_LOG_INFO("relay: adv takeover OK");
+        } else if (rc == NRF_ERROR_INVALID_STATE) {
+            g_relay_adv_active = true;   /* already advertising with relay params */
+        } else {
+            NRF_LOG_WARNING("relay: adv_start rc=%u", rc);
+        }
+    } else {
+        /* Stop → reconfigure → restart to ensure the new data length is applied.
+         * sd_ble_gap_adv_set_configure with params=NULL only updates the data
+         * buffer pointer but may not update the length on some S140 builds if
+         * advertising is still running. Stopping first is always safe. */
+        sd_ble_gap_adv_stop(m_advertising.adv_handle);
+
+        ble_gap_adv_params_t params;
+        memset(&params, 0, sizeof(params));
+        params.properties.type = BLE_GAP_ADV_TYPE_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
+        params.interval        = 80;
+        params.duration        = BLE_GAP_ADV_TIMEOUT_GENERAL_UNLIMITED;
+        params.primary_phy     = BLE_GAP_PHY_1MBPS;
+
+        ret_code_t rc = sd_ble_gap_adv_set_configure(
+            &m_advertising.adv_handle, &adv_data, &params);
+        if (rc != NRF_SUCCESS) {
+            NRF_LOG_WARNING("relay: adv reconfig rc=%u", rc);
+            return;
+        }
+        rc = sd_ble_gap_adv_start(m_advertising.adv_handle, APP_BLE_CONN_CFG_TAG);
+        if (rc != NRF_SUCCESS && rc != NRF_ERROR_INVALID_STATE) {
+            NRF_LOG_WARNING("relay: adv restart rc=%u", rc);
+        }
+    }
+}
+
+/**@brief Relay mode: restore normal advertising. */
+void ble_main_relay_adv_restore(void) {
+    g_relay_adv_active = false;
+    sd_ble_gap_adv_stop(m_advertising.adv_handle);
+    ret_code_t ret = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
+    if (ret != NRF_SUCCESS && ret != NRF_ERROR_INVALID_STATE) {
+        NRF_LOG_WARNING("relay: adv_restore rc=%u", ret);
+    }
 }
 
 /**@brief Function for starting advertising.

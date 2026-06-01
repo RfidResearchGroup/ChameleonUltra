@@ -101,6 +101,9 @@ static const standalone_mode_iface_t * const m_modes[] = {
 #if CONFIG_STANDALONE_EMUL_TRACE
     &mode_emultrace_iface,
 #endif
+#if defined(PROJECT_CHAMELEON_ULTRA)
+    &mode_relay_iface,
+#endif
 };
 
 #define MODE_COUNT  (sizeof(m_modes) / sizeof(m_modes[0]))
@@ -354,6 +357,7 @@ void app_standalone_init(void) {
     memset(&m_ctx, 0, sizeof(m_ctx));
     m_ctx.state = STANDALONE_STATE_DISARMED;
     m_ctx.mode  = STANDALONE_MODE_DISABLED;
+    standalone_led_init();
     persist_state_load();
     m_ctx.initialised = true;
     NRF_LOG_INFO("standalone: init, persisted mode=%u flags=0x%02x",

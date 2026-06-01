@@ -10684,6 +10684,107 @@ def authtrace_pretty_dump(sessions):
     return "\n".join(out)
 
 
+def parse_relay_result_buffer(raw: bytes) -> list:
+    """Parse a relay FDS result buffer into a list of session dicts.
+
+    Variable-length session records (16-byte header + trace):
+      [0]      role  (0=CARD, 1=READER)
+      [1]      status (0=OK, 1=TIMEOUT, 2=DISCONNECT)
+      [2]      uid_len
+      [3..6]   uid (4 bytes)
+      [7..8]   atqa
+      [9]      sak
+      [10..11] frame_count u16 LE
+      [12..13] trace_len u16 LE
+      [14..15] reserved
+      [16..]   trace frames (AuthTrace wire format: u16 hdr + raw bytes)
+    """
+    import struct
+    HEADER = 16
+    STATUS = {0: 'OK', 1: 'TIMEOUT', 2: 'DISCONNECT'}
+    sessions = []
+    off = 0
+    idx = 0
+    while off + HEADER <= len(raw):
+        h = raw[off:off + HEADER]
+        role        = h[0]
+        status      = h[1]
+        uid_len     = h[2]
+        uid         = raw[off+3:off+3+min(uid_len,4)].hex().upper() if uid_len else '-'
+        atqa        = raw[off+7:off+9].hex().upper()
+        sak         = f'{h[9]:02X}'
+        frame_count = struct.unpack_from('<H', h, 10)[0]
+        trace_len   = struct.unpack_from('<H', h, 12)[0]
+
+        trace_off   = off + HEADER
+        trace_end   = trace_off + trace_len
+        if trace_end > len(raw):
+            break  # truncated
+
+        trace_bytes = raw[trace_off:trace_end]
+        frames      = parse_relay_frames(trace_bytes)
+
+        sessions.append({
+            'session_num':  idx,
+            'role':         'CARD' if role == 0 else 'READER',
+            'uid_len':      uid_len,
+            'uid':          uid,
+            'atqa':         atqa,
+            'sak':          sak,
+            'frame_count':  frame_count,
+            'trace_len':    trace_len,
+            'status':       status,
+            'status_name':  STATUS.get(status, f'UNKNOWN({status})'),
+            'frames':       frames,
+        })
+        off = trace_end
+        idx += 1
+    return sessions
+
+
+def parse_relay_frames(trace: bytes) -> list:
+    """Decode a raw trace buffer into frame dicts (same format as AuthTrace)."""
+    frames = []
+    off = 0
+    while off + 2 <= len(trace):
+        hdr       = (trace[off] << 8) | trace[off + 1]
+        tag_to_rd = bool(hdr & 0x8000)
+        bits      = hdr & 0x7FFF
+        byte_cnt  = (bits + 7) // 8
+        off += 2
+        if off + byte_cnt > len(trace):
+            break
+        raw = trace[off:off + byte_cnt]
+        frames.append({
+            'dir':   'tag→reader' if tag_to_rd else 'reader→tag',
+            'bits':  bits,
+            'hex':   raw.hex().upper(),
+        })
+        off += byte_cnt
+    return frames
+
+
+def relay_result_summary(sessions) -> str:
+    """Human-readable session table for --dump."""
+    if not sessions:
+        return color_string((CY, '  (no sessions)'))
+    lines = []
+    for s in sessions:
+        role_col = CG if s['role'] == 'CARD' else CC
+        st_col   = CG if s['status'] == 0 else CY
+        lines.append(
+            f"  {CY}#{s['session_num']}{C0}  "
+            f"{role_col}{s['role']:<6}{C0}  "
+            f"UID={s['uid']}  ATQA={s['atqa']} SAK={s['sak']}  "
+            f"frames={s['frame_count']}  "
+            f"{st_col}{s['status_name']}{C0}"
+        )
+        for f in s.get('frames', []):
+            arrow = '←' if f['dir'] == 'tag→reader' else '→'
+            lines.append(f"      {arrow} [{f['bits']}b] {f['hex']}")
+    return '\n'.join(lines)
+
+
 # --- Commands ----------------------------------------------------------------
 
 @standalone.command('status')
@@ -10717,6 +10818,58 @@ class StandaloneStatus(DeviceRequiredUnit):
             gc_hint = f"  {CY}(GC recommended){C0}" if dirty > 4 else ""
             print(f" flash: {used} words used  {pages} pages free  "
                   f"valid={valid} dirty={dirty}{gc_hint}")
+        if mode == StandaloneMode.RELAY:
+            try:
+                d = self.cmd.relay_get_diag()
+                if not d:
+                    pass
+                else:
+                    reports = d['adv_reports']
+                    hits    = d['relay_hits']
+                    state   = d.get('ble_state', 0)
+                    role    = d.get('ble_role', 0)
+                    state_names = {0:'IDLE',1:'STARTING',2:'CONNECTING',
+                                   3:'DISCOVERING',4:'NEGOTIATING',5:'READY',
+                                   6:'ACTIVE',7:'ERROR'}
+                    role_names  = {0:'RELAY_CARD (faces reader)',
+                                   1:'RELAY_READER (faces real card)'}
+                    sub        = d.get('sub_state', 0)
+                    card_found  = d.get('card_found', 0)
+                    identity_rx = d.get('identity_rx', 0)
+                    uid_len     = d.get('uid_len', 0)
+                    uid_bytes   = d.get('uid', [])
+                    uid_str = ''.join(f'{b:02X}' for b in uid_bytes[:uid_len]) if uid_len else '-'
+                    sub_names = {0:'INIT',1:'LINKING',2:'CARD_AWAIT_IDENTITY',
+                                 3:'CARD_READY',4:'CARD_AUTH_GOT_NRAR',5:'CARD_AWAIT_AT',
+                                 6:'CARD_ISO4_RELAY',7:'READER_SCAN',8:'READER_READY',
+                                 9:'READER_RELAY',10:'ERROR'}
+                    state_str = state_names.get(state, f'UNKNOWN({state})')
+                    role_str  = role_names.get(role, f'UNKNOWN({role})')
+                    sub_str   = sub_names.get(sub, f'UNKNOWN({sub})')
+                    print(f"   ble: {reports} scan reports  {hits} relay hits")
+                    print(f"        state={CG if state==5 else CY}{state_str}{C0}  "
+                          f"role={CC}{role_str}{C0}")
+                    print(f"        sub={CG if sub in (3,8) else CY}{sub_str}{C0}")
+                    relay_armed = (state != StandaloneState.DISARMED)
+                    if relay_armed and reports == 0:
+                        print(f"        {CR}WARNING: scanning not working{C0}")
+                    elif relay_armed and hits == 0:
+                        print(f"        {CY}no relay HELLO seen yet{C0}")
+                    elif relay_armed and state < 5:
+                        print(f"        {CY}HELLO seen but not connected — check both CUs armed{C0}")
+                    else:
+                        if role == 0:   # RELAY_CARD
+                            if identity_rx:
+                                print(f"        {CG}card identity received  UID={uid_str}{C0}")
+                            else:
+                                print(f"        {CY}waiting for card identity from RELAY_READER{C0}")
+                        else:           # RELAY_READER
+                            if card_found:
+                                print(f"        {CG}real card found  UID={uid_str}{C0}")
+                            else:
+                                print(f"        {CY}scanning for real card — place card near CU{C0}")
+            except Exception:
+                pass
 
 
 @standalone.command('set-mode')
@@ -10734,7 +10887,7 @@ class StandaloneSetMode(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Set standalone mode'
-        parser.add_argument('mode', help='mode name (authtrace, emul-trace, slot-cycle, '
+        parser.add_argument('mode', help='mode name (authtrace, emul-trace, relay, slot-cycle, '
                                          'autoclone, read-replay, dict-check, '
                                          'disabled)')
         parser.add_argument('--opt-in', action='store_true',
@@ -10846,10 +10999,26 @@ class StandaloneGetResult(DeviceRequiredUnit):
                     f"to format)")))
             return
 
-        if mode not in (StandaloneMode.AUTHTRACE, StandaloneMode.EMUL_TRACE):
+        if mode not in (StandaloneMode.AUTHTRACE, StandaloneMode.EMUL_TRACE,
+                        StandaloneMode.RELAY):
             print(color_string((CY,
                 f"got {len(raw)} bytes; mode={mode.name} has no parser. "
                 f"use --raw -f <path> to dump.")))
+            return
+
+        if mode == StandaloneMode.RELAY:
+            sessions = parse_relay_result_buffer(raw)
+            print(color_string((CG, f"{len(sessions)} relay session(s)")))
+            if args.json:
+                import json as _json
+                out = _json.dumps(sessions, indent=2)
+                if args.file:
+                    Path(args.file).write_text(out)
+                    print(color_string((CG, f"-> {args.file}")))
+                else:
+                    print(out)
+            else:
+                print(relay_result_summary(sessions))
             return
 
         sessions = parse_authtrace_buffer(raw)
@@ -10909,6 +11078,7 @@ class StandaloneLs(DeviceRequiredUnit):
         4: 'slot_cycle',
         5: 'dict_check',
         6: 'emul_trace',
+        7: 'relay',
     }
 
     def args_parser(self) -> ArgumentParserNoExit:
@@ -11000,6 +11170,40 @@ class StandaloneConfig(DeviceRequiredUnit):
 
         any_setter = any(v is not None for v in
                          (args.block, args.key_type, args.key, args.timeout))
+
+        if mode == StandaloneMode.RELAY:
+            if any(v is not None for v in (args.block, args.key_type, args.key)):
+                print(color_string((CR,
+                    "relay config does not use --block/--key-type/--key")))
+                return
+            if args.timeout is not None:
+                # --timeout reused as WTX ms for relay mode
+                wtx_ms = int(args.timeout)
+                if wtx_ms < 500 or wtx_ms > 10000:
+                    print(color_string((CR,
+                        "relay --wtx must be 500-10000 ms")))
+                    return
+                cfg_hex = '{:02X}{:02X}{:02X}{:02X}'.format(
+                    wtx_ms & 0xFF, (wtx_ms >> 8) & 0xFF,
+                    (wtx_ms >> 16) & 0xFF, (wtx_ms >> 24) & 0xFF)
+                resp = self.cmd.standalone_set_config(
+                    StandaloneMode.RELAY.value, cfg_hex)
+                if resp.status == Status.SUCCESS:
+                    print(color_string((CG,
+                        f"relay WTX set to {wtx_ms} ms")))
+                return
+            # No setter args — read and display current config
+            raw = self.cmd.standalone_get_config(StandaloneMode.RELAY.value)
+            if raw and len(raw) >= 4:
+                wtx_ms = raw[0] | (raw[1] << 8) | (raw[2] << 16) | (raw[3] << 24)
+                print(color_string((CG, f"relay config:")))
+                print(f"  wtx  {wtx_ms} ms  (time to request from reader via WTX "
+                      f"while BLE round-trip completes)")
+                print(f"  link auto-pair nearest available CU in relay mode")
+                print(f"  role lower MAC = RELAY_CARD (reader side), "
+                      f"higher MAC = RELAY_READER (card side)")
+                print(color_string((CY, "Ultra only. Arm both units with both-button chord.")))
+            return
 
         if mode == StandaloneMode.EMUL_TRACE:
             print(color_string((CY,

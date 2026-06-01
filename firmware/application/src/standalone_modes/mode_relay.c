@@ -1,0 +1,766 @@
+/*
+ * mode_relay.c
+ *
+ * Transparent BLE relay between two ChameleonUltra devices.
+ *
+ *   RELAY_CARD  (lower BLE MAC) — NFCT, faces the real reader
+ *   RELAY_READER (higher BLE MAC) — RC522, faces the real card
+ *
+ * Flow:
+ *   1. CU2 (READER) scans real card → sends CARD_IDENTITY to CU1
+ *   2. CU1 (CARD) sets up NFCT emulation with real card's identity
+ *   3. Reader approaches CU1 → anticollision handled locally (fast)
+ *   4. Post-SELECT: every reader frame is forwarded to CU2 via BLE
+ *   5. CU2 relays frame to real card via RC522 → gets response
+ *   6. CU2 sends response to CU1 via BLE → CU1 sends to reader
+ *   7. All frames accumulated in trace buffer → persisted on disarm
+ *
+ * Result format per session:
+ *   [u8  role]       0=CARD, 1=READER
+ *   [u8  status]     0=OK, 1=TIMEOUT, 2=DISCONNECT
+ *   [u8  uid_len]
+ *   [u8[4] uid]      4-byte extracted UID
+ *   [u8[2] atqa]
+ *   [u8  sak]
+ *   [u16 frame_count_le]
+ *   [u16 trace_len_le]
+ *   [u8[4] reserved]
+ *   [trace bytes...]  frames in AuthTrace wire format:
+ *                     [u16 hdr: bit15=tag→reader, bits14-0=bit_count]
+ *                     [u8[] raw frame bytes]
+ */
+
+#include "app_standalone.h"
+#include "standalone_led.h"
+#include "ble_relay.h"
+
+#include <string.h>
+#include <stdint.h>
+
+#include "nrf_log.h"
+#include "app_timer.h"
+#include "app_status.h"
+
+#include "rfid/nfctag/hf/nfc_14a.h"
+#include "rfid/nfctag/hf/nfc_relay_tag.h"
+#include "rfid_main.h"
+#include "bsp/bsp_delay.h"
+#include "utils/syssleep.h"
+#include "rfid/reader/hf/rc522.h"
+#include "tag_emulation.h"
+
+/* -------------------------------------------------------------------------
+ * Config
+ * ------------------------------------------------------------------------- */
+#define RELAY_DEFAULT_WTX_MS     2000u
+#define RELAY_LINK_TIMEOUT_MS    120000u
+#define RELAY_FRAME_TIMEOUT_MS   3000u    /* max wait for response from real card */
+
+/* ISO14443-4 S(WTX) block */
+#define RELAY_WTX_BLOCK_CMD      0xF2
+#define RELAY_WTX_MULTIPLIER     1
+
+/* -------------------------------------------------------------------------
+ * Result storage
+ *
+ * Variable-length session records:
+ *   16-byte fixed header + variable trace
+ *   Max total buffer: 4KB
+ * ------------------------------------------------------------------------- */
+#define RELAY_RESULT_BUF_BYTES    4096u
+
+/* Session header offsets */
+#define RH_ROLE         0
+#define RH_STATUS       1
+#define RH_UID_LEN      2
+#define RH_UID          3   /* 4 bytes */
+#define RH_ATQA         7   /* 2 bytes */
+#define RH_SAK          9
+#define RH_FRAME_COUNT  10  /* u16 LE */
+#define RH_TRACE_LEN    12  /* u16 LE */
+#define RH_RESERVED     14  /* 2 bytes */
+#define RH_HEADER_SIZE  16
+
+#define RELAY_SESSION_OK          0x00
+#define RELAY_SESSION_TIMEOUT     0x01
+#define RELAY_SESSION_DISCONNECT  0x02
+
+/* Trace buffer per session (accumulates during relay, flushed on save) */
+#define RELAY_TRACE_BUF_BYTES  1024u
+
+static uint32_t m_result_words[(RELAY_RESULT_BUF_BYTES + 3) / 4];
+#define m_result_buf ((uint8_t *)m_result_words)
+
+static uint8_t  m_trace_buf[RELAY_TRACE_BUF_BYTES];
+static uint16_t m_trace_len;
+static uint16_t m_trace_frame_count;
+
+/* Append one frame to the in-RAM trace buffer */
+static void trace_append(bool tag_to_reader, const uint8_t *data, uint16_t bits) {
+    uint16_t bytes = (bits + 7) / 8;
+    uint16_t needed = 2 + bytes;
+    if (m_trace_len + needed > RELAY_TRACE_BUF_BYTES) return;
+    uint16_t hdr = (tag_to_reader ? 0x8000u : 0u) | (bits & 0x7FFFu);
+    m_trace_buf[m_trace_len++] = (uint8_t)(hdr >> 8);
+    m_trace_buf[m_trace_len++] = (uint8_t)(hdr     );
+    if (bytes && data) memcpy(m_trace_buf + m_trace_len, data, bytes);
+    m_trace_len += bytes;
+    m_trace_frame_count++;
+}
+
+/* -------------------------------------------------------------------------
+ * Sub-states
+ * ------------------------------------------------------------------------- */
+typedef enum {
+    RS_INIT = 0,
+    RS_LINKING,
+    RS_CARD_AWAIT_IDENTITY,
+    RS_CARD_READY,              /* emulating, waiting for reader */
+    RS_CARD_AWAIT_RESPONSE,     /* frame sent to CU2, waiting for response */
+    RS_READER_SCAN,
+    RS_READER_READY,
+    RS_READER_RELAY,
+    RS_ERROR,
+} relay_sub_state_t;
+
+/* -------------------------------------------------------------------------
+ * Module state
+ * ------------------------------------------------------------------------- */
+static struct {
+    relay_sub_state_t sub;
+    uint8_t           role;
+    uint32_t          wtx_ms;
+
+    relay_card_identity_t identity;
+    bool identity_received;
+    bool reader_sent_ready;
+
+
+    /* Generic frame relay: set in frame_cb ISR, consumed in on_tick */
+    volatile bool  frame_pending;
+    uint8_t        frame_buf[256]; /* large enough for any ISO14443-4 APDU */
+    uint16_t       frame_bits;
+
+    /* Response from real card (set in on_response CB, consumed in on_tick) */
+    volatile bool  response_ready;
+    bool           no_response;
+    uint8_t        response_buf[256];
+    uint16_t       response_bits;
+
+    /* READER: pending frame from CU1 (set in on_frame CB) */
+    volatile bool  reader_frame_pending;
+    uint8_t        reader_frame_buf[256];
+    uint16_t       reader_frame_bits;
+
+    /* Timing */
+    uint32_t link_start_ticks;
+    uint32_t frame_sent_ticks;
+
+    picc_14a_tag_t real_card;
+    bool           real_card_found;
+
+    /* Result tracking */
+    size_t  result_write;
+    size_t  result_read;
+    uint8_t session_count;
+    bool    result_loaded;
+
+    bool active;
+} m_st;
+
+/* nfc_relay_tag.h functions are included above */
+
+/* -------------------------------------------------------------------------
+ * WTX helper (ISO14443-4 only)
+ * ------------------------------------------------------------------------- */
+static void send_wtx(void) {
+    uint8_t wtx[4];
+    wtx[0] = RELAY_WTX_BLOCK_CMD;
+    wtx[1] = RELAY_WTX_MULTIPLIER;
+    nfc_tag_14a_append_crc(wtx, 2);
+    nfc_tag_14a_tx_bytes(wtx, 4, false);
+}
+
+/* -------------------------------------------------------------------------
+ * Frame ISR callback (NFCT ISR context — ISR-safe: copy and flag only)
+ * ------------------------------------------------------------------------- */
+static void on_frame_isr(const uint8_t *data, uint16_t bits) {
+    if (m_st.frame_pending) return;  /* previous frame not yet processed */
+    uint16_t bytes = (bits + 7) / 8;
+    if (bytes > sizeof(m_st.frame_buf)) bytes = sizeof(m_st.frame_buf);
+    memcpy(m_st.frame_buf, data, bytes);
+    m_st.frame_bits    = bits;
+    m_st.frame_pending = true;
+}
+
+/* -------------------------------------------------------------------------
+ * Result helpers
+ * ------------------------------------------------------------------------- */
+static void result_ensure_loaded(void) {
+    if (m_st.result_loaded) return;
+    m_st.result_loaded = true;
+    size_t loaded = 0;
+    standalone_rc_t rc = app_standalone_load_result_buf(
+        STANDALONE_MODE_RELAY, m_result_words, RELAY_RESULT_BUF_BYTES, &loaded);
+    if (rc == STANDALONE_RC_OK && loaded > 0) {
+        m_st.result_write = loaded;
+        m_st.result_read  = 0;
+    }
+}
+
+static void result_save_session(uint8_t status) {
+    result_ensure_loaded();
+
+    /* Make sure trace fits; if not, drop oldest session */
+    uint16_t needed = RH_HEADER_SIZE + m_trace_len;
+    while (m_st.result_write + needed > RELAY_RESULT_BUF_BYTES
+           && m_st.result_write >= RH_HEADER_SIZE) {
+        /* Drop oldest session: read its trace_len from header */
+        uint16_t oldest_trace = (uint16_t)m_result_buf[RH_TRACE_LEN]
+                              | ((uint16_t)m_result_buf[RH_TRACE_LEN+1] << 8);
+        uint16_t oldest_total = RH_HEADER_SIZE + oldest_trace;
+        if (oldest_total > m_st.result_write) break;
+        memmove(m_result_buf, m_result_buf + oldest_total,
+                m_st.result_write - oldest_total);
+        m_st.result_write -= oldest_total;
+        if (m_st.session_count > 0) m_st.session_count--;
+    }
+
+    if (m_st.result_write + needed > RELAY_RESULT_BUF_BYTES) {
+        NRF_LOG_WARNING("relay: result buffer full, session dropped");
+        return;
+    }
+
+    uint8_t *h = &m_result_buf[m_st.result_write];
+    memset(h, 0, RH_HEADER_SIZE);
+
+    uint8_t own[6] = {0}, peer[6] = {0};
+    ble_relay_get_my_addr(own);
+    ble_relay_get_peer_addr(peer);
+    (void)own; (void)peer;
+
+    h[RH_ROLE]   = m_st.role;
+    h[RH_STATUS] = status;
+
+    /* UID: prefer identity, fall back to real_card */
+    if (m_st.identity.uid_len > 0) {
+        h[RH_UID_LEN] = m_st.identity.uid_len > 4 ? 4 : m_st.identity.uid_len;
+        memcpy(&h[RH_UID], m_st.identity.uid, 4);
+        memcpy(&h[RH_ATQA], m_st.identity.atqa, 2);
+        h[RH_SAK] = m_st.identity.sak;
+    } else if (m_st.real_card_found) {
+        uint8_t uid4[4] = {0};
+        get_4byte_tag_uid(&m_st.real_card, uid4);
+        h[RH_UID_LEN] = 4;
+        memcpy(&h[RH_UID],  uid4, 4);
+        memcpy(&h[RH_ATQA], m_st.real_card.atqa, 2);
+        h[RH_SAK] = m_st.real_card.sak;
+    }
+
+    h[RH_FRAME_COUNT    ] = (uint8_t)(m_trace_frame_count     );
+    h[RH_FRAME_COUNT + 1] = (uint8_t)(m_trace_frame_count >> 8);
+    h[RH_TRACE_LEN      ] = (uint8_t)(m_trace_len             );
+    h[RH_TRACE_LEN   + 1] = (uint8_t)(m_trace_len          >> 8);
+
+    m_st.result_write += RH_HEADER_SIZE;
+    if (m_trace_len > 0) {
+        memcpy(&m_result_buf[m_st.result_write], m_trace_buf, m_trace_len);
+        m_st.result_write += m_trace_len;
+    }
+    m_st.session_count++;
+    m_st.result_read = 0;
+
+    app_standalone_save_result_buf(STANDALONE_MODE_RELAY,
+                                   m_result_words, m_st.result_write);
+    NRF_LOG_INFO("relay: session saved frames=%u trace=%u status=%u",
+                 m_trace_frame_count, m_trace_len, status);
+
+    /* Clear trace for next session */
+    m_trace_len         = 0;
+    m_trace_frame_count = 0;
+}
+
+/* -------------------------------------------------------------------------
+ * BLE relay callbacks (main-loop context via ble_relay_process())
+ * ------------------------------------------------------------------------- */
+
+static void on_connected(uint8_t my_role) {
+    m_st.role = my_role;
+    NRF_LOG_INFO("relay: connected role=%s",
+                 my_role == BLE_RELAY_ROLE_CARD ? "CARD" : "READER");
+
+    if (my_role == BLE_RELAY_ROLE_CARD) {
+        standalone_feedback(SL_FB_SUCCESS);
+        standalone_led_set_mode_color(STANDALONE_MODE_RELAY, RGB_BLUE);
+    } else {
+        standalone_feedback(SL_FB_SUCCESS);
+        standalone_led_set_mode_color(STANDALONE_MODE_RELAY, RGB_GREEN);
+    }
+    standalone_led_solid();
+
+    if (my_role == BLE_RELAY_ROLE_CARD) {
+        m_st.sub = RS_CARD_AWAIT_IDENTITY;
+    } else {
+        reader_mode_enter();
+        m_st.sub = RS_READER_SCAN;
+    }
+}
+
+static void on_card_identity(const relay_card_identity_t *id) {
+    if (m_st.identity_received) return;
+    memcpy(&m_st.identity, id, sizeof(*id));
+    if (m_st.identity.uid_len != 4 && m_st.identity.uid_len != 7)
+        m_st.identity.uid_len = 4;
+    m_st.identity_received = true;
+    m_st.reader_sent_ready = true;
+    NRF_LOG_INFO("relay: identity UID=%02X%02X%02X%02X",
+                 id->uid[0], id->uid[1], id->uid[2], id->uid[3]);
+}
+
+static void on_ready(void) {
+    if (m_st.role == BLE_RELAY_ROLE_CARD) {
+        m_st.reader_sent_ready = true;
+        if (m_st.identity_received) {
+            m_st.sub = RS_CARD_READY;
+            standalone_feedback(SL_FB_ARMED);
+        }
+    }
+}
+
+/* Response from real card (CU2 → CU1 via BLE) */
+static void on_response(const uint8_t *data, uint16_t bits) {
+    if (m_st.sub != RS_CARD_AWAIT_RESPONSE) return;
+    uint16_t bytes = (bits + 7) / 8;
+    if (bytes > sizeof(m_st.response_buf)) bytes = sizeof(m_st.response_buf);
+    memcpy(m_st.response_buf, data, bytes);
+    m_st.response_bits  = bits;
+    m_st.no_response    = false;
+    m_st.response_ready = true;
+}
+
+static void on_no_response(void) {
+    if (m_st.sub != RS_CARD_AWAIT_RESPONSE) return;
+    m_st.no_response    = true;
+    m_st.response_bits  = 0;
+    m_st.response_ready = true;
+}
+
+/* Frame from CU1 to forward to real card (CU2 side) */
+static void on_frame(const uint8_t *data, uint16_t bits) {
+    if (m_st.reader_frame_pending) return;
+    uint16_t bytes = (bits + 7) / 8;
+    if (bytes > sizeof(m_st.reader_frame_buf))
+        bytes = sizeof(m_st.reader_frame_buf);
+    memcpy(m_st.reader_frame_buf, data, bytes);
+    m_st.reader_frame_bits    = bits;
+    m_st.reader_frame_pending = true;
+}
+
+static void on_disconnected(void) {
+    NRF_LOG_INFO("relay: peer disconnected");
+    pcd_14a_reader_antenna_off();   /* de-power real card on disconnect */
+    result_save_session(RELAY_SESSION_DISCONNECT);
+    m_trace_len         = 0;   /* prevent on_exit double-save */
+    m_trace_frame_count = 0;
+    m_st.sub               = RS_LINKING;
+    m_st.identity_received = false;
+    m_st.reader_sent_ready = false;
+    m_st.frame_pending     = false;
+    m_st.response_ready    = false;
+    m_st.reader_frame_pending = false;
+    m_st.link_start_ticks  = app_timer_cnt_get();
+    sleep_timer_stop();
+    standalone_feedback(SL_FB_ERROR);
+    ble_relay_start();
+}
+
+/* -------------------------------------------------------------------------
+ * RELAY_READER: scan real card and send identity to CU1
+ * ------------------------------------------------------------------------- */
+static void reader_setup_card(void) {
+    if (!m_st.real_card_found) {
+        pcd_14a_reader_reset();
+        pcd_14a_reader_antenna_on();
+        bsp_delay_ms(8);
+        uint8_t status = pcd_14a_reader_scan_auto(&m_st.real_card);
+        if (status != STATUS_HF_TAG_OK) {
+            pcd_14a_reader_antenna_off();
+            return;
+        }
+        m_st.real_card_found = true;
+        NRF_LOG_INFO("relay reader: card UID=%02X%02X%02X%02X",
+                     m_st.real_card.uid[0], m_st.real_card.uid[1],
+                     m_st.real_card.uid[2], m_st.real_card.uid[3]);
+    }
+
+    relay_card_identity_t id;
+    memset(&id, 0, sizeof(id));
+    id.atqa[0] = m_st.real_card.atqa[0];
+    id.atqa[1] = m_st.real_card.atqa[1];
+    id.sak     = m_st.real_card.sak;
+    uint8_t cascade = m_st.real_card.cascade ? m_st.real_card.cascade : 1;
+    id.uid_len = cascade == 1 ? 4 : 7;
+    if (id.uid_len == 4) {
+        get_4byte_tag_uid(&m_st.real_card, id.uid);
+    } else {
+        memcpy(id.uid, m_st.real_card.uid, 7);
+    }
+
+    /* ATS for ISO14443-4 cards */
+    if (m_st.real_card.sak & 0x20) {
+        uint8_t ats[64]; uint16_t ats_bits = 0;
+        if (pcd_14a_reader_ats_request(ats, &ats_bits,
+                                       sizeof(ats)*8) == STATUS_HF_TAG_OK) {
+            id.ats_len = (ats_bits + 7) / 8;
+            if (id.ats_len > sizeof(id.ats)) id.ats_len = sizeof(id.ats);
+            memcpy(id.ats, ats, id.ats_len);
+        }
+    }
+
+    memcpy(&m_st.identity, &id, sizeof(id));
+    /* Keep antenna ON — card must remain powered throughout the relay session.
+     * Antenna will be turned off only on disconnect or disarm. */
+    ble_relay_send_card_identity(&id);
+
+    m_st.sub = RS_READER_READY;
+    standalone_led_set_mode_color(STANDALONE_MODE_RELAY, RGB_GREEN);
+    standalone_led_solid();
+    standalone_feedback(SL_FB_ARMED);
+    NRF_LOG_INFO("relay reader: identity sent");
+}
+
+/* -------------------------------------------------------------------------
+ * RELAY_READER: forward frame to real card, return response to CU1
+ * ------------------------------------------------------------------------- */
+static void reader_relay_frame(const uint8_t *data, uint16_t bits) {
+    uint8_t  rx_buf[256];
+    uint16_t rx_bits = 0;
+    uint8_t  tx_buf[256];
+    uint16_t tx_bytes = (bits + 7) / 8;
+    if (tx_bytes > sizeof(tx_buf)) tx_bytes = sizeof(tx_buf);
+    memcpy(tx_buf, data, tx_bytes);
+
+    /* Antenna stays on — card is kept powered for the duration of the session */
+    uint8_t status = pcd_14a_reader_bytes_transfer(
+        PCD_TRANSCEIVE, tx_buf, tx_bytes, rx_buf, &rx_bits,
+        sizeof(rx_buf) * 8);
+
+    if (status == STATUS_HF_TAG_OK && rx_bits > 0) {
+        ble_relay_send_response(rx_buf, rx_bits);
+    } else {
+        ble_relay_send_no_response();
+    }
+}
+
+/* -------------------------------------------------------------------------
+ * RELAY_CARD NFCT setup
+ * ------------------------------------------------------------------------- */
+static void card_setup_emulation(void) {
+    if (!m_st.identity_received) return;
+    /* Install slot-independent relay handler — works for any HF tag type */
+    nfc_relay_tag_install(m_st.identity.uid, m_st.identity.uid_len,
+                          m_st.identity.atqa, m_st.identity.sak,
+                          m_st.identity.ats, m_st.identity.ats_len);
+    nfc_relay_tag_set_frame_cb(on_frame_isr);
+    NRF_LOG_INFO("relay card: relay handler installed");
+}
+
+/* -------------------------------------------------------------------------
+ * Lifecycle
+ * ------------------------------------------------------------------------- */
+static const ble_relay_callbacks_t k_relay_cbs = {
+    .on_connected     = on_connected,
+    .on_card_identity = on_card_identity,
+    .on_preauth       = NULL,
+    .on_ready         = on_ready,
+    .on_frame         = on_frame,
+    .on_response      = on_response,
+    .on_no_response   = on_no_response,
+    .on_disconnected  = on_disconnected,
+};
+
+static standalone_rc_t on_enter(const uint8_t *cfg, size_t cfg_len) {
+    size_t  saved_write   = m_st.result_write;
+    size_t  saved_read    = m_st.result_read;
+    uint8_t saved_count   = m_st.session_count;
+    bool    saved_loaded  = m_st.result_loaded;
+
+    memset(&m_st, 0, sizeof(m_st));
+    m_trace_len         = 0;
+    m_trace_frame_count = 0;
+
+    m_st.result_write  = saved_write;
+    m_st.result_read   = saved_read;
+    m_st.session_count = saved_count;
+    m_st.result_loaded = saved_loaded;
+
+    m_st.active  = true;
+    m_st.wtx_ms  = RELAY_DEFAULT_WTX_MS;
+    m_st.sub     = RS_LINKING;
+
+    if (cfg != NULL && cfg_len >= 4) {
+        m_st.wtx_ms = (uint32_t)cfg[0] | ((uint32_t)cfg[1] << 8)
+                    | ((uint32_t)cfg[2] << 16) | ((uint32_t)cfg[3] << 24);
+    }
+
+    m_st.link_start_ticks = app_timer_cnt_get();
+    sleep_timer_stop();
+
+    static bool s_relay_initialized = false;
+    if (!s_relay_initialized) {
+        ble_relay_init(&k_relay_cbs);
+        s_relay_initialized = true;
+    }
+    ble_relay_start();
+    NRF_LOG_INFO("relay: armed WTX=%ums", m_st.wtx_ms);
+    return STANDALONE_RC_OK;
+}
+
+static standalone_rc_t on_exit(void) {
+    /* Save if a connection happened (identity received = peer connected and
+     * card found). Trace may be empty for UID-only readers — still worth
+     * recording that the relay ran. */
+    if (m_st.identity_received || m_trace_len > 0) {
+        result_save_session(RELAY_SESSION_OK);
+    }
+    m_st.active = false;
+    nfc_relay_tag_clear();
+    ble_relay_stop();
+    pcd_14a_reader_antenna_off();
+    tag_mode_enter();
+    sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
+    NRF_LOG_INFO("relay: disarmed");
+    return STANDALONE_RC_OK;
+}
+
+static standalone_rc_t on_tick(uint32_t now_ticks) {
+    if (!m_st.active) return STANDALONE_RC_OK;
+
+    ble_relay_process();
+    sleep_timer_stop();
+
+    /* Keep scan + HELLO alive every 2s */
+    static uint32_t s_last_scan_restart = 0;
+    if (ble_relay_get_state() != BLE_RELAY_STATE_IDLE &&
+        app_timer_cnt_diff_compute(now_ticks, s_last_scan_restart)
+            >= APP_TIMER_TICKS(2000)) {
+        s_last_scan_restart = now_ticks;
+        ble_relay_restart_scan();
+        if (m_st.sub == RS_LINKING) ble_relay_broadcast_hello();
+    }
+
+    switch (m_st.sub) {
+
+    case RS_LINKING: {
+        static uint32_t s_last_pulse = 0;
+        if (app_timer_cnt_diff_compute(now_ticks, s_last_pulse)
+                >= APP_TIMER_TICKS(1000)) {
+            s_last_pulse = now_ticks;
+            standalone_feedback(SL_FB_BUSY_START);
+        }
+        if (app_timer_cnt_diff_compute(now_ticks, m_st.link_start_ticks)
+                >= APP_TIMER_TICKS(RELAY_LINK_TIMEOUT_MS)) {
+            m_st.sub = RS_ERROR;
+            standalone_feedback(SL_FB_ERROR);
+        }
+        break;
+    }
+
+    case RS_CARD_AWAIT_IDENTITY:
+        if (m_st.identity_received) {
+            card_setup_emulation();
+            if (m_st.reader_sent_ready) {
+                m_st.sub = RS_CARD_READY;
+                standalone_feedback(SL_FB_ARMED);
+            }
+        }
+        break;
+
+    case RS_CARD_READY:
+        /* Frame ISR set frame_pending when reader sends a command */
+        if (m_st.frame_pending) {
+            m_st.frame_pending = false;
+
+            /* Log reader→tag frame in trace */
+            trace_append(false, m_st.frame_buf, m_st.frame_bits);
+
+            /* Send WTX only for ISO14443-4 I-blocks (bit0=0, bit1=0 of PCB byte).
+             * Classic auth/read/write commands must NOT get a WTX response. */
+            if (m_st.identity.ats_len > 0 && m_st.frame_bits >= 8) {
+                uint8_t pcb = m_st.frame_buf[0];
+                bool is_i_block = (pcb & 0xC0) == 0x00;  /* PCB: bits7-6 = 00 */
+                if (is_i_block) send_wtx();
+            }
+
+            /* Forward frame to RELAY_READER via BLE */
+            ble_relay_send_frame(m_st.frame_buf, m_st.frame_bits);
+            m_st.sub              = RS_CARD_AWAIT_RESPONSE;
+            m_st.frame_sent_ticks = now_ticks;
+        }
+        break;
+
+    case RS_CARD_AWAIT_RESPONSE:
+        if (m_st.response_ready) {
+            m_st.response_ready = false;
+            m_st.sub            = RS_CARD_READY;
+
+            if (!m_st.no_response && m_st.response_bits > 0) {
+                /* Log tag→reader response in trace */
+                trace_append(true, m_st.response_buf, m_st.response_bits);
+                /* Inject response into NFCT for transmission to reader */
+                nfc_relay_tag_inject_response(m_st.response_buf,
+                                             m_st.response_bits);
+            } else {
+                nfc_relay_tag_no_response();
+                NRF_LOG_INFO("relay card: no response from real card");
+            }
+        } else {
+            /* Timeout */
+            uint32_t wait = app_timer_cnt_diff_compute(now_ticks,
+                                                        m_st.frame_sent_ticks);
+            if (wait >= APP_TIMER_TICKS(RELAY_FRAME_TIMEOUT_MS)) {
+                NRF_LOG_WARNING("relay card: response timeout");
+                nfc_relay_tag_no_response();
+                m_st.sub = RS_CARD_READY;
+            }
+        }
+        break;
+
+    case RS_READER_SCAN: {
+        static uint32_t s_last_card_scan = 0;
+        if (app_timer_cnt_diff_compute(now_ticks, s_last_card_scan)
+                >= APP_TIMER_TICKS(500)) {
+            s_last_card_scan = now_ticks;
+            sleep_timer_stop();
+            reader_setup_card();
+            sleep_timer_stop();
+        }
+        break;
+    }
+
+    case RS_READER_READY: {
+        /* Re-broadcast identity every 1s */
+        static uint32_t s_last_bcast = 0;
+        if (app_timer_cnt_diff_compute(now_ticks, s_last_bcast)
+                >= APP_TIMER_TICKS(1000)) {
+            s_last_bcast = now_ticks;
+            ble_relay_send_card_identity(&m_st.identity);
+        }
+        /* Forward frames from CU1 to real card */
+        if (m_st.reader_frame_pending) {
+            m_st.reader_frame_pending = false;
+            m_st.sub = RS_READER_RELAY;
+            reader_relay_frame(m_st.reader_frame_buf, m_st.reader_frame_bits);
+            m_st.sub = RS_READER_READY;
+        }
+        break;
+    }
+
+    case RS_READER_RELAY:
+        /* handled synchronously in reader_relay_frame */
+        break;
+
+    case RS_ERROR:
+        break;
+
+    default:
+        break;
+    }
+
+    return STANDALONE_RC_OK;
+}
+
+static standalone_rc_t on_button(standalone_button_evt_t evt) {
+    if (evt == STANDALONE_BTN_BOTH_VLONG) {
+        memset(m_result_words, 0, sizeof(m_result_words));
+        m_st.result_write  = 0;
+        m_st.result_read   = 0;
+        m_st.session_count = 0;
+        m_st.result_loaded = true;
+        m_trace_len         = 0;
+        m_trace_frame_count = 0;
+        app_standalone_save_result_buf(STANDALONE_MODE_RELAY, NULL, 0);
+        ble_relay_stop();
+        m_st.sub               = RS_LINKING;
+            m_st.identity_received = false;
+        m_st.link_start_ticks  = app_timer_cnt_get();
+        ble_relay_start();
+        standalone_feedback(SL_FB_SUCCESS);
+    }
+    return STANDALONE_RC_OK;
+}
+
+/* -------------------------------------------------------------------------
+ * Result interface
+ * ------------------------------------------------------------------------- */
+static size_t get_result_size(void) { return m_st.result_write; }
+
+static standalone_rc_t read_result(uint8_t *out, size_t out_max, size_t *out_len) {
+    if (!out || !out_len) return STANDALONE_RC_INVALID_CFG;
+    result_ensure_loaded();
+    if (m_st.result_read >= m_st.result_write) {
+        m_st.result_read = 0;
+        *out_len = 0;
+        return STANDALONE_RC_NO_RESULT;
+    }
+    size_t remaining = m_st.result_write - m_st.result_read;
+    size_t take      = (remaining < out_max) ? remaining : out_max;
+    memcpy(out, &m_result_buf[m_st.result_read], take);
+    m_st.result_read += take;
+    *out_len = take;
+    return STANDALONE_RC_OK;
+}
+
+static void clear_result(void) {
+    memset(m_result_words, 0, sizeof(m_result_words));
+    m_st.result_write   = 0;
+    m_st.result_read    = 0;
+    m_st.session_count  = 0;
+    m_st.result_loaded  = true;
+    m_trace_len         = 0;
+    m_trace_frame_count = 0;
+    app_standalone_save_result_buf(STANDALONE_MODE_RELAY, NULL, 0);
+}
+
+static void ensure_loaded(void) { result_ensure_loaded(); }
+
+/* -------------------------------------------------------------------------
+ * Diagnostic accessor (CMD 7008)
+ * ------------------------------------------------------------------------- */
+void mode_relay_get_diag(uint8_t *out_sub, uint8_t *out_card_found,
+                         uint8_t *out_identity_rx,
+                         uint8_t *out_uid, uint8_t *out_uid_len) {
+    if (out_sub)         *out_sub         = (uint8_t)m_st.sub;
+    if (out_card_found)  *out_card_found  = m_st.real_card_found  ? 1 : 0;
+    if (out_identity_rx) *out_identity_rx = m_st.identity_received ? 1 : 0;
+    if (out_uid && out_uid_len) {
+        if (m_st.real_card_found) {
+            get_4byte_tag_uid(&m_st.real_card, out_uid);
+            *out_uid_len = 4;
+        } else if (m_st.identity_received) {
+            *out_uid_len = m_st.identity.uid_len;
+            memcpy(out_uid, m_st.identity.uid, m_st.identity.uid_len);
+        } else {
+            *out_uid_len = 0;
+        }
+    }
+}
+
+/* -------------------------------------------------------------------------
+ * Descriptor
+ * ------------------------------------------------------------------------- */
+const standalone_mode_iface_t mode_relay_iface = {
+    .id              = STANDALONE_MODE_RELAY,
+    .name            = "relay",
+    .writes_tag      = false,
+    .writes_slot     = false,
+    .wants_tick      = true,
+    .on_enter        = on_enter,
+    .on_exit         = on_exit,
+    .on_button       = on_button,
+    .on_tick         = on_tick,
+    .get_result_size = get_result_size,
+    .read_result     = read_result,
+    .clear_result    = clear_result,
+    .ensure_loaded   = ensure_loaded,
+};
