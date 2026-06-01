@@ -11196,13 +11196,16 @@ class StandaloneConfig(DeviceRequiredUnit):
             raw = self.cmd.standalone_get_config(StandaloneMode.RELAY.value)
             if raw and len(raw) >= 4:
                 wtx_ms = raw[0] | (raw[1] << 8) | (raw[2] << 16) | (raw[3] << 24)
-                print(color_string((CG, f"relay config:")))
-                print(f"  wtx  {wtx_ms} ms  (time to request from reader via WTX "
-                      f"while BLE round-trip completes)")
-                print(f"  link auto-pair nearest available CU in relay mode")
-                print(f"  role lower MAC = RELAY_CARD (reader side), "
-                      f"higher MAC = RELAY_READER (card side)")
-                print(color_string((CY, "Ultra only. Arm both units with both-button chord.")))
+            else:
+                wtx_ms = 2000  # firmware default
+            print(color_string((CG, f"relay config:")))
+            print(f"  wtx  {wtx_ms} ms  (time to request from reader via WTX "
+                  f"while BLE round-trip completes)"
+                  + (color_string((CY, "  [default]")) if not raw or len(raw) < 4 else ""))
+            print(f"  link auto-pair nearest available CU in relay mode")
+            print(f"  role lower MAC = RELAY_CARD (reader side), "
+                  f"higher MAC = RELAY_READER (card side)")
+            print(color_string((CY, "Ultra only. Arm both units with both-button chord.")))
             return
 
         if mode == StandaloneMode.EMUL_TRACE:
