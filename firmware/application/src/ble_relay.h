@@ -136,6 +136,7 @@ void ble_relay_start(void);
 
 /** Disconnect and stop advertising/scanning. */
 void ble_relay_stop(void);
+void ble_relay_set_fast_mode(bool fast);
 
 /* Restart scanning — safe to call while already scanning */
 void ble_relay_restart_scan(void);

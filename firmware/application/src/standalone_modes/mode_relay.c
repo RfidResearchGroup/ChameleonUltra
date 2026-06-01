@@ -209,6 +209,20 @@ static void result_ensure_loaded(void) {
     }
 }
 
+/* Forward declaration */
+static void result_save_session(uint8_t status);
+
+/* Flush current session state to FDS, overwriting any previous save.
+ * Used for autosave — keeps exactly one in-progress session record. */
+static void result_flush_session(uint8_t status) {
+    /* Reset write cursor to overwrite the last session only */
+    result_ensure_loaded();
+    m_st.result_write  = 0;
+    m_st.result_read   = 0;
+    m_st.session_count = 0;
+    result_save_session(status);
+}
+
 static void result_save_session(uint8_t status) {
     result_ensure_loaded();
 
@@ -431,6 +445,7 @@ static void reader_setup_card(void) {
     ble_relay_send_card_identity(&id);
 
     m_st.sub = RS_READER_READY;
+    ble_relay_set_fast_mode(true);  /* max scan rate for relay latency */
     standalone_led_set_mode_color(STANDALONE_MODE_RELAY, RGB_GREEN);
     standalone_led_solid();
     standalone_feedback(SL_FB_ARMED);
@@ -585,6 +600,7 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
             card_setup_emulation();
             if (m_st.reader_sent_ready) {
                 m_st.sub = RS_CARD_READY;
+                ble_relay_set_fast_mode(true);  /* max scan rate for relay latency */
                 standalone_feedback(SL_FB_ARMED);
             }
         }
@@ -599,7 +615,7 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
                 app_timer_cnt_diff_compute(now_ticks, s_last_autosave)
                     >= APP_TIMER_TICKS(15000)) {
                 s_last_autosave = now_ticks;
-                result_save_session(RELAY_SESSION_OK);
+                result_flush_session(RELAY_SESSION_OK);
             }
         }
         /* Frame ISR set frame_pending when reader sends a command */
@@ -671,7 +687,7 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
                 app_timer_cnt_diff_compute(now_ticks, s_last_autosave_r)
                     >= APP_TIMER_TICKS(15000)) {
                 s_last_autosave_r = now_ticks;
-                result_save_session(RELAY_SESSION_OK);
+                result_flush_session(RELAY_SESSION_OK);
             }
         }
         /* Re-broadcast identity every 1s */
