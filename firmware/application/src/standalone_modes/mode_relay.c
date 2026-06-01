@@ -165,6 +165,7 @@ static struct {
     uint8_t session_count;
     bool    result_loaded;
 
+    bool was_connected;  /* set on_connected, never cleared — used by on_exit */
     bool active;
 } m_st;
 
@@ -286,6 +287,7 @@ static void result_save_session(uint8_t status) {
 
 static void on_connected(uint8_t my_role) {
     m_st.role = my_role;
+    m_st.was_connected = true;
     NRF_LOG_INFO("relay: connected role=%s",
                  my_role == BLE_RELAY_ROLE_CARD ? "CARD" : "READER");
 
@@ -520,7 +522,7 @@ static standalone_rc_t on_exit(void) {
     /* Save if a connection happened (identity received = peer connected and
      * card found). Trace may be empty for UID-only readers — still worth
      * recording that the relay ran. */
-    if (m_st.identity_received || m_trace_len > 0) {
+    if (m_st.was_connected || m_trace_len > 0) {
         result_save_session(RELAY_SESSION_OK);
     }
     m_st.active = false;
