@@ -1906,6 +1906,12 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(Command.STANDALONE_TRIGGER, b'',
                                          timeout=10)
 
+    def standalone_disarm(self):
+        """Disarm the currently armed standalone mode, triggering on_exit
+        (saves result data to FDS)."""
+        return self.device.send_cmd_sync(Command.STANDALONE_DISARM, b'',
+                                         timeout=10)
+
     def relay_get_diag(self) -> dict:
         """Return relay diagnostic info: counters, BLE state, sub-state, UID."""
         resp = self.device.send_cmd_sync(Command.STANDALONE_RELAY_DIAG, b'')

@@ -3112,6 +3112,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_STANDALONE_GET_RESULT,          NULL,                        cmd_handler_standalone_get_result,           NULL                   },
     {    DATA_CMD_STANDALONE_CLEAR_RESULT,        NULL,                        cmd_handler_standalone_clear_result,         NULL                   },
     {    DATA_CMD_STANDALONE_TRIGGER,             NULL,                        cmd_handler_standalone_trigger,              NULL                   },
+    {    DATA_CMD_STANDALONE_DISARM,              NULL,                        cmd_handler_standalone_disarm,               NULL                   },
     {    DATA_CMD_STANDALONE_GET_SIZES,           NULL,                        cmd_handler_standalone_get_sizes,            NULL                   },
     {    DATA_CMD_STANDALONE_RELAY_DIAG,          NULL,                        cmd_handler_standalone_relay_diag,           NULL                   },
 };

@@ -218,6 +218,7 @@ standalone_rc_t     app_standalone_clear_result(void);
 
 /* Manual trigger - host-side equivalent of BOTH_SHORT. */
 standalone_rc_t     app_standalone_trigger(void);
+standalone_rc_t     app_standalone_disarm(void);
 
 #ifdef __cplusplus
 }

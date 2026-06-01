@@ -10840,16 +10840,15 @@ class StandaloneStatus(DeviceRequiredUnit):
                     uid_bytes   = d.get('uid', [])
                     uid_str = ''.join(f'{b:02X}' for b in uid_bytes[:uid_len]) if uid_len else '-'
                     sub_names = {0:'INIT',1:'LINKING',2:'CARD_AWAIT_IDENTITY',
-                                 3:'CARD_READY',4:'CARD_AUTH_GOT_NRAR',5:'CARD_AWAIT_AT',
-                                 6:'CARD_ISO4_RELAY',7:'READER_SCAN',8:'READER_READY',
-                                 9:'READER_RELAY',10:'ERROR'}
+                                 3:'CARD_READY',4:'CARD_AWAIT_RESPONSE',5:'READER_SCAN',
+                                 6:'READER_READY',7:'READER_RELAY',8:'ERROR'}
                     state_str = state_names.get(state, f'UNKNOWN({state})')
                     role_str  = role_names.get(role, f'UNKNOWN({role})')
                     sub_str   = sub_names.get(sub, f'UNKNOWN({sub})')
                     print(f"   ble: {reports} scan reports  {hits} relay hits")
                     print(f"        state={CG if state==5 else CY}{state_str}{C0}  "
                           f"role={CC}{role_str}{C0}")
-                    print(f"        sub={CG if sub in (3,8) else CY}{sub_str}{C0}")
+                    print(f"        sub={CG if sub in (3,6) else CY}{sub_str}{C0}")
                     relay_armed = (state != StandaloneState.DISARMED)
                     if relay_armed and reports == 0:
                         print(f"        {CR}WARNING: scanning not working{C0}")
@@ -10952,6 +10951,32 @@ class StandaloneTrigger(DeviceRequiredUnit):
             print(color_string((CR, "refused (likely missing opt-in)")))
         else:
             print(color_string((CR, f"trigger failed: status={resp.status}")))
+
+
+@standalone.command('disarm')
+class StandaloneDisarm(DeviceRequiredUnit):
+    """
+    Disarm the active standalone mode via USB, triggering on_exit.
+
+    Equivalent to the both-button long chord on the device. Saves result
+    data to FDS so it can be retrieved with get-result.
+    """
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = 'Disarm standalone mode and save results'
+        return parser
+
+    def on_exec(self, args):
+        try:
+            resp = self.cmd.standalone_disarm()
+            if resp.status == Status.SUCCESS:
+                print(color_string((CG, "disarmed — results saved")))
+            else:
+                print(color_string((CY, f"already disarmed or error: status={resp.status}")))
+        except Exception as e:
+            print(color_string((CR, f"disarm failed (old firmware?): {e}")))
+            print(color_string((CY, "Use the both-button chord on the device to disarm manually.")))
 
 
 @standalone.command('get-result')

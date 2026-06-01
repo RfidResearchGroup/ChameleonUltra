@@ -212,6 +212,16 @@ data_frame_tx_t *cmd_handler_standalone_trigger(uint16_t cmd, uint16_t status,
     return data_frame_make(cmd, rc_to_status(rc), 0, NULL);
 }
 
+/* 7009 STANDALONE_DISARM
+ * Disarm the currently armed standalone mode, triggering on_exit (result save).
+ */
+data_frame_tx_t *cmd_handler_standalone_disarm(uint16_t cmd, uint16_t status,
+                                               uint16_t length, uint8_t *data) {
+    (void)status; (void)length; (void)data;
+    standalone_rc_t rc = app_standalone_disarm();
+    return data_frame_make(cmd, rc_to_status(rc), 0, NULL);
+}
+
 /* 7007 GET_SIZES
  * Request:  empty
  * Response: { u32 byte_len_le } × STANDALONE_MODE__COUNT

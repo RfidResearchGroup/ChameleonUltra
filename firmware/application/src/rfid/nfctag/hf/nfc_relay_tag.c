@@ -29,6 +29,9 @@ static uint8_t               s_sak[1]     = {0};
 static nfc_tag_14a_uid_size  s_uid_size   = NFC_TAG_14A_UID_SINGLE_SIZE;
 static nfc_14a_ats_t         s_ats        = {0};
 
+/* Active flag — set by install, cleared by clear; makes callbacks no-ops safely */
+static bool s_active = false;
+
 /* Frame callback (set by mode_relay.c) */
 static void (*s_frame_cb)(const uint8_t *, uint16_t) = NULL;
 
@@ -41,6 +44,7 @@ static volatile bool s_awaiting_response = false;
 static nfc_tag_14a_coll_res_reference_t s_coll_res_ref;
 
 static nfc_tag_14a_coll_res_reference_t *relay_get_coll_res(void) {
+    if (!s_active) return NULL;
     s_coll_res_ref.size = &s_uid_size;
     s_coll_res_ref.uid  = s_uid;
     s_coll_res_ref.atqa = s_atqa;
@@ -53,6 +57,7 @@ static nfc_tag_14a_coll_res_reference_t *relay_get_coll_res(void) {
  * State handler — called by nfc_14a.c ISR for every post-SELECT frame
  * ------------------------------------------------------------------------- */
 static void relay_cb_state(uint8_t *data, uint16_t szBits) {
+    if (!s_active) return;  /* relay disarmed — ignore all frames */
     /* Ignore very short frames (Gen1A magic commands etc.) */
     if (szBits <= 8) return;
 
@@ -110,6 +115,7 @@ void nfc_relay_tag_install(const uint8_t *uid, uint8_t uid_len,
      * no teardown, safe to call at any time */
     nfc_tag_14a_set_handler(&s_relay_handler);
 
+    s_active = true;  /* enable callbacks now handler is registered */
     NRF_LOG_INFO("relay_tag: installed UID=%02X%02X%02X%02X",
                  s_uid[0], s_uid[1], s_uid[2], s_uid[3]);
     NRF_LOG_INFO("relay_tag: ATQA=%02X%02X SAK=%02X",
@@ -138,13 +144,15 @@ void nfc_relay_tag_no_response(void) {
 }
 
 void nfc_relay_tag_clear(void) {
+    /* Disable callbacks first */
+    s_active            = false;
     s_awaiting_response = false;
     s_frame_cb          = NULL;
 
-    /* Restore zero handler — slot activation will re-register the correct
-     * handler the next time the user activates a slot or disarms relay. */
-    nfc_tag_14a_handler_t null_handler = {0};
-    nfc_tag_14a_set_handler(&null_handler);
+    /* Force the 14A state machine back to IDLE so the READY→SELECT path
+     * never fires with a NULL auto_coll_res (nfc_14a.c dereferences
+     * auto_coll_res->size without a NULL check when in NFC_TAG_STATE_14A_READY). */
+    nfc_tag_14a_set_state(NFC_TAG_STATE_14A_IDLE);
 
     NRF_LOG_INFO("relay_tag: cleared");
 }

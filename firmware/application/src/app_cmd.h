@@ -54,6 +54,7 @@ data_frame_tx_t *cmd_handler_standalone_set_config  (uint16_t, uint16_t, uint16_
 data_frame_tx_t *cmd_handler_standalone_get_result  (uint16_t, uint16_t, uint16_t, uint8_t *);
 data_frame_tx_t *cmd_handler_standalone_clear_result(uint16_t, uint16_t, uint16_t, uint8_t *);
 data_frame_tx_t *cmd_handler_standalone_trigger     (uint16_t, uint16_t, uint16_t, uint8_t *);
+data_frame_tx_t *cmd_handler_standalone_disarm      (uint16_t, uint16_t, uint16_t, uint8_t *);
 data_frame_tx_t *cmd_handler_standalone_get_sizes   (uint16_t, uint16_t, uint16_t, uint8_t *);
 data_frame_tx_t *cmd_handler_standalone_relay_diag   (uint16_t, uint16_t, uint16_t, uint8_t *);
 

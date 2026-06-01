@@ -164,6 +164,7 @@ class Command(enum.IntEnum):
     STANDALONE_GET_RESULT       = 7004
     STANDALONE_CLEAR_RESULT     = 7005
     STANDALONE_TRIGGER          = 7006
+    STANDALONE_DISARM           = 7009
     STANDALONE_GET_SIZES        = 7007
     STANDALONE_RELAY_DIAG       = 7008
 

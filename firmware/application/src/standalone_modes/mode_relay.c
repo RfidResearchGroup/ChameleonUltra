@@ -271,10 +271,16 @@ static void result_save_session(uint8_t status) {
     m_st.session_count++;
     m_st.result_read = 0;
 
-    app_standalone_save_result_buf(STANDALONE_MODE_RELAY,
+    standalone_rc_t save_rc = app_standalone_save_result_buf(STANDALONE_MODE_RELAY,
                                    m_result_words, m_st.result_write);
-    NRF_LOG_INFO("relay: session saved frames=%u trace=%u status=%u",
-                 m_trace_frame_count, m_trace_len, status);
+    if (save_rc != STANDALONE_RC_OK) {
+        NRF_LOG_WARNING("relay: FDS save failed rc=%d write=%u", save_rc, m_st.result_write);
+        standalone_feedback(SL_FB_ERROR);
+    } else {
+        NRF_LOG_INFO("relay: session saved frames=%u trace=%u status=%u",
+                     m_trace_frame_count, m_trace_len, status);
+        standalone_feedback(SL_FB_SUCCESS);   /* brief green = saved OK */
+    }
 
     /* Clear trace for next session */
     m_trace_len         = 0;
@@ -519,17 +525,23 @@ static standalone_rc_t on_enter(const uint8_t *cfg, size_t cfg_len) {
 }
 
 static standalone_rc_t on_exit(void) {
-    /* Save if a connection happened (identity received = peer connected and
-     * card found). Trace may be empty for UID-only readers — still worth
-     * recording that the relay ran. */
-    if (m_st.was_connected || m_trace_len > 0) {
-        result_save_session(RELAY_SESSION_OK);
-    }
+    /* Sanity: flash LEDs immediately to confirm on_exit was called */
+    standalone_feedback(SL_FB_SUCCESS);
+
+    /* Stop relay hardware */
     m_st.active = false;
     nfc_relay_tag_clear();
     ble_relay_stop();
     pcd_14a_reader_antenna_off();
-    tag_mode_enter();
+
+    /* Save result — must happen before tag_mode_enter() which
+     * re-initialises NFCT and can briefly interrupt USB on Windows */
+    result_save_session(RELAY_SESSION_OK);
+
+    /* NOTE: tag_mode_enter() is intentionally omitted here.
+     * nfc_relay_tag_clear() already installed a null handler so the
+     * NFCT hardware is idle. The slot handler will be re-registered
+     * naturally on next mode arm or boot. */
     sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
     NRF_LOG_INFO("relay: disarmed");
     return STANDALONE_RC_OK;
@@ -579,6 +591,17 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
         break;
 
     case RS_CARD_READY:
+        /* Periodic autosave — ensures result is in FDS even if on_exit
+         * is interrupted by USB disconnect on Windows */
+        {
+            static uint32_t s_last_autosave = 0;
+            if (m_st.was_connected &&
+                app_timer_cnt_diff_compute(now_ticks, s_last_autosave)
+                    >= APP_TIMER_TICKS(15000)) {
+                s_last_autosave = now_ticks;
+                result_save_session(RELAY_SESSION_OK);
+            }
+        }
         /* Frame ISR set frame_pending when reader sends a command */
         if (m_st.frame_pending) {
             m_st.frame_pending = false;
@@ -641,6 +664,16 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
     }
 
     case RS_READER_READY: {
+        /* Periodic autosave */
+        {
+            static uint32_t s_last_autosave_r = 0;
+            if (m_st.was_connected &&
+                app_timer_cnt_diff_compute(now_ticks, s_last_autosave_r)
+                    >= APP_TIMER_TICKS(15000)) {
+                s_last_autosave_r = now_ticks;
+                result_save_session(RELAY_SESSION_OK);
+            }
+        }
         /* Re-broadcast identity every 1s */
         static uint32_t s_last_bcast = 0;
         if (app_timer_cnt_diff_compute(now_ticks, s_last_bcast)

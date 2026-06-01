@@ -501,3 +501,9 @@ standalone_rc_t app_standalone_trigger(void) {
     if (m == NULL || m->on_button == NULL) return STANDALONE_RC_INVALID_STATE;
     return m->on_button(STANDALONE_BTN_BOTH_SHORT);
 }
+
+standalone_rc_t app_standalone_disarm(void) {
+    if (m_ctx.state == STANDALONE_STATE_DISARMED) return STANDALONE_RC_OK;
+    transition_disarm();
+    return STANDALONE_RC_OK;
+}
