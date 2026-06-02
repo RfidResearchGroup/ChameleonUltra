@@ -11181,10 +11181,13 @@ def parse_relay_frames(trace: bytes) -> list:
         if off + byte_cnt > len(trace):
             break
         raw = trace[off:off + byte_cnt]
+        decoded, col = _decode_14a_frame_col(raw, bits)
         frames.append({
-            'dir':   'tag→reader' if tag_to_rd else 'reader→tag',
-            'bits':  bits,
-            'hex':   raw.hex().upper(),
+            'dir':     'tag→reader' if tag_to_rd else 'reader→tag',
+            'bits':    bits,
+            'hex':     raw.hex().upper(),
+            'decoded': decoded,
+            'col':     col,
         })
         off += byte_cnt
     return frames
@@ -11207,9 +11210,17 @@ def relay_result_summary(sessions) -> str:
             + f"frames={s['frame_count']}  "
             f"{st_col}{s['status_name']}{C0}"
         )
-        for f in s.get('frames', []):
-            arrow = '←' if f['dir'] == 'tag→reader' else '→'
-            lines.append(f"      {arrow} [{f['bits']}b] {f['hex']}")
+        frames = s.get('frames', [])
+        if frames:
+            lines.append(f"    {'#':>3}  {'dir':<12} {'bits':>4}  {'hex':<44}  decoded")
+            lines.append(f"    {'---':>3}  {'---':<12} {'----':>4}  {'---':<44}  -------")
+            for i, f in enumerate(frames):
+                arrow = f"{CG}←{C0}" if f['dir'] == 'tag→reader' else f"{CC}→{C0}"
+                decoded_str = color_string((f['col'], f['decoded'])) if f.get('decoded') else ''
+                lines.append(
+                    f"    {i+1:>3}  {arrow} {f['dir']:<11} {f['bits']:>4}  "
+                    f"{f['hex']:<44}  {decoded_str}"
+                )
     return '\n'.join(lines)
 
 
