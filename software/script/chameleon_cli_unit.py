@@ -10115,6 +10115,430 @@ _DESFIRE_PROTOCOL = {
 _DESFIRE_HW_MAJOR_TO_SW_MAJOR = {0x01: 1, 0x12: 2, 0x30: 3, 0x33: 3}
 
 
+# ---------------------------------------------------------------------------
+# hf des auth-trace — full host-side DESFire auth flow with on-wire frame
+# capture. Companion to `hf 14a auth-trace` (Crypto1/MFC) — for DESFire the
+# crypto is not time-sensitive so we drive the round-trip from the host using
+# hf14a_scan_keep + hf14a_raw and record every wire frame as we go.
+# ---------------------------------------------------------------------------
+
+def _crc14a(data: bytes) -> bytes:
+    """ISO 14443-A CRC-16 (CRC-A): poly 0x1021, reflected, init 0x6363.
+    Returns 2 bytes in transmission order (low byte first)."""
+    crc = 0x6363
+    for b in data:
+        b ^= crc & 0xFF
+        b = (b ^ (b << 4)) & 0xFF
+        crc = ((crc >> 8) ^ (b << 8) ^ (b << 3) ^ (b >> 4)) & 0xFFFF
+    return bytes([crc & 0xFF, (crc >> 8) & 0xFF])
+
+
+def _synth_14a_anticoll_frames(uid: bytes, atqa: bytes, sak: int, ats: bytes):
+    """
+    Reconstruct the on-wire anticoll/SELECT/SAK/RATS/ATS frame sequence from a
+    populated tag descriptor returned by hf14a_scan / hf14a_scan_keep. Returns
+    list of (szBits, data, is_tx, annot) tuples; is_tx=True means card→reader.
+
+    Mirrors firmware-side auth_trace_emit_anticoll() in app_cmd.c so the same
+    `_decode_14a_frame_col` decoder renders the prefix identically to the
+    firmware-captured MFC auth-trace.
+    """
+    frames = []
+    # REQA: 7-bit, reader→card
+    frames.append((7, bytes([0x26]), False, "REQA"))
+    # ATQA: 16-bit, card→reader (LSB-first on air — bytes already in air order)
+    frames.append((16, bytes(atqa), True, None))
+
+    cascade = 1 if len(uid) == 4 else (2 if len(uid) == 7 else 3)
+    cascade_sel = [0x93, 0x95, 0x97]
+    uid_pos = 0
+    for cl in range(cascade):
+        is_last = (cl == cascade - 1)
+        # Anticoll request: SEL 0x20 — 16 bits, reader→card
+        frames.append((16, bytes([cascade_sel[cl], 0x20]), False, None))
+        # Anticoll response: 4 UID bytes (CT+UID0..2 if cascading) + BCC — 40 bits
+        if is_last:
+            uid_seg = bytes(uid[uid_pos:uid_pos + 4])
+        else:
+            uid_seg = bytes([0x88]) + bytes(uid[uid_pos:uid_pos + 3])
+            uid_pos += 3
+        bcc = uid_seg[0] ^ uid_seg[1] ^ uid_seg[2] ^ uid_seg[3]
+        frames.append((40, uid_seg + bytes([bcc]), True, None))
+        # SELECT: SEL 0x70 || UID+BCC || CRC — 72 bits, reader→card
+        sel = bytes([cascade_sel[cl], 0x70]) + uid_seg + bytes([bcc])
+        sel_full = sel + _crc14a(sel)
+        frames.append((72, sel_full, False, None))
+        # SAK + CRC — 24 bits. Intermediate cascades return 0x04 (cascade bit);
+        # the captured `sak` is the final cascade's SAK only.
+        sak_byte = sak if is_last else 0x04
+        sak_full = bytes([sak_byte]) + _crc14a(bytes([sak_byte]))
+        frames.append((24, sak_full, True, None))
+
+    # RATS / ATS if the card answered RATS (ats_len > 0)
+    if ats:
+        # 0xE0 0x40 = RATS, FSDI=4 (FSD=48 bytes), CID=0
+        rats = bytes([0xE0, 0x40])
+        rats_full = rats + _crc14a(rats)
+        frames.append((32, rats_full, False, "RATS  FSDI=4 CID=0"))
+        ats_full = bytes(ats) + _crc14a(bytes(ats))
+        frames.append((len(ats_full) * 8, ats_full, True, f"ATS ({len(ats)} bytes payload)"))
+
+    return frames
+
+
+@hf_des.command("auth-trace")
+class HfDesAuthTrace(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.formatter_class = argparse.RawDescriptionHelpFormatter
+        parser.description = (
+            "Run a full DESFire authentication against a real card and print "
+            "every wire frame: REQA → ATQA → anticoll → SELECT → SAK → RATS → "
+            "ATS → (optional SELECT AID) → AUTHENTICATE → E(RndB) → "
+            "E(RndA||RndB') → E(RndA'), with host-side AES / 3DES / 3K3DES "
+            "decryption of the random nonces for verification.\n\n"
+            "Supports AuthenticateDES (0x0A, D40), AuthenticateAES (0xAA, "
+            "EV1+) and AuthenticateISO 3K3DES (0x1A). Requires the "
+            "'cryptography' Python package."
+        )
+        parser.add_argument("--keyno", type=int, default=0, metavar="<n>",
+                            help="DESFire key number (default 0 = master)")
+        parser.add_argument("-k", "--key", type=str, required=True, metavar="<hex>",
+                            help="Auth key in hex. 8 bytes = DES, 16 bytes = "
+                                 "AES or 2TDEA (use --type to disambiguate), "
+                                 "24 bytes = 3K3DES.")
+        parser.add_argument("--type", choices=["des", "aes", "3k3des"], default=None,
+                            help="Auth type. Auto-detected if omitted: 8=DES, "
+                                 "16=AES, 24=3K3DES.")
+        parser.add_argument("--aid", type=str, default=None, metavar="<hex>",
+                            help="Optional 3-byte AID to select before auth. "
+                                 "Pass in the same form `hf des info` displays "
+                                 "(e.g. --aid 808020 if info shows 'AID: 808020'). "
+                                 "Default: PICC level (no SelectApplication).")
+        parser.add_argument("-t", "--timeout", type=int, default=5000, metavar="<ms>",
+                            help="Tag-presence polling timeout in ms (default 5000). "
+                                 "Reader keeps the field on and polls for a card; "
+                                 "auth aborts if no card appears within this window.")
+        parser.epilog = """
+examples:
+  hf des auth-trace -k 00000000000000000000000000000000
+        # AES default key, PICC master
+  hf des auth-trace -k 0000000000000000 --type des
+        # legacy DES (D40)
+  hf des auth-trace --type 3k3des -k 000000000000000000000000000000000000000000000000
+        # 3K3DES (24-byte key)
+  hf des auth-trace --aid 010203 --keyno 1 -k <16-byte AES key>
+        # auth against key 1 of application 010203
+  hf des auth-trace -k 00000000000000000000000000000000 -t 15000
+        # wait up to 15s for a card to be placed on the antenna
+"""
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        # ---------- arg validation ------------------------------------------
+        key_hex = args.key.replace(" ", "")
+        if not re.fullmatch(r"[0-9a-fA-F]+", key_hex) or len(key_hex) % 2:
+            print(f"{CR}Key must be an even-length hex string{C0}")
+            return
+        key = bytes.fromhex(key_hex)
+
+        if args.type:
+            auth_type = args.type
+        elif len(key) == 8:
+            auth_type = "des"
+        elif len(key) == 16:
+            auth_type = "aes"      # default 16-byte interpretation
+        elif len(key) == 24:
+            auth_type = "3k3des"
+        else:
+            print(f"{CR}Key length {len(key)} invalid (need 8/16/24 bytes){C0}")
+            return
+
+        valid_lens = {"des": (8, 16), "aes": (16,), "3k3des": (24,)}
+        if len(key) not in valid_lens[auth_type]:
+            print(f"{CR}{auth_type.upper()} expects key length {valid_lens[auth_type]} "
+                  f"bytes, got {len(key)}{C0}")
+            return
+
+        aid_bytes = None
+        if args.aid:
+            aid_hex = args.aid.replace(" ", "")
+            if not re.fullmatch(r"[0-9a-fA-F]{6}", aid_hex):
+                print(f"{CR}AID must be 6 hex chars (3 bytes){C0}")
+                return
+            # AID is passed in the same wire-byte form `hf des info` displays
+            # — i.e. already in transmission order. No reversal needed.
+            aid_bytes = bytes.fromhex(aid_hex)
+
+        # ---------- crypto availability -------------------------------------
+        try:
+            from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+            from cryptography.hazmat.backends import default_backend
+            import os as _os
+        except ImportError:
+            print(f"{CR}This command needs the 'cryptography' Python package.\n"
+                  f"  pip install cryptography{C0}")
+            return
+
+        # Cipher factory for the chosen auth type
+        def _cipher(iv: bytes, key_arg: bytes):
+            if auth_type == "aes":
+                return Cipher(algorithms.AES(key_arg), modes.CBC(iv), backend=default_backend())
+            elif auth_type == "des":
+                # D40: legacy DES uses 8-byte key, or 2TDEA with 16-byte key.
+                # 'cryptography' TripleDES accepts both 16-byte (k1+k2) and
+                # 24-byte forms; for 8-byte we triple by replication.
+                if len(key_arg) == 8:
+                    k = key_arg + key_arg + key_arg
+                elif len(key_arg) == 16:
+                    k = key_arg + key_arg[:8]
+                else:
+                    k = key_arg
+                return Cipher(algorithms.TripleDES(k), modes.CBC(iv), backend=default_backend())
+            elif auth_type == "3k3des":
+                return Cipher(algorithms.TripleDES(key_arg), modes.CBC(iv), backend=default_backend())
+            raise RuntimeError(f"Unsupported auth_type {auth_type}")
+
+        block_sz   = 16 if auth_type == "aes" else 8
+        rnd_len    = 16 if auth_type == "aes" else (16 if auth_type == "3k3des" else 8)
+        auth_cmd   = {"des": 0x0A, "aes": 0xAA, "3k3des": 0x1A}[auth_type]
+
+        # ---------- scan + keep field, poll until present or timeout ---------
+        print(f" Running DESFire {auth_type.upper()} auth-trace: "
+              f"keyno={args.keyno} key={key_hex.upper()}"
+              + (f" aid={aid_bytes.hex().upper()}" if aid_bytes else " (PICC)"))
+        timeout_ms = max(1, min(60000, int(args.timeout)))
+        print(f" Waiting up to {timeout_ms} ms for a 14443-4 tag... "
+              f"({CY}place CU on a card now{C0})")
+        print()
+        deadline = time.monotonic() + (timeout_ms / 1000.0)
+        tags = None
+        last_err = None
+        while time.monotonic() < deadline:
+            try:
+                tags = self.cmd.hf14a_scan_keep()
+                if tags:
+                    break
+            except UnexpectedResponseError as e:
+                last_err = e  # HF_TAG_NO etc. — keep polling
+            except Exception as e:
+                # Unexpected error (USB/BLE issue) — abort immediately
+                print(f"{CR}Scan aborted: {e}{C0}")
+                return
+            time.sleep(0.05)
+        if not tags:
+            msg = f": {last_err}" if last_err else ""
+            print(f"{CR}No 14443A tag detected within {timeout_ms} ms{msg}{C0}")
+            return
+        tag = tags[0]
+        uid, atqa, sak, ats = tag["uid"], tag["atqa"], tag["sak"][0], tag["ats"]
+        if not ats:
+            print(f"{CR}Tag did not respond to RATS — not a 14443-4 card (DESFire requires RATS){C0}")
+            return
+
+        # ---------- trace accumulator ---------------------------------------
+        # Each entry: (szBits, bytes, is_tx (True=card→reader), annot_or_None)
+        frames = _synth_14a_anticoll_frames(uid, atqa, sak, ats)
+        block_num = 0  # T=CL I-block sequence bit (PCB low bit)
+
+        def _exchange_iblock(payload: bytes, annot_tx: str, annot_rx_prefix: str) -> bytes:
+            """Send one T=CL I-block, return inner card payload (no PCB, no CRC).
+               Records the full wire frames (PCB + payload + CRC) in `frames`."""
+            nonlocal block_num
+            pcb = 0x02 | block_num
+            tx_inner = bytes([pcb]) + payload
+            tx_wire  = tx_inner + _crc14a(tx_inner)
+            options = {
+                'activate_rf_field':  0,
+                'wait_response':      1,
+                'append_crc':         0,    # we already appended
+                'auto_select':        0,
+                'keep_rf_field':      1,
+                'check_response_crc': 0,
+            }
+            rx_wire = self.cmd.hf14a_raw(options=options,
+                                         resp_timeout_ms=2000,
+                                         data=list(tx_wire))
+            frames.append((len(tx_wire) * 8, tx_wire, False, annot_tx))
+            if not rx_wire or len(rx_wire) < 3:
+                frames.append((0, b'', True, f"{CR}<no response>{C0}"))
+                raise RuntimeError(f"Empty response to I-block PCB=0x{pcb:02X} "
+                                   f"(got {len(rx_wire) if rx_wire else 0} bytes)")
+            rx_wire = bytes(rx_wire)
+            frames.append((len(rx_wire) * 8, rx_wire, True, annot_rx_prefix))
+            block_num ^= 1
+            # Strip PCB byte and 2-byte CRC; caller doesn't see T=CL framing
+            if (rx_wire[0] & 0xC0) != 0x00:
+                raise RuntimeError(f"Expected I-block, got PCB=0x{rx_wire[0]:02X}")
+            return rx_wire[1:-2]
+
+        # ---------- optional SelectApplication (AID) ------------------------
+        try:
+            if aid_bytes:
+                # ISO-wrapped SelectApplication: 90 5A 00 00 03 <aid_le> 00
+                sel_apdu = bytes([0x90, 0x5A, 0x00, 0x00, 0x03]) + aid_bytes + bytes([0x00])
+                resp = _exchange_iblock(
+                    sel_apdu,
+                    annot_tx=f"I-block: SelectApplication AID={aid_bytes.hex().upper()}",
+                    annot_rx_prefix=None,
+                )
+                # ISO response: [...payload...] 91 SW2
+                if len(resp) < 2 or resp[-2] != 0x91 or resp[-1] != 0x00:
+                    print(f"{CR}SelectApplication failed: response={resp.hex().upper()}{C0}")
+                    self._render_trace(frames, "select-failed", None)
+                    return
+                # Update last RX annotation
+                frames[-1] = (frames[-1][0], frames[-1][1], frames[-1][2],
+                              f"I-block resp: 91 00 (SelectApplication OK)")
+
+            # ---------- AUTHENTICATE round 1 --------------------------------
+            auth_apdu1 = bytes([0x90, auth_cmd, 0x00, 0x00, 0x01, args.keyno & 0xFF, 0x00])
+            cmdname = {"des": "AuthenticateDES (0x0A)",
+                       "aes": "AuthenticateAES (0xAA)",
+                       "3k3des": "AuthenticateISO 3K3DES (0x1A)"}[auth_type]
+            resp1 = _exchange_iblock(
+                auth_apdu1,
+                annot_tx=f"I-block: {cmdname} keyno={args.keyno}",
+                annot_rx_prefix=None,
+            )
+            if len(resp1) < 2 or resp1[-2] != 0x91 or resp1[-1] != 0xAF:
+                # 0x91 0xAE = authentication error; 0x91 0xAF = additional frame
+                sw = resp1[-2:].hex().upper() if len(resp1) >= 2 else "??"
+                print(f"{CR}Auth round 1 failed: SW={sw}, payload={resp1[:-2].hex().upper()}{C0}")
+                self._render_trace(frames, "auth-round-1-failed", None)
+                return
+            enc_rndb = resp1[:-2]
+            if len(enc_rndb) != rnd_len:
+                print(f"{CR}Expected {rnd_len}-byte E(RndB), got {len(enc_rndb)}{C0}")
+                self._render_trace(frames, "bad-rndb-length", None)
+                return
+            frames[-1] = (frames[-1][0], frames[-1][1], frames[-1][2],
+                          f"I-block resp: 91 AF + E(RndB) [{rnd_len} bytes]")
+
+            # Decrypt RndB (IV=0)
+            iv0 = bytes(block_sz)
+            dec = _cipher(iv0, key).decryptor()
+            rndb = dec.update(enc_rndb) + dec.finalize()
+
+            # Generate RndA, rotate RndB left by 1 byte, encrypt CBC IV=E(RndB)
+            rnda = _os.urandom(rnd_len)
+            rndb_rot = rndb[1:] + rndb[:1]
+            enc2 = _cipher(enc_rndb, key).encryptor()
+            enc_token = enc2.update(rnda + rndb_rot) + enc2.finalize()
+
+            # ---------- AUTHENTICATE round 2 --------------------------------
+            auth_apdu2 = bytes([0x90, 0xAF, 0x00, 0x00, len(enc_token)]) + enc_token + bytes([0x00])
+            resp2 = _exchange_iblock(
+                auth_apdu2,
+                annot_tx=f"I-block: 90 AF (continue) + E(RndA||RndB')",
+                annot_rx_prefix=None,
+            )
+            if len(resp2) < 2 or resp2[-2] != 0x91 or resp2[-1] != 0x00:
+                sw = resp2[-2:].hex().upper() if len(resp2) >= 2 else "??"
+                # Try to render the trace before giving up
+                frames[-1] = (frames[-1][0], frames[-1][1], frames[-1][2],
+                              f"I-block resp: SW={sw}  (auth rejected)")
+                print(f"{CR}Auth round 2 failed: SW={sw} — wrong key or replay{C0}")
+                self._render_trace(frames, "auth-rejected", None)
+                return
+            enc_rnda_card = resp2[:-2]
+            if len(enc_rnda_card) != rnd_len:
+                print(f"{CR}Expected {rnd_len}-byte E(RndA'), got {len(enc_rnda_card)}{C0}")
+                self._render_trace(frames, "bad-rnda-length", None)
+                return
+            frames[-1] = (frames[-1][0], frames[-1][1], frames[-1][2],
+                          f"I-block resp: 91 00 + E(RndA') [{rnd_len} bytes]")
+
+            # Decrypt + verify RndA' == rotL1(RndA)
+            iv3 = enc_token[-block_sz:]
+            dec3 = _cipher(iv3, key).decryptor()
+            rnda_card = dec3.update(enc_rnda_card) + dec3.finalize()
+            rnda_rot = rnda[1:] + rnda[:1]
+            verified = (rnda_card == rnda_rot)
+
+        except Exception as e:
+            print(f"{CR}Auth aborted: {e}{C0}")
+            self._render_trace(frames, "error", None)
+            return
+
+        # ---------- session key derivation (for the report) -----------------
+        # DESFire EV1 session keys: take parts of RndA + RndB depending on
+        # auth_type. This is just for the report — we don't use it further.
+        if auth_type == "des":
+            # D40: K_SES = RndA[0..3] || RndB[0..3] (8 bytes)
+            ses_key = rnda[:4] + rndb[:4]
+        elif auth_type == "aes":
+            # EV1 AES: K_SES = RndA[0..3] || RndB[0..3] || RndA[12..15] || RndB[12..15]
+            ses_key = rnda[:4] + rndb[:4] + rnda[12:16] + rndb[12:16]
+        elif auth_type == "3k3des":
+            # EV1 3K3DES: 24-byte key
+            ses_key = (rnda[:4]   + rndb[:4]   +
+                       rnda[6:10] + rndb[6:10] +
+                       rnda[12:16] + rndb[12:16])
+        else:
+            ses_key = b""
+
+        # ---------- render the trace ----------------------------------------
+        status_label = (f"{CG}auth verified ✓{C0}" if verified
+                        else f"{CR}auth FAILED — RndA' mismatch{C0}")
+        self._render_trace(frames, status_label, {
+            "auth_type": auth_type,
+            "uid":       uid,
+            "rndb":      rndb,
+            "enc_rndb":  enc_rndb,
+            "rnda":      rnda,
+            "rnda_card": rnda_card,
+            "rnda_rot":  rnda_rot,
+            "enc_token": enc_token,
+            "enc_rnda_card": enc_rnda_card,
+            "ses_key":   ses_key,
+            "verified":  verified,
+        })
+
+    @staticmethod
+    def _render_trace(frames, status_label, crypto_info):
+        rx_count = sum(1 for _, _, tx, _ in frames if tx)
+        tx_count = sum(1 for _, _, tx, _ in frames if not tx)
+        print(f" Captured : {CG}{len(frames)}{C0} frame(s)  "
+              f"({CY}{tx_count}{C0} reader→card  {CG}{rx_count}{C0} card→reader)  "
+              f"{status_label}")
+        print()
+        print(f"  {'#':>3}  {'dir':<3}  {'bits':>4}  {'hex data':<42}  decoded")
+        print(f"  {'---':>3}  {'---':<3}  {'----':>4}  {'-' * 42}  {'-' * 35}")
+
+        for n, (szBits, data, is_tx, annot) in enumerate(frames):
+            hex_str = ' '.join(f'{b:02x}' for b in data)
+            if len(hex_str) > 42:
+                hex_str = hex_str[:39] + "..."
+            if annot is not None:
+                decoded, col = annot, CG
+            else:
+                try:
+                    decoded, col = _decode_14a_frame_col(data, szBits)
+                except Exception:
+                    decoded, col = "(undecoded)", CC
+            dir_str = f'{CG}<<<{C0}' if is_tx else f'{CY}>>>{C0}'
+            print(f"  {CY}{n + 1:>3}{C0}  {dir_str}  {szBits:>4}  {hex_str:<42}  {col}{decoded}{C0}")
+
+        # Crypto info block
+        if crypto_info:
+            print()
+            print(f" {CC}Crypto analysis ({crypto_info['auth_type'].upper()}):{C0}")
+            print(f"   UID            : {crypto_info['uid'].hex().upper()}")
+            print(f"   E(RndB) [wire] : {crypto_info['enc_rndb'].hex().upper()}")
+            print(f"   RndB (decrypt) : {crypto_info['rndb'].hex().upper()}")
+            print(f"   RndA (reader)  : {crypto_info['rnda'].hex().upper()}")
+            print(f"   E(RndA||RndB') : {crypto_info['enc_token'].hex().upper()}")
+            print(f"   E(RndA') [wire]: {crypto_info['enc_rnda_card'].hex().upper()}")
+            print(f"   RndA' expected : {crypto_info['rnda_rot'].hex().upper()}  (= rotL1(RndA))")
+            mark = "✓ MATCH" if crypto_info['verified'] else "✗ MISMATCH"
+            colour = CG if crypto_info['verified'] else CR
+            print(f"   RndA' from card: {colour}{crypto_info['rnda_card'].hex().upper()}{C0}  {colour}{mark}{C0}")
+            if crypto_info['verified'] and crypto_info['ses_key']:
+                print(f"   Session key    : {CG}{crypto_info['ses_key'].hex().upper()}{C0}  "
+                      f"({len(crypto_info['ses_key'])} bytes)")
+
+
 @hf_des.command("info")
 class HfDesInfo(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -10715,6 +11139,7 @@ def parse_relay_result_buffer(raw: bytes) -> list:
         sak         = f'{h[9]:02X}'
         frame_count = struct.unpack_from('<H', h, 10)[0]
         trace_len   = struct.unpack_from('<H', h, 12)[0]
+        protocol    = h[14]  # 0=HF, 1=LF
 
         trace_off   = off + HEADER
         trace_end   = trace_off + trace_len
@@ -10727,10 +11152,11 @@ def parse_relay_result_buffer(raw: bytes) -> list:
         sessions.append({
             'session_num':  idx,
             'role':         'CARD' if role == 0 else 'READER',
+            'protocol':     'LF' if protocol == 1 else 'HF',
             'uid_len':      uid_len,
             'uid':          uid,
-            'atqa':         atqa,
-            'sak':          sak,
+            'atqa':         atqa if protocol == 0 else '-',
+            'sak':          sak  if protocol == 0 else '-',
             'frame_count':  frame_count,
             'trace_len':    trace_len,
             'status':       status,
@@ -10775,8 +11201,10 @@ def relay_result_summary(sessions) -> str:
         lines.append(
             f"  {CY}#{s['session_num']}{C0}  "
             f"{role_col}{s['role']:<6}{C0}  "
-            f"UID={s['uid']}  ATQA={s['atqa']} SAK={s['sak']}  "
-            f"frames={s['frame_count']}  "
+            f"{CC}{s.get('protocol','HF')}{C0}  "
+            f"UID={s['uid']}  "
+            + (f"ATQA={s['atqa']} SAK={s['sak']}  " if s.get('protocol','HF') == 'HF' else "")
+            + f"frames={s['frame_count']}  "
             f"{st_col}{s['status_name']}{C0}"
         )
         for f in s.get('frames', []):

@@ -116,6 +116,14 @@ void nfc_relay_tag_install(const uint8_t *uid, uint8_t uid_len,
     nfc_tag_14a_set_handler(&s_relay_handler);
 
     s_active = true;  /* enable callbacks now handler is registered */
+
+    /* Ensure NFCT hardware is running. If the active slot has HF type
+     * undefined, tag_emulation_sense_switch_all() calls sense_switch(false)
+     * at boot leaving NFCT uninitialised — relay would be silent to readers.
+     * sense_switch(false) resets state; sense_switch(true) always calls
+     * nrfx_nfct_init() when state is NONE or DISABLE. */
+    nfc_tag_14a_sense_switch(false);
+    nfc_tag_14a_sense_switch(true);
     NRF_LOG_INFO("relay_tag: installed UID=%02X%02X%02X%02X",
                  s_uid[0], s_uid[1], s_uid[2], s_uid[3]);
     NRF_LOG_INFO("relay_tag: ATQA=%02X%02X SAK=%02X",
