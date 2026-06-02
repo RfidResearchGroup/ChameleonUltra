@@ -8182,9 +8182,9 @@ def _decode_14a_frame_col(data: bytes, szBits: int):
 
     # MIFARE Classic commands
     if b0 == 0x60:
-        return f'AUTH KeyA  block={data[1]}' if len(data) > 1 else 'AUTH KeyA', CR
+        return (f'AUTH KeyA  block=0x{data[1]:02X} ({data[1]})' if len(data) > 1 else 'AUTH KeyA'), CR
     if b0 == 0x61:
-        return f'AUTH KeyB  block={data[1]}' if len(data) > 1 else 'AUTH KeyB', CR
+        return (f'AUTH KeyB  block=0x{data[1]:02X} ({data[1]})' if len(data) > 1 else 'AUTH KeyB'), CR
     # Encrypted nonce / auth response (follows AUTH, first byte varies)
     if szBits == 72:
         return '(encrypted nonce — auth challenge/response)', CC
@@ -11475,7 +11475,15 @@ class StandaloneGetResult(DeviceRequiredUnit):
             print(color_string((CG, f"{len(sessions)} relay session(s)")))
             if args.json:
                 import json as _json
-                out = _json.dumps(sessions, indent=2)
+                # Strip display-only fields (col, decoded) from JSON output
+                def _clean(s):
+                    c = dict(s)
+                    c['frames'] = [
+                        {k: v for k, v in f.items() if k not in ('col', 'decoded')}
+                        for f in c.get('frames', [])
+                    ]
+                    return c
+                out = _json.dumps([_clean(s) for s in sessions], indent=2)
                 if args.file:
                     Path(args.file).write_text(out)
                     print(color_string((CG, f"-> {args.file}")))
