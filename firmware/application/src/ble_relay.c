@@ -55,12 +55,13 @@ NRF_LOG_MODULE_REGISTER();
 #define RELAY_SCAN_INTERVAL   200   /* 125ms in 0.625ms units */
 #define RELAY_SCAN_WINDOW      40   /* 25ms  */
 
-/* Active relay phase — improved latency without starving SoftDevice.
- * 75% scan duty cycle: 48/64 units = 30ms/40ms.
- * Leaves ~10ms per cycle for advertising and SD processing.
- * Worst-case round-trip: ~80ms vs ~350ms original. */
+/* Active relay phase — 100% scan duty cycle at 40ms.
+ * scan_interval == scan_window = continuous scan (SoftDevice supported).
+ * 40ms is fast enough for SD housekeeping; 12.5ms proved too fast.
+ * Advertising at 20ms (minimum for non-connectable).
+ * Worst-case one-way: 20ms (next adv slot) = round-trip ~40ms. */
 #define RELAY_FAST_SCAN_INTERVAL  64   /* 40ms */
-#define RELAY_FAST_SCAN_WINDOW    48   /* 30ms — 75% duty cycle */
+#define RELAY_FAST_SCAN_WINDOW    64   /* 40ms — 100% duty cycle */
 
 /* -----------------------------------------------------------------------
  * Event queue (ISR → main loop)
