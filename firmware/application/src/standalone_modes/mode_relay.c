@@ -264,12 +264,14 @@ static void result_save_session(uint8_t status) {
         memcpy(&h[RH_ATQA], m_st.identity.atqa, 2);
         h[RH_SAK] = m_st.identity.sak;
     } else if (m_st.real_card_found) {
+#ifndef PROJECT_CHAMELEON_LITE
         uint8_t uid4[4] = {0};
         get_4byte_tag_uid(&m_st.real_card, uid4);
         h[RH_UID_LEN] = 4;
         memcpy(&h[RH_UID],  uid4, 4);
         memcpy(&h[RH_ATQA], m_st.real_card.atqa, 2);
         h[RH_SAK] = m_st.real_card.sak;
+#endif
     }
 
     h[RH_FRAME_COUNT    ] = (uint8_t)(m_trace_frame_count     );
@@ -423,7 +425,11 @@ static void reader_setup_card(void) {
     uint8_t cascade = m_st.real_card.cascade ? m_st.real_card.cascade : 1;
     id.uid_len = cascade == 1 ? 4 : 7;
     if (id.uid_len == 4) {
+#ifndef PROJECT_CHAMELEON_LITE
         get_4byte_tag_uid(&m_st.real_card, id.uid);
+#else
+        memcpy(id.uid, m_st.real_card.uid, 4);
+#endif
     } else {
         memcpy(id.uid, m_st.real_card.uid, 7);
     }
@@ -786,7 +792,11 @@ void mode_relay_get_diag(uint8_t *out_sub, uint8_t *out_card_found,
     if (out_identity_rx) *out_identity_rx = m_st.identity_received ? 1 : 0;
     if (out_uid && out_uid_len) {
         if (m_st.real_card_found) {
+#ifndef PROJECT_CHAMELEON_LITE
             get_4byte_tag_uid(&m_st.real_card, out_uid);
+#else
+            memcpy(out_uid, m_st.real_card.uid, 4);
+#endif
             *out_uid_len = 4;
         } else if (m_st.identity_received) {
             *out_uid_len = m_st.identity.uid_len;
