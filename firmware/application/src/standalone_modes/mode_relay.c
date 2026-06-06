@@ -393,6 +393,7 @@ static void on_disconnected(void) {
     m_st.response_ready    = false;
     m_st.reader_frame_pending = false;
     m_st.real_card_found   = false;  /* allow fresh card scan on reconnect */
+    memset(&m_st.real_card, 0, sizeof(m_st.real_card));
     m_st.link_start_ticks  = app_timer_cnt_get();
     sleep_timer_stop();
     standalone_feedback(SL_FB_ERROR);
