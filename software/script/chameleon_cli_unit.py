@@ -7275,8 +7275,21 @@ class HWBatteryInfo(DeviceRequiredUnit):
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        voltage, percentage = self.cmd.get_battery_info()
+        try:
+            voltage, percentage, condition_code = self.cmd.get_battery_info_ex()
+        except UnexpectedResponseError:
+            voltage, percentage = self.cmd.get_battery_info()
+            condition_code = None
         condition = HWBatteryInfo.battery_condition(voltage, percentage)
+        if condition_code is not None:
+            condition_map = {
+                0: "critical",
+                1: "low",
+                2: "fair",
+                3: "good",
+                4: "excellent",
+            }
+            condition = condition_map.get(condition_code, condition)
         print(" - Battery information:")
         print(f"   voltage    -> {voltage} mV")
         print(f"   percentage -> {percentage}%")
