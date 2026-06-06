@@ -7258,6 +7258,18 @@ class HWBatteryInfo(DeviceRequiredUnit):
     # How much remaining battery is considered low?
     BATTERY_LOW_LEVEL = 30
 
+    @staticmethod
+    def battery_condition(voltage: int, percentage: int) -> str:
+        if voltage >= 4100 and percentage >= 80:
+            return "excellent"
+        if voltage >= 3950 and percentage >= 60:
+            return "good"
+        if voltage >= 3750 and percentage >= 30:
+            return "fair"
+        if voltage >= 3600 and percentage >= 15:
+            return "low"
+        return "critical"
+
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = "Get battery information, voltage and level"
@@ -7265,9 +7277,11 @@ class HWBatteryInfo(DeviceRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         voltage, percentage = self.cmd.get_battery_info()
+        condition = HWBatteryInfo.battery_condition(voltage, percentage)
         print(" - Battery information:")
         print(f"   voltage    -> {voltage} mV")
         print(f"   percentage -> {percentage}%")
+        print(f"   condition  -> {condition}")
         if percentage < HWBatteryInfo.BATTERY_LOW_LEVEL:
             print(color_string((CR, "[!] Low battery, please charge.")))
 
@@ -10557,7 +10571,6 @@ class HfDesChk(ReaderRequiredUnit):
                 print(f"\n   {CG}{algo:8s}  AID {aid}  key#{kno}  {key_hex}{C0}")
         else:
             print(f"\n {CR}No keys found{C0}")
-
 @hf_seos.command("eview")
 class HFSeosEView(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
