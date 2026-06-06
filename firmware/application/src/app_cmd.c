@@ -9,6 +9,7 @@
 #include "data_cmd.h"
 #include "app_cmd.h"
 #include "app_status.h"
+#include "battery_health.h"
 #include "tag_persistence.h"
 #include "nrf_pwr_mgmt.h"
 #include "settings.h"
@@ -178,22 +179,6 @@ static data_frame_tx_t *cmd_processor_get_battery_info(uint16_t cmd, uint16_t st
     return data_frame_make(cmd, STATUS_SUCCESS, sizeof(payload), (uint8_t *)&payload);
 }
 
-static uint8_t get_battery_condition_code(uint16_t voltage, uint8_t percent) {
-    if ((voltage >= 4100U) && (percent >= 80U)) {
-        return 4U; // excellent
-    }
-    if ((voltage >= 3950U) && (percent >= 60U)) {
-        return 3U; // good
-    }
-    if ((voltage >= 3750U) && (percent >= 30U)) {
-        return 2U; // fair
-    }
-    if ((voltage >= 3600U) && (percent >= 15U)) {
-        return 1U; // low
-    }
-    return 0U; // critical
-}
-
 static data_frame_tx_t *cmd_processor_get_battery_info_ex(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     struct {
         uint16_t voltage;
@@ -202,7 +187,8 @@ static data_frame_tx_t *cmd_processor_get_battery_info_ex(uint16_t cmd, uint16_t
     } PACKED payload;
     payload.voltage = U16HTONS(batt_lvl_in_milli_volts);
     payload.percent = percentage_batt_lvl;
-    payload.condition = get_battery_condition_code(batt_lvl_in_milli_volts, percentage_batt_lvl);
+    payload.condition = battery_health_to_code(
+        battery_health_from_measurement(batt_lvl_in_milli_volts, percentage_batt_lvl));
     return data_frame_make(cmd, STATUS_SUCCESS, sizeof(payload), (uint8_t *)&payload);
 }
 

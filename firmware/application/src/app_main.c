@@ -32,6 +32,7 @@ NRF_LOG_MODULE_REGISTER();
 #include "bsp_time.h"
 #include "bsp_wdt.h"
 #include "dataframe.h"
+#include "battery_health.h"
 #include "fds_util.h"
 #include "hex_utils.h"
 #include "rfid_main.h"
@@ -596,6 +597,20 @@ static void cycle_slot(bool dec) {
 }
 
 static void show_battery(void) {
+    static const uint8_t health_colors[] = {
+        RGB_RED,
+        RGB_YELLOW,
+        RGB_YELLOW,
+        RGB_GREEN,
+        RGB_CYAN,
+    };
+    static const uint8_t health_blinks[] = {
+        2U,
+        1U,
+        0U,
+        0U,
+        0U,
+    };
     rgb_marquee_stop();
     uint32_t *led_pins = hw_get_led_array();
     // if still in the first 4s after boot, blink red while waiting for battery info
@@ -610,11 +625,18 @@ static void show_battery(void) {
         }
         bsp_delay_ms(100);
     }
-    // ok we have data, show level with cyan LEDs
+    battery_health_t battery_health = battery_health_from_measurement(
+        batt_lvl_in_milli_volts,
+        percentage_batt_lvl);
+    uint8_t health_index = battery_health_to_code(battery_health);
+    uint8_t fill_color = health_colors[health_index];
+    uint8_t extra_blinks = health_blinks[health_index];
+
+    // ok we have data, show the level using a color that reflects the health
     for (int i = 0; i < RGB_LIST_NUM; i++) {
         nrf_gpio_pin_clear(led_pins[i]);
     }
-    set_slot_light_color(RGB_CYAN);
+    set_slot_light_color(fill_color);
     uint8_t nleds = (percentage_batt_lvl * RGB_LIST_NUM + 99U) / 100U;
     if (nleds > RGB_LIST_NUM) {
         nleds = RGB_LIST_NUM;
@@ -623,6 +645,20 @@ static void show_battery(void) {
         if (i < nleds) {
             nrf_gpio_pin_set(led_pins[i]);
             bsp_delay_ms(50);
+        }
+    }
+    if (extra_blinks > 0U) {
+        for (uint8_t blink = 0U; blink < extra_blinks; blink++) {
+            bsp_delay_ms(180);
+            for (int i = 0; i < RGB_LIST_NUM; i++) {
+                nrf_gpio_pin_clear(led_pins[i]);
+            }
+            bsp_delay_ms(140);
+            for (int i = 0; i < RGB_LIST_NUM; i++) {
+                if (i < nleds) {
+                    nrf_gpio_pin_set(led_pins[i]);
+                }
+            }
         }
     }
     // nothing special to finish, we wait for sleep or slot change
