@@ -615,9 +615,12 @@ static void show_battery(void) {
         nrf_gpio_pin_clear(led_pins[i]);
     }
     set_slot_light_color(RGB_CYAN);
-    uint8_t nleds = (percentage_batt_lvl * 2) / 25; // 0->7 (8 for 100% but this is ignored)
+    uint8_t nleds = (percentage_batt_lvl * RGB_LIST_NUM + 99U) / 100U;
+    if (nleds > RGB_LIST_NUM) {
+        nleds = RGB_LIST_NUM;
+    }
     for (int i = 0; i < RGB_LIST_NUM; i++) {
-        if (i <= nleds) {
+        if (i < nleds) {
             nrf_gpio_pin_set(led_pins[i]);
             bsp_delay_ms(50);
         }
