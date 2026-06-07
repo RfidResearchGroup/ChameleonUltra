@@ -330,6 +330,7 @@ static void on_connected(uint8_t my_role) {
     }
 }
 
+static void card_setup_emulation(void);
 static void on_card_identity(const relay_card_identity_t *id) {
     /* Accept updates when already CARD_READY — card may have changed on
      * the READER side (periodic re-scan). Reinstall relay handler with
