@@ -185,6 +185,7 @@ static data_frame_tx_t *cmd_processor_get_battery_info_ex(uint16_t cmd, uint16_t
         uint8_t percent;
         uint8_t condition;
     } PACKED payload;
+    // The condition field is a compact hint derived from voltage and percentage.
     payload.voltage = U16HTONS(batt_lvl_in_milli_volts);
     payload.percent = percentage_batt_lvl;
     payload.condition = battery_health_to_code(
