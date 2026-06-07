@@ -330,7 +330,43 @@ static void on_connected(uint8_t my_role) {
     }
 }
 
+/* Forward declaration */
 static void card_setup_emulation(void);
+
+static void on_rescan_req(void) {
+    /* CU1 signals reader left — scan for whatever card CU2 sees now.
+     * Only act as READER in RS_READER_READY (not during frame relay). */
+    if (m_st.role != BLE_RELAY_ROLE_READER) return;
+    if (m_st.sub != RS_READER_READY) return;
+
+    set_scan_tag_timeout(200);
+    picc_14a_tag_t new_card;
+    memset(&new_card, 0, sizeof(new_card));
+    if (pcd_14a_reader_scan_auto(&new_card) == STATUS_HF_TAG_OK) {
+        bool changed = (memcmp(new_card.uid, m_st.real_card.uid,
+                               sizeof(new_card.uid)) != 0);
+        if (changed) {
+            m_st.real_card       = new_card;
+            m_st.real_card_found = true;
+            relay_card_identity_t id;
+            memset(&id, 0, sizeof(id));
+            id.atqa[0] = new_card.atqa[0];
+            id.atqa[1] = new_card.atqa[1];
+            id.sak     = new_card.sak;
+            id.uid_len = 4;
+#ifndef PROJECT_CHAMELEON_LITE
+            get_4byte_tag_uid(&new_card, id.uid);
+#else
+            memcpy(id.uid, new_card.uid, 4);
+#endif
+            id.ats_len = 0;
+            ble_relay_send_card_identity(&id);
+            NRF_LOG_INFO("relay reader: card changed on rescan");
+        }
+        pcd_14a_reader_antenna_on();
+    }
+}
+
 static void on_card_identity(const relay_card_identity_t *id) {
     /* Accept updates when already CARD_READY — card may have changed on
      * the READER side (periodic re-scan). Reinstall relay handler with
@@ -518,6 +554,7 @@ static void card_setup_emulation(void) {
 static const ble_relay_callbacks_t k_relay_cbs = {
     .on_connected     = on_connected,
     .on_card_identity = on_card_identity,
+    .on_rescan_req    = on_rescan_req,
     .on_preauth       = NULL,
     .on_ready         = on_ready,
     .on_frame         = on_frame,
@@ -662,6 +699,25 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
             m_st.sub              = RS_CARD_AWAIT_RESPONSE;
             m_st.frame_sent_ticks = now_ticks;
         }
+        /* Detect reader field drop: 2s after last frame, signal CU2
+         * to scan for a new card so CU1 is ready for next presentation. */
+        {
+            static uint32_t s_last_frame_tick = 0;
+            static bool     s_had_frames      = false;
+            static bool     s_rescan_sent     = false;
+            if (m_st.frame_pending || m_st.sub == RS_CARD_AWAIT_RESPONSE) {
+                s_last_frame_tick = now_ticks;
+                s_had_frames      = true;
+                s_rescan_sent     = false;
+            }
+            if (s_had_frames && !s_rescan_sent &&
+                app_timer_cnt_diff_compute(now_ticks, s_last_frame_tick)
+                    >= APP_TIMER_TICKS(2000)) {
+                s_rescan_sent = true;
+                ble_relay_send_rescan_req();
+                NRF_LOG_INFO("relay card: reader left, RESCAN_REQ sent");
+            }
+        }
         break;
 
     case RS_CARD_AWAIT_RESPONSE:
@@ -721,39 +777,7 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
             s_last_bcast = now_ticks;
             ble_relay_send_card_identity(&m_st.identity);
         }
-        /* Periodic re-scan every 8s: detect card change and send fresh
-         * identity to CU1 without needing a BLE disconnect/reconnect. */
-        static uint32_t s_last_rescan = 0;
-        if (app_timer_cnt_diff_compute(now_ticks, s_last_rescan)
-                >= APP_TIMER_TICKS(8000)) {
-            s_last_rescan = now_ticks;
-            set_scan_tag_timeout(150);
-            picc_14a_tag_t new_card;
-            memset(&new_card, 0, sizeof(new_card));
-            if (pcd_14a_reader_scan_auto(&new_card) == STATUS_HF_TAG_OK) {
-                bool changed = (memcmp(new_card.uid, m_st.real_card.uid,
-                                       sizeof(new_card.uid)) != 0);
-                if (changed) {
-                    m_st.real_card = new_card;
-                    m_st.real_card_found = true;
-                    relay_card_identity_t id;
-                    memset(&id, 0, sizeof(id));
-                    id.atqa[0] = new_card.atqa[0];
-                    id.atqa[1] = new_card.atqa[1];
-                    id.sak     = new_card.sak;
-                    id.uid_len = 4;
-#ifndef PROJECT_CHAMELEON_LITE
-                    get_4byte_tag_uid(&new_card, id.uid);
-#else
-                    memcpy(id.uid, new_card.uid, 4);
-#endif
-                    id.ats_len = 0;
-                    ble_relay_send_card_identity(&id);
-                    NRF_LOG_INFO("relay reader: card changed, new identity sent");
-                }
-            }
-            pcd_14a_reader_antenna_on();  /* keep antenna on after scan */
-        }
+        /* Re-scan triggered by RESCAN_REQ from CU1 — see on_rescan_req() */
         /* Forward frames from CU1 to real card */
         if (m_st.reader_frame_pending) {
             m_st.reader_frame_pending = false;

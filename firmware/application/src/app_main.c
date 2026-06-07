@@ -961,6 +961,12 @@ static void run_button_function_by_settings(settings_button_function_t sbf) {
             break;
 #endif
 
+        case SettingsButtonStandaloneDisarm:
+            /* Disarm the active standalone mode — works on any hardware
+             * including clones where A+B triggers hardware reset. */
+            app_standalone_disarm();
+            break;
+
         case SettingsButtonShowBattery:
             show_battery();
             break;

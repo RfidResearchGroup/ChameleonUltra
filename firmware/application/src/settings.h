@@ -33,6 +33,7 @@ typedef enum {
     SettingsButtonShowBattery = 4U,
     // Toggle NFC field generator on/off (Ultra only, must be in reader mode)
     SettingsButtonNfcFieldGenerator = 5U,
+    SettingsButtonStandaloneDisarm  = 6U,  /* disarm active standalone mode */
 } settings_button_function_t;
 
 typedef struct ALIGN_U32 {

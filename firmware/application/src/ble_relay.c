@@ -337,6 +337,10 @@ static void dispatch(const relay_evt_t *e) {
         }
         break;
 
+    case BLE_RELAY_MSG_RESCAN_REQ:
+        if (m_cbs.on_rescan_req) m_cbs.on_rescan_req();
+        break;
+
     case BLE_RELAY_MSG_PREAUTH:
         if (e->len >= 6 && m_cbs.on_preauth) {
             relay_preauth_t pa;
@@ -493,6 +497,11 @@ bool ble_relay_send_card_identity(const relay_card_identity_t *id) {
     p[off++] = alen;
     if (alen) { memcpy(p + off, id->ats, alen); off += alen; }
     adv_send(BLE_RELAY_MSG_CARD_IDENTITY, p, off);
+    return true;
+}
+
+bool ble_relay_send_rescan_req(void) {
+    adv_send(BLE_RELAY_MSG_RESCAN_REQ, NULL, 0);
     return true;
 }
 
