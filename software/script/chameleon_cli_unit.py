@@ -37,6 +37,7 @@ from chameleon_utils import CR, CG, CB, CC, CY, C0, color_string
 from chameleon_utils import print_mem_dump
 from chameleon_enum import Command, Status, SlotNumber, TagSenseType, TagSpecificType
 from chameleon_enum import (
+    BatteryHealth,
     MifareClassicWriteMode,
     MifareClassicPrngType,
     MifareClassicDarksideStatus,
@@ -7282,14 +7283,10 @@ class HWBatteryInfo(DeviceRequiredUnit):
             condition_code = None
         condition = HWBatteryInfo.battery_condition(voltage, percentage)
         if condition_code is not None:
-            condition_map = {
-                0: "critical",
-                1: "low",
-                2: "fair",
-                3: "good",
-                4: "excellent",
-            }
-            condition = condition_map.get(condition_code, condition)
+            try:
+                condition = BatteryHealth(condition_code).name.lower()
+            except ValueError:
+                pass
         print(" - Battery information:")
         print(f"   voltage    -> {voltage} mV")
         print(f"   percentage -> {percentage}%")

@@ -622,6 +622,15 @@ class MfcValueBlockOperator(enum.IntEnum):
 
 
 @enum.unique
+class BatteryHealth(enum.IntEnum):
+    CRITICAL = 0
+    LOW = 1
+    FAIR = 2
+    GOOD = 3
+    EXCELLENT = 4
+
+
+@enum.unique
 class HIDFormat(enum.IntEnum):
     H10301 = 1
     IND26 = 2
