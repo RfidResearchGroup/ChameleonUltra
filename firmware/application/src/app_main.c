@@ -64,12 +64,14 @@ static bool m_is_a_btn_release = false;
 static bool m_system_off_processing = false;
 static bool m_battery_status_display_active = false;
 static uint32_t m_battery_status_display_started_at = 0;
+static uint8_t m_battery_status_display_leds = 0;
 extern bool g_usb_led_marquee_enable;
 
 static void battery_status_display_restore_slot(void);
 static void battery_status_display_stop(void);
 static bool battery_status_display_cancel_on_button(void);
 static void battery_status_display_on_button_cancel(void);
+static void play_power_on_animation(uint8_t slot, uint8_t dir, uint8_t color);
 
 // NFC field generator state
 volatile bool m_is_field_on = false;
@@ -608,10 +610,16 @@ static void cycle_slot(bool dec) {
 static void battery_status_display_restore_slot(void) {
     uint8_t slot = tag_emulation_get_slot();
     uint8_t color = get_color_by_slot(slot);
+    uint8_t dir = slot > 3 ? 1 : 0;
 
     rgb_marquee_stop();
     set_slot_light_color(color);
-    light_up_by_slot();
+    uint32_t *led_pins = hw_get_led_array();
+    for (int i = m_battery_status_display_leds; i > 0; i--) {
+        nrf_gpio_pin_clear(led_pins[i - 1]);
+        bsp_delay_ms(50);
+    }
+    play_power_on_animation(slot, dir, color);
 }
 
 static void battery_status_display_stop(void) {
@@ -684,8 +692,25 @@ static void show_battery(void) {
             }
         }
     }
+    m_battery_status_display_leds = nleds;
     m_battery_status_display_active = true;
     m_battery_status_display_started_at = app_timer_cnt_get();
+}
+
+static void play_power_on_animation(uint8_t slot, uint8_t dir, uint8_t color) {
+    uint8_t animation_config = settings_get_animation_config();
+    if (animation_config == SettingsAnimationModeFull) {
+        rgb_marquee_sweep_to(color, !dir, 11);
+        rgb_marquee_sweep_to(color, dir, 11);
+        rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
+    } else if (animation_config == SettingsAnimationModeMinimal) {
+        rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
+    } else if (animation_config == SettingsAnimationModeSymmetric) {
+        rgb_marquee_symmetric_out(color, slot);
+    }
+
+    set_slot_light_color(color);
+    light_up_by_slot();
 }
 
 static void battery_status_display_process(void) {
