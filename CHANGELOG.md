@@ -4,6 +4,8 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 
 ## [unreleased][unreleased]
  - Fix battery level never reaching 100% on fully charged devices by calibrating the battery curve to the conservative lower bound of the settled full-charge range (`4160-4190 mV`), and add a recommended battery calibration procedure.
+ - Added an extended battery info command so `hw battery` can report a qualitative battery condition hint (`excellent`, `good`, `fair`, `low`, or `critical`) while staying compatible with older firmware.
+ - Battery screen now uses the same health state on-device by coloring the battery bar and blinking for `low` and `critical` states.
  - Added IDTECK LF protocol support: tag emulation (PSK1 RF/32) and T55xx clone. No reader path yet; PSK demodulation on the envelope-only receive chain is left for a follow-up.
  - Added PAC/Stanley LF protocol support: read, emulate and T55xx clone (@kevihiiin, @danieltwagner)
  - Fix firmware application USB serial number (@taichunmin)

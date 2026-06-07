@@ -1541,6 +1541,16 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
+    def get_battery_info_ex(self):
+        """
+        Get battery info with condition hint
+        """
+        resp = self.device.send_cmd_sync(Command.GET_BATTERY_INFO_EX)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = struct.unpack('!HBB', resp.data)
+        return resp
+
+    @expect_response(Status.SUCCESS)
     def get_button_press_config(self, button: ButtonType):
         """
         Get config of button press function
