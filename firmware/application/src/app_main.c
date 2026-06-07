@@ -49,6 +49,7 @@ NRF_LOG_MODULE_REGISTER();
 
 // Defining soft timers
 APP_TIMER_DEF(m_button_check_timer); // Timer for button debounce
+#define BATTERY_STATUS_DISPLAY_DURATION_MS  5000U
 
 static uint32_t m_last_btn_press = 0;
 
@@ -61,6 +62,14 @@ static bool m_is_b_btn_release = false;
 static bool m_is_a_btn_release = false;
 
 static bool m_system_off_processing = false;
+static bool m_battery_status_display_active = false;
+static uint32_t m_battery_status_display_started_at = 0;
+extern bool g_usb_led_marquee_enable;
+
+static void battery_status_display_restore_slot(void);
+static void battery_status_display_stop(void);
+static bool battery_status_display_cancel_on_button(void);
+static void battery_status_display_on_button_cancel(void);
 
 // NFC field generator state
 volatile bool m_is_field_on = false;
@@ -596,6 +605,20 @@ static void cycle_slot(bool dec) {
     apply_slot_change(slot_now, slot_new);
 }
 
+static void battery_status_display_restore_slot(void) {
+    uint8_t slot = tag_emulation_get_slot();
+    uint8_t color = get_color_by_slot(slot);
+
+    rgb_marquee_stop();
+    set_slot_light_color(color);
+    light_up_by_slot();
+}
+
+static void battery_status_display_stop(void) {
+    battery_status_display_restore_slot();
+    m_battery_status_display_active = false;
+}
+
 static void show_battery(void) {
     static const uint8_t health_colors[] = {
         RGB_RED,
@@ -661,7 +684,49 @@ static void show_battery(void) {
             }
         }
     }
-    // nothing special to finish, we wait for sleep or slot change
+    m_battery_status_display_active = true;
+    m_battery_status_display_started_at = app_timer_cnt_get();
+}
+
+static void battery_status_display_process(void) {
+    if (!m_battery_status_display_active) {
+        return;
+    }
+
+    if (battery_status_display_cancel_on_button()) {
+        battery_status_display_on_button_cancel();
+        return;
+    }
+
+    uint32_t now = app_timer_cnt_get();
+    if (app_timer_cnt_diff_compute(now, m_battery_status_display_started_at) >= APP_TIMER_TICKS(BATTERY_STATUS_DISPLAY_DURATION_MS)) {
+        battery_status_display_stop();
+    }
+}
+
+static bool battery_status_display_cancel_on_button(void) {
+    if (!m_battery_status_display_active) {
+        return false;
+    }
+
+    if (!(m_is_a_btn_release || m_is_b_btn_release)) {
+        return false;
+    }
+
+    m_is_a_btn_release = false;
+    m_is_b_btn_release = false;
+    m_is_a_btn_press = false;
+    m_is_b_btn_press = false;
+    m_is_btn_long_press = false;
+    battery_status_display_stop();
+    return true;
+}
+
+static void battery_status_display_on_button_cancel(void) {
+    g_usb_led_marquee_enable = false;
+    if (!m_is_field_on) {
+        sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
+    }
 }
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
@@ -955,10 +1020,13 @@ static void run_button_function_by_settings(settings_button_function_t sbf) {
 
 /**@brief button press event process
  */
-extern bool g_usb_led_marquee_enable;
 static void button_press_process(void) {
     // Make sure that one of the AB buttons has a click event
     if (m_is_b_btn_release || m_is_a_btn_release) {
+        if (battery_status_display_cancel_on_button()) {
+            battery_status_display_on_button_cancel();
+            return;
+        }
         if (m_is_a_btn_release) {
             if (!m_is_btn_long_press) {
                 run_button_function_by_settings(settings_get_button_press_config('a'));
@@ -1077,16 +1145,19 @@ int main(void) {
     while (1) {
         // process lesc event
         lesc_event_process();
+        battery_status_display_process();
         // Button event process
         button_press_process();
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
         // Field generator rainbow animation
-        field_generator_rainbow_loop();
+        if (!m_battery_status_display_active) {
+            field_generator_rainbow_loop();
+        }
 #endif
 
         // Led blink at usb status (only if field generator is off)
-        if (!m_is_field_on) {
+        if (!m_is_field_on && !m_battery_status_display_active) {
             blink_usb_led_status();
         }
 
