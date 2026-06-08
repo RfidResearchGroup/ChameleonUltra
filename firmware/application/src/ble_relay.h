@@ -63,7 +63,9 @@ extern "C" {
 #define BLE_RELAY_MSG_RESPONSE          0x07  /* {u16 bits_le, u8[] response} */
 #define BLE_RELAY_MSG_NO_RESPONSE       0x08  /* {} card did not respond */
 #define BLE_RELAY_MSG_ERROR             0x09  /* {u8 code} */
-#define BLE_RELAY_MSG_RESCAN_REQ        0x0A  /* {} CARD->READER: reader left, scan new card */
+#define BLE_RELAY_MSG_RESCAN_REQ        0x0A  /* {} CARD->READER: rescan for new card */
+#define BLE_RELAY_MSG_FIELD_ON          0x0B  /* {} reserved */
+#define BLE_RELAY_MSG_FIELD_OFF         0x0C  /* {} reserved */
 
 #define BLE_RELAY_ROLE_CARD             0     /* NFCT, faces reader */
 #define BLE_RELAY_ROLE_READER           1     /* RC522, faces real card */
@@ -107,6 +109,8 @@ typedef struct {
 typedef void (*ble_relay_connected_cb_t)(uint8_t my_role);
 typedef void (*ble_relay_card_identity_cb_t)(const relay_card_identity_t *id);
 typedef void (*ble_relay_rescan_req_cb_t)(void);
+typedef void (*ble_relay_field_on_cb_t)(void);
+typedef void (*ble_relay_field_off_cb_t)(void);
 typedef void (*ble_relay_preauth_cb_t)(const relay_preauth_t *pa);
 typedef void (*ble_relay_ready_cb_t)(void);
 typedef void (*ble_relay_frame_cb_t)(const uint8_t *data, uint16_t bits);
@@ -118,6 +122,8 @@ typedef struct {
     ble_relay_connected_cb_t     on_connected;
     ble_relay_card_identity_cb_t on_card_identity;
     ble_relay_rescan_req_cb_t    on_rescan_req;
+    ble_relay_field_on_cb_t      on_field_on;
+    ble_relay_field_off_cb_t     on_field_off;
     ble_relay_preauth_cb_t       on_preauth;
     ble_relay_ready_cb_t         on_ready;
     ble_relay_frame_cb_t         on_frame;
@@ -165,6 +171,8 @@ bool ble_relay_send_frame(const uint8_t *data, uint16_t bits);
 /* --- RELAY_READER sends --- */
 bool ble_relay_send_card_identity(const relay_card_identity_t *id);
 bool ble_relay_send_rescan_req(void);
+bool ble_relay_send_field_on(void);
+bool ble_relay_send_field_off(void);
 bool ble_relay_send_preauth(const relay_preauth_t *pa);
 bool ble_relay_send_ready(void);
 bool ble_relay_send_response(const uint8_t *data, uint16_t bits);

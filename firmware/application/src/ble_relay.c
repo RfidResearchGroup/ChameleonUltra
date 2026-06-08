@@ -27,6 +27,7 @@
 
 #include "ble_relay.h"
 #include "ble_main.h"
+#include "utils/syssleep.h"
 
 
 #include <string.h>
@@ -55,13 +56,12 @@ NRF_LOG_MODULE_REGISTER();
 #define RELAY_SCAN_INTERVAL   200   /* 125ms in 0.625ms units */
 #define RELAY_SCAN_WINDOW      40   /* 25ms  */
 
-/* Active relay phase — 100% scan duty cycle at 40ms.
- * scan_interval == scan_window = continuous scan (SoftDevice supported).
- * 40ms is fast enough for SD housekeeping; 12.5ms proved too fast.
- * Advertising at 20ms (minimum for non-connectable).
- * Worst-case one-way: 20ms (next adv slot) = round-trip ~40ms. */
+/* Active relay phase — improved latency without starving SoftDevice.
+ * 75% scan duty cycle: 48/64 units = 30ms/40ms.
+ * Leaves ~10ms per cycle for advertising and SD processing.
+ * Worst-case round-trip: ~80ms vs ~350ms original. */
 #define RELAY_FAST_SCAN_INTERVAL  64   /* 40ms */
-#define RELAY_FAST_SCAN_WINDOW    64   /* 40ms — 100% duty cycle */
+#define RELAY_FAST_SCAN_WINDOW    48   /* 30ms — 75% duty cycle */
 
 /* -----------------------------------------------------------------------
  * Event queue (ISR → main loop)
@@ -340,6 +340,12 @@ static void dispatch(const relay_evt_t *e) {
     case BLE_RELAY_MSG_RESCAN_REQ:
         if (m_cbs.on_rescan_req) m_cbs.on_rescan_req();
         break;
+    case BLE_RELAY_MSG_FIELD_ON:
+        if (m_cbs.on_field_on) m_cbs.on_field_on();
+        break;
+    case BLE_RELAY_MSG_FIELD_OFF:
+        if (m_cbs.on_field_off) m_cbs.on_field_off();
+        break;
 
     case BLE_RELAY_MSG_PREAUTH:
         if (e->len >= 6 && m_cbs.on_preauth) {
@@ -402,6 +408,7 @@ void ble_relay_start(void) {
     m_ctx.rx_seq       = 0xFF;
 
     /* Advertise HELLO with our MAC — re-broadcast every 2s from on_tick */
+    s_fast_scan = false;
     adv_send(BLE_RELAY_MSG_HELLO, m_ctx.my_addr, 6);
     start_scanning();
     NRF_LOG_INFO("relay: started - broadcasting HELLO + scanning");
@@ -444,6 +451,10 @@ void ble_relay_broadcast_hello(void) {
 }
 
 void ble_relay_process(void) {
+    /* Aggressively cancel any sleep timer — multiple events (BLE disconnect,
+     * NFCT field lost) can start a 3-4s sleep timer. Processing BLE events
+     * means we're active; prevent sleep regardless of other state flags. */
+    sleep_timer_stop();
     relay_evt_t e;
     while (evt_pop(&e)) dispatch(&e);
 }
@@ -500,10 +511,9 @@ bool ble_relay_send_card_identity(const relay_card_identity_t *id) {
     return true;
 }
 
-bool ble_relay_send_rescan_req(void) {
-    adv_send(BLE_RELAY_MSG_RESCAN_REQ, NULL, 0);
-    return true;
-}
+bool ble_relay_send_rescan_req(void) { adv_send(BLE_RELAY_MSG_RESCAN_REQ, NULL, 0); return true; }
+bool ble_relay_send_field_on(void)   { adv_send(BLE_RELAY_MSG_FIELD_ON,  NULL, 0); return true; }
+bool ble_relay_send_field_off(void)  { adv_send(BLE_RELAY_MSG_FIELD_OFF, NULL, 0); return true; }
 
 bool ble_relay_send_preauth(const relay_preauth_t *pa) {
     uint8_t p[6] = { pa->block, pa->key_type,
