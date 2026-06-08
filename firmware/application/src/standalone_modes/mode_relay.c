@@ -32,6 +32,9 @@
 
 #include "app_standalone.h"
 #include "standalone_led.h"
+
+/* Exported to ble_main.c to suppress spurious battery-shutdown during relay */
+bool g_is_standalone_armed = false;
 #include "ble_relay.h"
 
 #include <string.h>
@@ -569,7 +572,8 @@ static standalone_rc_t on_enter(const uint8_t *cfg, size_t cfg_len) {
     m_st.session_count = saved_count;
     m_st.result_loaded = saved_loaded;
 
-    m_st.active  = true;
+    m_st.active           = true;
+    g_is_standalone_armed = true;   /* suppress battery shutdown during relay */
     m_st.wtx_ms  = RELAY_DEFAULT_WTX_MS;
     m_st.sub     = RS_LINKING;
 
@@ -596,7 +600,8 @@ static standalone_rc_t on_exit(void) {
     standalone_feedback(SL_FB_SUCCESS);
 
     /* Stop relay hardware */
-    m_st.active = false;
+    m_st.active           = false;
+    g_is_standalone_armed = false;
     nfc_relay_tag_clear();
     ble_relay_stop();
     pcd_14a_reader_antenna_off();
@@ -772,36 +777,66 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
             s_last_bcast = now_ticks;
             ble_relay_send_card_identity(&m_st.identity);
         }
-        /* Re-scan triggered by RESCAN_REQ from CU1.
-         * Runs here in on_tick (main-loop context) not in BLE dispatch. */
-        if (m_st.rescan_pending) {
-            m_st.rescan_pending = false;
-            sleep_timer_stop();  /* RC522 scan blocks 200ms — keep sleep timer reset */
-            set_scan_tag_timeout(200);
-            picc_14a_tag_t new_card;
-            memset(&new_card, 0, sizeof(new_card));
-            if (pcd_14a_reader_scan_auto(&new_card) == STATUS_HF_TAG_OK) {
-                bool changed = (memcmp(new_card.uid, m_st.real_card.uid,
-                                       sizeof(new_card.uid)) != 0);
-                if (changed) {
-                    m_st.real_card       = new_card;
-                    m_st.real_card_found = true;
-                    relay_card_identity_t id;
-                    memset(&id, 0, sizeof(id));
-                    id.atqa[0] = new_card.atqa[0];
-                    id.atqa[1] = new_card.atqa[1];
-                    id.sak     = new_card.sak;
-                    id.uid_len = 4;
+        /* Card change detection: scan when RESCAN_REQ received OR every 5s
+         * when idle (no relay frames for 3s). Single RESCAN_REQ scan misses
+         * the new card if it isn't in the RC522 field at that exact moment;
+         * the periodic scan catches it on the next 5s window. */
+        {
+            static uint32_t s_last_frame_seen  = 0;
+            static uint32_t s_last_card_check  = 0;
+            if (s_last_card_check == 0) s_last_card_check = now_ticks;
+
+            if (m_st.reader_frame_pending) s_last_frame_seen = now_ticks;
+
+            bool reader_idle = (s_last_frame_seen == 0 ||
+                app_timer_cnt_diff_compute(now_ticks, s_last_frame_seen)
+                    >= APP_TIMER_TICKS(3000));
+
+            bool do_scan = m_st.rescan_pending ||
+                (reader_idle &&
+                 app_timer_cnt_diff_compute(now_ticks, s_last_card_check)
+                     >= APP_TIMER_TICKS(5000));
+
+            if (do_scan) {
+                m_st.rescan_pending = false;
+                s_last_card_check   = now_ticks;
+                sleep_timer_stop();
+                set_scan_tag_timeout(200);
+                picc_14a_tag_t new_card;
+                memset(&new_card, 0, sizeof(new_card));
+                if (pcd_14a_reader_scan_auto(&new_card) == STATUS_HF_TAG_OK) {
+                    /* For ISO 14443-4 cards (SAK & 0x20 = DeSFire etc.) the
+                     * anticollision UID is randomised each field-on — compare
+                     * ATQA+SAK only. For other cards compare the full UID. */
+                    bool changed;
+                    if (new_card.sak & 0x20) {
+                        changed = (new_card.atqa[0] != m_st.real_card.atqa[0] ||
+                                   new_card.atqa[1] != m_st.real_card.atqa[1] ||
+                                   new_card.sak     != m_st.real_card.sak);
+                    } else {
+                        changed = (memcmp(new_card.uid, m_st.real_card.uid,
+                                          sizeof(new_card.uid)) != 0);
+                    }
+                    if (changed) {
+                        m_st.real_card       = new_card;
+                        m_st.real_card_found = true;
+                        relay_card_identity_t id;
+                        memset(&id, 0, sizeof(id));
+                        id.atqa[0] = new_card.atqa[0];
+                        id.atqa[1] = new_card.atqa[1];
+                        id.sak     = new_card.sak;
+                        id.uid_len = 4;
 #ifndef PROJECT_CHAMELEON_LITE
-                    get_4byte_tag_uid(&new_card, id.uid);
+                        get_4byte_tag_uid(&new_card, id.uid);
 #else
-                    memcpy(id.uid, new_card.uid, 4);
+                        memcpy(id.uid, new_card.uid, 4);
 #endif
-                    id.ats_len = 0;
-                    ble_relay_send_card_identity(&id);
-                    NRF_LOG_INFO("relay reader: card changed, new identity sent");
+                        id.ats_len = 0;
+                        ble_relay_send_card_identity(&id);
+                        NRF_LOG_INFO("relay reader: card changed, new identity sent");
+                    }
+                    pcd_14a_reader_antenna_on();
                 }
-                pcd_14a_reader_antenna_on();
             }
         }
         /* Forward frames from CU1 to real card */

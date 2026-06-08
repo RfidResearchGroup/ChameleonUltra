@@ -386,6 +386,9 @@ static void conn_params_init(void) {
  */
 static bool g_relay_adv_active = false;
 
+/* Declared in mode_relay.c — suppresses battery shutdown during relay */
+extern bool g_is_standalone_armed;
+
 static void on_adv_evt(ble_adv_evt_t ble_adv_evt) {
     /* Relay mode owns the advertising handle — ignore module events */
     if (g_relay_adv_active) return;
@@ -834,7 +837,7 @@ static void battery_level_meas_timeout_handler(void *p_context) {
     }
 
     // check low battery level, if level == 0, we can try to shutdown.
-    if (percentage_batt_lvl == 0) {
+    if (percentage_batt_lvl == 0 && !g_is_standalone_armed) {
         NRF_LOG_INFO("battery too low, try to shutdown...");
         g_is_low_battery_shutdown = true;
         sleep_timer_start(SLEEP_NO_BATTERY_SHUTDOWN);
