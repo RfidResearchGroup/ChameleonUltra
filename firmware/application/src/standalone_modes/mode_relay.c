@@ -261,21 +261,18 @@ static void result_save_session(uint8_t status) {
     h[RH_ROLE]   = m_st.role;
     h[RH_STATUS] = status;
 
-    /* UID: prefer identity, fall back to real_card */
-    if (m_st.identity.uid_len > 0) {
-        h[RH_UID_LEN] = m_st.identity.uid_len > 4 ? 4 : m_st.identity.uid_len;
-        memcpy(&h[RH_UID], m_st.identity.uid, 4);
-        memcpy(&h[RH_ATQA], m_st.identity.atqa, 2);
-        h[RH_SAK] = m_st.identity.sak;
-    } else if (m_st.real_card_found) {
-#ifndef PROJECT_CHAMELEON_LITE
-        uint8_t uid4[4] = {0};
-        get_4byte_tag_uid(&m_st.real_card, uid4);
-        h[RH_UID_LEN] = 4;
-        memcpy(&h[RH_UID],  uid4, 4);
+    /* On READER: record the real card found by RC522.
+     * On CARD:   record the identity received from READER CU. */
+    if (m_st.role == BLE_RELAY_ROLE_READER && m_st.real_card_found) {
+        h[RH_UID_LEN] = m_st.real_card.uid_len;
+        memcpy(&h[RH_UID],  m_st.real_card.uid,  m_st.real_card.uid_len > 4 ? 4 : m_st.real_card.uid_len);
         memcpy(&h[RH_ATQA], m_st.real_card.atqa, 2);
         h[RH_SAK] = m_st.real_card.sak;
-#endif
+    } else if (m_st.identity.uid_len > 0) {
+        h[RH_UID_LEN] = m_st.identity.uid_len > 4 ? 4 : m_st.identity.uid_len;
+        memcpy(&h[RH_UID],  m_st.identity.uid,  4);
+        memcpy(&h[RH_ATQA], m_st.identity.atqa, 2);
+        h[RH_SAK] = m_st.identity.sak;
     }
 
     h[RH_FRAME_COUNT    ] = (uint8_t)(m_trace_frame_count     );
@@ -573,7 +570,8 @@ static standalone_rc_t on_enter(const uint8_t *cfg, size_t cfg_len) {
     m_st.result_loaded = saved_loaded;
 
     m_st.active           = true;
-    g_is_standalone_armed = true;   /* suppress battery shutdown during relay */
+    g_is_standalone_armed = true;
+    memset(&m_st.identity, 0, sizeof(m_st.identity));  /* clear stale identity from prev arm */
     m_st.wtx_ms  = RELAY_DEFAULT_WTX_MS;
     m_st.sub     = RS_LINKING;
 
