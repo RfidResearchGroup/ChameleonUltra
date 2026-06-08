@@ -825,12 +825,8 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
                         id.atqa[0] = new_card.atqa[0];
                         id.atqa[1] = new_card.atqa[1];
                         id.sak     = new_card.sak;
-                        id.uid_len = 4;
-#ifndef PROJECT_CHAMELEON_LITE
-                        get_4byte_tag_uid(&new_card, id.uid);
-#else
-                        memcpy(id.uid, new_card.uid, 4);
-#endif
+                        id.uid_len = new_card.uid_len;
+                        memcpy(id.uid, new_card.uid, new_card.uid_len);
                         id.ats_len = 0;
                         ble_relay_send_card_identity(&id);
                         NRF_LOG_INFO("relay reader: card changed, new identity sent");
