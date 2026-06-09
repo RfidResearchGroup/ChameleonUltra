@@ -491,6 +491,10 @@ static void reader_setup_card(void) {
     /* Keep antenna ON — card must remain powered throughout the relay session.
      * Antenna will be turned off only on disconnect or disarm. */
     ble_relay_send_card_identity(&id);
+    /* Cache in m_st.identity so the 1s re-broadcast in RS_READER_READY
+     * keeps sending it — CARD CU may miss the first packet. */
+    memcpy(&m_st.identity, &id, sizeof(id));
+    m_st.identity_received = true;
 
     m_st.sub = RS_READER_READY;
     /* READER stays in fast scan — must remain responsive to relay frames
@@ -827,6 +831,8 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
                         memcpy(id.uid, new_card.uid, new_card.uid_len);
                         id.ats_len = 0;
                         ble_relay_send_card_identity(&id);
+                        memcpy(&m_st.identity, &id, sizeof(id));
+                        m_st.identity_received = true;
                         NRF_LOG_INFO("relay reader: card changed, new identity sent");
                     }
                     pcd_14a_reader_antenna_on();
