@@ -30,6 +30,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Added support for timestamped comments in CLI via `rem`, `;`, `%` or `#` (@doegox)
  - Fixed watchdog trigger during `hw factory_reset` (@doegox)
  - Added PyInstaller support for CLI client (@augustozanellato)
+ - Fixed formatting returned keys by static and staticnested (@triplesprawl)
 
 ## [v2.0.0][2023-09-26]
  - Added `hw slot nick delete` and DELETE_SLOT_TAG_NICK (@doegox)
