@@ -132,6 +132,7 @@ void nfc_tag_14a_set_state(nfc_tag_14a_state_t state);
 void nfc_tag_14a_tx_bytes(uint8_t *data, uint32_t bytes, bool appendCrc);
 void nfc_tag_14a_tx_bits(uint8_t *data, uint32_t bits);
 void nfc_tag_14a_tx_nbit(uint8_t data, uint32_t bits);
+void nfc_tag_14a_set_frame_delay_max(uint32_t max_ticks);
 
 // Determine whether it is an effective UID length
 bool is_valid_uid_size(uint8_t uid_length);

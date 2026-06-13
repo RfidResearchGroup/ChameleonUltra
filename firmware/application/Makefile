@@ -21,6 +21,7 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/byte_mirror.c \
   $(PROJ_DIR)/rfid/crc_utils.c \
   $(PROJ_DIR)/rfid/hex_utils.c \
+  $(PROJ_DIR)/rfid/crypto/ulc_3des.c \
   $(PROJ_DIR)/rfid/mf1_crapto1.c \
   $(PROJ_DIR)/rfid/mf1_crypto1.c \
   $(PROJ_DIR)/rfid/parity.c \
@@ -184,6 +185,7 @@ INC_FOLDERS += \
   ${PROJ_DIR}/bsp/ \
   ${PROJ_DIR}/utils/ \
   ${PROJ_DIR}/rfid/ \
+  ${PROJ_DIR}/rfid/crypto/ \
   ${PROJ_DIR}/rfid/nfctag/ \
   ${PROJ_DIR}/rfid/nfctag/hf \
   ${PROJ_DIR}/rfid/nfctag/lf \

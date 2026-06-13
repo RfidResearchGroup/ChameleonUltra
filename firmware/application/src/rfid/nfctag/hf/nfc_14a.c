@@ -335,6 +335,10 @@ void nfc_tag_14a_tx_nbit(uint8_t data, uint32_t bits) {
     NFC_14A_TX_BITS_CORE(bits, NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
 }
 
+void nfc_tag_14a_set_frame_delay_max(uint32_t max_ticks) {
+    nrf_nfct_frame_delay_max_set(max_ticks);
+}
+
 /**
  * 14A monitoring the packaging function of data processing from PCD
  */
