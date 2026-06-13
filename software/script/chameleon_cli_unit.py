@@ -431,8 +431,6 @@ class MFUAuthArgsUnit(ReaderRequiredUnit):
 
             if len(key) not in [4, 16]:
                 raise ValueError("Key should either be 4 or 16 bytes long")
-            elif len(key) == 16:
-                raise ValueError("Ultralight-C authentication isn't supported yet")
 
             return key
 
@@ -441,7 +439,8 @@ class MFUAuthArgsUnit(ReaderRequiredUnit):
             "--key",
             type=key_parser,
             metavar="<hex>",
-            help="Authentication key (EV1/NTAG 4 bytes).",
+            help="Authentication key: 4 bytes (UL EV1/NTAG password) "
+                 "or 16 bytes (Ultralight-C 3DES key, cipher order).",
         )
         parser.add_argument(
             "-l",
@@ -4219,6 +4218,14 @@ class HFMFURDPG(MFUAuthArgsUnit):
     def on_exec(self, args: argparse.Namespace):
         param = self.get_param(args)
 
+        if param.key is not None and len(param.key) == 16:
+            try:
+                data = self.cmd.mf0_ulc_read(param.key, args.page, 1)
+                print(f" - Data: {bytes(data[:4]).hex()}")
+            except UnexpectedResponseError:
+                print(color_string((CR, " - Auth failed")))
+            return
+
         options = {
             "activate_rf_field": 0,
             "wait_response": 1,
@@ -4302,6 +4309,14 @@ class HFMFUWRPG(MFUAuthArgsUnit):
                     (CR, "Page data should be a 4 byte (8 character) hex string")
                 )
             )
+            return
+
+        if param.key is not None and len(param.key) == 16:
+            try:
+                self.cmd.mf0_ulc_write(param.key, args.page, data)
+                print(" - Ok")
+            except UnexpectedResponseError:
+                print(color_string((CR, "Write failed.")))
             return
 
         options = {
@@ -4565,6 +4580,10 @@ class HFMFURCNT(MFUAuthArgsUnit):
     def on_exec(self, args: argparse.Namespace):
         param = self.get_param(args)
 
+        if param.key is not None and len(param.key) == 16:
+            print(color_string((CR, "rcnt is not available for Ultralight-C (3DES) tags.")))
+            return
+
         options = {
             "activate_rf_field": 0,
             "wait_response": 1,
@@ -4676,6 +4695,31 @@ class HFMFUDUMP(MFUAuthArgsUnit):
                 )
             )
             print(f"- {err}")
+            return
+
+        if param.key is not None and len(param.key) == 16:
+            print(" - Detected tag type as Mifare Ultralight C.")
+            ulc_stop = stop_page if stop_page is not None else 0x2C
+            count = min(ulc_stop - args.page, 48)
+            if count > 0:
+                try:
+                    data = bytes(self.cmd.mf0_ulc_read(param.key, args.page, count))
+                except UnexpectedResponseError:
+                    print(color_string((CR, " - Auth failed")))
+                    data = b""
+                pages_read = len(data) // 4
+                for idx in range(pages_read):
+                    page_data = data[idx * 4: idx * 4 + 4]
+                    print(f" - Page {args.page + idx:2}: {page_data.hex()}")
+                    if fd is not None:
+                        if save_as_eml:
+                            fd.write(page_data.hex() + "\n")
+                        else:
+                            fd.write(page_data)
+                if 0 < pages_read < count:
+                    print(f"- {color_string((CY, 'Dump stopped early (page not readable without/again auth).'))}")
+                if fd is not None and args.file != "":
+                    print(f"- {color_string((CG, f'Dump written in {args.file}.'))}")
             return
 
         options = {
