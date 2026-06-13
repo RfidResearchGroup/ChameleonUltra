@@ -111,6 +111,8 @@
 #define DATA_CMD_IOPROX_COMPOSE_ID              (3013)
 #define DATA_CMD_LF_T55XX_WRITE                 (3016)
 #define DATA_CMD_IDTECK_WRITE_TO_T55XX          (3018)
+#define DATA_CMD_JABLOTRON_SCAN                 (3019)
+#define DATA_CMD_JABLOTRON_WRITE_TO_T55XX       (3020)
 
 //
 // ******************************************************************
@@ -193,6 +195,8 @@
 #define DATA_CMD_PAC_GET_EMU_ID                 (5007)
 #define DATA_CMD_IOPROX_SET_EMU_ID              (5008)
 #define DATA_CMD_IOPROX_GET_EMU_ID              (5009)
+#define DATA_CMD_JABLOTRON_SET_EMU_ID           (5010)
+#define DATA_CMD_JABLOTRON_GET_EMU_ID           (5011)
 #define DATA_CMD_IDTECK_SET_EMU_ID              (5012)
 #define DATA_CMD_IDTECK_GET_EMU_ID              (5013)
 

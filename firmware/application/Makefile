@@ -41,6 +41,8 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/pac.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/ioprox.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/viking.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/protocols/jablotron.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/utils/diphase.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/wiegand.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/idteck.c \
   $(PROJ_DIR)/utils/dataframe.c \
@@ -355,6 +357,7 @@ ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
     $(PROJ_DIR)/rfid/reader/lf/lf_pac_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_ioprox_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_viking_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_jablotron_data.c \
 
   INC_FOLDERS +=\
     ${PROJ_DIR}/rfid/reader/ \
