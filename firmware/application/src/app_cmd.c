@@ -604,6 +604,39 @@ static data_frame_tx_t *cmd_processor_mf0_ulc_write(uint16_t cmd, uint16_t statu
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+static data_frame_tx_t *cmd_processor_mf0_ulc_set_key(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t old_key[16];
+        uint8_t new_key[16];
+    } PACKED payload_t;
+    if (length != sizeof(payload_t)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    payload_t *payload = (payload_t *)data;
+    picc_14a_tag_t taginfo;
+    status = pcd_14a_reader_scan_auto(&taginfo);
+    if (status != STATUS_HF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    status = pcd_14a_reader_mf0_ulc_auth(payload->old_key);
+    if (status != STATUS_HF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+
+    uint8_t card[16];
+    for (int i = 0; i < 8; i++) card[i] = payload->new_key[7 - i];
+    for (int i = 0; i < 8; i++) card[8 + i] = payload->new_key[15 - i];
+
+    for (uint8_t i = 0; i < 4; i++) {
+        status = pcd_14a_reader_mf0_ult_write_page(0x2C + i, &card[i * 4]);
+        if (status != STATUS_HF_TAG_OK) {
+            return data_frame_make(cmd, status, 0, NULL);
+        }
+    }
+    return data_frame_make(cmd, STATUS_HF_TAG_OK, 0, NULL);
+}
+
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
 static data_frame_tx_t *cmd_processor_hf14a_set_field_on(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -3074,6 +3107,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF0_ULC_AUTH,                 before_hf_reader_run,        cmd_processor_mf0_ulc_auth,                  after_hf_reader_run    },
     {    DATA_CMD_MF0_ULC_READ,                 before_hf_reader_run,        cmd_processor_mf0_ulc_read,                  after_hf_reader_run    },
     {    DATA_CMD_MF0_ULC_WRITE,                before_hf_reader_run,        cmd_processor_mf0_ulc_write,                 after_hf_reader_run    },
+    {    DATA_CMD_MF0_ULC_SET_KEY,              before_hf_reader_run,        cmd_processor_mf0_ulc_set_key,               after_hf_reader_run    },
     {    DATA_CMD_HF14A_RAW,                    before_reader_run,           cmd_processor_hf14a_raw,                     NULL                   },
     {    DATA_CMD_MF1_MANIPULATE_VALUE_BLOCK,   before_hf_reader_run,        cmd_processor_mf1_manipulate_value_block,    after_hf_reader_run    },
     {    DATA_CMD_MF1_CHECK_KEYS_OF_SECTORS,    before_hf_reader_run,        cmd_processor_mf1_check_keys_of_sectors,     after_hf_reader_run    },

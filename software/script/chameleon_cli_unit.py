@@ -4376,6 +4376,47 @@ class HFMFUWRPG(MFUAuthArgsUnit):
             print(color_string((CR, " - Auth failed")))
 
 
+@hf_mfu.command("setkey")
+class HFMFUSETKEY(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Change the MIFARE Ultralight C 3DES key (authenticate with the current key, then write the new key)"
+
+        def key16(key: str) -> bytes:
+            try:
+                key = bytes.fromhex(key)
+            except ValueError:
+                raise ValueError("Key should be a hex string")
+            if len(key) != 16:
+                raise ValueError("Ultralight-C 3DES key must be 16 bytes")
+            return key
+
+        parser.add_argument(
+            "-k",
+            "--key",
+            type=key16,
+            required=True,
+            metavar="<hex>",
+            help="Current 16-byte 3DES key (cipher order).",
+        )
+        parser.add_argument(
+            "-n",
+            "--new-key",
+            type=key16,
+            required=True,
+            metavar="<hex>",
+            help="New 16-byte 3DES key (cipher order).",
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            self.cmd.mf0_ulc_set_key(args.key, args.new_key)
+            print(" - Ok")
+        except UnexpectedResponseError:
+            print(color_string((CR, " - Failed (wrong current key or key page locked)")))
+
+
 @hf_mfu.command("eview")
 class HFMFUEVIEW(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
