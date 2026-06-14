@@ -625,10 +625,40 @@ static void reader_relay_frame(const uint8_t *data, uint16_t bits) {
  * ------------------------------------------------------------------------- */
 static void card_setup_emulation(void) {
     if (!m_st.identity_received) return;
+
+    /* Patch the ATS we present to the reader so it grants a longer Frame
+     * Waiting Time (FWT). The real card's ATS advertises FWI=8 (~77ms), but
+     * the BLE relay round-trip is ~80ms — just over that limit, so the reader
+     * gives up microseconds before our relayed response is injected. Bumping
+     * FWI to 14 (~5s) gives the relay ample time. The reader honours whatever
+     * FWT we advertise, and the emulator recomputes the ATS CRC on TX, so
+     * patching the payload is safe.
+     *
+     * ATS layout: TL T0 [TA(1)] [TB(1)] [TC(1)] [historical...]
+     *   T0 bit4 (0x10) = TA present, bit5 (0x20) = TB present, bit6 (0x40) = TC
+     *   TB(1) = (FWI << 4) | SFGI  — FWI is the upper nibble.
+     */
+    uint8_t patched_ats[sizeof(m_st.identity.ats)];
+    uint8_t ats_len = m_st.identity.ats_len;
+    if (ats_len > sizeof(patched_ats)) ats_len = sizeof(patched_ats);
+    memcpy(patched_ats, m_st.identity.ats, ats_len);
+
+    if (ats_len >= 2) {
+        uint8_t t0 = patched_ats[1];
+        uint8_t idx = 2;                 /* first byte after T0 */
+        if (t0 & 0x10) idx++;            /* skip TA(1) if present */
+        if ((t0 & 0x20) && idx < ats_len) {
+            /* TB(1) present at idx — force FWI=14, preserve SFGI low nibble */
+            uint8_t sfgi = patched_ats[idx] & 0x0F;
+            patched_ats[idx] = (14u << 4) | sfgi;
+            NRF_LOG_INFO("relay card: ATS FWI bumped, TB(1)=%02X", patched_ats[idx]);
+        }
+    }
+
     /* Install slot-independent relay handler — works for any HF tag type */
     nfc_relay_tag_install(m_st.identity.uid, m_st.identity.uid_len,
                           m_st.identity.atqa, m_st.identity.sak,
-                          m_st.identity.ats, m_st.identity.ats_len);
+                          patched_ats, ats_len);
     nfc_relay_tag_set_frame_cb(on_frame_isr);
     NRF_LOG_INFO("relay card: relay handler installed");
 }
