@@ -167,4 +167,3 @@ void nfc_relay_tag_clear(void) {
 
     NRF_LOG_INFO("relay_tag: cleared");
 }
-

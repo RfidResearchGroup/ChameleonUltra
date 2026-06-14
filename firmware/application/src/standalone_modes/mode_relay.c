@@ -350,7 +350,13 @@ static void on_connected(uint8_t my_role) {
 static void card_setup_emulation(void);
 
 static void on_field_on(void)  { /* reserved for future use */ }
-static void on_field_off(void) { /* reserved for future use */ }
+static void on_field_off(void) {
+    /* Real reader's session ended (CARD CU signalled field drop via BLE).
+     * Mark real card session as stale — the next relay frame will re-select
+     * the real card via WUPA+SELECT+RATS to establish a fresh T=CL session. */
+    if (m_st.role == BLE_RELAY_ROLE_READER && m_st.real_card_found)
+        m_st.needs_reselect = true;
+}
 
 static void on_rescan_req(void) {
     /* Set flag — actual RC522 scan deferred to on_tick so it runs
@@ -520,6 +526,33 @@ static void reader_setup_card(void) {
  * RELAY_READER: forward frame to real card, return response to CU1
  * ------------------------------------------------------------------------- */
 static void reader_relay_frame(const uint8_t *data, uint16_t bits) {
+    /* Re-select the real card if the previous T=CL session ended
+     * (field drop, S(DESELECT), or first frame after rescan).
+     * scan_auto does WUPA+SELECT+RATS in one call — use its result directly.
+     * Do NOT call pcd_14a_reader_ats_request after scan_auto: card is already
+     * in T=CL ACTIVE and a second RATS will NAK, aborting the session. */
+    if (m_st.needs_reselect && (m_st.real_card.sak & 0x20)) {
+        m_st.needs_reselect = false;
+        picc_14a_tag_t fresh;
+        pcd_14a_reader_reset();
+        bsp_delay_ms(5);
+        if (pcd_14a_reader_scan_auto(&fresh) == STATUS_HF_TAG_OK) {
+            /* Update cached ATS if it changed (rare, but safe) */
+            uint8_t al = fresh.ats_len < sizeof(m_st.identity.ats)
+                         ? fresh.ats_len : sizeof(m_st.identity.ats);
+            if (al > 0 && (al != m_st.identity.ats_len ||
+                memcmp(fresh.ats, m_st.identity.ats, al) != 0)) {
+                m_st.identity.ats_len = al;
+                memcpy(m_st.identity.ats, fresh.ats, al);
+                ble_relay_send_card_identity(&m_st.identity);
+            }
+            /* Card is now in T=CL ACTIVE — fall through to forward I-block */
+        } else {
+            ble_relay_send_no_response();
+            return;
+        }
+    }
+
     uint8_t  rx_buf[256];
     uint16_t rx_bits = 0;
     uint8_t  tx_buf[256];
