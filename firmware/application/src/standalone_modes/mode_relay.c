@@ -60,7 +60,9 @@ bool g_is_standalone_armed = false;
 #define RELAY_LINK_TIMEOUT_MS    120000u
 #define RELAY_FRAME_TIMEOUT_MS   3000u    /* max wait for response from real card */
 
-/* ISO14443-4 S(WTX) block */
+/* ISO14443-4 S(WTX) block — reserved for a future WTX-ACK handshake
+ * implementation (currently unused; BLE latency is absorbed by the
+ * widened FRAMEDELAYMAX window in nfc_relay_tag_inject_response instead). */
 #define RELAY_WTX_BLOCK_CMD      0xF2
 #define RELAY_WTX_MULTIPLIER     1
 
@@ -176,28 +178,6 @@ static struct {
 } m_st;
 
 /* nfc_relay_tag.h functions are included above */
-
-/* -------------------------------------------------------------------------
- * WTX helper (ISO14443-4 only)
- * ------------------------------------------------------------------------- */
-static void send_wtx(uint8_t cid) {
-    /* S(WTX) PCB = 0xF2, set CID bit (bit 3) and CID byte if reader uses CID */
-    uint8_t wtx[5];
-    uint8_t pcb = RELAY_WTX_BLOCK_CMD;
-    uint8_t len = 2;
-    if (cid != 0xFF) {
-        pcb |= 0x08;           /* CID present */
-        wtx[0] = pcb;
-        wtx[1] = cid & 0x0F;  /* CID byte */
-        wtx[2] = RELAY_WTX_MULTIPLIER;
-        len = 3;
-    } else {
-        wtx[0] = pcb;
-        wtx[1] = RELAY_WTX_MULTIPLIER;
-    }
-    nfc_tag_14a_append_crc(wtx, len);
-    nfc_tag_14a_tx_bytes(wtx, len + 2, false);
-}
 
 /* -------------------------------------------------------------------------
  * Frame ISR callback (NFCT ISR context — ISR-safe: copy and flag only)
