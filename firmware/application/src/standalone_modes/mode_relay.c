@@ -555,7 +555,6 @@ static void reader_relay_frame(const uint8_t *data, uint16_t bits) {
     }
 
     uint8_t  rx_buf[256];
-    uint16_t rx_bits = 0;
     uint8_t  tx_buf[256];
     uint16_t tx_bytes = (bits + 7) / 8;
     if (tx_bytes > sizeof(tx_buf)) tx_bytes = sizeof(tx_buf);
@@ -575,6 +574,9 @@ static void reader_relay_frame(const uint8_t *data, uint16_t bits) {
      *   keepField=true     : keep powered for the rest of the session
      *   checkCrc=false     : pass response through with its CRC intact
      */
+    uint16_t rx_len = 0;   /* pcd_14a_reader_raw_cmd returns BYTES here when
+                            * checkCrc=false (it overwrites the bit count with
+                            * finalRecvBytes). Do NOT treat this as bits. */
     uint8_t status = pcd_14a_reader_raw_cmd(
         false,  /* openRFField */
         true,   /* waitResp */
@@ -586,14 +588,19 @@ static void reader_relay_frame(const uint8_t *data, uint16_t bits) {
         tx_bytes * 8,
         tx_buf,
         rx_buf,
-        &rx_bits,
+        &rx_len,
         sizeof(rx_buf) * 8);
+
+    /* Convert the byte count to a bit count for the relay protocol, which
+     * carries frame lengths in bits. Treating bytes as bits truncated the
+     * response to ~1/8 its size (e.g. a 21-byte E(RndB) became "21 bits"). */
+    uint16_t rx_bits = rx_len * 8;
 
     /* Record the frame we forwarded to the real card (reader→tag direction
      * from the relay's perspective: this CU is acting as the reader). */
     trace_append(false, tx_buf, tx_bytes * 8);
 
-    if (status == STATUS_HF_TAG_OK && rx_bits > 0) {
+    if (status == STATUS_HF_TAG_OK && rx_len > 0) {
         /* Record what the real card actually returned — lets `standalone
          * get-result` on the READER CU show the true card response, so we can
          * tell whether truncation happens at the card, over BLE, or at the
@@ -1009,11 +1016,24 @@ static standalone_rc_t on_button(standalone_button_evt_t evt) {
 /* -------------------------------------------------------------------------
  * Result interface
  * ------------------------------------------------------------------------- */
-static size_t get_result_size(void) { return m_st.result_write; }
+static size_t get_result_size(void) {
+    /* Flush any unsaved live trace so the reported size includes the current
+     * (still-armed) relay session — otherwise the CLI sees 0 and never reads. */
+    if (m_trace_len > 0) {
+        result_flush_session(RELAY_SESSION_OK);
+    }
+    return m_st.result_write;
+}
 
 static standalone_rc_t read_result(uint8_t *out, size_t out_max, size_t *out_len) {
     if (!out || !out_len) return STANDALONE_RC_INVALID_CFG;
     result_ensure_loaded();
+    /* If there are unsaved frames in the live trace (relay still armed, no
+     * autosave/disconnect yet), flush them now so get-result reflects the
+     * current session instead of only previously-saved ones. */
+    if (m_trace_len > 0 && m_st.result_read == 0) {
+        result_flush_session(RELAY_SESSION_OK);
+    }
     if (m_st.result_read >= m_st.result_write) {
         m_st.result_read = 0;
         *out_len = 0;
