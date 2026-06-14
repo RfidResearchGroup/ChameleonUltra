@@ -42,6 +42,7 @@ NRF_LOG_MODULE_REGISTER();
 #include "tag_persistence.h"
 #include "settings.h"
 #include "app_standalone.h"
+#include "nrf_crypto.h"
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 #include "rc522.h"
@@ -1136,6 +1137,7 @@ int main(void) {
     power_management_init();  // Power management initialization
     usb_cdc_init();           // USB cdc emulation initialization
     ble_slave_init();         // Bluetooth protocol stack initialization
+    APP_ERROR_CHECK(nrf_crypto_init()); // Hardware crypto (CC310) — must follow SoftDevice init
 
     rng_drv_and_srand_init(); // Random number generator initialization
     bsp_timer_init();         // Initialize timeout timer
