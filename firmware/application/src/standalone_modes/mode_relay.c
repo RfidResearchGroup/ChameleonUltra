@@ -589,7 +589,17 @@ static void reader_relay_frame(const uint8_t *data, uint16_t bits) {
         &rx_bits,
         sizeof(rx_buf) * 8);
 
+    /* Record the frame we forwarded to the real card (reader→tag direction
+     * from the relay's perspective: this CU is acting as the reader). */
+    trace_append(false, tx_buf, tx_bytes * 8);
+
     if (status == STATUS_HF_TAG_OK && rx_bits > 0) {
+        /* Record what the real card actually returned — lets `standalone
+         * get-result` on the READER CU show the true card response, so we can
+         * tell whether truncation happens at the card, over BLE, or at the
+         * CARD CU's NFCT injection. */
+        trace_append(true, rx_buf, rx_bits);
+
         /* Propagate S(DESELECT) response — card returns to HALT state,
          * set needs_reselect so the next frame triggers a fresh re-select. */
         if (tx_bytes >= 1 && (tx_buf[0] & 0xF7) == 0xC2) {
