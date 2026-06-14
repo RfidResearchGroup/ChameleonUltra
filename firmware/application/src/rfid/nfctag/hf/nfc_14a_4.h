@@ -66,8 +66,8 @@ nfc_tag_14a_4_tcl_state_t;
 nfc_tag_14a_coll_res_reference_t *nfc_tag_14a_4_get_coll_res(void);
 
 /* Handles the low-level ISO14443-4 communication. Returns true when a complete APDU has been read and is ready for response. */
-bool nfc_tag_14a_4_base_handler(nfc_tag_14a_4_tcl_state_t m_tcl_session_state, uint8_t *data, uint16_t szBytes);
-void nfc_tag_14a_4_base_respond(nfc_tag_14a_4_tcl_state_t m_tcl_session_state);
+bool nfc_tag_14a_4_base_handler(nfc_tag_14a_4_tcl_state_t *m_tcl_session_state, uint8_t *data, uint16_t szBytes);
+void nfc_tag_14a_4_base_respond(nfc_tag_14a_4_tcl_state_t *m_tcl_session_state);
 
 /* tag_base_map callbacks */
 int  nfc_tag_14a_4_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer);
