@@ -10343,7 +10343,8 @@ examples:
 
         def _exchange_iblock(payload: bytes, annot_tx: str, annot_rx_prefix: str) -> bytes:
             """Send one T=CL I-block, return inner card payload (no PCB, no CRC).
-               Records the full wire frames (PCB + payload + CRC) in `frames`."""
+               Records the full wire frames (PCB + payload + CRC) in `frames`.
+               Handles S(WTX) responses from the relay transparently."""
             nonlocal block_num
             pcb = 0x02 | block_num
             tx_inner = bytes([pcb]) + payload
@@ -10360,6 +10361,23 @@ examples:
                                          resp_timeout_ms=2000,
                                          data=list(tx_wire))
             frames.append((len(tx_wire) * 8, tx_wire, False, annot_tx))
+
+            # Handle S(WTX) — relay sends WTX before BLE round-trip; acknowledge
+            # and wait for the real I-block response.
+            wtx_attempts = 0
+            while rx_wire and len(rx_wire) >= 3 and (rx_wire[0] & 0xF7) == 0xF2:
+                wtx_attempts += 1
+                if wtx_attempts > 8:
+                    break
+                wtxm = rx_wire[1] if len(rx_wire) > 2 else 1
+                # S(WTX) ACK: same PCB, same WTXM, no CID
+                wtx_ack = bytes([rx_wire[0], wtxm]) + _crc14a(bytes([rx_wire[0], wtxm]))
+                rx_wire = self.cmd.hf14a_raw(
+                    options={**options, 'wait_response': 1},
+                    resp_timeout_ms=3000,
+                    data=list(wtx_ack),
+                )
+
             if not rx_wire or len(rx_wire) < 3:
                 frames.append((0, b'', True, f"{CR}<no response>{C0}"))
                 raise RuntimeError(f"Empty response to I-block PCB=0x{pcb:02X} "
