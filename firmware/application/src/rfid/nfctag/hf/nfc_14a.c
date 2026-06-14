@@ -57,6 +57,11 @@ const uint16_t ats_fsdi_table[] = {
 
 // Whether it is responding to
 static volatile bool m_is_responded = false;
+/* Deferred response: set by a tag handler (e.g. the relay) when it will
+ * transmit a response later, after this RX ISR returns. Prevents the
+ * RX_FRAMEEND path from running nfc_fdt_reset() + re-arming RX, which would
+ * close the response window before the deferred TX arrives. */
+static volatile bool m_response_deferred = false;
 // Receiving buffer
 static uint8_t m_nfc_rx_buffer[MAX_NFC_RX_BUFFER_SIZE] = { 0x00 };
 
@@ -298,6 +303,13 @@ void nfc_tag_14a_tx_bytes(uint8_t *data, uint32_t bytes, bool appendCrc) {
 
 void nfc_tag_14a_set_frame_delay_max(uint32_t ticks) {
     nrf_nfct_frame_delay_max_set(ticks & 0xFFFFFUL);
+}
+
+void nfc_tag_14a_defer_response(void) {
+    /* Called from a tag handler's cb_state (NFCT ISR context) to signal that
+     * a response will be transmitted asynchronously after the ISR returns.
+     * Keeps the NFCT response window open instead of closing it. */
+    m_response_deferred = true;
 }
 
 /**
@@ -724,14 +736,25 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             //   Otherwise, the nrfx_nfct_evt_tx_frameend conditions above will not be triggered, and nrfx_nfct_rx_bytes will not be called
             // All the next communication will have problems. How can I play if there is a problem? Play an egg.
             m_is_responded = false;
+            m_response_deferred = false;
             // One more layer of pressure stack, but it seems to have little effect on performance
             // This function processes the data sent by the card reader, and then read that you don't need to reply to the card reader. If you need it, reply
             // Don't reply if you don't need it, it makes sense, right?This is science.
             nfc_tag_14a_data_process(m_nfc_rx_buffer);
             // The above prompt tells us that when we do not need to reply to the card reader, we need to manually enable it
             if (!m_is_responded) {
-                nfc_fdt_reset();
-                NRFX_NFCT_RX_BYTES
+                if (m_response_deferred) {
+                    /* A handler (the relay) has taken ownership of this frame and
+                     * will transmit a response asynchronously once a remote
+                     * round-trip completes. Hold the response window open by
+                     * widening FRAMEDELAYMAX to its maximum (~77ms) and do NOT
+                     * re-arm RX — the deferred nfc_tag_14a_tx_bytes() will drive
+                     * TX, and the TX_FRAMEEND path will re-arm RX afterward. */
+                    nrf_nfct_frame_delay_max_set(0xFFFFFUL);
+                } else {
+                    nfc_fdt_reset();
+                    NRFX_NFCT_RX_BYTES
+                }
             }
             break;
         }

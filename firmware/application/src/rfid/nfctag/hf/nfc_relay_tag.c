@@ -67,6 +67,10 @@ static void relay_cb_state(uint8_t *data, uint16_t szBits) {
 
     /* Forward all other frames (I-blocks, S(DESELECT), etc.) via callback. */
     if (s_frame_cb) {
+        /* Tell the NFCT layer a response is coming asynchronously (after the
+         * BLE round-trip) so it holds the response window open instead of
+         * closing it when this ISR returns without an immediate reply. */
+        nfc_tag_14a_defer_response();
         s_frame_cb(data, szBits);
         s_awaiting_response = true;
     }
