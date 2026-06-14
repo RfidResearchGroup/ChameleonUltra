@@ -352,11 +352,25 @@ static void on_rescan_req(void) {
 static void on_card_identity(const relay_card_identity_t *id) {
     /* Accept updates when already CARD_READY — card may have changed on
      * the READER side (periodic re-scan). Reinstall relay handler with
-     * the new identity so CU1 presents the correct card to the reader. */
+     * the new identity so CU1 presents the correct card to the reader.
+     *
+     * Also accept an update (even before CARD_READY) if it CHANGES the UID
+     * length or UID — the READER may broadcast an early identity built from
+     * a partial/aliased anticollision (e.g. a DeSFire random 4-byte UID seen
+     * before the full 7-byte cascade completes). Latching that wrong length
+     * would make us emulate a 4-byte tag for a 7-byte card, and the reader's
+     * CL2 cascade then fails right after SELECT. */
     bool already_ready = (m_st.identity_received && m_st.sub == RS_CARD_READY);
-    if (m_st.identity_received && !already_ready) return;
 
-    bool changed = already_ready &&
+    bool corrects_uid = m_st.identity_received && !already_ready &&
+                        (m_st.identity.uid_len != id->uid_len ||
+                         memcmp(m_st.identity.uid, id->uid,
+                                id->uid_len <= 7 ? id->uid_len : 7) != 0 ||
+                         m_st.identity.ats_len != id->ats_len);
+
+    if (m_st.identity_received && !already_ready && !corrects_uid) return;
+
+    bool changed = (already_ready || corrects_uid) &&
                    (memcmp(&m_st.identity, id, sizeof(*id)) != 0);
     memcpy(&m_st.identity, id, sizeof(*id));
     if (m_st.identity.uid_len != 4 && m_st.identity.uid_len != 7)
@@ -364,13 +378,16 @@ static void on_card_identity(const relay_card_identity_t *id) {
     m_st.identity_received = true;
     m_st.reader_sent_ready = true;
 
-    /* If card changed while already relaying, reinstall handler immediately */
-    if (changed) {
+    /* If card changed (or we corrected the UID length) while the handler is
+     * already installed, reinstall it immediately with the new identity. */
+    if (changed && (already_ready || m_st.sub == RS_CARD_READY)) {
         card_setup_emulation();
-        NRF_LOG_INFO("relay card: identity updated UID=%02X%02X%02X%02X",
+        NRF_LOG_INFO("relay card: identity updated len=%u UID=%02X%02X%02X%02X",
+                     m_st.identity.uid_len,
                      id->uid[0], id->uid[1], id->uid[2], id->uid[3]);
     } else {
-        NRF_LOG_INFO("relay: identity UID=%02X%02X%02X%02X",
+        NRF_LOG_INFO("relay: identity len=%u UID=%02X%02X%02X%02X",
+                     m_st.identity.uid_len,
                      id->uid[0], id->uid[1], id->uid[2], id->uid[3]);
     }
 }
@@ -900,8 +917,22 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
                         id.atqa[0] = new_card.atqa[0];
                         id.atqa[1] = new_card.atqa[1];
                         id.sak     = new_card.sak;
-                        id.uid_len = new_card.uid_len;
-                        memcpy(id.uid, new_card.uid, new_card.uid_len);
+                        /* Derive UID length from the cascade level, NOT from
+                         * new_card.uid_len (which can be the raw anticollision
+                         * byte count of an incomplete cascade). A 7-byte DeSFire
+                         * read as 4 bytes here would make the CARD CU emulate a
+                         * single-cascade tag and the reader's CL2 would fail. */
+                        uint8_t cascade = new_card.cascade ? new_card.cascade : 1;
+                        id.uid_len = (cascade == 1) ? 4 : 7;
+                        if (id.uid_len == 4) {
+#ifndef PROJECT_CHAMELEON_LITE
+                            get_4byte_tag_uid(&new_card, id.uid);
+#else
+                            memcpy(id.uid, new_card.uid, 4);
+#endif
+                        } else {
+                            memcpy(id.uid, new_card.uid, 7);
+                        }
                         id.ats_len = new_card.ats_len < sizeof(id.ats)
                                      ? new_card.ats_len : sizeof(id.ats);
                         memcpy(id.ats, new_card.ats, id.ats_len);
@@ -909,7 +940,8 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
                         memcpy(&m_st.identity, &id, sizeof(id));
                         m_st.identity_received = true;
                         m_st.needs_reselect    = false;
-                        NRF_LOG_INFO("relay reader: card changed, new identity sent");
+                        NRF_LOG_INFO("relay reader: card changed, len=%u new identity sent",
+                                     id.uid_len);
                     }
                     /* Unchanged card: keep m_st.identity as-is — preserves ATS so
                      * CARD CU continues responding to RATS correctly. */
