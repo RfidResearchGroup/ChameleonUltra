@@ -705,6 +705,12 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
         }
         case NRFX_NFCT_EVT_TX_FRAMEEND: {
             // NRF_LOG_INFO("TX end.\n");
+            /* Restore the default frame-delay window after every TX. The relay
+             * response path (nfc_relay_tag_inject_response) widens FRAMEDELAYMAX
+             * to 0xFFFFF to absorb BLE latency; reset it here — once the frame
+             * has actually gone out — so subsequent fast anticollision polling
+             * is answered with normal timing. Safe for non-relay TX too. */
+            nrf_nfct_frame_delay_max_set(0x00001000UL);
             // After the transmission is over, you need to be able to receive it
             NRFX_NFCT_RX_BYTES
             break;

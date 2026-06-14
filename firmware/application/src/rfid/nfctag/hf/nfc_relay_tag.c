@@ -142,23 +142,27 @@ void nfc_relay_tag_inject_response(const uint8_t *data, uint16_t bit_count) {
     if (!s_awaiting_response || !data) return;
     s_awaiting_response = false;
 
+    uint16_t bytes = (bit_count + 7) / 8;
+    /* Clamp to the NFCT TX buffer — a corrupted BLE frame must not assert-crash
+     * the firmware via the ASSERT inside nfc_tag_14a_tx_bytes(). */
+    if (bytes == 0) return;
+    if (bytes > MAX_NFC_TX_BUFFER_SIZE) bytes = MAX_NFC_TX_BUFFER_SIZE;
+
     /* Extend the NFCT frame-delay window to its maximum (0xFFFFF ticks ≈ 77ms
-     * at 13.56 MHz) so this single relayed response can be transmitted even
-     * though the BLE round-trip took far longer than the default ~4.8ms
-     * window. The window is restored to default immediately afterward by the
-     * TX-done path / next anticollision so rapid UID-only polling is not
-     * affected. */
+     * at 13.56 MHz) so this relayed response can be transmitted even though the
+     * BLE round-trip took far longer than the default ~4.8ms window.
+     *
+     * Do NOT reset the window synchronously here: nfc_tag_14a_tx_bytes() only
+     * arms TASKS_STARTTX and returns immediately — the hardware latches
+     * FRAMEDELAYMAX when transmission actually begins, which is after this
+     * function returns. Resetting on the next line is a race. The window is
+     * restored to the default in the TX_FRAMEEND ISR / nfc_fdt_reset() path
+     * once the frame has gone out. */
     nfc_tag_14a_set_frame_delay_max(0xFFFFFUL);
 
     /* Transmit raw bytes as-is. The real card's response already contains
      * CRC bytes as returned by RC522 — do NOT append CRC again. */
-    uint16_t bytes = (bit_count + 7) / 8;
     nfc_tag_14a_tx_bytes((uint8_t *)data, bytes, false);
-
-    /* Restore the default response window so the next command (e.g. a fresh
-     * WUPA/anticollision from a UID-only reader doing rapid polling) is
-     * answered with normal fast timing rather than the wide relay window. */
-    nfc_tag_14a_set_frame_delay_max(65535UL);
 
     NRF_LOG_DEBUG("relay_tag: injected %u bits", bit_count);
 }
