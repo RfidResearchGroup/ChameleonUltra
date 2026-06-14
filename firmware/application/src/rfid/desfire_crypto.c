@@ -393,10 +393,9 @@ size_t desfire_crc32_append(uint8_t *buf, size_t len)
 ret_code_t desfire_rng(uint8_t *buf, size_t len)
 {
     uint8_t avail = 0;
-    /* Spin until the hardware pool has enough bytes */
+    /* Spin until the hardware pool has enough bytes (returns void) */
     do {
-        ret_code_t err = nrf_drv_rng_bytes_available(&avail);
-        if (err != NRF_SUCCESS) return err;
+        nrf_drv_rng_bytes_available(&avail);
     } while (avail < (uint8_t)len);
     return nrf_drv_rng_rand(buf, (uint8_t)len);
 }

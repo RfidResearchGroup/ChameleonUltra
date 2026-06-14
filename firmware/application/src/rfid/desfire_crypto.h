@@ -17,6 +17,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 #include "sdk_errors.h"
 
 /* -----------------------------------------------------------------------
@@ -49,7 +50,7 @@ ret_code_t desfire_aes_cbc_decrypt(const uint8_t key[16],
                                     size_t         len);
 
 /** AES-128-CMAC over arbitrary-length message. mac_out = 16 bytes. */
-ret_code_t desfire_aes_cmac(const uint8_t  key[16],
+ret_code_t desfire_aes_cmac(const uint8_t *key,
                               const uint8_t *msg,
                               size_t         len,
                               uint8_t        mac_out[16]);
