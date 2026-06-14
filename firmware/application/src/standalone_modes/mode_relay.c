@@ -162,6 +162,7 @@ static struct {
     picc_14a_tag_t real_card;
     bool           real_card_found;
     bool           rescan_pending;  /* set by on_rescan_req, handled in on_tick */
+    bool           needs_reselect;   /* true after RATS — re-select before first I-block */
 
     /* Result tracking */
     size_t  result_write;
@@ -178,12 +179,23 @@ static struct {
 /* -------------------------------------------------------------------------
  * WTX helper (ISO14443-4 only)
  * ------------------------------------------------------------------------- */
-static void send_wtx(void) {
-    uint8_t wtx[4];
-    wtx[0] = RELAY_WTX_BLOCK_CMD;
-    wtx[1] = RELAY_WTX_MULTIPLIER;
-    nfc_tag_14a_append_crc(wtx, 2);
-    nfc_tag_14a_tx_bytes(wtx, 4, false);
+static void send_wtx(uint8_t cid) {
+    /* S(WTX) PCB = 0xF2, set CID bit (bit 3) and CID byte if reader uses CID */
+    uint8_t wtx[5];
+    uint8_t pcb = RELAY_WTX_BLOCK_CMD;
+    uint8_t len = 2;
+    if (cid != 0xFF) {
+        pcb |= 0x08;           /* CID present */
+        wtx[0] = pcb;
+        wtx[1] = cid & 0x0F;  /* CID byte */
+        wtx[2] = RELAY_WTX_MULTIPLIER;
+        len = 3;
+    } else {
+        wtx[0] = pcb;
+        wtx[1] = RELAY_WTX_MULTIPLIER;
+    }
+    nfc_tag_14a_append_crc(wtx, len);
+    nfc_tag_14a_tx_bytes(wtx, len + 2, false);
 }
 
 /* -------------------------------------------------------------------------
@@ -428,6 +440,7 @@ static void on_disconnected(void) {
     m_st.reader_frame_pending = false;
     m_st.real_card_found   = false;  /* allow fresh card scan on reconnect */
     m_st.rescan_pending    = false;
+    m_st.needs_reselect    = false;
     memset(&m_st.real_card, 0, sizeof(m_st.real_card));
     m_st.link_start_ticks  = app_timer_cnt_get();
     sleep_timer_stop();
@@ -484,6 +497,11 @@ static void reader_setup_card(void) {
             id.ats_len = (ats_bits + 7) / 8;
             if (id.ats_len > sizeof(id.ats)) id.ats_len = sizeof(id.ats);
             memcpy(id.ats, ats, id.ats_len);
+            /* HALT card after RATS — returns it to IDLE so first relay
+             * frame can do a clean re-select via WUPA+SELECT+RATS */
+            pcd_14a_reader_halt_tag();
+            bsp_delay_ms(5);
+            m_st.needs_reselect = true;
         }
     }
 
@@ -509,6 +527,23 @@ static void reader_setup_card(void) {
  * RELAY_READER: forward frame to real card, return response to CU1
  * ------------------------------------------------------------------------- */
 static void reader_relay_frame(const uint8_t *data, uint16_t bits) {
+    /* Re-select the real card if it was HALTed after initial RATS capture.
+     * WUPA → anticollision → SELECT → RATS restores the ISO14443-4 session. */
+    if (m_st.needs_reselect && m_st.real_card.sak & 0x20) {
+        m_st.needs_reselect = false;
+        picc_14a_tag_t dummy;
+        pcd_14a_reader_reset();
+        bsp_delay_ms(5);
+        if (pcd_14a_reader_scan_auto(&dummy) == STATUS_HF_TAG_OK) {
+            uint8_t ats[64]; uint16_t ats_bits = 0;
+            pcd_14a_reader_ats_request(ats, &ats_bits, sizeof(ats) * 8);
+            /* ATS captured; card now in ACTIVE* and ready for I-blocks */
+        } else {
+            ble_relay_send_no_response();
+            return;
+        }
+    }
+
     uint8_t  rx_buf[256];
     uint16_t rx_bits = 0;
     uint8_t  tx_buf[256];
@@ -522,6 +557,11 @@ static void reader_relay_frame(const uint8_t *data, uint16_t bits) {
         sizeof(rx_buf) * 8);
 
     if (status == STATUS_HF_TAG_OK && rx_bits > 0) {
+        /* Propagate S(DESELECT) response — card returns to HALT state,
+         * set needs_reselect so the next frame triggers a fresh re-select. */
+        if (tx_bytes >= 1 && (tx_buf[0] & 0xF7) == 0xC2) {
+            m_st.needs_reselect = true;
+        }
         ble_relay_send_response(rx_buf, rx_bits);
     } else {
         ble_relay_send_no_response();
