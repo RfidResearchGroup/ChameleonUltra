@@ -57,12 +57,15 @@ static nfc_tag_14a_coll_res_reference_t *relay_get_coll_res(void) {
  * State handler — called by nfc_14a.c ISR for every post-SELECT frame
  * ------------------------------------------------------------------------- */
 static void relay_cb_state(uint8_t *data, uint16_t szBits) {
-    if (!s_active) return;  /* relay disarmed — ignore all frames */
-    /* Ignore very short frames (Gen1A magic commands etc.) */
+    if (!s_active) return;
     if (szBits <= 8) return;
 
-    /* Forward every frame to mode_relay.c via the registered callback.
-     * This is ISR context — callback MUST only copy + set a flag. */
+    /* Consume S(WTX) ACK locally — do NOT relay to real card.
+     * WTX is a local handshake between CARD CU and the real reader;
+     * forwarding WTX ACK to the real card confuses its session state. */
+    if ((data[0] & 0xF7) == 0xF2) return;
+
+    /* Forward all other frames (I-blocks, S(DESELECT), etc.) via callback. */
     if (s_frame_cb) {
         s_frame_cb(data, szBits);
         s_awaiting_response = true;
@@ -164,3 +167,4 @@ void nfc_relay_tag_clear(void) {
 
     NRF_LOG_INFO("relay_tag: cleared");
 }
+
