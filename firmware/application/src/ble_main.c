@@ -632,7 +632,7 @@ void ble_main_relay_adv_set(const uint8_t *raw_adv, uint8_t len) {
          * auth frames (>31 bytes) aren't truncated. Data goes out on the
          * secondary channels via the secondary PHY. */
         params.properties.type = BLE_GAP_ADV_TYPE_EXTENDED_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
-        params.interval        = 40;  /* 25ms — balanced relay */
+        params.interval        = 32;  /* 20ms — extended-adv minimum; keeps round-trip under 77ms NFCT ceiling */
         params.duration        = BLE_GAP_ADV_TIMEOUT_GENERAL_UNLIMITED;
         params.primary_phy     = BLE_GAP_PHY_1MBPS;
         params.secondary_phy   = BLE_GAP_PHY_1MBPS;
@@ -662,7 +662,7 @@ void ble_main_relay_adv_set(const uint8_t *raw_adv, uint8_t len) {
         ble_gap_adv_params_t params;
         memset(&params, 0, sizeof(params));
         params.properties.type = BLE_GAP_ADV_TYPE_EXTENDED_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
-        params.interval        = 40;  /* 25ms — balanced relay */
+        params.interval        = 32;  /* 20ms — extended-adv minimum; keeps round-trip under 77ms NFCT ceiling */
         params.duration        = BLE_GAP_ADV_TIMEOUT_GENERAL_UNLIMITED;
         params.primary_phy     = BLE_GAP_PHY_1MBPS;
         params.secondary_phy   = BLE_GAP_PHY_1MBPS;
