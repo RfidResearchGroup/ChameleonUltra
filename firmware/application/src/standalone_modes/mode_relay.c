@@ -489,16 +489,15 @@ static void reader_setup_card(void) {
         memcpy(id.uid, m_st.real_card.uid, 7);
     }
 
-    /* ATS for ISO14443-4 cards */
+    /* ATS for ISO14443-4 cards — scan_auto already sent RATS and stored
+     * the result in m_st.real_card.ats / m_st.real_card.ats_len.
+     * Use that directly; do NOT call pcd_14a_reader_ats_request again
+     * (card is in T=CL ACTIVE after scan_auto and will NAK a second RATS). */
     if (m_st.real_card.sak & 0x20) {
-        uint8_t ats[64]; uint16_t ats_bits = 0;
-        if (pcd_14a_reader_ats_request(ats, &ats_bits,
-                                       sizeof(ats)*8) == STATUS_HF_TAG_OK) {
-            id.ats_len = (ats_bits + 7) / 8;
-            if (id.ats_len > sizeof(id.ats)) id.ats_len = sizeof(id.ats);
-            memcpy(id.ats, ats, id.ats_len);
-            /* HALT card after RATS — returns it to IDLE so first relay
-             * frame can do a clean re-select via WUPA+SELECT+RATS */
+        id.ats_len = m_st.real_card.ats_len < sizeof(id.ats)
+                     ? m_st.real_card.ats_len : sizeof(id.ats);
+        memcpy(id.ats, m_st.real_card.ats, id.ats_len);
+        if (id.ats_len > 0) {
             pcd_14a_reader_halt_tag();
             bsp_delay_ms(5);
             m_st.needs_reselect = true;
@@ -531,13 +530,23 @@ static void reader_relay_frame(const uint8_t *data, uint16_t bits) {
      * WUPA → anticollision → SELECT → RATS restores the ISO14443-4 session. */
     if (m_st.needs_reselect && m_st.real_card.sak & 0x20) {
         m_st.needs_reselect = false;
-        picc_14a_tag_t dummy;
+        picc_14a_tag_t fresh;
         pcd_14a_reader_reset();
         bsp_delay_ms(5);
-        if (pcd_14a_reader_scan_auto(&dummy) == STATUS_HF_TAG_OK) {
-            uint8_t ats[64]; uint16_t ats_bits = 0;
-            pcd_14a_reader_ats_request(ats, &ats_bits, sizeof(ats) * 8);
-            /* ATS captured; card now in ACTIVE* and ready for I-blocks */
+        if (pcd_14a_reader_scan_auto(&fresh) == STATUS_HF_TAG_OK) {
+            /* scan_auto already sent RATS internally — card is now in T=CL ACTIVE.
+             * Do NOT call pcd_14a_reader_ats_request here: card is already past RATS
+             * and a second RATS will NAK, causing the card to deselect.
+             * Update cached ATS from scan_auto's result if it changed. */
+            uint8_t al = fresh.ats_len < sizeof(m_st.identity.ats)
+                         ? fresh.ats_len : sizeof(m_st.identity.ats);
+            if (al > 0 && (al != m_st.identity.ats_len ||
+                memcmp(fresh.ats, m_st.identity.ats, al) != 0)) {
+                m_st.identity.ats_len = al;
+                memcpy(m_st.identity.ats, fresh.ats, al);
+                ble_relay_send_card_identity(&m_st.identity);
+            }
+            /* Card is in T=CL ACTIVE — fall through to forward the I-block */
         } else {
             ble_relay_send_no_response();
             return;
@@ -730,7 +739,10 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
             if (m_st.identity.ats_len > 0 && m_st.frame_bits >= 8) {
                 uint8_t pcb = m_st.frame_buf[0];
                 bool is_i_block = (pcb & 0xC0) == 0x00;  /* PCB: bits7-6 = 00 */
-                if (is_i_block) send_wtx();
+                if (is_i_block) {
+                    uint8_t cid = (pcb & 0x08) ? (m_st.frame_buf[1] & 0x0F) : 0xFF;
+                    send_wtx(cid);
+                }
             }
 
             /* Forward frame to RELAY_READER via BLE */
@@ -847,11 +859,14 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
                 picc_14a_tag_t new_card;
                 memset(&new_card, 0, sizeof(new_card));
                 if (pcd_14a_reader_scan_auto(&new_card) == STATUS_HF_TAG_OK) {
-                    /* For ISO 14443-4 cards (SAK & 0x20 = DeSFire etc.) the
-                     * anticollision UID is randomised each field-on — compare
-                     * ATQA+SAK only. For other cards compare the full UID. */
+                    /* scan_auto already does RATS internally for SAK & 0x20 cards
+                     * and stores the result in new_card.ats / new_card.ats_len.
+                     * Do NOT call pcd_14a_reader_ats_request again — card is already
+                     * in T=CL ACTIVE state and a second RATS request will NAK. */
+
                     bool changed;
                     if (new_card.sak & 0x20) {
+                        /* DeSFire/ISO14443-4: compare ATQA+SAK only — UID is random */
                         changed = (new_card.atqa[0] != m_st.real_card.atqa[0] ||
                                    new_card.atqa[1] != m_st.real_card.atqa[1] ||
                                    new_card.sak     != m_st.real_card.sak);
@@ -859,6 +874,7 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
                         changed = (memcmp(new_card.uid, m_st.real_card.uid,
                                           sizeof(new_card.uid)) != 0);
                     }
+
                     if (changed) {
                         m_st.real_card       = new_card;
                         m_st.real_card_found = true;
@@ -869,13 +885,20 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
                         id.sak     = new_card.sak;
                         id.uid_len = new_card.uid_len;
                         memcpy(id.uid, new_card.uid, new_card.uid_len);
-                        id.ats_len = 0;
+                        id.ats_len = new_card.ats_len < sizeof(id.ats)
+                                     ? new_card.ats_len : sizeof(id.ats);
+                        memcpy(id.ats, new_card.ats, id.ats_len);
                         ble_relay_send_card_identity(&id);
                         memcpy(&m_st.identity, &id, sizeof(id));
                         m_st.identity_received = true;
+                        m_st.needs_reselect    = true;
                         NRF_LOG_INFO("relay reader: card changed, new identity sent");
                     }
-                    pcd_14a_reader_antenna_on();
+                    /* Unchanged card: keep m_st.identity as-is — preserves ATS so
+                     * CARD CU continues responding to RATS correctly. */
+                    if (new_card.sak & 0x20) {
+                        m_st.needs_reselect = true; /* scan_auto did RATS; re-select before next relay frame */
+                    }
                 }
             }
         }

@@ -2381,6 +2381,21 @@ static data_frame_tx_t *cmd_processor_hf14a_scan_keep(uint16_t cmd, uint16_t sta
     if (status != STATUS_HF_TAG_OK) {
         return data_frame_make(cmd, status, 0, NULL);
     }
+
+    /* scan_auto may find the card but skip RATS if timing is tight (common
+     * with DESFire random-UID cards). If SAK indicates ISO14443-4 and ATS
+     * wasn't captured, request it explicitly now while field is still on. */
+    if ((taginfo.sak & 0x20) && taginfo.ats_len == 0) {
+        uint8_t  ats_buf[64];
+        uint16_t ats_bits = 0;
+        if (pcd_14a_reader_ats_request(ats_buf, &ats_bits,
+                                        sizeof(ats_buf) * 8) == STATUS_HF_TAG_OK) {
+            taginfo.ats_len = (uint8_t)((ats_bits + 7) / 8);
+            if (taginfo.ats_len > sizeof(taginfo.ats))
+                taginfo.ats_len = sizeof(taginfo.ats);
+            memcpy(taginfo.ats, ats_buf, taginfo.ats_len);
+        }
+    }
     uint8_t payload[1 + sizeof(taginfo.uid) + sizeof(taginfo.atqa) + sizeof(taginfo.sak) + 1 + 254];
     uint16_t offset = 0;
     payload[offset++] = taginfo.uid_len;
