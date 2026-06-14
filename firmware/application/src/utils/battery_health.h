@@ -11,7 +11,7 @@ typedef enum {
     BATTERY_HEALTH_EXCELLENT = 4,
 } battery_health_t;
 
-// Compact battery condition hint derived from voltage and percentage.
+// Compact battery condition hint derived from estimated remaining capacity.
 battery_health_t battery_health_from_measurement(uint16_t voltage, uint8_t percent);
 uint8_t battery_health_to_code(battery_health_t health);
 
