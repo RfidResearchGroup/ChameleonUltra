@@ -62,12 +62,16 @@ NRF_LOG_MODULE_REGISTER();
 #define RELAY_SCAN_INTERVAL   200   /* 125ms in 0.625ms units */
 #define RELAY_SCAN_WINDOW      40   /* 25ms  */
 
-/* Active relay phase — improved latency without starving SoftDevice.
- * 75% scan duty cycle: 48/64 units = 30ms/40ms.
- * Leaves ~10ms per cycle for advertising and SD processing.
- * Worst-case round-trip: ~80ms vs ~350ms original. */
-#define RELAY_FAST_SCAN_INTERVAL  64   /* 40ms */
-#define RELAY_FAST_SCAN_WINDOW    48   /* 30ms — 75% duty cycle */
+/* Active relay phase — aggressive timing to keep the round-trip under the
+ * NFCT FRAMEDELAYMAX hardware ceiling (~77ms). The emulating CARD's NFCT
+ * abandons the response slot 77ms after receiving a command, so the full
+ * CARD→READER→card→READER→CARD round-trip MUST complete within that window.
+ *
+ * Scan interval 24 units (15ms), window 22 (~13.75ms, ~92% duty). Two BLE
+ * hops then bound the worst case near 2×15 = 30ms plus adv latency — safely
+ * under 77ms. Higher duty cycle costs power but the relay session is short. */
+#define RELAY_FAST_SCAN_INTERVAL  24   /* 15ms */
+#define RELAY_FAST_SCAN_WINDOW    22   /* 13.75ms — ~92% duty cycle */
 
 /* -----------------------------------------------------------------------
  * Event queue (ISR → main loop)
