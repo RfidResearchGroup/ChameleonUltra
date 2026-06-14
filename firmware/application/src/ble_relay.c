@@ -62,16 +62,17 @@ NRF_LOG_MODULE_REGISTER();
 #define RELAY_SCAN_INTERVAL   200   /* 125ms in 0.625ms units */
 #define RELAY_SCAN_WINDOW      40   /* 25ms  */
 
-/* Active relay phase — aggressive timing to keep the round-trip under the
- * NFCT FRAMEDELAYMAX hardware ceiling (~77ms). The emulating CARD's NFCT
- * abandons the response slot 77ms after receiving a command, so the full
- * CARD→READER→card→READER→CARD round-trip MUST complete within that window.
+/* Active relay phase — balance two competing needs:
+ *   1. Round-trip must stay under the NFCT FRAMEDELAYMAX ceiling (~77ms).
+ *   2. Each CU must SCAN (to receive) AND ADVERTISE (to send). A scan duty
+ *      cycle too close to 100% starves advertising — the CU can't transmit
+ *      its own frames, so the peer never receives them.
  *
- * Scan interval 24 units (15ms), window 22 (~13.75ms, ~92% duty). Two BLE
- * hops then bound the worst case near 2×15 = 30ms plus adv latency — safely
- * under 77ms. Higher duty cycle costs power but the relay session is short. */
+ * Scan interval 24 units (15ms), window 16 (10ms, ~67% duty) leaves ~5ms per
+ * cycle for advertising. Two hops ~ 2×15 + processing stays well under 77ms,
+ * while the 33% idle leaves room for the adv events to actually go out. */
 #define RELAY_FAST_SCAN_INTERVAL  24   /* 15ms */
-#define RELAY_FAST_SCAN_WINDOW    22   /* 13.75ms — ~92% duty cycle */
+#define RELAY_FAST_SCAN_WINDOW    16   /* 10ms — ~67% duty, leaves airtime for adv */
 
 /* -----------------------------------------------------------------------
  * Event queue (ISR → main loop)
