@@ -740,16 +740,21 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
             /* Log reader→tag frame in trace */
             trace_append(false, m_st.frame_buf, m_st.frame_bits);
 
-            /* Send WTX only for ISO14443-4 I-blocks (bit0=0, bit1=0 of PCB byte).
-             * Classic auth/read/write commands must NOT get a WTX response. */
-            if (m_st.identity.ats_len > 0 && m_st.frame_bits >= 8) {
-                uint8_t pcb = m_st.frame_buf[0];
-                bool is_i_block = (pcb & 0xC0) == 0x00;  /* PCB: bits7-6 = 00 */
-                if (is_i_block) {
-                    uint8_t cid = (pcb & 0x08) ? (m_st.frame_buf[1] & 0x0F) : 0xFF;
-                    send_wtx(cid);
-                }
-            }
+            /* NOTE: We deliberately do NOT send S(WTX) here.
+             *
+             * Transmitting WTX via nfc_tag_14a_tx_bytes() closes the NFCT
+             * response slot for the current command — once WTX goes out the
+             * hardware returns to RX and the real relayed response can no
+             * longer be transmitted against the original command frame.
+             *
+             * Instead, nfc_relay_tag_inject_response() widens FRAMEDELAYMAX to
+             * its maximum (~77ms) so the relayed response can be transmitted
+             * late, after the BLE round-trip completes, against the original
+             * command. This covers the relay latency without WTX choreography.
+             *
+             * A real reader with a tight FWT that genuinely requires WTX would
+             * need the WTX-ACK handshake handled in the NFCT ISR (respond to
+             * the reader's S(WTX) ACK frame), which is a future enhancement. */
 
             /* Forward frame to RELAY_READER via BLE */
             ble_relay_send_frame(m_st.frame_buf, m_st.frame_bits);
