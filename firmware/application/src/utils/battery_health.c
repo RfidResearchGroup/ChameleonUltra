@@ -1,16 +1,21 @@
 #include "battery_health.h"
 
 battery_health_t battery_health_from_measurement(uint16_t voltage, uint8_t percent) {
-    if ((voltage >= 4100U) && (percent >= 80U)) {
+    (void)voltage;
+
+    // Keep the condition hint aligned with the user-facing battery bar:
+    // we classify primarily by estimated remaining capacity instead of raw
+    // voltage so the hint stays stable across cells and hardware variants.
+    if (percent >= 88U) {
         return BATTERY_HEALTH_EXCELLENT;
     }
-    if ((voltage >= 3950U) && (percent >= 60U)) {
+    if (percent >= 63U) {
         return BATTERY_HEALTH_GOOD;
     }
-    if ((voltage >= 3750U) && (percent >= 30U)) {
+    if (percent >= 38U) {
         return BATTERY_HEALTH_FAIR;
     }
-    if ((voltage >= 3600U) && (percent >= 15U)) {
+    if (percent >= 13U) {
         return BATTERY_HEALTH_LOW;
     }
     return BATTERY_HEALTH_CRITICAL;
