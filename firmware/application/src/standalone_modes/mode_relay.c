@@ -39,6 +39,7 @@ bool g_is_standalone_armed = false;
 
 #include <string.h>
 #include <stdint.h>
+#include "nrf.h"   /* CMSIS core intrinsics: __DMB() memory barrier */
 
 #include "nrf_log.h"
 #include "app_timer.h"
@@ -207,6 +208,7 @@ static void on_frame_isr(const uint8_t *data, uint16_t bits) {
     if (bytes > sizeof(m_st.frame_buf)) bytes = sizeof(m_st.frame_buf);
     memcpy(m_st.frame_buf, data, bytes);
     m_st.frame_bits    = bits;
+    __DMB();  /* publish buffer writes before the flag the consumer polls */
     m_st.frame_pending = true;
 }
 
@@ -411,6 +413,7 @@ static void on_response(const uint8_t *data, uint16_t bits) {
     memcpy(m_st.response_buf, data, bytes);
     m_st.response_bits  = bits;
     m_st.no_response    = false;
+    __DMB();
     m_st.response_ready = true;
 }
 
@@ -429,6 +432,7 @@ static void on_frame(const uint8_t *data, uint16_t bits) {
         bytes = sizeof(m_st.reader_frame_buf);
     memcpy(m_st.reader_frame_buf, data, bytes);
     m_st.reader_frame_bits    = bits;
+    __DMB();
     m_st.reader_frame_pending = true;
 }
 
@@ -729,6 +733,8 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
         }
         /* Frame ISR set frame_pending when reader sends a command */
         if (m_st.frame_pending) {
+            __DMB();  /* ensure frame_buf/frame_bits writes (ISR) are visible
+                       * before we read them — pairs with the ISR's flag set */
             m_st.frame_pending = false;
 
             /* Log reader→tag frame in trace */
@@ -774,6 +780,7 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
 
     case RS_CARD_AWAIT_RESPONSE:
         if (m_st.response_ready) {
+            __DMB();  /* response_buf/bits written in BLE callback — order after flag */
             m_st.response_ready = false;
             m_st.sub            = RS_CARD_READY;
 
@@ -904,6 +911,7 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
         }
         /* Forward frames from CU1 to real card */
         if (m_st.reader_frame_pending) {
+            __DMB();  /* reader_frame_buf/bits written in BLE callback — order after flag */
             m_st.reader_frame_pending = false;
             m_st.sub = RS_READER_RELAY;
             reader_relay_frame(m_st.reader_frame_buf, m_st.reader_frame_bits);
