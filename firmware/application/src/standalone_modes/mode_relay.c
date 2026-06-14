@@ -544,9 +544,32 @@ static void reader_relay_frame(const uint8_t *data, uint16_t bits) {
     if (tx_bytes > sizeof(tx_buf)) tx_bytes = sizeof(tx_buf);
     memcpy(tx_buf, data, tx_bytes);
 
-    /* Antenna stays on — card is kept powered for the duration of the session */
-    uint8_t status = pcd_14a_reader_bytes_transfer(
-        PCD_TRANSCEIVE, tx_buf, tx_bytes, rx_buf, &rx_bits,
+    /* Forward the frame to the real card transparently. The reader's frame
+     * already includes its 2-byte ISO14443 CRC, and the card's response will
+     * also carry its CRC — so we must NOT append a CRC on TX and NOT strip/
+     * check CRC on RX. pcd_14a_reader_raw_cmd gives explicit control of this,
+     * unlike pcd_14a_reader_bytes_transfer which inherits whatever CRC mode
+     * the previous scan/select left configured.
+     *
+     *   openRFField=false  : field already on, card powered
+     *   waitResp=true      : we need the card's response
+     *   appendCrc=false    : frame already has CRC
+     *   autoSelect=false   : card already selected / in T=CL ACTIVE
+     *   keepField=true     : keep powered for the rest of the session
+     *   checkCrc=false     : pass response through with its CRC intact
+     */
+    uint8_t status = pcd_14a_reader_raw_cmd(
+        false,  /* openRFField */
+        true,   /* waitResp */
+        false,  /* appendCrc */
+        false,  /* autoSelect */
+        true,   /* keepField */
+        false,  /* checkCrc */
+        300,    /* waitRespTimeout ms */
+        tx_bytes * 8,
+        tx_buf,
+        rx_buf,
+        &rx_bits,
         sizeof(rx_buf) * 8);
 
     if (status == STATUS_HF_TAG_OK && rx_bits > 0) {
@@ -557,6 +580,8 @@ static void reader_relay_frame(const uint8_t *data, uint16_t bits) {
         }
         ble_relay_send_response(rx_buf, rx_bits);
     } else {
+        NRF_LOG_WARNING("relay reader: transfer failed status=%u rx_bits=%u",
+                        status, rx_bits);
         ble_relay_send_no_response();
     }
 }
