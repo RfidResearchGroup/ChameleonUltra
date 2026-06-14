@@ -263,8 +263,8 @@ static void result_save_session(uint8_t status) {
         memcpy(&h[RH_ATQA], m_st.real_card.atqa, 2);
         h[RH_SAK] = m_st.real_card.sak;
     } else if (m_st.identity.uid_len > 0) {
-        h[RH_UID_LEN] = m_st.identity.uid_len > 4 ? 4 : m_st.identity.uid_len;
-        memcpy(&h[RH_UID],  m_st.identity.uid,  4);
+        h[RH_UID_LEN] = m_st.identity.uid_len;   /* true length (4 or 7) for diagnostics */
+        memcpy(&h[RH_UID],  m_st.identity.uid,  4);  /* header only stores first 4 bytes */
         memcpy(&h[RH_ATQA], m_st.identity.atqa, 2);
         h[RH_SAK] = m_st.identity.sak;
     }
