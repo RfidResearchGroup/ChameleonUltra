@@ -507,23 +507,13 @@ static void ble_stack_init(void) {
     err_code = nrf_sdh_ble_default_cfg_set(APP_BLE_CONN_CFG_TAG, &ram_start);
     APP_ERROR_CHECK(err_code);
 
-    /* Enable extended advertising and size the advertising-set data buffer for
-     * up to 255-byte AdvData. Without this the SoftDevice rejects adv data
-     * longer than the 31-byte legacy limit, which the relay needs for DESFire
-     * frames. One adv set, high-duty-cycle max adv data length. */
-    {
-        ble_cfg_t ble_cfg;
-        memset(&ble_cfg, 0, sizeof(ble_cfg));
-        ble_cfg.gap_cfg.role_count_cfg.adv_set_count        = 1;
-        ble_cfg.gap_cfg.role_count_cfg.periph_role_count    = 1;
-        ble_cfg.gap_cfg.role_count_cfg.central_role_count   = 1;
-        ble_cfg.gap_cfg.role_count_cfg.central_sec_count    = 0;
-        ble_cfg.gap_cfg.role_count_cfg.qos_channel_survey_role_available = false;
-        err_code = sd_ble_cfg_set(BLE_GAP_CFG_ROLE_COUNT, &ble_cfg, ram_start);
-        if (err_code != NRF_SUCCESS) {
-            NRF_LOG_WARNING("relay: role_count cfg rc=%u", err_code);
-        }
-    }
+    /* NOTE: extended advertising for the relay does NOT require sd_ble_cfg_set
+     * role-count changes here. The default config already provides one
+     * advertising set, and the extended AdvData buffer is supplied by the
+     * application (s_relay_raw[255]) at sd_ble_gap_adv_set_configure() time —
+     * that lives in app RAM, not SoftDevice RAM. Adding a BLE_GAP_CFG_ROLE_COUNT
+     * override raised the SoftDevice RAM requirement above the linker-reserved
+     * region and prevented boot, so it is intentionally omitted. */
 
     // Enable BLE stack.
     err_code = nrf_sdh_ble_enable(&ram_start);
