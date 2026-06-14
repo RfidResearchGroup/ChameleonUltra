@@ -507,6 +507,24 @@ static void ble_stack_init(void) {
     err_code = nrf_sdh_ble_default_cfg_set(APP_BLE_CONN_CFG_TAG, &ram_start);
     APP_ERROR_CHECK(err_code);
 
+    /* Enable extended advertising and size the advertising-set data buffer for
+     * up to 255-byte AdvData. Without this the SoftDevice rejects adv data
+     * longer than the 31-byte legacy limit, which the relay needs for DESFire
+     * frames. One adv set, high-duty-cycle max adv data length. */
+    {
+        ble_cfg_t ble_cfg;
+        memset(&ble_cfg, 0, sizeof(ble_cfg));
+        ble_cfg.gap_cfg.role_count_cfg.adv_set_count        = 1;
+        ble_cfg.gap_cfg.role_count_cfg.periph_role_count    = 1;
+        ble_cfg.gap_cfg.role_count_cfg.central_role_count   = 1;
+        ble_cfg.gap_cfg.role_count_cfg.central_sec_count    = 0;
+        ble_cfg.gap_cfg.role_count_cfg.qos_channel_survey_role_available = false;
+        err_code = sd_ble_cfg_set(BLE_GAP_CFG_ROLE_COUNT, &ble_cfg, ram_start);
+        if (err_code != NRF_SUCCESS) {
+            NRF_LOG_WARNING("relay: role_count cfg rc=%u", err_code);
+        }
+    }
+
     // Enable BLE stack.
     err_code = nrf_sdh_ble_enable(&ram_start);
     APP_ERROR_CHECK(err_code);
@@ -601,7 +619,7 @@ static void whitelist_set(pm_peer_id_list_skip_t skip) {
  * stream is never interrupted and the ble_advertising module cannot
  * accidentally overwrite the relay payload.
  */
-static uint8_t  s_relay_raw[31];
+static uint8_t  s_relay_raw[255];   /* extended advertising data (was 31 legacy) */
 static uint16_t s_relay_raw_len = 0;
 
 void ble_main_relay_adv_set(const uint8_t *raw_adv, uint8_t len) {
@@ -620,10 +638,14 @@ void ble_main_relay_adv_set(const uint8_t *raw_adv, uint8_t len) {
 
         ble_gap_adv_params_t params;
         memset(&params, 0, sizeof(params));
-        params.properties.type = BLE_GAP_ADV_TYPE_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
-        params.interval        = 40;  /* 25ms — balanced relay */    /* 50 ms — more frequent for faster discovery */
+        /* Extended advertising — carries up to 255-byte AdvData so DESFire
+         * auth frames (>31 bytes) aren't truncated. Data goes out on the
+         * secondary channels via the secondary PHY. */
+        params.properties.type = BLE_GAP_ADV_TYPE_EXTENDED_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
+        params.interval        = 40;  /* 25ms — balanced relay */
         params.duration        = BLE_GAP_ADV_TIMEOUT_GENERAL_UNLIMITED;
         params.primary_phy     = BLE_GAP_PHY_1MBPS;
+        params.secondary_phy   = BLE_GAP_PHY_1MBPS;
 
         ret_code_t rc = sd_ble_gap_adv_set_configure(
             &m_advertising.adv_handle, &adv_data, &params);
@@ -649,10 +671,11 @@ void ble_main_relay_adv_set(const uint8_t *raw_adv, uint8_t len) {
 
         ble_gap_adv_params_t params;
         memset(&params, 0, sizeof(params));
-        params.properties.type = BLE_GAP_ADV_TYPE_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
+        params.properties.type = BLE_GAP_ADV_TYPE_EXTENDED_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
         params.interval        = 40;  /* 25ms — balanced relay */
         params.duration        = BLE_GAP_ADV_TIMEOUT_GENERAL_UNLIMITED;
         params.primary_phy     = BLE_GAP_PHY_1MBPS;
+        params.secondary_phy   = BLE_GAP_PHY_1MBPS;
 
         ret_code_t rc = sd_ble_gap_adv_set_configure(
             &m_advertising.adv_handle, &adv_data, &params);

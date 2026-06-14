@@ -48,8 +48,14 @@ NRF_LOG_MODULE_REGISTER();
 #define RELAY_MFR_MAGIC_H   0x52   /* 'R' */
 #define RELAY_MFR_MAGIC_L   0x4C   /* 'L' */
 #define RELAY_MFR_COMPANY   0x4359 /* 'CY' */
-#define RELAY_MAX_PAYLOAD   24
+/* Extended advertising payload limit. Legacy adv capped this at ~22 bytes
+ * (31-byte ADV_IND minus framing), which truncated DESFire AES auth frames
+ * (e.g. the 41-byte E(RndA||RndB') I-block). Extended advertising (BLE 5)
+ * raises the AdvData limit to 255 bytes, so a single packet now carries any
+ * DESFire auth frame and most file/EMV reads without fragmentation. */
+#define RELAY_MAX_PAYLOAD   245
 #define RELAY_HEADER_SIZE   4      /* magic(2) + type(1) + seq(1) */
+#define RELAY_ADV_BUF_SIZE  255    /* extended advertising data buffer */
 
 /* Scan parameters: 100ms interval, 50ms window */
 /* Discovery phase — relaxed timing, conserves power */
@@ -130,10 +136,10 @@ NRF_SDH_BLE_OBSERVER(m_relay_observer, 2, relay_evt_handler, NULL);
  * Takes over the existing ble_advertising handle (from ble_main.c) with
  * non-connectable relay data.  No second advertising set needed.
  * ----------------------------------------------------------------------- */
-static uint8_t s_relay_adv_raw[31];
+static uint8_t s_relay_adv_raw[RELAY_ADV_BUF_SIZE];
 
 static void adv_send(uint8_t type, const uint8_t *data, uint8_t dlen) {
-    /* Hard cap: 31-byte ADV_IND minus flags(3)+len(1)+type(1)+company(2)+header(4) = 20 */
+    /* Extended advertising allows up to 255 bytes of AdvData (vs 31 legacy). */
     if (dlen > RELAY_MAX_PAYLOAD) dlen = RELAY_MAX_PAYLOAD;
 
     /* Build raw AD bytes:
@@ -164,15 +170,18 @@ static void adv_send(uint8_t type, const uint8_t *data, uint8_t dlen) {
  * Scanning
  * ----------------------------------------------------------------------- */
 
-/* File-scope scan state — must outlive each call to sd_ble_gap_scan_start */
+/* File-scope scan state — must outlive each call to sd_ble_gap_scan_start.
+ * Extended advertising reports can be up to 255 bytes, so the scan buffer
+ * must be sized for extended (not BLE_GAP_SCAN_BUFFER_MIN which is for legacy). */
 static ble_gap_scan_params_t s_scan_params;
-static uint8_t               s_scan_buf[BLE_GAP_SCAN_BUFFER_MIN];
+static uint8_t               s_scan_buf[BLE_GAP_SCAN_BUFFER_EXTENDED_MIN];
 static ble_data_t            s_scan_data;
 
 static bool s_fast_scan = false;
 
 static void start_scanning(void) {
     memset(&s_scan_params, 0, sizeof(s_scan_params));
+    s_scan_params.extended  = 1;   /* receive extended advertising reports */
     s_scan_params.active    = 0;
     s_scan_params.interval  = s_fast_scan ? RELAY_FAST_SCAN_INTERVAL : RELAY_SCAN_INTERVAL;
     s_scan_params.window    = s_fast_scan ? RELAY_FAST_SCAN_WINDOW   : RELAY_SCAN_WINDOW;
