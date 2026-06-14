@@ -130,6 +130,10 @@ void nfc_tag_14a_sense_switch(bool enable);
 void nfc_tag_14a_set_handler(nfc_tag_14a_handler_t *handler);
 void nfc_tag_14a_set_state(nfc_tag_14a_state_t state);
 void nfc_tag_14a_tx_bytes(uint8_t *data, uint32_t bytes, bool appendCrc);
+/* Relay support: extend the NFCT response window (FRAMEDELAYMAX) so a tag
+ * response delayed by a BLE round-trip can still be transmitted. Pass ticks
+ * in 13.56 MHz units (max 0xFFFFF ≈ 77 ms). */
+void nfc_tag_14a_set_frame_delay_max(uint32_t ticks);
 void nfc_tag_14a_tx_bits(uint8_t *data, uint32_t bits);
 void nfc_tag_14a_tx_nbit(uint8_t data, uint32_t bits);
 

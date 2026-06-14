@@ -142,6 +142,13 @@ void nfc_relay_tag_inject_response(const uint8_t *data, uint16_t bit_count) {
     if (!s_awaiting_response || !data) return;
     s_awaiting_response = false;
 
+    /* Extend the NFCT frame-delay window to its maximum (0xFFFFF ticks ≈ 77ms
+     * at 13.56 MHz) so the response can be transmitted even though the BLE
+     * round-trip took far longer than the default ~4.8ms window. Without this
+     * the NFCT hardware abandons the response slot before we inject and the
+     * reader sees no answer. */
+    nfc_tag_14a_set_frame_delay_max(0xFFFFFUL);
+
     /* Transmit raw bytes as-is. The real card's response already contains
      * CRC bytes as returned by RC522 — do NOT append CRC again. */
     uint16_t bytes = (bit_count + 7) / 8;

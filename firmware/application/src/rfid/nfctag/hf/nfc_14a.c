@@ -296,6 +296,10 @@ void nfc_tag_14a_tx_bytes(uint8_t *data, uint32_t bytes, bool appendCrc) {
     NFC_14A_TX_BYTE_CORE(data, bytes, appendCrc, NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
 }
 
+void nfc_tag_14a_set_frame_delay_max(uint32_t ticks) {
+    nrf_nfct_frame_delay_max_set(ticks & 0xFFFFFUL);
+}
+
 /**
  * @brief: Function for response reader core implemented
  * @param[in]   bits   Send bits length
