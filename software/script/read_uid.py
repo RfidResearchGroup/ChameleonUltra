@@ -60,8 +60,8 @@ def clear_last_output():
     global _last_line_count
     if _last_line_count > 0:
         # Move cursor up and clear each line
-        sys.stdout.write(f"[{_last_line_count}A")
-        sys.stdout.write("[J")
+        sys.stdout.write(f"\033[{_last_line_count}A")
+        sys.stdout.write("\033[J")
         sys.stdout.flush()
     _last_line_count = 0
 
@@ -77,7 +77,7 @@ def print_uid(uid_bytes: bytes) -> None:
     lines.append("")
     lines.append("─" * 40)
     for l in big(uid_compact).splitlines():
-        lines.append("[92m" + l + "[0m")
+        lines.append("\033[92m" + l + "\033[0m")
     lines.append(f"  UID (hex)  :  {uid_spaced}")
     lines.append(f"  Length     :  {uid_len}")
     lines.append("─" * 40)
@@ -101,6 +101,28 @@ def open_device(port, use_ble):
             sys.exit(1)
         dev.open(target)
     return dev
+
+
+def init_reader_mode(cmd):
+    """Put the device into reader mode before scanning.
+
+    This is the step the interactive CLI performs on startup but a bare
+    script does not. Without it the device stays in whatever mode it booted
+    into (tag/emulation), hf14a_scan finds nothing, and the device only
+    appears to work after the CLI has been run once to flip the mode.
+
+    Guarded by is_device_reader_mode() so subsequent runs skip the switch
+    (and its settle delay) entirely — only the first run after a mode change
+    pays the cost.
+    """
+    try:
+        if not cmd.is_device_reader_mode():
+            cmd.set_device_reader_mode(True)
+            # Give the firmware a moment to switch RC522 into reader mode
+            time.sleep(0.1)
+    except Exception as e:
+        print(f"{ANSI_YELLOW}[!] Could not confirm reader mode: {e}{ANSI_RESET}",
+              file=sys.stderr)
 
 
 def scan_once(cmd):
@@ -144,6 +166,10 @@ def main():
 
     cmd = chameleon_cmd.ChameleonCMD(dev)
 
+    # Ensure the device is in reader mode — this is what the CLI does on startup
+    # and what was missing here.
+    init_reader_mode(cmd)
+
     if args.font != "big":
         _font = args.font
         try:
@@ -161,6 +187,7 @@ def main():
             uid = scan_once(cmd)
 
             if uid is None:
+                last_uid = None  # reset so re-presenting the same card re-displays it
                 if args.watch:
                     print(".", end="", flush=True)
                 else:
