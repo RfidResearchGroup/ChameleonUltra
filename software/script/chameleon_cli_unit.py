@@ -10363,11 +10363,13 @@ examples:
             frames.append((len(tx_wire) * 8, tx_wire, False, annot_tx))
 
             # Handle S(WTX) — relay sends WTX before BLE round-trip; acknowledge
-            # and wait for the real I-block response.
+            # and wait for the real I-block response. The relay may need several
+            # WTX rounds before the BLE round-trip delivers the card's response,
+            # so allow generous retries with a short settle between them.
             wtx_attempts = 0
             while rx_wire and len(rx_wire) >= 3 and (rx_wire[0] & 0xF7) == 0xF2:
                 wtx_attempts += 1
-                if wtx_attempts > 8:
+                if wtx_attempts > 30:
                     break
                 wtxm = rx_wire[1] if len(rx_wire) > 2 else 1
                 # S(WTX) ACK: same PCB, same WTXM, no CID
