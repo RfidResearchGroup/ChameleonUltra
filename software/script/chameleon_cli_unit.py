@@ -10373,7 +10373,7 @@ examples:
             wtx_attempts = 0
             while rx_wire and len(rx_wire) >= 2 and (rx_wire[0] & 0xF7) == 0xF2:
                 wtx_attempts += 1
-                if wtx_attempts > 30:
+                if wtx_attempts > 60:
                     break
                 wtxm = rx_wire[1] & 0x3F if len(rx_wire) >= 2 else 1
                 if wtxm == 0:
@@ -10385,6 +10385,13 @@ examples:
                     resp_timeout_ms=3000,
                     data=list(wtx_ack),
                 )
+                # Give the BLE relay time to make progress between ACK rounds.
+                # Without this, the reader hammers WTX ACKs faster than the
+                # CARD↔READER↔card round-trip can complete, starving the relay's
+                # own advertising/scan airtime and capping out before the real
+                # response is ever buffered. ~30ms per round lets the relay
+                # advance one full hop.
+                time.sleep(0.03)
 
             if not rx_wire or len(rx_wire) < 3:
                 frames.append((0, b'', True, f"{CR}<no response>{C0}"))
