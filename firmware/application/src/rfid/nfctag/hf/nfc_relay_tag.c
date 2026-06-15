@@ -129,14 +129,27 @@ static void relay_cb_state(uint8_t *data, uint16_t szBits) {
     }
 }
 
+/* Set true by relay_cb_reset (fires on RATS = new T=CL session). mode_relay
+ * polls/clears it via nfc_relay_tag_take_session_reset() to force its own
+ * sub-state back to READY, so a second auth-trace run isn't blocked by stale
+ * RS_CARD_AWAIT_RESPONSE state left from the previous run. */
+static volatile bool s_session_reset = false;
+
 /* -------------------------------------------------------------------------
- * Reset handler — field dropped; reset state
+ * Reset handler — field dropped / new RATS; reset state
  * ------------------------------------------------------------------------- */
 static void relay_cb_reset(void) {
     s_awaiting_response = false;
     s_response_pending  = false;
     s_response_len      = 0;
     s_wtx_active        = false;
+    s_session_reset     = true;
+}
+
+bool nfc_relay_tag_take_session_reset(void) {
+    bool v = s_session_reset;
+    s_session_reset = false;
+    return v;
 }
 
 /* -------------------------------------------------------------------------

@@ -33,6 +33,10 @@ void nfc_relay_tag_install(const uint8_t *uid, uint8_t uid_len,
 /** Register the frame callback (ISR-safe: copy + flag only).
  *  Called once per frame received from the reader after SELECT. */
 void nfc_relay_tag_set_frame_cb(void (*cb)(const uint8_t *data, uint16_t bits));
+/* Returns true once after a new RATS (new T=CL session) has reset the relay
+ * tag state; clears the flag on read. mode_relay uses this to force its own
+ * sub-state back to READY between auth-trace runs. */
+bool nfc_relay_tag_take_session_reset(void);
 
 /** Inject a raw response to be transmitted to the reader.
  *  Call from main-loop context after receiving the response from RELAY_READER.
