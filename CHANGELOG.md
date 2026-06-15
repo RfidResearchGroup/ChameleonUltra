@@ -4,6 +4,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 
 ## [unreleased][unreleased]
  - Added standalone (host-less) modes: arm with both-button chord, run workflows without a connected host. Initial modes: `authtrace` (multi-session HF14A reader auth-trace capture, reuses CMD 2017 machinery) and `slot_cycle` (timed emulation-slot rotation). Host side via the new `standalone` CLI subgroup.
+ - Added Jablotron LF protocol support: read, emulate and T55xx clone (@midlan)
  - Added IDTECK LF protocol support: tag emulation (PSK1 RF/32) and T55xx clone. No reader path yet; PSK demodulation on the envelope-only receive chain is left for a follow-up.
  - Added PAC/Stanley LF protocol support: read, emulate and T55xx clone (@kevihiiin, @danieltwagner)
  - Fix firmware application USB serial number (@taichunmin)

@@ -98,6 +98,8 @@ class Command(enum.IntEnum):
     IOPROX_COMPOSE_ID = 3013
     LF_T55XX_WRITE = 3016
     IDTECK_WRITE_TO_T55XX = 3018
+    JABLOTRON_SCAN = 3019
+    JABLOTRON_WRITE_TO_T55XX = 3020
 
     MF1_WRITE_EMU_BLOCK_DATA = 4000
     HF14A_SET_ANTI_COLL_DATA = 4001
@@ -178,6 +180,8 @@ class Command(enum.IntEnum):
     PAC_GET_EMU_ID = 5007
     IOPROX_SET_EMU_ID = 5008
     IOPROX_GET_EMU_ID = 5009
+    JABLOTRON_SET_EMU_ID = 5010
+    JABLOTRON_GET_EMU_ID = 5011
     IDTECK_SET_EMU_ID = 5012
     IDTECK_GET_EMU_ID = 5013
     EM4X05_SCAN = 3030
@@ -321,7 +325,7 @@ class TagSpecificType(enum.IntEnum):
     # Visa2000
     Viking = 170
     # Noralsy
-    # Jablotron
+    Jablotron = 180
 
     # FSK Tag-Talk-First      200
     HIDProx = 200
@@ -416,6 +420,8 @@ class TagSpecificType(enum.IntEnum):
             return "PAC/Stanley"
         elif self == TagSpecificType.Viking:
             return "Viking"
+        elif self == TagSpecificType.Jablotron:
+            return "Jablotron"
         elif self == TagSpecificType.IDTECK:
             return "IDTECK"
         elif self == TagSpecificType.MIFARE_Mini:
