@@ -751,6 +751,23 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
     ble_relay_process();
     sleep_timer_stop();
 
+    /* A new RATS (new T=CL session, e.g. a repeated auth-trace run) resets the
+     * relay tag state. Force our own CARD sub-state back to READY so a stale
+     * RS_CARD_AWAIT_RESPONSE from a previous run (which otherwise lingers until
+     * the multi-second frame timeout) doesn't block the new run's first frame.
+     * Clear any half-relayed frame/response flags too. */
+    if (m_st.role == BLE_RELAY_ROLE_CARD && nfc_relay_tag_take_session_reset()) {
+        /* Only discard state if we were stuck waiting on the PREVIOUS run's
+         * response. Do NOT blanket-clear frame_pending: the new session's
+         * first I-block (AuthenticateAES) may have already arrived and set it,
+         * and clearing it here would drop that command. */
+        if (m_st.sub == RS_CARD_AWAIT_RESPONSE) {
+            m_st.sub            = RS_CARD_READY;
+            m_st.response_ready = false;
+            m_st.no_response    = false;
+        }
+    }
+
     /* Keep scan + HELLO alive every 2s */
     static uint32_t s_last_scan_restart = 0;
     if (ble_relay_get_state() != BLE_RELAY_STATE_IDLE &&
