@@ -152,7 +152,8 @@ def main():
     parser.add_argument("--interval", "-i", type=float, default=0.5,
                         help="Poll interval in seconds for --watch mode (default: 0.5).")
     parser.add_argument("--font", default="standard",
-                        help="pyfiglet font name (default: 'big'). Try 'banner', 'block', 'doom'.")
+                        help="pyfiglet font name (default: 'standard'). "
+                             "Try 'digital', 'banner', 'big', 'block', 'doom'.")
     args = parser.parse_args()
 
     print(f"{ANSI_BOLD}ChameleonUltra UID Reader{ANSI_RESET}")
@@ -170,13 +171,18 @@ def main():
     # and what was missing here.
     init_reader_mode(cmd)
 
-    if args.font != "big":
-        _font = args.font
+    # Validate the requested font once at startup by probing it. If it isn't
+    # available, warn and fall back to the default rather than crashing later
+    # inside print_uid (where there is no fallback).
+    if args.font:
         try:
+            pyfiglet.figlet_format("0", font=args.font)  # probe — raises if missing
+            _font = args.font
             global big
             big = lambda text, font=_font: pyfiglet.figlet_format(text, font=_font)
         except Exception:
-            pass
+            print(f"{ANSI_YELLOW}[!] Font '{args.font}' not found, using default.{ANSI_RESET}",
+                  file=sys.stderr)
 
     print(f"{ANSI_GREEN}Connected.{ANSI_RESET}  Place a Mifare Classic card on the reader …\n")
 
