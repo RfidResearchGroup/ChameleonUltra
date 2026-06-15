@@ -832,8 +832,14 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
             m_st.sub              = RS_CARD_AWAIT_RESPONSE;
             m_st.frame_sent_ticks = now_ticks;
         }
-        /* Detect reader field drop: 2s after last frame, signal CU2
-         * to scan for a new card so CU1 is ready for next presentation. */
+        /* Detect reader field drop: signal CU2 to scan for a new card so CU1
+         * is ready for the next presentation. The timeout must be comfortably
+         * longer than a full multi-round authentication (which, with WTX
+         * extensions over the relay, can span well over a second). Firing this
+         * mid-auth would send RESCAN_REQ → set needs_reselect on the READER →
+         * re-select the real card → reset its half-finished auth state, so
+         * round 2 of a DESFire AES auth would then fail. 6s is safely beyond
+         * any real exchange while still detecting an actually-removed reader. */
         {
             static uint32_t s_last_frame_tick = 0;
             static bool     s_had_frames      = false;
@@ -845,7 +851,7 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
             }
             if (s_had_frames && !s_rescan_sent &&
                 app_timer_cnt_diff_compute(now_ticks, s_last_frame_tick)
-                    >= APP_TIMER_TICKS(2000)) {
+                    >= APP_TIMER_TICKS(6000)) {
                 s_rescan_sent = true;
                 ble_relay_send_rescan_req();
                 NRF_LOG_INFO("relay card: reader left, RESCAN_REQ sent");
@@ -927,7 +933,7 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
 
             bool reader_idle = (s_last_frame_seen == 0 ||
                 app_timer_cnt_diff_compute(now_ticks, s_last_frame_seen)
-                    >= APP_TIMER_TICKS(3000));
+                    >= APP_TIMER_TICKS(6000));
 
             bool do_scan = m_st.rescan_pending ||
                 (reader_idle &&
