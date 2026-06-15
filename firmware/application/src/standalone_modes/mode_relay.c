@@ -961,7 +961,10 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
                 m_st.rescan_pending = false;
                 s_last_card_check   = now_ticks;
                 sleep_timer_stop();
-                set_scan_tag_timeout(200);
+                /* NOTE: do not call set_scan_tag_timeout() here — it lives in
+                 * the LF reader (lf_reader_main.c), is excluded from the Lite
+                 * build, and only bounds LF read time, not the HF scan below.
+                 * It had no effect on pcd_14a_reader_scan_auto() anyway. */
                 picc_14a_tag_t new_card;
                 memset(&new_card, 0, sizeof(new_card));
                 if (pcd_14a_reader_scan_auto(&new_card) == STATUS_HF_TAG_OK) {
