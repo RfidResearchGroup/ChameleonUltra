@@ -10389,9 +10389,10 @@ examples:
                 # Without this, the reader hammers WTX ACKs faster than the
                 # CARD↔READER↔card round-trip can complete, starving the relay's
                 # own advertising/scan airtime and capping out before the real
-                # response is ever buffered. ~30ms per round lets the relay
-                # advance one full hop.
-                time.sleep(0.03)
+                # response is ever buffered. ~50ms per round lets the relay
+                # advance a full hop even for the larger (41-byte, extended-adv)
+                # round-2 frames.
+                time.sleep(0.05)
 
             if not rx_wire or len(rx_wire) < 3:
                 frames.append((0, b'', True, f"{CR}<no response>{C0}"))
