@@ -58,7 +58,9 @@ bool g_is_standalone_armed = false;
  * ------------------------------------------------------------------------- */
 #define RELAY_DEFAULT_WTX_MS     2000u
 #define RELAY_LINK_TIMEOUT_MS    120000u
-#define RELAY_FRAME_TIMEOUT_MS   3000u    /* max wait for response from real card */
+#define RELAY_FRAME_TIMEOUT_MS   10000u   /* max wait for response from real card;
+                                           * generous because WTX keeps the reader
+                                           * patient across many extension rounds */
 
 /* ISO14443-4 S(WTX) block — reserved for a future WTX-ACK handshake
  * implementation (currently unused; BLE latency is absorbed by the
