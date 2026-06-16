@@ -81,7 +81,7 @@ static ret_code_t block_dev_empty_init(nrf_block_dev_t const * p_blk_dev,
 
     if (p_work->ev_handler)
     {
-        /*Asynchronous operation (simulation)*/
+        /*Asynchronous operation (emulation)*/
         const nrf_block_dev_event_t ev = {
                 NRF_BLOCK_DEV_EVT_INIT,
                 NRF_BLOCK_DEV_RESULT_SUCCESS,
@@ -106,7 +106,7 @@ static ret_code_t block_dev_empty_uninit(nrf_block_dev_t const * p_blk_dev)
 
     if (p_work->ev_handler)
     {
-        /*Asynchronous operation (simulation)*/
+        /*Asynchronous operation (emulation)*/
         const nrf_block_dev_event_t ev = {
                 NRF_BLOCK_DEV_EVT_UNINIT,
                 NRF_BLOCK_DEV_RESULT_SUCCESS,
@@ -152,7 +152,7 @@ static ret_code_t block_dev_empty_read_req(nrf_block_dev_t const * p_blk_dev,
     memset(p_blk->p_buff, 0, p_empty_dev->p_work->geometry.blk_size * p_blk->blk_count);
     if (p_work->ev_handler)
     {
-        /*Asynchronous operation (simulation)*/
+        /*Asynchronous operation (emulation)*/
         const nrf_block_dev_event_t ev = {
                 NRF_BLOCK_DEV_EVT_BLK_READ_DONE,
                 NRF_BLOCK_DEV_RESULT_SUCCESS,
@@ -197,7 +197,7 @@ static ret_code_t block_dev_empty_write_req(nrf_block_dev_t const * p_blk_dev,
 
     if (p_work->ev_handler)
     {
-        /*Asynchronous operation (simulation)*/
+        /*Asynchronous operation (emulation)*/
         const nrf_block_dev_event_t ev = {
                 NRF_BLOCK_DEV_EVT_BLK_WRITE_DONE,
                 NRF_BLOCK_DEV_RESULT_SUCCESS,

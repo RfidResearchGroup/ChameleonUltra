@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include "utils.h"
 
-#define NETDATA_MAX_DATA_LENGTH   512
+#define NETDATA_MAX_DATA_LENGTH   4096
 
 /*
  * *********************************************************************************************************************************
@@ -17,8 +17,8 @@
  *  SOF(1byte)  LRC(1byte)  CMD(2byte)  Status(2byte)  Data Length(2byte)  Frame Head LRC(1byte)  Data(length)  Frame All LRC(1byte)
  *     0x11       0xEF        cmd(u16)    status(u16)      length(u16)              lrc(u8)          data(u8*)       lrc(u8)
  *
- *  The data length max is 512, frame length is 1 + 1 + 2 + 2 + 2 + 1 + n + 1 = (10 + n)
- *  So, one frame will be between 10 and 522 bytes.
+ *  The data length max is 4096, frame length is 1 + 1 + 2 + 2 + 2 + 1 + n + 1 = (10 + n)
+ *  So, one frame will be between 10 and 4106 bytes.
  * *********************************************************************************************************************************
  */
 

@@ -20,7 +20,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Check out the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ inputs.checkout-sha == null && github.sha || inputs.checkout-sha }}
           fetch-depth: 0
@@ -54,7 +54,7 @@ jobs:
         device_type: [ultra, lite]
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ inputs.checkout-sha == null && github.sha || inputs.checkout-sha }}
           fetch-depth: 0
@@ -64,7 +64,7 @@ jobs:
         run: |
           docker run --rm -v ${PWD}:/workdir -e CURRENT_DEVICE_TYPE=${{ matrix.device_type }} ghcr.io/${repo,,}-fw-builder@${{ needs.build_fw_builder.outputs.image_hash }} firmware/build.sh
       - name: Upload built binaries
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.device_type }}-firmware
           path: firmware/objects/*.hex
@@ -76,17 +76,17 @@ jobs:
           unzip firmware/objects/${{ matrix.device_type }}-dfu-app.zip -d firmware/objects/${{ matrix.device_type }}-dfu-app
           unzip firmware/objects/${{ matrix.device_type }}-dfu-full.zip -d firmware/objects/${{ matrix.device_type }}-dfu-full
       - name: Upload dfu app image
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.device_type }}-dfu-app
           path: firmware/objects/${{ matrix.device_type }}-dfu-app/*
       - name: Upload dfu full image
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.device_type }}-dfu-full
           path: firmware/objects/${{ matrix.device_type }}-dfu-full/*
       - name: Upload release artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: release-artifacts
+          name: release-artifacts-${{ matrix.device_type }}
           path: firmware/objects/*.zip

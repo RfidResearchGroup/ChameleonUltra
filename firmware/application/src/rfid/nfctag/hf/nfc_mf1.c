@@ -3,6 +3,7 @@
 #include "nfc_mf1.h"
 #include "nfc_14a.h"
 #include "hex_utils.h"
+#include "mf1_crapto1.h"  // for prng_successor — real MFC LFSR PRNG
 #include "fds_util.h"
 #include "tag_persistence.h"
 
@@ -188,7 +189,7 @@ static nfc_tag_14a_coll_res_reference_t m_shadow_coll_res;
 static nfc_tag_mf1_trailer_info_t *m_tag_trailer_info = NULL;
 // Define and use MF1 special communication buffer
 static nfc_tag_mf1_tx_buffer_t m_tag_tx_buffer;
-//Save the specific type of MF1 currently being simulated
+//Save the specific type of MF1 currently being emulated
 static tag_specific_type_t m_tag_type;
 
 // Fast simulate is enable, we use internal crypto1 instance from 'mf1_crypto1.c'
@@ -201,7 +202,7 @@ static struct Crypto1State *pcs = &mpcs;
 // Define the buffer of the data that stored the detected data
 // Place this data in a dormant RAM to save time and space to write into Flash
 #define MF1_AUTH_LOG_MAX_SIZE   1000
-static __attribute__((section(".noinit"))) struct nfc_tag_mf1_auth_log_buffer {
+static __attribute__((section(".noinit_mf1"))) struct nfc_tag_mf1_auth_log_buffer {
     uint32_t count;
     nfc_tag_mf1_auth_log_t logs[MF1_AUTH_LOG_MAX_SIZE];
 } m_auth_log;
@@ -306,20 +307,56 @@ void ValueToBlock(uint8_t *Block, uint32_t Value) {
     Block[11] = Block[3];
 }
 
-/** @brief MF1 Get a random number
- * @param nonce      Random number buffer
+/** @brief Persistent LFSR state for Mifare Classic-compatible nonce generation.
+ *  Seeded from hardware RNG at boot via nfc_tag_mf1_prng_seed().
+ */
+static uint32_t m_prng_state = 0;
+
+/** @brief Seed the LFSR PRNG from hardware RNG value obtained at boot. */
+void nfc_tag_mf1_prng_seed(uint32_t seed) {
+    m_prng_state = seed;
+}
+
+void nfc_tag_mf1_set_prng_type(uint8_t type) {
+    if (type <= 2) {
+        m_tag_information->config.prng_type = type;
+    }
+}
+
+uint8_t nfc_tag_mf1_get_prng_type(void) {
+    return m_tag_information->config.prng_type;
+}
+
+/** @brief MF1 Get a random number.
+ *  PRNG type is per-slot, persisted in FDS via the config struct.
+ *    0 = STATIC  — fixed nonce (0x01020304), for testing
+ *    1 = WEAK    — real Mifare Classic 16-bit LFSR (default, passes Eltis fingerprint)
+ *    2 = HARD    — rand() seeded from hardware RNG (original behaviour)
+ * @param nonce     4-byte nonce output buffer
+ * @param isNested  true if this is a nested authentication
  */
 void nfc_tag_mf1_random_nonce(uint8_t nonce[4], bool isNested) {
-    // Use RAND to quickly generate random numbers, less performance loss
-    // isNested provides more randomness for hardnested attack
-    if (isNested) {
-        nonce[0] = rand() & 0xff;
-        nonce[1] = rand() & 0xff;
-        nonce[2] = rand() & 0xff;
-        nonce[3] = rand() & 0xff;
+    uint8_t prng_type = m_tag_information->config.prng_type;
+    if (prng_type == 0) {
+        // STATIC — always return same nonce (clone-card behaviour)
+        nonce[0] = 0x01;
+        nonce[1] = 0x02;
+        nonce[2] = 0x03;
+        nonce[3] = 0x04;
+    } else if (prng_type == 1) {
+        // WEAK — real MFC LFSR, advance 32 clocks per call
+        m_prng_state = prng_successor(m_prng_state, 32);
+        num_to_bytes(m_prng_state, 4, nonce);
     } else {
-        // fast for most readers
-        num_to_bytes(rand(), 4, nonce);
+        // HARD — original rand() behaviour
+        if (isNested) {
+            nonce[0] = rand() & 0xff;
+            nonce[1] = rand() & 0xff;
+            nonce[2] = rand() & 0xff;
+            nonce[3] = rand() & 0xff;
+        } else {
+            num_to_bytes(rand(), 4, nonce);
+        }
     }
 }
 
@@ -500,7 +537,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                                 BlockEnd = BlockStart + 4 - 1;
                             }
 
-                            // The type of current simulation card is not enough to support the access of the card reader
+                            // The type of current emulation card is not enough to support the access of the card reader
                             if (check_block_max_overflow(BlockAuth)) {
                                 break;
                             }
@@ -805,7 +842,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                                 BlockEnd = BlockStart + 4 - 1;
                             }
 
-                            // The type of current simulation card is not enough to support the access of the card reader
+                            // The type of current emulation card is not enough to support the access of the card reader
                             if (check_block_max_overflow(BlockAuth)) {
                                 break;
                             }
@@ -1016,7 +1053,7 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
  * @brief Provide the necessary anti -conflict resources for the MiFare label (only pointer provides pointers)
  */
 nfc_tag_14a_coll_res_reference_t *get_mifare_coll_res() {
-    //According to the current interoperability configuration, selectively return the configuration data to selectively, assuming that the data interoperability is turned on, then we also need to ensure that the current simulation card is 4BYTE
+    //According to the current interoperability configuration, selectively return the configuration data to selectively, assuming that the data interoperability is turned on, then we also need to ensure that the current emulation card is 4BYTE
     if (m_tag_information->config.use_mf1_coll_res && m_tag_information->res_coll.size == NFC_TAG_14A_UID_SINGLE_SIZE) {
         // Manufacturer information obtained by the data area
         nfc_tag_mf1_factory_info_t *block0_factory_info = (nfc_tag_mf1_factory_info_t *)m_tag_information->memory[0];
@@ -1102,7 +1139,7 @@ int nfc_tag_mf1_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer)
     if (buffer->length >= info_size) {
         //Convert the data buffer to MF1 structure type
         m_tag_information = (nfc_tag_mf1_information_t *)buffer->buffer;
-        // The specific type of MF1 that is simulated by the cache
+        // The specific type of MF1 that is emulated by the cache
         m_tag_type = type;
         // Register 14A communication management interface
         nfc_tag_14a_handler_t handler_for_14a = {
@@ -1111,6 +1148,8 @@ int nfc_tag_mf1_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer)
             .cb_reset = nfc_tag_mf1_reset_handler,
         };
         nfc_tag_14a_set_handler(&handler_for_14a);
+        NRF_LOG_INFO("HF mf1 config 'field_off_do_reset' = %d", m_tag_information->config.field_off_do_reset);
+        nfc_tag_14a_set_reset_enable(m_tag_information->config.field_off_do_reset);
         NRF_LOG_INFO("HF mf1 data load finish.");
     } else {
         NRF_LOG_ERROR("nfc_tag_mf1_information_t too big.");
@@ -1157,6 +1196,13 @@ bool nfc_tag_mf1_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     p_mf1_information->config.use_mf1_coll_res = false;
     p_mf1_information->config.mode_block_write = NFC_TAG_MF1_WRITE_NORMAL;
     p_mf1_information->config.detection_enable = false;
+    p_mf1_information->config.field_off_do_reset = false;
+
+    // PRNG type defaults to WEAK (1) — real MFC LFSR, compatible with Eltis readers
+    p_mf1_information->config.prng_type = 1;
+    p_mf1_information->config.reserved1 = 0x00;
+    p_mf1_information->config.reserved2 = 0x00;
+    p_mf1_information->config.reserved3 = 0x00;
 
     // save data to flash
     tag_sense_type_t sense_type = get_sense_type_from_tag_type(tag_type);
@@ -1236,3 +1282,10 @@ nfc_tag_mf1_write_mode_t nfc_tag_mf1_get_write_mode(void) {
     return m_tag_information->config.mode_block_write;
 }
 
+void nfc_tag_mf1_set_field_off_do_reset(bool enable) {
+    m_tag_information->config.field_off_do_reset = enable;
+}
+
+bool nfc_tag_mf1_is_field_off_do_reset(void) {
+    return m_tag_information->config.field_off_do_reset;
+}

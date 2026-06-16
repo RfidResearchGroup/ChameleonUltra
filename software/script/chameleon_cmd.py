@@ -3,12 +3,15 @@ import ctypes
 from typing import Union
 
 import chameleon_com
-from chameleon_utils import expect_response
+from chameleon_utils import expect_response, reconstruct_full_nt, parity_to_str
 from chameleon_enum import Command, SlotNumber, Status, TagSenseType, TagSpecificType
 from chameleon_enum import ButtonPressFunction, ButtonType, MifareClassicDarksideStatus
 from chameleon_enum import MfcKeyType, MfcValueBlockOperator
 
-CURRENT_VERSION_SETTINGS = 5
+CURRENT_VERSION_SETTINGS = 6
+
+new_key = b'\x20\x20\x66\x66'
+old_keys = [b'\x51\x24\x36\x48', b'\x19\x92\x04\x27']
 
 
 class ChameleonCMD:
@@ -233,6 +236,103 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.HF_TAG_OK)
+    def hf14a_scan_keep(self):
+        """
+        Scan ISO14443-A tag with full select + RATS, keeping field alive.
+
+        Identical to hf14a_scan but does NOT tear down the RF field afterward.
+        The card remains powered and in ISO14443-4 T=CL state so subsequent
+        hf14a_raw calls can exchange APDUs without re-selecting.
+        """
+        resp = self.device.send_cmd_sync(Command.HF14A_SCAN_KEEP)
+        if resp.status == Status.HF_TAG_OK:
+            offset = 0
+            data = []
+            while offset < len(resp.data):
+                uidlen, = struct.unpack_from('!B', resp.data, offset)
+                offset += 1
+                uid, atqa, sak, atslen = struct.unpack_from(
+                    f'!{uidlen}s2s1sB', resp.data, offset)
+                offset += struct.calcsize(f'!{uidlen}s2s1sB')
+                ats, = struct.unpack_from(f'!{atslen}s', resp.data, offset)
+                offset += atslen
+                data.append({'uid': uid, 'atqa': atqa, 'sak': sak, 'ats': ats})
+            resp.parsed = data
+        return resp
+
+    def hf14a_4_set_anti_coll(self, uid: bytes, atqa: bytes, sak: int, ats: bytes):
+        """
+        Set UID / ATQA / SAK / ATS for the active HF14A_4 slot.
+
+        :param uid:  UID bytes (4 or 7 bytes)
+        :param atqa: ATQA 2 bytes (wire order, e.g. b'\x04\x00' for ATQA 00 04)
+        :param sak:  SAK byte value (int), use 0x20 for ISO14443-4
+        :param ats:  ATS bytes (without CRC)
+        """
+        uid_size = len(uid)
+        payload = (bytes([uid_size]) + bytes(uid) + bytes(atqa) +
+                   bytes([sak]) + bytes([len(ats)]) + bytes(ats))
+        return self.device.send_cmd_sync(Command.HF14A_4_SET_ANTI_COLL, payload)
+
+    def hf14a_4_apdu_recv(self):
+        """
+        Non-blocking poll for a pending APDU from the ISO14443-4 T=CL stack.
+
+        Returns immediately: STATUS_SUCCESS + APDU bytes if one is pending,
+        STATUS_HF_TAG_NO if no APDU is waiting.  Call in a tight loop from
+        the host side for relay/capture use cases.
+        """
+        return self.device.send_cmd_sync(Command.HF14A_4_APDU_RECV, b'', timeout=2)
+
+    def hf14a_4_apdu_send(self, resp: bytes):
+        """Send an APDU response to the ISO14443-4 T=CL stack."""
+        payload = bytes([(len(resp) >> 8) & 0xFF, len(resp) & 0xFF]) + bytes(resp)
+        return self.device.send_cmd_sync(Command.HF14A_4_APDU_SEND, payload)
+
+    def hf14a_4_add_static_response(self, cmd: bytes, resp: bytes):
+        """
+        Add a static APDU command→response pair to the HF14A_4 slot.
+
+        The firmware will automatically reply with resp whenever it receives
+        an APDU whose first len(cmd) bytes match cmd, without USB involvement.
+        Must be called before hw mode -e.
+        """
+        rlen = len(resp)
+        payload = bytes([len(cmd)]) + bytes(cmd) + bytes([(rlen >> 8) & 0xFF, rlen & 0xFF]) + bytes(resp)
+        return self.device.send_cmd_sync(Command.HF14A_4_STATIC_RESP, payload)
+
+    def hf14a_4_reader_apdu(self, apdu: bytes):
+        """
+        Select card (with RATS) and send one ISO14443-4 T=CL APDU in a single
+        firmware call — avoiding the USB round-trip gap that would depower the card.
+
+        :param apdu: raw APDU bytes (no PCB wrapping needed)
+        :return: response object with resp.data = APDU response bytes (no PCB/CRC)
+        """
+        return self.device.send_cmd_sync(
+            Command.HF14A_4_READER_APDU, bytes(apdu), timeout=3)
+
+    def hf14a_4_emv_scan(self):
+        """
+        Full EMV card scan in a single firmware call.
+
+        The firmware performs the complete sequence (field cycle, select, RATS,
+        PPSE, SELECT AID, GPO, READ RECORDs) without returning to the host
+        between APDUs, avoiding the field-drop issue with separate calls.
+
+        Response format:
+            uid_len(1) uid(n) atqa(2) sak(1) ats_len(1) ats(m)
+            num_apdus(1)
+            for each APDU pair:
+                cmd_len(1) cmd(n) resp_len_le(2) resp(m)
+        """
+        resp = self.device.send_cmd_sync(Command.HF14A_4_EMV_SCAN, b'', timeout=10)
+        return resp
+
+    def hf14a_4_clear_static_responses(self):
+        """Clear all static APDU responses from the active HF14A_4 slot."""
+        return self.device.send_cmd_sync(Command.HF14A_4_STATIC_RESP, b'\x00')
+
     def hf14a_raw(self, options, resp_timeout_ms=100, data=[], bitlen=None):
         """
         Send raw cmd to 14a tag.
@@ -270,12 +370,11 @@ class ChameleonCMD:
                 raise ValueError(f'bitlen={bitlen} but missing data')
             if not ((len(data) - 1) * 8 < bitlen <= len(data) * 8):
                 raise ValueError(f'bitlen={bitlen} incompatible with provided data ({len(data)} bytes), '
-                                 f'must be between {((len(data) - 1) * 8 )+1} and {len(data) * 8} included')
+                                 f'must be between {((len(data) - 1) * 8)+1} and {len(data) * 8} included')
 
         data = bytes(cs)+struct.pack(f'!HH{len(data)}s', resp_timeout_ms, bitlen, bytearray(data))
         resp = self.device.send_cmd_sync(Command.HF14A_RAW, data, timeout=(resp_timeout_ms // 1000) + 1)
-        resp.parsed = resp.data
-        return resp
+        return resp.data
 
     @expect_response(Status.HF_TAG_OK)
     def mf1_manipulate_value_block(self, src_block, src_type: MfcKeyType, src_key, operator: MfcValueBlockOperator, operand, dst_block, dst_type: MfcKeyType, dst_key):
@@ -312,16 +411,16 @@ class ChameleonCMD:
             raise ValueError("Invalid len(keys)")
         data = struct.pack(f'!10s{6*len(keys)}s', mask, b''.join(keys))
 
-        bitsCnt = 80 # maximum sectorKey_to_be_checked
+        bitsCnt = 80  # maximum sectorKey_to_be_checked
         for b in mask:
             while b > 0:
                 [bitsCnt, b] = [bitsCnt - (b & 0b1), b >> 1]
         if bitsCnt < 1:
             # All sectorKey is masked
             return chameleon_com.Response(
-                cmd=Command.MF1_CHECK_KEYS_OF_SECTORS, 
+                cmd=Command.MF1_CHECK_KEYS_OF_SECTORS,
                 status=Status.HF_TAG_OK,
-                parsed={ 'status': Status.HF_TAG_OK },
+                parsed={'status': Status.HF_TAG_OK},
             )
         # base timeout: 1s
         # auth: len(keys) * sectorKey_to_be_checked * 0.1s
@@ -329,7 +428,7 @@ class ChameleonCMD:
         timeout = 1 + (bitsCnt + 1) * len(keys) * 0.1
 
         resp = self.device.send_cmd_sync(Command.MF1_CHECK_KEYS_OF_SECTORS, data, timeout=timeout)
-        resp.parsed = { 'status': resp.status }
+        resp.parsed = {'status': resp.status}
         if len(resp.data) == 490:
             found = ''.join([format(i, '08b') for i in resp.data[0:10]])
             # print(f'{found = }')
@@ -337,6 +436,23 @@ class ChameleonCMD:
                 'found': resp.data[0:10],
                 'sectorKeys': {k: resp.data[6 * k + 10:6 * k + 16] for k, v in enumerate(found) if v == '1'}
             })
+        return resp
+
+    @expect_response([Status.HF_TAG_OK, Status.HF_TAG_NO, Status.MF_ERR_AUTH])
+    def mf1_check_keys_on_block(self, block: int, key_type: int, keys: list[bytes]):
+        if key_type not in [0x60, 0x61]:
+            raise ValueError("Wrong key type")
+        if len(keys) < 1 or len(keys) > 83:
+            raise ValueError("Invalid len(keys)")
+        data = struct.pack(f'!BBB{6*len(keys)}s', block, key_type, len(keys), b''.join(keys))
+
+        resp = self.device.send_cmd_sync(Command.MF1_CHECK_KEYS_ON_BLOCK, data, timeout=10)
+
+        if resp.status == Status.HF_TAG_OK and len(resp.data) == 7:
+            found, key = struct.unpack('!B6s', resp.data)
+            if found:
+                resp.parsed = key
+
         return resp
 
     @expect_response(Status.HF_TAG_OK)
@@ -359,6 +475,128 @@ class ChameleonCMD:
             }
         return resp
 
+    @expect_response(Status.HF_TAG_OK)
+    def mf1_hard_nested_acquire(self, slow, block_known, type_known, key_known, block_target, type_target):
+        """
+        Collect the NT_ENC list for HardNested decryption
+        :return:
+        """
+        data = struct.pack('!BBB6sBB', slow, type_known, block_known, key_known, type_target, block_target)
+        resp = self.device.send_cmd_sync(Command.MF1_HARDNESTED_ACQUIRE, data, timeout=30)
+        if resp.status == Status.HF_TAG_OK:
+            resp.parsed = resp.data  # we can return the raw nonces bytes
+        return resp
+
+    @expect_response([Status.HF_TAG_OK, Status.HF_TAG_NO])
+    def mf1_static_encrypted_nested_acquire(self, backdoor_key, sector_count, starting_sector):
+        data = struct.pack('!6sBB', backdoor_key, sector_count, starting_sector)
+        resp = self.device.send_cmd_sync(Command.MF1_ENC_NESTED_ACQUIRE, data, timeout=30)
+        if resp.status == Status.HF_TAG_OK:
+            resp.parsed = {
+                'uid': struct.unpack('!I', resp.data[0:4])[0],
+                'nts': {
+                    'a': [],
+                    'b': []
+                }
+            }
+
+            i = 4
+
+            while i < len(resp.data):
+                resp.parsed['nts']['a'].append(
+                    {
+                        'nt': reconstruct_full_nt(resp.data, i),
+                        'nt_enc': int.from_bytes(resp.data[i + 3: i + 7], byteorder='big'),
+                        'parity': parity_to_str(resp.data[i + 2])
+                    }
+                )
+
+                resp.parsed['nts']['b'].append(
+                    {
+                        'nt': reconstruct_full_nt(resp.data, i + 7),
+                        'nt_enc': int.from_bytes(resp.data[i + 10: i + 14], byteorder='big'),
+                        'parity': parity_to_str(resp.data[i + 9])
+                    }
+                )
+
+                i += 14
+        return resp
+
+    def hf14a_sniff(self, timeout_ms: int = 5000):
+        """
+        Capture ISO14443A reader frames while CU acts as a tag emulator.
+
+        The firmware installs a sniff callback into the HF14A stack for the
+        requested duration, then returns all captured frames packed as:
+          [2 bytes: bit count, big-endian] [N bytes: frame data, ceil(bits/8)] ...
+
+        :param timeout_ms: Listen duration in ms (1-30000, default 5000)
+        :return: Raw response — check .status and .data
+        """
+        timeout_ms = max(1, min(30000, timeout_ms))
+        payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF])
+        timeout_s = (timeout_ms // 1000) + 5
+        return self.device.send_cmd_sync(Command.HF14A_SNIFF, payload, timeout=timeout_s)
+
+    def hf14a_auth_trace(self, block: int, key_type: int, key: bytes, timeout_ms: int = 5000):
+        """
+        Run a full reader-side ISO14443A + MIFARE Classic Crypto1 auth flow
+        against a real card and return every wire frame for inspection.
+
+        The firmware polls for a tag in the field for up to `timeout_ms`
+        milliseconds, then performs anticoll + SELECT + (optional RATS) +
+        AUTH and packs all frames — synthesized anticoll plus the live
+        AUTH/NT/NR||AR/AT — into the same buffer format used by hf14a_sniff:
+          [2 bytes: bit count, big-endian] [N bytes: frame data, ceil(bits/8)] ...
+        Bit 15 of the bit-count header: 0 = reader→card, 1 = card→reader.
+
+        :param block:      target block number (0-255)
+        :param key_type:   0x60 (Key A) or 0x61 (Key B)
+        :param key:        6-byte sector key
+        :param timeout_ms: tag-presence polling timeout in ms (1-30000)
+        :return: Raw response — check .status and .data
+        """
+        if key_type not in (0x60, 0x61):
+            raise ValueError("key_type must be 0x60 (Key A) or 0x61 (Key B)")
+        if len(key) != 6:
+            raise ValueError("key must be exactly 6 bytes")
+        timeout_ms = max(1, min(30000, int(timeout_ms)))
+        payload = (
+            bytes([key_type, block & 0xFF])
+            + bytes(key)
+            + bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF])
+        )
+        # Add a couple of seconds of slack on top of the device-side polling
+        # window so the USB/BLE round-trip doesn't time out before firmware
+        # gives up on its own.
+        return self.device.send_cmd_sync(Command.HF14A_AUTH_TRACE, payload, timeout=(timeout_ms // 1000) + 3)
+
+    @expect_response(Status.SUCCESS)
+    def hf14a_get_config(self):
+        """
+        Get hf 14a config
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.HF14A_GET_CONFIG)
+        if resp.status == Status.SUCCESS:
+            bcc, cl2, cl3, rats = struct.unpack('!bbbb', resp.data)
+            resp.parsed = {'bcc': bcc,
+                           'cl2': cl2,
+                           'cl3': cl3,
+                           'rats': rats}
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def hf14a_set_config(self, data):
+        """
+        Set hf 14a config
+
+        :return:
+        """
+        data = struct.pack('!bbbb', data['bcc'], data['cl2'], data['cl3'], data['rats'])
+        return self.device.send_cmd_sync(Command.HF14A_SET_CONFIG, data)
+
     @expect_response(Status.LF_TAG_OK)
     def em410x_scan(self):
         """
@@ -367,7 +605,13 @@ class ChameleonCMD:
         :return:
         """
         resp = self.device.send_cmd_sync(Command.EM410X_SCAN)
-        resp.parsed = resp.data
+        if resp.status == Status.LF_TAG_OK:
+            tag_type = struct.unpack('!H', resp.data[:2])[0]
+            if tag_type == TagSpecificType.EM410X_ELECTRA:
+                fmt = '!H13s'
+            else:
+                fmt = '!H5s'
+            resp.parsed = struct.unpack(fmt, resp.data[:struct.calcsize(fmt)])  # tag type + uid
         return resp
 
     @expect_response(Status.LF_TAG_OK)
@@ -378,17 +622,225 @@ class ChameleonCMD:
         :param id_bytes: ID card number
         :return:
         """
-        new_key = b'\x20\x20\x66\x66'
-        old_keys = [b'\x51\x24\x36\x48', b'\x19\x92\x04\x27']
+        if len(id_bytes) == 5:
+            data = struct.pack(f'!5s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+            return self.device.send_cmd_sync(Command.EM410X_WRITE_TO_T55XX, data)
+        if len(id_bytes) == 13:
+            data = struct.pack(f'!13s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+            return self.device.send_cmd_sync(Command.EM410X_ELECTRA_WRITE_TO_T55XX, data)
+        raise ValueError("The id bytes length must equal 5 (EM410X) or 13 (Electra)")
+
+    @expect_response(Status.LF_TAG_OK)
+    def hidprox_scan(self, format: int):
+        """
+        Read the length, facility code and card number of HID Prox.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.HIDPROX_SCAN, struct.pack('!B', format))
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = struct.unpack('>BIBIBH', resp.data[:13])
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def hidprox_write_to_t55xx(self, id_bytes: bytes):
+        """
+        Write HID Prox card number into T55XX.
+
+        :param id_bytes: ID card number
+        :return:
+        """
+        if len(id_bytes) != 13:
+            raise ValueError("The id bytes length must equal 13")
+        data = struct.pack(f'!13s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.HIDPROX_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
+    def ioprox_scan(self):
+        """
+        Read ioProx (XSF): version, facility, number, raw.
+        """
+        resp = self.device.send_cmd_sync(Command.IOPROX_SCAN)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def ioprox_write_to_t55xx(self, id_bytes: bytes):
+        """
+        Write ioProx card data to a T55XX tag.
+        """
+        if len(id_bytes) != 16:
+            raise ValueError("The ioProx id bytes length must equal 16")
+
+        # Pack id_bytes (16), new_key (4), and all old_keys (4 each) into one buffer
+        fmt = f'!16s4s{4 * len(old_keys)}s'
+        data = struct.pack(fmt, id_bytes, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.IOPROX_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.SUCCESS)
+    def ioprox_decode_raw(self, raw8_bytes):
+        """
+        Send 8 raw card bytes to firmware and return 16-byte card data structure.
+        Response layout: [0]=ver, [1]=fc, [2..3]=cn, [4..11]=raw8, [12..15]=padding.
+        """
+        resp = self.device.send_cmd_sync(Command.IOPROX_DECODE_RAW, data=raw8_bytes)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def ioprox_compose_id(self, ver, fc, cn):
+        """
+        Encode ioProx parameters into a 16-byte card data structure via firmware.
+        Response layout: [0]=ver, [1]=fc, [2..3]=cn, [4..11]=raw8, [12..15]=padding.
+        """
+        payload = struct.pack(">BBH", ver, fc, cn)
+        resp = self.device.send_cmd_sync(Command.IOPROX_COMPOSE_ID, data=payload)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
+        return resp
+
+    def lf_sniff(self, timeout_ms: int = 2000):
+        """
+        Capture raw LF field ADC samples.
+
+        The ChameleonUltra samples the LF antenna at 125kHz (8µs/sample).
+        Each byte is an 8-bit ADC value: ~0x80 = field on, lower = gap/no field.
+
+        :param timeout_ms: Capture duration in ms (1-10000, default 2000)
+        :return: Raw response object — check .status and .data
+        """
+        timeout_ms = max(1, min(10000, timeout_ms))
+        payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF])
+        timeout_s = (timeout_ms // 1000) + 2
+        return self.device.send_cmd_sync(Command.LF_SNIFF, payload, timeout=timeout_s)
+
+    @expect_response(Status.LF_TAG_OK)
+    def em4x05_scan(self, pwd: int = 0):
+        """
+        Read an EM4x05 or EM4x69 tag (reader-talk-first).
+
+        Response payload (14 bytes, big-endian):
+          config    4 bytes  — block 0 configuration word
+          uid       4 bytes  — EM4x05 UID
+          uid_hi    4 bytes  — EM4x69 uid_hi (zero for plain EM4x05)
+          is_em4x69 1 byte   — 1 if a 64-bit EM4x69 UID was read
+          uid_block 1 byte   — block number UID was read from
+
+        :param pwd: 32-bit password for LOGIN (default 0x00000000)
+        :return: parsed tuple (config, uid, uid_hi, is_em4x69, uid_block)
+        """
+        pwd_bytes = struct.pack('!I', pwd & 0xFFFFFFFF)
+        resp = self.device.send_cmd_sync(Command.EM4X05_SCAN, pwd_bytes)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = struct.unpack('!IIIBB', resp.data[:14])
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def viking_scan(self):
+        """
+        Read the card number of Viking.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.VIKING_SCAN)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data  # uid
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def viking_write_to_t55xx(self, id_bytes: bytes):
+        """
+        Write Viking card number into T55XX.
+
+        :param id_bytes: ID card number
+        :return:
+        """
+        if len(id_bytes) != 4:
+            raise ValueError("The id bytes length must equal 4")
+        data = struct.pack(f'!4s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.VIKING_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
+    def pac_scan(self):
+        """
+        Read the card ID of PAC/Stanley.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.PAC_SCAN)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data[:8]
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def pac_write_to_t55xx(self, id_bytes: bytes):
+        """
+        Write PAC/Stanley card data to a T55XX tag.
+
+        :param id_bytes: 8-byte ASCII card ID
+        :return:
+        """
+        if len(id_bytes) != 8:
+            raise ValueError("The id bytes length must equal 8")
+        data = struct.pack(f'!8s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.PAC_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
+    def jablotron_scan(self):
+        """
+        Read the card number of Jablotron.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.JABLOTRON_SCAN)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data[:5]
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def jablotron_write_to_t55xx(self, id_bytes: bytes):
+        """
+        Write Jablotron card number into T55XX.
+
+        :param id_bytes: 5-byte Jablotron card ID
+        :return:
+        """
         if len(id_bytes) != 5:
             raise ValueError("The id bytes length must equal 5")
         data = struct.pack(f'!5s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
-        return self.device.send_cmd_sync(Command.EM410X_WRITE_TO_T55XX, data)
+        return self.device.send_cmd_sync(Command.JABLOTRON_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
+    def idteck_write_to_t55xx(self, id_bytes: bytes):
+        """
+        Write an IDTECK 64-bit PSK1 frame onto a T55xx tag.
+
+        :param id_bytes: 8 bytes = full 64-bit frame (preamble 4 bytes + data 4 bytes)
+        :return:
+        """
+        if len(id_bytes) != 8:
+            raise ValueError("The id bytes length must equal 8")
+        data = struct.pack(f'!8s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.IDTECK_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
+    def adc_generic_read(self):
+        """
+        Read the ADC when the field is on.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.ADC_GENERIC_READ, None)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data
+        return resp
 
     @expect_response(Status.SUCCESS)
     def get_slot_info(self):
         """
-            Get slots info.
+        Get slots info.
 
         :return:
         """
@@ -401,7 +853,7 @@ class ChameleonCMD:
     @expect_response(Status.SUCCESS)
     def get_active_slot(self):
         """
-            Get selected slot.
+        Get selected slot.
 
         :return:
         """
@@ -413,7 +865,7 @@ class ChameleonCMD:
     @expect_response(Status.SUCCESS)
     def set_active_slot(self, slot_index: SlotNumber):
         """
-            Set the card slot currently active for use.
+        Set the card slot currently active for use.
 
         :param slot_index: Card slot index
         :return:
@@ -425,7 +877,7 @@ class ChameleonCMD:
     @expect_response(Status.SUCCESS)
     def set_slot_tag_type(self, slot_index: SlotNumber, tag_type: TagSpecificType):
         """
-        Set the label type of the simulated card of the current card slot
+        Set the label type of the emulated card of the current card slot
         Note: This operation will not change the data in the flash,
         and the change of the data in the flash will only be updated at the next save.
 
@@ -440,7 +892,7 @@ class ChameleonCMD:
     @expect_response(Status.SUCCESS)
     def delete_slot_sense_type(self, slot_index: SlotNumber, sense_type: TagSenseType):
         """
-            Delete a sense type for a specific slot.
+        Delete a sense type for a specific slot.
 
         :param slot_index: Slot index
         :param sense_type: Sense type to disable
@@ -452,7 +904,7 @@ class ChameleonCMD:
     @expect_response(Status.SUCCESS)
     def set_slot_data_default(self, slot_index: SlotNumber, tag_type: TagSpecificType):
         """
-        Set the data of the simulated card in the specified card slot as the default data
+        Set the data of the emulated card in the specified card slot as the default data
         Note: This API will set the data in the flash together.
 
         :param slot_index: Card slot number
@@ -476,26 +928,199 @@ class ChameleonCMD:
         data = struct.pack('!BBB', SlotNumber.to_fw(slot_index), sense_type, enabled)
         return self.device.send_cmd_sync(Command.SET_SLOT_ENABLE, data)
 
+    def _get_active_lf_tag_type(self) -> TagSpecificType:
+        slotinfo = self.get_slot_info()
+        active_slot = SlotNumber.from_fw(self.get_active_slot())
+        lf_tag_value = slotinfo[active_slot - 1]['lf']
+        return TagSpecificType(lf_tag_value)
+
     @expect_response(Status.SUCCESS)
     def em410x_set_emu_id(self, id: bytes):
         """
-        Set the card number simulated by EM410x.
+        Set the card number emulated by EM410x.
 
         :param id_bytes: byte of the card number
         :return:
         """
-        if len(id) != 5:
-            raise ValueError("The id bytes length must equal 5")
-        data = struct.pack('5s', id)
+        lf_tag_type = self._get_active_lf_tag_type()
+        if lf_tag_type == TagSpecificType.EM410X_ELECTRA:
+            expected_len = 13
+        elif lf_tag_type == TagSpecificType.EM410X:
+            expected_len = 5
+        else:
+            raise ValueError(f"Active LF slot type {lf_tag_type} is not EM410X")
+
+        if len(id) != expected_len:
+            raise ValueError(f"The id bytes length must equal {expected_len}")
+
+        data = struct.pack(f'!{expected_len}s', id)
         return self.device.send_cmd_sync(Command.EM410X_SET_EMU_ID, data)
 
     @expect_response(Status.SUCCESS)
     def em410x_get_emu_id(self):
         """
-            Get the simulated EM410x card id
+        Get the emulated EM410x card id
         """
         resp = self.device.send_cmd_sync(Command.EM410X_GET_EMU_ID)
+        if resp.status == Status.SUCCESS:
+            data = resp.data
+            id_bytes = data
+            tag_type = None
+
+            if len(data) >= 2:
+                try:
+                    candidate = TagSpecificType(int.from_bytes(data[:2], byteorder='big'))
+                except ValueError:
+                    candidate = None
+
+                if candidate in (TagSpecificType.EM410X, TagSpecificType.EM410X_ELECTRA):
+                    expected_len = 13 if candidate == TagSpecificType.EM410X_ELECTRA else 5
+                    if len(data) == expected_len + 2:
+                        tag_type = candidate
+                        id_bytes = data[2:2 + expected_len]
+
+            if tag_type is None:
+                lf_tag_type = self._get_active_lf_tag_type()
+                if lf_tag_type == TagSpecificType.EM410X_ELECTRA:
+                    expected_len = 13
+                elif lf_tag_type == TagSpecificType.EM410X:
+                    expected_len = 5
+                else:
+                    expected_len = len(data)
+                id_bytes = data[:expected_len]
+
+            resp.parsed = id_bytes
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def hidprox_set_emu_id(self, id: bytes):
+        """
+        Set the card number emulated by HID Prox.
+
+        :param id_bytes: byte of the card number
+        :return:
+        """
+        if len(id) != 13:
+            raise ValueError("The id bytes length must equal 13")
+        return self.device.send_cmd_sync(Command.HIDPROX_SET_EMU_ID, id)
+
+    @expect_response(Status.SUCCESS)
+    def hidprox_get_emu_id(self):
+        """
+        Get the emulated HID Prox card id
+        """
+        resp = self.device.send_cmd_sync(Command.HIDPROX_GET_EMU_ID)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = struct.unpack('>BIBIBH', resp.data[:13])
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def ioprox_set_emu_id(self, id: bytes):
+        """
+        Set the card number emulated by ioProx.
+
+        :param id_bytes: byte of the card number
+        :return:
+        """
+        if len(id) != 16:
+            raise ValueError("The id bytes length must equal 16")
+        return self.device.send_cmd_sync(Command.IOPROX_SET_EMU_ID, id)
+
+    @expect_response(Status.SUCCESS)
+    def ioprox_get_emu_id(self):
+        """
+        Get the emulated ioProx card id
+        """
+        resp = self.device.send_cmd_sync(Command.IOPROX_GET_EMU_ID)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def idteck_set_emu_id(self, id: bytes):
+        """
+        Set the 64-bit IDTECK frame emulated on the active slot.
+
+        :param id: 8 bytes (preamble + card data, big-endian)
+        """
+        if len(id) != 8:
+            raise ValueError("The id bytes length must equal 8")
+        return self.device.send_cmd_sync(Command.IDTECK_SET_EMU_ID, id)
+
+    @expect_response(Status.SUCCESS)
+    def idteck_get_emu_id(self):
+        """
+        Get the emulated IDTECK 64-bit frame.
+        """
+        resp = self.device.send_cmd_sync(Command.IDTECK_GET_EMU_ID)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data[:8]
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def viking_set_emu_id(self, id: bytes):
+        """
+        Set the card number emulated by Viking.
+
+        :param id_bytes: byte of the card number
+        :return:
+        """
+        if len(id) != 4:
+            raise ValueError("The id bytes length must equal 4")
+        data = struct.pack('4s', id)
+        return self.device.send_cmd_sync(Command.VIKING_SET_EMU_ID, data)
+
+    @expect_response(Status.SUCCESS)
+    def viking_get_emu_id(self):
+        """
+        Get the emulated Viking card id
+        """
+        resp = self.device.send_cmd_sync(Command.VIKING_GET_EMU_ID)
         resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def pac_set_emu_id(self, id: bytes):
+        """
+        Set the card ID emulated by PAC/Stanley.
+
+        :param id: 8-byte ASCII card ID
+        :return:
+        """
+        if len(id) != 8:
+            raise ValueError("The id bytes length must equal 8")
+        data = struct.pack('8s', id)
+        return self.device.send_cmd_sync(Command.PAC_SET_EMU_ID, data)
+
+    @expect_response(Status.SUCCESS)
+    def pac_get_emu_id(self):
+        """
+        Get the emulated PAC/Stanley card ID
+        """
+        resp = self.device.send_cmd_sync(Command.PAC_GET_EMU_ID)
+        resp.parsed = resp.data[:8]
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def jablotron_set_emu_id(self, id: bytes):
+        """
+        Set the card number emulated by Jablotron.
+
+        :param id: 5-byte Jablotron card ID
+        :return:
+        """
+        if len(id) != 5:
+            raise ValueError("The id bytes length must equal 5")
+        data = struct.pack('5s', id)
+        return self.device.send_cmd_sync(Command.JABLOTRON_SET_EMU_ID, data)
+
+    @expect_response(Status.SUCCESS)
+    def jablotron_get_emu_id(self):
+        """
+        Get the emulated Jablotron card id
+        """
+        resp = self.device.send_cmd_sync(Command.JABLOTRON_GET_EMU_ID)
+        resp.parsed = resp.data[:5]
         return resp
 
     @expect_response(Status.SUCCESS)
@@ -551,6 +1176,64 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
+    def mf0_ntag_get_detection_enable(self):
+        """
+        Get whether NTAG password detection is enabled.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_GET_DETECTION_ENABLE)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = struct.unpack('!B', resp.data)[0] == 1
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mf0_ntag_set_detection_enable(self, enabled: bool):
+        """
+        Set whether to enable NTAG password detection.
+
+        :param enable: Whether to enable
+        :return:
+        """
+        data = struct.pack('!B', enabled)
+        return self.device.send_cmd_sync(Command.MF0_NTAG_SET_DETECTION_ENABLE, data)
+
+    @expect_response(Status.SUCCESS)
+    def mf0_ntag_get_detection_count(self):
+        """
+        Get the statistics of the current NTAG password detection records.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_GET_DETECTION_COUNT)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = struct.unpack('!I', resp.data)[0]
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mf0_ntag_get_detection_log(self, index: int):
+        """
+        Get NTAG password detection logs from the specified index position.
+
+        :param index: start index
+        :return:
+        """
+        data = struct.pack('!I', index)
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_GET_DETECTION_LOG, data)
+        if resp.status == Status.SUCCESS:
+            # convert - each log entry is just a 4-byte password
+            result_list = []
+            pos = 0
+            while pos < len(resp.data):
+                password = resp.data[pos:pos+4]
+                result_list.append({
+                    'password': password.hex()
+                })
+                pos += 4
+            resp.parsed = result_list
+        return resp
+
+    @expect_response(Status.SUCCESS)
     def mf1_write_emu_block_data(self, block_start: int, block_data: bytes):
         """
         Set the block data of the analog card of MF1.
@@ -571,6 +1254,70 @@ class ChameleonCMD:
         data = struct.pack('!BB', block_start, block_count)
         resp = self.device.send_cmd_sync(Command.MF1_READ_EMU_BLOCK_DATA, data)
         resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mfu_get_emu_pages_count(self):
+        """
+            Gets the number of pages available in the current MF0 / NTAG slot
+        """
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_GET_PAGE_COUNT)
+        resp.parsed = resp.data[0]
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mfu_read_emu_page_data(self, page_start: int, page_count: int):
+        """
+            Gets data for selected block range
+        """
+        data = struct.pack('!BB', page_start, page_count)
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_READ_EMU_PAGE_DATA, data)
+        resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mfu_write_emu_page_data(self, page_start: int, data: bytes):
+        """
+            Gets data for selected block range
+        """
+        count = len(data) >> 2
+
+        assert (len(data) % 4) == 0
+        assert (page_start >= 0) and (count + page_start) <= 256
+
+        data = struct.pack('!BB', page_start, count) + data
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_WRITE_EMU_PAGE_DATA, data)
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mfu_read_emu_counter_data(self, index: int) -> tuple[int, bool]:
+        """
+            Gets data for selected counter
+        """
+        data = struct.pack('!B', index)
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_GET_COUNTER_DATA, data)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = (((resp.data[2] << 16) | (resp.data[1] << 8) | resp.data[0]), resp.data[3] == 0xBD)
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mfu_write_emu_counter_data(self, index: int, value: int, reset_tearing: bool):
+        """
+            Sets data for selected counter
+        """
+        data = struct.pack('!BBBB', index | (int(reset_tearing) << 7),
+                           value & 0xFF, (value >> 8) & 0xFF, (value >> 16) & 0xFF)
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_SET_COUNTER_DATA, data)
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mfu_reset_auth_cnt(self):
+        """
+            Resets authentication counter
+        """
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_RESET_AUTH_CNT, bytes())
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data[0]
         return resp
 
     @expect_response(Status.SUCCESS)
@@ -617,6 +1364,41 @@ class ChameleonCMD:
         data = struct.pack('!BB', SlotNumber.to_fw(slot), sense_type)
         resp = self.device.send_cmd_sync(Command.GET_SLOT_TAG_NICK, data)
         resp.parsed = resp.data.decode(encoding="utf8")
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def get_all_slot_nicks(self):
+        resp = self.device.send_cmd_sync(Command.GET_ALL_SLOT_NICKS, b'')
+
+        slots = []
+        i = 0
+        slot_index = 0
+
+        while i < len(resp.data) and slot_index < 8:
+            slot_names = {'hf': '', 'lf': ''}
+
+            if i < len(resp.data):
+                hf_len = resp.data[i]
+                i += 1
+                if hf_len > 0 and i + hf_len <= len(resp.data):
+                    slot_names['hf'] = resp.data[i:i + hf_len].decode(encoding="utf8", errors="ignore")
+                    i += hf_len
+                else:
+                    i += hf_len
+
+            if i < len(resp.data):
+                lf_len = resp.data[i]
+                i += 1
+                if lf_len > 0 and i + lf_len <= len(resp.data):
+                    slot_names['lf'] = resp.data[i:i + lf_len].decode(encoding="utf8", errors="ignore")
+                    i += lf_len
+                else:
+                    i += lf_len
+
+            slots.append(slot_names)
+            slot_index += 1
+
+        resp.parsed = slots
         return resp
 
     @expect_response(Status.SUCCESS)
@@ -686,6 +1468,26 @@ class ChameleonCMD:
         data = struct.pack('!B', mode)
         return self.device.send_cmd_sync(Command.MF1_SET_WRITE_MODE, data)
 
+    def mf1_get_prng_type(self):
+        """
+        Get PRNG type used for MF1 auth nonce:
+          0 = Static  (fixed nonce)
+          1 = Weak    (LFSR-based, predictable)
+          2 = Hard    (unpredictable)
+        """
+        resp = self.device.send_cmd_sync(Command.MF1_GET_PRNG_TYPE)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data[0]
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mf1_set_prng_type(self, prng_type: int):
+        """
+        Set PRNG type (0=Static, 1=Weak, 2=Hard)
+        """
+        data = struct.pack('!B', prng_type)
+        return self.device.send_cmd_sync(Command.MF1_SET_PRNG_TYPE, data)
+
     @expect_response(Status.SUCCESS)
     def slot_data_config_save(self):
         """
@@ -728,6 +1530,24 @@ class ChameleonCMD:
         """
         data = struct.pack('!B', value)
         return self.device.send_cmd_sync(Command.SET_ANIMATION_MODE, data)
+
+    @expect_response(Status.SUCCESS)
+    def get_sleep_timeout(self):
+        """
+        Get the wake timeout (in seconds) after a button wakeup
+        """
+        resp = self.device.send_cmd_sync(Command.GET_SLEEP_TIMEOUT)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = struct.unpack('!B', resp.data)[0]
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def set_sleep_timeout(self, seconds: int):
+        """
+        Set the wake timeout (in seconds) after a button wakeup
+        """
+        data = struct.pack('!B', seconds)
+        return self.device.send_cmd_sync(Command.SET_SLEEP_TIMEOUT, data)
 
     @expect_response(Status.SUCCESS)
     def reset_settings(self):
@@ -868,7 +1688,7 @@ class ChameleonCMD:
     def get_device_settings(self):
         """
         Get all possible settings
-        For version 5:
+        For version 6:
         settings[0] = SETTINGS_CURRENT_VERSION; // current version
         settings[1] = settings_get_animation_config(); // animation mode
         settings[2] = settings_get_button_press_config('A'); // short A button press mode
@@ -877,6 +1697,7 @@ class ChameleonCMD:
         settings[5] = settings_get_long_button_press_config('B'); // long B button press mode
         settings[6] = settings_get_ble_pairing_enable(); // does device require pairing
         settings[7:13] = settings_get_ble_pairing_key(); // BLE pairing key
+        settings[13] = sleep_timeout in seconds; // wake timeout after button wakeup
         """
         resp = self.device.send_cmd_sync(Command.GET_DEVICE_SETTINGS)
         if resp.status == Status.SUCCESS:
@@ -887,8 +1708,8 @@ class ChameleonCMD:
                 raise ValueError("Settings version in app newer than Chameleon. "
                                  "Please upgrade Chameleon firmware")
             settings_version, animation_mode, btn_press_A, btn_press_B, btn_long_press_A, \
-                btn_long_press_B, ble_pairing_enable, ble_pairing_key = \
-                struct.unpack('!BBBBBBB6s', resp.data)
+                btn_long_press_B, ble_pairing_enable, ble_pairing_key, sleep_timeout = \
+                struct.unpack('!BBBBBBB6sB', resp.data)
             resp.parsed = {'settings_version': settings_version,
                            'animation_mode': animation_mode,
                            'btn_press_A': btn_press_A,
@@ -896,7 +1717,8 @@ class ChameleonCMD:
                            'btn_long_press_A': btn_long_press_A,
                            'btn_long_press_B': btn_long_press_B,
                            'ble_pairing_enable': ble_pairing_enable,
-                           'ble_pairing_key': ble_pairing_key}
+                           'ble_pairing_key': ble_pairing_key,
+                           'sleep_timeout': sleep_timeout}
         return resp
 
     @expect_response(Status.SUCCESS)
@@ -920,6 +1742,59 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
+    def mf0_ntag_get_uid_magic_mode(self):
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_GET_UID_MAGIC_MODE)
+        if resp.status == Status.SUCCESS:
+            resp.parsed, = struct.unpack('!?', resp.data)
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mf0_ntag_set_uid_magic_mode(self, enabled: bool):
+        return self.device.send_cmd_sync(Command.MF0_NTAG_SET_UID_MAGIC_MODE, struct.pack('?', enabled))
+
+    @expect_response(Status.SUCCESS)
+    def mf0_ntag_get_version_data(self):
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_GET_VERSION_DATA)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data[:8]
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mf0_ntag_set_version_data(self, data: bytes):
+        assert len(data) == 8
+        return self.device.send_cmd_sync(Command.MF0_NTAG_SET_VERSION_DATA, data)
+
+    @expect_response(Status.SUCCESS)
+    def mf0_ntag_get_signature_data(self):
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_GET_SIGNATURE_DATA)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data[:32]
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mf0_ntag_set_signature_data(self, data: bytes):
+        assert len(data) == 32
+        return self.device.send_cmd_sync(Command.MF0_NTAG_SET_SIGNATURE_DATA, data)
+
+    @expect_response(Status.SUCCESS)
+    def mf0_ntag_get_write_mode(self):
+        """
+        Get write mode for MF0/NTAG
+        """
+        resp = self.device.send_cmd_sync(Command.MF0_NTAG_GET_WRITE_MODE)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data[0]
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mf0_ntag_set_write_mode(self, mode: int):
+        """
+        Set write mode for MF0/NTAG
+        """
+        data = struct.pack('!B', mode)
+        return self.device.send_cmd_sync(Command.MF0_NTAG_SET_WRITE_MODE, data)
+
+    @expect_response(Status.SUCCESS)
     def get_ble_pairing_enable(self):
         """
         Is ble pairing enable?
@@ -935,6 +1810,18 @@ class ChameleonCMD:
     def set_ble_pairing_enable(self, enabled: bool):
         data = struct.pack('!B', enabled)
         return self.device.send_cmd_sync(Command.SET_BLE_PAIRING_ENABLE, data)
+
+    @expect_response(Status.SUCCESS)
+    def mf1_get_field_off_do_reset(self):
+        resp = self.device.send_cmd_sync(Command.MF1_GET_FIELD_OFF_DO_RESET)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = struct.unpack('!B', resp.data)[0] == 1
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mf1_set_field_off_do_reset(self, enabled: bool):
+        data = struct.pack('!B', enabled)
+        return self.device.send_cmd_sync(Command.MF1_SET_FIELD_OFF_DO_RESET, data)
 
 
 def test_fn():

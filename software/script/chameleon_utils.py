@@ -1,4 +1,10 @@
 import argparse
+import subprocess
+import sys
+import tempfile
+import os.path
+from pathlib import Path
+
 import colorama
 from functools import wraps
 # once Python3.10 is mainstream, we can replace Union[str, None] by str | None
@@ -17,6 +23,8 @@ CC = colorama.Fore.CYAN
 CY = colorama.Fore.YELLOW
 CM = colorama.Fore.MAGENTA
 C0 = colorama.Style.RESET_ALL
+
+default_cwd = Path.cwd() / Path(__file__).with_name("bin")
 
 
 class ArgsParserError(Exception):
@@ -48,59 +56,77 @@ class ArgumentParserNoExit(argparse.ArgumentParser):
     def exit(self, status: int = 0, message: Union[str, None] = None):
         if message:
             raise ParserExitIntercept(message)
+            # status=0 means help was printed; raise to stop argparse continuing
+            # to validate required args (which would cause a second print_help call)
+        raise ParserExitIntercept('')
 
     def error(self, message: str):
         args = {'prog': self.prog, 'message': message}
         raise ArgsParserError('%(prog)s: error: %(message)s\n' % args)
 
-    def print_help(self):
-        """
-        Colorize argparse help
-        """
-        print("-" * 80)
-        print(f"{CR}{self.prog}{C0}\n")
-        lines = self.format_help().splitlines()
-        usage = lines[:lines.index('')]
-        assert usage[0].startswith('usage:')
-        usage[0] = usage[0].replace('usage:', f'{CG}usage:{C0}\n ')
-        usage[0] = usage[0].replace(self.prog, f'{CR}{self.prog}{C0}')
-        usage = [usage[0]] + [x[4:] for x in usage[1:]] + ['']
-        lines = lines[lines.index('')+1:]
-        desc = lines[:lines.index('')]
-        print(f'{CC}'+'\n'.join(desc)+f'{C0}\n')
-        print('\n'.join(usage))
-        lines = lines[lines.index('')+1:]
-        if '' in lines:
-            options = lines[:lines.index('')]
-            lines = lines[lines.index('')+1:]
-        else:
-            options = lines
+
+def print_help(self):
+    """
+    Colorize argparse help
+    """
+    print("-" * 80)
+    print(color_string((CR, self.prog)))
+
+    # Get the help text and split it, filtering out leading empty lines
+    raw_lines = self.format_help().splitlines()
+    lines = [line for line in raw_lines if line.strip() or line == '']
+
+    # Find the usage block safely
+    usage_start = -1
+    for i, line in enumerate(lines):
+        if line.strip().startswith('usage:'):
+            usage_start = i
+            break
+
+    if usage_start != -1:
+        # We found a usage line, extract the block until the first empty line
+        try:
+            empty_after_usage = lines.index('', usage_start)
+            usage = lines[usage_start:empty_after_usage]
+
+            # Apply coloring to the usage string
+            usage[0] = usage[0].replace('usage:', f'{color_string((CG, "usage:"))}\n ')
+            usage[0] = usage[0].replace(self.prog, color_string((CR, self.prog)))
+
+            # Reformat indentation and print
+            usage_to_print = [usage[0]] + [x[4:] for x in usage[1:]] + ['']
+            print('\n'.join(usage_to_print))
+
+            # Advance lines pointer to after the usage block
+            lines = lines[empty_after_usage + 1:]
+        except ValueError:
+            # If no empty line found, just print what we have
+            print('\n'.join(lines[usage_start:]))
             lines = []
-        if len(options) > 0 and options[0].strip() == 'positional arguments:':
-            positional_args = options
-            positional_args[0] = positional_args[0].replace('positional arguments:', f'{CG}positional arguments:{C0}')
-            if len(positional_args) > 1:
-                positional_args.append('')
-            print('\n'.join(positional_args))
-            if '' in lines:
-                options = lines[:lines.index('')]
-                lines = lines[lines.index('')+1:]
-            else:
-                options = lines
-                lines = []
-        if len(options) > 0:
-            # 2 variants depending on Python version(?)
-            assert options[0].strip() in ['options:', 'optional arguments:']
-            options[0] = options[0].replace('options:', f'{CG}options:{C0}')
-            options[0] = options[0].replace('optional arguments:', f'{CG}optional arguments:{C0}')
-            if len(options) > 1:
-                options.append('')
-            print('\n'.join(options))
-        if len(lines) > 0:
-            lines[0] = f'{CG}{lines[0]}{C0}'
-            print('\n'.join(lines))
-        print('')
-        self.help_requested = True
+
+    # Print description if available
+    if lines and lines[0].strip() != '':
+        try:
+            desc_end = lines.index('')
+            desc = lines[:desc_end]
+            print(color_string((CC, "\n".join(desc))))
+            lines = lines[desc_end + 1:]
+        except ValueError:
+            pass
+
+    # Handle options and positional arguments without crashing on strict matches
+    for line in lines:
+        clean_line = line.strip().lower()
+        if clean_line == 'positional arguments:':
+            print(color_string((CG, line)))
+        elif clean_line in ['options:', 'optional arguments:']:
+            print(color_string((CG, line)))
+        else:
+            print(line)
+
+    print('')
+    self.help_requested = True
+
 
 def print_mem_dump(bindata, blocksize):
 
@@ -114,9 +140,103 @@ def print_mem_dump(bindata, blocksize):
     blk_index = 1
     for b in blocks:
         hexstr = ' '.join(b.hex()[i:i+2] for i in range(0, len(b.hex()), 2))
-        asciistr = ''.join([chr(b[i]) if (b[i] > 31 and b[i] < 127) else '.' for i in range(0,len(b),1)])
+        asciistr = ''.join([chr(b[i]) if (b[i] > 31 and b[i] < 127) else '.' for i in range(0, len(b), 1)])
         print(f"[=] {blk_index:3} | {hexstr.upper()} | {asciistr} ")
         blk_index += 1
+
+
+def print_key_table(key_map):
+    key_width = max(
+        max(len(k) for k in key_map["A"].values()),
+        max(len(k) for k in key_map["B"].values()),
+        len("key A"),
+        len("key B"),
+    )
+    header_line = f"[=] {'-'*5}+{'-'*(key_width+2)}+{'-'*(key_width+2)}"
+    print(header_line)
+    print(f"[=]  sec | key A{' '*(key_width-5)} | key B{' '*(key_width-5)}")
+    print(header_line)
+    for sec, (a, b) in enumerate(zip(key_map["A"].values(), key_map["B"].values())):
+        print(f"[=]  {sec:02d}  | {a:{key_width}} | {b:{key_width}}")
+    print(header_line)
+
+
+def _swap_endian(x):
+    x = ((x >> 8) & 0x00ff00ff) | ((x & 0x00ff00ff) << 8)
+    x = (x >> 16) | (x << 16)
+    return x & 0xFFFFFFFF
+
+
+def prng_successor(x, n):
+    x = _swap_endian(x)
+
+    while n > 0:
+        x = (x >> 1) | (
+            (((x >> 16) ^ (x >> 18) ^ (x >> 19) ^ (x >> 21)) & 0x1) << 31
+        )
+        x = x & 0xFFFFFFFF
+        n -= 1
+
+    return _swap_endian(x)
+
+
+def reconstruct_full_nt(response_data, offset):
+    nt = int.from_bytes(response_data[offset: offset + 2], byteorder='big')
+
+    return (nt << 16) | prng_successor(nt, 16)
+
+
+def parity_to_str(nt_par_err):
+    return "".join(
+        [
+            str((nt_par_err >> 3) & 1),
+            str((nt_par_err >> 2) & 1),
+            str((nt_par_err >> 1) & 1),
+            str(nt_par_err & 1),
+        ]
+    )
+
+
+def execute_tool(tool_name, args):
+    if sys.platform == "win32":
+        tool_executable = f"{tool_name}.exe"
+    else:
+        tool_executable = f"./{tool_name}"
+
+    tool_path = os.path.join(default_cwd, tool_executable)
+    cmd_recover_list = [tool_path]
+    cmd_recover_list.extend(args)
+
+    # print(f"Executing: {' '.join(cmd_recover_list)}")
+
+    temp_output_file = tempfile.NamedTemporaryFile(
+        suffix=".log", prefix="output_", delete=True,
+        mode='w+', encoding='utf-8', errors='replace'
+    )
+
+    process = subprocess.Popen(
+        cmd_recover_list,
+        cwd=tempfile.gettempdir(),
+        stdout=temp_output_file,
+        stderr=subprocess.STDOUT,
+    )
+
+    ret_code = process.wait()
+    temp_output_file.seek(0)
+
+    if ret_code:
+        raise Exception('Failed to execute tool: ' + temp_output_file.read())
+
+    return temp_output_file.read()
+
+
+def tqdm_if_exists(iterator):
+    try:
+        import tqdm
+        return tqdm.tqdm(iterator)
+    except ImportError:
+        return iterator
+
 
 def expect_response(accepted_responses: Union[int, list[int]]) -> Callable[..., Any]:
     """
@@ -142,6 +262,14 @@ def expect_response(accepted_responses: Union[int, list[int]]) -> Callable[..., 
         return error_throwing_func
 
     return decorator
+
+
+def color_string(*args):
+    result = []
+    for arg in args:
+        result.append(f"{arg[0]}{arg[1]}")
+    result.append(C0)
+    return "".join(result)
 
 
 class CLITree:

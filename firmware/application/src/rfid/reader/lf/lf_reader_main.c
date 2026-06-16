@@ -1,8 +1,19 @@
-#include "bsp_time.h"
-#include "bsp_delay.h"
 #include "lf_reader_main.h"
-#include "lf_125khz_radio.h"
 
+#include <stdbool.h>
+#include "bsp_delay.h"
+#include "bsp_time.h"
+#include "hex_utils.h"
+#include "lf_125khz_radio.h"
+#include "lf_reader_data.h"
+#include "protocols/em410x.h"
+#include "protocols/ioprox.h"
+#include "protocols/hidprox.h"
+#include "protocols/idteck.h"
+#include "protocols/t55xx.h"
+#include "protocols/jablotron.h"
+#include "protocols/pac.h"
+#include "protocols/viking.h"
 
 #define NRF_LOG_MODULE_NAME lf_main
 #include "nrf_log.h"
@@ -10,104 +21,258 @@
 #include "nrf_log_default_backends.h"
 NRF_LOG_MODULE_REGISTER();
 
-
 // The default card search is available N Millisecond timeout
-uint32_t g_timeout_readem_ms = 500;
-
-
-/**
-* Search EM410X tag
-*/
-uint8_t PcdScanEM410X(uint8_t *uid) {
-    uint8_t ret = STATUS_EM410X_TAG_NO_FOUND;
-    if (em410x_read(uid, g_timeout_readem_ms) == 1) {
-        ret = STATUS_LF_TAG_OK;
-    }
-    return ret;
-}
+static uint32_t g_timeout_readem_ms = 500;
 
 /**
-* Check whether there is a specified UID tag on the current field
-*/
-uint8_t check_write_ok(uint8_t *uid, uint8_t *newuid, uint8_t on_uid_diff_return) {
-    // After the card is written, we need to read it once,
-    // If the data I read is incorrect, it means that the writing fails
-    if (PcdScanEM410X(newuid) != STATUS_LF_TAG_OK) {
-        return STATUS_EM410X_TAG_NO_FOUND;
-    }
-    // If you read the card number the same
-    // Explanation is successful (maybe)
-    if (
-        uid[0] == newuid[0] &&
-        uid[1] == newuid[1] &&
-        uid[2] == newuid[2] &&
-        uid[3] == newuid[3] &&
-        uid[4] == newuid[4]) {
+ * Search EM410X tag
+ */
+uint8_t scan_em410x(uint8_t *uid) {
+    if (em410x_read(uid, g_timeout_readem_ms)) {
         return STATUS_LF_TAG_OK;
     }
-    // If you find the card, the card number is wrong,
-    // Then we will return the abnormal value of the inlet
-    return on_uid_diff_return;
+    return STATUS_LF_TAG_NO_FOUND;
 }
 
 /**
-* Write T55XX tag
-*/
-uint8_t PcdWriteT55XX(uint8_t *uid, uint8_t *newkey, uint8_t *old_keys, uint8_t old_key_count) {
-    uint8_t datas[8] = { 255 };
-    uint8_t i;
-
-    init_t55xx_hw();
-    start_lf_125khz_radio();
-
-    bsp_delay_ms(1);    // Delays for a while after starting the field
-
-    // keys Need at least two, one newkey, one Oldkey
-    // one key The length is 4 Byte
-    // uid newkey oldkeys * n
-
-    // The key transmitted in iterative,
-    // Reset T55XX tags
-    // printf("The old keys count: %d\r\n", old_key_count);
-    for (i = 0; i < old_key_count; i++) {
-        T55xx_Reset_Passwd(old_keys + (i * 4), newkey);
-        /*
-        printf("oldkey is: %02x%02x%02x%02x\r\n",
-            (old_keys + (i * 4))[0],
-            (old_keys + (i * 4))[1],
-            (old_keys + (i * 4))[2],
-            (old_keys + (i * 4))[3]
-        );*/
+ * Search HID Prox tag
+ */
+uint8_t scan_hidprox(uint8_t *data, uint8_t format_hint) {
+    if (hidprox_read(data, format_hint, g_timeout_readem_ms)) {
+        return STATUS_LF_TAG_OK;
     }
+    return STATUS_LF_TAG_NO_FOUND;
+}
 
-    // In order to avoid the labels of a special control area,
-    // We use the new key here to reset the control area
-    T55xx_Reset_Passwd(newkey, newkey);
+/**
+ * @brief Search ioProx tag
+ * @param output 16 bytes ioprox_codec_t->data layout: version, facility code, card number, raw8
+ * @return STATUS_LF_TAG_OK on success
+ */
+uint8_t scan_ioprox(uint8_t *data, uint8_t format_hint) {
+    if (ioprox_read(data, format_hint, g_timeout_readem_ms)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
 
-    // The data encoded 410X is the block data to prepare for the card writing
-    em410x_encoder(uid, datas);
+/**
+ * @brief Decode raw8 data to structured ioProx format
+ * @param raw8 Input 8 bytes
+ * @param output 16 bytes ioprox_codec_t->data layout: version, facility code, card number, raw8
+ * @return STATUS_SUCCESS on success
+ */
+uint8_t decode_ioprox_raw(uint8_t *raw8, uint8_t *output) {
+    if (ioprox_decode_raw_to_data(raw8, output)) {
+        return STATUS_SUCCESS;
+    }
+    return STATUS_CMD_ERR;
+}
 
-    // After the key is reset, perform the card writing operation
-    /*
-    printf("newkey is: %02x%02x%02x%02x\r\n",
-        newkey[0],
-        newkey[1],
-        newkey[2],
-        newkey[3]
-    );
-    */
-    T55xx_Write_data(newkey, datas);
+/**
+ * @brief Encode ioProx parameters to structured ioProx format
+ * @param ver Version byte
+ * @param fc Facility code byte
+ * @param cn Card number (16-bit)
+ * @param out 16 bytes ioprox_codec_t->data layout: version, facility code, card number, raw8
+ * @return STATUS_SUCCESS on success
+ */
+uint8_t encode_ioprox_params(uint8_t ver, uint8_t fc, uint16_t cn, uint8_t *out) {
+    if (ioprox_encode_params_to_data(ver, fc, cn, out)) {
+        return STATUS_SUCCESS;
+    }
+    return STATUS_CMD_ERR;
+}
+
+/**
+ * Search PAC/Stanley tag
+ */
+uint8_t scan_pac(uint8_t *card_id) {
+    if (pac_read(card_id, g_timeout_readem_ms)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
+/**
+ * Search Viking tag
+ */
+uint8_t scan_viking(uint8_t *uid) {
+    if (viking_read(uid, g_timeout_readem_ms)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
+/**
+ * Search Jablotron tag
+ */
+uint8_t scan_jablotron(uint8_t *uid) {
+    if (jablotron_read(uid, g_timeout_readem_ms)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
+/**
+ * Try reset t55XX tag passwords by enumerating old passwords.
+ */
+static void try_reset_t55xx_passwd(uint32_t new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    for (uint8_t i = 0; i < old_passwd_count; i++) {
+        uint32_t old_passwd = bytes_to_num(old_passwds + i * 4, 4);
+        t55xx_reset_passwd(old_passwd, new_passwd);
+    }
+    t55xx_reset_passwd(new_passwd, new_passwd);
+}
+
+/**
+ * Write card data to t55xx
+ */
+static uint8_t write_t55xx(uint32_t *blks, uint8_t blk_count, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t passwd = bytes_to_num(new_passwd, 4);
+
+    start_lf_125khz_radio();
+    bsp_delay_ms(1);  // Delays for a while after starting the field
+
+    try_reset_t55xx_passwd(passwd, old_passwds, old_passwd_count);
+    t55xx_write_data(passwd, blks, blk_count);
 
     stop_lf_125khz_radio();
 
-    // Read the verification and return the results of the card writing
-    // Do not read it here, you can check it by the upper machine
+    // writing results should be verified by upper computer
     return STATUS_LF_TAG_OK;
 }
 
 /**
-* Set the time value of the card search timeout of the EM card
-*/
-void SetEMScanTagTimeout(uint32_t ms) {
-    g_timeout_readem_ms = ms;
+ * Write em410x card data to t55xx
+ */
+uint8_t write_em410x_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[7] = {0x00};
+    uint8_t blk_count = em410x_t55xx_writer(uid, blks);
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
+    }
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
 }
+
+uint8_t write_em410x_electra_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[7] = {0x00};
+    uint8_t blk_count = em410x_electra_t55xx_writer(uid, blks);
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
+    }
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
+/**
+ * Write hidprox card data to t55xx
+ */
+uint8_t write_hidprox_to_t55xx(uint8_t format, uint32_t fc, uint64_t cn, uint32_t il, uint32_t oem, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    wiegand_card_t card = {
+        .format = format,
+        .card_number = cn,
+        .facility_code = fc,
+        .issue_level = il,
+        .oem = oem,
+    };
+    uint32_t blks[7] = {0x00};
+    uint8_t blk_count = hidprox_t55xx_writer(&card, blks);
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
+    }
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
+/**
+ * Write ioprox card data to t55xx
+ */
+uint8_t write_ioprox_to_t55xx(uint8_t *card_data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    // Prepare T5577 block array: index 0 = config word, 1-2 = data blocks
+    uint32_t blks[3] = {0x00};
+
+    uint8_t blk_count = ioprox_t55xx_writer(card_data, blks);
+
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
+    }
+
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
+/**
+ * Write viking card data to t55xx
+ */
+uint8_t write_viking_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[7] = {0x00};
+    uint8_t blk_count = viking_t55xx_writer(uid, blks);
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
+    }
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
+uint8_t write_pac_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[7] = {0x00};
+    uint8_t blk_count = pac_t55xx_writer(data, blks);
+    if (blk_count == 0) return STATUS_PAR_ERR;
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
+/**
+ * Write jablotron card data to t55xx
+ */
+uint8_t write_jablotron_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[7] = {0x00};
+    uint8_t blk_count = jablotron_t55xx_writer(uid, blks);
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
+    }
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
+/**
+ * Write IDTECK card data to t55xx (PSK1 RF/32, 64-bit frame).
+ */
+uint8_t write_idteck_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[7] = {0x00};
+    uint8_t blk_count = idteck_t55xx_writer(data, blks);
+    if (blk_count == 0) return STATUS_PAR_ERR;
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
+/**
+ * Set the LF card scanning timeout value (in milliseconds).
+ */
+void set_scan_tag_timeout(uint32_t ms) { g_timeout_readem_ms = ms; }
+
+#if defined(PROJECT_CHAMELEON_ULTRA)
+/**
+ * Write a single raw 32-bit word to a T55xx block.
+ *
+ * Unlike write_em410x_to_t55xx() and friends, this writes the exact word
+ * supplied with no protocol encoding — useful for custom configuration
+ * words, recovery of locked tags, or scripted programming.
+ *
+ * Only available on Chameleon Ultra (Lite has no LF writer hardware).
+ *
+ * @param block      Block number (0-7 for page 0, 0-3 for page 1)
+ * @param word       32-bit data word to write
+ * @param passwd     Password for password-protected write (ignored when use_passwd is false)
+ * @param use_passwd true = password-protected write, false = open write
+ * @param page1      true = target page 1, false = page 0
+ * @return           STATUS_LF_TAG_OK always (T55xx gives no ACK; verify by reading back)
+ */
+uint8_t lf_t55xx_write_block(uint8_t block, uint32_t word, uint32_t passwd, bool use_passwd, bool page1) {
+    uint8_t opcode = page1 ? T5577_OPCODE_PAGE1 : T5577_OPCODE_PAGE0;
+    uint32_t *pwd_ptr = use_passwd ? &passwd : NULL;
+
+    start_lf_125khz_radio();
+    bsp_delay_ms(1);  // Delay for a while after starting the field
+
+    t55xx_send_cmd(opcode, pwd_ptr, 0, &word, block);
+    t55xx_send_cmd(T5577_OPCODE_RESET, NULL, 0, NULL, 0);
+
+    stop_lf_125khz_radio();
+    return STATUS_LF_TAG_OK;
+}
+#endif

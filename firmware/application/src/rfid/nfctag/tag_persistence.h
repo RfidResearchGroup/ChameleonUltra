@@ -2,8 +2,8 @@
 #define TAG_PERSISTENCE_H
 
 #include <stdint.h>
-#include "tag_base_type.h"
 
+#include "tag_base_type.h"
 
 typedef struct {
     uint16_t key;

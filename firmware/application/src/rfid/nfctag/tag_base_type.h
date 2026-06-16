@@ -1,10 +1,9 @@
 #ifndef TAG_BASE_TYPE_H
 #define TAG_BASE_TYPE_H
 
-
 // Field sensor type
-typedef enum  {
-    //No sense of induction
+typedef enum {
+    // No sense of induction
     TAG_SENSE_NO,
     // Low -frequency 125kHz field induction
     TAG_SENSE_LF,
@@ -13,12 +12,11 @@ typedef enum  {
 } tag_sense_type_t;
 
 /**
- *
- *The definition of all types of labels that support analog
- * Note that all the defined label type below is the specific type statistics of the application layer refine
- * No longer distinguish between high and low frequencies
+ * The definition of all types of labels that support analog
+ * Note that all the defined tag type below is the specific type statistics of
+ * the application layer refine No longer distinguish between high and low
+ * frequencies
  */
-
 typedef enum {
     TAG_TYPE_UNDEFINED = 0,
 
@@ -35,21 +33,28 @@ typedef enum {
     //////////// LF ////////////
 
     //////// ASK Tag-Talk-First   100
-    // EM410x
+    // EM410x, EM-Micro
     TAG_TYPE_EM410X = 100,
+    TAG_TYPE_EM410X_16,
+    TAG_TYPE_EM410X_32,
+    TAG_TYPE_EM410X_64,
+    TAG_TYPE_EM410X_ELECTRA,
     // FDX-B
     // securakey
     // gallagher
     // PAC/Stanley
+    TAG_TYPE_PAC = 150,
     // Presco
     // Visa2000
     // Viking
+    TAG_TYPE_VIKING = 170,
     // Noralsy
     // Jablotron
+    TAG_TYPE_JABLOTRON = 180,
 
     //////// FSK Tag-Talk-First   200
-    // HID Prox
-    // ioProx
+    TAG_TYPE_HID_PROX = 200,
+    TAG_TYPE_IOPROX,
     // AWID
     // Paradox
 
@@ -57,6 +62,7 @@ typedef enum {
     // Indala
     // Keri
     // NexWatch
+    TAG_TYPE_IDTECK = 310,
 
     //////// Reader-Talk-First    400
     // T5577
@@ -75,43 +81,54 @@ typedef enum {
     TAG_TYPE_NTAG_213 = 1100,
     TAG_TYPE_NTAG_215,
     TAG_TYPE_NTAG_216,
+    TAG_TYPE_MF0ICU1,
+    TAG_TYPE_MF0ICU2,
+    TAG_TYPE_MF0UL11,
+    TAG_TYPE_MF0UL21,
+    TAG_TYPE_NTAG_210,
+    TAG_TYPE_NTAG_212,
     // MIFARE Plus series        1200
     // DESFire series            1300
 
     // ST25TA series             2000
 
     // HF14A-4 series            3000
+    TAG_TYPE_HF14A_4 = 3000,
 
 } tag_specific_type_t;
 
 #define TAG_SPECIFIC_TYPE_OLD2NEW_LF_VALUES \
     {OLD_TAG_TYPE_EM410X, TAG_TYPE_EM410X}
 
-#define TAG_SPECIFIC_TYPE_OLD2NEW_HF_VALUES \
-    {OLD_TAG_TYPE_MIFARE_Mini, TAG_TYPE_MIFARE_Mini},\
-    {OLD_TAG_TYPE_MIFARE_1024, TAG_TYPE_MIFARE_1024},\
-    {OLD_TAG_TYPE_MIFARE_2048, TAG_TYPE_MIFARE_2048},\
-    {OLD_TAG_TYPE_MIFARE_4096, TAG_TYPE_MIFARE_4096},\
-    {OLD_TAG_TYPE_NTAG_213, TAG_TYPE_NTAG_213},\
-    {OLD_TAG_TYPE_NTAG_215, TAG_TYPE_NTAG_215},\
-    {OLD_TAG_TYPE_NTAG_216, TAG_TYPE_NTAG_216}
+#define TAG_SPECIFIC_TYPE_OLD2NEW_HF_VALUES               \
+    {OLD_TAG_TYPE_MIFARE_Mini, TAG_TYPE_MIFARE_Mini},     \
+        {OLD_TAG_TYPE_MIFARE_1024, TAG_TYPE_MIFARE_1024}, \
+        {OLD_TAG_TYPE_MIFARE_2048, TAG_TYPE_MIFARE_2048}, \
+        {OLD_TAG_TYPE_MIFARE_4096, TAG_TYPE_MIFARE_4096}, \
+        {OLD_TAG_TYPE_NTAG_213, TAG_TYPE_NTAG_213},       \
+        {OLD_TAG_TYPE_NTAG_215, TAG_TYPE_NTAG_215}, {     \
+        OLD_TAG_TYPE_NTAG_216, TAG_TYPE_NTAG_216          \
+    }
 
 #define TAG_SPECIFIC_TYPE_LF_VALUES \
-    TAG_TYPE_EM410X
+    TAG_TYPE_EM410X, TAG_TYPE_EM410X_ELECTRA, TAG_TYPE_PAC, TAG_TYPE_HID_PROX, TAG_TYPE_IOPROX, TAG_TYPE_VIKING, TAG_TYPE_JABLOTRON, TAG_TYPE_IDTECK
 
-#define TAG_SPECIFIC_TYPE_HF_VALUES \
-    TAG_TYPE_MIFARE_Mini,\
-    TAG_TYPE_MIFARE_1024,\
-    TAG_TYPE_MIFARE_2048,\
-    TAG_TYPE_MIFARE_4096,\
-    TAG_TYPE_NTAG_213,\
-    TAG_TYPE_NTAG_215,\
-    TAG_TYPE_NTAG_216
+// Tag types that use PSK1 modulation for emulation. These require the PWM
+// base clock to be set to 1MHz (see lf_tag_em.c pwm_init) so the 16us
+// subcarrier period can be expressed with a counter_top valid under the
+// nRF52 PWM spec. Legacy ASK/FSK types keep the default 125kHz base.
+#define IS_PSK1_TYPE(t) ((t) == TAG_TYPE_IDTECK)
+
+#define TAG_SPECIFIC_TYPE_HF_VALUES                                   \
+    TAG_TYPE_MIFARE_Mini, TAG_TYPE_MIFARE_1024, TAG_TYPE_MIFARE_2048, \
+        TAG_TYPE_MIFARE_4096, TAG_TYPE_NTAG_213, TAG_TYPE_NTAG_215,   \
+        TAG_TYPE_NTAG_216, TAG_TYPE_MF0ICU1, TAG_TYPE_MF0ICU2,        \
+        TAG_TYPE_MF0UL11, TAG_TYPE_MF0UL21, TAG_TYPE_NTAG_210,        \
+        TAG_TYPE_NTAG_212, TAG_TYPE_HF14A_4
 
 typedef struct {
     tag_specific_type_t tag_hf;
     tag_specific_type_t tag_lf;
 } tag_slot_specific_type_t;
-
 
 #endif

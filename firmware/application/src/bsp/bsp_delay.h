@@ -7,7 +7,6 @@
 extern "C" {
 #endif
 
-void bsp_delay_init(void);
 void bsp_delay_ms(uint16_t nms);
 void bsp_delay_us(uint32_t nus);
 

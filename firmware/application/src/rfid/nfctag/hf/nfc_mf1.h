@@ -71,8 +71,17 @@ typedef struct {
     uint8_t detection_enable: 1;
     // Allow to write block 0 (CUID/gen2 mode)
     uint8_t mode_gen2_magic: 1;
-    // reserve
-    uint8_t reserved1: 4;
+    /**
+     * Should the NFC peripheral be reset after losing the RF field?
+     * This configuration can fix the issue where some card readers cause the CU to enter a strange state of no response/incorrect response.
+     * Once in this state, the device must be restarted to resolve the issue.
+     * Alternatively, enabling this configuration for resetting the NFC after leaving the rf field can also solve the aforementioned problem.
+     */
+    uint8_t field_off_do_reset: 1;
+    // PRNG type: 0=static 1=weak/LFSR(default) 2=hard/rand
+    uint8_t prng_type: 2;
+    // reserved
+    uint8_t reserved1: 1;
     uint8_t reserved2;
     uint8_t reserved3;
 } nfc_tag_mf1_configure_t;
@@ -157,6 +166,10 @@ void nfc_tag_mf1_set_use_mf1_coll_res(bool enable);
 bool nfc_tag_mf1_is_use_mf1_coll_res(void);
 void nfc_tag_mf1_set_write_mode(nfc_tag_mf1_write_mode_t write_mode);
 nfc_tag_mf1_write_mode_t nfc_tag_mf1_get_write_mode(void);
-
+void nfc_tag_mf1_set_field_off_do_reset(bool enable);
+bool nfc_tag_mf1_is_field_off_do_reset(void);
+void nfc_tag_mf1_prng_seed(uint32_t seed);  // seed MFC LFSR PRNG from hardware RNG
+void nfc_tag_mf1_set_prng_type(uint8_t type);  // 0=static 1=weak(LFSR) 2=hard(rand)
+uint8_t nfc_tag_mf1_get_prng_type(void);
 
 #endif

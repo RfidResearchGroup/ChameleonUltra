@@ -62,7 +62,7 @@
     RC522 theDefaultTimerTimeoutConfiguration,ThisValueCanBeAdjustedDynamically,Through PcdSetTimeout function
     operationStandardM1CardMaximumWaitingTime 25ms
     weCanIncreaseTimeoutToCompatibleWithSomeDullCards
-    forExample,SomeBraceletSimulationCards,SuchAsSomeOtherHardwareSimulationCards,SuchAsColorChangingDragons
+    forExample,SomeBraceletemulationCards,SuchAsSomeOtherHardwareemulationCards,SuchAsColorChangingDragons
     ifTheTimeoutValueIsTooSmall,YouMayNotBeAbleToReadTheUid (gen1A)Card!
 */
 #define DEF_COM_TIMEOUT         25
@@ -168,6 +168,17 @@ typedef struct {
     uint8_t ats_len;  // 14443-4 answer to select size
 } PACKED picc_14a_tag_t;
 
+// A struct used to send hf14a-configs
+typedef struct {
+    int8_t forcebcc;     // 0:expect valid BCC 1:force using computed BCC 2:force using card BCC
+    int8_t forcecl2;     // 0:auto 1:force executing CL2 2:force skipping CL2
+    int8_t forcecl3;     // 0:auto 1:force executing CL3 2:force skipping CL3
+    int8_t forcerats;    // 0:auto 1:force executing RATS 2:force skipping RATS
+} PACKED hf14a_config_t;
+
+hf14a_config_t *get_hf14a_config(void);
+void set_hf14a_config(const hf14a_config_t *hc);
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -190,25 +201,25 @@ void pcd_14a_reader_timeout_set(uint16_t timeout_ms);
 
 // Device communication interface
 uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command,
-                                      uint8_t *pIn,
-                                      uint8_t  InLenByte,
-                                      uint8_t *pOut,
-                                      uint16_t *pOutLenBit,
-                                      uint16_t maxOutLenBit);
+uint8_t *pIn,
+uint8_t  InLenByte,
+uint8_t *pOut,
+uint16_t *pOutLenBit,
+uint16_t maxOutLenBit);
 uint8_t pcd_14a_reader_bytes_transfer_flags(uint8_t Command,
-                                            uint8_t *pIn,
-                                            uint8_t  InLenByte,
-                                            uint8_t *pOut,
-                                            uint16_t *pOutLenBit,
-                                            uint16_t maxOutLenBit,
-                                            uint32_t flags);
+uint8_t *pIn,
+uint8_t  InLenByte,
+uint8_t *pOut,
+uint16_t *pOutLenBit,
+uint16_t maxOutLenBit,
+uint32_t flags);
 uint8_t pcd_14a_reader_bits_transfer(uint8_t *pTx,
-                                     uint16_t  szTxBits,
-                                     uint8_t *pTxPar,
-                                     uint8_t *pRx,
-                                     uint8_t *pRxPar,
-                                     uint16_t *pRxLenBit,
-                                     uint16_t szRxLenBitMax);
+uint16_t  szTxBits,
+uint8_t *pTxPar,
+uint8_t *pRx,
+uint8_t *pRxPar,
+uint16_t *pRxLenBit,
+uint16_t szRxLenBitMax);
 
 // Device auto append and check 14443-A parity enable or disable.
 void pcd_14a_reader_parity_on(void);
@@ -237,7 +248,7 @@ uint8_t pcd_14a_reader_halt_tag(void);
 void pcd_14a_reader_fast_halt_tag(void);
 
 uint8_t pcd_14a_reader_raw_cmd(bool openRFField, bool waitResp, bool appendCrc, bool autoSelect, bool keepField, bool checkCrc, uint16_t waitRespTimeout,
-                               uint16_t szDataSendBits, uint8_t *pDataSend, uint8_t *pDataRecv, uint16_t *pszDataRecv, uint16_t szDataRecvBitMax);
+uint16_t szDataSendBits, uint8_t *pDataSend, uint8_t *pDataRecv, uint16_t *pszDataRecv, uint16_t szDataRecvBitMax);
 
 // UID & UFUID tag operation
 uint8_t pcd_14a_reader_gen1a_unlock(void);

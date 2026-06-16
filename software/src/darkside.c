@@ -28,7 +28,7 @@ int main(int argc, char *argv[]) {
     uint32_t uid = (uint32_t)atoui(argv[1]);
     uint32_t count = 0, i, j;
     uint32_t keycount = 0;
-    uint64_t *keylist = NULL, * last_keylist = NULL;
+    uint64_t *keylist = NULL, *last_keylist = NULL;
     DarksideParam *dps = NULL;
     bool no_key_recover = true;
 
