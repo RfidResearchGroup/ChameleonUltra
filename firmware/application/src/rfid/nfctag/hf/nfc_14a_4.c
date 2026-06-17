@@ -23,24 +23,24 @@
 /* ------------------------------------------------------------------ */
 #define PCB_IBLOCK_MASK     0xC0
 #define PCB_IBLOCK_VAL      0x00
-#define PCB_RBLOCK_MASK     0xE0
-#define PCB_RBLOCK_VAL      0x80   /* R(ACK) = 0xA2/0xA3, R(NAK) = 0xB2/0xB3 */
+#define PCB_RBLOCK_MASK     0xE6  /* R-block: bit8=1, bit7=0, bit6=1, bit3=0, bit2=1 */
+#define PCB_RBLOCK_VAL      0xA2  /* R(ACK) = 0xA2/0xA3, R(NAK) = 0xB2/0xB3 */
 #define PCB_SBLOCK_MASK     0xC0
 #define PCB_SBLOCK_VAL      0xC0
 #define PCB_BLOCK_NUM       0x01
-#define PCB_CID_FOLLOWING   0x10  /* bit4: CID follows */
-#define PCB_NAD_FOLLOWING   0x08  /* bit3: NAD follows */
-#define PCB_CHAIN           0x20  /* bit5: chaining flag per ISO14443-4 Table 3 */
-#define PCB_SBLOCK_WTX      0x30
+#define PCB_CID_FOLLOWING   0x08  /* bit4: CID follows */
+#define PCB_NAD_FOLLOWING   0x04  /* bit3: NAD follows */
+#define PCB_CHAIN           0x10  /* bit5: chaining flag per ISO14443-4 Table 3 */
+#define PCB_SBLOCK_WTX      0xF2
 #define PCB_SBLOCK_DESELECT 0xC2
-#define WTX_VALUE           0x3B   /* WTXM=59 (~3s extra wait) */
+#define PCB_PPS             0xD0
+#define WTX_VALUE           0x3B  /* WTXM=59 (~3s extra wait) */
 
 static inline bool is_iblock(uint8_t pcb) {
     return (pcb & PCB_IBLOCK_MASK) == PCB_IBLOCK_VAL;
 }
 static inline bool is_rblock(uint8_t pcb) {
-    /* R-block: bit7=1, bit6=0, bit2=1, bit1=0 (mask 0xC6, value 0x82) */
-    return (pcb & 0xC6) == 0x82;
+    return (pcb & PCB_RBLOCK_MASK) == PCB_RBLOCK_VAL;
 }
 static inline bool is_sblock(uint8_t pcb) {
     return (pcb & PCB_SBLOCK_MASK) == PCB_SBLOCK_VAL;
@@ -166,7 +166,7 @@ static void send_iblock(nfc_tag_14a_4_tcl_state_t *m_tcl_session_state) {
 }
 
 static void send_rack(nfc_tag_14a_4_tcl_state_t *m_tcl_session_state) {
-    uint8_t pcb = 0xA2 | (m_tcl_session_state->m_block_num & 0x01);
+    uint8_t pcb = PCB_RBLOCK_VAL | (m_tcl_session_state->m_block_num & 0x01);
     if (m_tcl_session_state->m_cid_supported) {
         pcb |= PCB_CID_FOLLOWING;
         uint8_t buf[2] = { pcb, m_tcl_session_state->m_cid & 0x0F };
@@ -227,6 +227,12 @@ bool nfc_tag_14a_4_base_handler(nfc_tag_14a_4_tcl_state_t *m_tcl_session_state, 
             }
             return false;
         }
+        if ((pcb & PCB_PPS) == PCB_PPS) {
+            /* Echo back with our own PPS */
+            uint8_t resp[1] = { PCB_PPS };
+            nfc_tag_14a_tx_bytes(resp, 1, true);
+            return false;
+        }
         return false;
     }
 
@@ -245,8 +251,7 @@ bool nfc_tag_14a_4_base_handler(nfc_tag_14a_4_tcl_state_t *m_tcl_session_state, 
 
         uint8_t offset = 1;
         if (has_cid) {
-            /* CID acknowledged but not used in responses (keeps protocol simpler) */
-            m_tcl_session_state->m_cid_supported = false;
+            m_tcl_session_state->m_cid_supported = true;
             offset++;  /* skip CID byte */
         }
         if (has_nad) offset++;
