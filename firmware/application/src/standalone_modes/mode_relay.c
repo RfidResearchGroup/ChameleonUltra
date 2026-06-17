@@ -174,6 +174,7 @@ static struct {
     size_t  result_read;
     uint8_t session_count;
     bool    result_loaded;
+    bool    live_committed;  /* current live trace already appended as a session */
 
     bool was_connected;  /* set on_connected, never cleared — used by on_exit */
     bool active;
@@ -211,16 +212,20 @@ static void result_ensure_loaded(void) {
 
 /* Forward declaration */
 static void result_save_session(uint8_t status);
+static void result_commit_live(uint8_t status);
 
-/* Flush current session state to FDS, overwriting any previous save.
- * Used for autosave — keeps exactly one in-progress session record. */
-static void result_flush_session(uint8_t status) {
-    /* Reset write cursor to overwrite the last session only */
-    result_ensure_loaded();
-    m_st.result_write  = 0;
-    m_st.result_read   = 0;
-    m_st.session_count = 0;
+/* Commit the current live trace as a new session record WITHOUT discarding
+ * previously stored sessions. Appends via result_save_session (which drops the
+ * oldest session if the buffer is full — drop-oldest ring semantics). Idempotent
+ * within a session: the live_committed flag prevents the same in-progress trace
+ * from being appended twice (e.g. by repeated get-result reads while armed).
+ * The flag is cleared at each new session boundary (RATS / new auth) so the
+ * next session is committed in turn. */
+static void result_commit_live(uint8_t status) {
+    if (m_trace_len == 0) return;       /* nothing to commit */
+    if (m_st.live_committed) return;    /* already appended this session */
     result_save_session(status);
+    m_st.live_committed = true;
 }
 
 static void result_save_session(uint8_t status) {
@@ -438,9 +443,10 @@ static void on_frame(const uint8_t *data, uint16_t bits) {
 static void on_disconnected(void) {
     NRF_LOG_INFO("relay: peer disconnected");
     pcd_14a_reader_antenna_off();   /* de-power real card on disconnect */
-    result_save_session(RELAY_SESSION_DISCONNECT);
+    result_commit_live(RELAY_SESSION_DISCONNECT);  /* append iff not already committed */
     m_trace_len         = 0;   /* prevent on_exit double-save */
     m_trace_frame_count = 0;
+    m_st.live_committed = false;   /* next connection starts a fresh session */
     m_st.sub               = RS_LINKING;
     m_st.identity_received = false;
     m_st.reader_sent_ready = false;
@@ -733,8 +739,10 @@ static standalone_rc_t on_exit(void) {
     pcd_14a_reader_antenna_off();
 
     /* Save result — must happen before tag_mode_enter() which
-     * re-initialises NFCT and can briefly interrupt USB on Windows */
-    result_save_session(RELAY_SESSION_OK);
+     * re-initialises NFCT and can briefly interrupt USB on Windows.
+     * Non-destructive: append the final in-flight session (if any, and not
+     * already committed) while keeping all previously stored sessions. */
+    result_commit_live(RELAY_SESSION_OK);
 
     /* NOTE: tag_mode_enter() is intentionally omitted here.
      * nfc_relay_tag_clear() already installed a null handler so the
@@ -757,6 +765,17 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
      * the multi-second frame timeout) doesn't block the new run's first frame.
      * Clear any half-relayed frame/response flags too. */
     if (m_st.role == BLE_RELAY_ROLE_CARD && nfc_relay_tag_take_session_reset()) {
+        /* A new RATS marks a session boundary. Commit the PREVIOUS session's
+         * trace (drop-oldest append, non-destructive) and start a fresh trace
+         * for the new transaction, so every captured auth attempt is stored
+         * rather than overwritten. */
+        if (m_trace_len > 0) {
+            result_commit_live(RELAY_SESSION_OK);
+            m_trace_len         = 0;
+            m_trace_frame_count = 0;
+        }
+        m_st.live_committed = false;   /* new session not yet committed */
+
         /* Only discard state if we were stuck waiting on the PREVIOUS run's
          * response. Do NOT blanket-clear frame_pending: the new session's
          * first I-block (AuthenticateAES) may have already arrived and set it,
@@ -816,7 +835,11 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
                 app_timer_cnt_diff_compute(now_ticks, s_last_autosave)
                     >= APP_TIMER_TICKS(15000)) {
                 s_last_autosave = now_ticks;
-                result_flush_session(RELAY_SESSION_OK);
+                /* Periodic safety commit of the in-flight session (non-destructive;
+                 * idempotent via live_committed). Boundary commits handle normal
+                 * session storage — this only guards against losing a very
+                 * long-running session to a crash/power loss before its boundary. */
+                result_commit_live(RELAY_SESSION_OK);
             }
         }
         /* Frame ISR set frame_pending when reader sends a command */
@@ -927,7 +950,7 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
                 app_timer_cnt_diff_compute(now_ticks, s_last_autosave_r)
                     >= APP_TIMER_TICKS(15000)) {
                 s_last_autosave_r = now_ticks;
-                result_flush_session(RELAY_SESSION_OK);
+                result_commit_live(RELAY_SESSION_OK);  /* non-destructive safety commit */
             }
         }
         /* Re-broadcast identity every 1s */
@@ -1075,22 +1098,22 @@ static standalone_rc_t on_button(standalone_button_evt_t evt) {
  * Result interface
  * ------------------------------------------------------------------------- */
 static size_t get_result_size(void) {
-    /* Flush any unsaved live trace so the reported size includes the current
-     * (still-armed) relay session — otherwise the CLI sees 0 and never reads. */
-    if (m_trace_len > 0) {
-        result_flush_session(RELAY_SESSION_OK);
-    }
+    /* Commit any uncommitted live trace as a session (non-destructive append)
+     * so the reported size includes the current session alongside all prior
+     * stored sessions. Idempotent: won't double-append within a session. */
+    result_commit_live(RELAY_SESSION_OK);
     return m_st.result_write;
 }
 
 static standalone_rc_t read_result(uint8_t *out, size_t out_max, size_t *out_len) {
     if (!out || !out_len) return STANDALONE_RC_INVALID_CFG;
     result_ensure_loaded();
-    /* If there are unsaved frames in the live trace (relay still armed, no
-     * autosave/disconnect yet), flush them now so get-result reflects the
-     * current session instead of only previously-saved ones. */
-    if (m_trace_len > 0 && m_st.result_read == 0) {
-        result_flush_session(RELAY_SESSION_OK);
+    /* At the start of a read pass, commit any uncommitted live trace as a
+     * session (non-destructive append) so get-result returns every stored
+     * session plus the current one. Only at result_read==0 so we don't append
+     * mid-stream. */
+    if (m_st.result_read == 0) {
+        result_commit_live(RELAY_SESSION_OK);
     }
     if (m_st.result_read >= m_st.result_write) {
         m_st.result_read = 0;
@@ -1111,6 +1134,7 @@ static void clear_result(void) {
     m_st.result_read    = 0;
     m_st.session_count  = 0;
     m_st.result_loaded  = true;
+    m_st.live_committed = false;
     m_trace_len         = 0;
     m_trace_frame_count = 0;
     app_standalone_save_result_buf(STANDALONE_MODE_RELAY, NULL, 0);
