@@ -24,6 +24,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Fix Windows build (@suut)
  - Added `hf 14a config` to deal with badly configured cards (@azuwis)
  - New Symmetrical LED Animation Mode and Improved Minimal Mode (@WillyJL)
+ - Added support for SEOS credentials (@aaronjamt)
 
 ## [v2.1.0][2025-09-02]
  - Added UV, formatter and linter. Contribution guidelines. (@GameTec-live)
