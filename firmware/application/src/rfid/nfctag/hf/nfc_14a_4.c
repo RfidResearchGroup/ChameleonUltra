@@ -33,6 +33,7 @@
 #define PCB_CHAIN           0x10  /* bit5: chaining flag per ISO14443-4 Table 3 */
 #define PCB_SBLOCK_WTX      0xF2
 #define PCB_SBLOCK_DESELECT 0xC2
+#define PCB_PPS             0xD0
 #define WTX_VALUE           0x3B  /* WTXM=59 (~3s extra wait) */
 
 static inline bool is_iblock(uint8_t pcb) {
@@ -223,6 +224,12 @@ static void nfc_tag_14a_4_state_handler(uint8_t *data, uint16_t szBytes) {
             }
             return;
         }
+        if ((pcb & PCB_PPS) == PCB_PPS) {
+            /* Echo back with our own PPS */
+            uint8_t resp[1] = { PCB_PPS };
+            nfc_tag_14a_tx_bytes(resp, 1, true);
+            return;
+        }
         return;
     }
 
@@ -241,8 +248,7 @@ static void nfc_tag_14a_4_state_handler(uint8_t *data, uint16_t szBytes) {
 
         uint8_t offset = 1;
         if (has_cid) {
-            /* CID acknowledged but not used in responses (keeps protocol simpler) */
-            m_cid_supported = false;
+            m_cid_supported = true;
             offset++;  /* skip CID byte */
         }
         if (has_nad) offset++;
