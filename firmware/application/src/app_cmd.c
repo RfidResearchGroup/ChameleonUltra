@@ -2533,16 +2533,16 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
     }
 
     /* Copy data portion (strip PCB + CRC), then handle chaining */
-    uint8_t blk_num = 0;
     uint8_t resp_pcb = resp_buf[0];
     uint8_t dlen = resp_bytes - 3; /* subtract PCB(1) + CRC(2) */
     if (dlen > 0 && resp_chain_len + dlen < sizeof(resp_chain)) {
         memcpy(&resp_chain[resp_chain_len], &resp_buf[1], dlen);
         resp_chain_len += dlen;
     }
-    blk_num ^= 1;
 
-    /* ISO14443-4 chaining: PCB bit5 (0x20) set means more blocks follow */
+    /* ISO14443-4 chaining: PCB bit5 (0x20) set means more blocks follow.
+     * The R(ACK) block number is taken directly from the received PCB
+     * (resp_pcb & 0x01), so no separate block-number counter is needed. */
     while (resp_pcb & 0x20) {
         uint8_t rack = 0xA2 | (resp_pcb & 0x01); /* R(ACK) block_num matches received I-block */
         uint8_t rack_frame[3];
@@ -2563,7 +2563,6 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
             memcpy(&resp_chain[resp_chain_len], &resp_buf[1], dlen);
             resp_chain_len += dlen;
         }
-        blk_num ^= 1;
     }
 
     return data_frame_make(cmd, STATUS_HF_TAG_OK, resp_chain_len, resp_chain);
