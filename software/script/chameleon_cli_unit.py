@@ -62,7 +62,7 @@ type_id_SAK_dict = {
     0x18: "MIFARE Classic 4K | Plus S 4K | Plus X 4K",
     0x19: "MIFARE Classic 2K",
     0x20: "MIFARE Plus EV1/EV2 | DESFire EV1/EV2/EV3 | DESFire Light | NTAG 4xx | "
-    "MIFARE Plus S 2/4K | MIFARE Plus X 2/4K | MIFARE Plus SE 1K",
+    "MIFARE Plus S 2/4K | MIFARE Plus X 2/4K | MIFARE Plus SE 1K | SEOS",
     0x28: "SmartMX with MIFARE Classic 1K",
     0x38: "SmartMX with MIFARE Classic 4K",
 }
@@ -883,6 +883,7 @@ hf_14a = hf.subgroup("14a", "ISO14443-a commands")
 hf_mf = hf.subgroup("mf", "MIFARE Classic commands")
 hf_mfu = hf.subgroup("mfu", "MIFARE Ultralight / NTAG commands")
 hf_des = hf.subgroup("des", "MIFARE DESFire commands")
+hf_seos = hf.subgroup("seos", "SEOS commands")
 
 lf = root.subgroup("lf", "Low Frequency commands")
 lf_em = lf.subgroup("em", "EM commands")
@@ -10556,3 +10557,159 @@ class HfDesChk(ReaderRequiredUnit):
                 print(f"\n   {CG}{algo:8s}  AID {aid}  key#{kno}  {key_hex}{C0}")
         else:
             print(f"\n {CR}No keys found{C0}")
+
+@hf_seos.command("eview")
+class HFSeosEView(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "View data from emulator memory"
+        self.add_slot_args(parser)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        selected_slot = self.cmd.get_active_slot()
+        slot_info = self.cmd.get_slot_info()
+        tag_type = TagSpecificType(slot_info[selected_slot]["hf"])
+
+        if tag_type != TagSpecificType.SEOS:
+            raise Exception(
+                "Card in current slot is not SEOS"
+            )
+        data = self.cmd.seos_read_emu_data()
+
+        print("[=]        Data:", data["data"].hex().upper())
+        print("[=]         OID:", data["oid"].hex().upper())
+        print("[=]         Tag:", data["tag"].hex().upper())
+        print("[=] Diversifier:", data["diversifier"].hex().upper())
+
+@hf_seos.command("eload")
+class HFSeosELoad(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Load data into emulator memory"
+        self.add_slot_args(parser)
+        self.add_hf14a_anticoll_args(parser)
+        parser.add_argument("-d", "--data", type=str, default=None, metavar="<hex>",
+                            help="Data to present to reader (2-255 bytes). Must be valid BER-TLV.")
+        parser.add_argument("-o", "--oid", type=str, default=None, metavar="<hex>",
+                            help=f"Target OID (1-32 bytes).")
+        parser.add_argument("-t", "--tag", type=str, default=None, metavar="<hex>",
+                            help=f"Tag of presented data (1-2 bytes).")
+        parser.add_argument("--diversifier", type=str, default=None, metavar="<hex>",
+                            help=f"Simulated card diversifier (1-16 bytes).")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        selected_slot = self.cmd.get_active_slot()
+        slot_info = self.cmd.get_slot_info()
+        tag_type = TagSpecificType(slot_info[selected_slot]["hf"])
+
+        if tag_type != TagSpecificType.SEOS:
+            raise Exception(
+                "Card in current slot is not SEOS"
+            )
+
+        # Handle ISO14443-A anticollision changes
+        anti_coll_data = self.cmd.hf14a_get_anti_coll_data()
+        if anti_coll_data is None or len(anti_coll_data) == 0:
+            print(
+                f"{color_string((CR, f'Slot does not contain any HF 14A config'))}"
+            )
+            return
+        uid = anti_coll_data["uid"]
+        atqa = anti_coll_data["atqa"]
+        sak = anti_coll_data["sak"]
+        ats = anti_coll_data["ats"]
+        
+        change_requested, change_done, uid, atqa, sak, ats = self.update_hf14a_anticoll(
+            args, uid, atqa, sak, ats
+        )
+
+        if (
+            args.data is None and
+            args.oid is None and
+            args.tag is None and
+            args.diversifier is None and
+            change_requested is False
+        ):
+            print(color_string((CR, "Error: No changes were requested.")))
+
+
+        seos_data = self.cmd.seos_read_emu_data()
+
+        # Parse args
+        data = bytes.fromhex(args.data) if args.data else seos_data["data"]
+        oid = bytes.fromhex(args.oid) if args.oid else seos_data["oid"]
+        tag = bytes.fromhex(args.tag) if args.tag else seos_data["tag"]
+        diversifier = bytes.fromhex(args.diversifier) if args.diversifier else seos_data["diversifier"]
+
+        # These are not currently configurable
+        hash_alg = seos_data["hash_alg"]
+        encr_alg = seos_data["encr_alg"]
+
+        if len(data) < 2 or len(data) > 255:
+            print(color_string((CR, "Error: invalid data length. Accepts 2-255 bytes.")))
+            return
+        if len(oid) < 1 or len(oid) > 32:
+            print(color_string((CR, "Error: invalid OID length. Accepts 1-32 bytes.")))
+            return
+        if len(tag) < 1 or len(tag) > 2:
+            print(color_string((CR, "Error: invalid tag length. Accepts 1-2 bytes.")))
+            return
+        if len(diversifier) < 1 or len(diversifier) > 16:
+            print(color_string((CR, "Error: invalid diversifier length. Accepts 1-16 bytes.")))
+            return
+
+        self.cmd.seos_write_emu_data(
+            data=data,
+            oid=oid,
+            tag=tag,
+            diversifier=diversifier,
+            hash_alg=hash_alg,
+            encr_alg=encr_alg
+        )
+
+@hf_seos.command("keys")
+class HFSeosKeys(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Load data into emulator memory"
+        self.add_slot_args(parser)
+        parser.add_argument("-a", "--auth", type=str, metavar="<hex>", required=True,
+                            help="Auth key (16 bytes)")
+        parser.add_argument("-e", "--privenc", type=str, metavar="<hex>", required=True,
+                            help="PrivEnc key (16 bytes)")
+        parser.add_argument("-m", "--privmac", type=str, metavar="<hex>", required=True,
+                            help="PrivMac key (16 bytes)")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        selected_slot = self.cmd.get_active_slot()
+        slot_info = self.cmd.get_slot_info()
+        tag_type = TagSpecificType(slot_info[selected_slot]["hf"])
+
+        if tag_type != TagSpecificType.SEOS:
+            raise Exception(
+                "Card in current slot is not SEOS"
+            )
+
+        # Parse args
+        auth = bytes.fromhex(args.auth)
+        privenc = bytes.fromhex(args.privenc)
+        privmac = bytes.fromhex(args.privmac)
+
+        if len(auth) != 16:
+            print(color_string((CR, "Error: invalid auth key length. Accepts 16 bytes.")))
+            return
+        if len(privenc) != 16:
+            print(color_string((CR, "Error: invalid PrivEnc key length. Accepts 16 bytes.")))
+            return
+        if len(privmac) != 16:
+            print(color_string((CR, "Error: invalid PrivMac key length. Accepts 16 bytes.")))
+            return
+
+        self.cmd.seos_write_emu_keys(
+            auth=auth,
+            privenc=privenc,
+            privmac=privmac
+        )
