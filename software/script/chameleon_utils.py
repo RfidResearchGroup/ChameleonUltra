@@ -196,6 +196,11 @@ def parity_to_str(nt_par_err):
         ]
     )
 
+def odd_parity_byte(value: int) -> int:
+    assert(value >=0 and value <= 255)
+    for i in [4, 2, 1]:
+        value ^= value >> i
+    return (value & 1) ^ 1
 
 def execute_tool(tool_name, args):
     if sys.platform == "win32":
