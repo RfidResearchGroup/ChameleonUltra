@@ -62,6 +62,18 @@ static volatile bool m_is_responded = false;
  * RX_FRAMEEND path from running nfc_fdt_reset() + re-arming RX, which would
  * close the response window before the deferred TX arrives. */
 static volatile bool m_response_deferred = false;
+
+/* When true, the relay owns the NFCT and the response window must stay wide
+ * (max FRAMEDELAYMAX ~77ms) for the entire armed session — NOT be clamped back
+ * to the 302us default after each TX. The relay's round-trip latency means any
+ * TX (WTX or buffered response) can be followed by another long wait, and a
+ * transient clamp to 302us would cause the nRF to abandon ("eat") the next
+ * response slot. Set by nfc_relay_tag on install, cleared on clear. */
+static volatile bool m_relay_hold_fdt_max = false;
+
+void nfc_tag_14a_set_relay_hold(bool hold) {
+    m_relay_hold_fdt_max = hold;
+}
 // Receiving buffer
 static uint8_t m_nfc_rx_buffer[MAX_NFC_RX_BUFFER_SIZE] = { 0x00 };
 
@@ -637,8 +649,11 @@ static inline void nrf_nfct_reset(void) {
 static inline void nfc_fdt_reset(void) {
     // STOP TX
     *(volatile uint32_t *)0x40005010 = 0x01;
-    // Reset fdt max
-    nrf_nfct_frame_delay_max_set(0x00001000UL);
+    // Reset fdt max — but not while the relay holds the NFCT (it needs the
+    // window to stay wide across its multi-round exchange).
+    if (!m_relay_hold_fdt_max) {
+        nrf_nfct_frame_delay_max_set(0x00001000UL);
+    }
 }
 
 extern bool g_usb_led_marquee_enable;
@@ -721,8 +736,15 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
              * response path (nfc_relay_tag_inject_response) widens FRAMEDELAYMAX
              * to 0xFFFFF to absorb BLE latency; reset it here — once the frame
              * has actually gone out — so subsequent fast anticollision polling
-             * is answered with normal timing. Safe for non-relay TX too. */
-            nrf_nfct_frame_delay_max_set(0x00001000UL);
+             * is answered with normal timing. Safe for non-relay TX too.
+             *
+             * EXCEPTION: while the relay holds the NFCT, keep the window wide.
+             * The relay's multi-round exchange means the very next frame may be
+             * another WTX/response that needs the long window, and clamping to
+             * 302us here would let the nRF abandon that next response slot. */
+            if (!m_relay_hold_fdt_max) {
+                nrf_nfct_frame_delay_max_set(0x00001000UL);
+            }
             // After the transmission is over, you need to be able to receive it
             NRFX_NFCT_RX_BYTES
             break;

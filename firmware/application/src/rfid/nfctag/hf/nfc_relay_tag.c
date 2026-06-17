@@ -196,6 +196,10 @@ void nfc_relay_tag_install(const uint8_t *uid, uint8_t uid_len,
 
     s_active = true;  /* enable callbacks now handler is registered */
 
+    /* Hold FRAMEDELAYMAX wide for the whole relay session so the per-TX clamp
+     * to the 302us default never eats a slow relayed response. */
+    nfc_tag_14a_set_relay_hold(true);
+
     /* Ensure NFCT hardware is running. If the active slot has HF type
      * undefined, tag_emulation_sense_switch_all() calls sense_switch(false)
      * at boot leaving NFCT uninitialised — relay would be silent to readers.
@@ -251,6 +255,11 @@ void nfc_relay_tag_clear(void) {
     s_response_len      = 0;
     s_wtx_active        = false;
     s_frame_cb          = NULL;
+
+    /* Release the FRAMEDELAYMAX hold and restore the default window so normal
+     * emulation/anticollision after the relay disarms uses standard timing. */
+    nfc_tag_14a_set_relay_hold(false);
+    nfc_tag_14a_set_frame_delay_max(0x00001000UL);
 
     /* Force the 14A state machine back to IDLE so the READY→SELECT path
      * never fires with a NULL auto_coll_res (nfc_14a.c dereferences

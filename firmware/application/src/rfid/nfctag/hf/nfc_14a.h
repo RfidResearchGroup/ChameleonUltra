@@ -134,6 +134,10 @@ void nfc_tag_14a_tx_bytes(uint8_t *data, uint32_t bytes, bool appendCrc);
  * response delayed by a BLE round-trip can still be transmitted. Pass ticks
  * in 13.56 MHz units (max 0xFFFFF ≈ 77 ms). */
 void nfc_tag_14a_set_frame_delay_max(uint32_t ticks);
+/* When held, FRAMEDELAYMAX stays at its maximum across TX_FRAMEEND/fdt_reset
+ * for the duration of a relay session instead of being clamped to the default.
+ * Set true by the relay on install, false on clear. */
+void nfc_tag_14a_set_relay_hold(bool hold);
 /* Relay support: call from a tag handler's cb_state (ISR) to signal that a
  * response will be transmitted asynchronously after the ISR returns. Keeps
  * the NFCT response window open for the deferred TX. */
