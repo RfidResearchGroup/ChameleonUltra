@@ -84,7 +84,7 @@ bool nfc_tag_14a_4_get_pending_apdu(uint8_t *buf, uint16_t *length);
 void nfc_tag_14a_4_set_response(const uint8_t *data, uint16_t length);
 
 /* Reset handler */
-void nfc_tag_14a_4_reset_state(nfc_tag_14a_4_tcl_state_t m_tcl_session_state);
+void nfc_tag_14a_4_reset_state(nfc_tag_14a_4_tcl_state_t *m_tcl_session_state);
 void nfc_tag_14a_4_reset_handler(void);
 
 #endif /* NFC_14A_4_H */

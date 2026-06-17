@@ -345,18 +345,18 @@ void nfc_tag_14a_4_set_response(const uint8_t *data, uint16_t length) {
 /*  Reset handler                                                       */
 /* ------------------------------------------------------------------ */
 
-void nfc_tag_14a_4_reset_state(nfc_tag_14a_4_tcl_state_t m_tcl_session_state) {
-    m_tcl_session_state.m_block_num      = 0;
-    m_tcl_session_state.m_cid_supported  = false;
-    m_tcl_session_state.m_cid            = 0;
-    m_tcl_session_state.m_apdu_pending   = false;
-    m_tcl_session_state.m_response_ready = false;
-    m_tcl_session_state.m_apdu_len       = 0;
-    m_tcl_session_state.m_resp_len       = 0;
+void nfc_tag_14a_4_reset_state(nfc_tag_14a_4_tcl_state_t *m_tcl_session_state) {
+    m_tcl_session_state->m_block_num      = 0;
+    m_tcl_session_state->m_cid_supported  = false;
+    m_tcl_session_state->m_cid            = 0;
+    m_tcl_session_state->m_apdu_pending   = false;
+    m_tcl_session_state->m_response_ready = false;
+    m_tcl_session_state->m_apdu_len       = 0;
+    m_tcl_session_state->m_resp_len       = 0;
 }
 
 void nfc_tag_14a_4_reset_handler(void) {
-    nfc_tag_14a_4_reset_state(m_tcl_session_state);
+    nfc_tag_14a_4_reset_state(&m_tcl_session_state);
 }
 
 void nfc_tag_14a_4_get_debug_counters(uint8_t *rx, uint8_t *tx,
