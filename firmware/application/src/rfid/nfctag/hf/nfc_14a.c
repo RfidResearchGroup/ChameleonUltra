@@ -682,13 +682,8 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
                 uint32_t amt  = NRF_NFCT->TXD.AMOUNT;
                 uint16_t tx_bytes = (amt >> NFCT_TXD_AMOUNT_TXDATABYTES_Pos)
                                     & (NFCT_TXD_AMOUNT_TXDATABYTES_Msk >> NFCT_TXD_AMOUNT_TXDATABYTES_Pos);
-                uint16_t tx_bits_rem = (amt >> NFCT_TXD_AMOUNT_TXDATABITS_Pos)
-                                       & (NFCT_TXD_AMOUNT_TXDATABITS_Msk >> NFCT_TXD_AMOUNT_TXDATABITS_Pos);
-                uint16_t tx_bits = (tx_bits_rem > 0)
-                                   ? ((tx_bytes - 1) * 8 + tx_bits_rem)
-                                   : (tx_bytes * 8);
-                if (tx_bits > 0 && tx_bytes <= MAX_NFC_TX_BUFFER_SIZE) {
-                    m_tx_sniff_cb(m_nfc_tx_buffer, tx_bits);
+                if (amt > 0 && tx_bytes <= MAX_NFC_TX_BUFFER_SIZE) {
+                    m_tx_sniff_cb(m_nfc_tx_buffer, amt);
                 }
             }
             break;
