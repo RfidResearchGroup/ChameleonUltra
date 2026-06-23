@@ -100,6 +100,7 @@ class Command(enum.IntEnum):
     IDTECK_WRITE_TO_T55XX = 3018
     JABLOTRON_SCAN = 3019
     JABLOTRON_WRITE_TO_T55XX = 3020
+    PYRAMID_SCAN = 3021
 
     MF1_WRITE_EMU_BLOCK_DATA = 4000
     HF14A_SET_ANTI_COLL_DATA = 4001
@@ -318,6 +319,7 @@ class TagSpecificType(enum.IntEnum):
     # FSK Tag-Talk-First      200
     HIDProx = 200
     ioProx = 201
+    Pyramid = 202
     # AWID
     # Paradox
 
@@ -404,6 +406,8 @@ class TagSpecificType(enum.IntEnum):
             return "HIDProx"
         elif self == TagSpecificType.ioProx:
             return "ioProx"
+        elif self == TagSpecificType.Pyramid:
+            return "Farpointe/Pyramid"
         elif self == TagSpecificType.PAC:
             return "PAC/Stanley"
         elif self == TagSpecificType.Viking:
