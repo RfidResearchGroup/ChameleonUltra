@@ -800,6 +800,17 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
+    def pyramid_scan(self):
+        """
+        Read a Farpointe/Pyramid tag. Returns the raw 16-byte (128-bit) frame;
+        the card number and format length are decoded host-side by the CLI.
+        """
+        resp = self.device.send_cmd_sync(Command.PYRAMID_SCAN)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data[:16]
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
     def jablotron_write_to_t55xx(self, id_bytes: bytes):
         """
         Write Jablotron card number into T55XX.

@@ -880,6 +880,15 @@ static data_frame_tx_t *cmd_processor_jablotron_scan(uint16_t cmd, uint16_t stat
     return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_buffer), card_buffer);
 }
 
+static data_frame_tx_t *cmd_processor_pyramid_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t card_data[16] = {0};  // raw 128-bit Pyramid frame
+    status = scan_pyramid(card_data);
+    if (status != STATUS_LF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_data), card_data);
+}
+
 static data_frame_tx_t *cmd_processor_jablotron_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     typedef struct {
         uint8_t id[5];
@@ -2502,14 +2511,12 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
     }
 
     /* Copy data portion (strip PCB + CRC), then handle chaining */
-    uint8_t blk_num = 0;
     uint8_t resp_pcb = resp_buf[0];
     uint8_t dlen = resp_bytes - 3; /* subtract PCB(1) + CRC(2) */
     if (dlen > 0 && resp_chain_len + dlen < sizeof(resp_chain)) {
         memcpy(&resp_chain[resp_chain_len], &resp_buf[1], dlen);
         resp_chain_len += dlen;
     }
-    blk_num ^= 1;
 
     /* ISO14443-4 chaining: PCB bit5 (0x20) set means more blocks follow */
     while (resp_pcb & 0x20) {
@@ -2532,7 +2539,6 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
             memcpy(&resp_chain[resp_chain_len], &resp_buf[1], dlen);
             resp_chain_len += dlen;
         }
-        blk_num ^= 1;
     }
 
     return data_frame_make(cmd, STATUS_HF_TAG_OK, resp_chain_len, resp_chain);
@@ -3045,6 +3051,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_PAC_WRITE_TO_T55XX,           before_reader_run,           cmd_processor_pac_write_to_t55xx,            NULL                   },
     {    DATA_CMD_JABLOTRON_SCAN,               before_reader_run,           cmd_processor_jablotron_scan,                NULL                   },
     {    DATA_CMD_JABLOTRON_WRITE_TO_T55XX,     before_reader_run,           cmd_processor_jablotron_write_to_t55xx,      NULL                   },
+    {    DATA_CMD_PYRAMID_SCAN,                 before_reader_run,           cmd_processor_pyramid_scan,                  NULL                   },
     {    DATA_CMD_IDTECK_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_idteck_write_to_t55xx,         NULL                   },
     {    DATA_CMD_LF_T55XX_WRITE,               before_reader_run,           cmd_processor_lf_t55xx_write,                NULL                   },
     {    DATA_CMD_ADC_GENERIC_READ,             before_reader_run,           cmd_processor_generic_read,                  NULL                   },

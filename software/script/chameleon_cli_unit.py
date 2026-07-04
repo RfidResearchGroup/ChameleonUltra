@@ -900,6 +900,7 @@ lf_viking = lf.subgroup("viking", "Viking commands")
 lf_jablotron = lf.subgroup("jablotron", "Jablotron commands")
 lf_generic = lf.subgroup("generic", "Generic commands")
 lf_idteck = lf.subgroup("idteck", "IDTECK commands")
+lf_pyramid = lf.subgroup("pyramid", "Farpointe/Pyramid commands")
 
 
 @root.command("clear")
@@ -6961,6 +6962,59 @@ class LFJablotronRead(ReaderRequiredUnit):
         card_id = jablotron_card_id(id)
         print(f" Jablotron ID: {color_string((CG, id.hex().upper()))}")
         print(f" Card number:  {color_string((CY, str(card_id)))}")
+
+
+def pyramid_decode(raw: bytes):
+    """Decode a 16-byte (128-bit) Farpointe/Pyramid frame.
+
+    Mirrors Proxmark's demodPyramid: strip the odd-parity bit from every 8-bit
+    group of bits 8..127 (15 groups -> 105 data bits), find the leading-1
+    format sentinel, then read facility code / card number per the detected
+    format length. Returns (fmt_len, facility_code_or_None, card_number).
+    """
+    if len(raw) != 16:
+        raise ValueError("Pyramid frame must be exactly 16 bytes (128 bits)")
+    bits = [(raw[i >> 3] >> (7 - (i & 7))) & 1 for i in range(128)]
+
+    # strip odd parity: 15 groups of 8 (bits 8..127) -> 105 data bits
+    dep = []
+    for word in range(8, 128, 8):
+        dep.extend(bits[word:word + 7])  # keep 7 data bits, drop parity
+
+    def d2i(off, n):
+        v = 0
+        for i in range(n):
+            v = (v << 1) | dep[off + i]
+        return v
+
+    # leading-1 sentinel marks the start of the format field
+    j = next((i for i, v in enumerate(dep) if v), len(dep))
+    fmt_len = len(dep) - j - 8
+
+    if fmt_len == 26:
+        return fmt_len, d2i(73, 8), d2i(81, 16)
+    elif fmt_len == 45:
+        return 42, d2i(53, 10), d2i(63, 32)
+    else:
+        return fmt_len, None, d2i(81, 16)
+
+
+@lf_pyramid.command("read")
+class LFPyramidRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Scan a Farpointe/Pyramid tag and print card number and raw frame"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        raw = self.cmd.pyramid_scan()
+        fmt_len, fc, card = pyramid_decode(raw)
+        print(f"Farpointe/Pyramid")
+        print(f"   Format length: {color_string((CG, str(fmt_len)))}")
+        if fc is not None:
+            print(f"   Facility:      {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
+        print(f"   Card number:   {color_string((CY, str(card)))}")
+        print(f"   Raw:           {color_string((CY, raw.hex().upper()))}")
 
 
 @lf_jablotron.command("write")
