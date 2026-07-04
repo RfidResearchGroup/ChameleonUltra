@@ -16,6 +16,8 @@
 #define DEMOD_BUFFER_SIZE (32)
 #define HIDPROX_RAW_SIZE (96)
 
+// NOTE: These LF_FSK2a_* defines are intentionally local to this .c file
+// to allow per-protocol timing tuning (do not move to a shared header).
 #define LF_FSK2a_PWM_LO_FREQ_LOOP (5)
 #define LF_FSK2a_PWM_LO_FREQ_TOP_VALUE (10)
 #define LF_FSK2a_PWM_HI_FREQ_LOOP (6)
@@ -47,7 +49,7 @@ void hidprox_decoder_start(hidprox_codec *d, uint8_t format_hint) {
 hidprox_codec *hidprox_codec_alloc(void) {
     hidprox_codec *d = malloc(sizeof(hidprox_codec));
     d->card = NULL;
-    d->modem = fsk_alloc();
+    d->modem = fsk_alloc(FSK_BITRATE_HID);
     return d;
 }
 
@@ -226,10 +228,10 @@ const protocol hidprox = {
     .get_data = (codec_get_data)hidprox_get_data,
     .modulator = (modulator)hidprox_modulator,
     .decoder =
-        {
-            .start = (decoder_start)hidprox_decoder_start,
-            .feed = (decoder_feed)hidprox_decoder_feed,
-        },
+    {
+        .start = (decoder_start)hidprox_decoder_start,
+        .feed = (decoder_feed)hidprox_decoder_feed,
+    },
 };
 
 uint8_t hidprox_t55xx_writer(wiegand_card_t *card, uint32_t *blks) {

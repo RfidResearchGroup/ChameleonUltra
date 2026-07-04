@@ -90,7 +90,7 @@ BLE_ADVERTISING_DEF(m_advertising);                                             
 
 uint16_t          batt_lvl_in_milli_volts = 0;
 uint8_t           percentage_batt_lvl = 0;
-static nrf_saadc_value_t adc_buf[ADC_BUF_SIZE][ADC_BUF_COUNT];
+static nrf_saadc_value_t adc_buf[ADC_BUF_COUNT][ADC_BUF_SIZE];
 static uint16_t   m_conn_handle          = BLE_CONN_HANDLE_INVALID;                 /**< Handle of the current connection. */
 static uint16_t   m_ble_nus_max_data_len = BLE_GATT_ATT_MTU_DEFAULT - 3;            /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
 lf_adc_callback_t m_lf_adc_callback      = NULL;
@@ -736,11 +736,11 @@ static void battery_level_meas_timeout_handler(void *p_context) {
     // if battery service is notification enable, we can send msg to device.
     err_code = ble_bas_battery_level_update(&m_bas, percentage_batt_lvl, BLE_CONN_HANDLE_ALL);
     if ((err_code != NRF_SUCCESS) &&
-        (err_code != NRF_ERROR_INVALID_STATE) &&
-        (err_code != NRF_ERROR_RESOURCES) &&
-        (err_code != NRF_ERROR_BUSY) &&
-        (err_code != NRF_ERROR_FORBIDDEN) &&
-        (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING)) {
+            (err_code != NRF_ERROR_INVALID_STATE) &&
+            (err_code != NRF_ERROR_RESOURCES) &&
+            (err_code != NRF_ERROR_BUSY) &&
+            (err_code != NRF_ERROR_FORBIDDEN) &&
+            (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING)) {
         APP_ERROR_HANDLER(err_code);
     }
 

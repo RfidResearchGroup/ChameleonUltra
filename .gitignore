@@ -710,3 +710,8 @@ software/script/tests/nonces.bin
 software/script/nonces.bin
 
 tools/
+.vscode/settings.json
+.vscode/tasks.json
+firmware/compile_commands.json
+firmware/application/compile_commands.json
+software/src/target_arch_detect.c

@@ -57,6 +57,9 @@ class Command(enum.IntEnum):
     GET_BLE_PAIRING_ENABLE = 1036
     SET_BLE_PAIRING_ENABLE = 1037
 
+    GET_SLEEP_TIMEOUT = 1039
+    SET_SLEEP_TIMEOUT = 1040
+
     HF14A_SCAN = 2000
     MF1_DETECT_SUPPORT = 2001
     MF1_DETECT_PRNG = 2002
@@ -68,6 +71,8 @@ class Command(enum.IntEnum):
     MF1_READ_ONE_BLOCK = 2008
     MF1_WRITE_ONE_BLOCK = 2009
     HF14A_RAW = 2010
+    HF14A_SCAN_KEEP = 2016
+    HF14A_AUTH_TRACE = 2017
     MF1_MANIPULATE_VALUE_BLOCK = 2011
     MF1_CHECK_KEYS_OF_SECTORS = 2012
     MF1_HARDNESTED_ACQUIRE = 2013
@@ -80,6 +85,7 @@ class Command(enum.IntEnum):
 
     EM410X_SCAN = 3000
     EM410X_WRITE_TO_T55XX = 3001
+    EM410X_ELECTRA_WRITE_TO_T55XX = 3006
     HIDPROX_SCAN = 3002
     HIDPROX_WRITE_TO_T55XX = 3003
     VIKING_SCAN = 3004
@@ -131,12 +137,37 @@ class Command(enum.IntEnum):
     # FIXME: not implemented
     MF0_NTAG_GET_EMULATOR_CONFIG = 4037
 
+    MF1_SET_FIELD_OFF_DO_RESET = 4038
+    MF1_GET_FIELD_OFF_DO_RESET = 4039
+
+    MF1_GET_PRNG_TYPE = 4040
+    MF1_SET_PRNG_TYPE = 4041
+
+    # ISO14443-4 T=CL emulation
+    HF14A_4_APDU_RECV = 6000
+    HF14A_4_APDU_SEND = 6001
+    HF14A_4_SET_ANTI_COLL = 6002
+    HF14A_4_STATIC_RESP = 6003
+    HF14A_4_READER_APDU = 6004
+    HF14A_4_EMV_SCAN = 6005
+
     EM410X_SET_EMU_ID = 5000
     EM410X_GET_EMU_ID = 5001
     HIDPROX_SET_EMU_ID = 5002
     HIDPROX_GET_EMU_ID = 5003
     VIKING_SET_EMU_ID = 5004
     VIKING_GET_EMU_ID = 5005
+    PAC_SET_EMU_ID = 5006
+    PAC_GET_EMU_ID = 5007
+    IOPROX_SET_EMU_ID = 5008
+    IOPROX_GET_EMU_ID = 5009
+    JABLOTRON_SET_EMU_ID = 5010
+    JABLOTRON_GET_EMU_ID = 5011
+    IDTECK_SET_EMU_ID = 5012
+    IDTECK_GET_EMU_ID = 5013
+    EM4X05_SCAN = 3030
+    EM4X05_READSNIFF = 3032
+    LF_SNIFF = 3031
 
 
 @enum.unique
@@ -265,19 +296,21 @@ class TagSpecificType(enum.IntEnum):
     EM410X_16 = 101
     EM410X_32 = 102
     EM410X_64 = 103
+    EM410X_ELECTRA = 104
     # FDX-B
     # securakey
     # gallagher
     # PAC/Stanley
+    PAC = 150
     # Presco
     # Visa2000
     Viking = 170
     # Noralsy
-    # Jablotron
+    Jablotron = 180
 
     # FSK Tag-Talk-First      200
     HIDProx = 200
-    # ioProx
+    ioProx = 201
     # AWID
     # Paradox
 
@@ -285,6 +318,7 @@ class TagSpecificType(enum.IntEnum):
     # Indala
     # Keri
     # NexWatch
+    IDTECK = 310
 
     # Reader-Talk-First       400
     # T5577
@@ -317,7 +351,8 @@ class TagSpecificType(enum.IntEnum):
 
     # ST25TA series          2000
 
-    # HF14A-4 series         3000
+    # ISO14443-4 T=CL emulation
+    HF14A_4 = 3000
 
     @staticmethod
     def list(exclude_meta=True):
@@ -356,10 +391,20 @@ class TagSpecificType(enum.IntEnum):
             return "EM410X/32"
         elif self == TagSpecificType.EM410X_64:
             return "EM410X/64"
+        elif self == TagSpecificType.EM410X_ELECTRA:
+            return "EM410X Electra"
         elif self == TagSpecificType.HIDProx:
             return "HIDProx"
+        elif self == TagSpecificType.ioProx:
+            return "ioProx"
+        elif self == TagSpecificType.PAC:
+            return "PAC/Stanley"
         elif self == TagSpecificType.Viking:
             return "Viking"
+        elif self == TagSpecificType.Jablotron:
+            return "Jablotron"
+        elif self == TagSpecificType.IDTECK:
+            return "IDTECK"
         elif self == TagSpecificType.MIFARE_Mini:
             return "Mifare Mini"
         elif self == TagSpecificType.MIFARE_1024:
@@ -510,6 +555,7 @@ class MifareClassicDarksideStatus(enum.IntEnum):
 class AnimationMode(enum.IntEnum):
     FULL = 0
     MINIMAL = 1
+    SYMMETRIC = 3
     NONE = 2
 
     def __str__(self):
@@ -517,6 +563,8 @@ class AnimationMode(enum.IntEnum):
             return "Full animation"
         elif self == AnimationMode.MINIMAL:
             return "Minimal animation"
+        elif self == AnimationMode.SYMMETRIC:
+            return "Symmetric animation"
         elif self == AnimationMode.NONE:
             return "No animation"
 
@@ -557,11 +605,13 @@ class ButtonPressFunction(enum.IntEnum):
             return "Toggle NFC Field Generator"
         return "None"
 
+
 @enum.unique
 class MfcValueBlockOperator(enum.IntEnum):
     DECREMENT = 0xC0
     INCREMENT = 0xC1
     RESTORE = 0xC2
+
 
 @enum.unique
 class HIDFormat(enum.IntEnum):
@@ -588,6 +638,7 @@ class HIDFormat(enum.IntEnum):
     C1K35S = 21
     C15001 = 22
     S12906 = 23
+    ACTPHID = 42
     SIE36 = 24
     H10320 = 25
     H10302 = 26
@@ -621,6 +672,7 @@ class HIDFormat(enum.IntEnum):
             HIDFormat.C1K35S: "HID Corporate 1000 35-bit Std",
             HIDFormat.C15001: "HID KeyScan 36-bit",
             HIDFormat.S12906: "HID Simplex 36-bit",
+            HIDFormat.ACTPHID: "HID ACTProx 36-bit",
             HIDFormat.SIE36: "HID 36-bit Siemens",
             HIDFormat.H10320: "HID H10320 37-bit BCD",
             HIDFormat.H10302: "HID H10302 37-bit huge ID",
@@ -632,4 +684,3 @@ class HIDFormat(enum.IntEnum):
         if self in descriptions:
             return descriptions[self]
         return "Invalid"
-

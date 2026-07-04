@@ -4,7 +4,7 @@
 #include "tag_emulation.h"
 
 #define MAX_NFC_RX_BUFFER_SIZE  257
-#define MAX_NFC_TX_BUFFER_SIZE  64
+#define MAX_NFC_TX_BUFFER_SIZE  512  /* must hold PCB + max APDU response */
 
 #define NFC_TAG_14A_CRC_LENGTH  2
 
@@ -36,10 +36,11 @@
 
 // ISO14443-A Universal state machine
 typedef enum {
-    NFC_TAG_STATE_14A_IDLE,     // Leisure, you can wait for any instructions
-    NFC_TAG_STATE_14A_READY,    // Select card status, currently the standard 14A anti -rushing collision
-    NFC_TAG_STATE_14A_ACTIVE,   // Select cards or other instructions to enter the working status, which can receive all data
-    NFC_TAG_STATE_14A_HALTED,   // The label stops working status and can only be awakened by Halt or other special instructions (non -labels)
+    NFC_TAG_STATE_14A_IDLE,        // Leisure, you can wait for any instructions
+    NFC_TAG_STATE_14A_READY,       // Select card status, currently the standard 14A anti -rushing collision
+    NFC_TAG_STATE_14A_ACTIVE,      // Select cards or other instructions to enter the working status, which can receive all data
+    NFC_TAG_STATE_14A_HALTED,      // The label stops working status and can only be awakened by Halt or other special instructions (non -labels)
+    NFC_TAG_STATE_14A_PROPRIETARY, // Card is in proprietary state; all commands handled only by state_handler
 } nfc_tag_14a_state_t;
 
 // UID of the length in the enumeration specification
@@ -82,6 +83,27 @@ typedef struct {
 
 // Communication reception function that needs to be implemented
 typedef void (*nfc_tag_14a_reset_handler_t)(void);
+
+/* Sniff callback — called for every received frame before the tag handler.
+ * data    : raw frame bytes (after parity strip)
+ * szBits  : number of bits received */
+typedef void (*nfc_tag_14a_sniff_cb_t)(const uint8_t *data, uint16_t szBits);
+
+void nfc_tag_14a_set_sniff_cb(nfc_tag_14a_sniff_cb_t cb);
+void nfc_tag_14a_clear_sniff_cb(void);
+
+/* TX sniff callback — fires at TX_FRAMESTART with the frame the tag is about
+ * to send (card→reader direction).  Same signature as the RX sniff callback.
+ * Install alongside nfc_tag_14a_set_sniff_cb() to capture both directions. */
+typedef void (*nfc_tag_14a_tx_sniff_cb_t)(const uint8_t *data, uint16_t szBits);
+
+void nfc_tag_14a_set_tx_sniff_cb(nfc_tag_14a_tx_sniff_cb_t cb);
+void nfc_tag_14a_clear_tx_sniff_cb(void);
+
+/* Passive sniff mode: when true, suppresses all CU anticollision responses
+ * (ATQA, UID, SAK) so the CU does not collide with real cards in the field.
+ * Enable before starting a sniff session, disable on completion. */
+void nfc_tag_14a_set_sniff_passive(bool passive);
 typedef void (*nfc_tag_14a_state_handler_t)(uint8_t *data, uint16_t szBits);
 typedef nfc_tag_14a_coll_res_reference_t *(*nfc_tag_14a_coll_handler_t)(void);
 
@@ -114,5 +136,9 @@ void nfc_tag_14a_tx_nbit(uint8_t data, uint32_t bits);
 
 // Determine whether it is an effective UID length
 bool is_valid_uid_size(uint8_t uid_length);
+
+// Reset nfc peripheral after field lost
+void nfc_tag_14a_set_reset_enable(bool enable);
+bool nfc_tag_14a_is_reset_enable();
 
 #endif

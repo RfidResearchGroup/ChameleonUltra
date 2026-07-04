@@ -7,6 +7,7 @@
 #include "nfc_14a.h"
 #include "nfc_mf0_ntag.h"
 #include "nfc_mf1.h"
+#include "nfc_14a_4.h"
 #include "rgb_marquee.h"
 #include "tag_persistence.h"
 
@@ -90,8 +91,13 @@ static uint16_t m_slot_config_crc;
 static tag_base_handler_map_t tag_base_map[] = {
     // LF tag emulation
     {TAG_SENSE_LF, TAG_TYPE_EM410X,      lf_tag_data_loadcb,           lf_tag_em410x_data_savecb,    lf_tag_em410x_data_factory,    &m_tag_data_lf},
+    {TAG_SENSE_LF, TAG_TYPE_EM410X_ELECTRA, lf_tag_data_loadcb,        lf_tag_em410x_data_savecb,    lf_tag_em410x_data_factory,    &m_tag_data_lf},
     {TAG_SENSE_LF, TAG_TYPE_HID_PROX,    lf_tag_data_loadcb,           lf_tag_hidprox_data_savecb,   lf_tag_hidprox_data_factory,   &m_tag_data_lf},
+    {TAG_SENSE_LF, TAG_TYPE_IOPROX,      lf_tag_data_loadcb,           lf_tag_ioprox_data_savecb,    lf_tag_ioprox_data_factory,    &m_tag_data_lf},
     {TAG_SENSE_LF, TAG_TYPE_VIKING,      lf_tag_data_loadcb,           lf_tag_viking_data_savecb,    lf_tag_viking_data_factory,    &m_tag_data_lf},
+    {TAG_SENSE_LF, TAG_TYPE_PAC,         lf_tag_data_loadcb,           lf_tag_pac_data_savecb,       lf_tag_pac_data_factory,       &m_tag_data_lf},
+    {TAG_SENSE_LF, TAG_TYPE_JABLOTRON,   lf_tag_data_loadcb,           lf_tag_jablotron_data_savecb, lf_tag_jablotron_data_factory, &m_tag_data_lf},
+    {TAG_SENSE_LF, TAG_TYPE_IDTECK,      lf_tag_data_loadcb,           lf_tag_idteck_data_savecb,    lf_tag_idteck_data_factory,    &m_tag_data_lf},
     // MF1 tag emulation
     {TAG_SENSE_HF, TAG_TYPE_MIFARE_Mini, nfc_tag_mf1_data_loadcb,      nfc_tag_mf1_data_savecb,      nfc_tag_mf1_data_factory,      &m_tag_data_hf},
     {TAG_SENSE_HF, TAG_TYPE_MIFARE_1024, nfc_tag_mf1_data_loadcb,      nfc_tag_mf1_data_savecb,      nfc_tag_mf1_data_factory,      &m_tag_data_hf},
@@ -108,6 +114,8 @@ static tag_base_handler_map_t tag_base_map[] = {
     {TAG_SENSE_HF, TAG_TYPE_MF0ICU2,     nfc_tag_mf0_ntag_data_loadcb, nfc_tag_mf0_ntag_data_savecb, nfc_tag_mf0_ntag_data_factory, &m_tag_data_hf},
     {TAG_SENSE_HF, TAG_TYPE_MF0UL11,     nfc_tag_mf0_ntag_data_loadcb, nfc_tag_mf0_ntag_data_savecb, nfc_tag_mf0_ntag_data_factory, &m_tag_data_hf},
     {TAG_SENSE_HF, TAG_TYPE_MF0UL21,     nfc_tag_mf0_ntag_data_loadcb, nfc_tag_mf0_ntag_data_savecb, nfc_tag_mf0_ntag_data_factory, &m_tag_data_hf},
+    // ISO14443-4 T=CL emulation
+    {TAG_SENSE_HF, TAG_TYPE_HF14A_4,     nfc_tag_14a_4_data_loadcb,    nfc_tag_14a_4_data_savecb,    nfc_tag_14a_4_data_factory,    &m_tag_data_hf},
 };
 
 static void tag_emulation_load_config(void);
@@ -347,11 +355,13 @@ void tag_emulation_delete_data(uint8_t slot, tag_sense_type_t sense_type) {
         case TAG_SENSE_HF: {
             slotConfig.slots[slot].tag_hf = TAG_TYPE_UNDEFINED;
             slotConfig.slots[slot].enabled_hf = false;
-        } break;
+        }
+        break;
         case TAG_SENSE_LF: {
             slotConfig.slots[slot].tag_lf = TAG_TYPE_UNDEFINED;
             slotConfig.slots[slot].enabled_lf = false;
-        } break;
+        }
+        break;
         default:
             break;
     }
@@ -410,7 +420,7 @@ void tag_emulation_sense_switch(tag_sense_type_t type, bool enable) {
             break;
         case TAG_SENSE_HF:
             if (enable && (slotConfig.slots[slot].enabled_hf) &&
-                (slotConfig.slots[slot].tag_hf != TAG_TYPE_UNDEFINED)) {
+                    (slotConfig.slots[slot].tag_hf != TAG_TYPE_UNDEFINED)) {
                 nfc_tag_14a_sense_switch(true);
             } else {
                 nfc_tag_14a_sense_switch(false);
@@ -418,7 +428,7 @@ void tag_emulation_sense_switch(tag_sense_type_t type, bool enable) {
             break;
         case TAG_SENSE_LF:
             if (enable && (slotConfig.slots[slot].enabled_lf) &&
-                (slotConfig.slots[slot].tag_lf != TAG_TYPE_UNDEFINED)) {
+                    (slotConfig.slots[slot].tag_lf != TAG_TYPE_UNDEFINED)) {
                 lf_tag_125khz_sense_switch(true);
             } else {
                 lf_tag_125khz_sense_switch(false);
