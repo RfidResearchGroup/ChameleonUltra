@@ -3126,34 +3126,50 @@ class HFMFDump(MF1AuthArgsUnit):
 
         # iterate over sectors
         for s in range(16):
-            # try all keys for this sector
-            typ = None
+            # find working keys for this sector (both A and B)
+            type_a = type_b = None
+            key_a = key_b = None
             for key in keys:
-                # first try key B
-                try:
-                    self.cmd.mf1_read_one_block(4 * s, MfcKeyType.B, key)
-                    typ = MfcKeyType.B
+                if type_b is None:
+                    try:
+                        self.cmd.mf1_read_one_block(4 * s, MfcKeyType.B, key)
+                        type_b = MfcKeyType.B
+                        key_b = key
+                    except UnexpectedResponseError:
+                        pass
+                if type_a is None:
+                    try:
+                        self.cmd.mf1_read_one_block(4 * s, MfcKeyType.A, key)
+                        type_a = MfcKeyType.A
+                        key_a = key
+                    except UnexpectedResponseError:
+                        pass
+                if type_a is not None and type_b is not None:
                     break
-                except UnexpectedResponseError:
-                    # ignore read errors at this stage as we want to try key A
-                    pass
-                # try with key A if B was unsuccessful
-                try:
-                    self.cmd.mf1_read_one_block(4 * s, MfcKeyType.A, key)
-                    typ = MfcKeyType.A
-                    break
-                except UnexpectedResponseError:
-                    pass
-            else:
+            if type_a is None and type_b is None:
                 raise Exception(f"No key found for sector {s}")
+
+            typ = type_a if type_a is not None else type_b
+            key = key_a if type_a is not None else key_b
             # iterate over blocks
-            for b in range(4):
+            for b in range(3):
                 block_data = self.cmd.mf1_read_one_block(4 * s + b, typ, key)
-                # add data to buffer
                 if content_type == "bin":
                     buffer.extend(block_data)
                 elif content_type == "hex":
                     buffer.extend(block_data.hex().encode("utf-8"))
+
+            # sector trailer: fill key bytes from known keys
+            trailer = bytearray(self.cmd.mf1_read_one_block(4 * s + 3, typ, key))
+            if key_a is not None:
+                trailer[0:6] = key_a
+            if key_b is not None:
+                trailer[10:16] = key_b
+            trailer = bytes(trailer)
+            if content_type == "bin":
+                buffer.extend(trailer)
+            elif content_type == "hex":
+                buffer.extend(trailer.hex().encode("utf-8"))
         # write buffer to file
         args.dump_file.write(buffer)
 
