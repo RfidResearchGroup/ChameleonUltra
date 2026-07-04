@@ -3,6 +3,8 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+
+## [v2.2.0][2026-07-04]
  - Added Jablotron LF protocol support: read, emulate and T55xx clone (@midlan)
  - Fix battery level never reaching 100% on fully charged devices by calibrating the battery curve to the conservative lower bound of the settled full-charge range (`4160-4190 mV`), and add a recommended battery calibration procedure.
  - Added an extended battery info command so `hw battery` can report a qualitative battery condition hint (`excellent`, `good`, `fair`, `low`, or `critical`) while staying compatible with older firmware.
@@ -27,6 +29,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Fix Windows build (@suut)
  - Added `hf 14a config` to deal with badly configured cards (@azuwis)
  - New Symmetrical LED Animation Mode and Improved Minimal Mode (@WillyJL)
+ - Fix MF1 state reset logic and access control conditions (@unkernet)
 
 ## [v2.1.0][2025-09-02]
  - Added UV, formatter and linter. Contribution guidelines. (@GameTec-live)
