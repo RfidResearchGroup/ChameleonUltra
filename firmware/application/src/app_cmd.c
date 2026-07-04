@@ -9,6 +9,7 @@
 #include "data_cmd.h"
 #include "app_cmd.h"
 #include "app_status.h"
+#include "battery_health.h"
 #include "tag_persistence.h"
 #include "nrf_pwr_mgmt.h"
 #include "settings.h"
@@ -175,6 +176,20 @@ static data_frame_tx_t *cmd_processor_get_battery_info(uint16_t cmd, uint16_t st
     } PACKED payload;
     payload.voltage = U16HTONS(batt_lvl_in_milli_volts);
     payload.percent = percentage_batt_lvl;
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(payload), (uint8_t *)&payload);
+}
+
+static data_frame_tx_t *cmd_processor_get_battery_info_ex(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    struct {
+        uint16_t voltage;
+        uint8_t percent;
+        uint8_t condition;
+    } PACKED payload;
+    // The condition field is a compact hint derived from estimated remaining capacity.
+    payload.voltage = U16HTONS(batt_lvl_in_milli_volts);
+    payload.percent = percentage_batt_lvl;
+    payload.condition = battery_health_to_code(
+        battery_health_from_measurement(batt_lvl_in_milli_volts, percentage_batt_lvl));
     return data_frame_make(cmd, STATUS_SUCCESS, sizeof(payload), (uint8_t *)&payload);
 }
 
@@ -2996,6 +3011,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_ENABLED_SLOTS,            NULL,                        cmd_processor_get_enabled_slots,             NULL                   },
     {    DATA_CMD_DELETE_SLOT_SENSE_TYPE,       NULL,                        cmd_processor_delete_slot_sense_type,        NULL                   },
     {    DATA_CMD_GET_BATTERY_INFO,             NULL,                        cmd_processor_get_battery_info,              NULL                   },
+    {    DATA_CMD_GET_BATTERY_INFO_EX,          NULL,                        cmd_processor_get_battery_info_ex,           NULL                   },
     {    DATA_CMD_GET_BUTTON_PRESS_CONFIG,      NULL,                        cmd_processor_get_button_press_config,       NULL                   },
     {    DATA_CMD_SET_BUTTON_PRESS_CONFIG,      NULL,                        cmd_processor_set_button_press_config,       NULL                   },
     {    DATA_CMD_GET_LONG_BUTTON_PRESS_CONFIG, NULL,                        cmd_processor_get_long_button_press_config,  NULL                   },

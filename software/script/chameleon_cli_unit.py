@@ -39,6 +39,7 @@ from chameleon_utils import CR, CG, CB, CC, CY, C0, color_string
 from chameleon_utils import print_mem_dump
 from chameleon_enum import Command, Status, SlotNumber, TagSenseType, TagSpecificType
 from chameleon_enum import (
+    BatteryHealth,
     MifareClassicWriteMode,
     MifareClassicPrngType,
     MifareClassicDarksideStatus,
@@ -7257,16 +7258,39 @@ class HWBatteryInfo(DeviceRequiredUnit):
     # How much remaining battery is considered low?
     BATTERY_LOW_LEVEL = 30
 
+    @staticmethod
+    def battery_condition(voltage: int, percentage: int) -> str:
+        if voltage >= 4100 and percentage >= 80:
+            return "excellent"
+        if voltage >= 3950 and percentage >= 60:
+            return "good"
+        if voltage >= 3750 and percentage >= 30:
+            return "fair"
+        if voltage >= 3600 and percentage >= 15:
+            return "low"
+        return "critical"
+
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = "Get battery information, voltage and level"
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        voltage, percentage = self.cmd.get_battery_info()
+        try:
+            voltage, percentage, condition_code = self.cmd.get_battery_info_ex()
+        except UnexpectedResponseError:
+            voltage, percentage = self.cmd.get_battery_info()
+            condition_code = None
+        condition = HWBatteryInfo.battery_condition(voltage, percentage)
+        if condition_code is not None:
+            try:
+                condition = BatteryHealth(condition_code).name.lower()
+            except ValueError:
+                pass
         print(" - Battery information:")
         print(f"   voltage    -> {voltage} mV")
         print(f"   percentage -> {percentage}%")
+        print(f"   condition  -> {condition}")
         if percentage < HWBatteryInfo.BATTERY_LOW_LEVEL:
             print(color_string((CR, "[!] Low battery, please charge.")))
 

@@ -39,6 +39,7 @@ class Command(enum.IntEnum):
     DELETE_SLOT_SENSE_TYPE = 1024
 
     GET_BATTERY_INFO = 1025
+    GET_BATTERY_INFO_EX = 1041
 
     GET_BUTTON_PRESS_CONFIG = 1026
     SET_BUTTON_PRESS_CONFIG = 1027
@@ -618,6 +619,15 @@ class MfcValueBlockOperator(enum.IntEnum):
     DECREMENT = 0xC0
     INCREMENT = 0xC1
     RESTORE = 0xC2
+
+
+@enum.unique
+class BatteryHealth(enum.IntEnum):
+    CRITICAL = 0
+    LOW = 1
+    FAIR = 2
+    GOOD = 3
+    EXCELLENT = 4
 
 
 @enum.unique
