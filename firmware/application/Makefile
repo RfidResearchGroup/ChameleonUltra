@@ -358,6 +358,7 @@ ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
     ${PROJ_DIR}/rfid/reader/ \
     ${PROJ_DIR}/rfid/reader/hf \
     ${PROJ_DIR}/rfid/reader/lf \
+    ${PROJ_DIR}/rfid/nfctag/lf/protocols \
 
   CFLAGS += -DPROJECT_CHAMELEON_ULTRA
 

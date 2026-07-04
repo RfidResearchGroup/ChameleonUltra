@@ -1,3 +1,3 @@
-GNU_INSTALL_ROOT ?= C:/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin/
-GNU_VERSION ?= 10.3.1
+GNU_INSTALL_ROOT ?= C:/Users/BlanchTrap/Documents/GitHub/ChameleonUltra/tools/arm-toolchain/arm-gnu-toolchain-12.2.rel1-mingw-w64-i686-arm-none-eabi/bin/
+GNU_VERSION ?= 12.2.1
 GNU_PREFIX ?= arm-none-eabi

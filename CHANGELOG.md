@@ -4,6 +4,8 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 
 ## [unreleased][unreleased]
  - Fix for static nested key recovery (@jekkos)
+ - Added experimental EMV, DESFire, NTAG brute-force, NDEF URI, FDX-B, Indala, and T5577 reader/attack features (@realdaveblanch)
+ - Fixed ISO14443-4 WTX handling and reader include paths for the experimental reader features (@realdaveblanch)
 
 ## [v2.1.0][2025-09-02]
  - Added UV, formatter and linter. Contribution guidelines. (@GameTec-live)

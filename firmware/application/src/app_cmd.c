@@ -498,7 +498,7 @@ static data_frame_tx_t *cmd_processor_mf1_write_one_block(uint16_t cmd, uint16_t
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
 static data_frame_tx_t *cmd_processor_hf14a_scan_emv(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    char buffer[128];
+    char buffer[256];
     bool result = emv_scan(buffer, sizeof(buffer));
     uint16_t len = strlen(buffer);
     if (result) {
