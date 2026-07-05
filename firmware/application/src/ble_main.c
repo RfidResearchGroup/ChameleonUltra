@@ -119,7 +119,7 @@ static uint32_t next_free_buf_index(void) {
  */
 void set_ble_connect_key(uint8_t *key) {
     static uint8_t passkey[BLE_PAIRING_KEY_LEN];
-    memcpy(passkey, key, BLE_PAIRING_KEY_LEN);
+    memcpy(passkey, key, sizeof(passkey));
     m_static_pin_option.gap_opt.passkey.p_passkey = passkey;
     // NRF_LOG_RAW_HEXDUMP_INFO(passkey, 6);
     APP_ERROR_CHECK(sd_ble_opt_set(BLE_GAP_OPT_PASSKEY, &m_static_pin_option));
