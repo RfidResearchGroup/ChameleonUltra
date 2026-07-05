@@ -6307,7 +6307,7 @@ class LFT55xxClone(ReaderRequiredUnit):
       electra  --id <26 hex>         e.g. --id DEADBEEF880102030405060708
       hid      -f <format> --cn <n>  e.g. -f H10301 --fc 10 --cn 1234
       ioprox   --ver <n> --fc <n> --cn <n>   OR   --raw8 <16 hex>
-      pac      --id <8 ASCII>        e.g. --id 11223344
+      pac      --id <16 hex>         e.g. --id 3131323233333434  (8-byte ASCII card ID)
       viking   --id <8 hex>          e.g. --id DEADBEEF
       idteck   --id <16 hex>         e.g. --id 4944544BDEADBEEF
                                       (or 8 hex for payload only; preamble auto-prepended)
@@ -6338,7 +6338,7 @@ class LFT55xxClone(ReaderRequiredUnit):
             type=str,
             required=False,
             metavar="HEX",
-            help="Card ID in hex: 10 for em410x, 26 for electra, 8 for viking, 8 or 16 for idteck; 8 ASCII chars for pac",
+            help="Card ID in hex: 10 for em410x, 26 for electra, 8 for viking, 8 or 16 for idteck, 16 for pac (8-byte ASCII card ID)",
         )
         # HID Prox
         parser.add_argument(
@@ -6465,12 +6465,16 @@ class LFT55xxClone(ReaderRequiredUnit):
 
         elif t == "pac":
             if args.id is None:
-                raise ArgsParserError("--id is required for pac (8 ASCII characters)")
-            if len(args.id) != 8:
-                raise ArgsParserError("--id must be exactly 8 ASCII characters for pac")
-            id_bytes = args.id.encode("ascii")
+                raise ArgsParserError("--id is required for pac (16 hex chars = 8-byte ASCII card ID)")
+            if not re.match(r"^[a-fA-F0-9]{16}$", args.id):
+                raise ArgsParserError("--id must be exactly 16 hex characters for pac (8-byte ASCII card ID)")
+            id_bytes = bytes.fromhex(args.id)
+            # PAC uses 7-bit UART frames; MSB of each byte is not encoded
+            if any(b > 0x7F for b in id_bytes):
+                raise ArgsParserError("PAC card IDs are 7-bit only (each byte must be 0x00-0x7F)")
             self.cmd.pac_write_to_t55xx(id_bytes)
-            print(f" - PAC/Stanley ID cloned to T55xx: {args.id}")
+            id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in id_bytes)
+            print(f" - PAC/Stanley ID cloned to T55xx: {args.id.upper()} (CN: {id_ascii})")
 
         elif t == "viking":
             if args.id is None:
