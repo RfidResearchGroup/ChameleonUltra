@@ -14,6 +14,9 @@ extern "C" {
 typedef struct {
     uint8_t bitrate; // 50 or 64
     uint8_t c;
+    bool dc_block;   // subtract a running DC baseline before Goertzel (off by default)
+    bool dc_seen;    // running-baseline initialised
+    float dc_run;    // IIR-tracked DC baseline
     uint16_t samples[FSK_MAX_BITRATE];
     float goertzel_fc_8;
     float goertzel_fc_10;
