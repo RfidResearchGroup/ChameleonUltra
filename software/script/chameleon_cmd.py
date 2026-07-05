@@ -8,7 +8,7 @@ from chameleon_enum import Command, SlotNumber, Status, TagSenseType, TagSpecifi
 from chameleon_enum import ButtonPressFunction, ButtonType, MifareClassicDarksideStatus
 from chameleon_enum import MfcKeyType, MfcValueBlockOperator
 
-CURRENT_VERSION_SETTINGS = 6
+CURRENT_VERSION_SETTINGS = 7
 
 new_key = b'\x20\x20\x66\x66'
 old_keys = [b'\x51\x24\x36\x48', b'\x19\x92\x04\x27']
@@ -1822,6 +1822,24 @@ class ChameleonCMD:
     def mf1_set_field_off_do_reset(self, enabled: bool):
         data = struct.pack('!B', enabled)
         return self.device.send_cmd_sync(Command.MF1_SET_FIELD_OFF_DO_RESET, data)
+
+    @expect_response(Status.SUCCESS)
+    def get_long_press_threshold(self):
+        """
+        Get the long button press threshold (in ms)
+        """
+        resp = self.device.send_cmd_sync(Command.GET_LONG_PRESS_THRESHOLD)
+        if resp.status == Status.SUCCESS:
+            resp.parsed, = struct.unpack('!H', resp.data)
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def set_long_press_threshold(self, duration: int):
+        """
+        Set the long button press threshold (in ms)
+        """
+        data = struct.pack('!H', duration)
+        return self.device.send_cmd_sync(Command.SET_LONG_PRESS_THRESHOLD, data)
 
 
 def test_fn():
