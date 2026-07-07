@@ -24,7 +24,20 @@ CY = colorama.Fore.YELLOW
 CM = colorama.Fore.MAGENTA
 C0 = colorama.Style.RESET_ALL
 
-default_cwd = Path.cwd() / Path(__file__).with_name("bin")
+
+def get_resource_dir(relative_path: str):
+    """
+    Get the resource directory of the program.
+    Returns the temporary directory where files are extracted after being packaged with PyInstaller, or the directory where the script is located in the development environment.
+    """
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        base_dir = Path(sys._MEIPASS)
+    else:
+        base_dir = Path(__file__).parent
+    return base_dir / relative_path
+
+
+default_cwd = get_resource_dir("bin")
 
 
 class ArgsParserError(Exception):
