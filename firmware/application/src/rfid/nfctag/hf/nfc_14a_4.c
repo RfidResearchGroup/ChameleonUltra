@@ -55,15 +55,7 @@ static nfc_tag_14a_4_information_t *m_tag_information = NULL;
 static nfc_tag_14a_coll_res_reference_t m_shadow_coll_res;
 
 /* T=CL session state */
-static uint8_t  m_block_num      = 0;
-static bool     m_cid_supported  = false;
-static uint8_t  m_cid            = 0;
-static uint8_t  m_apdu_buf[NFC_14A_4_MAX_APDU];
-static uint16_t m_apdu_len       = 0;
-static bool     m_apdu_pending   = false;
-static uint8_t  m_resp_buf[NFC_14A_4_MAX_APDU];
-static uint16_t m_resp_len       = 0;
-static bool     m_response_ready = false;
+static nfc_tag_14a_4_tcl_state_t m_tcl_session_state;
 
 /* TX scratch buffer */
 static uint8_t m_tx_buf[NFC_14A_4_MAX_APDU + 4];
@@ -160,34 +152,35 @@ static bool find_static_response(const uint8_t *apdu, uint16_t apdu_len,
 /*  TX helpers                                                          */
 /* ------------------------------------------------------------------ */
 
-static void send_iblock(const uint8_t *data, uint16_t len) {
-    uint8_t pcb = 0x02 | (m_block_num & 0x01);
-    if (m_cid_supported) pcb |= PCB_CID_FOLLOWING;
+static void send_iblock(nfc_tag_14a_4_tcl_state_t *m_tcl_session_state) {
+    uint16_t len = m_tcl_session_state->m_resp_len;
+    uint8_t pcb = 0x02 | (m_tcl_session_state->m_block_num & 0x01);
+    if (m_tcl_session_state->m_cid_supported) pcb |= PCB_CID_FOLLOWING;
     uint8_t off = 0;
     m_tx_buf[off++] = pcb;
-    if (m_cid_supported) m_tx_buf[off++] = m_cid & 0x0F;
+    if (m_tcl_session_state->m_cid_supported) m_tx_buf[off++] = m_tcl_session_state->m_cid & 0x0F;
     if (len > NFC_14A_4_MAX_APDU) len = NFC_14A_4_MAX_APDU;
-    memcpy(&m_tx_buf[off], data, len);
+    memcpy(&m_tx_buf[off], m_tcl_session_state->m_resp_buf, len);
     nfc_tag_14a_tx_bytes(m_tx_buf, off + len, true);
-    m_block_num ^= 1;
+    m_tcl_session_state->m_block_num ^= 1;
 }
 
-static void send_rack(void) {
-    uint8_t pcb = 0xA2 | (m_block_num & 0x01);
-    if (m_cid_supported) {
+static void send_rack(nfc_tag_14a_4_tcl_state_t *m_tcl_session_state) {
+    uint8_t pcb = 0xA2 | (m_tcl_session_state->m_block_num & 0x01);
+    if (m_tcl_session_state->m_cid_supported) {
         pcb |= PCB_CID_FOLLOWING;
-        uint8_t buf[2] = { pcb, m_cid & 0x0F };
+        uint8_t buf[2] = { pcb, m_tcl_session_state->m_cid & 0x0F };
         nfc_tag_14a_tx_bytes(buf, 2, true);
     } else {
         nfc_tag_14a_tx_bytes(&pcb, 1, true);
     }
 }
 
-static void send_wtx(void) {
+static void send_wtx(nfc_tag_14a_4_tcl_state_t *m_tcl_session_state) {
     uint8_t buf[3];
     uint8_t off = 0;
-    buf[off++] = PCB_SBLOCK_WTX | (m_cid_supported ? PCB_CID_FOLLOWING : 0);
-    if (m_cid_supported) buf[off++] = m_cid & 0x0F;
+    buf[off++] = PCB_SBLOCK_WTX | (m_tcl_session_state->m_cid_supported ? PCB_CID_FOLLOWING : 0);
+    if (m_tcl_session_state->m_cid_supported) buf[off++] = m_tcl_session_state->m_cid & 0x0F;
     buf[off++] = WTX_VALUE;
     nfc_tag_14a_tx_bytes(buf, off, true);
 }
@@ -196,8 +189,18 @@ static void send_wtx(void) {
 /*  State handler (called from NFCT ISR on each received frame)        */
 /* ------------------------------------------------------------------ */
 
-static void nfc_tag_14a_4_state_handler(uint8_t *data, uint16_t szBytes) {
-    if (szBytes == 0) return;
+void nfc_tag_14a_4_base_respond(nfc_tag_14a_4_tcl_state_t *m_tcl_session_state) {
+    if (m_tcl_session_state->m_response_ready) {
+        m_tcl_session_state->m_response_ready = false;
+        send_iblock(m_tcl_session_state);
+    } else {
+        /* No response ready — keep reader alive with WTX */
+        send_wtx(m_tcl_session_state);
+    }
+}
+
+bool nfc_tag_14a_4_base_handler(nfc_tag_14a_4_tcl_state_t *m_tcl_session_state, uint8_t *data, uint16_t szBytes) {
+    if (szBytes == 0) return false;
     uint8_t pcb = data[0];
 
     /* ---- S-block ---- */
@@ -206,31 +209,31 @@ static void nfc_tag_14a_4_state_handler(uint8_t *data, uint16_t szBytes) {
             /* Echo DESELECT */
             nfc_tag_14a_tx_bytes(data, szBytes, true);
             nfc_tag_14a_4_reset_handler();
-            return;
+            return false;
         }
         if ((pcb & 0x3F) == (PCB_SBLOCK_WTX & 0x3F)) {
             /* Reader sending WTX — echo back with our WTXM */
             uint8_t wtxm = (szBytes > 1) ? data[szBytes - 1] & 0x3F : WTX_VALUE;
             uint8_t resp[3];
             uint8_t off = 0;
-            resp[off++] = PCB_SBLOCK_WTX | (m_cid_supported ? PCB_CID_FOLLOWING : 0);
-            if (m_cid_supported) resp[off++] = m_cid & 0x0F;
+            resp[off++] = PCB_SBLOCK_WTX | (m_tcl_session_state->m_cid_supported ? PCB_CID_FOLLOWING : 0);
+            if (m_tcl_session_state->m_cid_supported) resp[off++] = m_tcl_session_state->m_cid & 0x0F;
             resp[off++] = wtxm;
             nfc_tag_14a_tx_bytes(resp, off, true);
             /* If we now have a response ready, send it next I-block */
-            if (m_response_ready) {
-                m_response_ready = false;
-                send_iblock(m_resp_buf, m_resp_len);
+            if (m_tcl_session_state->m_response_ready) {
+                m_tcl_session_state->m_response_ready = false;
+                send_iblock(m_tcl_session_state);
             }
-            return;
+            return false;
         }
-        return;
+        return false;
     }
 
     /* ---- R-block ---- */
     if (is_rblock(pcb)) {
-        send_rack();
-        return;
+        send_rack(m_tcl_session_state);
+        return false;
     }
 
     /* ---- I-block ---- */
@@ -243,14 +246,14 @@ static void nfc_tag_14a_4_state_handler(uint8_t *data, uint16_t szBytes) {
         uint8_t offset = 1;
         if (has_cid) {
             /* CID acknowledged but not used in responses (keeps protocol simpler) */
-            m_cid_supported = false;
+            m_tcl_session_state->m_cid_supported = false;
             offset++;  /* skip CID byte */
         }
         if (has_nad) offset++;
 
         if (offset >= szBytes) {
-            send_rack();
-            return;
+            send_rack(m_tcl_session_state);
+            return false;
         }
 
         uint16_t apdu_len = szBytes - offset;
@@ -258,95 +261,102 @@ static void nfc_tag_14a_4_state_handler(uint8_t *data, uint16_t szBytes) {
 
         m_dbg_iblocks_rx++;
         m_dbg_last_rx_pcb = pcb;
-        NRF_LOG_INFO("14A4 I-block #%d: reader_blk=%d m_block_num=%d apdu_len=%d",
-                     m_dbg_iblocks_rx, reader_blknum, m_block_num, apdu_len);
+        NRF_LOG_INFO("14A4 I-block #%d: reader_blk=%d m_tcl_session_state->m_block_num=%d apdu_len=%d",
+                     m_dbg_iblocks_rx, reader_blknum, m_tcl_session_state->m_block_num, apdu_len);
 
         /* Block number check per ISO14443-4 §7.5.3.3:
          * If block number matches expected, process new APDU.
          * If block number does NOT match, it is a retransmit —
          * resend the last response without re-processing. */
-        if (reader_blknum != (m_block_num & 0x01)) {
+        if (reader_blknum != (m_tcl_session_state->m_block_num & 0x01)) {
             /* Retransmit: resend last response */
-            if (m_resp_len > 0) {
+            if (m_tcl_session_state->m_resp_len > 0) {
                 /* Restore block num to what we sent last time and resend */
-                m_block_num ^= 1;  /* undo the increment from last send */
-                send_iblock(m_resp_buf, m_resp_len);
+                m_tcl_session_state->m_block_num ^= 1;  /* undo the increment from last send */
+                send_iblock(m_tcl_session_state);
             } else {
-                send_rack();
+                send_rack(m_tcl_session_state);
             }
-            return;
+            return false;
         }
 
-        memcpy(m_apdu_buf, &data[offset], apdu_len);
-        m_apdu_len    = apdu_len;
-        m_apdu_pending = true;
-        m_response_ready = false;
+        memcpy(m_tcl_session_state->m_apdu_buf, &data[offset], apdu_len);
+        m_tcl_session_state->m_apdu_len    = apdu_len;
+        m_tcl_session_state->m_apdu_pending = true;
+        m_tcl_session_state->m_response_ready = false;
 
         if (more_chain) {
-            send_rack();
-            return;
+            send_rack(m_tcl_session_state);
+            return false;
         }
-
-        /* APDU complete — check static table first, then WTX */
-        {
-            uint8_t  *static_resp = NULL;
-            uint16_t  static_len  = 0;
-            bool _found = find_static_response(m_apdu_buf, apdu_len,
-                                               &static_resp, &static_len);
-            m_dbg_last_match = _found ? 1 : 0;
-            NRF_LOG_INFO("14A4 find_static: found=%d static_len=%d resp_count=%d",
-                         _found, static_len, m_static_resp_count);
-            if (_found) {
-                m_dbg_iblocks_tx++;
-                memcpy(m_resp_buf, static_resp, static_len);
-                m_resp_len = static_len;
-                send_iblock(m_resp_buf, m_resp_len);
-            } else if (m_response_ready) {
-                m_response_ready = false;
-                send_iblock(m_resp_buf, m_resp_len);
-            } else {
-                /* No response ready — keep reader alive with WTX */
-                send_wtx();
-            }
-        }
-        return;
+        
+        return true;
     }
 
     NRF_LOG_INFO("14A-4: unknown PCB 0x%02x", pcb);
+    return false;
 }
 
+/* ------------------------------------------------------------------ */
+/*  State handler (called from NFCT ISR on each received frame)        */
+/* ------------------------------------------------------------------ */
+
+static void nfc_tag_14a_4_state_handler(uint8_t *data, uint16_t szBytes) {
+    if (!nfc_tag_14a_4_base_handler(&m_tcl_session_state, data, szBytes)) return;
+    
+    /* APDU complete — check static table first, then WTX */
+    uint8_t  *static_resp = NULL;
+    uint16_t  static_len  = 0;
+    bool _found = find_static_response(m_tcl_session_state.m_apdu_buf, m_tcl_session_state.m_apdu_len,
+                                        &static_resp, &static_len);
+    m_dbg_last_match = _found ? 1 : 0;
+    NRF_LOG_INFO("14A4 find_static: found=%d static_len=%d resp_count=%d",
+                    _found, static_len, m_static_resp_count);
+    if (_found) {
+        m_dbg_iblocks_tx++;
+        memcpy(m_tcl_session_state.m_resp_buf, static_resp, static_len);
+        m_tcl_session_state.m_resp_len = static_len;
+        m_tcl_session_state.m_response_ready = true;
+    }
+
+    nfc_tag_14a_4_base_respond(&m_tcl_session_state);
+}
 
 /* ------------------------------------------------------------------ */
 /*  APDU relay API (for host-driven responses)                         */
 /* ------------------------------------------------------------------ */
 
 bool nfc_tag_14a_4_get_pending_apdu(uint8_t *buf, uint16_t *length) {
-    if (!m_apdu_pending) return false;
-    m_apdu_pending = false;
-    *length = m_apdu_len;
-    memcpy(buf, m_apdu_buf, m_apdu_len);
+    if (!m_tcl_session_state.m_apdu_pending) return false;
+    m_tcl_session_state.m_apdu_pending = false;
+    *length = m_tcl_session_state.m_apdu_len;
+    memcpy(buf, m_tcl_session_state.m_apdu_buf, m_tcl_session_state.m_apdu_len);
     return true;
 }
 
 void nfc_tag_14a_4_set_response(const uint8_t *data, uint16_t length) {
     if (length > NFC_14A_4_MAX_APDU) length = NFC_14A_4_MAX_APDU;
-    memcpy(m_resp_buf, data, length);
-    m_resp_len = length;
-    m_response_ready = true;
+    memcpy(m_tcl_session_state.m_resp_buf, data, length);
+    m_tcl_session_state.m_resp_len = length;
+    m_tcl_session_state.m_response_ready = true;
 }
 
 /* ------------------------------------------------------------------ */
 /*  Reset handler                                                       */
 /* ------------------------------------------------------------------ */
 
+void nfc_tag_14a_4_reset_state(nfc_tag_14a_4_tcl_state_t *m_tcl_session_state) {
+    m_tcl_session_state->m_block_num      = 0;
+    m_tcl_session_state->m_cid_supported  = false;
+    m_tcl_session_state->m_cid            = 0;
+    m_tcl_session_state->m_apdu_pending   = false;
+    m_tcl_session_state->m_response_ready = false;
+    m_tcl_session_state->m_apdu_len       = 0;
+    m_tcl_session_state->m_resp_len       = 0;
+}
+
 void nfc_tag_14a_4_reset_handler(void) {
-    m_block_num      = 0;
-    m_cid_supported  = false;
-    m_cid            = 0;
-    m_apdu_pending   = false;
-    m_response_ready = false;
-    m_apdu_len       = 0;
-    m_resp_len       = 0;
+    nfc_tag_14a_4_reset_state(&m_tcl_session_state);
 }
 
 void nfc_tag_14a_4_get_debug_counters(uint8_t *rx, uint8_t *tx,
