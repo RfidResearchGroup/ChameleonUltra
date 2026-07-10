@@ -128,8 +128,13 @@ static void try_reset_t55xx_passwd(uint32_t new_passwd, uint8_t *old_passwds, ui
 /**
  * Write card data to t55xx
  */
-static uint8_t write_t55xx(uint32_t *blks, uint8_t blk_count, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+static uint8_t write_t55xx(uint32_t *blks, uint8_t blk_count, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool no_password) {
     uint32_t passwd = bytes_to_num(new_passwd, 4);
+
+    // No password: clear the PWD enable bit in block 0 so the tag is left unprotected
+    if (no_password) {
+        blks[0] &= ~T5577_PWD;
+    }
 
     start_lf_125khz_radio();
     bsp_delay_ms(1);  // Delays for a while after starting the field
@@ -146,22 +151,22 @@ static uint8_t write_t55xx(uint32_t *blks, uint8_t blk_count, uint8_t *new_passw
 /**
  * Write em410x card data to t55xx
  */
-uint8_t write_em410x_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+uint8_t write_em410x_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool no_password) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = em410x_t55xx_writer(uid, blks);
     if (blk_count == 0) {
         return STATUS_PAR_ERR;
     }
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, no_password);
 }
 
-uint8_t write_em410x_electra_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+uint8_t write_em410x_electra_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool no_password) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = em410x_electra_t55xx_writer(uid, blks);
     if (blk_count == 0) {
         return STATUS_PAR_ERR;
     }
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, no_password);
 }
 
 /**
@@ -180,7 +185,7 @@ uint8_t write_hidprox_to_t55xx(uint8_t format, uint32_t fc, uint64_t cn, uint32_
     if (blk_count == 0) {
         return STATUS_PAR_ERR;
     }
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, false);
 }
 
 /**
@@ -196,7 +201,7 @@ uint8_t write_ioprox_to_t55xx(uint8_t *card_data, uint8_t *new_passwd, uint8_t *
         return STATUS_PAR_ERR;
     }
 
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, false);
 }
 
 /**
@@ -208,14 +213,14 @@ uint8_t write_viking_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_pa
     if (blk_count == 0) {
         return STATUS_PAR_ERR;
     }
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, false);
 }
 
 uint8_t write_pac_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = pac_t55xx_writer(data, blks);
     if (blk_count == 0) return STATUS_PAR_ERR;
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, false);
 }
 
 /**
@@ -227,7 +232,7 @@ uint8_t write_jablotron_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old
     if (blk_count == 0) {
         return STATUS_PAR_ERR;
     }
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, false);
 }
 
 /**
@@ -237,7 +242,7 @@ uint8_t write_idteck_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_p
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = idteck_t55xx_writer(data, blks);
     if (blk_count == 0) return STATUS_PAR_ERR;
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, false);
 }
 
 /**
