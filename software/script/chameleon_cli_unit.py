@@ -5797,7 +5797,10 @@ class LFEM410xWriteT55xx(LFEMIdArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = "Write em410x id to t55xx"
-        return self.add_card_arg(parser, required=True)
+        parser = self.add_card_arg(parser, required=True)
+        parser.add_argument("--nopwd", action="store_true",
+                            help="Leave the T55xx password-free")
+        return parser
 
     def on_exec(self, args: argparse.Namespace):
         id_hex = args.id
@@ -5806,8 +5809,8 @@ class LFEM410xWriteT55xx(LFEMIdArgsUnit, ReaderRequiredUnit):
                 "Writing to T55xx supports 5-byte EM410X (10 hex) or 13-byte Electra (26 hex) IDs."
             )
         id_bytes = bytes.fromhex(id_hex)
-        self.cmd.em410x_write_to_t55xx(id_bytes)
-        print(f" - EM410x ID write done: {id_hex}")
+        self.cmd.em410x_write_to_t55xx(id_bytes, no_pwd=args.nopwd)
+        print(f" - EM410x ID write done: {id_hex}" + (" (no password)" if args.nopwd else ""))
 
 
 @lf_hid_prox.command("read")
