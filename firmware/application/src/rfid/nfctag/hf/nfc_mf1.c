@@ -1227,6 +1227,7 @@ void nfc_tag_mf1_reset_handler() {
     m_mf1_state = MF1_STATE_UNAUTHENTICATED;
     m_gen1a_state = GEN1A_STATE_DISABLE;
     nfc_tag_14a_set_state(NFC_TAG_STATE_14A_IDLE);
+    AuthenticatedSector = 0xFF;  //Fix missig Authentication variable
 
 #ifndef NFC_MF1_FAST_SIM
     // Must to reset pcs handler
