@@ -7421,6 +7421,54 @@ class HWBlePair(DeviceRequiredUnit):
             print(color_string((CY, "Do not forget to store your settings in flash!")))
 
 
+@hw_settings.command("bleadv")
+class HWBleAdvertising(DeviceRequiredUnit):
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Show or configure BLE advertising (disable for USB-only mode)"
+        set_group = parser.add_mutually_exclusive_group()
+        set_group.add_argument(
+            "-e", "--enable", action="store_true", help="Enable BLE advertising"
+        )
+        set_group.add_argument(
+            "-d", "--disable", action="store_true", help="Disable BLE advertising (USB-only mode)"
+        )
+        return parser
+
+    def _set_advertising(self, enabled: bool, target_str: str):
+        # The device only accepts this change over USB, so a BLE client can't
+        # turn off the radio it is connected through.
+        try:
+            self.cmd.set_ble_advertising_enable(enabled)
+        except UnexpectedResponseError:
+            print(color_string((CR, "BLE advertising can only be changed while connected over USB.")))
+            return
+        print(f" - Successfully change ble advertising to {target_str}.")
+        print(color_string((CY, "Do not forget to store your settings in flash!")))
+
+    def on_exec(self, args: argparse.Namespace):
+        is_adv_enable = self.cmd.get_ble_advertising_enable()
+        enabled_str = color_string((CG, "Enabled"))
+        disabled_str = color_string((CR, "Disabled"))
+
+        if not args.enable and not args.disable:
+            if is_adv_enable:
+                print(f" - BLE advertising: {enabled_str}")
+            else:
+                print(f" - BLE advertising: {disabled_str}")
+        elif args.enable:
+            if is_adv_enable:
+                print(color_string((CY, "BLE advertising is already enabled.")))
+                return
+            self._set_advertising(True, enabled_str)
+        elif args.disable:
+            if not is_adv_enable:
+                print(color_string((CY, "BLE advertising is already disabled.")))
+                return
+            self._set_advertising(False, disabled_str)
+
+
 @hw.command("raw")
 class HWRaw(DeviceRequiredUnit):
 

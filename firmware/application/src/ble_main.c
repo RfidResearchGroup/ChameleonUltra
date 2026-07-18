@@ -588,6 +588,10 @@ static void whitelist_set(pm_peer_id_list_skip_t skip) {
 /**@brief Function for starting advertising.
  */
 void advertising_start(bool erase_bonds) {
+    if (!settings_get_ble_advertising_enable()) {
+        // BLE advertising disabled by user setting (USB-only mode); keep the radio silent.
+        return;
+    }
     if (erase_bonds == true && settings_get_ble_pairing_enable_first_load()) {
         // Advertising is started by PM_EVT_PEERS_DELETE_SUCCEEDED event.
         // So we don't call `ble_advertising_start()` after `delete_bonds_all()`.
@@ -606,6 +610,18 @@ void advertising_start(bool erase_bonds) {
  */
 void advertising_stop(void) {
     sd_ble_gap_adv_stop(m_advertising.adv_handle);
+}
+
+/**
+ * @brief Terminate the active BLE link, if any.
+ */
+void ble_disconnect(void) {
+    if (m_conn_handle != BLE_CONN_HANDLE_INVALID) {
+        ret_code_t err_code = sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+        if (err_code != NRF_SUCCESS && err_code != NRF_ERROR_INVALID_STATE) {
+            APP_ERROR_CHECK(err_code);
+        }
+    }
 }
 
 /**@brief Function for handling Peer Manager events.
