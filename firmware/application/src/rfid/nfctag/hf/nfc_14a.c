@@ -292,6 +292,7 @@ uint8_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBi
  * @param[in]   appendCrc  Whether to send the byte flow, automatically send the CRC16 verification automatically
  */
 void nfc_tag_14a_tx_bytes(uint8_t *data, uint32_t bytes, bool appendCrc) {
+    if (m_sniff_passive) return;   // passive tap: CU must never emit on air
     ASSERT(bytes <= MAX_NFC_TX_BUFFER_SIZE);
     NFC_14A_TX_BYTE_CORE(data, bytes, appendCrc, NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
 }
@@ -319,6 +320,7 @@ void nfc_tag_14a_tx_bytes(uint8_t *data, uint32_t bytes, bool appendCrc) {
  * @param[in]   bits   The length of the bit stream to be sent
  */
 void nfc_tag_14a_tx_bits(uint8_t *data, uint32_t bits) {
+    if (m_sniff_passive) return;   // passive tap: CU must never emit on air
     m_is_responded = true;
     memcpy(m_nfc_tx_buffer, data, (bits / 8) + (bits % 8 > 0 ? 1 : 0));
     NFC_14A_TX_BITS_CORE(bits, NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
@@ -330,6 +332,7 @@ void nfc_tag_14a_tx_bits(uint8_t *data, uint32_t bits) {
  * @param[in]   bits   To send a few bites
  */
 void nfc_tag_14a_tx_nbit(uint8_t data, uint32_t bits) {
+    if (m_sniff_passive) return;   // passive tap: CU must never emit on air
     m_is_responded = true;
     m_nfc_tx_buffer[0] = data;
     NFC_14A_TX_BITS_CORE(bits, NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
