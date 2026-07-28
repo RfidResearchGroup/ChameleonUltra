@@ -7754,16 +7754,26 @@ class HF14ASniff(BaseCLIUnit):
             '--timeout', type=int, default=5000, metavar='MS',
             help='Listen duration in milliseconds (default: 5000, max: 30000, firmware blocks for full duration)'
         )
+        parser.add_argument(
+            '--tap', action='store_true',
+            help='Passive tap: CU stays silent while a REAL card answers the reader. '
+                 'Captures reader->card on NFCT and card->reader via the RC522. '
+                 'Place CU, card, and reader in the same field.'
+        )
         return parser
 
     def on_exec(self, args: argparse.Namespace):
         timeout = max(1, min(30000, args.timeout))
-        print(f" Listening for reader frames for {timeout}ms...")
-        print(" Place CU near a reader now.")
+        if args.tap:
+            print(f" Passive tap for {timeout}ms — CU silent, real card answers.")
+            print(" Place the card between the reader and the CU, all in the field.")
+        else:
+            print(f" Listening for reader frames for {timeout}ms...")
+            print(" Place CU near a reader now.")
         print()
 
         try:
-            resp = self.cmd.hf14a_sniff(timeout_ms=timeout)
+            resp = self.cmd.hf14a_sniff(timeout_ms=timeout, tap=args.tap)
         except Exception as e:
             if 'CMDInvalid' in type(e).__name__ or '2020' in str(e):
                 print(f"{CR}Command not supported — reflash firmware to enable hf 14a sniff{C0}")

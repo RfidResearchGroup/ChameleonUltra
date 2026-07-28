@@ -522,19 +522,27 @@ class ChameleonCMD:
                 i += 14
         return resp
 
-    def hf14a_sniff(self, timeout_ms: int = 5000):
+    def hf14a_sniff(self, timeout_ms: int = 5000, tap: bool = False):
         """
-        Capture ISO14443A reader frames while CU acts as a tag emulator.
-
-        The firmware installs a sniff callback into the HF14A stack for the
-        requested duration, then returns all captured frames packed as:
+        Capture ISO14443A frames and return them packed as:
           [2 bytes: bit count, big-endian] [N bytes: frame data, ceil(bits/8)] ...
+        Bit 15 of the bit count: 0 = reader->card, 1 = card->reader.
+
+        Two modes:
+          tap=False (classic): CU acts as a tag emulator and answers the reader;
+              reader commands + CU's own emulated responses are logged.
+          tap=True (passive tap): CU stays silent while a REAL card in the field
+              answers the reader. The reader->card downlink is captured on the NFCT
+              side; per frame the firmware flips HF_ANT_SEL to the RC522 and grabs
+              the card->reader uplink (listen-only, no field driven). Place the CU,
+              the card, and the reader so all three share the field.
 
         :param timeout_ms: Listen duration in ms (1-30000, default 5000)
+        :param tap: Passive-tap mode (real card in the loop) if True
         :return: Raw response — check .status and .data
         """
         timeout_ms = max(1, min(30000, timeout_ms))
-        payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF])
+        payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF, 0x01 if tap else 0x00])
         timeout_s = (timeout_ms // 1000) + 5
         return self.device.send_cmd_sync(Command.HF14A_SNIFF, payload, timeout=timeout_s)
 
