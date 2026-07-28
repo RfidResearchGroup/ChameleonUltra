@@ -221,6 +221,11 @@ uint8_t *pRxPar,
 uint16_t *pRxLenBit,
 uint16_t szRxLenBitMax);
 
+// Passive receive: capture one card->reader frame under an EXTERNAL field,
+// without driving our own carrier (uplink half of a single-device HF-14A sniff).
+uint8_t pcd_14a_reader_passive_receive(uint8_t *pOut, uint16_t maxOutLenBit,
+uint16_t *pOutLenBit, uint8_t *pErr, uint16_t timeout_ms);
+
 // Device auto append and check 14443-A parity enable or disable.
 void pcd_14a_reader_parity_on(void);
 void pcd_14a_reader_parity_off(void);
