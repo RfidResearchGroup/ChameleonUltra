@@ -1282,6 +1282,118 @@ void pcd_14a_reader_calc_crc(uint8_t *pbtData, size_t szLen, uint8_t *pbtCrc) {
 }
 
 /**
+* @brief  Passive receive: capture ONE card->reader frame under an EXTERNAL
+*         reader's field, WITHOUT driving our own RF carrier. This is the
+*         uplink half of a single-device HF-14A sniff. The RC522 receiver
+*         demodulates the 847 kHz load-modulation subcarrier; PCD_RECEIVE
+*         activates the RX path only (no TX, StartSend stays 0).
+*
+* Preconditions:
+*   - Device in READER mode, so HF_ANT_SEL routes the coil to the RC522.
+*   - An external reader is energising the field (we never turn TX1/TX2 on).
+*
+* Notes for bench validation of the "does the RC522 deframe a foreign response"
+* gate: this returns the frame even when ErrorReg flags parity/CRC problems, and
+* hands ErrorReg back via pErr so error rate vs. frame length can be measured.
+* Short frames (ATQA/anticoll/SAK, MIFARE reads) are expected clean; long
+* foreign-locked frames are where sampling-clock drift shows up.
+*
+* @param pOut         buffer for received bytes
+* @param maxOutLenBit capacity of pOut, in bits
+* @param pOutLenBit   [out] received length in bits (0 on timeout)
+* @param pErr         [out] raw ErrorReg snapshot, or NULL
+* @param timeout_ms   how long to wait for a subcarrier frame
+* @retval STATUS_HF_TAG_OK   a frame was captured (possibly with parity/CRC errs)
+* @retval STATUS_HF_TAG_NO   no subcarrier frame within timeout
+* @retval STATUS_HF_ERR_STAT frame longer than pOut capacity
+*/
+/**
+* @brief  Arm the RC522 receiver for a passive (listen-only) capture.
+*         Configures RX and issues PCD_RECEIVE WITHOUT driving our own field.
+*         SPI is independent of HF_ANT_SEL, so this may be called while the coil
+*         is still routed to the NFCT side; the receiver simply sees no field
+*         until HF_ANT_SEL is flipped to the RC522. Pre-arming this way keeps the
+*         antenna-flip on the critical path down to a single GPIO write, which is
+*         what lets the flip land inside the ~86 us FDT gap after a downlink frame.
+*/
+void pcd_14a_reader_passive_rx_arm(void) {
+    // Never drive our own field: we listen under the external reader's carrier.
+    pcd_14a_reader_antenna_off();
+
+    // Receive-only config: 106 kbps type A, no on-chip RX CRC check so the raw
+    // response (CRC bytes included) reaches the host; validation is off-device.
+    clear_register_mask(RxModeReg, 0x80);          // RxCRCEn = 0
+    // Fixed maximum receiver gain; disables AGC hunting under a constant field.
+    write_register_single(RFCfgReg, 0x70);         // RxGain = 48 dB
+
+    write_register_single(CommandReg, PCD_IDLE);   // stop any running command
+    clear_register_mask(ComIrqReg, 0x80);          // clear IRQ flags (Set1 = 0)
+    set_register_mask(FIFOLevelReg, 0x80);         // flush FIFO
+    clear_register_mask(BitFramingReg, 0x80);      // StartSend = 0 (no TX)
+
+    write_register_single(CommandReg, PCD_RECEIVE);// activate receiver only
+}
+
+/**
+* @brief  Collect the frame from a previously armed passive receive. Poll RxIRq
+*         (with an ms timeout) and drain the FIFO. Returns the frame even when
+*         ErrorReg flags parity/CRC problems, and hands ErrorReg back via pErr so
+*         error rate vs. frame length can be measured on the bench.
+*
+* @retval STATUS_HF_TAG_OK   a frame was captured (possibly with parity/CRC errs)
+* @retval STATUS_HF_TAG_NO   no subcarrier frame within timeout
+* @retval STATUS_HF_ERR_STAT frame longer than pOut capacity
+*/
+uint8_t pcd_14a_reader_passive_rx_collect(uint8_t *pOut, uint16_t maxOutLenBit,
+                                          uint16_t *pOutLenBit, uint8_t *pErr,
+                                          uint16_t timeout_ms) {
+    uint8_t status = STATUS_HF_TAG_NO;
+    uint8_t n, lastBits, err = 0, not_timeout;
+    uint16_t bitlen;
+
+    if (pOutLenBit) { *pOutLenBit = 0; }
+
+    bsp_set_timer(g_timeout_auto_timer, 0);
+    do {
+        n = read_register_single(ComIrqReg);       // wait for RxIRq (0x20)
+        not_timeout = NO_TIMEOUT_1MS(g_timeout_auto_timer, timeout_ms);
+    } while (not_timeout && !(n & 0x20));
+
+    if (not_timeout) {
+        err = read_register_single(ErrorReg);      // report, do NOT discard frame
+        n = read_register_single(FIFOLevelReg);
+        if (n == 0) { n = 1; }
+        lastBits = read_register_single(Control522Reg) & 0x07;
+        bitlen = lastBits ? ((n - 1) * 8 + lastBits) : (n * 8);
+        if (bitlen <= maxOutLenBit) {
+            read_register_buffer(FIFODataReg, pOut, n);
+            if (pOutLenBit) { *pOutLenBit = bitlen; }
+            status = STATUS_HF_TAG_OK;
+        } else {
+            status = STATUS_HF_ERR_STAT;
+        }
+    }
+
+    if (pErr) { *pErr = err; }
+    write_register_single(CommandReg, PCD_IDLE);   // idle the receiver
+    return status;
+}
+
+/**
+* @brief  Single-shot passive receive = arm + collect. Capture ONE card->reader
+*         frame under an EXTERNAL reader's field, without driving our own carrier.
+*         Preconditions: device in READER mode (HF_ANT_SEL routed to the RC522)
+*         and an external reader energising the field. See the arm/collect halves
+*         above for the split used by the streaming sniff FSM.
+*/
+uint8_t pcd_14a_reader_passive_receive(uint8_t *pOut, uint16_t maxOutLenBit,
+                                       uint16_t *pOutLenBit, uint8_t *pErr,
+                                       uint16_t timeout_ms) {
+    pcd_14a_reader_passive_rx_arm();
+    return pcd_14a_reader_passive_rx_collect(pOut, maxOutLenBit, pOutLenBit, pErr, timeout_ms);
+}
+
+/**
 * @brief  : Open the antenna
 */
 inline void pcd_14a_reader_antenna_on(void) {
