@@ -28,17 +28,18 @@
 #include "nrf_soc.h"
 #include "nrf_delay.h"
 
-/* In recovery mode the embedded BL is the STOCK bootloader, which must
- * be written to its stock address (0xF3000), and the UICR + MBR params
- * must be rewound to match. In normal mode the embedded BL is our UF2
- * bootloader at 0xEB000. */
+/* This branch builds the bootloader at 0xF3000 (the stock 44KB region,
+ * via bootloader-stage1.ld). Both the recovery build (embedding the STOCK
+ * bootloader) and the normal build (embedding our custom bootloader) place
+ * it at 0xF3000, so both rewind UICR to 0xF3000 to match. */
 #ifdef RECOVERY_MODE
   #define BL_REGION_START    0x000F3000UL
   #define BL_REGION_END      0x000FE000UL
   #define UICR_BL_ADDR_STOCK 0x000F3000UL
 #else
-  #define BL_REGION_START    0x000EB000UL
+  #define BL_REGION_START    0x000F3000UL
   #define BL_REGION_END      0x000FE000UL
+  #define UICR_BL_ADDR_STOCK 0x000F3000UL
 #endif
 #define BL_PAGE_SIZE       0x1000UL
 #define BL_REGION_PAGES    ((BL_REGION_END - BL_REGION_START) / BL_PAGE_SIZE)
@@ -163,15 +164,14 @@ static bl_updater_status_t bl_updater_flash_bl(bool validate_first)
                EMBEDDED_BOOTLOADER_BIN_SIZE) != 0)
         return BL_UPDATER_ERR_VERIFY;
 
-#ifdef RECOVERY_MODE
-    /* Rewind the UICR bootloader start address to the stock location.
-     * UICR can only be written after a page erase; the value only takes
-     * effect after a reset. */
+    /* Ensure the UICR bootloader start address matches where we just wrote
+     * the BL (0xF3000). UICR can only be written after a page erase; the
+     * value only takes effect after a reset. Corrects any stale value
+     * (e.g. 0xEB000) left by earlier experiments. */
     if (*(volatile uint32_t *)UICR_BOOTLOADER_ADDR != UICR_BL_ADDR_STOCK) {
         nvmc_page_erase(UICR_PAGE_ADDR);
         nvmc_write_word(UICR_BOOTLOADER_ADDR, UICR_BL_ADDR_STOCK);
     }
-#endif
 
     return BL_UPDATER_OK;
 }

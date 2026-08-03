@@ -34,6 +34,7 @@ class Command(enum.IntEnum):
     WIPE_FDS = 1020
 
     DELETE_SLOT_TAG_NICK = 1021
+    UPDATE_BL = 1022
 
     GET_ENABLED_SLOTS = 1023
     DELETE_SLOT_SENSE_TYPE = 1024

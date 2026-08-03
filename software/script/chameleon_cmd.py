@@ -1456,6 +1456,15 @@ class ChameleonCMD:
         """
         self.device.send_cmd_auto(Command.ENTER_BOOTLOADER, close=True)
 
+    def update_bl(self):
+        """
+        Ask the device to flash the embedded bootloader (bl_updater) and reset.
+        The device validates CRC then writes the BL region and reboots, so the
+        USB port drops immediately — send and close, like enter_bootloader.
+        :return:
+        """
+        self.device.send_cmd_auto(Command.UPDATE_BL, close=True)
+
     @expect_response(Status.SUCCESS)
     def get_animation_mode(self):
         """

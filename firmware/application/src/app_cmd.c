@@ -7,6 +7,7 @@
 #include "syssleep.h"
 #include "hex_utils.h"
 #include "data_cmd.h"
+#include "bl_updater.h"
 #include "app_cmd.h"
 #include "app_status.h"
 #include "tag_persistence.h"
@@ -103,6 +104,19 @@ static data_frame_tx_t *cmd_processor_enter_bootloader(uint16_t cmd, uint16_t st
     // Never into here...
     while (1) __NOP();
     // For the compiler to be happy...
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_update_bl(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    // Validate the embedded bootloader image (size + CRC32) before touching
+    // flash. If valid, bl_updater_run() disables the SoftDevice, writes the
+    // BL region (0xF3000), sets UICR, and resets — it does not return.
+    bl_updater_status_t st = bl_updater_validate();
+    if (st != BL_UPDATER_OK) {
+        uint8_t code = (uint8_t)st;
+        return data_frame_make(cmd, STATUS_PAR_ERR, 1, &code);
+    }
+    bl_updater_run();
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
@@ -2475,14 +2489,12 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
     }
 
     /* Copy data portion (strip PCB + CRC), then handle chaining */
-    uint8_t blk_num = 0;
     uint8_t resp_pcb = resp_buf[0];
     uint8_t dlen = resp_bytes - 3; /* subtract PCB(1) + CRC(2) */
     if (dlen > 0 && resp_chain_len + dlen < sizeof(resp_chain)) {
         memcpy(&resp_chain[resp_chain_len], &resp_buf[1], dlen);
         resp_chain_len += dlen;
     }
-    blk_num ^= 1;
 
     /* ISO14443-4 chaining: PCB bit5 (0x20) set means more blocks follow */
     while (resp_pcb & 0x20) {
@@ -2505,8 +2517,7 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
             memcpy(&resp_chain[resp_chain_len], &resp_buf[1], dlen);
             resp_chain_len += dlen;
         }
-        blk_num ^= 1;
-    }
+        }
 
     return data_frame_make(cmd, STATUS_HF_TAG_OK, resp_chain_len, resp_chain);
 }
@@ -2955,6 +2966,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_SLOT_TAG_NICK,            NULL,                        cmd_processor_get_slot_tag_nick,             NULL                   },
     {    DATA_CMD_SLOT_DATA_CONFIG_SAVE,        NULL,                        cmd_processor_slot_data_config_save,         NULL                   },
     {    DATA_CMD_ENTER_BOOTLOADER,             NULL,                        cmd_processor_enter_bootloader,              NULL                   },
+    {    DATA_CMD_UPDATE_BL,                    NULL,                        cmd_processor_update_bl,                     NULL                   },
     {    DATA_CMD_GET_DEVICE_CHIP_ID,           NULL,                        cmd_processor_get_device_chip_id,            NULL                   },
     {    DATA_CMD_GET_DEVICE_ADDRESS,           NULL,                        cmd_processor_get_device_address,            NULL                   },
     {    DATA_CMD_SAVE_SETTINGS,                NULL,                        cmd_processor_save_settings,                 NULL                   },

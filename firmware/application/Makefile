@@ -10,6 +10,7 @@ SRC_FILES += \
   $(SRC_COMMON)/libc_nano_stubs.c \
   $(PROJ_DIR)/app_main.c \
   $(PROJ_DIR)/app_cmd.c \
+  $(PROJ_DIR)/bl_updater.c \
   $(PROJ_DIR)/ble_main.c \
   $(PROJ_DIR)/rfid_main.c \
   $(PROJ_DIR)/settings.c \
@@ -380,6 +381,15 @@ else ifeq (${CURRENT_DEVICE_TYPE}, ${CHAMELEON_LITE})
 $(info  Chameleon Lite <Application>: tag emulation module enable.)
 else
 $(error Chameleon <Application>: No device type define.)
+endif
+
+# Recovery build: build.sh passes RECOVERY_MODE=1 as a make variable when
+# RECOVERY_ZIP is set (embedding the STOCK bootloader). Turn it into a
+# compile definition so bl_updater.c's #ifdef RECOVERY_MODE selects the
+# stock-bootloader recovery path in bl_updater.c.
+ifeq ($(RECOVERY_MODE),1)
+  CFLAGS += -DRECOVERY_MODE=1
+$(info  Chameleon <Application>: RECOVERY build — embedding stock bootloader, target 0xF3000.)
 endif
 
 ifeq (${NRF_LOG_UART_ON_SWO_ENABLED}, 1)
