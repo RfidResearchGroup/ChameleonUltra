@@ -22,6 +22,9 @@
 
 #define NRF_LOG_MODULE_NAME app_main
 #include "nrf_log.h"
+#ifdef RECOVERY_MODE
+#include "bl_updater.h"   // recovery: revert-to-stock hook
+#endif
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 NRF_LOG_MODULE_REGISTER();
@@ -1124,6 +1127,15 @@ static void ble_passkey_init(void) {
 /**@brief Application main function.
  */
 int main(void) {
+#ifdef RECOVERY_MODE
+    /* Revert-to-stock build: as the VERY FIRST thing main() does (before any
+     * peripheral or SoftDevice init), write the embedded STOCK bootloader to
+     * the BL region, invalidate this recovery app's vector table, and reset.
+     * The stock BL then boots, finds no valid app, and drops to stock DFU
+     * mode. Does not return on success. */
+    (void)bl_updater_run_and_invalidate_app();
+    while (1) { __WFE(); }   // only reached if the update failed
+#endif
     hw_connect_init();        // Remember to initialize the pins first
 
     fds_util_init();          // Initialize fds tool
