@@ -21,6 +21,10 @@ static nrf_pwm_values_individual_t m_lf_125khz_pwm_seq_val[] = {
     {2, 0, 0, 0},
 };
 
+nrf_pwm_sequence_t const /* Active carrier configuration; defaults to 125 kHz. */
+static nrf_pwm_clk_t m_base_clock = (nrf_pwm_clk_t)NRF_PWM_CLK_500kHz;
+static uint16_t m_top_value = 4;
+
 nrf_pwm_sequence_t const m_lf_125khz_pwm_seq_obj = {
     .values.p_individual = m_lf_125khz_pwm_seq_val,
     .length = NRF_PWM_VALUES_LENGTH(m_lf_125khz_pwm_seq_val),
@@ -154,6 +158,26 @@ void lf_125khz_radio_gpiote_disable(void) {
 }
 
 // init 125kHz signal PWM modulation (use gpiote for ASK & saadc for FSK)
+void lf_radio_set_carrier(lf_carrier_t carrier) {
+    switch (carrier) {
+        case LF_CARRIER_134KHZ:
+            m_base_clock = (nrf_pwm_clk_t)NRF_PWM_CLK_16MHz;
+            m_top_value = 119;
+            m_lf_125khz_pwm_seq_val[0].channel_0 = 60;  /* ~50% duty */
+            break;
+        case LF_CARRIER_125KHZ:
+        default:
+            m_base_clock = (nrf_pwm_clk_t)NRF_PWM_CLK_500kHz;
+            m_top_value = 4;
+            m_lf_125khz_pwm_seq_val[0].channel_0 = 2;
+            break;
+    }
+    if (m_reader_inited) {
+        nrfx_pwm_uninit(&m_pwm);
+        pwm_init();
+    }
+}
+
 void lf_125khz_radio_init(void) {
     if (!m_reader_inited) {
         pwm_init();
