@@ -50,13 +50,11 @@
 #include "nrf_log.h"
 #include "sdk_config.h"
 
-
 #define HANDLER_MODE_EXIT 0xFFFFFFF9 // When this is jumped to, the CPU will exit interrupt context
                                      // (handler mode), and pop values from the stack into registers.
                                      // See ARM's documentation for "Exception entry and return".
 #define EXCEPTION_STACK_WORD_COUNT 8 // The number of words popped from the stack when
                                      // HANDLER_MODE_EXIT is branched to.
-
 
 /**@brief Function that sets the stack pointer and starts executing a particular address.
  *
@@ -68,7 +66,6 @@ void jump_to_addr(uint32_t new_msp, uint32_t addr)
     __set_MSP(new_msp);
     ((void (*)(void))addr)();
 }
-
 
 /**@brief Function for booting an app as if the chip was reset.
  *
@@ -91,67 +88,28 @@ __STATIC_INLINE void app_start(uint32_t vector_table_addr)
     jump_to_addr(new_msp, reset_handler); // Jump directly to the App's Reset Handler.
 }
 
-
 ret_code_t nrf_bootloader_flash_protect(uint32_t address, uint32_t size)
 {
-    if ((size & (CODE_PAGE_SIZE - 1)) || (address > BOOTLOADER_SETTINGS_ADDRESS))
-    {
-        return NRF_ERROR_INVALID_PARAM;
-    }
-
-#if defined(ACL_PRESENT)
-
-    // Protect using ACL.
-    static uint32_t acl_instance = 0;
-
-    uint32_t const mask   = (ACL_ACL_PERM_WRITE_Disable << ACL_ACL_PERM_WRITE_Pos);
-
-    if (acl_instance >= ACL_REGIONS_COUNT)
-    {
-        return NRF_ERROR_NO_MEM;
-    }
-
-    NRF_ACL->ACL[acl_instance].ADDR = address;
-    NRF_ACL->ACL[acl_instance].SIZE = size;
-    NRF_ACL->ACL[acl_instance].PERM = mask;
-
-    acl_instance++;
-
-#elif defined (BPROT_PRESENT)
-
-    // Protect using BPROT. BPROT does not support read protection.
-    uint32_t pagenum_start = address / CODE_PAGE_SIZE;
-    uint32_t pagenum_end   = pagenum_start + ((size - 1) / CODE_PAGE_SIZE);
-
-    for (uint32_t i = pagenum_start; i <= pagenum_end; i++)
-    {
-        uint32_t config_index = i / 32;
-        uint32_t mask         = (1 << (i - config_index * 32));
-
-        switch (config_index)
-        {
-            case 0:
-                NRF_BPROT->CONFIG0 = mask;
-                break;
-            case 1:
-                NRF_BPROT->CONFIG1 = mask;
-                break;
-#if BPROT_REGIONS_NUM > 64
-            case 2:
-                NRF_BPROT->CONFIG2 = mask;
-                break;
-            case 3:
-                NRF_BPROT->CONFIG3 = mask;
-                break;
-#endif
-        }
-    }
-
-#endif
-
+    /* ---------------------------------------------------------------------
+     * Flash protection intentionally DISABLED for this open-source fork.
+     *
+     * Upstream, this sets an ACL write-disable on the bootloader region
+     * every time the bootloader launches the application. ACL latches until
+     * the next reset and cannot be cleared by software — which makes the
+     * bl_updater self-update mechanism (the app writing the BL region via
+     * NVMC) fail silently: the erase/write is blocked, the post-write verify
+     * fails, and the update is a no-op. That defeats `hw update_bl` and the
+     * revert-to-stock path.
+     *
+     * Since this fork deliberately allows the application to rewrite the
+     * bootloader (with its own CRC + memcmp verification), we skip ACL
+     * entirely. Return success so callers (nrf_bootloader_app_start_final)
+     * proceed normally.
+     * ------------------------------------------------------------------- */
+    (void)address;
+    (void)size;
     return NRF_SUCCESS;
 }
-
 
 void nrf_bootloader_app_start_final(uint32_t vector_table_addr)
 {
