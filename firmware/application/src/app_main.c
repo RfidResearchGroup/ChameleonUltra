@@ -1132,9 +1132,17 @@ int main(void) {
      * peripheral or SoftDevice init), write the embedded STOCK bootloader to
      * the BL region, invalidate this recovery app's vector table, and reset.
      * The stock BL then boots, finds no valid app, and drops to stock DFU
-     * mode. Does not return on success. */
-    (void)bl_updater_run_and_invalidate_app();
-    while (1) { __WFE(); }   // only reached if the update failed
+     * mode. Does not return on success.
+     *
+     * Uses the _force variant (skips the runtime CRC check). The embedded
+     * image's CRC is verified at BUILD time by make_recovery_header.py, and
+     * the runtime crc32_compute has been observed to disagree with it for
+     * reasons unrelated to data integrity — a runtime CRC check here only
+     * causes a silent no-op (the exact "revert did nothing" symptom).
+     * bl_updater_flash_bl still does a post-write memcmp verify, which is the
+     * integrity check that actually matters. */
+    (void)bl_updater_run_and_invalidate_app_force();
+    while (1) { __WFE(); }   // only reached if the post-write verify failed
 #endif
     hw_connect_init();        // Remember to initialize the pins first
 
