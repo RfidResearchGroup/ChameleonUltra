@@ -9,10 +9,10 @@
 #include "protocols/em410x.h"
 #include "protocols/ioprox.h"
 #include "protocols/hidprox.h"
+#include "protocols/fdxb.h"
 #include "protocols/idteck.h"
 #include "protocols/t55xx.h"
 #include "protocols/jablotron.h"
-#include "protocols/fdxb.h"
 #include "protocols/pac.h"
 #include "protocols/viking.h"
 
@@ -114,6 +114,7 @@ uint8_t scan_jablotron(uint8_t *uid) {
     }
     return STATUS_LF_TAG_NO_FOUND;
 }
+
 /**
  * Search FDX-B animal tag (134.2 kHz)
  */
@@ -123,7 +124,6 @@ uint8_t scan_fdxb(uint8_t *data) {
     }
     return STATUS_LF_TAG_NO_FOUND;
 }
-
 
 /**
  * Try reset t55XX tag passwords by enumerating old passwords.
