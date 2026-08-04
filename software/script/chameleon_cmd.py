@@ -799,21 +799,6 @@ class ChameleonCMD:
             resp.parsed = resp.data[:5]
         return resp
 
-    def fdxb_scan(self):
-        """
-        Read an FDX-B animal tag (134.2 kHz).
-
-        :return: response with parsed = (tag_type_int, 13-byte destuffed frame)
-        """
-        resp = self.device.send_cmd_sync(Command.FDXB_SCAN)
-        if resp.status == Status.LF_TAG_OK:
-            tag_type = struct.unpack('!H', resp.data[:2])[0]
-            frame = resp.data[2:15]
-            resp.parsed = (tag_type, frame)
-        return resp
-
-    @expect_response(Status.LF_TAG_OK)
-
     @expect_response(Status.LF_TAG_OK)
     def jablotron_write_to_t55xx(self, id_bytes: bytes):
         """
@@ -826,6 +811,20 @@ class ChameleonCMD:
             raise ValueError("The id bytes length must equal 5")
         data = struct.pack(f'!5s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.JABLOTRON_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
+    def fdxb_scan(self):
+        """
+        Read an FDX-B animal tag (134.2 kHz).
+
+        :return: response with parsed = (tag_type_int, 13-byte destuffed frame)
+        """
+        resp = self.device.send_cmd_sync(Command.FDXB_SCAN)
+        if resp.status == Status.LF_TAG_OK:
+            tag_type = struct.unpack('!H', resp.data[:2])[0]
+            frame = resp.data[2:15]
+            resp.parsed = (tag_type, frame)
+        return resp
 
     @expect_response(Status.LF_TAG_OK)
     def idteck_write_to_t55xx(self, id_bytes: bytes):
@@ -1837,6 +1836,49 @@ class ChameleonCMD:
     def mf1_set_field_off_do_reset(self, enabled: bool):
         data = struct.pack('!B', enabled)
         return self.device.send_cmd_sync(Command.MF1_SET_FIELD_OFF_DO_RESET, data)
+
+    @expect_response(Status.SUCCESS)
+    def seos_read_emu_data(self):
+        resp = self.device.send_cmd_sync(Command.SEOS_READ_EMU_DATA, None)
+        resp.parsed = {}
+
+        def extract_next():
+            length = resp.data[0]
+            value = resp.data[1:length+1]
+            resp.data = resp.data[length+1:]
+            return value
+
+        data, oid, tag, diversifier = extract_next(), extract_next(), extract_next(), extract_next()
+        hash_alg, encr_alg = struct.unpack('!BB', resp.data)
+
+        resp.parsed = {
+            "data": data, "oid": oid, "tag": tag, "diversifier": diversifier,
+            "hash_alg": hash_alg, "encr_alg": encr_alg
+        }
+
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def seos_write_emu_data(self, data: bytes, oid: bytes, tag: bytes, diversifier: bytes, hash_alg: int, encr_alg: int):
+        data = bytes([len(data)]) + data
+        oid = bytes([len(oid)]) + oid
+        tag = bytes([len(tag)]) + tag
+        diversifier = bytes([len(diversifier)]) + diversifier
+        
+        payload = (
+            data + oid + tag + diversifier +
+            struct.pack('!BB', hash_alg, encr_alg)
+        )
+        
+        if len(payload) > 4096:
+            raise ValueError("Too much provided data")
+
+        return self.device.send_cmd_sync(Command.SEOS_WRITE_EMU_DATA, payload)
+    
+    @expect_response(Status.SUCCESS)
+    def seos_write_emu_keys(self, auth: bytes, privenc: bytes, privmac: bytes):
+        payload = auth + privenc + privmac
+        return self.device.send_cmd_sync(Command.SEOS_WRITE_EMU_KEYS, payload)
 
 
 def test_fn():
