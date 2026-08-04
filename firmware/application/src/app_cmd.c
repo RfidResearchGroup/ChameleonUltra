@@ -2386,6 +2386,15 @@ static uint8_t       m_uplink_buf[64];
  * TUNABLE: raise if slow cards are missed, lower if fast readers drop frames. */
 #define HF_SNIFF_UPLINK_TIMEOUT_MS  2
 
+/* Uplink (RC522 passive-RX) sanity filter. The RC522 is demodulating a card's
+ * subcarrier under an EXTERNAL reader's field — a mode it is not built for — so
+ * between real answers it emits sub-byte fragments and error-flagged partials.
+ * Store only plausible 14A card frames: a 4-bit ACK/NAK, or a byte-framed
+ * response (>= 8 bits). Drop anything ErrorReg marks as a protocol, collision,
+ * or FIFO-overflow error. Parity/CRC bits are deliberately NOT masked: raw
+ * capture runs with on-chip CRC off, so those are expected, not fatal. */
+#define HF_SNIFF_UPLINK_ERR_MASK  (0x01u | 0x08u | 0x10u)  /* Protocol|Coll|BufOvfl */
+
 /* Encode one frame into m_sniff_buf.
  * Format: [szBits_be16][data...]
  * Bit 15 of szBits: 0 = reader→card (RX), 1 = card→reader (TX).
@@ -2512,7 +2521,12 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
             nfc_tag_14a_sniff_rearm_rx();          /* re-arm NFCT reception       */
             m_uplink_pending = false;
             bsp_wdt_feed();
-            if (st == STATUS_HF_TAG_OK && ubits > 0) {
+            /* Valid card->reader frame = 4-bit ACK/NAK or byte-framed (>= 8 bits);
+             * everything between is RC522 demod noise. Also drop protocol/
+             * collision/overflow-flagged captures (see HF_SNIFF_UPLINK_ERR_MASK). */
+            bool uplink_len_ok = (ubits == 4) || (ubits >= 8);
+            if (st == STATUS_HF_TAG_OK && uplink_len_ok &&
+                    !(uerr & HF_SNIFF_UPLINK_ERR_MASK)) {
                 hf14a_sniff_store(m_uplink_buf, ubits, true); /* card->reader     */
             }
             continue;   /* re-check timeout immediately, skip the 1 ms sleep     */
