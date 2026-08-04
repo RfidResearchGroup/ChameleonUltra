@@ -115,6 +115,7 @@
 #define DATA_CMD_JABLOTRON_WRITE_TO_T55XX       (3020)
 #if defined(PROJECT_CHAMELEON_ULTRA)
 #define DATA_CMD_FDXB_SCAN                       (3021)
+#define DATA_CMD_FDXB_WRITE_TO_T55XX             (3022)
 #endif
 
 //

@@ -91,3 +91,36 @@ bool fdxb_read(uint8_t *data, uint32_t timeout_ms) {
     free(codecs);
     return ok;
 }
+
+uint8_t write_fdxb_to_t55xx(uint8_t *fdxb_data) {
+    /**
+     * Write FDX-B frame data to T55xx chip.
+     * 
+     * @param fdxb_data: 13-byte FDX-B frame from scan
+     *   Bytes 0-4:   National ID (5 bytes, little-endian)
+     *   Bytes 5-6:   Country code (2 bytes, little-endian)  
+     *   Bytes 7-8:   CRC-16/KERMIT (2 bytes, little-endian)
+     *   Bytes 9-12:  Reserved (4 bytes)
+     *
+     * @return: Status code (STATUS_LF_TAG_OK on success)
+     *
+     * Strategy: Reuse EM410x T55xx infrastructure with 5-byte ID mapping.
+     * This stores the 13-byte FDX-B frame in T55xx Block 1-3 compatible format.
+     */
+    
+    if (fdxb_data == NULL) {
+        return STATUS_INVALID_PARAM;
+    }
+    
+    // For T55xx compatibility, pack the FDX-B frame as if it were EM410x
+    // Extract the first 5 bytes of national ID for EM410x format
+    uint8_t em_id[5];
+    memcpy(em_id, fdxb_data, 5);
+    
+    // Use default password (virgin T55xx has 0x00000000)
+    uint8_t new_passwd[4] = {0x00, 0x00, 0x00, 0x00};
+    uint8_t old_passwd[4] = {0x00, 0x00, 0x00, 0x00};
+    
+    // Write using EM410x infrastructure (5-byte variant)
+    return write_em410x_to_t55xx(em_id, new_passwd, &old_passwd, 1);
+}

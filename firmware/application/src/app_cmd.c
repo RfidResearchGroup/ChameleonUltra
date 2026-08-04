@@ -3062,6 +3062,14 @@ static data_frame_tx_t *cmd_processor_fdxb_scan(uint16_t cmd, uint16_t status, u
     }
     return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_buffer), card_buffer);
 }
+
+static data_frame_tx_t *cmd_processor_fdxb_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length < 13) {
+        return data_frame_make(cmd, STATUS_INVALID_PARAM, 0, NULL);
+    }
+    status = write_fdxb_to_t55xx(data);
+    return data_frame_make(cmd, status, 0, NULL);
+}
 #endif
 
 static cmd_data_map_t m_data_cmd_map[] = {
@@ -3141,6 +3149,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_JABLOTRON_WRITE_TO_T55XX,     before_reader_run,           cmd_processor_jablotron_write_to_t55xx,      NULL                   },
 #if defined(PROJECT_CHAMELEON_ULTRA)
     {    DATA_CMD_FDXB_SCAN,                    before_reader_run,           cmd_processor_fdxb_scan,                     NULL                   },
+    {    DATA_CMD_FDXB_WRITE_TO_T55XX,          before_reader_run,           cmd_processor_fdxb_write_to_t55xx,           NULL                   },
 #endif
     {    DATA_CMD_IDTECK_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_idteck_write_to_t55xx,         NULL                   },
     {    DATA_CMD_LF_T55XX_WRITE,               before_reader_run,           cmd_processor_lf_t55xx_write,                NULL                   },
