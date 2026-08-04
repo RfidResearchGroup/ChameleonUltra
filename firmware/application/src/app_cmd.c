@@ -2467,6 +2467,16 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
         nrf_gpio_cfg_output(HF_ANT_SEL);
         nrf_gpio_pin_set(HF_ANT_SEL);          /* coil -> NFCT (downlink listen) */
         nfc_tag_14a_set_sniff_passive(true);   /* suppress CU's own TX responses */
+
+        /* Bring NFCT into listen-only mode independent of slot config: --tap
+         * needs no emulated HF card. nfc_tag_14a_sense_switch() is ungated
+         * (only its tag_emulation callers check enabled_hf/tag_hf), so calling
+         * it directly inits + enables NFCT and the reader's downlink starts
+         * firing RX_FRAMEEND -> the sniff callback. Idempotent via
+         * m_nfc_sense_state if emulation already brought NFCT up. Cleanup's
+         * tag_emulation_sense_run() restores the correct slot state afterwards
+         * (and uninits NFCT when the active slot carries no HF tag). */
+        nfc_tag_14a_sense_switch(true);
     }
 
     m_sniff_active  = true;
@@ -2500,7 +2510,12 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
     tag_emulation_sense_run();  /* restore slot-based sense state */
 
     if (m_sniff_buf_len == 0) {
-        return data_frame_make(cmd, STATUS_HF_TAG_NO, 0, NULL);
+        /* Return the callback invocation count so the client can tell
+         * "NFCT never received a downlink" (cb_count == 0 -> field/sense/routing)
+         * apart from "frames arrived but nothing was stored" (cb_count > 0). */
+        uint8_t dbg[2] = { (uint8_t)(m_sniff_cb_count >> 8),
+                           (uint8_t)(m_sniff_cb_count & 0xFF) };
+        return data_frame_make(cmd, STATUS_HF_TAG_NO, 2, dbg);
     }
     return data_frame_make(cmd, STATUS_SUCCESS, m_sniff_buf_len, m_sniff_buf);
 }
