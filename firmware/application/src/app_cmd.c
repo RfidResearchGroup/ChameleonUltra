@@ -2370,6 +2370,15 @@ static uint16_t m_sniff_cb_count = 0;   /* debug: total callback invocations */
  * to the NFCT side for the next reader command. */
 static volatile bool m_sniff_tap = false;
 
+/* Passive-tap uplink hand-off, ISR -> sniff wait-loop. The RXFRAMEEND callback
+ * arms the RC522, flips the shared coil to it, sets m_uplink_pending, and
+ * returns WITHOUT polling — polling the RC522 over SPI for the card's answer
+ * must not run in the NFCT interrupt (that busy-wait starved USB + the WDT and
+ * reset the device). The wait-loop (thread context) drains the FIFO, stores the
+ * uplink, flips the coil back to NFCT, and re-arms NFCT reception. */
+static volatile bool m_uplink_pending = false;
+static uint8_t       m_uplink_buf[64];
+
 /* Ceiling on the per-frame uplink wait. The card answers ~86 us (FDT) after the
  * downlink frame ends, so a good capture returns almost immediately; this only
  * bounds the no-response case (HALT/NAK). Runs in the NFCT callback context, so
@@ -2398,23 +2407,16 @@ static void hf14a_sniff_frame_cb(const uint8_t *data, uint16_t szBits) {
     hf14a_sniff_store(data, szBits, false);  /* reader→card downlink */
 
     if (m_sniff_tap) {
-        /* This fires at RXFRAMEEND — the reader has just stopped talking, the
-         * real card answers ~86 us from now. Pre-arm the RC522 (SPI works while
-         * the coil is still on NFCT), then the flip is a single GPIO write, then
-         * collect the card's uplink, then hand the coil straight back to NFCT so
-         * we are listening again before the reader's next command. */
-        static uint8_t  ubuf[64];
-        uint16_t ubits = 0;
-        uint8_t  uerr  = 0;
+        /* RXFRAMEEND: the reader has just stopped, the real card answers ~86 us
+         * from now. Arm the RC522 receiver (SPI, ~tens of us — blocking SPI is
+         * safe here, it polls; only the frame WAIT is long) and flip the shared
+         * coil to it with a single GPIO write, then HAND OFF to the wait-loop.
+         * Do NOT poll for the frame in this interrupt — that is what reset the
+         * device. The RC522 now captures the uplink into its FIFO autonomously;
+         * the wait-loop drains it, flips back, and re-arms NFCT. */
         pcd_14a_reader_passive_rx_arm();          /* arm while coil on NFCT      */
         nrf_gpio_pin_clear(HF_ANT_SEL);           /* coil -> RC522 (reader path) */
-        uint8_t st = pcd_14a_reader_passive_rx_collect(
-                         ubuf, U8ARR_BIT_LEN(ubuf), &ubits, &uerr,
-                         HF_SNIFF_UPLINK_TIMEOUT_MS);
-        nrf_gpio_pin_set(HF_ANT_SEL);             /* coil -> NFCT (listen again) */
-        if (st == STATUS_HF_TAG_OK && ubits > 0) {
-            hf14a_sniff_store(ubuf, ubits, true); /* card→reader uplink          */
-        }
+        m_uplink_pending = true;                  /* wait-loop finishes the job  */
     }
 }
 
@@ -2462,11 +2464,14 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
          * it never drives its own field. Start with the coil on the NFCT side
          * (HF_ANT_SEL high = emulation) for downlink listening; the callback
          * flips to the RC522 and back per frame. */
+        nrf_gpio_cfg_output(READER_POWER);
+        nrf_gpio_pin_set(READER_POWER);        /* power the RC522 for uplink RX  */
         pcd_14a_reader_init();
         pcd_14a_reader_reset();
         nrf_gpio_cfg_output(HF_ANT_SEL);
         nrf_gpio_pin_set(HF_ANT_SEL);          /* coil -> NFCT (downlink listen) */
         nfc_tag_14a_set_sniff_passive(true);   /* suppress CU's own TX responses */
+        nfc_tag_14a_set_sniff_suppress_field_lost(true); /* survive coil flips   */
 
         /* Bring NFCT into listen-only mode independent of slot config: --tap
          * needs no emulated HF card. nfc_tag_14a_sense_switch() is ungated
@@ -2493,6 +2498,25 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
      * main loop cannot feed it while we are blocking here. */
     autotimer *p_at = bsp_obtain_timer(0);
     while (NO_TIMEOUT_1MS(p_at, timeout_ms)) {
+        if (m_sniff_tap && m_uplink_pending) {
+            /* Thread context: safe to poll the RC522 over SPI and wait briefly.
+             * The coil was muxed to the RC522 in the ISR; drain the card's
+             * uplink, flip the coil back to NFCT, re-arm NFCT RX for the next
+             * reader downlink, then record the frame. */
+            uint16_t ubits = 0;
+            uint8_t  uerr  = 0;
+            uint8_t  st = pcd_14a_reader_passive_rx_collect(
+                              m_uplink_buf, U8ARR_BIT_LEN(m_uplink_buf),
+                              &ubits, &uerr, HF_SNIFF_UPLINK_TIMEOUT_MS);
+            nrf_gpio_pin_set(HF_ANT_SEL);          /* coil -> NFCT again          */
+            nfc_tag_14a_sniff_rearm_rx();          /* re-arm NFCT reception       */
+            m_uplink_pending = false;
+            bsp_wdt_feed();
+            if (st == STATUS_HF_TAG_OK && ubits > 0) {
+                hf14a_sniff_store(m_uplink_buf, ubits, true); /* card->reader     */
+            }
+            continue;   /* re-check timeout immediately, skip the 1 ms sleep     */
+        }
         bsp_delay_ms(1);
         bsp_wdt_feed();
     }
@@ -2503,9 +2527,13 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
     nfc_tag_14a_clear_sniff_cb();
     nfc_tag_14a_clear_tx_sniff_cb();
     if (tap) {
+        m_sniff_tap = false;
+        m_uplink_pending = false;
+        nfc_tag_14a_set_sniff_suppress_field_lost(false);
         nfc_tag_14a_set_sniff_passive(false);  /* re-enable normal TX responses  */
         nrf_gpio_pin_set(HF_ANT_SEL);          /* leave coil on NFCT (emulation) */
-        m_sniff_tap = false;
+        pcd_14a_reader_antenna_off();
+        nrf_gpio_pin_clear(READER_POWER);      /* power down the RC522           */
     }
     tag_emulation_sense_run();  /* restore slot-based sense state */
 
