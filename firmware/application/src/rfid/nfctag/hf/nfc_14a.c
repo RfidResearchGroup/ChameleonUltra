@@ -89,17 +89,6 @@ static bool m_sniff_passive = false;
 void nfc_tag_14a_set_sniff_passive(bool passive) {
     m_sniff_passive = passive;
 }
-
-/* Passive tap: while the shared coil is muxed to the RC522 to grab the card's
- * uplink, NFCT momentarily sees no field and would fire FIELD_LOST (reset FSM +
- * arm the sleep timer). Suppress that across the flip so emulation state
- * survives; the sniff wait-loop re-arms NFCT RX on flip-back via
- * nfc_tag_14a_sniff_rearm_rx(). */
-static volatile bool m_sniff_suppress_field_lost = false;
-
-void nfc_tag_14a_set_sniff_suppress_field_lost(bool suppress) {
-    m_sniff_suppress_field_lost = suppress;
-}
 static uint8_t m_nfc_tx_buffer[MAX_NFC_TX_BUFFER_SIZE] = { 0x00 };
 // The N -secondary connection needs to use SAK, when the "third 'bit' in SAK is 1 is 1, the logo UID is incomplete
 static uint8_t m_uid_incomplete_sak[] = { 0x04, 0xda, 0x17 };
@@ -652,14 +641,6 @@ static inline void nfc_fdt_reset(void) {
     nrf_nfct_frame_delay_max_set(0x00001000UL);
 }
 
-/* Re-arm NFCT reception after the sniff wait-loop flips the shared coil back
- * from the RC522. Mirrors the re-arm the RXFRAMEEND path performs when the tag
- * does not reply, so the next reader downlink is captured. Thread-context only. */
-void nfc_tag_14a_sniff_rearm_rx(void) {
-    nfc_fdt_reset();
-    NRFX_NFCT_RX_BYTES
-}
-
 extern bool g_usb_led_marquee_enable;
 
 /**
@@ -694,13 +675,6 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             break;
         }
         case NRFX_NFCT_EVT_FIELD_LOST: {
-            if (m_sniff_suppress_field_lost) {
-                // Coil is temporarily muxed to the RC522 for uplink capture.
-                // Ignore this transient loss and keep NFCT state intact; the
-                // sniff wait-loop re-arms RX once the coil returns to NFCT.
-                NRF_LOG_INFO("HF FIELD LOST (suppressed: sniff tap)");
-                break;
-            }
             g_is_tag_emulating = false;
             // call sleep_timer_start *after* unsetting g_is_tag_emulating
             sleep_timer_start(SLEEP_DELAY_MS_FIELD_NFC_LOST);
