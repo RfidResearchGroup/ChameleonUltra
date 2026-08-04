@@ -226,6 +226,12 @@ uint16_t szRxLenBitMax);
 uint8_t pcd_14a_reader_passive_receive(uint8_t *pOut, uint16_t maxOutLenBit,
 uint16_t *pOutLenBit, uint8_t *pErr, uint16_t timeout_ms);
 
+// Split halves of the passive receive, for the streaming sniff FSM: arm the
+// RX (SPI-only, coil may still be on NFCT) then collect after the antenna flip.
+void    pcd_14a_reader_passive_rx_arm(void);
+uint8_t pcd_14a_reader_passive_rx_collect(uint8_t *pOut, uint16_t maxOutLenBit,
+uint16_t *pOutLenBit, uint8_t *pErr, uint16_t timeout_ms);
+
 // Device auto append and check 14443-A parity enable or disable.
 void pcd_14a_reader_parity_on(void);
 void pcd_14a_reader_parity_off(void);
