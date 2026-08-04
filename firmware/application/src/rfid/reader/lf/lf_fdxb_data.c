@@ -7,6 +7,7 @@
 #include "bsp_time.h"
 #include "circular_buffer.h"
 #include "lf_125khz_radio.h"
+#include "lf_reader_main.h"           // ← ADDED (line 10)
 #include "protocols/fdxb.h"
 #include "protocols/protocols.h"
 
@@ -92,7 +93,7 @@ bool fdxb_read(uint8_t *data, uint32_t timeout_ms) {
     return ok;
 }
 
-uint8_t write_fdxb_to_t55xx(uint8_t *fdxb_data) {
+uint8_t write_fdxb_to_t55xx(uint8_t *fdxb_data) {           // ← ADDED (line 96)
     /**
      * Write FDX-B frame data to T55xx chip.
      * 
@@ -109,7 +110,7 @@ uint8_t write_fdxb_to_t55xx(uint8_t *fdxb_data) {
      */
     
     if (fdxb_data == NULL) {
-        return STATUS_INVALID_PARAM;
+        return STATUS_PAR_ERR;                              // ← FIXED (line 113, was STATUS_INVALID_PARAM)
     }
     
     // For T55xx compatibility, pack the FDX-B frame as if it were EM410x
@@ -122,5 +123,5 @@ uint8_t write_fdxb_to_t55xx(uint8_t *fdxb_data) {
     uint8_t old_passwd[4] = {0x00, 0x00, 0x00, 0x00};
     
     // Write using EM410x infrastructure (5-byte variant)
-    return write_em410x_to_t55xx(em_id, new_passwd, &old_passwd, 1);
+    return write_em410x_to_t55xx(em_id, new_passwd, old_passwd, 1);  // ← FIXED (line 126, was &old_passwd)
 }

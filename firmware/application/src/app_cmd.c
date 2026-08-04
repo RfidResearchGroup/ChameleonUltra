@@ -3065,7 +3065,7 @@ static data_frame_tx_t *cmd_processor_fdxb_scan(uint16_t cmd, uint16_t status, u
 
 static data_frame_tx_t *cmd_processor_fdxb_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length < 13) {
-        return data_frame_make(cmd, STATUS_INVALID_PARAM, 0, NULL);
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     status = write_fdxb_to_t55xx(data);
     return data_frame_make(cmd, status, 0, NULL);
