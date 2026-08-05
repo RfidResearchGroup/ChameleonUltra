@@ -8308,11 +8308,16 @@ def _decode_14a_frame_col(data: bytes, szBits: int, is_tx: bool = False,
             if cla == 0x00 and ins == 0x70:
                 return 'MANAGE CHANNEL', CC, None
             return f'APDU  CLA={cla:02x} INS={ins:02x} P1={p1:02x} P2={p2:02x}', CY, None
+        if szBits >= 64:
+            return '(encrypted / data)', CC, None
         return f'unknown cmd (0x{b0:02x})', CC, None
 
     # ===================== CARD -> READER : responses =====================
     # ATQA -- 2 bytes, only right after REQA/WUPA
-    if szBits == 16 and len(data) == 2 and prev_cmd in ('reqa', 'wupa'):
+    if (szBits == 16 and len(data) == 2 and prev_cmd in ('reqa', 'wupa')
+            and (data[0] & 0x20) == 0        # byte0 bit5 is RFU (0)
+            and (data[0] & 0x1f) != 0        # byte0 must carry a bit-frame SDD bit
+            and (data[1] & 0xf0) == 0):       # byte1 high nibble is RFU (0)
         atqa = data[0] | (data[1] << 8)
         return f"ATQA (Answer To Request, Type A) = 0x{atqa:04X}", CG, None
     # UID/anticoll response -- 5 bytes with VALID BCC, only after ANTICOLL
@@ -8334,7 +8339,7 @@ def _decode_14a_frame_col(data: bytes, szBits: int, is_tx: bool = False,
                     return f'SW {data[off]:02X} {data[off + 1]:02X}  {lbl}', CY, None
     # large blob (the caller's auth tracker names the specific NT/NR||AR/AT)
     if szBits >= 64:
-        return '(encrypted)', CC, None
+        return '(encrypted / data)', CC, None
     # nothing matched a plausible response -> show raw, do not invent a label
     return raw()
 
