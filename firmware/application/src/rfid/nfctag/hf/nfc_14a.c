@@ -89,6 +89,17 @@ static bool m_sniff_passive = false;
 void nfc_tag_14a_set_sniff_passive(bool passive) {
     m_sniff_passive = passive;
 }
+
+/* Passive tap: while a real card is authenticating it load-modulates hard and
+ * transiently dips the field NFCT sees, tripping FIELD_LOST. The stock handler
+ * then sleeps/resets and goes deaf until the next FIELD_DETECTED, dropping the
+ * reader's AUTH/READ frames. When this flag is set, FIELD_LOST is treated as
+ * transient: re-activate + re-arm RX and keep listening. */
+static volatile bool m_sniff_hold_field = false;
+
+void nfc_tag_14a_set_sniff_hold_field(bool hold) {
+    m_sniff_hold_field = hold;
+}
 static uint8_t m_nfc_tx_buffer[MAX_NFC_TX_BUFFER_SIZE] = { 0x00 };
 // The N -secondary connection needs to use SAK, when the "third 'bit' in SAK is 1 is 1, the logo UID is incomplete
 static uint8_t m_uid_incomplete_sak[] = { 0x04, 0xda, 0x17 };
@@ -675,6 +686,16 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             break;
         }
         case NRFX_NFCT_EVT_FIELD_LOST: {
+            if (m_sniff_hold_field) {
+                // Passive tap: a real card's load modulation during the auth
+                // exchange transiently dips the field. Don't sleep/reset (that
+                // goes deaf and drops AUTH/READ); re-activate and re-arm RX so
+                // NFCT keeps capturing the reader's frames through the transient.
+                nrfx_nfct_autocolres_disable();
+                nrfx_nfct_state_force(NRFX_NFCT_STATE_ACTIVATED);
+                NRFX_NFCT_RX_BYTES
+                break;
+            }
             g_is_tag_emulating = false;
             // call sleep_timer_start *after* unsetting g_is_tag_emulating
             sleep_timer_start(SLEEP_DELAY_MS_FIELD_NFC_LOST);

@@ -7853,6 +7853,9 @@ class HF14ASniff(BaseCLIUnit):
         expect_nr_ar = False
         last_auth_keytype = None
         last_auth_block = None
+        auth_nt_slot = -1
+        expect_nr_ar = False
+        nt_clean = None
         prev_cmd = None
         iso_dep = False
 
@@ -7868,25 +7871,32 @@ class HF14ASniff(BaseCLIUnit):
             if (not is_tx) and szBits == 32 and len(data) == 4 and data[0] in (0x60, 0x61):
                 last_auth_keytype = 'A' if data[0] == 0x60 else 'B'
                 last_auth_block = data[1]
-                expect_nt = True
+                auth_nt_slot = n + 1     # NT must be the very next frame, nothing later
                 expect_nr_ar = False
+                nt_clean = None
                 decoded_ctx = f"MIFARE Classic AUTH Key{last_auth_keytype} block=0x{last_auth_block:02X} ({last_auth_block})"
                 col_ctx = CG
 
-            # Card -> reader: NT (32-bit) immediately after AUTH
-            elif is_tx and expect_nt and szBits == 32 and len(data) == 4:
-                nt = data.hex()
-                decoded_ctx = f"AUTH: NT (card nonce) = {nt}"
-                col_ctx = CG
-                expect_nt = False
+            # Card -> reader: NT — ONLY the frame immediately after AUTH. A clean
+            # nonce is 4 bytes; the RC522 often mangles it (40 bits etc.), so flag
+            # that rather than latching onto a later SAK and calling it NT.
+            elif is_tx and n == auth_nt_slot:
+                if szBits == 32 and len(data) == 4:
+                    nt_clean = data.hex()
+                    decoded_ctx = f"AUTH: NT (card nonce) = {nt_clean}"
+                    col_ctx = CG
+                else:
+                    decoded_ctx = f"AUTH: NT (card nonce) GARBLED — {szBits}b, need clean 32b"
+                    col_ctx = CR
                 expect_nr_ar = True
 
-            # Reader -> card: NR||AR (64-bit) immediately after NT (encrypted)
+            # Reader -> card: NR||AR (64-bit, encrypted) after the NT slot
             elif (not is_tx) and expect_nr_ar and szBits == 64 and len(data) == 8:
                 nr = data[:4].hex()
                 ar = data[4:].hex()
-                decoded_ctx = f"AUTH continuation: NR||AR (enc)  NR={nr}  AR={ar}"
-                col_ctx = CG
+                note = "" if nt_clean else "  (NT garbled -> not crackable)"
+                decoded_ctx = f"AUTH: NR||AR (enc)  NR={nr}  AR={ar}{note}"
+                col_ctx = CG if nt_clean else CY
                 expect_nr_ar = False
 
             # Generic decoder -- direction- and context-gated
@@ -8644,6 +8654,20 @@ def _print_14a_sniff_summary(frames):
                       f"need a second auth to crack{C0}")
                 print(f"   {CC}When paired, run:{C0} "
                       f"mfkey64 {uid} {n['nt']} {n['nr']} {n['ar']} <nt2>")
+
+    elif auth_seen:
+        # Reader-side auth was captured but no clean nonce survived — the
+        # card-side NT came back garbled. Say so, so it's clear the reader path
+        # works and only the RC522 NT capture is the blocker.
+        n_auth = sum(1 for _szb, _d, _tx in frames
+                     if (not _tx) and _szb == 32 and len(_d) == 4 and _d[0] in (0x60, 0x61))
+        print()
+        print(f" {'-'*55}")
+        print(f" {CC}Nonces   :{C0} {CY}{n_auth} AUTH captured, but every card nonce (NT) "
+              f"came back garbled{C0}")
+        print(f"   Reader side is clean (AUTH + NR||AR present); the RC522 is mangling")
+        print(f"   the 4-byte NT. One clean 32-bit NT in the frame right after an AUTH")
+        print(f"   is all that's needed to crack.")
 
 
 def _get_capture():

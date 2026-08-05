@@ -2599,6 +2599,7 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
             ppi_start_ok = true;
         }
         nfc_tag_14a_set_sniff_passive(true);   /* CU never answers on air         */
+        nfc_tag_14a_set_sniff_hold_field(true); /* ride through card-modulation dips */
 
         /* Bring NFCT into listen-only mode independent of slot config: --tap
          * needs no emulated HF card. nfc_tag_14a_sense_switch() is ungated
@@ -2670,6 +2671,7 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
     nfc_tag_14a_clear_tx_sniff_cb();
     if (tap) {
         m_sniff_tap = false;
+        nfc_tag_14a_set_sniff_hold_field(false);
         write_register_single(CommandReg, PCD_IDLE);  /* stop RC522 receive      */
         if (ppi_end_ok)   { nrfx_ppi_channel_disable(ppi_end);   nrfx_ppi_channel_free(ppi_end);   }
         if (ppi_start_ok) { nrfx_ppi_channel_disable(ppi_start); nrfx_ppi_channel_free(ppi_start); }
