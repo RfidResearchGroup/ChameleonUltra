@@ -7853,6 +7853,8 @@ class HF14ASniff(BaseCLIUnit):
         expect_nr_ar = False
         last_auth_keytype = None
         last_auth_block = None
+        prev_cmd = None
+        iso_dep = False
 
         for n, (szBits, data, is_tx) in enumerate(frames):
             hex_str = ' '.join(f'{b:02x}' for b in data)
@@ -7887,8 +7889,17 @@ class HF14ASniff(BaseCLIUnit):
                 col_ctx = CG
                 expect_nr_ar = False
 
-            # Fallback to generic frame decoder
-            decoded, col = _decode_14a_frame_col(data, szBits)
+            # Generic decoder -- direction- and context-gated
+            decoded, col, cmd_tag = _decode_14a_frame_col(
+                data, szBits, is_tx, prev_cmd, iso_dep)
+            if not is_tx:
+                prev_cmd = cmd_tag
+                if cmd_tag == 'rats':
+                    iso_dep = True
+                elif cmd_tag in ('halt', 'deselect'):
+                    iso_dep = False
+            else:
+                prev_cmd = None      # a response consumes its command context
             if decoded_ctx is not None:
                 decoded, col = decoded_ctx, col_ctx
 
@@ -8022,6 +8033,8 @@ examples:
         nr_ar_enc = None
         at_enc = None
         uid_bytes = b''
+        prev_cmd = None
+        iso_dep = False
 
         for n, (szBits, data, is_tx) in enumerate(frames):
             hex_str = ' '.join(f'{b:02x}' for b in data)
@@ -8068,7 +8081,16 @@ examples:
                 decoded_ctx = f"AT (enc) = {data.hex().upper()}"
                 col_ctx = CG
 
-            decoded, col = _decode_14a_frame_col(data, szBits)
+            decoded, col, cmd_tag = _decode_14a_frame_col(
+                data, szBits, is_tx, prev_cmd, iso_dep)
+            if not is_tx:
+                prev_cmd = cmd_tag
+                if cmd_tag == 'rats':
+                    iso_dep = True
+                elif cmd_tag in ('halt', 'deselect'):
+                    iso_dep = False
+            else:
+                prev_cmd = None      # a response consumes its command context
             if decoded_ctx is not None:
                 decoded, col = decoded_ctx, col_ctx
 
@@ -8176,189 +8198,146 @@ def _decode_sw(sw1: int, sw2: int) -> str:
     return ''
 
 
-def _decode_14a_frame_col(data: bytes, szBits: int):
-    """Return (description, colour) for a 14A frame."""
+_CD = "\033[90m"   # dim grey: raw/garbled frames that fail validation
+
+
+def _sak_desc(sak: int):
+    try:
+        sak_type = type_id_SAK_dict.get(sak, "")
+    except Exception:
+        sak_type = ""
+    if sak_type:
+        return f"SAK (Select Acknowledge) = 0x{sak:02X}  [{sak_type}]"
+    return f"SAK (Select Acknowledge) = 0x{sak:02X}"
+
+
+def _decode_14a_frame_col(data: bytes, szBits: int, is_tx: bool = False,
+                          prev_cmd=None, iso_dep: bool = False):
+    """Return (description, colour, cmd_tag) for a 14A frame.
+
+    Direction- and context-gated so demod garbage is not dressed up as protocol:
+      * is_tx False (reader->card) is decoded as a COMMAND, is_tx True
+        (card->reader) as a RESPONSE.
+      * a response is only NAMED when the preceding reader command makes it
+        plausible -- ATQA after REQA/WUPA, SAK after SELECT, UID after ANTICOLL
+        -- and it passes its integrity check (BCC / length).
+      * APDUs are only decoded inside an established ISO-DEP (RATS/ATS) channel.
+    Anything that fails is shown raw, not mislabelled.
+
+    cmd_tag (3rd value) is this frame's reader-command class ('reqa','anticoll1',
+    'select1','auth','rats','halt','deselect',...) or None, so the caller can
+    feed it as prev_cmd to the next frame and track ISO-DEP state.
+    """
     if not data:
-        return '', C0
+        return '', C0, None
     b0 = data[0]
 
-    # ---------------------------------------------------------------------
-    # ISO14443-A "reply" frames that often show as "unknown" in hf 14a sniff
-    # because the sniffer doesn't know if a frame is reader->card or card->reader.
-    # We infer by payload length/bits and known structures.
-    # ---------------------------------------------------------------------
-    # ATQA: Answer To Request (Type A) - 2 bytes / 16 bits (tag -> reader).
-    # Transmitted LSB first. Common MIFARE Classic ATQA is 0x0004 => '04 00'.
-    # Be conservative: avoid mislabeling common commands like 0x93 0x20 (ANTICOLL).
-    if szBits == 16 and len(data) == 2:
-        not_atqa_prefixes = {
-            0x93, 0x95, 0x97,  # ANTICOLL / SELECT cascade levels
-            0x50,              # HLTA
-            0x60, 0x61,        # MIFARE Classic AUTH
-            0x30,              # READ
-            0xA0, 0xA2,        # WRITE variants
-            0xE0,              # RATS
-        }
-        if data[0] not in not_atqa_prefixes:
-            atqa = data[0] | (data[1] << 8)  # LSB first in air
-            return f"ATQA (Answer To Request, Type A) = 0x{atqa:04X}", CG
+    def raw(reason=''):
+        body = f'raw {data.hex()}'
+        return (f'{body}  ({reason})' if reason else body), _CD, None
 
-    # SAK: Select Acknowledge — 1 byte on air, but the trace may include the
-    # 2-byte CRC-A appended, giving 3 bytes / 24 bits total.
-    if (szBits == 8 and len(data) == 1) or (szBits == 24 and len(data) == 3):
-        sak = data[0]
-        # Reuse existing NXP SAK classification table if present
-        # (type_id_SAK_dict is defined near top of file).
-        try:
-            sak_type = type_id_SAK_dict.get(sak, "")
-        except Exception:
-            sak_type = ""
-        if sak_type:
-            return f"SAK (Select Acknowledge) = 0x{sak:02X}  [{sak_type}]", CG
-        return f"SAK (Select Acknowledge) = 0x{sak:02X}", CG
+    # ===================== READER -> CARD : commands =====================
+    if not is_tx:
+        if szBits == 7:
+            if b0 == 0x26:
+                return 'REQA', CG, 'reqa'
+            if b0 == 0x52:
+                return 'WUPA', CG, 'wupa'
+            return f'short(0x{b0:02x})', CC, None
+        if b0 in (0x93, 0x95, 0x97):
+            lvl = {0x93: '1', 0x95: '2', 0x97: '3'}[b0]
+            if len(data) > 1 and data[1] == 0x70:
+                uid = ' '.join(f'{b:02x}' for b in data[2:6]) if len(data) >= 6 else ''
+                return f'SELECT CL{lvl}  UID={uid}', CB, f'select{lvl}'
+            nvb = f'NVB={data[1]:02x}' if len(data) > 1 else ''
+            return f'ANTICOLL CL{lvl}  {nvb}', CB, f'anticoll{lvl}'
+        if b0 == 0x50:
+            return 'HALT', CC, 'halt'
+        if b0 == 0xc2:
+            return 'S-DESELECT', CC, 'deselect'
+        if b0 == 0xd0:
+            return (f'PPS  PPS1={data[1]:02x}' if len(data) > 1 else 'PPS'), CC, None
+        if b0 == 0xe0:
+            fsdi = (data[1] >> 4) if len(data) > 1 else 0
+            cid = (data[1] & 0xf) if len(data) > 1 else 0
+            return f'RATS  FSDI={fsdi} CID={cid}', CC, 'rats'
+        if b0 == 0x60:
+            return (f'AUTH KeyA  block={data[1]}' if len(data) > 1 else 'AUTH KeyA'), CR, 'auth'
+        if b0 == 0x61:
+            return (f'AUTH KeyB  block={data[1]}' if len(data) > 1 else 'AUTH KeyB'), CR, 'auth'
+        if b0 == 0x30:
+            return (f'READ  block={data[1]}' if len(data) > 1 else 'READ'), CC, 'read'
+        if b0 == 0xa0:
+            return (f'WRITE block={data[1]}' if len(data) > 1 else 'WRITE'), CY, 'write'
+        if b0 == 0x40:
+            return 'MAGIC WUPC1', CY, None
+        if b0 == 0x43:
+            return 'MAGIC WUPC2', CY, None
+        if b0 == 0x41:
+            return 'MAGIC WIPE', CR, None
+        # ISO 7816-4 APDU -- only inside an established ISO-DEP channel
+        if iso_dep and len(data) >= 4 and b0 in (0x00, 0x80, 0x90, 0xa0):
+            cla, ins = data[0], data[1]
+            p1 = data[2] if len(data) > 2 else 0
+            p2 = data[3] if len(data) > 3 else 0
+            if cla == 0x00 and ins == 0xa4:
+                if len(data) > 5:
+                    aid = ' '.join(f'{b:02x}' for b in data[5:5 + data[4]])
+                    name = _known_aid(bytes(data[5:5 + data[4]]))
+                    label = f'SELECT AID  {aid.upper()}' + (f'  ({name})' if name else '')
+                    return label, CY, None
+                return 'SELECT', CY, None
+            if cla == 0x00 and ins == 0xb0:
+                return f'READ BINARY  off={p1 << 8 | p2} len={data[4] if len(data) > 4 else 0}', CC, None
+            if cla == 0x00 and ins == 0xb2:
+                return f'READ RECORD  SFI={p2 >> 3} rec={p1}', CC, None
+            if cla == 0x80 and ins == 0xca:
+                name = _known_bertag((p1 << 8) | p2)
+                return f'GET DATA  {p1:02x}{p2:02x}' + (f'  ({name})' if name else ''), CC, None
+            if cla == 0x80 and ins == 0xa8:
+                return 'GPO  (Get Processing Options)', CY, None
+            if cla == 0x80 and ins == 0xae:
+                actype = {0x00: 'AAC', 0x40: 'TC', 0x80: 'ARQC'}.get(p1 & 0xc0, f'AC/{p1:02x}')
+                return f'GENERATE AC  requesting {actype}', CR, None
+            if cla == 0x00 and ins == 0x20:
+                return 'VERIFY PIN', CY, None
+            if cla == 0x00 and ins == 0x88:
+                return 'INTERNAL AUTH', CR, None
+            if cla == 0x00 and ins == 0x82:
+                return 'EXTERNAL AUTH', CR, None
+            if cla == 0x00 and ins == 0x70:
+                return 'MANAGE CHANNEL', CC, None
+            return f'APDU  CLA={cla:02x} INS={ins:02x} P1={p1:02x} P2={p2:02x}', CY, None
+        return f'unknown cmd (0x{b0:02x})', CC, None
 
-    # Anticollision CL1 response: 4 UID bytes + BCC = 5 bytes / 40 bits.
-    # BCC is XOR of UID bytes.
-    if szBits == 40 and len(data) == 5:
-        uid0, uid1, uid2, uid3, bcc = data
-        calc = uid0 ^ uid1 ^ uid2 ^ uid3
-        if calc == bcc:
-            uid = bytes([uid0, uid1, uid2, uid3]).hex()
-            return f"ANTICOLL CL1 response: UID={uid}  BCC=0x{bcc:02X} (OK)", CG
-        # If BCC doesn't match, still label it as anticoll-like, but warn.
-        uid = bytes(data[:4]).hex()
-        return f"ANTICOLL-like: UID={uid}  BCC=0x{bcc:02X} (expected 0x{calc:02X})", CY
+    # ===================== CARD -> READER : responses =====================
+    # ATQA -- 2 bytes, only right after REQA/WUPA
+    if szBits == 16 and len(data) == 2 and prev_cmd in ('reqa', 'wupa'):
+        atqa = data[0] | (data[1] << 8)
+        return f"ATQA (Answer To Request, Type A) = 0x{atqa:04X}", CG, None
+    # UID/anticoll response -- 5 bytes with VALID BCC, only after ANTICOLL
+    if szBits == 40 and len(data) == 5 and prev_cmd in ('anticoll1', 'anticoll2', 'anticoll3'):
+        u0, u1, u2, u3, bcc = data
+        if (u0 ^ u1 ^ u2 ^ u3) == bcc:
+            return f"ANTICOLL response: UID={bytes(data[:4]).hex()}  BCC=0x{bcc:02X} (OK)", CG, None
+        return raw('BCC fail')
+    # SAK -- 1 byte (or 3 on the wire incl. CRC-A), only after a SELECT
+    if prev_cmd in ('select1', 'select2', 'select3') and \
+            ((szBits == 8 and len(data) == 1) or (szBits == 24 and len(data) == 3)):
+        return _sak_desc(data[0]), CG, None
+    # ISO-DEP response -- ISO 7816 status word at the tail
+    if iso_dep and len(data) >= 2:
+        for off in (-2, -4):
+            if len(data) >= abs(off):
+                lbl = _decode_sw(data[off], data[off + 1])
+                if lbl:
+                    return f'SW {data[off]:02X} {data[off + 1]:02X}  {lbl}', CY, None
+    # large blob (the caller's auth tracker names the specific NT/NR||AR/AT)
+    if szBits >= 64:
+        return '(encrypted)', CC, None
+    # nothing matched a plausible response -> show raw, do not invent a label
+    return raw()
 
-    # Short frames (7-bit)
-    if szBits == 7:
-        if b0 == 0x26:
-            return 'REQA', CG
-        if b0 == 0x52:
-            return 'WUPA', CG
-        return f'short(0x{b0:02x})', CC
-
-    # Anti-collision / Select
-    if b0 == 0x93:
-        if len(data) > 1 and data[1] == 0x70:
-            uid = ' '.join(f'{b:02x}' for b in data[2:6]) if len(data) >= 6 else ''
-            return f'SELECT CL1  UID={uid}', CB
-        nvb = f'NVB={data[1]:02x}' if len(data) > 1 else ''
-        return f'ANTICOLL CL1  {nvb}', CB
-    if b0 == 0x95:
-        if len(data) > 1 and data[1] == 0x70:
-            uid = ' '.join(f'{b:02x}' for b in data[2:6]) if len(data) >= 6 else ''
-            return f'SELECT CL2  UID={uid}', CB
-        nvb = f'NVB={data[1]:02x}' if len(data) > 1 else ''
-        return f'ANTICOLL CL2  {nvb}', CB
-    if b0 == 0x97:
-        if len(data) > 1 and data[1] == 0x70:
-            uid = ' '.join(f'{b:02x}' for b in data[2:6]) if len(data) >= 6 else ''
-            return f'SELECT CL3  UID={uid}', CB
-        nvb = f'NVB={data[1]:02x}' if len(data) > 1 else ''
-        return f'ANTICOLL CL3  {nvb}', CB
-
-    # HALT (0x50 0x00 + CRC — b1 may vary after parity strip)
-    if b0 == 0x50:
-        return 'HALT', CC
-
-    # S-DESELECT (ISO14443-4 block)
-    if b0 == 0xc2:
-        return 'S-DESELECT', CC
-
-    # PPS
-    if b0 == 0xd0:
-        return f'PPS  PPS1={data[1]:02x}' if len(data) > 1 else 'PPS', CC
-
-    # RATS
-    if b0 == 0xe0:
-        fsdi = (data[1] >> 4) if len(data) > 1 else 0
-        cid = (data[1] & 0xf) if len(data) > 1 else 0
-        return f'RATS  FSDI={fsdi} CID={cid}', CC
-
-    # MIFARE Classic commands
-    if b0 == 0x60:
-        return f'AUTH KeyA  block={data[1]}' if len(data) > 1 else 'AUTH KeyA', CR
-    if b0 == 0x61:
-        return f'AUTH KeyB  block={data[1]}' if len(data) > 1 else 'AUTH KeyB', CR
-    # Encrypted nonce / auth response (follows AUTH, first byte varies)
-    if szBits == 72:
-        return '(encrypted nonce — auth challenge/response)', CC
-
-    if b0 == 0x30:
-        return f'READ  block={data[1]}' if len(data) > 1 else 'READ', CC
-    if b0 == 0xa0:
-        return f'WRITE block={data[1]}' if len(data) > 1 else 'WRITE', CY
-    if b0 == 0x40:
-        return 'MAGIC WUPC1', CY
-    if b0 == 0x43:
-        return 'MAGIC WUPC2', CY
-    if b0 == 0x41:
-        return 'MAGIC WIPE', CR
-
-    # ISO 7816-4 APDUs
-    if len(data) >= 2 and b0 in (0x00, 0x80, 0x90, 0xa0):
-        cla, ins = data[0], data[1]
-        p1 = data[2] if len(data) > 2 else 0
-        p2 = data[3] if len(data) > 3 else 0
-        # SELECT FILE / AID
-        if cla == 0x00 and ins == 0xa4:
-            if len(data) > 5:
-                aid = ' '.join(f'{b:02x}' for b in data[5:5+data[4]])
-                # Identify known AIDs
-                aid_raw = bytes(data[5:5+data[4]])
-                name = _known_aid(aid_raw)
-                label = f'SELECT AID  {aid.upper()}'
-                if name:
-                    label += f'  ({name})'
-                return label, CY
-            return 'SELECT', CY
-        # READ BINARY
-        if cla == 0x00 and ins == 0xb0:
-            return f'READ BINARY  off={p1 << 8 | p2} len={data[4] if len(data) > 4 else 0}', CC
-        # READ RECORD
-        if cla == 0x00 and ins == 0xb2:
-            sfi = p2 >> 3
-            return f'READ RECORD  SFI={sfi} rec={p1}', CC
-        # GET DATA
-        if cla == 0x80 and ins == 0xca:
-            tag = (p1 << 8) | p2
-            name = _known_bertag(tag)
-            return f'GET DATA  {p1:02x}{p2:02x}' + (f'  ({name})' if name else ''), CC
-        # GET PROCESSING OPTIONS
-        if cla == 0x80 and ins == 0xa8:
-            return 'GPO  (Get Processing Options)', CY
-        # GENERATE AC
-        if cla == 0x80 and ins == 0xae:
-            actype = {0x00: 'AAC', 0x40: 'TC', 0x80: 'ARQC'}.get(p1 & 0xc0, f'AC/{p1:02x}')
-            return f'GENERATE AC  requesting {actype}', CR
-        # VERIFY
-        if cla == 0x00 and ins == 0x20:
-            return 'VERIFY PIN', CY
-        # INTERNAL AUTHENTICATE
-        if cla == 0x00 and ins == 0x88:
-            return 'INTERNAL AUTH', CR
-        # EXTERNAL AUTHENTICATE
-        if cla == 0x00 and ins == 0x82:
-            return 'EXTERNAL AUTH', CR
-        # MANAGE CHANNEL
-        if cla == 0x00 and ins == 0x70:
-            return 'MANAGE CHANNEL', CC
-        return f'APDU  CLA={cla:02x} INS={ins:02x} P1={p1:02x} P2={p2:02x}', CY
-
-    # ISO 7816-4 status word — scan last 2 bytes (and last 4 if CRC present)
-    sw_label = ''
-    for sw_offset in (-2, -4):
-        if len(data) >= abs(sw_offset):
-            s1, s2 = data[sw_offset], data[sw_offset + 1]
-            lbl = _decode_sw(s1, s2)
-            if lbl:
-                sw_label = f'SW {s1:02X} {s2:02X}  {lbl}'
-                break
-    if sw_label:
-        return sw_label, CY
-
-    # Unknown — show first byte
-    return f'unknown (0x{b0:02x})', CC
 
 
 def _known_aid(aid: bytes) -> str:

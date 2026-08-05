@@ -12,6 +12,7 @@
 #include "tag_persistence.h"
 #include "nrf_pwr_mgmt.h"
 #include "app_util_platform.h"
+#include "nrfx_ppi.h"
 #include "settings.h"
 #include "delayed_reset.h"
 #include "netdata.h"
@@ -2374,30 +2375,46 @@ static volatile bool m_sniff_tap = false;
 
 /* Card-side (RC522) coalescing buffer. In free-running RxMultiple mode the
  * demodulated bytes trickle into the FIFO; accumulate them and emit one card
- * frame when the stream goes idle (see HF_SNIFF_CARD_GAP_POLLS). */
+ * frame when the stream goes idle (gap) or the reader speaks again. */
 static uint8_t  m_card_buf[64];
-static uint8_t  m_card_len = 0;
+static uint8_t  m_card_len      = 0;
+static uint32_t m_card_frame_ts = 0;   /* us timestamp of the frame's first byte */
+static uint32_t m_card_last_us  = 0;   /* us timestamp of the last byte taken     */
 
-/* Empty-FIFO polls that mark a card-frame boundary. This tree has only a ms
- * timebase, so we gap-split by poll count rather than Fantasi's 300 us timer.
- * TUNABLE with the RC522 op-point; for the precise 180 us reader-edge guard and
- * per-frame timing, wire a 1 MHz TIMER + PPI stamp on NFCT RXFRAMEEND. */
-#define HF_SNIFF_CARD_GAP_POLLS  64
+/* Monotonic capture counter used as the record timestamp in CLASSIC (emulator)
+ * mode, where the us timebase is not running; preserves capture order. */
+static uint32_t m_sniff_seq = 0;
+
+/* Card-side timing (tap mode), us. GUARD drops RC522 bytes seen while the reader
+ * is transmitting or within GUARD us of a reader frame end (Miller-edge junk);
+ * GAP closes a card frame after that much idle. Fantasi's on-device values —
+ * TUNABLE together with the RC522 op-point. */
+#define HF_SNIFF_CARD_GUARD_US  180
+#define HF_SNIFF_CARD_GAP_US    300
 
 /* Encode one frame into m_sniff_buf.
- * Format: [szBits_be16][data...]
- * Bit 15 of szBits: 0 = reader→card (RX), 1 = card→reader (TX).
- * Real szBits always < 512 so bit15 is always free in genuine frames.
- * Old parsers (bit15=0 for all frames) still work correctly. */
-static void hf14a_sniff_store(const uint8_t *data, uint16_t szBits, bool is_tx) {
+ * INTERNAL record layout: [ts_le32][szBits_be16][data...]
+ *   ts     : 4 bytes LE, capture-time key. tap mode = us since capture start
+ *            (1 MHz TIMER1); classic mode = monotonic counter. Used only to sort
+ *            the trace into chronological order at the end — the two tap
+ *            receivers append out of order because the card side coalesces.
+ *   szBits : big-endian; bit 15 = direction (0 reader->card, 1 card->reader),
+ *            low 15 bits = bit length (real frames < 512, so bit15 is free).
+ * hf14a_sniff_finalize() sorts by ts and STRIPS the ts before the response is
+ * returned, so the host still receives the original [szBits_be16][data] records
+ * (unchanged wire format), just in time order. The decoder needs no changes. */
+static void hf14a_sniff_store(const uint8_t *data, uint16_t szBits, bool is_tx, uint32_t ts) {
     uint16_t szBytes = (szBits + 7) / 8;
     /* NFCT downlink runs in ISR context; the RC522 card side runs in the sniff
-     * wait-loop (thread). Both append here now that the two receivers are live
-     * at once — guard the shared cursor. */
+     * wait-loop (thread). Both append here — guard the shared cursor. */
     CRITICAL_REGION_ENTER();
-    if (m_sniff_buf_len + 2 + szBytes <= HF_SNIFF_BUF_SIZE) {
+    if (m_sniff_buf_len + 6 + szBytes <= HF_SNIFF_BUF_SIZE) {
+        m_sniff_buf[m_sniff_buf_len++] =  ts        & 0xFF;   /* ts LE32   */
+        m_sniff_buf[m_sniff_buf_len++] = (ts >>  8) & 0xFF;
+        m_sniff_buf[m_sniff_buf_len++] = (ts >> 16) & 0xFF;
+        m_sniff_buf[m_sniff_buf_len++] = (ts >> 24) & 0xFF;
         uint16_t hdr = szBits | (is_tx ? 0x8000u : 0x0000u);
-        m_sniff_buf[m_sniff_buf_len++] = (hdr >> 8) & 0xFF;
+        m_sniff_buf[m_sniff_buf_len++] = (hdr >> 8) & 0xFF;   /* hdr BE16  */
         m_sniff_buf[m_sniff_buf_len++] =  hdr        & 0xFF;
         memcpy(&m_sniff_buf[m_sniff_buf_len], data, szBytes);
         m_sniff_buf_len += szBytes;
@@ -2435,21 +2452,63 @@ static void hf14a_sniff_card_rx_config(void) {
  * ACK/NAK lengths need the parity/us path not wired here). */
 static void hf14a_sniff_card_flush(void) {
     if (m_card_len > 0 && m_card_buf[m_card_len - 1] == 0x00) m_card_len--;
-    if (m_card_len > 0) hf14a_sniff_store(m_card_buf, (uint16_t)m_card_len * 8, true);
+    if (m_card_len > 0) hf14a_sniff_store(m_card_buf, (uint16_t)m_card_len * 8, true, m_card_frame_ts);
     m_card_len = 0;
+}
+
+/* Sort the capture into chronological order and strip the internal timestamps,
+ * leaving the original [szBits_be16][data] records the host already parses.
+ * Runs after capture stops (command-thread, no concurrent append). Selection
+ * sort over records (n is a few hundred -> sub-ms); equal ts keep capture order.
+ * ts == 0xFFFFFFFF is used as the "consumed" marker (never a real value: classic
+ * ts is a small counter, tap ts is us and tops out in the millions). */
+static void hf14a_sniff_finalize(void) {
+    static uint8_t out[HF_SNIFF_BUF_SIZE];
+    uint16_t out_len = 0;
+    for (;;) {
+        uint32_t best_ts = 0xFFFFFFFFu;
+        uint16_t best_off = 0xFFFFu, off = 0;
+        while (off + 6 <= m_sniff_buf_len) {
+            uint32_t ts = (uint32_t)m_sniff_buf[off]
+                        | ((uint32_t)m_sniff_buf[off + 1] << 8)
+                        | ((uint32_t)m_sniff_buf[off + 2] << 16)
+                        | ((uint32_t)m_sniff_buf[off + 3] << 24);
+            uint16_t bits = ((uint16_t)m_sniff_buf[off + 4] << 8) | m_sniff_buf[off + 5];
+            uint16_t n = ((bits & 0x7FFFu) + 7) / 8;
+            if (ts != 0xFFFFFFFFu && ts < best_ts) { best_ts = ts; best_off = off; }
+            off += 6 + n;
+        }
+        if (best_off == 0xFFFFu) break;                 /* all records consumed */
+        uint16_t bits = ((uint16_t)m_sniff_buf[best_off + 4] << 8) | m_sniff_buf[best_off + 5];
+        uint16_t n = ((bits & 0x7FFFu) + 7) / 8;
+        if (out_len + 2 + n <= sizeof(out)) {
+            out[out_len++] = m_sniff_buf[best_off + 4];  /* hdr BE, ts dropped */
+            out[out_len++] = m_sniff_buf[best_off + 5];
+            memcpy(&out[out_len], &m_sniff_buf[best_off + 6], n);
+            out_len += n;
+        }
+        m_sniff_buf[best_off]     = 0xFF;                /* mark consumed */
+        m_sniff_buf[best_off + 1] = 0xFF;
+        m_sniff_buf[best_off + 2] = 0xFF;
+        m_sniff_buf[best_off + 3] = 0xFF;
+    }
+    memcpy(m_sniff_buf, out, out_len);
+    m_sniff_buf_len = out_len;
 }
 
 static void hf14a_sniff_frame_cb(const uint8_t *data, uint16_t szBits) {
     m_sniff_cb_count++;   /* count even if buffer full or inactive */
     if (!m_sniff_active) return;
-    hf14a_sniff_store(data, szBits, false);  /* reader->card downlink (NFCT) */
+    /* tap: PPI stamped this RXFRAMEEND into TIMER1 CC[0]; classic: capture order. */
+    uint32_t ts = m_sniff_tap ? NRF_TIMER1->CC[0] : m_sniff_seq++;
+    hf14a_sniff_store(data, szBits, false, ts);  /* reader->card downlink (NFCT) */
     /* card->reader is captured in parallel from the RC522 FIFO in the sniff
      * wait-loop — no antenna flip, both receivers share the coil. */
 }
 
 static void hf14a_sniff_tx_frame_cb(const uint8_t *data, uint16_t szBits) {
     if (!m_sniff_active) return;
-    hf14a_sniff_store(data, szBits, true);   /* card→reader */
+    hf14a_sniff_store(data, szBits, true, m_sniff_seq++);   /* card->reader (emulated) */
 }
 
 static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -2483,8 +2542,12 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
      * with a slot active before running this command. */
     m_sniff_buf_len = 0;
     m_sniff_cb_count = 0;
+    m_sniff_seq = 0;
+    m_card_len = 0;
     m_sniff_tap = tap;
 
+    nrf_ppi_channel_t ppi_end = (nrf_ppi_channel_t)0, ppi_start = (nrf_ppi_channel_t)0;
+    bool ppi_end_ok = false, ppi_start_ok = false;
     if (tap) {
         /* Passive tap: CU must NOT respond, so a real card owns the uplink. Both
          * receivers sit on the shared coil at once, no flip: the coil is routed
@@ -2500,6 +2563,32 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
         nrf_gpio_pin_set(HF_ANT_SEL);          /* coil -> NFCT (kept here always) */
         hf14a_sniff_card_rx_config();          /* RC522 -> passive card RX        */
         m_card_len = 0;
+
+        /* us timebase for the card guard + frame timing: TIMER1 free-run @1 MHz
+         * (16 MHz PCLK >> 4). Two nrfx-allocated PPI channels HW-stamp the reader
+         * frame edges with zero ISR latency: RXFRAMEEND -> CC[0], RXFRAMESTART ->
+         * CC[2]. CC[1] is captured on demand for "now". TIMER1 is free here
+         * (TIMER0=SoftDevice, TIMER2=LF radio, TIMER3/4 enabled elsewhere). */
+        NRF_TIMER1->TASKS_STOP  = 1;
+        NRF_TIMER1->MODE        = TIMER_MODE_MODE_Timer;
+        NRF_TIMER1->BITMODE     = TIMER_BITMODE_BITMODE_32Bit;
+        NRF_TIMER1->PRESCALER   = 4;               /* 16 MHz >> 4 = 1 MHz = 1 us  */
+        NRF_TIMER1->TASKS_CLEAR = 1;
+        NRF_TIMER1->TASKS_START = 1;
+        if (nrfx_ppi_channel_alloc(&ppi_end) == NRFX_SUCCESS) {
+            nrfx_ppi_channel_assign(ppi_end,
+                (uint32_t)&NRF_NFCT->EVENTS_RXFRAMEEND,
+                (uint32_t)&NRF_TIMER1->TASKS_CAPTURE[0]);
+            nrfx_ppi_channel_enable(ppi_end);
+            ppi_end_ok = true;
+        }
+        if (nrfx_ppi_channel_alloc(&ppi_start) == NRFX_SUCCESS) {
+            nrfx_ppi_channel_assign(ppi_start,
+                (uint32_t)&NRF_NFCT->EVENTS_RXFRAMESTART,
+                (uint32_t)&NRF_TIMER1->TASKS_CAPTURE[2]);
+            nrfx_ppi_channel_enable(ppi_start);
+            ppi_start_ok = true;
+        }
         nfc_tag_14a_set_sniff_passive(true);   /* CU never answers on air         */
 
         /* Bring NFCT into listen-only mode independent of slot config: --tap
@@ -2525,20 +2614,37 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
      * capture — no sleep, or a longer card response overflows the 64-byte FIFO.
      * Classic mode idles a ms at a time. The WDT (5 s) is fed regularly. */
     autotimer *p_at = bsp_obtain_timer(0);
-    uint32_t poll_ct = 0, idle_polls = 0;
+    uint32_t poll_ct = 0;
     while (NO_TIMEOUT_1MS(p_at, timeout_ms)) {
         if (m_sniff_tap) {
+            NRF_TIMER1->TASKS_CAPTURE[1] = 1;
+            uint32_t now     = NRF_TIMER1->CC[1];   /* now (us)                    */
+            uint32_t rx_end  = NRF_TIMER1->CC[0];   /* PPI: last RXFRAMEEND (us)   */
+            uint32_t r_start = NRF_TIMER1->CC[2];   /* PPI: last RXFRAMESTART (us) */
+            /* a reader frame is mid-flight when its start is more recent than its
+             * end (32-bit free-run wraps at ~71 min, irrelevant for a sniff). */
+            bool in_reader_tx = (int32_t)(r_start - rx_end) > 0;
+
+            /* close the current card frame after an idle gap */
+            if (m_card_len > 0 && (uint32_t)(now - m_card_last_us) > HF_SNIFF_CARD_GAP_US) {
+                hf14a_sniff_card_flush();
+            }
+
             uint8_t lvl = read_register_single(FIFOLevelReg) & 0x7F;
             if (lvl > 0) {
-                idle_polls = 0;
-                while (lvl-- > 0 && m_card_len < sizeof(m_card_buf)) {
-                    m_card_buf[m_card_len++] = read_register_single(FIFODataReg);
+                bool junk = in_reader_tx ||
+                            ((uint32_t)(now - rx_end) < HF_SNIFF_CARD_GUARD_US);
+                if (junk) {
+                    set_register_mask(FIFOLevelReg, 0x80);   /* drop reader-edge noise */
+                } else {
+                    if (m_card_len == 0) m_card_frame_ts = now;  /* stamp frame start */
+                    while (lvl-- > 0 && m_card_len < sizeof(m_card_buf)) {
+                        m_card_buf[m_card_len++] = read_register_single(FIFODataReg);
+                    }
+                    m_card_last_us = now;
+                    if (m_card_len >= sizeof(m_card_buf)) hf14a_sniff_card_flush();
                 }
                 write_register_single(ComIrqReg, 0x7F);
-                if (m_card_len >= sizeof(m_card_buf)) hf14a_sniff_card_flush();
-            } else if (m_card_len > 0 && ++idle_polls >= HF_SNIFF_CARD_GAP_POLLS) {
-                hf14a_sniff_card_flush();      /* idle gap -> card frame boundary */
-                idle_polls = 0;
             }
             if ((++poll_ct & 0x3FFu) == 0) bsp_wdt_feed();
             continue;
@@ -2556,6 +2662,9 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
     if (tap) {
         m_sniff_tap = false;
         write_register_single(CommandReg, PCD_IDLE);  /* stop RC522 receive      */
+        if (ppi_end_ok)   { nrfx_ppi_channel_disable(ppi_end);   nrfx_ppi_channel_free(ppi_end);   }
+        if (ppi_start_ok) { nrfx_ppi_channel_disable(ppi_start); nrfx_ppi_channel_free(ppi_start); }
+        NRF_TIMER1->TASKS_STOP = 1;            /* release the us timebase         */
         nfc_tag_14a_set_sniff_passive(false);  /* re-enable normal TX responses  */
         nrf_gpio_pin_set(HF_ANT_SEL);          /* leave coil on NFCT (emulation) */
         pcd_14a_reader_antenna_off();
@@ -2571,6 +2680,7 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
                            (uint8_t)(m_sniff_cb_count & 0xFF) };
         return data_frame_make(cmd, STATUS_HF_TAG_NO, 2, dbg);
     }
+    hf14a_sniff_finalize();  /* chronological order + strip ts (wire format unchanged) */
     return data_frame_make(cmd, STATUS_SUCCESS, m_sniff_buf_len, m_sniff_buf);
 }
 
