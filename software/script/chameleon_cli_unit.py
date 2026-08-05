@@ -7855,6 +7855,7 @@ class HF14ASniff(BaseCLIUnit):
         last_auth_block = None
         auth_nt_slot = -1
         expect_nr_ar = False
+        at_slot = -1
         nt_clean = None
         prev_cmd = None
         iso_dep = False
@@ -7898,6 +7899,19 @@ class HF14ASniff(BaseCLIUnit):
                 decoded_ctx = f"AUTH: NR||AR (enc)  NR={nr}  AR={ar}{note}"
                 col_ctx = CG if nt_clean else CY
                 expect_nr_ar = False
+                at_slot = n + 1     # {at} is the very next frame (card->reader, 32b)
+
+            # Card -> reader: AT — the frame immediately after NR||AR. mfkey64
+            # needs this (clean 4 bytes) plus a clean NT to recover the key.
+            elif is_tx and n == at_slot:
+                if szBits == 32 and len(data) == 4:
+                    at_hex = data.hex()
+                    ready = " -> mfkey64-ready" if nt_clean else " (but NT garbled)"
+                    decoded_ctx = f"AUTH: AT (enc card response) = {at_hex}{ready}"
+                    col_ctx = CG if nt_clean else CY
+                else:
+                    decoded_ctx = f"AUTH: AT (enc card response) GARBLED — {szBits}b, need clean 32b"
+                    col_ctx = CR
 
             # Generic decoder -- direction- and context-gated
             decoded, col, cmd_tag = _decode_14a_frame_col(
@@ -8648,12 +8662,17 @@ def _print_14a_sniff_summary(frames):
                               f"capture more nonce exchanges and retry{C0}")
 
             elif len(ns) == 1:
-                # Single capture — can't crack without a paired exchange
+                # One clean nonce triple (nt/nr/ar). Two correct ways to finish:
+                #  - mfkey64 needs this same auth's {at} (the 32-bit card->reader
+                #    frame right after {nr}{ar}) as the 5th value.
+                #  - mfkey32v2 needs a SECOND clean nonce for the same block/key
+                #    instead, and no {at}.
                 n = ns[0]
-                print(f"   {CY}Only one exchange captured — "
-                      f"need a second auth to crack{C0}")
-                print(f"   {CC}When paired, run:{C0} "
-                      f"mfkey64 {uid} {n['nt']} {n['nr']} {n['ar']} <nt2>")
+                print(f"   {CY}One clean nonce (nt/nr/ar) captured — not yet crackable.{C0}")
+                print(f"   {CC}mfkey64  (add this auth's {{at}}):{C0} "
+                      f"mfkey64 {uid} {n['nt']} {n['nr']} {n['ar']} <at>")
+                print(f"   {CC}mfkey32v2 (add a 2nd clean nonce):{C0} "
+                      f"mfkey32v2 {uid} {n['nt']} {n['nr']} {n['ar']} <nt2> <nr2> <ar2>")
 
     elif auth_seen:
         # Reader-side auth was captured but no clean nonce survived — the
