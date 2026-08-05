@@ -2387,9 +2387,18 @@ static uint32_t m_sniff_seq = 0;
 
 /* Card-side timing (tap mode), us. GUARD drops RC522 bytes seen while the reader
  * is transmitting or within GUARD us of a reader frame end (Miller-edge junk);
- * GAP closes a card frame after that much idle. Fantasi's on-device values —
- * TUNABLE together with the RC522 op-point. */
-#define HF_SNIFF_CARD_GUARD_US  180
+ * GAP closes a card frame after that much idle.
+ *
+ * GUARD is CRITICAL and must end BEFORE the card starts answering, or it eats
+ * the first byte of the response: at 106 kbit/s a bit is 9.44 us and a 9-bit
+ * (data+parity) byte is ~85 us, and the PICC answers ~86 us (FDT) after the
+ * reader frame ends -- so the first byte spans ~86..171 us. Fantasi's 180 us
+ * clipped it here (UID b2 cf b1 1a came back as cf b1 1a d6, leading byte lost,
+ * and the NT that mfkey64 needs was corrupted). 64 us clears the reader edge
+ * yet ends well before the ~86 us response. TUNABLE: if leading bytes are still
+ * lost, lower further; if reader-edge noise returns, raise toward ~80 us. Also
+ * sweep the RC522 op-point (hf14a_sniff_card_rx_config) alongside this. */
+#define HF_SNIFF_CARD_GUARD_US  64
 #define HF_SNIFF_CARD_GAP_US    300
 
 /* Encode one frame into m_sniff_buf.
