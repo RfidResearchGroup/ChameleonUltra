@@ -9,6 +9,7 @@
 #include "lf_125khz_radio.h"
 #include "lf_reader_main.h"
 #include "protocols/fdxb.h"
+#include "protocols/t55xx.h"
 #include "protocols/protocols.h"
 
 #define NRF_LOG_MODULE_NAME fdxb
