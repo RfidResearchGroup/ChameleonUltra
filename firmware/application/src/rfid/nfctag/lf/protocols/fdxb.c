@@ -6,6 +6,7 @@
 #include "nordic_common.h"
 #include "protocols.h"
 #include "tag_base_type.h"
+#include "t55xx.h"
 #include "utils/diphase.h"
 
 /*
