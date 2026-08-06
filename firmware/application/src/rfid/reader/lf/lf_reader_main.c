@@ -297,9 +297,6 @@ uint8_t lf_t55xx_write_block(uint8_t block, uint32_t word, uint32_t passwd, bool
  *   Bytes 10-12: Trailer / application data
  *
  * @return: Status code (STATUS_LF_TAG_OK on success)
- *
- * Strategy: Use fdxb_t55xx_writer() to encode frame into T55xx block format,
- * then write with T55xx infrastructure, but tuned to 134.2 kHz (like fdxb_read).
  */
 uint8_t write_fdxb_to_t55xx(uint8_t *fdxb_data) {
     uint32_t blks[5] = {0x00};  // config + 4 data blocks (5 total)
@@ -311,23 +308,16 @@ uint8_t write_fdxb_to_t55xx(uint8_t *fdxb_data) {
     // Default password for virgin T55xx (0x00000000)
     uint8_t new_passwd[4] = {0x00, 0x00, 0x00, 0x00};
     uint8_t old_passwd[4] = {0x00, 0x00, 0x00, 0x00};
-    uint32_t passwd = bytes_to_num(new_passwd, 4);
     
-    // CRITICAL: Set antenna to 134.2 kHz (FDX-B carrier) before writing
-    // This is unlike other protocols (EM410x, Jablotron) which use 125 kHz
+    // CRITICAL: Set antenna to 134.2 kHz for FDX-B (T55xx responds at antenna frequency)
     lf_radio_set_carrier(LF_CARRIER_134KHZ);
     
-    start_lf_125khz_radio();  // Still called "125khz" but frequency is set above
-    bsp_delay_ms(1);
-    
-    try_reset_t55xx_passwd(passwd, old_passwd, 1);
-    t55xx_write_data(passwd, blks, blk_count);
-    
-    stop_lf_125khz_radio();
+    // Write using standard T55xx infrastructure
+    uint8_t status = write_t55xx(blks, blk_count, new_passwd, old_passwd, 1);
     
     // Restore to 125 kHz for other LF operations
     lf_radio_set_carrier(LF_CARRIER_125KHZ);
     
-    return STATUS_LF_TAG_OK;
+    return status;
 }
 #endif
