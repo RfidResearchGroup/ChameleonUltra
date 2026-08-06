@@ -302,7 +302,7 @@ uint8_t lf_t55xx_write_block(uint8_t block, uint32_t word, uint32_t passwd, bool
  * then write with standard T55xx infrastructure using Diphase encoding at RF/32.
  */
 uint8_t write_fdxb_to_t55xx(uint8_t *fdxb_data) {
-    uint32_t blks[3] = {0x00};
+    uint32_t blks[5] = {0x00};  // config + 4 data blocks (5 total)
     uint8_t blk_count = fdxb_t55xx_writer(fdxb_data, blks);
     if (blk_count == 0) {
         return STATUS_PAR_ERR;
