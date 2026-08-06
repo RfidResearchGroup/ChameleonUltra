@@ -255,7 +255,12 @@ static bool fw_version_ok(dfu_init_command_t const * p_init)
 #endif // NRF_DFU_SUPPORTS_EXTERNAL_APP
     else
     {
-        return  (p_init->fw_version > s_dfu_settings.bootloader_version);
+        /* Bootloader update. Upstream enforces a strictly-monotonic version
+         * (new fw_version must exceed the stored bootloader_version), which
+         * blocks re-flashing an equal or older bootloader — including
+         * revert-to-stock and re-installing the same build. This fork allows
+         * it: the signed package is already trusted, so accept any version. */
+        return true;
     }
 }
 
