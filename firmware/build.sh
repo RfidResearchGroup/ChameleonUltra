@@ -9,7 +9,7 @@ softdevice_version=7.2.0
 softdevice_id=0x0100
 
 application_version=1
-bootloader_version=5
+bootloader_version=1
 
 device_type=${CURRENT_DEVICE_TYPE:-ultra}
 case $device_type in
