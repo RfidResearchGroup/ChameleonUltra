@@ -16,3 +16,5 @@ extern const protocol fdxb;
 
 extern const protocol *fdxb_protocols[];
 extern size_t fdxb_protocols_size;
+
+uint8_t fdxb_t55xx_writer(uint8_t *fdxb_data, uint32_t *blks);
