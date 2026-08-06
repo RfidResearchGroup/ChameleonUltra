@@ -825,8 +825,6 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(Command.FDXB_WRITE_TO_T55XX, fdxb_data)
 
     @expect_response(Status.LF_TAG_OK)
-
-    @expect_response(Status.LF_TAG_OK)
     def jablotron_write_to_t55xx(self, id_bytes: bytes):
         """
         Write Jablotron card number into T55XX.
