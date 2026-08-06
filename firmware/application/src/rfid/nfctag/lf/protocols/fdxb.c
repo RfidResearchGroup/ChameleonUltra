@@ -185,13 +185,18 @@ uint8_t fdxb_t55xx_writer(uint8_t *fdxb_data, uint32_t *blks) {
     /**
      * Encode FDX-B frame for T55xx programming.
      * 
-     * Packs the 13-byte destuffed FDX-B frame into T55xx blocks.
-     * Block 0 = config (T5577_FDXB_CONFIG)
-     * Blocks 1-2 = 13-byte frame data
+     * Stores the full 13-byte destuffed FDX-B frame into T55xx blocks.
+     * 
+     * Block layout:
+     *   Block 0: T5577_FDXB_CONFIG
+     *   Block 1: bytes 0-3
+     *   Block 2: bytes 4-7
+     *   Block 3: bytes 8-11
+     *   Block 4: byte 12 + padding
      * 
      * @param fdxb_data: 13-byte FDX-B destuffed frame
-     * @param blks: output array (must hold at least 3 elements)
-     * @return: number of blocks used (3: config + 2 data blocks)
+     * @param blks: output array (must hold at least 5 elements)
+     * @return: number of blocks used (5: config + 4 data blocks)
      */
     if (fdxb_data == NULL) {
         return 0;
@@ -200,23 +205,30 @@ uint8_t fdxb_t55xx_writer(uint8_t *fdxb_data, uint32_t *blks) {
     // Block 0: T55xx configuration for FDX-B (Diphase, RF/32)
     blks[0] = T5577_FDXB_CONFIG;
     
-    // Blocks 1-2: Pack 13-byte frame into two 32-bit words (little-endian)
-    // Block 1: bytes 0-3 (national ID start)
+    // Blocks 1-4: Pack all 13 bytes into four 32-bit words (little-endian)
+    
+    // Block 1: bytes 0-3
     blks[1] = ((uint32_t)fdxb_data[3] << 24) |
               ((uint32_t)fdxb_data[2] << 16) |
               ((uint32_t)fdxb_data[1] << 8) |
               ((uint32_t)fdxb_data[0]);
     
-    // Block 2: bytes 4-7 (national ID end + country)
+    // Block 2: bytes 4-7
     blks[2] = ((uint32_t)fdxb_data[7] << 24) |
               ((uint32_t)fdxb_data[6] << 16) |
               ((uint32_t)fdxb_data[5] << 8) |
               ((uint32_t)fdxb_data[4]);
     
-    // Note: bytes 8-12 (CRC + trailer) not stored to T55xx in this simplified format
-    // Full 13-byte preservation would require extended block layout
+    // Block 3: bytes 8-11
+    blks[3] = ((uint32_t)fdxb_data[11] << 24) |
+              ((uint32_t)fdxb_data[10] << 16) |
+              ((uint32_t)fdxb_data[9] << 8) |
+              ((uint32_t)fdxb_data[8]);
     
-    return 3;  // config + 2 data blocks
+    // Block 4: byte 12 + 3 bytes padding
+    blks[4] = ((uint32_t)fdxb_data[12] << 24);
+    
+    return 5;  // config + 4 data blocks (full 13 bytes)
 }
 
 static bool fdxb_decoder_feed(fdxb_codec *d, uint16_t interval) {
