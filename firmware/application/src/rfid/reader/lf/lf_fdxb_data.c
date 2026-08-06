@@ -7,7 +7,7 @@
 #include "bsp_time.h"
 #include "circular_buffer.h"
 #include "lf_125khz_radio.h"
-#include "lf_reader_main.h"           // ← ADDED (line 10)
+#include "lf_reader_main.h"
 #include "protocols/fdxb.h"
 #include "protocols/protocols.h"
 
@@ -93,35 +93,32 @@ bool fdxb_read(uint8_t *data, uint32_t timeout_ms) {
     return ok;
 }
 
-uint8_t write_fdxb_to_t55xx(uint8_t *fdxb_data) {           // ← ADDED (line 96)
+uint8_t write_fdxb_to_t55xx(uint8_t *fdxb_data) {
     /**
      * Write FDX-B frame data to T55xx chip.
      * 
-     * @param fdxb_data: 13-byte FDX-B frame from scan
-     *   Bytes 0-4:   National ID (5 bytes, little-endian)
-     *   Bytes 5-6:   Country code (2 bytes, little-endian)  
-     *   Bytes 7-8:   CRC-16/KERMIT (2 bytes, little-endian)
-     *   Bytes 9-12:  Reserved (4 bytes)
+     * @param fdxb_data: 13-byte FDX-B destuffed frame from scan
+     *   Bytes 0-7:   National ID (38 bits) + Country code (10 bits) + 
+     *                App bit (1 bit) + Reserved (14 bits) - all LSB-first
+     *   Bytes 8-9:   CRC-16/KERMIT
+     *   Bytes 10-12: Trailer / application data
      *
      * @return: Status code (STATUS_LF_TAG_OK on success)
      *
-     * Strategy: Reuse EM410x T55xx infrastructure with 5-byte ID mapping.
-     * This stores the 13-byte FDX-B frame in T55xx Block 1-3 compatible format.
+     * Strategy: Use fdxb_t55xx_writer() to encode frame into T55xx block format,
+     * then write with standard T55xx infrastructure using Diphase encoding at RF/32.
      */
     
-    if (fdxb_data == NULL) {
-        return STATUS_PAR_ERR;                              // ← FIXED (line 113, was STATUS_INVALID_PARAM)
+    uint32_t blks[3] = {0x00};
+    uint8_t blk_count = fdxb_t55xx_writer(fdxb_data, blks);
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
     }
     
-    // For T55xx compatibility, pack the FDX-B frame as if it were EM410x
-    // Extract the first 5 bytes of national ID for EM410x format
-    uint8_t em_id[5];
-    memcpy(em_id, fdxb_data, 5);
-    
-    // Use default password (virgin T55xx has 0x00000000)
+    // Default password for virgin T55xx (0x00000000)
     uint8_t new_passwd[4] = {0x00, 0x00, 0x00, 0x00};
     uint8_t old_passwd[4] = {0x00, 0x00, 0x00, 0x00};
     
-    // Write using EM410x infrastructure (5-byte variant)
-    return write_em410x_to_t55xx(em_id, new_passwd, old_passwd, 1);  // ← FIXED (line 126, was &old_passwd)
+    // Use write_t55xx with proper block configuration
+    return write_t55xx(blks, blk_count, new_passwd, old_passwd, 1);
 }
