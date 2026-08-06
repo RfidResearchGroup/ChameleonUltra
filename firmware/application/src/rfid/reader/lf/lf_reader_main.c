@@ -286,4 +286,33 @@ uint8_t lf_t55xx_write_block(uint8_t block, uint32_t word, uint32_t passwd, bool
     stop_lf_125khz_radio();
     return STATUS_LF_TAG_OK;
 }
+
+/**
+ * Write FDX-B frame data to T55xx chip.
+ * 
+ * @param fdxb_data: 13-byte FDX-B destuffed frame from scan
+ *   Bytes 0-7:   National ID (38 bits) + Country code (10 bits) + 
+ *                App bit (1 bit) + Reserved (14 bits) - all LSB-first
+ *   Bytes 8-9:   CRC-16/KERMIT
+ *   Bytes 10-12: Trailer / application data
+ *
+ * @return: Status code (STATUS_LF_TAG_OK on success)
+ *
+ * Strategy: Use fdxb_t55xx_writer() to encode frame into T55xx block format,
+ * then write with standard T55xx infrastructure using Diphase encoding at RF/32.
+ */
+uint8_t write_fdxb_to_t55xx(uint8_t *fdxb_data) {
+    uint32_t blks[3] = {0x00};
+    uint8_t blk_count = fdxb_t55xx_writer(fdxb_data, blks);
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
+    }
+    
+    // Default password for virgin T55xx (0x00000000)
+    uint8_t new_passwd[4] = {0x00, 0x00, 0x00, 0x00};
+    uint8_t old_passwd[4] = {0x00, 0x00, 0x00, 0x00};
+    
+    // Use write_t55xx with proper block configuration
+    return write_t55xx(blks, blk_count, new_passwd, old_passwd, 1);
+}
 #endif
