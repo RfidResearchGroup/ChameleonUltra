@@ -9,7 +9,6 @@
 #include "lf_125khz_radio.h"
 #include "lf_reader_main.h"
 #include "protocols/fdxb.h"
-#include "protocols/t55xx.h"
 #include "protocols/protocols.h"
 
 #define NRF_LOG_MODULE_NAME fdxb
@@ -92,34 +91,4 @@ bool fdxb_read(uint8_t *data, uint32_t timeout_ms) {
     }
     free(codecs);
     return ok;
-}
-
-uint8_t write_fdxb_to_t55xx(uint8_t *fdxb_data) {
-    /**
-     * Write FDX-B frame data to T55xx chip.
-     * 
-     * @param fdxb_data: 13-byte FDX-B destuffed frame from scan
-     *   Bytes 0-7:   National ID (38 bits) + Country code (10 bits) + 
-     *                App bit (1 bit) + Reserved (14 bits) - all LSB-first
-     *   Bytes 8-9:   CRC-16/KERMIT
-     *   Bytes 10-12: Trailer / application data
-     *
-     * @return: Status code (STATUS_LF_TAG_OK on success)
-     *
-     * Strategy: Use fdxb_t55xx_writer() to encode frame into T55xx block format,
-     * then write with standard T55xx infrastructure using Diphase encoding at RF/32.
-     */
-    
-    uint32_t blks[3] = {0x00};
-    uint8_t blk_count = fdxb_t55xx_writer(fdxb_data, blks);
-    if (blk_count == 0) {
-        return STATUS_PAR_ERR;
-    }
-    
-    // Default password for virgin T55xx (0x00000000)
-    uint8_t new_passwd[4] = {0x00, 0x00, 0x00, 0x00};
-    uint8_t old_passwd[4] = {0x00, 0x00, 0x00, 0x00};
-    
-    // Use write_t55xx with proper block configuration
-    return write_t55xx(blks, blk_count, new_passwd, old_passwd, 1);
 }
