@@ -121,6 +121,74 @@ static uint8_t *fdxb_get_data(fdxb_codec *d) {
     return d->data;
 }
 
+/**
+ * Reconstruct the 128-bit FDX-B raw frame from 13-byte destuffed data.
+ * 
+ * Reverse of fdxb_validate(): takes destuffed frame and adds back:
+ *   - 11-bit header: 00000000001 (LSB first)
+ *   - Control bits: 1 after every 8 data bits
+ * 
+ * Frame layout (128 bits total):
+ *   bits 0-10:   header (00000000001)
+ *   bits 11-18:  data byte 0, LSB first
+ *   bit 19:      control bit 1
+ *   bits 20-27:  data byte 1, LSB first
+ *   bit 28:      control bit 1
+ *   ... (pattern repeats for all 13 bytes)
+ * 
+ * @param frame: 13-byte destuffed FDX-B frame
+ * @param raw_hi: output - bits 0-63 of 128-bit frame (MSB side)
+ * @param raw_lo: output - bits 64-127 of 128-bit frame (LSB side)
+ * @return: true if frame is valid (non-null)
+ */
+static bool fdxb_raw_frame(const uint8_t *frame, uint64_t *raw_hi, uint64_t *raw_lo) {
+    if (frame == NULL) {
+        return false;
+    }
+    
+    *raw_hi = 0;
+    *raw_lo = 0;
+    
+    // Frame is built LSB-first into a 128-bit register
+    // We build into raw_lo first (bits 0-63), then overflow to raw_hi
+    uint64_t bits = 0;
+    uint8_t bit_count = 0;
+    
+    // Helper macro to add a single bit
+#define ADD_BIT(b) do { \
+    bits |= (((uint64_t)(b) & 1) << bit_count); \
+    bit_count++; \
+    if (bit_count == 64) { \
+        *raw_lo = bits; \
+        bits = 0; \
+        bit_count = 0; \
+    } \
+} while(0)
+    
+    // Add 11-bit header: 00000000001 (LSB first = bit 0 is 1, bits 1-10 are 0)
+    ADD_BIT(1);  // header bit 0 (the '1')
+    for (int i = 1; i < 11; i++) {
+        ADD_BIT(0);  // header bits 1-10 (the '0's)
+    }
+    
+    // Add 13 groups: 8 data bits + 1 control bit '1'
+    for (int k = 0; k < FDXB_GROUPS; k++) {
+        // Add 8 data bits (LSB first)
+        for (int i = 0; i < 8; i++) {
+            ADD_BIT((frame[k] >> i) & 1);
+        }
+        // Add control bit '1'
+        ADD_BIT(1);
+    }
+    
+    // Store remaining bits in raw_hi
+    *raw_hi = bits;
+    
+#undef ADD_BIT
+    
+    return true;
+}
+
 static void fdxb_decoder_start(fdxb_codec *d, uint8_t format) {
     memset(d->data, 0, FDXB_DATA_SIZE);
     d->raw_hi = 0;
@@ -185,14 +253,15 @@ uint8_t fdxb_t55xx_writer(uint8_t *fdxb_data, uint32_t *blks) {
     /**
      * Encode FDX-B frame for T55xx programming.
      * 
-     * Stores the full 13-byte destuffed FDX-B frame into T55xx blocks.
+     * Reconstructs the full 128-bit FDX-B frame from the 13-byte destuffed data,
+     * then packs it into T55xx blocks with Diphase/RF32 config.
      * 
      * Block layout:
      *   Block 0: T5577_FDXB_CONFIG
-     *   Block 1: bytes 0-3
-     *   Block 2: bytes 4-7
-     *   Block 3: bytes 8-11
-     *   Block 4: byte 12 + padding
+     *   Block 1: bits 0-31 of 128-bit raw frame
+     *   Block 2: bits 32-63 of 128-bit raw frame
+     *   Block 3: bits 64-95 of 128-bit raw frame
+     *   Block 4: bits 96-127 of 128-bit raw frame
      * 
      * @param fdxb_data: 13-byte FDX-B destuffed frame
      * @param blks: output array (must hold at least 5 elements)
@@ -202,33 +271,22 @@ uint8_t fdxb_t55xx_writer(uint8_t *fdxb_data, uint32_t *blks) {
         return 0;
     }
     
+    // Reconstruct the full 128-bit frame from destuffed data
+    uint64_t raw_hi, raw_lo;
+    if (!fdxb_raw_frame(fdxb_data, &raw_hi, &raw_lo)) {
+        return 0;
+    }
+    
     // Block 0: T55xx configuration for FDX-B (Diphase, RF/32)
     blks[0] = T5577_FDXB_CONFIG;
     
-    // Blocks 1-4: Pack all 13 bytes into four 32-bit words (little-endian)
+    // Blocks 1-4: Pack 128-bit frame into four 32-bit words (little-endian)
+    blks[1] = (uint32_t)(raw_lo & 0xFFFFFFFF);
+    blks[2] = (uint32_t)((raw_lo >> 32) & 0xFFFFFFFF);
+    blks[3] = (uint32_t)(raw_hi & 0xFFFFFFFF);
+    blks[4] = (uint32_t)((raw_hi >> 32) & 0xFFFFFFFF);
     
-    // Block 1: bytes 0-3
-    blks[1] = ((uint32_t)fdxb_data[3] << 24) |
-              ((uint32_t)fdxb_data[2] << 16) |
-              ((uint32_t)fdxb_data[1] << 8) |
-              ((uint32_t)fdxb_data[0]);
-    
-    // Block 2: bytes 4-7
-    blks[2] = ((uint32_t)fdxb_data[7] << 24) |
-              ((uint32_t)fdxb_data[6] << 16) |
-              ((uint32_t)fdxb_data[5] << 8) |
-              ((uint32_t)fdxb_data[4]);
-    
-    // Block 3: bytes 8-11
-    blks[3] = ((uint32_t)fdxb_data[11] << 24) |
-              ((uint32_t)fdxb_data[10] << 16) |
-              ((uint32_t)fdxb_data[9] << 8) |
-              ((uint32_t)fdxb_data[8]);
-    
-    // Block 4: byte 12 + 3 bytes padding
-    blks[4] = ((uint32_t)fdxb_data[12] << 24);
-    
-    return 5;  // config + 4 data blocks (full 13 bytes)
+    return 5;  // config + 4 data blocks (full 128-bit encoded frame)
 }
 
 static bool fdxb_decoder_feed(fdxb_codec *d, uint16_t interval) {
