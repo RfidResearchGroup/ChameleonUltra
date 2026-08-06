@@ -813,7 +813,6 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
-    @expect_response(Status.LF_TAG_OK)
     def fdxb_write_to_t55xx(self, fdxb_data: bytes):
         """
         Write FDX-B tag data to T55XX.
