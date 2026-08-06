@@ -153,13 +153,19 @@ static bool fdxb_raw_frame(const uint8_t *frame, uint64_t *raw_hi, uint64_t *raw
     // We build into raw_lo first (bits 0-63), then overflow to raw_hi
     uint64_t bits = 0;
     uint8_t bit_count = 0;
+    bool storing_hi = false;  // Track which half we're storing to
     
     // Helper macro to add a single bit
 #define ADD_BIT(b) do { \
     bits |= (((uint64_t)(b) & 1) << bit_count); \
     bit_count++; \
     if (bit_count == 64) { \
-        *raw_lo = bits; \
+        if (!storing_hi) { \
+            *raw_lo = bits; \
+            storing_hi = true; \
+        } else { \
+            *raw_hi = bits; \
+        } \
         bits = 0; \
         bit_count = 0; \
     } \
@@ -180,9 +186,6 @@ static bool fdxb_raw_frame(const uint8_t *frame, uint64_t *raw_hi, uint64_t *raw
         // Add control bit '1'
         ADD_BIT(1);
     }
-    
-    // Store remaining bits in raw_hi
-    *raw_hi = bits;
     
 #undef ADD_BIT
     
