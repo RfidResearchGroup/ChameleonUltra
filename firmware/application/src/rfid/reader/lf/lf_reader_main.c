@@ -286,6 +286,7 @@ uint8_t lf_t55xx_write_block(uint8_t block, uint32_t word, uint32_t passwd, bool
     stop_lf_125khz_radio();
     return STATUS_LF_TAG_OK;
 }
+#endif
 
 /**
  * Write FDX-B frame data to T55xx chip.
@@ -308,4 +309,3 @@ uint8_t write_fdxb_to_t55xx(uint8_t *fdxb_data) {
     // Use standard T55xx write infrastructure (same as jablotron/EM410x)
     return write_t55xx(blks, blk_count, new_passwd, old_passwd, 1);
 }
-#endif
