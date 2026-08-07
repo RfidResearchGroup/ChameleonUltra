@@ -283,11 +283,11 @@ uint8_t fdxb_t55xx_writer(uint8_t *fdxb_data, uint32_t *blks) {
     // Block 0: T55xx configuration for FDX-B (Diphase, RF/32)
     blks[0] = T5577_FDXB_CONFIG;
     
-    // Blocks 1-4: Pack 128-bit frame into four 32-bit words (little-endian)
-    blks[1] = (uint32_t)(raw_lo & 0xFFFFFFFF);
-    blks[2] = (uint32_t)((raw_lo >> 32) & 0xFFFFFFFF);
-    blks[3] = (uint32_t)(raw_hi & 0xFFFFFFFF);
-    blks[4] = (uint32_t)((raw_hi >> 32) & 0xFFFFFFFF);
+    // Blocks 1-4: Pack 128-bit frame into four 32-bit words (HIGH bits first, like jablotron)
+    blks[1] = (uint32_t)((raw_hi >> 32) & 0xFFFFFFFF);  // bits 96-127
+    blks[2] = (uint32_t)(raw_hi & 0xFFFFFFFF);          // bits 64-95
+    blks[3] = (uint32_t)((raw_lo >> 32) & 0xFFFFFFFF);  // bits 32-63
+    blks[4] = (uint32_t)(raw_lo & 0xFFFFFFFF);          // bits 0-31
     
     return 5;  // config + 4 data blocks (full 128-bit encoded frame)
 }
