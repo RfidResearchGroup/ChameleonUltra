@@ -822,7 +822,8 @@ class ChameleonCMD:
         """
         if len(fdxb_data) != 13:
             raise ValueError("FDX-B data must be exactly 13 bytes")
-        return self.device.send_cmd_sync(Command.FDXB_WRITE_TO_T55XX, fdxb_data)
+        data = struct.pack(f'!13s4s{4*len(old_keys)}s', fdxb_data, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.FDXB_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
     def jablotron_write_to_t55xx(self, id_bytes: bytes):
