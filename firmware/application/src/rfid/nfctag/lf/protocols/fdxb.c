@@ -123,77 +123,61 @@ static uint8_t *fdxb_get_data(fdxb_codec *d) {
 
 /**
  * Reconstruct the 128-bit FDX-B raw frame from 13-byte destuffed data.
- * 
- * Reverse of fdxb_validate(): takes destuffed frame and adds back:
- *   - 11-bit header: 00000000001 (LSB first)
- *   - Control bits: 1 after every 8 data bits
- * 
- * Frame layout (128 bits total):
- *   bits 0-10:   header (00000000001)
- *   bits 11-18:  data byte 0, LSB first
- *   bit 19:      control bit 1
- *   bits 20-27:  data byte 1, LSB first
- *   bit 28:      control bit 1
- *   ... (pattern repeats for all 13 bytes)
- * 
+ *
+ * Exact inverse of fdxb_validate() + fdxb_shift_bit().  Bits are shifted in
+ * in transmission order using the same shift as the decoder, so on return
+ * raw_hi/raw_lo hold bit-for-bit what a decoder's registers hold after
+ * receiving this frame:
+ *
+ *   raw_hi = transmission positions 0..63   (position p at bit 63-p)
+ *   raw_lo = transmission positions 64..127 (position p at bit 127-p)
+ *
+ * Transmission order (128 bits total):
+ *   pos 0-9:    header zeros
+ *   pos 10:     header one
+ *   pos 11-18:  data byte 0, LSB of the byte first
+ *   pos 19:     control bit 1
+ *   ... repeats for all 13 bytes
+ *
  * @param frame: 13-byte destuffed FDX-B frame
- * @param raw_hi: output - bits 0-63 of 128-bit frame (MSB side)
- * @param raw_lo: output - bits 64-127 of 128-bit frame (LSB side)
+ * @param raw_hi: output - transmission positions 0-63, MSB-first
+ * @param raw_lo: output - transmission positions 64-127, MSB-first
  * @return: true if frame is valid (non-null)
  */
 static bool fdxb_raw_frame(const uint8_t *frame, uint64_t *raw_hi, uint64_t *raw_lo) {
     if (frame == NULL) {
         return false;
     }
-    
-    *raw_hi = 0;
-    *raw_lo = 0;
-    
-    // Frame is built LSB-first into a 128-bit register
-    // raw_hi captures bits 0-63, raw_lo captures bits 64-127
-    uint64_t bits = 0;
-    uint8_t bit_count = 0;
-    bool storing_lo = false;  // Track which half we're storing to
-    
-    // Helper macro to add a single bit
-#define ADD_BIT(b) do { \
-    bits |= (((uint64_t)(b) & 1) << bit_count); \
-    bit_count++; \
-    if (bit_count == 64) { \
-        if (!storing_lo) { \
-            *raw_hi = bits; \
-            storing_lo = true; \
-        } else { \
-            *raw_lo = bits; \
-        } \
-        bits = 0; \
-        bit_count = 0; \
-    } \
-} while(0)
-    
-    // Add 11-bit header: 00000000001 (LSB first = bit 0 is 1, bits 1-10 are 0)
-    ADD_BIT(1);  // header bit 0 (the '1')
-    for (int i = 1; i < 11; i++) {
-        ADD_BIT(0);  // header bits 1-10 (the '0's)
+
+    uint64_t hi = 0;
+    uint64_t lo = 0;
+
+    /* Same shift as fdxb_shift_bit(): oldest bit ends up at bit 63 of hi. */
+#define ADD_BIT(b) do {                     \
+    hi = (hi << 1) | (lo >> 63);            \
+    lo = (lo << 1) | ((b) ? 1ULL : 0ULL);   \
+} while (0)
+
+    /* Header: ten zeros then a one -- matches fdxb_validate(). */
+    for (int i = 0; i < FDXB_HEADER_BITS - 1; i++) {
+        ADD_BIT(0);
     }
-    
-    // Add 13 groups: 8 data bits + 1 control bit '1'
+    ADD_BIT(1);
+
+    /* 13 groups: 8 data bits (byte LSB first) + control bit 1. */
     for (int k = 0; k < FDXB_GROUPS; k++) {
-        // Add 8 data bits (LSB first)
         for (int i = 0; i < 8; i++) {
             ADD_BIT((frame[k] >> i) & 1);
         }
-        // Add control bit '1'
         ADD_BIT(1);
     }
-    
-    // Ensure raw_lo captures any remaining bits
-    if (storing_lo && bit_count > 0) {
-        *raw_lo = bits;
-    }
-    
+
 #undef ADD_BIT
-    
+
+    /* 11 + 13*9 = 128 shifts exactly, so hi/lo are fully populated. */
+    *raw_hi = hi;
+    *raw_lo = lo;
+
     return true;
 }
 
@@ -287,13 +271,15 @@ uint8_t fdxb_t55xx_writer(uint8_t *fdxb_data, uint32_t *blks) {
     
     // Block 0: T55xx configuration for FDX-B (Diphase, RF/32)
     blks[0] = T5577_FDXB_CONFIG;
-    
-    // Blocks 1-4: Pack 128-bit frame sequentially
-    // raw_hi = bits 0-63, raw_lo = bits 64-127
-    blks[1] = (uint32_t)(raw_hi & 0xFFFFFFFF);          // bits 0-31
-    blks[2] = (uint32_t)((raw_hi >> 32) & 0xFFFFFFFF);  // bits 32-63
-    blks[3] = (uint32_t)(raw_lo & 0xFFFFFFFF);          // bits 64-95
-    blks[4] = (uint32_t)((raw_lo >> 32) & 0xFFFFFFFF);  // bits 96-127
+
+    /* T55xx sends block 1 first, MSB first within each block (same
+     * convention as em410x_t55xx_writer).  raw_hi/raw_lo already hold the
+     * frame MSB-first in transmission order, so the split is a straight
+     * high-word/low-word cut. */
+    blks[1] = (uint32_t)(raw_hi >> 32);          // positions 0-31
+    blks[2] = (uint32_t)(raw_hi & 0xFFFFFFFF);   // positions 32-63
+    blks[3] = (uint32_t)(raw_lo >> 32);          // positions 64-95
+    blks[4] = (uint32_t)(raw_lo & 0xFFFFFFFF);   // positions 96-127
     
     return 5;  // config + 4 data blocks (full 128-bit encoded frame)
 }
