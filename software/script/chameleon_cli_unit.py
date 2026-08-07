@@ -21,6 +21,7 @@ from pathlib import Path
 from platform import uname
 from datetime import datetime
 import hardnested_utils
+from fdxb_country import describe_country_code
 
 import chameleon_com
 import chameleon_cmd
@@ -3320,7 +3321,7 @@ class LFFdxbRead(ReaderRequiredUnit):
         crc = int.from_bytes(frame[8:10], "little")
         
         print(" FDX-B (ISO 11784/11785)")
-        print(f"  Country    : {country}")
+        print(f"  Country    : {describe_country_code(country)}")
         print(f"  National ID: {color_string((CG, str(national)))}")
         print(f"  Animal flag: {animal}")
         print(f"  App bit    : {app_bit}")
