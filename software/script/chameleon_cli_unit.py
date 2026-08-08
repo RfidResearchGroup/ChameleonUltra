@@ -819,6 +819,15 @@ class LFFdxbIdArgsUnit(DeviceRequiredUnit):
             return False
         if args.id is None or not re.match(r"^[a-fA-F0-9]{26}$", args.id):
             raise ArgsParserError("FDX-B ID must include 26 HEX symbols (13 bytes)")
+        # Structural sanity: the CRC-16 in bytes 8-9 must cover bytes 0-7.
+        # A hand-edited ID whose CRC no longer matches will not round-trip and
+        # may be rejected by third-party readers.  Warn rather than block, so a
+        # deliberately malformed frame can still be written for testing, unless
+        # the frame is also unreadable by our own decoder (see _fdxb_frame_ok).
+        frame = bytes.fromhex(args.id)
+        ok, reason = _fdxb_frame_ok(frame)
+        if not ok:
+            raise ArgsParserError(f"FDX-B frame invalid: {reason}")
         return True
 
     def args_parser(self) -> ArgumentParserNoExit:
@@ -826,6 +835,61 @@ class LFFdxbIdArgsUnit(DeviceRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         raise NotImplementedError("Please implement this")
+
+
+def _fdxb_crc16(data: bytes) -> int:
+    """CRC-16 as computed by the firmware's fdxb_crc16 (reflected 0x8408)."""
+    crc = 0x0000
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            crc = (crc >> 1) ^ 0x8408 if crc & 1 else crc >> 1
+    return crc & 0xFFFF
+
+
+def _fdxb_frame_ok(frame: bytes) -> "tuple[bool, str]":
+    """
+    Validate a 13-byte destuffed FDX-B frame for writability.
+
+    Returns (True, "") if structurally sound, else (False, reason).
+
+    The 64-bit block in bytes 0-7 is laid out (LSB first):
+        bits  0-37  national ID
+        bits 38-47  country code
+        bit  48     extended-data flag (a.k.a. data-block / application bit)
+        bits 49-62  reserved -- MUST be zero on a conformant tag
+        bit  63     animal flag
+
+    A frame with nonzero reserved bits is emitted fine by the T55xx but
+    rejected as malformed by conformant readers, so the written tag reads
+    back as "not found".  That is the hard failure we block here.
+    """
+    if len(frame) != 13:
+        return False, f"expected 13 bytes, got {len(frame)}"
+
+    v = int.from_bytes(frame[0:8], "little")
+    reserved = (v >> 49) & ((1 << 14) - 1)
+    if reserved != 0:
+        return False, (f"reserved bits 49-62 are nonzero (0x{reserved:04x}); "
+                       f"a conformant reader will reject this frame as malformed "
+                       f"and the written tag will read back as not found")
+    return True, ""
+
+
+def _fdxb_crc16(data: bytes) -> int:
+    """CRC-16 as computed by the firmware's fdxb_crc16 (reflected 0x8408)."""
+    crc = 0x0000
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            crc = (crc >> 1) ^ 0x8408 if crc & 1 else crc >> 1
+    return crc & 0xFFFF
+
+
+def _fdxb_crc_ok(frame: bytes) -> bool:
+    """True if bytes 8-9 match the CRC-16 over bytes 0-7."""
+    stored = int.from_bytes(frame[8:10], "little")
+    return stored == _fdxb_crc16(frame[0:8])
 
 
 class LFIdteckIdArgsUnit(DeviceRequiredUnit):
@@ -3375,6 +3439,10 @@ class LFFdxbWriteT55xx(LFFdxbIdArgsUnit, ReaderRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         data_hex = args.id
         data_bytes = bytes.fromhex(data_hex)
+        if not _fdxb_crc_ok(data_bytes):
+            calc = _fdxb_crc16(data_bytes[0:8])
+            print(f" [!] CRC-16 in frame does not match data (expected 0x{calc:04x}); "
+                  f"writing anyway, but the tag may not verify on other readers")
         self.cmd.fdxb_write_to_t55xx(data_bytes)
         print(f" - FDX-B frame: {data_hex.upper()} written to T55xx")
 
