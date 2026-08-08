@@ -3303,14 +3303,13 @@ class LFFdxbRead(ReaderRequiredUnit):
         parser = ArgumentParserNoExit()
         parser.description = "Scan FDX-B animal tag (134.2 kHz) and print id"
         parser.add_argument("--raw", action="store_true", help="also print the raw 13-byte frame")
+        parser.add_argument("-@", dest="continuous", action="store_true",
+                            help="continuous scan until a key is pressed (helps locate an implant)")
         return parser
 
-    def on_exec(self, args: argparse.Namespace):
-        resp = self.cmd.fdxb_scan()
+    def _print_result(self, resp, show_raw: bool) -> bool:
         if not resp or not hasattr(resp, 'parsed') or resp.parsed is None:
-            print(" No FDX-B tag found")
-            return
-        
+            return False
         tag_type, frame = resp.parsed
         # Parse the 13-byte destuffed frame
         v = int.from_bytes(frame[0:8], "little")
@@ -3319,15 +3318,51 @@ class LFFdxbRead(ReaderRequiredUnit):
         app_bit = (v >> 48) & 1
         animal = (v >> 63) & 1
         crc = int.from_bytes(frame[8:10], "little")
-        
+
         print(" FDX-B (ISO 11784/11785)")
         print(f"  Country    : {describe_country_code(country)}")
         print(f"  National ID: {color_string((CG, str(national)))}")
         print(f"  Animal flag: {animal}")
         print(f"  App bit    : {app_bit}")
         print(f"  CRC-16     : 0x{crc:04x}")
-        if args.raw:
+        if show_raw:
             print(f"  Raw frame  : {frame.hex()}")
+        return True
+
+    def on_exec(self, args: argparse.Namespace):
+        if not args.continuous:
+            if not self._print_result(self.cmd.fdxb_scan(), args.raw):
+                print(" No FDX-B tag found")
+            return
+
+        # Continuous mode: rescan until the user presses a key.  A hit does
+        # not stop the loop -- sweeping past the implant should keep printing
+        # so the strongest position is easy to find.
+        print("[=] Press <Enter> to stop")
+        try:
+            while not self._key_pressed():
+                if not self._print_result(self.cmd.fdxb_scan(), args.raw):
+                    # brief spacer so the terminal shows scanning is live
+                    print(" ...", end="\r")
+        except KeyboardInterrupt:
+            pass
+        print()
+
+    @staticmethod
+    def _key_pressed() -> bool:
+        """Non-blocking check for any keypress, portable across OSes."""
+        if sys.platform == "win32":
+            import msvcrt
+            if msvcrt.kbhit():
+                msvcrt.getch()
+                return True
+            return False
+        import select
+        dr, _, _ = select.select([sys.stdin], [], [], 0)
+        if dr:
+            sys.stdin.readline()
+            return True
+        return False
 
 
 @lf_fdxb.command("write")
