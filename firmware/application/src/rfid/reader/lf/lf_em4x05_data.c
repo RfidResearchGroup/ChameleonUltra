@@ -21,16 +21,10 @@
 NRF_LOG_MODULE_REGISTER();
 
 #define EM4X05_CMD_BITS      9
-#define EM4X05_RESP_BITS     45
-#define EM4X05_ROWS          8
-#define EM4X05_COLS          4
+#define EM4X05_PREAMBLE_LEN  8
+#define EM4X05_WORD_BITS     45
+#define EM4X05_RESP_BITS     (EM4X05_PREAMBLE_LEN + EM4X05_WORD_BITS)  /* 8 + 45 = 53 */
 #define EM4X05_CB_SIZE       256
-
-static inline uint8_t odd_parity4(uint8_t nibble) {
-    nibble ^= nibble >> 2;
-    nibble ^= nibble >> 1;
-    return (~nibble) & 1;
-}
 
 static uint8_t em4x05_cmd_parity(uint8_t opcode, uint8_t addr) {
     uint8_t o1 = (opcode >> 1) & 1;
@@ -49,35 +43,72 @@ static uint16_t em4x05_build_cmd(uint8_t opcode, uint8_t addr) {
     return (1u << 8) | ((opcode & 0x3) << 6) | ((addr & 0x7) << 3) | (parity & 0x7);
 }
 
-static bool em4x05_decode_response(const uint8_t *bits, uint32_t *data) {
-    if (bits[0] != 0) {
-        return false;
+/*
+ * EM4x05 response word, as defined by the datasheet and matching PM3's
+ * Prepare_Data() (armsrc/lfops.c) and em4x05_setdemod_buffer()
+ * (client/src/cmdlfem4x05.c):
+ *
+ *   preamble   8 bits : 0 0 0 0 1 0 1 0   (error preamble: 0 0 0 0 0 0 0 1)
+ *   rows 0-3   9 bits each : 8 data bits LSB-first + EVEN row parity
+ *   row 4      8 bits : EVEN column parity, LSB-first
+ *   stop       1 bit  : 0
+ *                       -> 8 + 4*9 + 8 + 1 = 53 bits captured, 45-bit word
+ *
+ * The 32-bit result is assembled LSB-first: the first data bit received is
+ * bit 0 of the word (PM3 finishes with bytebits_to_byteLSBF).
+ */
+static const uint8_t em4x05_preamble_ok[EM4X05_PREAMBLE_LEN]  = {0, 0, 0, 0, 1, 0, 1, 0};
+static const uint8_t em4x05_preamble_err[EM4X05_PREAMBLE_LEN] = {0, 0, 0, 0, 0, 0, 0, 1};
+
+static bool em4x05_match_preamble(const uint8_t *bits, const uint8_t *pattern) {
+    for (int i = 0; i < EM4X05_PREAMBLE_LEN; i++) {
+        if ((bits[i] & 1) != pattern[i]) {
+            return false;
+        }
     }
+    return true;
+}
+
+/*
+ * Decode the 45-bit word that follows the preamble.
+ * Returns true and sets *data on success.
+ */
+static bool em4x05_decode_response(const uint8_t *bits, uint32_t *data) {
     uint32_t result = 0;
-    uint8_t col_parity[EM4X05_COLS] = {0};
-    for (int row = 0; row < EM4X05_ROWS; row++) {
-        int base = 1 + row * (EM4X05_COLS + 1);
-        uint8_t nibble = 0;
-        for (int col = 0; col < EM4X05_COLS; col++) {
+    uint8_t col_parity[8] = {0};
+
+    for (int row = 0; row < 4; row++) {
+        int base = row * 9;
+        uint8_t row_parity = 0;
+        for (int col = 0; col < 8; col++) {
             uint8_t b = bits[base + col] & 1;
-            nibble = (nibble << 1) | b;
+            /* LSB-first: first bit received is the low bit of this byte. */
+            result |= ((uint32_t)b) << (row * 8 + col);
+            row_parity ^= b;
             col_parity[col] ^= b;
         }
-        uint8_t rp = bits[base + EM4X05_COLS] & 1;
-        if (rp != odd_parity4(nibble)) {
+        /* EVEN row parity: plain XOR of the eight data bits. */
+        if ((bits[base + 8] & 1) != row_parity) {
             NRF_LOG_DEBUG("em4x05: row %d parity fail", row);
             return false;
         }
-        result = (result << EM4X05_COLS) | nibble;
     }
-    int cp_base = 1 + EM4X05_ROWS * (EM4X05_COLS + 1);
-    for (int col = 0; col < EM4X05_COLS; col++) {
-        uint8_t received_cp = bits[cp_base + col] & 1;
-        if (received_cp != ((~col_parity[col]) & 1)) {
+
+    /* EVEN column parity, eight bits, LSB-first. */
+    int cp_base = 4 * 9;
+    for (int col = 0; col < 8; col++) {
+        if ((bits[cp_base + col] & 1) != col_parity[col]) {
             NRF_LOG_DEBUG("em4x05: col %d parity fail", col);
             return false;
         }
     }
+
+    /* Stop bit must be 0. */
+    if ((bits[cp_base + 8] & 1) != 0) {
+        NRF_LOG_DEBUG("em4x05: stop bit not zero");
+        return false;
+    }
+
     *data = result;
     return true;
 }
@@ -95,6 +126,7 @@ static uint8_t em4x05_rf64_period(uint8_t interval) {
 }
 
 static circular_buffer g_cb;
+static bool g_last_resp_was_error = false;
 
 static void em4x05_edge_cb(void) {
     uint32_t cnt = get_lf_counter_value();
@@ -145,24 +177,32 @@ static void em4x05_send_timeslot_cb(void) {
     g_timeslot_done = true;
 }
 
+/*
+ * Build the 45-bit word sent to the tag (login password / write data).
+ * Same layout as the response word -- see em4x05_decode_response() above.
+ * Mirrors PM3's Prepare_Data() in armsrc/lfops.c.
+ */
 static void em4x05_build_data_word(uint32_t data, uint8_t bits[45]) {
-    uint8_t col_par[4] = {0};
+    uint8_t col_par[8] = {0};
     int pos = 0;
-    bits[pos++] = 0;
-    for (int row = 0; row < 8; row++) {
-        uint8_t nibble = (data >> (28 - row * 4)) & 0xF;
-        uint8_t rp = 0;
-        for (int col = 0; col < 4; col++) {
-            uint8_t b = (nibble >> (3 - col)) & 1;
+
+    for (int row = 0; row < 4; row++) {
+        uint8_t row_parity = 0;
+        for (int col = 0; col < 8; col++) {
+            /* LSB-first within the word. */
+            uint8_t b = (data >> (row * 8 + col)) & 1;
             bits[pos++] = b;
+            row_parity ^= b;
             col_par[col] ^= b;
-            rp ^= b;
         }
-        bits[pos++] = (~rp) & 1;
+        bits[pos++] = row_parity;      /* EVEN */
     }
-    for (int col = 0; col < 4; col++) {
-        bits[pos++] = (~col_par[col]) & 1;
+
+    for (int col = 0; col < 8; col++) {
+        bits[pos++] = col_par[col];    /* EVEN, LSB-first */
     }
+
+    bits[pos++] = 0;                   /* stop bit */
 }
 
 static void em4x05_login_timeslot_cb(void) {
@@ -226,6 +266,7 @@ static bool em4x05_read_block(uint8_t addr, uint32_t *data, uint32_t timeout_ms)
     g_send_opcode   = EM4X05_OPCODE_READ;
     g_send_addr     = addr;
     g_timeslot_done = false;
+    g_last_resp_was_error = false;
 
     /*
      * Timeslot must cover full command transmission:
@@ -269,8 +310,16 @@ static bool em4x05_read_block(uint8_t addr, uint32_t *data, uint32_t timeout_ms)
             resp_bits[bit_count++] = mbits[i] ? 1 : 0;
         }
         if (bit_count >= EM4X05_RESP_BITS) {
-            ok = em4x05_decode_response(resp_bits, data);
+            /* Window is full: require the preamble, then decode the word. */
+            if (em4x05_match_preamble(resp_bits, em4x05_preamble_ok)) {
+                ok = em4x05_decode_response(resp_bits + EM4X05_PREAMBLE_LEN, data);
+            } else if (em4x05_match_preamble(resp_bits, em4x05_preamble_err)) {
+                /* Tag answered but refused -- typically read/write protected. */
+                NRF_LOG_DEBUG("em4x05: error preamble (login required?)");
+                g_last_resp_was_error = true;
+            }
             if (!ok) {
+                /* Slide the window one bit and keep hunting. */
                 memmove(resp_bits, resp_bits + 1, EM4X05_RESP_BITS - 1);
                 bit_count = EM4X05_RESP_BITS - 1;
             }
@@ -291,6 +340,10 @@ bool em4x05_read(em4x05_data_t *out, uint32_t timeout_ms) {
 
     if (!em4x05_read_block(EM4X05_BLOCK_CONFIG, &out->config, block_timeout)) {
         NRF_LOG_DEBUG("em4x05: block 0 read failed");
+        if (g_last_resp_was_error) {
+            /* Tag replied with the error preamble: it is read-protected. */
+            out->login_required = true;
+        }
         return false;
     }
 
