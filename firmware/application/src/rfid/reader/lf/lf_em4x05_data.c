@@ -344,3 +344,138 @@ uint8_t scan_em4x05(em4x05_data_t *out) {
     }
     return found ? STATUS_LF_TAG_OK : STATUS_LF_TAG_NO_FOUND;
 }
+
+/* -----------------------------------------------------------------------
+ * WRITE support
+ *
+ * UNVERIFIED ON HARDWARE.  The bit-level primitives below (send_em4305_bit,
+ * em4x05_build_data_word, the timeslot structure) are the same ones the
+ * read/login path uses and are known good for *sending*.  What has never
+ * been exercised is programming an EEPROM block: em4x05_build_data_word is
+ * currently only used to encode the LOGIN password, which the tag checks
+ * but does not store.  Two things must be confirmed against the EM4305
+ * datasheet and a real tag before trusting this:
+ *   1. T_PROG_US below -- the field-on wait while the tag burns the block.
+ *      The value here is a documented-typical placeholder, NOT measured.
+ *   2. Whether a write must be followed by a read-back to confirm, since
+ *      WRITE returns no response word to ACK on.
+ * --------------------------------------------------------------------- */
+
+/*
+ * EM4305 programming time after the data word, field left ON.
+ *
+ * PM3 value: tPC + tWEE = 10820us (armsrc/lfops.c EM4xWriteWord, the
+ * commented "WaitUS(10820)").  PM3 itself no longer blind-waits -- it samples
+ * the tag's response preamble instead, because a denied write returns an
+ * error preamble much sooner than a successful one completes.  We blind-wait
+ * for now; TODO: replace with response sampling using the existing read-side
+ * modem (em4x05_edge_cb + em4x05_decode_response) to confirm success and to
+ * detect write-protect denial.  Protect-word timing, if ever added, is
+ * tPC + tPR = 13640us.
+ */
+#define EM4X05_T_PROG_US   10820
+
+/* EM4305 config register is physical block 4 (EM_CONFIG_BLOCK in PM3);
+ * data blocks for a 4-block payload are 5,6,7,8.  This is distinct from the
+ * read-side EM4X05_BLOCK_CONFIG(0) constant, which is where scan reads the
+ * config word back from. */
+#define EM4X05_WRITE_CONFIG_BLOCK   4
+#define EM4X05_WRITE_DATA_BLOCK0    5
+
+static uint8_t  g_write_addr;
+static uint32_t g_write_data;
+
+/* Reverse the 32 bits of x.  EM4305 stores data words in the opposite bit
+ * order to how the FDX-B frame packs them; PM3's em4x05_clone_tag applies
+ * exactly this to every data block (but NOT to the config word). */
+static uint32_t em4x05_reflect32(uint32_t x) {
+    x = ((x & 0x55555555U) << 1) | ((x & 0xAAAAAAAAU) >> 1);
+    x = ((x & 0x33333333U) << 2) | ((x & 0xCCCCCCCCU) >> 2);
+    x = ((x & 0x0F0F0F0FU) << 4) | ((x & 0xF0F0F0F0U) >> 4);
+    x = ((x & 0x00FF00FFU) << 8) | ((x & 0xFF00FF00U) >> 8);
+    return (x << 16) | (x >> 16);
+}
+
+static void em4x05_write_timeslot_cb(void) {
+    /* Start gap + settle, identical to em4x05_send_timeslot_cb. */
+    stop_lf_125khz_radio();
+    bsp_delay_us(440);
+    start_lf_125khz_radio();
+    bsp_delay_us(104);
+
+    /* 9-bit WRITE command, MSB first. */
+    uint16_t cmd = em4x05_build_cmd(EM4X05_OPCODE_WRITE, g_write_addr);
+    for (int i = 8; i >= 0; i--) {
+        send_em4305_bit((cmd >> i) & 1);
+    }
+
+    /* 45-bit data word (leading 0 + 8*(nibble+row parity) + 4 column parity). */
+    uint8_t data_bits[45];
+    em4x05_build_data_word(g_write_data, data_bits);
+    for (int i = 0; i < 45; i++) {
+        send_em4305_bit(data_bits[i]);
+    }
+
+    /* Programming pause: field stays ON while the tag burns the block. */
+    bsp_delay_us(EM4X05_T_PROG_US);
+
+    g_timeslot_done = true;
+}
+
+static bool em4x05_write_block(uint8_t addr, uint32_t data) {
+    g_write_addr    = addr;
+    g_write_data    = data;
+    g_timeslot_done = false;
+
+    /* start_gap(440)+settle(104)+54 bits*(256+250)+T_prog(10820) ~= 38.7ms.
+     * Budget 45ms for margin; wait loop below covers 50ms. */
+    request_timeslot(45000, em4x05_write_timeslot_cb);
+
+    autotimer *p_wait = bsp_obtain_timer(0);
+    while (!g_timeslot_done && NO_TIMEOUT_1MS(p_wait, 50)) {}
+    bsp_return_timer(p_wait);
+
+    return g_timeslot_done;
+}
+
+/*
+ * Write an FDX-B frame to an EM4305/4469 tag.
+ *
+ * Config word 0x0002008F = EM4x05_SET_BITRATE(32) | MODULATION_BIPHASE |
+ * SET_NUM_BLOCKS(4), i.e. the numeric value of PM3's EM4305_FDXB_CONFIG_BLOCK.
+ *
+ * Blocks 5-8 carry the same four 32-bit words the T5577 writer produces
+ * (blocks 1-4 there): fdxb_t55xx_writer has already packed the PM3-identical
+ * frame bits.  Only the config word and the target chip differ.
+ *
+ * @param blks: blks[1..4] = the four frame words from fdxb_t55xx_writer
+ * @param password: login password, or 0 if none required
+ * @param needs_login: issue LOGIN before writing (RL/WL protected tag)
+ */
+uint8_t write_fdxb_to_em4305(uint32_t *blks, uint32_t password, bool needs_login) {
+    start_lf_125khz_radio();
+    bsp_delay_ms(5);
+
+    if (needs_login) {
+        if (!em4x05_login(password, 1000)) {
+            stop_lf_125khz_radio();
+            return STATUS_LF_TAG_NO_FOUND;
+        }
+    }
+
+    /*
+     * Data payload -> blocks 5-8, each bit-reflected (EM4305 data-word bit
+     * order is the reverse of the frame packing; PM3 does the same).
+     * Config word -> block 4, written WITHOUT reflection and LAST, so the
+     * tag only begins modulating once the four data blocks are in place.
+     */
+    bool ok = true;
+    ok = ok && em4x05_write_block(EM4X05_WRITE_DATA_BLOCK0 + 0, em4x05_reflect32(blks[1]));
+    ok = ok && em4x05_write_block(EM4X05_WRITE_DATA_BLOCK0 + 1, em4x05_reflect32(blks[2]));
+    ok = ok && em4x05_write_block(EM4X05_WRITE_DATA_BLOCK0 + 2, em4x05_reflect32(blks[3]));
+    ok = ok && em4x05_write_block(EM4X05_WRITE_DATA_BLOCK0 + 3, em4x05_reflect32(blks[4]));
+    ok = ok && em4x05_write_block(EM4X05_WRITE_CONFIG_BLOCK, 0x0002008F);
+
+    stop_lf_125khz_radio();
+    return ok ? STATUS_LF_TAG_OK : STATUS_LF_TAG_NO_FOUND;
+}
