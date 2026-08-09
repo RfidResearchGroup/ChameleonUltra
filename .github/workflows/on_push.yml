@@ -12,6 +12,8 @@ jobs:
     uses: ./.github/workflows/build_firmware.yml
   client_pipeline:
     name: Build Firmware
+    permissions:
+      contents: read
     uses: ./.github/workflows/build_client.yml
   create_dev_release:
     permissions:
@@ -24,15 +26,15 @@ jobs:
       - client_pipeline
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Download release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: release-artifacts-*
           merge-multiple: true
           path: release-artifacts
       - name: Upload to dev release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           body: |
             Auto-Generated DFU packages from latest `main` commit.
@@ -49,7 +51,7 @@ jobs:
       - name: Fix up release tag
         run: |
           git tag -f dev
-          git push --tags -f
+          git push origin refs/tags/dev --force
   create_release:
     permissions:
       contents: write
@@ -61,15 +63,17 @@ jobs:
       - client_pipeline
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Download release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: release-artifacts-*
           merge-multiple: true
           path: release-artifacts
       - name: Upload to tagged release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           body: |
             Auto-Generated DFU packages for Release ${{ github.ref_name }}
