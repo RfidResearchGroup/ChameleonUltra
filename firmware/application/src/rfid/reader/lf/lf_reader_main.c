@@ -9,6 +9,9 @@
 #include "protocols/em410x.h"
 #include "protocols/ioprox.h"
 #include "protocols/hidprox.h"
+#if defined(PROJECT_CHAMELEON_ULTRA)
+#include "protocols/fdxb.h"
+#endif
 #include "protocols/idteck.h"
 #include "protocols/t55xx.h"
 #include "protocols/jablotron.h"
@@ -113,6 +116,20 @@ uint8_t scan_jablotron(uint8_t *uid) {
     }
     return STATUS_LF_TAG_NO_FOUND;
 }
+
+#if defined(PROJECT_CHAMELEON_ULTRA)
+/**
+ * Search FDX-B animal tag (134.2 kHz)
+ *
+ * Ultra only: fdxb.c / lf_fdxb_data.c are in the Ultra-only SRC_FILES.
+ */
+uint8_t scan_fdxb(uint8_t *data) {
+    if (fdxb_read(data, g_timeout_readem_ms)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
+#endif
 
 /**
  * Try reset t55XX tag passwords by enumerating old passwords.
@@ -274,5 +291,26 @@ uint8_t lf_t55xx_write_block(uint8_t block, uint32_t word, uint32_t passwd, bool
 
     stop_lf_125khz_radio();
     return STATUS_LF_TAG_OK;
+}
+
+/**
+ * Write FDX-B frame data to T55xx chip.
+ * 
+ * @param fdxb_data: 13-byte FDX-B destuffed frame from scan
+ * @param new_passwd: 4-byte new password
+ * @param old_passwds: array of old passwords to try
+ * @param old_passwd_count: number of old passwords
+ *
+ * @return: Status code (STATUS_LF_TAG_OK on success)
+ */
+uint8_t write_fdxb_to_t55xx(uint8_t *fdxb_data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[6] = {0x00};  // config + 4 data blocks (5 total)
+    uint8_t blk_count = fdxb_t55xx_writer(fdxb_data, blks);
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
+    }
+    
+    // Use standard T55xx write infrastructure (same as jablotron/EM410x)
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
 }
 #endif

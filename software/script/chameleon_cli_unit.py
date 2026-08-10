@@ -21,6 +21,7 @@ from pathlib import Path
 from platform import uname
 from datetime import datetime
 import hardnested_utils
+from fdxb_country import describe_country_code
 
 import chameleon_com
 import chameleon_cmd
@@ -65,7 +66,7 @@ type_id_SAK_dict = {
     0x18: "MIFARE Classic 4K | Plus S 4K | Plus X 4K",
     0x19: "MIFARE Classic 2K",
     0x20: "MIFARE Plus EV1/EV2 | DESFire EV1/EV2/EV3 | DESFire Light | NTAG 4xx | "
-    "MIFARE Plus S 2/4K | MIFARE Plus X 2/4K | MIFARE Plus SE 1K | SEOS",
+    "MIFARE Plus S 2/4K | MIFARE Plus X 2/4K | MIFARE Plus SE 1K",
     0x28: "SmartMX with MIFARE Classic 1K",
     0x38: "SmartMX with MIFARE Classic 4K",
 }
@@ -802,6 +803,130 @@ def _idteck_frame_info(frame: bytes) -> dict:
     }
 
 
+class LFFdxbIdArgsUnit(DeviceRequiredUnit):
+    """Argument parser for FDX-B: 26 hex chars = 13 bytes (destuffed frame)."""
+
+    @staticmethod
+    def add_card_arg(parser: ArgumentParserNoExit, required=False):
+        parser.add_argument(
+            "--id", type=str, required=required,
+            help="FDX-B frame (13 bytes hex: national_id[5] + country[2] + crc[2] + reserved[4])",
+            metavar="<hex>"
+        )
+        return parser
+
+    def before_exec(self, args: argparse.Namespace):
+        if not super().before_exec(args):
+            return False
+        if args.id is None or not re.match(r"^[a-fA-F0-9]{26}$", args.id):
+            raise ArgsParserError("FDX-B ID must include 26 HEX symbols (13 bytes)")
+        # Structural sanity: the CRC-16 in bytes 8-9 must cover bytes 0-7.
+        # A hand-edited ID whose CRC no longer matches will not round-trip and
+        # may be rejected by third-party readers.  Warn rather than block, so a
+        # deliberately malformed frame can still be written for testing, unless
+        # the frame is also unreadable by our own decoder (see _fdxb_frame_ok).
+        frame = bytes.fromhex(args.id)
+        ok, reason = _fdxb_frame_ok(frame)
+        if not ok:
+            raise ArgsParserError(f"FDX-B frame invalid: {reason}")
+        return True
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        raise NotImplementedError("Please implement this")
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError("Please implement this")
+
+
+def _fdxb_crc16(data: bytes) -> int:
+    """CRC-16 as computed by the firmware's fdxb_crc16 (reflected 0x8408)."""
+    crc = 0x0000
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            crc = (crc >> 1) ^ 0x8408 if crc & 1 else crc >> 1
+    return crc & 0xFFFF
+
+
+def _fdxb_frame_ok(frame: bytes) -> "tuple[bool, str]":
+    """
+    Validate a 13-byte destuffed FDX-B frame for writability.
+
+    Returns (True, "") if structurally sound, else (False, reason).
+
+    The 64-bit block in bytes 0-7 is laid out (LSB first):
+        bits  0-37  national ID
+        bits 38-47  country code
+        bit  48     extended-data flag (a.k.a. data-block / application bit)
+        bits 49-62  reserved -- MUST be zero on a conformant tag
+        bit  63     animal flag
+
+    A frame with nonzero reserved bits is emitted fine by the T55xx but
+    rejected as malformed by conformant readers, so the written tag reads
+    back as "not found".  That is the hard failure we block here.
+    """
+    if len(frame) != 13:
+        return False, f"expected 13 bytes, got {len(frame)}"
+
+    v = int.from_bytes(frame[0:8], "little")
+    reserved = (v >> 49) & ((1 << 14) - 1)
+    if reserved != 0:
+        return False, (f"reserved bits 49-62 are nonzero (0x{reserved:04x}); "
+                       f"a conformant reader will reject this frame as malformed "
+                       f"and the written tag will read back as not found")
+    return True, ""
+
+
+def _fdxb_crc16(data: bytes) -> int:
+    """CRC-16 as computed by the firmware's fdxb_crc16 (reflected 0x8408)."""
+    crc = 0x0000
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            crc = (crc >> 1) ^ 0x8408 if crc & 1 else crc >> 1
+    return crc & 0xFFFF
+
+
+def _fdxb_crc_ok(frame: bytes) -> bool:
+    """True if bytes 8-9 match the CRC-16 over bytes 0-7."""
+    stored = int.from_bytes(frame[8:10], "little")
+    return stored == _fdxb_crc16(frame[0:8])
+
+
+def _fdxb_build_frame(country: int, national: int, animal: int = 1,
+                      extended: int = 0) -> bytes:
+    """
+    Build a 13-byte destuffed FDX-B frame from logical fields.
+
+    Reserved bits 49-62 are left zero by construction, so a frame built this
+    way can never hit the "reserved bits nonzero -> unreadable" footgun.
+
+        bits  0-37  national ID     (<= 274877906943)
+        bits 38-47  country code    (<= 1023)
+        bit  48     extended flag   (set iff extended != 0)
+        bits 49-62  reserved        (always 0 here)
+        bit  63     animal flag
+        bytes 8-9   CRC-16 over bytes 0-7
+        bytes 10-12 extended data   (24 bits, 0 if unused)
+    """
+    if not 0 <= country <= 0x3FF:
+        raise ArgsParserError("country must be 0-1023")
+    if not 0 <= national <= ((1 << 38) - 1):
+        raise ArgsParserError("national ID must be 0-274877906943 (38-bit field)")
+    if not 0 <= extended <= 0xFFFFFF:
+        raise ArgsParserError("extended data must be 0-16777215 (24-bit field)")
+
+    v = national & ((1 << 38) - 1)
+    v |= (country & 0x3FF) << 38
+    v |= (1 if extended else 0) << 48
+    v |= (animal & 1) << 63
+
+    head = v.to_bytes(8, "little")
+    crc = _fdxb_crc16(head).to_bytes(2, "little")
+    ext = (extended & 0xFFFFFF).to_bytes(3, "little")
+    return head + crc + ext
+
+
 class LFIdteckIdArgsUnit(DeviceRequiredUnit):
     """Argument parser for IDTECK: 16-hex = full 64-bit frame (preamble + payload)."""
 
@@ -901,6 +1026,7 @@ lf_ioprox = lf.subgroup("ioprox", "ioProx commands")
 lf_pac = lf.subgroup("pac", "PAC/Stanley commands")
 lf_viking = lf.subgroup("viking", "Viking commands")
 lf_jablotron = lf.subgroup("jablotron", "Jablotron commands")
+lf_fdxb = lf.subgroup("fdxb", "FDX-B animal tag commands (134.2 kHz)")
 lf_generic = lf.subgroup("generic", "Generic commands")
 lf_idteck = lf.subgroup("idteck", "IDTECK commands")
 
@@ -3271,6 +3397,135 @@ class HFMFClone(MF1AuthArgsUnit):
 
 
 @hf_mf.command("value")
+
+@lf_fdxb.command("read")
+class LFFdxbRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Scan FDX-B animal tag (134.2 kHz) and print id"
+        parser.add_argument("--raw", action="store_true", help="also print the raw 13-byte frame")
+        parser.add_argument("-@", dest="continuous", action="store_true",
+                            help="continuous scan until a key is pressed (helps locate an implant)")
+        return parser
+
+    def _print_result(self, resp, show_raw: bool) -> bool:
+        if not resp or not hasattr(resp, 'parsed') or resp.parsed is None:
+            return False
+        tag_type, frame = resp.parsed
+        # Parse the 13-byte destuffed frame
+        v = int.from_bytes(frame[0:8], "little")
+        national = v & ((1 << 38) - 1)
+        country = (v >> 38) & 0x3FF
+        app_bit = (v >> 48) & 1
+        animal = (v >> 63) & 1
+        crc = int.from_bytes(frame[8:10], "little")
+
+        print(" FDX-B (ISO 11784/11785)")
+        print(f"  Country    : {describe_country_code(country)}")
+        print(f"  National ID: {color_string((CG, str(national)))}")
+        print(f"  Animal flag: {animal}")
+        print(f"  App bit    : {app_bit}")
+        print(f"  CRC-16     : 0x{crc:04x}")
+        if show_raw:
+            print(f"  Raw frame  : {frame.hex()}")
+        return True
+
+    def on_exec(self, args: argparse.Namespace):
+        if not args.continuous:
+            if not self._print_result(self.cmd.fdxb_scan(), args.raw):
+                print(" No FDX-B tag found")
+            return
+
+        # Continuous mode: rescan until the user presses a key.  A hit does
+        # not stop the loop -- sweeping past the implant should keep printing
+        # so the strongest position is easy to find.
+        print("[=] Press <Enter> to stop")
+        try:
+            while not self._key_pressed():
+                if not self._print_result(self.cmd.fdxb_scan(), args.raw):
+                    # brief spacer so the terminal shows scanning is live
+                    print(" ...", end="\r")
+        except KeyboardInterrupt:
+            pass
+        print()
+
+    @staticmethod
+    def _key_pressed() -> bool:
+        """Non-blocking check for any keypress, portable across OSes."""
+        if sys.platform == "win32":
+            import msvcrt
+            if msvcrt.kbhit():
+                msvcrt.getch()
+                return True
+            return False
+        import select
+        dr, _, _ = select.select([sys.stdin], [], [], 0)
+        if dr:
+            sys.stdin.readline()
+            return True
+        return False
+
+
+@lf_fdxb.command("write")
+class LFFdxbWriteT55xx(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Write FDX-B frame to T55xx (by fields, or raw --id)"
+        parser.add_argument("--country", type=int, metavar="<0-1023>",
+                            help="country/manufacturer code (ISO 3166 numeric, e.g. 208 for Denmark)")
+        parser.add_argument("--national", type=int, metavar="<id>",
+                            help="national ID, up to 274877906943 (38-bit)")
+        parser.add_argument("--animal", type=int, default=1, choices=(0, 1),
+                            help="animal flag (default 1)")
+        parser.add_argument("--extended", type=lambda x: int(x, 0), default=0, metavar="<0-0xFFFFFF>",
+                            help="optional 24-bit extended data (default 0)")
+        parser.add_argument("--id", type=str, metavar="<hex>",
+                            help="raw 26-hex frame instead of fields (advanced; not validated for reserved bits)")
+        return parser
+
+    def _resolve_frame(self, args) -> bytes:
+        """Field args take priority; fall back to raw --id.  Returns 13 bytes."""
+        if args.country is not None or args.national is not None:
+            if args.country is None or args.national is None:
+                raise ArgsParserError("both --country and --national are required when building by fields")
+            return _fdxb_build_frame(args.country, args.national, args.animal, args.extended)
+        if args.id is not None:
+            if not re.match(r"^[a-fA-F0-9]{26}$", args.id):
+                raise ArgsParserError("FDX-B --id must be 26 HEX symbols (13 bytes)")
+            frame = bytes.fromhex(args.id)
+            ok, reason = _fdxb_frame_ok(frame)
+            if not ok:
+                raise ArgsParserError(f"FDX-B frame invalid: {reason}")
+            return frame
+        raise ArgsParserError("provide --country and --national, or a raw --id")
+
+    def on_exec(self, args: argparse.Namespace):
+        data_bytes = self._resolve_frame(args)
+        if not _fdxb_crc_ok(data_bytes):
+            calc = _fdxb_crc16(data_bytes[0:8])
+            print(f" [!] CRC-16 in frame does not match data (expected 0x{calc:04x}); "
+                  f"writing anyway, but the tag may not verify on other readers")
+        self.cmd.fdxb_write_to_t55xx(data_bytes)
+        print(f" - FDX-B frame: {data_bytes.hex().upper()} written to T55xx")
+
+
+@lf_fdxb.command("clone")
+class LFFdxbClone(LFFdxbWriteT55xx):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = super().args_parser()
+        parser.description = "Clone FDX-B animal tag to T55xx (alias for 'write')"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        data_bytes = self._resolve_frame(args)
+        if not _fdxb_crc_ok(data_bytes):
+            calc = _fdxb_crc16(data_bytes[0:8])
+            print(f" [!] CRC-16 in frame does not match data (expected 0x{calc:04x}); "
+                  f"cloning anyway, but the tag may not verify on other readers")
+        self.cmd.fdxb_write_to_t55xx(data_bytes)
+        print(f" - FDX-B clone complete: {data_bytes.hex().upper()}")
+
+
 class HFMFVALUE(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
@@ -12198,3 +12453,4 @@ class HFSeosKeys(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
             privenc=privenc,
             privmac=privmac
         )
+        print(f"\n {CR}No keys found{C0}")

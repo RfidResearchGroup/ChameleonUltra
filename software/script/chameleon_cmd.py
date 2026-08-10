@@ -807,6 +807,32 @@ class ChameleonCMD:
             resp.parsed = resp.data[:5]
         return resp
 
+    def fdxb_scan(self):
+        """
+        Read an FDX-B animal tag (134.2 kHz).
+
+        :return: response with parsed = (tag_type_int, 13-byte destuffed frame)
+        """
+        resp = self.device.send_cmd_sync(Command.FDXB_SCAN)
+        if resp.status == Status.LF_TAG_OK:
+            tag_type = struct.unpack('!H', resp.data[:2])[0]
+            frame = resp.data[2:15]
+            resp.parsed = (tag_type, frame)
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def fdxb_write_to_t55xx(self, fdxb_data: bytes):
+        """
+        Write FDX-B tag data to T55XX.
+
+        :param fdxb_data: 13-byte FDX-B frame (national_id[5] + country[2] + crc[2] + reserved[4])
+        :return:
+        """
+        if len(fdxb_data) != 13:
+            raise ValueError("FDX-B data must be exactly 13 bytes")
+        data = struct.pack(f'!13s4s{4*len(old_keys)}s', fdxb_data, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.FDXB_WRITE_TO_T55XX, data)
+
     @expect_response(Status.LF_TAG_OK)
     def jablotron_write_to_t55xx(self, id_bytes: bytes):
         """

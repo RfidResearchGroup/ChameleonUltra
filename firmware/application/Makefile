@@ -369,6 +369,8 @@ ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
     $(PROJ_DIR)/rfid/reader/lf/lf_ioprox_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_viking_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_jablotron_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_fdxb_data.c \
+    $(PROJ_DIR)/rfid/nfctag/lf/protocols/fdxb.c \
 
   INC_FOLDERS +=\
     ${PROJ_DIR}/rfid/reader/ \
