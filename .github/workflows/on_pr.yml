@@ -1,6 +1,6 @@
 name: PR handler
 on:
-  pull_request_target:
+  pull_request:
 
 jobs:
   firmware_pipeline:
@@ -13,6 +13,8 @@ jobs:
       checkout-sha: "${{ github.event.pull_request.head.sha }}"
   client_pipeline:
     name: Build Firmware
+    permissions:
+      contents: read
     uses: ./.github/workflows/build_client.yml
     with:
       checkout-sha: "${{ github.event.pull_request.head.sha }}"
@@ -25,7 +27,7 @@ jobs:
     permissions:
       pull-requests: write
     steps:
-      - uses: marocchino/sticky-pull-request-comment@v2
+      - uses: marocchino/sticky-pull-request-comment@v3
         with:
           message: |
             # Built artifacts for commit ${{ github.event.pull_request.head.sha }}

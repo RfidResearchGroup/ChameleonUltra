@@ -4,6 +4,9 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 
 ## [unreleased][unreleased]
  - Added standalone (host-less) modes: arm with both-button chord, run workflows without a connected host. Initial modes: `authtrace` (multi-session HF14A reader auth-trace capture, reuses CMD 2017 machinery) and `slot_cycle` (timed emulation-slot rotation). Host side via the new `standalone` CLI subgroup.
+
+## [v2.2.0][2026-07-04]
+>>>>>>> origin/main
  - Added Jablotron LF protocol support: read, emulate and T55xx clone (@midlan)
  - Added IDTECK LF protocol support: tag emulation (PSK1 RF/32) and T55xx clone. No reader path yet; PSK demodulation on the envelope-only receive chain is left for a follow-up.
  - Added PAC/Stanley LF protocol support: read, emulate and T55xx clone (@kevihiiin, @danieltwagner)
@@ -25,6 +28,8 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Fix Windows build (@suut)
  - Added `hf 14a config` to deal with badly configured cards (@azuwis)
  - New Symmetrical LED Animation Mode and Improved Minimal Mode (@WillyJL)
+ - Fix MF1 state reset logic and access control conditions (@unkernet)
+ - Added support for SEOS credentials (@aaronjamt)
 
 ## [v2.1.0][2025-09-02]
  - Added UV, formatter and linter. Contribution guidelines. (@GameTec-live)

@@ -11882,6 +11882,8 @@ class StandaloneConfig(DeviceRequiredUnit):
         else:
             print(color_string((CR,
                 f"set-config failed: status={resp.status}")))@hf_seos.command("eview")
+
+@hf_seos.command("eview")
 class HFSeosEView(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()

@@ -1997,6 +1997,7 @@ class ChameleonCMD:
         n = len(resp.data) // 4
         import struct
         return [struct.unpack_from('<I', resp.data, i * 4)[0] for i in range(n)]
+
     @expect_response(Status.SUCCESS)
     def seos_read_emu_data(self):
         resp = self.device.send_cmd_sync(Command.SEOS_READ_EMU_DATA, None)
