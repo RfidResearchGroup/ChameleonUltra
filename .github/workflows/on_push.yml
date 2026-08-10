@@ -3,6 +3,10 @@ name: Push handler
 on:
   push:
 
+concurrency:
+  group: push-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   firmware_pipeline:
     name: Build Firmware
