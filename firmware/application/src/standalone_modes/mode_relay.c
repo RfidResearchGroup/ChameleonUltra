@@ -35,6 +35,13 @@
 
 /* Exported to ble_main.c to suppress spurious battery-shutdown during relay */
 bool g_is_standalone_armed = false;
+
+#if defined(PROJECT_CHAMELEON_ULTRA)
+/* Full relay implementation needs the RC522 HF reader (Ultra only). CU Lite
+ * has no reader, so the whole mode is compiled out and is not registered in
+ * app_standalone.c. Only mode_relay_get_diag() is provided on Lite (see the
+ * #else stub at the end of this file) because the standalone command layer
+ * references it unconditionally. */
 #include "ble_relay.h"
 
 #include <string.h>
@@ -961,3 +968,20 @@ const standalone_mode_iface_t mode_relay_iface = {
     .clear_result    = clear_result,
     .ensure_loaded   = ensure_loaded,
 };
+
+#else  /* PROJECT_CHAMELEON_LITE — no RC522 reader; relay mode unavailable */
+
+/* The standalone command layer (app_cmd_standalone.c) calls this
+ * unconditionally, so it must link on Lite. Relay never runs here, so it
+ * simply reports "nothing". */
+void mode_relay_get_diag(uint8_t *out_sub, uint8_t *out_card_found,
+                         uint8_t *out_identity_rx,
+                         uint8_t *out_uid, uint8_t *out_uid_len) {
+    if (out_sub)         *out_sub         = 0;
+    if (out_card_found)  *out_card_found  = 0;
+    if (out_identity_rx) *out_identity_rx = 0;
+    if (out_uid_len)     *out_uid_len     = 0;
+    (void)out_uid;
+}
+
+#endif /* PROJECT_CHAMELEON_ULTRA */
