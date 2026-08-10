@@ -287,6 +287,9 @@ void rgb_marquee_slot_switch(uint8_t led_down, uint8_t color_led_down, uint8_t l
             light_level --;
         }
     }
+    for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
+        nrf_gpio_pin_clear(led_pins[i]);
+    }
     if (led_up >= 0 && led_up <= 7) {
         //Treatment
         pwm_config.output_pins[0] = led_pins[led_up];

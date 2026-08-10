@@ -31,7 +31,9 @@ from chameleon_utils import (
     execute_tool,
     tqdm_if_exists,
     print_key_table,
+    default_cwd
 )
+
 from chameleon_utils import CLITree
 from chameleon_utils import CR, CG, CB, CC, CY, C0, color_string
 from chameleon_utils import print_mem_dump
@@ -63,12 +65,10 @@ type_id_SAK_dict = {
     0x18: "MIFARE Classic 4K | Plus S 4K | Plus X 4K",
     0x19: "MIFARE Classic 2K",
     0x20: "MIFARE Plus EV1/EV2 | DESFire EV1/EV2/EV3 | DESFire Light | NTAG 4xx | "
-    "MIFARE Plus S 2/4K | MIFARE Plus X 2/4K | MIFARE Plus SE 1K",
+    "MIFARE Plus S 2/4K | MIFARE Plus X 2/4K | MIFARE Plus SE 1K | SEOS",
     0x28: "SmartMX with MIFARE Classic 1K",
     0x38: "SmartMX with MIFARE Classic 4K",
 }
-
-default_cwd = Path.cwd() / Path(__file__).with_name("bin")
 
 
 def load_key_file(import_key, keys):
@@ -724,6 +724,28 @@ class LFVikingIdArgsUnit(DeviceRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
+class LFJablotronIdArgsUnit(DeviceRequiredUnit):
+    @staticmethod
+    def add_card_arg(parser: ArgumentParserNoExit, required=False):
+        parser.add_argument(
+            "--id", type=str, required=required, help="Jablotron tag id (5 bytes hex)", metavar="<hex>"
+        )
+        return parser
+
+    def before_exec(self, args: argparse.Namespace):
+        if not super().before_exec(args):
+            return False
+        if args.id is None or not re.match(r"^[a-fA-F0-9]{10}$", args.id):
+            raise ArgsParserError("ID must include 10 HEX symbols (5 bytes)")
+        return True
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        raise NotImplementedError("Please implement this")
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError("Please implement this")
+
+
 IDTECK_PREAMBLE_HEX = "4944544B"
 IDTECK_PREAMBLE_INT = 0x4944544B
 
@@ -862,6 +884,7 @@ hf_14a = hf.subgroup("14a", "ISO14443-a commands")
 hf_mf = hf.subgroup("mf", "MIFARE Classic commands")
 hf_mfu = hf.subgroup("mfu", "MIFARE Ultralight / NTAG commands")
 hf_des = hf.subgroup("des", "MIFARE DESFire commands")
+hf_seos = hf.subgroup("seos", "SEOS commands")
 
 lf = root.subgroup("lf", "Low Frequency commands")
 lf_em = lf.subgroup("em", "EM commands")
@@ -877,6 +900,7 @@ lf_hid_prox = lf_hid.subgroup("prox", "HID Prox commands")
 lf_ioprox = lf.subgroup("ioprox", "ioProx commands")
 lf_pac = lf.subgroup("pac", "PAC/Stanley commands")
 lf_viking = lf.subgroup("viking", "Viking commands")
+lf_jablotron = lf.subgroup("jablotron", "Jablotron commands")
 lf_generic = lf.subgroup("generic", "Generic commands")
 lf_idteck = lf.subgroup("idteck", "IDTECK commands")
 
@@ -6010,6 +6034,14 @@ class LFIOProxEconfig(SlotIndexArgsAndGoUnit, LFIOProxIdArgsUnit):
             print(f"   ID: {color_string((CY, cn))}")
             print(f"   Raw: {color_string((CY, raw8.hex().upper()))}")
 
+def jablotron_card_id(raw_bytes: bytes) -> int:
+    """Convert 5 raw Jablotron bytes to decimal card number via BCD."""
+    card_id = 0
+    for b in raw_bytes:
+        card_id = card_id * 100 + ((b >> 4) * 10) + (b & 0x0F)
+    return card_id
+
+
 
 def pac_encode_raw(card_id: bytes) -> bytes:
     """Encode 8-byte card ID to 16-byte T55XX bitstream (128 bits).
@@ -6704,6 +6736,11 @@ class HWSlotList(DeviceRequiredUnit):
                 if lf_tag_type == TagSpecificType.Viking:
                     id = self.cmd.viking_get_emu_id()
                     print(f"      {'ID:':40}{color_string((CY, id.hex().upper()))}")
+                if lf_tag_type == TagSpecificType.Jablotron:
+                    id = self.cmd.jablotron_get_emu_id()
+                    card_id = jablotron_card_id(id)
+                    print(f"      {'ID:':40}{color_string((CY, id.hex().upper()))}")
+                    print(f"      {'Card:':40}{color_string((CG, str(card_id)))}")
                 if lf_tag_type == TagSpecificType.PAC:
                     id = self.cmd.pac_get_emu_id()
                     id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in id)
@@ -6913,6 +6950,60 @@ class LFVikingEconfig(SlotIndexArgsAndGoUnit, LFVikingIdArgsUnit):
             response = self.cmd.viking_get_emu_id()
             print(" - Get Viking tag id success.")
             print(f"ID: {response.hex().upper()}")
+
+
+@lf_jablotron.command("read")
+class LFJablotronRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Scan Jablotron tag and print id"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        id = self.cmd.jablotron_scan()
+        card_id = jablotron_card_id(id)
+        print(f" Jablotron ID: {color_string((CG, id.hex().upper()))}")
+        print(f" Card number:  {color_string((CY, str(card_id)))}")
+
+
+@lf_jablotron.command("write")
+class LFJablotronWriteT55xx(LFJablotronIdArgsUnit, ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Write Jablotron id to t55xx"
+        return self.add_card_arg(parser, required=True)
+
+    def on_exec(self, args: argparse.Namespace):
+        id_hex = args.id
+        id_bytes = bytes.fromhex(id_hex)
+        self.cmd.jablotron_write_to_t55xx(id_bytes)
+        print(f" - Jablotron ID: {id_hex.upper()} write done.")
+
+
+@lf_jablotron.command("econfig")
+class LFJablotronEconfig(SlotIndexArgsAndGoUnit, LFJablotronIdArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Set emulated Jablotron card id"
+        self.add_slot_args(parser)
+        self.add_card_arg(parser)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.id is not None:
+            slotinfo = self.cmd.get_slot_info()
+            selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+            lf_tag_type = TagSpecificType(slotinfo[selected - 1]["lf"])
+            if lf_tag_type != TagSpecificType.Jablotron:
+                print(f"{color_string((CR, 'WARNING'))}: Slot type not set to Jablotron.")
+            self.cmd.jablotron_set_emu_id(bytes.fromhex(args.id))
+            print(" - Set Jablotron tag id success.")
+        else:
+            response = self.cmd.jablotron_get_emu_id()
+            card_id = jablotron_card_id(response)
+            print(" - Get Jablotron tag id success.")
+            print(f"ID: {response.hex().upper()}")
+            print(f"Card: {card_id}")
 
 
 @hw_slot.command("nick")
@@ -11785,3 +11876,159 @@ class StandaloneConfig(DeviceRequiredUnit):
         else:
             print(color_string((CR,
                 f"set-config failed: status={resp.status}")))
+
+@hf_seos.command("eview")
+class HFSeosEView(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "View data from emulator memory"
+        self.add_slot_args(parser)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        selected_slot = self.cmd.get_active_slot()
+        slot_info = self.cmd.get_slot_info()
+        tag_type = TagSpecificType(slot_info[selected_slot]["hf"])
+
+        if tag_type != TagSpecificType.SEOS:
+            raise Exception(
+                "Card in current slot is not SEOS"
+            )
+        data = self.cmd.seos_read_emu_data()
+
+        print("[=]        Data:", data["data"].hex().upper())
+        print("[=]         OID:", data["oid"].hex().upper())
+        print("[=]         Tag:", data["tag"].hex().upper())
+        print("[=] Diversifier:", data["diversifier"].hex().upper())
+
+@hf_seos.command("eload")
+class HFSeosELoad(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Load data into emulator memory"
+        self.add_slot_args(parser)
+        self.add_hf14a_anticoll_args(parser)
+        parser.add_argument("-d", "--data", type=str, default=None, metavar="<hex>",
+                            help="Data to present to reader (2-255 bytes). Must be valid BER-TLV.")
+        parser.add_argument("-o", "--oid", type=str, default=None, metavar="<hex>",
+                            help=f"Target OID (1-32 bytes).")
+        parser.add_argument("-t", "--tag", type=str, default=None, metavar="<hex>",
+                            help=f"Tag of presented data (1-2 bytes).")
+        parser.add_argument("--diversifier", type=str, default=None, metavar="<hex>",
+                            help=f"Simulated card diversifier (1-16 bytes).")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        selected_slot = self.cmd.get_active_slot()
+        slot_info = self.cmd.get_slot_info()
+        tag_type = TagSpecificType(slot_info[selected_slot]["hf"])
+
+        if tag_type != TagSpecificType.SEOS:
+            raise Exception(
+                "Card in current slot is not SEOS"
+            )
+
+        # Handle ISO14443-A anticollision changes
+        anti_coll_data = self.cmd.hf14a_get_anti_coll_data()
+        if anti_coll_data is None or len(anti_coll_data) == 0:
+            print(
+                f"{color_string((CR, f'Slot does not contain any HF 14A config'))}"
+            )
+            return
+        uid = anti_coll_data["uid"]
+        atqa = anti_coll_data["atqa"]
+        sak = anti_coll_data["sak"]
+        ats = anti_coll_data["ats"]
+        
+        change_requested, change_done, uid, atqa, sak, ats = self.update_hf14a_anticoll(
+            args, uid, atqa, sak, ats
+        )
+
+        if (
+            args.data is None and
+            args.oid is None and
+            args.tag is None and
+            args.diversifier is None and
+            change_requested is False
+        ):
+            print(color_string((CR, "Error: No changes were requested.")))
+
+
+        seos_data = self.cmd.seos_read_emu_data()
+
+        # Parse args
+        data = bytes.fromhex(args.data) if args.data else seos_data["data"]
+        oid = bytes.fromhex(args.oid) if args.oid else seos_data["oid"]
+        tag = bytes.fromhex(args.tag) if args.tag else seos_data["tag"]
+        diversifier = bytes.fromhex(args.diversifier) if args.diversifier else seos_data["diversifier"]
+
+        # These are not currently configurable
+        hash_alg = seos_data["hash_alg"]
+        encr_alg = seos_data["encr_alg"]
+
+        if len(data) < 2 or len(data) > 255:
+            print(color_string((CR, "Error: invalid data length. Accepts 2-255 bytes.")))
+            return
+        if len(oid) < 1 or len(oid) > 32:
+            print(color_string((CR, "Error: invalid OID length. Accepts 1-32 bytes.")))
+            return
+        if len(tag) < 1 or len(tag) > 2:
+            print(color_string((CR, "Error: invalid tag length. Accepts 1-2 bytes.")))
+            return
+        if len(diversifier) < 1 or len(diversifier) > 16:
+            print(color_string((CR, "Error: invalid diversifier length. Accepts 1-16 bytes.")))
+            return
+
+        self.cmd.seos_write_emu_data(
+            data=data,
+            oid=oid,
+            tag=tag,
+            diversifier=diversifier,
+            hash_alg=hash_alg,
+            encr_alg=encr_alg
+        )
+
+@hf_seos.command("keys")
+class HFSeosKeys(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Load data into emulator memory"
+        self.add_slot_args(parser)
+        parser.add_argument("-a", "--auth", type=str, metavar="<hex>", required=True,
+                            help="Auth key (16 bytes)")
+        parser.add_argument("-e", "--privenc", type=str, metavar="<hex>", required=True,
+                            help="PrivEnc key (16 bytes)")
+        parser.add_argument("-m", "--privmac", type=str, metavar="<hex>", required=True,
+                            help="PrivMac key (16 bytes)")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        selected_slot = self.cmd.get_active_slot()
+        slot_info = self.cmd.get_slot_info()
+        tag_type = TagSpecificType(slot_info[selected_slot]["hf"])
+
+        if tag_type != TagSpecificType.SEOS:
+            raise Exception(
+                "Card in current slot is not SEOS"
+            )
+
+        # Parse args
+        auth = bytes.fromhex(args.auth)
+        privenc = bytes.fromhex(args.privenc)
+        privmac = bytes.fromhex(args.privmac)
+
+        if len(auth) != 16:
+            print(color_string((CR, "Error: invalid auth key length. Accepts 16 bytes.")))
+            return
+        if len(privenc) != 16:
+            print(color_string((CR, "Error: invalid PrivEnc key length. Accepts 16 bytes.")))
+            return
+        if len(privmac) != 16:
+            print(color_string((CR, "Error: invalid PrivMac key length. Accepts 16 bytes.")))
+            return
+
+        self.cmd.seos_write_emu_keys(
+            auth=auth,
+            privenc=privenc,
+            privmac=privmac
+        )

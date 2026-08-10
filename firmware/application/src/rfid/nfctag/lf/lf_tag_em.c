@@ -12,6 +12,7 @@
 #include "protocols/hidprox.h"
 #include "protocols/idteck.h"
 #include "protocols/ioprox.h"
+#include "protocols/jablotron.h"
 #include "protocols/pac.h"
 #include "protocols/viking.h"
 #include "syssleep.h"
@@ -269,6 +270,15 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
         return LF_PAC_TAG_ID_SIZE;
     }
 
+    if (type == TAG_TYPE_JABLOTRON && buffer->length >= LF_JABLOTRON_TAG_ID_SIZE) {
+        m_tag_type = type;
+        void *codec = jablotron.alloc();
+        m_pwm_seq = jablotron.modulator(codec, buffer->buffer);
+        jablotron.free(codec);
+        NRF_LOG_INFO("load lf jablotron data finish.");
+        return LF_JABLOTRON_TAG_ID_SIZE;
+    }
+
     if (type == TAG_TYPE_IDTECK && buffer->length >= LF_IDTECK_TAG_ID_SIZE) {
         m_tag_type = type;
         void *codec = idteck.alloc();
@@ -409,6 +419,16 @@ int lf_tag_pac_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) 
 bool lf_tag_pac_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     // default id: 8 ASCII bytes
     uint8_t tag_id[8] = {'C', 'A', 'R', 'D', '0', '0', '0', '1'};
+    return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
+}
+
+int lf_tag_jablotron_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return m_tag_type == TAG_TYPE_JABLOTRON ? LF_JABLOTRON_TAG_ID_SIZE : 0;
+}
+
+bool lf_tag_jablotron_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    // default id: 5 bytes (top bit must be 0)
+    uint8_t tag_id[5] = {0x01, 0xB6, 0x69, 0x00, 0x00};
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
 }
 
