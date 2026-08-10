@@ -1768,13 +1768,14 @@ static data_frame_tx_t *cmd_processor_delete_slot_tag_nick(uint16_t cmd, uint16_
 }
 
 static data_frame_tx_t *cmd_processor_mf1_get_emulator_config(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t mf1_info[5] = {};
+    uint8_t mf1_info[6] = {};
     mf1_info[0] = nfc_tag_mf1_is_detection_enable();
     mf1_info[1] = nfc_tag_mf1_is_gen1a_magic_mode();
     mf1_info[2] = nfc_tag_mf1_is_gen2_magic_mode();
     mf1_info[3] = nfc_tag_mf1_is_use_mf1_coll_res();
     mf1_info[4] = nfc_tag_mf1_get_write_mode();
-    return data_frame_make(cmd, STATUS_SUCCESS, 5, mf1_info);
+    mf1_info[5] = nfc_tag_mf1_is_strict_key_b_auth();
+    return data_frame_make(cmd, STATUS_SUCCESS, 6, mf1_info);
 }
 
 static data_frame_tx_t *cmd_processor_mf1_get_prng_type(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -1788,6 +1789,19 @@ static data_frame_tx_t *cmd_processor_mf1_set_prng_type(uint16_t cmd, uint16_t s
     }
     nfc_tag_mf1_set_prng_type(data[0]);
     return data_frame_make(cmd, STATUS_SUCCESS, 1, &data[0]);  // echo back the set value
+}
+
+static data_frame_tx_t *cmd_processor_mf1_get_strict_key_b_auth(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t enable = nfc_tag_mf1_is_strict_key_b_auth();
+    return data_frame_make(cmd, STATUS_SUCCESS, 1, &enable);
+}
+
+static data_frame_tx_t *cmd_processor_mf1_set_strict_key_b_auth(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 1 || data[0] > 1) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    nfc_tag_mf1_set_strict_key_b_auth(data[0]);
+    return data_frame_make(cmd, STATUS_SUCCESS, 1, &data[0]);
 }
 
 static data_frame_tx_t *cmd_processor_mf1_get_gen1a_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -3161,6 +3175,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_GET_EMULATOR_CONFIG,      NULL,                        cmd_processor_mf1_get_emulator_config,       NULL                   },
     {    DATA_CMD_MF1_GET_PRNG_TYPE,            NULL,                        cmd_processor_mf1_get_prng_type,             NULL                   },
     {    DATA_CMD_MF1_SET_PRNG_TYPE,            NULL,                        cmd_processor_mf1_set_prng_type,             NULL                   },
+    {    DATA_CMD_MF1_GET_STRICT_KEY_B_AUTH,    NULL,                        cmd_processor_mf1_get_strict_key_b_auth,     NULL                   },
+    {    DATA_CMD_MF1_SET_STRICT_KEY_B_AUTH,    NULL,                        cmd_processor_mf1_set_strict_key_b_auth,     NULL                   },
     {    DATA_CMD_MF1_GET_GEN1A_MODE,           NULL,                        cmd_processor_mf1_get_gen1a_mode,            NULL                   },
     {    DATA_CMD_MF1_SET_GEN1A_MODE,           NULL,                        cmd_processor_mf1_set_gen1a_mode,            NULL                   },
     {    DATA_CMD_MF1_GET_GEN2_MODE,            NULL,                        cmd_processor_mf1_get_gen2_mode,             NULL                   },
