@@ -104,6 +104,7 @@ void nfc_tag_14a_clear_tx_sniff_cb(void);
  * (ATQA, UID, SAK) so the CU does not collide with real cards in the field.
  * Enable before starting a sniff session, disable on completion. */
 void nfc_tag_14a_set_sniff_passive(bool passive);
+void nfc_tag_14a_set_sniff_hold_field(bool hold);
 typedef void (*nfc_tag_14a_state_handler_t)(uint8_t *data, uint16_t szBits);
 typedef nfc_tag_14a_coll_res_reference_t *(*nfc_tag_14a_coll_handler_t)(void);
 

@@ -7785,16 +7785,26 @@ class HF14ASniff(BaseCLIUnit):
             '--timeout', type=int, default=5000, metavar='MS',
             help='Listen duration in milliseconds (default: 5000, max: 30000, firmware blocks for full duration)'
         )
+        parser.add_argument(
+            '--tap', action='store_true',
+            help='Passive tap: CU stays silent while a REAL card answers the reader. '
+                 'Captures reader->card on NFCT and card->reader via the RC522. '
+                 'Place CU, card, and reader in the same field.'
+        )
         return parser
 
     def on_exec(self, args: argparse.Namespace):
         timeout = max(1, min(30000, args.timeout))
-        print(f" Listening for reader frames for {timeout}ms...")
-        print(" Place CU near a reader now.")
+        if args.tap:
+            print(f" Passive tap for {timeout}ms — CU silent, real card answers.")
+            print(" Place the card between the reader and the CU, all in the field.")
+        else:
+            print(f" Listening for reader frames for {timeout}ms...")
+            print(" Place CU near a reader now.")
         print()
 
         try:
-            resp = self.cmd.hf14a_sniff(timeout_ms=timeout)
+            resp = self.cmd.hf14a_sniff(timeout_ms=timeout, tap=args.tap)
         except Exception as e:
             if 'CMDInvalid' in type(e).__name__ or '2020' in str(e):
                 print(f"{CR}Command not supported — reflash firmware to enable hf 14a sniff{C0}")
@@ -7873,6 +7883,12 @@ class HF14ASniff(BaseCLIUnit):
         expect_nr_ar = False
         last_auth_keytype = None
         last_auth_block = None
+        auth_nt_slot = -1
+        expect_nr_ar = False
+        at_slot = -1
+        nt_clean = None
+        prev_cmd = None
+        iso_dep = False
 
         for n, (szBits, data, is_tx) in enumerate(frames):
             hex_str = ' '.join(f'{b:02x}' for b in data)
@@ -7886,29 +7902,58 @@ class HF14ASniff(BaseCLIUnit):
             if (not is_tx) and szBits == 32 and len(data) == 4 and data[0] in (0x60, 0x61):
                 last_auth_keytype = 'A' if data[0] == 0x60 else 'B'
                 last_auth_block = data[1]
-                expect_nt = True
+                auth_nt_slot = n + 1     # NT must be the very next frame, nothing later
                 expect_nr_ar = False
+                nt_clean = None
                 decoded_ctx = f"MIFARE Classic AUTH Key{last_auth_keytype} block=0x{last_auth_block:02X} ({last_auth_block})"
                 col_ctx = CG
 
-            # Card -> reader: NT (32-bit) immediately after AUTH
-            elif is_tx and expect_nt and szBits == 32 and len(data) == 4:
-                nt = data.hex()
-                decoded_ctx = f"AUTH: NT (card nonce) = {nt}"
-                col_ctx = CG
-                expect_nt = False
+            # Card -> reader: NT — ONLY the frame immediately after AUTH. A clean
+            # nonce is 4 bytes; the RC522 often mangles it (40 bits etc.), so flag
+            # that rather than latching onto a later SAK and calling it NT.
+            elif is_tx and n == auth_nt_slot:
+                if szBits == 32 and len(data) == 4:
+                    nt_clean = data.hex()
+                    decoded_ctx = f"AUTH: NT (card nonce) = {nt_clean}"
+                    col_ctx = CG
+                else:
+                    decoded_ctx = f"AUTH: NT (card nonce) GARBLED — {szBits}b, need clean 32b"
+                    col_ctx = CR
                 expect_nr_ar = True
 
-            # Reader -> card: NR||AR (64-bit) immediately after NT (encrypted)
+            # Reader -> card: NR||AR (64-bit, encrypted) after the NT slot
             elif (not is_tx) and expect_nr_ar and szBits == 64 and len(data) == 8:
                 nr = data[:4].hex()
                 ar = data[4:].hex()
-                decoded_ctx = f"AUTH continuation: NR||AR (enc)  NR={nr}  AR={ar}"
-                col_ctx = CG
+                note = "" if nt_clean else "  (NT garbled -> not crackable)"
+                decoded_ctx = f"AUTH: NR||AR (enc)  NR={nr}  AR={ar}{note}"
+                col_ctx = CG if nt_clean else CY
                 expect_nr_ar = False
+                at_slot = n + 1     # {at} is the very next frame (card->reader, 32b)
 
-            # Fallback to generic frame decoder
-            decoded, col = _decode_14a_frame_col(data, szBits)
+            # Card -> reader: AT — the frame immediately after NR||AR. mfkey64
+            # needs this (clean 4 bytes) plus a clean NT to recover the key.
+            elif is_tx and n == at_slot:
+                if szBits == 32 and len(data) == 4:
+                    at_hex = data.hex()
+                    ready = " -> mfkey64-ready" if nt_clean else " (but NT garbled)"
+                    decoded_ctx = f"AUTH: AT (enc card response) = {at_hex}{ready}"
+                    col_ctx = CG if nt_clean else CY
+                else:
+                    decoded_ctx = f"AUTH: AT (enc card response) GARBLED — {szBits}b, need clean 32b"
+                    col_ctx = CR
+
+            # Generic decoder -- direction- and context-gated
+            decoded, col, cmd_tag = _decode_14a_frame_col(
+                data, szBits, is_tx, prev_cmd, iso_dep)
+            if not is_tx:
+                prev_cmd = cmd_tag
+                if cmd_tag == 'rats':
+                    iso_dep = True
+                elif cmd_tag in ('halt', 'deselect'):
+                    iso_dep = False
+            else:
+                prev_cmd = None      # a response consumes its command context
             if decoded_ctx is not None:
                 decoded, col = decoded_ctx, col_ctx
 
@@ -8042,6 +8087,8 @@ examples:
         nr_ar_enc = None
         at_enc = None
         uid_bytes = b''
+        prev_cmd = None
+        iso_dep = False
 
         for n, (szBits, data, is_tx) in enumerate(frames):
             hex_str = ' '.join(f'{b:02x}' for b in data)
@@ -8088,7 +8135,16 @@ examples:
                 decoded_ctx = f"AT (enc) = {data.hex().upper()}"
                 col_ctx = CG
 
-            decoded, col = _decode_14a_frame_col(data, szBits)
+            decoded, col, cmd_tag = _decode_14a_frame_col(
+                data, szBits, is_tx, prev_cmd, iso_dep)
+            if not is_tx:
+                prev_cmd = cmd_tag
+                if cmd_tag == 'rats':
+                    iso_dep = True
+                elif cmd_tag in ('halt', 'deselect'):
+                    iso_dep = False
+            else:
+                prev_cmd = None      # a response consumes its command context
             if decoded_ctx is not None:
                 decoded, col = decoded_ctx, col_ctx
 
@@ -8196,58 +8252,150 @@ def _decode_sw(sw1: int, sw2: int) -> str:
     return ''
 
 
-def _decode_14a_frame_col(data: bytes, szBits: int):
-    """Return (description, colour) for a 14A frame."""
+_CD = "\033[90m"   # dim grey: raw/garbled frames that fail validation
+
+
+def _sak_desc(sak: int):
+    try:
+        sak_type = type_id_SAK_dict.get(sak, "")
+    except Exception:
+        sak_type = ""
+    if sak_type:
+        return f"SAK (Select Acknowledge) = 0x{sak:02X}  [{sak_type}]"
+    return f"SAK (Select Acknowledge) = 0x{sak:02X}"
+
+
+def _decode_14a_frame_col(data: bytes, szBits: int, is_tx: bool = False,
+                          prev_cmd=None, iso_dep: bool = False):
+    """Return (description, colour, cmd_tag) for a 14A frame.
+
+    Direction- and context-gated so demod garbage is not dressed up as protocol:
+      * is_tx False (reader->card) is decoded as a COMMAND, is_tx True
+        (card->reader) as a RESPONSE.
+      * a response is only NAMED when the preceding reader command makes it
+        plausible -- ATQA after REQA/WUPA, SAK after SELECT, UID after ANTICOLL
+        -- and it passes its integrity check (BCC / length).
+      * APDUs are only decoded inside an established ISO-DEP (RATS/ATS) channel.
+    Anything that fails is shown raw, not mislabelled.
+
+    cmd_tag (3rd value) is this frame's reader-command class ('reqa','anticoll1',
+    'select1','auth','rats','halt','deselect',...) or None, so the caller can
+    feed it as prev_cmd to the next frame and track ISO-DEP state.
+    """
     if not data:
-        return '', C0
+        return '', C0, None
     b0 = data[0]
 
-    # ---------------------------------------------------------------------
-    # ISO14443-A "reply" frames that often show as "unknown" in hf 14a sniff
-    # because the sniffer doesn't know if a frame is reader->card or card->reader.
-    # We infer by payload length/bits and known structures.
-    # ---------------------------------------------------------------------
-    # ATQA: Answer To Request (Type A) - 2 bytes / 16 bits (tag -> reader).
-    # Transmitted LSB first. Common MIFARE Classic ATQA is 0x0004 => '04 00'.
-    # Be conservative: avoid mislabeling common commands like 0x93 0x20 (ANTICOLL).
-    if szBits == 16 and len(data) == 2:
-        not_atqa_prefixes = {
-            0x93, 0x95, 0x97,  # ANTICOLL / SELECT cascade levels
-            0x50,              # HLTA
-            0x60, 0x61,        # MIFARE Classic AUTH
-            0x30,              # READ
-            0xA0, 0xA2,        # WRITE variants
-            0xE0,              # RATS
-        }
-        if data[0] not in not_atqa_prefixes:
-            atqa = data[0] | (data[1] << 8)  # LSB first in air
-            return f"ATQA (Answer To Request, Type A) = 0x{atqa:04X}", CG
+    def raw(reason=''):
+        body = f'raw {data.hex()}'
+        return (f'{body}  ({reason})' if reason else body), _CD, None
 
-    # SAK: Select Acknowledge — 1 byte on air, but the trace may include the
-    # 2-byte CRC-A appended, giving 3 bytes / 24 bits total.
-    if (szBits == 8 and len(data) == 1) or (szBits == 24 and len(data) == 3):
-        sak = data[0]
-        # Reuse existing NXP SAK classification table if present
-        # (type_id_SAK_dict is defined near top of file).
-        try:
-            sak_type = type_id_SAK_dict.get(sak, "")
-        except Exception:
-            sak_type = ""
-        if sak_type:
-            return f"SAK (Select Acknowledge) = 0x{sak:02X}  [{sak_type}]", CG
-        return f"SAK (Select Acknowledge) = 0x{sak:02X}", CG
+    # ===================== READER -> CARD : commands =====================
+    if not is_tx:
+        if szBits == 7:
+            if b0 == 0x26:
+                return 'REQA', CG, 'reqa'
+            if b0 == 0x52:
+                return 'WUPA', CG, 'wupa'
+            return f'short(0x{b0:02x})', CC, None
+        if b0 in (0x93, 0x95, 0x97):
+            lvl = {0x93: '1', 0x95: '2', 0x97: '3'}[b0]
+            if len(data) > 1 and data[1] == 0x70:
+                uid = ' '.join(f'{b:02x}' for b in data[2:6]) if len(data) >= 6 else ''
+                return f'SELECT CL{lvl}  UID={uid}', CB, f'select{lvl}'
+            nvb = f'NVB={data[1]:02x}' if len(data) > 1 else ''
+            return f'ANTICOLL CL{lvl}  {nvb}', CB, f'anticoll{lvl}'
+        if b0 == 0x50:
+            return 'HALT', CC, 'halt'
+        if b0 == 0xc2:
+            return 'S-DESELECT', CC, 'deselect'
+        if b0 == 0xd0:
+            return (f'PPS  PPS1={data[1]:02x}' if len(data) > 1 else 'PPS'), CC, None
+        if b0 == 0xe0:
+            fsdi = (data[1] >> 4) if len(data) > 1 else 0
+            cid = (data[1] & 0xf) if len(data) > 1 else 0
+            return f'RATS  FSDI={fsdi} CID={cid}', CC, 'rats'
+        if b0 == 0x60:
+            return (f'AUTH KeyA  block={data[1]}' if len(data) > 1 else 'AUTH KeyA'), CR, 'auth'
+        if b0 == 0x61:
+            return (f'AUTH KeyB  block={data[1]}' if len(data) > 1 else 'AUTH KeyB'), CR, 'auth'
+        if b0 == 0x30:
+            return (f'READ  block={data[1]}' if len(data) > 1 else 'READ'), CC, 'read'
+        if b0 == 0xa0:
+            return (f'WRITE block={data[1]}' if len(data) > 1 else 'WRITE'), CY, 'write'
+        if b0 == 0x40:
+            return 'MAGIC WUPC1', CY, None
+        if b0 == 0x43:
+            return 'MAGIC WUPC2', CY, None
+        if b0 == 0x41:
+            return 'MAGIC WIPE', CR, None
+        # ISO 7816-4 APDU -- only inside an established ISO-DEP channel
+        if iso_dep and len(data) >= 4 and b0 in (0x00, 0x80, 0x90, 0xa0):
+            cla, ins = data[0], data[1]
+            p1 = data[2] if len(data) > 2 else 0
+            p2 = data[3] if len(data) > 3 else 0
+            if cla == 0x00 and ins == 0xa4:
+                if len(data) > 5:
+                    aid = ' '.join(f'{b:02x}' for b in data[5:5 + data[4]])
+                    name = _known_aid(bytes(data[5:5 + data[4]]))
+                    label = f'SELECT AID  {aid.upper()}' + (f'  ({name})' if name else '')
+                    return label, CY, None
+                return 'SELECT', CY, None
+            if cla == 0x00 and ins == 0xb0:
+                return f'READ BINARY  off={p1 << 8 | p2} len={data[4] if len(data) > 4 else 0}', CC, None
+            if cla == 0x00 and ins == 0xb2:
+                return f'READ RECORD  SFI={p2 >> 3} rec={p1}', CC, None
+            if cla == 0x80 and ins == 0xca:
+                name = _known_bertag((p1 << 8) | p2)
+                return f'GET DATA  {p1:02x}{p2:02x}' + (f'  ({name})' if name else ''), CC, None
+            if cla == 0x80 and ins == 0xa8:
+                return 'GPO  (Get Processing Options)', CY, None
+            if cla == 0x80 and ins == 0xae:
+                actype = {0x00: 'AAC', 0x40: 'TC', 0x80: 'ARQC'}.get(p1 & 0xc0, f'AC/{p1:02x}')
+                return f'GENERATE AC  requesting {actype}', CR, None
+            if cla == 0x00 and ins == 0x20:
+                return 'VERIFY PIN', CY, None
+            if cla == 0x00 and ins == 0x88:
+                return 'INTERNAL AUTH', CR, None
+            if cla == 0x00 and ins == 0x82:
+                return 'EXTERNAL AUTH', CR, None
+            if cla == 0x00 and ins == 0x70:
+                return 'MANAGE CHANNEL', CC, None
+            return f'APDU  CLA={cla:02x} INS={ins:02x} P1={p1:02x} P2={p2:02x}', CY, None
+        if szBits >= 64:
+            return '(encrypted / data)', CC, None
+        return f'unknown cmd (0x{b0:02x})', CC, None
 
-    # Anticollision CL1 response: 4 UID bytes + BCC = 5 bytes / 40 bits.
-    # BCC is XOR of UID bytes.
-    if szBits == 40 and len(data) == 5:
-        uid0, uid1, uid2, uid3, bcc = data
-        calc = uid0 ^ uid1 ^ uid2 ^ uid3
-        if calc == bcc:
-            uid = bytes([uid0, uid1, uid2, uid3]).hex()
-            return f"ANTICOLL CL1 response: UID={uid}  BCC=0x{bcc:02X} (OK)", CG
-        # If BCC doesn't match, still label it as anticoll-like, but warn.
-        uid = bytes(data[:4]).hex()
-        return f"ANTICOLL-like: UID={uid}  BCC=0x{bcc:02X} (expected 0x{calc:02X})", CY
+    # ===================== CARD -> READER : responses =====================
+    # ATQA -- 2 bytes, only right after REQA/WUPA
+    if (szBits == 16 and len(data) == 2 and prev_cmd in ('reqa', 'wupa')
+            and (data[0] & 0x20) == 0        # byte0 bit5 is RFU (0)
+            and (data[0] & 0x1f) != 0        # byte0 must carry a bit-frame SDD bit
+            and (data[1] & 0xf0) == 0):       # byte1 high nibble is RFU (0)
+        atqa = data[0] | (data[1] << 8)
+        return f"ATQA (Answer To Request, Type A) = 0x{atqa:04X}", CG, None
+    # UID/anticoll response -- 5 bytes with VALID BCC, only after ANTICOLL
+    if szBits == 40 and len(data) == 5 and prev_cmd in ('anticoll1', 'anticoll2', 'anticoll3'):
+        u0, u1, u2, u3, bcc = data
+        if (u0 ^ u1 ^ u2 ^ u3) == bcc:
+            return f"ANTICOLL response: UID={bytes(data[:4]).hex()}  BCC=0x{bcc:02X} (OK)", CG, None
+        return raw('BCC fail')
+    # SAK -- 1 byte (or 3 on the wire incl. CRC-A), only after a SELECT
+    if prev_cmd in ('select1', 'select2', 'select3') and \
+            ((szBits == 8 and len(data) == 1) or (szBits == 24 and len(data) == 3)):
+        return _sak_desc(data[0]), CG, None
+    # ISO-DEP response -- ISO 7816 status word at the tail
+    if iso_dep and len(data) >= 2:
+        for off in (-2, -4):
+            if len(data) >= abs(off):
+                lbl = _decode_sw(data[off], data[off + 1])
+                if lbl:
+                    return f'SW {data[off]:02X} {data[off + 1]:02X}  {lbl}', CY, None
+    # large blob (the caller's auth tracker names the specific NT/NR||AR/AT)
+    if szBits >= 64:
+        return '(encrypted / data)', CC, None
+    # nothing matched a plausible response -> show raw, do not invent a label
+    return raw()
 
     # Short frames (7-bit)
     if szBits == 7:
@@ -8383,7 +8531,6 @@ def _decode_14a_frame_col(data: bytes, szBits: int):
 
     # Unknown — show first byte
     return f'unknown (0x{b0:02x})', CC
-
 
 def _known_aid(aid: bytes) -> str:
     table = {
@@ -8690,12 +8837,31 @@ def _print_14a_sniff_summary(frames):
                               f"capture more nonce exchanges and retry{C0}")
 
             elif len(ns) == 1:
-                # Single capture — can't crack without a paired exchange
+                # One clean nonce triple (nt/nr/ar). Two correct ways to finish:
+                #  - mfkey64 needs this same auth's {at} (the 32-bit card->reader
+                #    frame right after {nr}{ar}) as the 5th value.
+                #  - mfkey32v2 needs a SECOND clean nonce for the same block/key
+                #    instead, and no {at}.
                 n = ns[0]
-                print(f"   {CY}Only one exchange captured — "
-                      f"need a second auth to crack{C0}")
-                print(f"   {CC}When paired, run:{C0} "
-                      f"mfkey64 {uid} {n['nt']} {n['nr']} {n['ar']} <nt2>")
+                print(f"   {CY}One clean nonce (nt/nr/ar) captured — not yet crackable.{C0}")
+                print(f"   {CC}mfkey64  (add this auth's {{at}}):{C0} "
+                      f"mfkey64 {uid} {n['nt']} {n['nr']} {n['ar']} <at>")
+                print(f"   {CC}mfkey32v2 (add a 2nd clean nonce):{C0} "
+                      f"mfkey32v2 {uid} {n['nt']} {n['nr']} {n['ar']} <nt2> <nr2> <ar2>")
+
+    elif auth_seen:
+        # Reader-side auth was captured but no clean nonce survived — the
+        # card-side NT came back garbled. Say so, so it's clear the reader path
+        # works and only the RC522 NT capture is the blocker.
+        n_auth = sum(1 for _szb, _d, _tx in frames
+                     if (not _tx) and _szb == 32 and len(_d) == 4 and _d[0] in (0x60, 0x61))
+        print()
+        print(f" {'-'*55}")
+        print(f" {CC}Nonces   :{C0} {CY}{n_auth} AUTH captured, but every card nonce (NT) "
+              f"came back garbled{C0}")
+        print(f"   Reader side is clean (AUTH + NR||AR present); the RC522 is mangling")
+        print(f"   the 4-byte NT. One clean 32-bit NT in the frame right after an AUTH")
+        print(f"   is all that's needed to crack.")
 
 
 def _get_capture():
