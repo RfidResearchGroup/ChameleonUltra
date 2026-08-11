@@ -37,23 +37,11 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v6
 
-      - name: Install dependencies with uv (if lockfile present)
-        if: ${{ hashFiles('software/uv.lock') != '' }}
+      - name: Install dependencies with uv
         run: uv sync --dev
 
-      - name: Install tools with pip (fallback)
-        if: ${{ hashFiles('software/uv.lock') == '' }}
-        run: |
-          python -m pip install --upgrade pip
-          # Try project requirements if present
-          if [ -f script/requirements.txt ]; then pip install -r script/requirements.txt || true; fi
-          # Ensure ruff is available
-          pip install ruff
-
       - name: Ruff check
-        run: |
-          set -e
-          (uv run ruff --version && uv run ruff check .) || ruff check .
+        run: uv run ruff check .
 
   lint-types:
     runs-on: ubuntu-latest
@@ -83,20 +71,8 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
 
-      - name: Install dependencies with uv (if lockfile present)
-        if: ${{ hashFiles('software/uv.lock') != '' }}
+      - name: Install dependencies with uv
         run: uv sync --dev
 
-      - name: Install tools with pip (fallback)
-        if: ${{ hashFiles('software/uv.lock') == '' }}
-        run: |
-          python -m pip install --upgrade pip
-          # Try project requirements if present
-          if [ -f script/requirements.txt ]; then pip install -r script/requirements.txt || true; fi
-          # Ensure pyrefly is available
-          pip install pyrefly
-
       - name: Pyrefly check
-        run: |
-          set -e
-          (uv run pyrefly --help >/dev/null 2>&1 && uv run pyrefly check) || pyrefly check
+        run: uv run pyrefly check
