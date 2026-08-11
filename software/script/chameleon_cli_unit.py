@@ -1353,6 +1353,40 @@ class HF14AConfig(DeviceRequiredUnit):
         print(self.Cl3.format(config["cl3"]))
         print(self.Rats.format(config["rats"]))
 
+@hw.command("blver")
+class HWBootloaderVersion(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Get bootloader version"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            major, minor = self.cmd.get_bootloader_version()
+            print(f" - Bootloader Version: v{major}.{minor}")
+        except chameleon_com.CMDInvalidException:
+            print(" - Bootloader version not supported by current firmware, please update")
+
+
+@hw.command("freemem")
+class HWFreeMemory(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Get device heap memory usage"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            mem = self.cmd.get_free_memory()
+            free  = mem['free']
+            total = mem['total']
+            used  = total - free
+            pct   = (used / total * 100.0) if total > 0 else 0.0
+            print(f" - Heap free  : {free:,} bytes")
+            print(f" - Heap used  : {used:,} bytes")
+            print(f" - Heap total : {total:,} bytes  ({pct:.1f}% used)")
+        except chameleon_com.CMDInvalidException:
+            print(" - Free memory not supported by current firmware, please update")
 
 @hf_14a.command("scan")
 class HF14AScan(ReaderRequiredUnit):
