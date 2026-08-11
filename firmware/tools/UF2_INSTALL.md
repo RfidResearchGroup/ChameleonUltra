@@ -24,8 +24,10 @@ After installation:
   iterating on firmware modifications.
 - **No CDC driver required for UF2.** USB Mass Storage is universal — works
   on Linux, macOS, Windows, even bare ChromeOS.
-- **A path back.** Drop `fullimage.uf2` (built by `build.sh`) onto the
-  CHAMELEON drive to restore the complete firmware including the bootloader.
+- **A path back.** Drop `ultra-fullimage.uf2` (built by `build.sh`) onto
+  the CHAMELEON drive to restore this fork's complete image (SoftDevice +
+  UF2 bootloader + application). To return to the *stock* bootloader
+  instead, use `revert-to-stock.sh` (Step 8).
 
 -----
 
@@ -47,14 +49,12 @@ On Arch Linux:
 
 ```bash
 sudo pacman -S arm-none-eabi-gcc arm-none-eabi-newlib python python-pip git
-pip install --user nrfutil
 ```
 
 On Debian / Ubuntu / Kali:
 
 ```bash
 sudo apt install gcc-arm-none-eabi libnewlib-arm-none-eabi python3-pip git
-pip install --user nrfutil
 ```
 
 On macOS (via Homebrew):
@@ -62,18 +62,33 @@ On macOS (via Homebrew):
 ```bash
 brew install --cask gcc-arm-embedded
 brew install python git
-pip3 install --user nrfutil
+```
+
+**nRF Util (v7 or newer).** The build and flash scripts use the modern,
+modular nrfutil — a standalone native binary. This is **not** the legacy
+`pip install nrfutil` (v6.x and earlier); that package lacks the
+`nrf5sdk-tools` and `device` commands the scripts call and will not work.
+Download the `nrfutil` binary for your OS from Nordic's
+[nRF Util page](https://www.nordicsemi.com/Products/Development-tools/nRF-Util),
+put it on your `PATH`, then install the two command plugins:
+
+```bash
+nrfutil install nrf5sdk-tools   # used by build.sh: pkg / settings generate
+nrfutil install device          # used by flash-dfu-sdbl.sh: device program
 ```
 
 You'll also need Nordic's [nRF Command Line Tools](https://www.nordicsemi.com/Products/Development-tools/nRF-Command-Line-Tools)
-for the `mergehex` utility. Download the appropriate `.deb` / `.rpm` /
-`.dmg` from Nordic's site and install per their instructions.
+for the `mergehex` utility (Nordic is archiving these in favour of nRF Util,
+but `build.sh` still uses `mergehex` for the hex merge). Install the
+appropriate `.deb` / `.rpm` / `.dmg` from Nordic's site.
 
 Verify your toolchain:
 
 ```bash
 arm-none-eabi-gcc --version          # should be 10.x or newer
-nrfutil --version                    # any recent version is fine
+nrfutil --version                    # 7.0.0 or newer
+nrfutil nrf5sdk-tools --help         # confirms the plugin is installed
+nrfutil device --version             # confirms the plugin is installed
 mergehex --version                   # comes from nRF Command Line Tools
 ```
 
@@ -120,10 +135,13 @@ A normal build takes 30 – 90 seconds depending on your machine. Expect
 to see output ending in something like:
 
 ```
-adding: application.hex (deflated 70%)
-adding: bootloader.hex (deflated 71%)
-adding: fullimage.hex (deflated 71%)
-adding: softdevice.hex (deflated 47%)
+==========================================================
+Build complete.
+  SD+BL      : objects/ultra-dfu-sdbl.zip
+  App        : objects/ultra-dfu-app.zip
+  Full image : objects/ultra-fullimage.uf2
+Use flash-dfu-sdbl.sh to install both stages.
+==========================================================
 ```
 
 If the build fails on `mergehex: command not found`, the nRF Command
@@ -133,16 +151,27 @@ The build produces these artifacts in `firmware/objects/`:
 
 | File                    | Purpose                                                                                          |
 |-------------------------|--------------------------------------------------------------------------------------------------|
-| `ultra-dfu-sdbl.zip`    | **First-time install, step 1.** SoftDevice + UF2 bootloader signed package for the stock DFU flow. |
+| `ultra-dfu-sdbl.zip`    | **First-time install, step 1.** SoftDevice + UF2 bootloader, signed for the stock serial-DFU flow. |
 | `ultra-application.uf2` | **First-time install, step 2, and all future updates.** Drag-and-drop application image.        |
-| `ultra-dfu-full.zip`    | Legacy combined package (SD + BL + app). Only useful for debugging the stock DFU flow.          |
+| `ultra-fullimage.uf2`   | This fork's complete image (SD + BL + app) as one UF2. Drag-and-drop to restore the fork in one shot. |
+| `ultra-bootloader.uf2`  | Bootloader-only UF2. Used internally for the stage-1 → stage-2 handoff.                          |
+| `ultra-dfu-full.zip`    | Combined signed package (SD + BL + app) for the stock serial-DFU flow (`flash-dfu-full.sh`).    |
 | `ultra-dfu-app.zip`     | Signed app-only zip. Only useful if still on the stock bootloader.                               |
 | `ultra-binaries.zip`    | Raw hex files for SWD flashing or inspection.                                                    |
 | `fullimage.hex`         | Combined SoftDevice + Bootloader + Application hex. Flash via SWD if you have one.              |
 
+Building for the Lite (`CURRENT_DEVICE_TYPE=lite ./build.sh`) produces the
+same set with a `lite-` prefix. The flash scripts auto-detect Lite vs Ultra
+from USB and pick the matching files, so the steps below are identical for
+either target.
+
 -----
 
 Step 3 — put the stock device into DFU mode
+
+> Step 4's `flash-dfu-sdbl.sh` attempts this automatically via
+> `resource/tools/enter_dfu.py`. The manual sequence below is the fallback
+> if auto-entry doesn't take.
 
 The stock ChameleonUltra enters DFU mode via this sequence:
 
@@ -166,24 +195,26 @@ again, holding **B** more deliberately during the plug-in.
 
 Step 4 — flash the UF2 bootloader and SoftDevice
 
-With the device in DFU mode, from inside the `firmware/` directory:
+From inside the `firmware/` directory:
 
 ```bash
 ./flash-dfu-sdbl.sh
 ```
 
-This pushes only the SoftDevice + UF2 bootloader (`ultra-dfu-sdbl.zip`)
-to the device. The device reboots into the new UF2 bootloader once
-complete. No timing or button-holding required.
+The script auto-detects Lite vs Ultra from USB, tries to enter serial DFU
+for you (`resource/tools/enter_dfu.py`, falling back to the manual
+cold-boot + hold-**B** sequence from Step 3), waits for the serial DFU
+device (`1915:521f`), then pushes the SoftDevice + UF2 bootloader
+(`ultra-dfu-sdbl.zip`) with `nrfutil device program --traits nordicDfu`.
 
 A successful run looks like:
 
 ```
-Flashing SoftDevice + UF2 Bootloader to ultra...
-[00:00:18]     100% [1/1 CCB5DB7D5207] Image transfer complete
-Device programmed.
-Done. Device will reboot into UF2 bootloader.
-Run flash-uf2-app.sh to flash the application.
+=== Flashing composite bootloader (SD+BL) via serial DFU ===
+Waiting for serial DFU device (1915:521f)...
+[00:00:18]  100% [1/1] Image transfer complete
+Done. Composite bootloader (UF2 + CDC serial DFU) installed at 0xF3000.
+Flash the application with ./flash-dfu-app.sh or drag the app UF2.
 ```
 
 -----
@@ -267,13 +298,17 @@ appears.
 
 From the running application
 
-If the firmware is running normally, you can enter UF2 mode from the
-CLI:
+If the firmware is running normally, reboot into the composite bootloader
+(which brings up the CHAMELEON drive) from the CLI:
 
 ```bash
 $ python3 chameleon_cli_main.py
-[chameleon] hw uf2
+[chameleon] hw dfu
 ```
+
+`hw dfu` sends `ENTER_BOOTLOADER` and drops the USB link immediately. The
+`resource/tools/enter_dfu.py` and `enter_dfu_over_ble.py` helpers do the
+same over USB and BLE respectively.
 
 Pushing an update
 
@@ -305,7 +340,7 @@ Common reasons and fixes:
 
 | Reason          | Cause                                              | Fix                                      |
 |-----------------|----------------------------------------------------|------------------------------------------|
-| `WRONG_FAMILY`  | UF2 built for wrong target (not nRF52840)          | Rebuild with correct family ID           |
+| `WRONG_FAMILY`  | UF2's family ID isn't this fork's custom `0x1B57745F` (e.g. a stock or other-target UF2) | Rebuild from this fork; both Ultra and Lite use family `0x1B57745F` |
 | `OUT_OF_BOUNDS` | UF2 targets address outside app region             | Check `--base` address in uf2conv call   |
 | `WRITE_ERROR`   | Flash write or verify failed                       | Retry; may indicate worn flash           |
 
@@ -313,19 +348,29 @@ Common reasons and fixes:
 
 Step 8 — going back to stock (if you ever need to)
 
-To fully restore the original firmware including the stock bootloader,
-drop `fullimage.uf2` (built by `build.sh` from this fork) onto the
-CHAMELEON drive in UF2 DFU mode. This restores MBR, SoftDevice,
-bootloader, application, and settings in a single operation — no SWD
-required.
+These are two different operations — don't confuse them:
 
-To revert to the upstream stock bootloader specifically:
+**Restore this fork's full image** (SoftDevice + UF2 bootloader + app):
+drop `ultra-fullimage.uf2` onto the CHAMELEON drive in UF2 DFU mode. This
+rewrites the fork in one shot; it does **not** return you to the stock
+bootloader.
 
-1. Build a recovery image per `firmware/tools/RECOVERY_BUILD.md`.
-2. Enter UF2 DFU mode (cold-boot + hold B + plug).
-3. Drag the recovery UF2 onto the CHAMELEON drive.
-4. The device resets into the stock bootloader.
-5. Push the stock application via the upstream `flash-dfu-app.sh`.
+**Revert to the upstream stock bootloader** — use the scripted flow:
+
+```bash
+./revert-to-stock.sh /path/to/ultra-dfu-full.zip
+# or drop the stock zip at ~/Downloads/ultra-dfu-full.zip and run it bare:
+./revert-to-stock.sh
+```
+
+It takes the stock RRG release package (`ultra-dfu-full.zip` from the
+[upstream releases](https://github.com/RfidResearchGroup/ChameleonUltra/releases)),
+builds a recovery UF2 that embeds the stock SD+BL (`RECOVERY_ZIP=… ./build.sh`
+→ `ultra-revert-to-stock.uf2`), and drops it onto the CHAMELEON drive. The
+recovery app runs `bl_updater` to rewrite the bootloader region back to
+stock at 0xF3000, then reboots into the stock bootloader in DFU mode, ready
+for the stock application via the upstream serial DFU. See
+`firmware/tools/RECOVERY_BUILD.md` for the underlying mechanism.
 
 -----
 
@@ -345,14 +390,20 @@ still doesn't appear:
 - **macOS:** `system_profiler SPUSBDataType` will show what the device
   is actually presenting.
 
-Build fails with `nrfutil: command not found`
+Build fails with `nrfutil: command not found` or `unknown command nrf5sdk-tools`
 
-`pip install --user nrfutil` installs into `~/.local/bin/`, which may
-not be on your `PATH`. Add this to your shell rc file:
+The scripts need the modern nrfutil (v7+) binary on your `PATH`, plus its
+plugins. Confirm the version, then install the plugins:
 
 ```bash
-export PATH="$HOME/.local/bin:$PATH"
+nrfutil --version               # must report 7.x
+nrfutil install nrf5sdk-tools
+nrfutil install device
 ```
+
+If `nrfutil --version` reports 6.x or lower you have the legacy pip
+package; remove it (`pip uninstall nrfutil`) and install the standalone
+binary from Nordic's nRF Util page.
 
 Build fails with `mergehex: command not found`
 
