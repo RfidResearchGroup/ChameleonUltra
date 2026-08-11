@@ -20,7 +20,7 @@
  * Layout:
  *   0xDF000  BL_STAGED_MAGIC  (4 bytes)  = 0xBEEFCAFE
  *   0xDF004  BL size          (4 bytes)
- *   0xDF008  BL binary data   (up to 80KB, ends ~0xEAFFF)
+ *   0xDF008  BL binary data   (up to 48KB, ends ~0xEAFFF)
  *
  * 12 pages (0xDF000–0xEAFFF) are reserved.  Keep in sync with the
  * matching constants in bootloader/src/main.c.
