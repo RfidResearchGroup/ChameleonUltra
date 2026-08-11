@@ -200,7 +200,6 @@ endif
 OPT = -Os -g3
 # Link-time optimization + dead-code stripping to fit the 44KB region.
 OPT += -flto
-CFLAGS  += -ffunction-sections -fdata-sections
 
 # C flags common to all targets
 CFLAGS += $(OPT)
@@ -216,11 +215,19 @@ CFLAGS += -DSOFTDEVICE_PRESENT
 CFLAGS += -DSVC_INTERFACE_CALL_AS_NORMAL_FUNCTION
 CFLAGS += -mcpu=cortex-m4
 CFLAGS += -mthumb -mabi=aapcs
+CFLAGS += -DFLOAT_ABI_HARD
 CFLAGS += -Wall -Werror
 CFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
-# keep every function in a separate section, this allows linker to discard unused ones
+# keep every function/data item in its own section so the linker can discard
+# unused ones (applies to both ultra and lite)
 CFLAGS += -ffunction-sections -fdata-sections -fno-strict-aliasing
 CFLAGS += -fno-builtin -fshort-enums
+# Strip ARM unwind tables (.ARM.exidx / .ARM.extab): unused in a C bootloader
+# and the sections that overflow the 44KB region at 0xFE000. Applies to both
+# ultra and lite via common CFLAGS. NOTE: this only affects objects compiled
+# here; exidx carried by the prebuilt liboberon / libnrf_cc310_bl .a files is
+# dropped via /DISCARD/ in bootloader-stage1.ld.
+CFLAGS += -fno-unwind-tables -fno-asynchronous-unwind-tables
 
 # C++ flags common to all targets
 CXXFLAGS += $(OPT)
