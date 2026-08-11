@@ -88,3 +88,15 @@ jobs:
           generate_release_notes: true
           append_body: true
           files: release-artifacts/*
+
+  start_feature_freeze:
+    name: Start the next PR review cycle
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: create_release
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    uses: ./.github/workflows/pr_review_cycle.yml
+    with:
+      start_feature_freeze: true
