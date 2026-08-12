@@ -273,12 +273,10 @@ static bool crc_on_valid_app_required(void)
 {
     bool ret = true;
     if (NRF_BL_APP_CRC_CHECK_SKIPPED_ON_SYSTEMOFF_RESET &&
-        (nrf_power_resetreas_get() & NRF_POWER_RESETREAS_OFF_MASK))
+        (nrf_power_resetreas_get() & (NRF_POWER_RESETREAS_OFF_MASK
+                                    | NRF_POWER_RESETREAS_NFC_MASK
+                                    | NRF_POWER_RESETREAS_LPCOMP_MASK)))
     {
-        // We need to get wake-up source in the APP, such as button wake-up, so this reson cannot be cleared.
-        // If the reson is cleared here, the developer may need to find a way to pass it to the APP firmware. 
-        // Otherwise,  the developer has to implement other methods to get the wake-up source.
-        // nrf_power_resetreas_clear(NRF_POWER_RESETREAS_OFF_MASK);
         ret = false;
     }
     else if (NRF_BL_APP_CRC_CHECK_SKIPPED_ON_GPREGRET2 &&
@@ -287,13 +285,8 @@ static bool crc_on_valid_app_required(void)
         nrf_power_gpregret2_set(nrf_power_gpregret2_get() & ~BOOTLOADER_DFU_SKIP_CRC);
         ret = false;
     }
-    else
-    {
-    }
-
     return ret;
 }
-
 
 
 static bool boot_validate(boot_validation_t const * p_validation, uint32_t data_addr, uint32_t data_len, bool do_crc)
