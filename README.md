@@ -37,17 +37,6 @@ updates.
   same NFC/RFID research firmware, the same CLI protocol, the same
   ChameleonUltraGUI compatibility.
 
-## Trade-offs
-
-- Signed-DFU CDC transport is removed from the bootloader to fit MSC +
-  GhostFAT into the 44 KB region. After installing this fork’s
-  bootloader, signed `.zip` packages can no longer be pushed via
-  `nrfutil pkg dfu` — use UF2 instead, or use the revert-to-stock UF2
-  to go back to upstream.
-- Firmware updates are unsigned. UF2 is a development-and-research
-  format, not a secure update mechanism. If you need cryptographically
-  verified updates, stay on upstream.
-
 ## Documentation specific to this fork
 
 - **[Installation guide](firmware/tools/UF2_INSTALL.md)** — clone, build, flash to a
