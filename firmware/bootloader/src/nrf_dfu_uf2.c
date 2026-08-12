@@ -112,6 +112,19 @@ void uf2_dfu_complete(void)
     s_dfu_settings.bank_0.image_size = uf2_ghostfat_blocks_written() * 256u;
     s_dfu_settings.bank_0.image_crc  = 0;
 
+    /* UF2 images are unsigned and carry no app CRC, so mark the app as needing
+     * no boot-time validation. Otherwise a stale VALIDATE_CRC left in the
+     * settings by an earlier serial-DFU flash makes app_is_valid() recompute
+     * the app CRC and mismatch on any CRC-required boot (e.g. an NFC/LPCOMP
+     * field wake, or the LF-field-at-sleep soft reset), dropping the device
+     * into DFU instead of the app. Refresh boot_validation_crc too, so the
+     * backup settings page stays consistent (as nrf_dfu_settings_write does). */
+    s_dfu_settings.boot_validation_app.type = NO_VALIDATION;
+    s_dfu_settings.boot_validation_crc = crc32_compute(
+        (const uint8_t *)&s_dfu_settings.boot_validation_softdevice,
+        3u * sizeof(boot_validation_t),
+        NULL);
+
     s_dfu_settings.crc = crc32_compute(
         (uint8_t const *)&s_dfu_settings + 4,
         offsetof(nrf_dfu_settings_t, init_command) - 4,
