@@ -129,11 +129,6 @@ fi
     ../tools/uf2conv.py application.hex --family 0x1B57745F -o ${device_type}-application.uf2
     ../tools/uf2conv.py fullimage.hex --family 0x1B57745F -o ${device_type}-fullimage.uf2
 
-    # Bootloader-only UF2 for the stage-1 -> stage-2 handoff. Contains ONLY
-    # the 0xEB000-0xFE000 BL region, so stage 1 can stage it at 0x80000
-    # without app blocks (from fullimage) clobbering the staging area.
-    ../tools/uf2conv.py bootloader.hex --family 0x1B57745F -o ${device_type}-bootloader.uf2
-
     tmp_dir=$(mktemp -d -t cu_binaries_XXXXXXXXXX)
     cp *.hex "$tmp_dir"
     mv $tmp_dir/application_merged.hex $tmp_dir/application.hex

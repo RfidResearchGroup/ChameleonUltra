@@ -223,13 +223,7 @@ int main(void) {
     }
     init_leds();
 
-    // Must happen before flash protection is applied, since it edits a protected page.
-    // bl_staged_apply_if_present(); // removed
     nrf_bootloader_mbr_addrs_populate();
-
-    /* Check for staged bootloader update written by bl_updater.
-    * Must run BEFORE nrf_bootloader_flash_protect() sets ACL. */
-    // bl_updater_apply_staged_update(); // removed
 
     // ACL flash protection removed for open-source development.
 

@@ -3,18 +3,8 @@
  *
  * Entry points:
  *   bl_updater_run()                          replace BL, reset (CRC check)
- *   bl_updater_run_and_invalidate_app()       replace BL, erase own VT, reset (CRC check)
- *   bl_updater_run_and_invalidate_app_force() same, NO CRC check
- *   bl_updater_stage_and_reset_force()        stage BL for bootloader-side apply, NO CRC check
- *
- * The _stage_ variant exists because the bootloader sets ACL flash
- * protection on its own region before jumping to the app, and that
- * protection persists across soft resets.  Direct flash writes from the
- * app are silently ignored.  The staging approach writes the new BL into
- * the unprotected app region, then resets.  On the next boot the
- * bootloader detects the staged image (before ACL is set), copies a
- * tiny erase+write function to RAM, and applies it there — the only
- * safe way to replace the currently-executing bootloader flash.
+ *   bl_updater_run_and_invalidate_app_force() replace BL, erase own vector
+ *                                             table, reset — NO CRC check
  */
 
 #include "bl_updater.h"
@@ -186,16 +176,6 @@ bl_updater_status_t bl_updater_run(void)
     return BL_UPDATER_OK;
 }
 
-bl_updater_status_t bl_updater_run_and_invalidate_app(void)
-{
-    bl_updater_status_t st = bl_updater_flash_bl(true);
-    if (st != BL_UPDATER_OK) return st;
-    nvmc_page_erase(APP_REGION_START);
-    nrf_delay_ms(50);
-    NVIC_SystemReset();
-    return BL_UPDATER_OK;
-}
-
 bl_updater_status_t bl_updater_run_and_invalidate_app_force(void)
 {
     bl_updater_status_t st = bl_updater_flash_bl(false);
@@ -204,49 +184,4 @@ bl_updater_status_t bl_updater_run_and_invalidate_app_force(void)
     nrf_delay_ms(50);
     NVIC_SystemReset();
     return BL_UPDATER_OK;
-}
-
-
-/* ---- Staged update ---- */
-
-bl_updater_status_t bl_updater_stage_and_reset_force(void)
-{
-    if (EMBEDDED_BOOTLOADER_BIN_SIZE == 0u)
-        return BL_UPDATER_ERR_EMPTY;
-    if (EMBEDDED_BOOTLOADER_BIN_SIZE > BL_REGION_BYTES)
-        return BL_UPDATER_ERR_TOO_LARGE;
-
-    if (nrf_sdh_is_enabled()) {
-        ret_code_t err = nrf_sdh_disable_request();
-        if (err != NRF_SUCCESS) return BL_UPDATER_ERR_SD_DISABLE;
-        while (nrf_sdh_is_enabled()) {}
-    }
-
-    __disable_irq();
-
-    /* Erase the staging area (12 pages from BL_STAGED_BASE). */
-    for (uint32_t i = 0; i < BL_STAGED_PAGES; i++)
-        nvmc_page_erase(BL_STAGED_BASE + i * BL_STAGED_PAGE_SZ);
-
-    /* Write header: size first so a torn write of the magic is detectable. */
-    const uint32_t bl_size = EMBEDDED_BOOTLOADER_BIN_SIZE;
-    nvmc_write_bytes(BL_STAGED_SIZE_ADDR,
-                     (const uint8_t *)&bl_size,
-                     sizeof(uint32_t));
-    nvmc_write_bytes(BL_STAGED_DATA_ADDR,
-                     EMBEDDED_BOOTLOADER_BIN,
-                     EMBEDDED_BOOTLOADER_BIN_SIZE);
-    /* Write magic last — bootloader treats this as the commit point. */
-    static const uint32_t magic = BL_STAGED_MAGIC_VAL;
-    nvmc_write_bytes(BL_STAGED_MAGIC_ADDR,
-                     (const uint8_t *)&magic,
-                     sizeof(uint32_t));
-
-    /* Self-destruct: erase own vector table so whichever bootloader
-     * runs next (UF2 or stock) finds no valid app. */
-    nvmc_page_erase(APP_REGION_START);
-
-    nrf_delay_ms(50);
-    NVIC_SystemReset();
-    return BL_UPDATER_OK; /* unreached */
 }
