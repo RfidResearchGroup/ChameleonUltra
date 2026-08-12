@@ -1,9 +1,11 @@
 /*
  * uf2_ghostfat.h — virtual FAT12 disk that captures incoming UF2 blocks.
  *
- * MIT License. Original implementation; design pattern inspired by
- * adafruit/tinyuf2's ghostfat layer.
+ * SPDX-License-Identifier: MIT
+ * Ghostfat pattern derived from adafruit/tinyuf2, Copyright (c) 2020 Ha Thach.
+ * Copyright (c) 2026 Niel <sec1.dk>. See firmware/bootloader/LICENSE.MIT.
  */
+
 #ifndef UF2_GHOSTFAT_H__
 #define UF2_GHOSTFAT_H__
 
