@@ -9152,14 +9152,13 @@ def _print_14a_sniff_summary(frames):
         print(f"   the 4-byte NT. One clean 32-bit NT in the frame right after an AUTH")
         print(f"   is all that's needed to crack.")
 
-
 def _get_capture():
-    """Return last capture buffer or print error."""
+    """Return last capture buffer, or None if nothing has been captured yet."""
     import chameleon_cli_unit as _m
-    if not _m._last_capture:
+    buf = getattr(_m, '_last_capture', None)
+    if not buf:
         return None
-    return _m._last_capture
-
+    return buf
 
 @data.command('hexsamples')
 class DataHexsamples(BaseCLIUnit):
