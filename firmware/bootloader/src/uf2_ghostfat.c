@@ -5,8 +5,11 @@
  *   - INFO_UF2.TXT: always present, device info + dd recommendations
  *   - FAIL.TXT:     appears after a UF2 block was rejected
  *
- * MIT License.
+ * SPDX-License-Identifier: MIT
+ * Ghostfat pattern derived from adafruit/tinyuf2, Copyright (c) 2020 Ha Thach.
+ * Copyright (c) 2026 Niel <sec1.dk>. See firmware/bootloader/LICENSE.MIT.
  */
+
 #include "uf2_ghostfat.h"
 #include "uf2.h"
 #include "uf2_status.h"
