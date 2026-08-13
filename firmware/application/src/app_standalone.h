@@ -219,6 +219,9 @@ standalone_rc_t     app_standalone_clear_result(void);
 /* Manual trigger - host-side equivalent of BOTH_SHORT. */
 standalone_rc_t     app_standalone_trigger(void);
 standalone_rc_t     app_standalone_disarm(void);
+/* Non-blocking disarm for the host command path — defers the state change and
+ * any blocking on_exit flash save to the next app_standalone_tick(). */
+standalone_rc_t     app_standalone_request_disarm(void);
 
 #ifdef __cplusplus
 }

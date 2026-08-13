@@ -218,7 +218,10 @@ data_frame_tx_t *cmd_handler_standalone_trigger(uint16_t cmd, uint16_t status,
 data_frame_tx_t *cmd_handler_standalone_disarm(uint16_t cmd, uint16_t status,
                                                uint16_t length, uint8_t *data) {
     (void)status; (void)length; (void)data;
-    standalone_rc_t rc = app_standalone_disarm();
+    /* Defer the actual disarm: relay's on_exit does a synchronous FDS save that
+     * can block for seconds on flash GC. Returning now lets the dispatcher send
+     * this ack before that save runs (on the next standalone tick). */
+    standalone_rc_t rc = app_standalone_request_disarm();
     return data_frame_make(cmd, rc_to_status(rc), 0, NULL);
 }
 

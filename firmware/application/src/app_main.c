@@ -82,6 +82,14 @@ static uint32_t m_gpregret_val;
 #define GPREGRET_CLEAR_VALUE_DEFAULT (0xFFFFFFFFUL)
 #define RESET_ON_LF_FIELD_EXISTS_Msk (1UL)
 
+/* Bootloader "skip app CRC on next boot" magic written to GPREGRET2, mirrors
+ * BOOTLOADER_DFU_SKIP_CRC in nrf52_sdk/.../nrf_bootloader_info.h (0xA8 | 0x01).
+ * Set before entering System OFF so an NFC/LPCOMP field wake skips the app CRC
+ * check and boots the app instead of dropping to composite DFU. The bootloader
+ * consumes and clears this magic before the app runs. TEST helper — the
+ * nrf_bootloader.c crc_on_valid_app_required() change is the permanent fix. */
+#define BOOTLOADER_DFU_SKIP_CRC_MAGIC (0xA8u | 0x01u)
+
 extern bool g_is_low_battery_shutdown;
 
 
@@ -483,6 +491,12 @@ static void system_off_enter(void) {
 
     // Last call, gate is closing
     NRF_LOG_FLUSH();
+
+    // TEST: ask the bootloader to skip the app CRC check on the next wake, so an
+    // NFC (HF) / LPCOMP field wake from System OFF boots the app instead of
+    // dropping to composite DFU. Only set on this System-OFF path (no LF flag
+    // here, so no collision with RESET_ON_LF_FIELD_EXISTS_Msk on GPREGRET2 bit 0).
+    sd_power_gpregret_set(1, BOOTLOADER_DFU_SKIP_CRC_MAGIC);
 
     // Go to system-off mode (this function will not return; wakeup will cause a reset).
     // Note that if you insert jlink or drive a Debug, you may report an error when entering the low power consumption.

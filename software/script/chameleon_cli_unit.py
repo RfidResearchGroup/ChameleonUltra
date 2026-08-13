@@ -7396,6 +7396,7 @@ class HWDFU(DeviceRequiredUnit):
         # let time for comm thread to send dfu cmd and close port
         time.sleep(0.1)
 
+
 @hw_settings.command("animation")
 class HWSettingsAnimation(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -9123,13 +9124,14 @@ def _print_14a_sniff_summary(frames):
         print(f"   the 4-byte NT. One clean 32-bit NT in the frame right after an AUTH")
         print(f"   is all that's needed to crack.")
 
+
 def _get_capture():
-    """Return last capture buffer, or None if nothing has been captured yet."""
+    """Return last capture buffer or print error."""
     import chameleon_cli_unit as _m
-    buf = getattr(_m, '_last_capture', None)
-    if not buf:
+    if not _m._last_capture:
         return None
-    return buf
+    return _m._last_capture
+
 
 @data.command('hexsamples')
 class DataHexsamples(BaseCLIUnit):
@@ -11954,11 +11956,21 @@ class StandaloneDisarm(DeviceRequiredUnit):
         try:
             resp = self.cmd.standalone_disarm()
             if resp.status == Status.SUCCESS:
-                print(color_string((CG, "disarmed — results saved")))
+                print(color_string((CG, "disarmed — results saving")))
             else:
                 print(color_string((CY, f"already disarmed or error: status={resp.status}")))
         except Exception as e:
-            print(color_string((CR, f"disarm failed (old firmware?): {e}")))
+            # The disarm may have been accepted but the ack came back slow — a
+            # mode's on_exit can do a multi-second blocking FDS save. Confirm the
+            # actual device state before reporting failure.
+            try:
+                from chameleon_enum import StandaloneState
+                if self.cmd.standalone_get_mode()[0] == StandaloneState.DISARMED:
+                    print(color_string((CG, "disarmed (ack was slow — confirmed via state)")))
+                    return
+            except Exception:
+                pass
+            print(color_string((CR, f"disarm failed: {e}")))
             print(color_string((CY, "Use the both-button chord on the device to disarm manually.")))
 
 

@@ -78,6 +78,12 @@ static struct {
     bool                initialised;
 } m_ctx;
 
+/* Set by app_standalone_request_disarm() (host command path). The actual
+ * disarm — including a mode's on_exit, which on relay does a blocking FDS
+ * result-save that can take seconds on flash GC — runs in app_standalone_tick()
+ * so the command ack is sent before that flash write, not after it. */
+static volatile bool m_disarm_pending = false;
+
 /* -------------------------------------------------------------------------
  * Mode registry
  * ------------------------------------------------------------------------- */
@@ -431,6 +437,16 @@ bool app_standalone_on_button(standalone_button_evt_t evt) {
 
 void app_standalone_tick(uint32_t now_ticks) {
     if (!m_ctx.initialised) return;
+
+    /* Deferred host-requested disarm: run it here (main-loop context) so a
+     * mode's on_exit — e.g. relay's multi-second blocking FDS save — happens
+     * AFTER the command ack has already been transmitted, not before it. */
+    if (m_disarm_pending) {
+        m_disarm_pending = false;
+        if (m_ctx.state != STANDALONE_STATE_DISARMED) transition_disarm();
+        return;
+    }
+
     if (m_ctx.state == STANDALONE_STATE_DISARMED) return;
 
     /* Cheap throttle: use raw ticks deltas. The framework only needs
@@ -505,5 +521,14 @@ standalone_rc_t app_standalone_trigger(void) {
 standalone_rc_t app_standalone_disarm(void) {
     if (m_ctx.state == STANDALONE_STATE_DISARMED) return STANDALONE_RC_OK;
     transition_disarm();
+    return STANDALONE_RC_OK;
+}
+
+/* Non-blocking disarm for the host command path. Flags the disarm and returns
+ * immediately; the state change and any blocking on_exit flash save run on the
+ * next app_standalone_tick(), so the caller can ack without waiting on FDS GC. */
+standalone_rc_t app_standalone_request_disarm(void) {
+    if (m_ctx.state == STANDALONE_STATE_DISARMED) return STANDALONE_RC_OK;
+    m_disarm_pending = true;
     return STANDALONE_RC_OK;
 }
