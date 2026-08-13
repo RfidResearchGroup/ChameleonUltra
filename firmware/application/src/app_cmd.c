@@ -777,20 +777,45 @@ static data_frame_tx_t *cmd_processor_em410x_scan(uint16_t cmd, uint16_t status,
 
 static data_frame_tx_t *cmd_processor_lf_search(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     (void)status; (void)length; (void)data;
+    /* Response is always [tag_type(2, big-endian), id...]. The two reader
+     * families differ: em410x/fdxb write the tag_type into the buffer
+     * themselves, but hidprox/ioprox/pac/viking/jablotron write only the raw id
+     * (their individual scan commands imply the type). For the latter we scan
+     * into buf+2 and prepend the tag_type here so the client can identify it. */
     uint8_t  buf[2 + LF_IOPROX_TAG_ID_SIZE] = {0x00};   /* ioprox (16) is the largest id */
     uint16_t out_len = 0;
     uint8_t  st = STATUS_LF_TAG_NO_FOUND;
 
     set_scan_tag_timeout(LF_SEARCH_PER_PROTO_MS);
 
+    /* --- readers that already prefix [tag_type, id] --- */
 #if defined(PROJECT_CHAMELEON_ULTRA)
-    if (st != STATUS_LF_TAG_OK && scan_fdxb(buf) == STATUS_LF_TAG_OK)        { out_len = 2 + FDXB_DATA_SIZE;           st = STATUS_LF_TAG_OK; }
+    if (st != STATUS_LF_TAG_OK && scan_fdxb(buf) == STATUS_LF_TAG_OK) {
+        out_len = 2 + FDXB_DATA_SIZE; st = STATUS_LF_TAG_OK;
+    }
 #endif
-    if (st != STATUS_LF_TAG_OK && scan_hidprox(buf, 0) == STATUS_LF_TAG_OK)  { out_len = 2 + LF_HIDPROX_TAG_ID_SIZE;   st = STATUS_LF_TAG_OK; }
-    if (st != STATUS_LF_TAG_OK && scan_ioprox(buf, 0) == STATUS_LF_TAG_OK)   { out_len = 2 + LF_IOPROX_TAG_ID_SIZE;    st = STATUS_LF_TAG_OK; }
-    if (st != STATUS_LF_TAG_OK && scan_pac(buf) == STATUS_LF_TAG_OK)         { out_len = 2 + LF_PAC_TAG_ID_SIZE;       st = STATUS_LF_TAG_OK; }
-    if (st != STATUS_LF_TAG_OK && scan_jablotron(buf) == STATUS_LF_TAG_OK)   { out_len = 2 + LF_JABLOTRON_TAG_ID_SIZE; st = STATUS_LF_TAG_OK; }
-    if (st != STATUS_LF_TAG_OK && scan_viking(buf) == STATUS_LF_TAG_OK)      { out_len = 2 + LF_VIKING_TAG_ID_SIZE;    st = STATUS_LF_TAG_OK; }
+    /* --- readers that write only the raw id: scan into buf+2, prepend type --- */
+    if (st != STATUS_LF_TAG_OK && scan_hidprox(buf + 2, 0) == STATUS_LF_TAG_OK) {
+        buf[0] = (uint8_t)(TAG_TYPE_HID_PROX >> 8); buf[1] = (uint8_t)TAG_TYPE_HID_PROX;
+        out_len = 2 + LF_HIDPROX_TAG_ID_SIZE; st = STATUS_LF_TAG_OK;
+    }
+    if (st != STATUS_LF_TAG_OK && scan_ioprox(buf + 2, 0) == STATUS_LF_TAG_OK) {
+        buf[0] = (uint8_t)(TAG_TYPE_IOPROX >> 8); buf[1] = (uint8_t)TAG_TYPE_IOPROX;
+        out_len = 2 + LF_IOPROX_TAG_ID_SIZE; st = STATUS_LF_TAG_OK;
+    }
+    if (st != STATUS_LF_TAG_OK && scan_pac(buf + 2) == STATUS_LF_TAG_OK) {
+        buf[0] = (uint8_t)(TAG_TYPE_PAC >> 8); buf[1] = (uint8_t)TAG_TYPE_PAC;
+        out_len = 2 + LF_PAC_TAG_ID_SIZE; st = STATUS_LF_TAG_OK;
+    }
+    if (st != STATUS_LF_TAG_OK && scan_jablotron(buf + 2) == STATUS_LF_TAG_OK) {
+        buf[0] = (uint8_t)(TAG_TYPE_JABLOTRON >> 8); buf[1] = (uint8_t)TAG_TYPE_JABLOTRON;
+        out_len = 2 + LF_JABLOTRON_TAG_ID_SIZE; st = STATUS_LF_TAG_OK;
+    }
+    if (st != STATUS_LF_TAG_OK && scan_viking(buf + 2) == STATUS_LF_TAG_OK) {
+        buf[0] = (uint8_t)(TAG_TYPE_VIKING >> 8); buf[1] = (uint8_t)TAG_TYPE_VIKING;
+        out_len = 2 + LF_VIKING_TAG_ID_SIZE; st = STATUS_LF_TAG_OK;
+    }
+    /* em410x reader prefixes [tag_type, id] itself; EM410x last (loosest match). */
     if (st != STATUS_LF_TAG_OK && scan_em410x(buf) == STATUS_LF_TAG_OK) {
         tag_specific_type_t tt = (buf[0] << 8) | buf[1];
         out_len = 2 + ((tt == TAG_TYPE_EM410X_ELECTRA) ? LF_EM410X_ELECTRA_TAG_ID_SIZE : LF_EM410X_TAG_ID_SIZE);

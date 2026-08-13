@@ -6080,7 +6080,8 @@ class LFSearch(ReaderRequiredUnit):
     _TYPE_NAMES = {
         100: "EM410X", 101: "EM410X_16", 102: "EM410X_32", 103: "EM410X_64",
         104: "EM410X_ELECTRA", 105: "FDX-B", 150: "PAC/Stanley",
-        170: "Viking", 180: "Jablotron", 310: "IDTECK",
+        170: "Viking", 180: "Jablotron", 200: "HID Prox", 201: "ioProx",
+        310: "IDTECK",
     }
 
     def args_parser(self) -> ArgumentParserNoExit:
