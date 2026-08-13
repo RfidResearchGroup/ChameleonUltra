@@ -206,5 +206,6 @@
 #define DATA_CMD_EM4X05_SCAN                    (3030)
 #define DATA_CMD_EM4X05_READSNIFF               (3032)
 #define DATA_CMD_LF_SNIFF                       (3031)
+#define DATA_CMD_LF_SEARCH                      (3033)  // PM3-style: sweep all LF decoders, first hit
 
 #endif

@@ -682,6 +682,61 @@ static data_frame_tx_t *cmd_processor_em410x_scan(uint16_t cmd, uint16_t status,
     return data_frame_make(cmd, STATUS_LF_TAG_OK, 2 + id_size, card_buffer);
 }
 
+/* PM3-style 'lf search': sweep every supported LF decoder in specificity order
+ * and return the first hit. Response is always [tag_type(2, big-endian), id...].
+ * The two reader families differ: em410x writes the tag_type into the buffer
+ * itself, while hidprox/ioprox/pac/viking/jablotron write only the raw id (their
+ * individual scan commands imply the type). For the latter we scan into buf+2
+ * and prepend the tag_type here. EM410x is tried last because its ASK/Manchester
+ * demod is the loosest and most likely to match another tag's edges. A shorter
+ * per-protocol timeout keeps the whole sweep interactive. */
+#define LF_SEARCH_PER_PROTO_MS      180u
+#define LF_SEARCH_DEFAULT_MS        500u
+
+static data_frame_tx_t *cmd_processor_lf_search(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    (void)status; (void)length; (void)data;
+    uint8_t  buf[2 + LF_IOPROX_TAG_ID_SIZE] = {0x00};   /* ioprox (16) is the largest id */
+    uint16_t out_len = 0;
+    uint8_t  st = STATUS_LF_TAG_NO_FOUND;
+
+    set_scan_tag_timeout(LF_SEARCH_PER_PROTO_MS);
+
+    /* readers that write only the raw id: scan into buf+2, prepend the type */
+    if (st != STATUS_LF_TAG_OK && scan_hidprox(buf + 2, 0) == STATUS_LF_TAG_OK) {
+        buf[0] = (uint8_t)(TAG_TYPE_HID_PROX >> 8); buf[1] = (uint8_t)TAG_TYPE_HID_PROX;
+        out_len = 2 + LF_HIDPROX_TAG_ID_SIZE; st = STATUS_LF_TAG_OK;
+    }
+    if (st != STATUS_LF_TAG_OK && scan_ioprox(buf + 2, 0) == STATUS_LF_TAG_OK) {
+        buf[0] = (uint8_t)(TAG_TYPE_IOPROX >> 8); buf[1] = (uint8_t)TAG_TYPE_IOPROX;
+        out_len = 2 + LF_IOPROX_TAG_ID_SIZE; st = STATUS_LF_TAG_OK;
+    }
+    if (st != STATUS_LF_TAG_OK && scan_pac(buf + 2) == STATUS_LF_TAG_OK) {
+        buf[0] = (uint8_t)(TAG_TYPE_PAC >> 8); buf[1] = (uint8_t)TAG_TYPE_PAC;
+        out_len = 2 + LF_PAC_TAG_ID_SIZE; st = STATUS_LF_TAG_OK;
+    }
+    if (st != STATUS_LF_TAG_OK && scan_jablotron(buf + 2) == STATUS_LF_TAG_OK) {
+        buf[0] = (uint8_t)(TAG_TYPE_JABLOTRON >> 8); buf[1] = (uint8_t)TAG_TYPE_JABLOTRON;
+        out_len = 2 + LF_JABLOTRON_TAG_ID_SIZE; st = STATUS_LF_TAG_OK;
+    }
+    if (st != STATUS_LF_TAG_OK && scan_viking(buf + 2) == STATUS_LF_TAG_OK) {
+        buf[0] = (uint8_t)(TAG_TYPE_VIKING >> 8); buf[1] = (uint8_t)TAG_TYPE_VIKING;
+        out_len = 2 + LF_VIKING_TAG_ID_SIZE; st = STATUS_LF_TAG_OK;
+    }
+    /* em410x reader prefixes [tag_type, id] itself */
+    if (st != STATUS_LF_TAG_OK && scan_em410x(buf) == STATUS_LF_TAG_OK) {
+        tag_specific_type_t tt = (buf[0] << 8) | buf[1];
+        out_len = 2 + ((tt == TAG_TYPE_EM410X_ELECTRA) ? LF_EM410X_ELECTRA_TAG_ID_SIZE : LF_EM410X_TAG_ID_SIZE);
+        st = STATUS_LF_TAG_OK;
+    }
+
+    set_scan_tag_timeout(LF_SEARCH_DEFAULT_MS);
+
+    if (st != STATUS_LF_TAG_OK) {
+        return data_frame_make(cmd, STATUS_LF_TAG_NO_FOUND, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, out_len, buf);
+}
+
 static data_frame_tx_t *cmd_processor_em410x_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     typedef struct {
         uint8_t id[5];
@@ -3118,6 +3173,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_CHECK_KEYS_ON_BLOCK,      before_hf_reader_run,        cmd_processor_mf1_check_keys_on_block,       after_hf_reader_run    },
 
     {    DATA_CMD_EM410X_SCAN,                  before_reader_run,           cmd_processor_em410x_scan,                   NULL                   },
+    {    DATA_CMD_LF_SEARCH,                    before_reader_run,           cmd_processor_lf_search,                     NULL                   },
     {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_em410x_write_to_t55xx,         NULL                   },
     {    DATA_CMD_EM410X_ELECTRA_WRITE_TO_T55XX, before_reader_run,           cmd_processor_em410x_electra_write_to_t55xx, NULL                   },
     {    DATA_CMD_HIDPROX_SCAN,                 before_reader_run,           cmd_processor_hidprox_scan,                  NULL                   },
