@@ -7396,35 +7396,6 @@ class HWDFU(DeviceRequiredUnit):
         # let time for comm thread to send dfu cmd and close port
         time.sleep(0.1)
 
-
-@hw.command("update_bl")
-class HWUpdateBL(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit:
-        parser = ArgumentParserNoExit()
-        parser.description = ("Flash the embedded bootloader to the device and reset. "
-                              "The application writes the bootloader region directly "
-                              "(bl_updater). This carries a small brick risk during the "
-                              "erase/write window — keep SWD recovery available.")
-        parser.add_argument("-y", "--yes", action="store_true",
-                            help="skip the confirmation prompt")
-        return parser
-
-    def on_exec(self, args: argparse.Namespace):
-        if not args.yes:
-            print(" ! This rewrites the bootloader region and resets the device.")
-            print(" ! If it fails mid-write, recovery needs SWD.")
-            confirm = input(" Proceed? [y/N] ").strip().lower()
-            if confirm not in ("y", "yes"):
-                print(" - Aborted.")
-                return
-        print("Flashing bootloader (validating CRC, then write + reset)...")
-        self.cmd.update_bl()
-        # The device validates, writes the BL, and resets — USB drops here.
-        print(" - Command sent. Device is rewriting its bootloader and rebooting.")
-        print(" - If it does not re-enumerate, use SWD recovery.")
-        time.sleep(0.1)
-
-
 @hw_settings.command("animation")
 class HWSettingsAnimation(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
