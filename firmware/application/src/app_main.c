@@ -1145,6 +1145,44 @@ static void ble_passkey_init(void) {
 
 /**@brief Application main function.
  */
+/* Proactive FDS garbage collection during idle.
+ *
+ * FDS writes (standalone state/result/config, settings, tag nicks) go through
+ * fds_write_sync -> fds_record_update, which marks the previous record dirty.
+ * Dirty records accumulate until a write hits FDS_ERR_NO_SPACE_IN_FLASH, and
+ * fds_write_sync then runs a full fds_gc_sync(). That GC busy-waits for seconds
+ * and starves USB servicing — a problem if it lands during a host command
+ * (e.g. standalone disarm's result save, which dropped the CDC link). Running
+ * GC here, only when the device is genuinely idle, keeps the dirty count low so
+ * the on-demand GC rarely (if ever) triggers at a bad moment. */
+#define FDS_IDLE_GC_DIRTY_THRESHOLD  48u      /* GC once this many dirty records pile up */
+#define FDS_IDLE_GC_CHECK_MS         30000u   /* re-check at most this often             */
+
+extern volatile bool g_is_ble_connected;
+
+static void fds_idle_gc_maybe(void) {
+    static uint32_t last_check = 0;
+    uint32_t now = app_timer_cnt_get();
+    if (app_timer_cnt_diff_compute(now, last_check) < APP_TIMER_TICKS(FDS_IDLE_GC_CHECK_MS)) {
+        return;
+    }
+    last_check = now;
+
+    /* Only when truly idle: an armed standalone mode or an active BLE link means
+     * a multi-second GC stall could disrupt something in flight. A rare, brief
+     * stall on a USB-connected-but-idle device is acceptable, and far better
+     * than a GC landing mid-command. */
+    if (app_standalone_get_state() != STANDALONE_STATE_DISARMED) return;
+    if (g_is_ble_connected) return;
+
+    fds_stat_t stat;
+    if (fds_stat(&stat) != NRF_SUCCESS) return;
+    if (stat.dirty_records < FDS_IDLE_GC_DIRTY_THRESHOLD) return;
+
+    NRF_LOG_INFO("fds: idle GC (dirty=%u valid=%u)", stat.dirty_records, stat.valid_records);
+    fds_gc_sync();
+}
+
 int main(void) {
 #ifdef RECOVERY_MODE
     /* Revert-to-stock build: as the VERY FIRST thing main() does (before any
@@ -1206,6 +1244,10 @@ int main(void) {
         button_press_process();
         // Standalone subsystem tick (cheap; framework throttles internally)
         app_standalone_tick(app_timer_cnt_get());
+
+        // Proactive FDS GC while idle — keeps dirty records low so an on-demand
+        // GC never has to run mid-command (see fds_idle_gc_maybe).
+        fds_idle_gc_maybe();
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
         // Field generator rainbow animation

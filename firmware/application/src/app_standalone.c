@@ -131,6 +131,16 @@ static const standalone_mode_iface_t *active_mode(void) {
  * ------------------------------------------------------------------------- */
 
 static standalone_rc_t persist_state_save(void) {
+    /* Skip redundant writes: re-persisting the same mode+flags only churns a
+     * fresh dirty record for no benefit (each fds_update marks the old one
+     * dirty). Only write when the persisted state actually changed. */
+    static bool    last_valid = false;
+    static uint8_t last_mode  = 0;
+    static uint8_t last_flags = 0;
+    if (last_valid && last_mode == (uint8_t)m_ctx.mode && last_flags == m_ctx.flags) {
+        return STANDALONE_RC_OK;
+    }
+
     standalone_persist_t rec __attribute__((aligned(4))) = {
         .version  = STANDALONE_PERSIST_VERSION,
         .mode     = (uint8_t)m_ctx.mode,
@@ -144,6 +154,9 @@ static standalone_rc_t persist_state_save(void) {
         NRF_LOG_WARNING("standalone: fds_write_sync(state) failed");
         return STANDALONE_RC_INTERNAL;
     }
+    last_valid = true;
+    last_mode  = (uint8_t)m_ctx.mode;
+    last_flags = m_ctx.flags;
     return STANDALONE_RC_OK;
 }
 
