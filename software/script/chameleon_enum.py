@@ -197,6 +197,7 @@ class Command(enum.IntEnum):
     EM4X05_SCAN = 3030
     EM4X05_READSNIFF = 3032
     LF_SNIFF = 3031
+    LF_SEARCH = 3033
 
 
 @enum.unique

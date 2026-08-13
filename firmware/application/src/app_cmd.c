@@ -7,7 +7,6 @@
 #include "syssleep.h"
 #include "hex_utils.h"
 #include "data_cmd.h"
-#include "bl_updater.h"
 #include "app_cmd.h"
 #include "app_status.h"
 #include "tag_persistence.h"
@@ -147,19 +146,6 @@ static data_frame_tx_t *cmd_processor_enter_bootloader(uint16_t cmd, uint16_t st
     // Never into here...
     while (1) __NOP();
     // For the compiler to be happy...
-    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
-}
-
-static data_frame_tx_t *cmd_processor_update_bl(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    // Validate the embedded bootloader image (size + CRC32) before touching
-    // flash. If valid, bl_updater_run() disables the SoftDevice, writes the
-    // BL region (0xF3000), sets UICR, and resets — it does not return.
-    bl_updater_status_t st = bl_updater_validate();
-    if (st != BL_UPDATER_OK) {
-        uint8_t code = (uint8_t)st;
-        return data_frame_make(cmd, STATUS_PAR_ERR, 1, &code);
-    }
-    bl_updater_run();
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
@@ -777,6 +763,46 @@ static data_frame_tx_t *cmd_processor_em410x_scan(uint16_t cmd, uint16_t status,
     uint16_t id_size = (tag_type == TAG_TYPE_EM410X_ELECTRA) ? LF_EM410X_ELECTRA_TAG_ID_SIZE : LF_EM410X_TAG_ID_SIZE;
 
     return data_frame_make(cmd, STATUS_LF_TAG_OK, 2 + id_size, card_buffer);
+}
+
+/* PM3-style 'lf search': sweep every supported LF decoder in specificity order
+ * and return the first hit. Each scan_*() fills the buffer as
+ * [tag_type_hi, tag_type_lo, id...] — the same shape as the individual scan
+ * commands — so the client dispatches formatting by tag_type. EM410x is tried
+ * last because its ASK/Manchester demod is the loosest and most likely to
+ * match another tag's edges or noise. Uses a shorter per-protocol timeout than
+ * a single-protocol scan so the whole sweep stays interactive. */
+#define LF_SEARCH_PER_PROTO_MS      180u
+#define LF_SEARCH_DEFAULT_MS        500u   /* module default restored after the sweep */
+
+static data_frame_tx_t *cmd_processor_lf_search(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    (void)status; (void)length; (void)data;
+    uint8_t  buf[2 + LF_IOPROX_TAG_ID_SIZE] = {0x00};   /* ioprox (16) is the largest id */
+    uint16_t out_len = 0;
+    uint8_t  st = STATUS_LF_TAG_NO_FOUND;
+
+    set_scan_tag_timeout(LF_SEARCH_PER_PROTO_MS);
+
+#if defined(PROJECT_CHAMELEON_ULTRA)
+    if (st != STATUS_LF_TAG_OK && scan_fdxb(buf) == STATUS_LF_TAG_OK)        { out_len = 2 + FDXB_DATA_SIZE;           st = STATUS_LF_TAG_OK; }
+#endif
+    if (st != STATUS_LF_TAG_OK && scan_hidprox(buf, 0) == STATUS_LF_TAG_OK)  { out_len = 2 + LF_HIDPROX_TAG_ID_SIZE;   st = STATUS_LF_TAG_OK; }
+    if (st != STATUS_LF_TAG_OK && scan_ioprox(buf, 0) == STATUS_LF_TAG_OK)   { out_len = 2 + LF_IOPROX_TAG_ID_SIZE;    st = STATUS_LF_TAG_OK; }
+    if (st != STATUS_LF_TAG_OK && scan_pac(buf) == STATUS_LF_TAG_OK)         { out_len = 2 + LF_PAC_TAG_ID_SIZE;       st = STATUS_LF_TAG_OK; }
+    if (st != STATUS_LF_TAG_OK && scan_jablotron(buf) == STATUS_LF_TAG_OK)   { out_len = 2 + LF_JABLOTRON_TAG_ID_SIZE; st = STATUS_LF_TAG_OK; }
+    if (st != STATUS_LF_TAG_OK && scan_viking(buf) == STATUS_LF_TAG_OK)      { out_len = 2 + LF_VIKING_TAG_ID_SIZE;    st = STATUS_LF_TAG_OK; }
+    if (st != STATUS_LF_TAG_OK && scan_em410x(buf) == STATUS_LF_TAG_OK) {
+        tag_specific_type_t tt = (buf[0] << 8) | buf[1];
+        out_len = 2 + ((tt == TAG_TYPE_EM410X_ELECTRA) ? LF_EM410X_ELECTRA_TAG_ID_SIZE : LF_EM410X_TAG_ID_SIZE);
+        st = STATUS_LF_TAG_OK;
+    }
+
+    set_scan_tag_timeout(LF_SEARCH_DEFAULT_MS);
+
+    if (st != STATUS_LF_TAG_OK) {
+        return data_frame_make(cmd, STATUS_LF_TAG_NO_FOUND, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, out_len, buf);
 }
 
 static data_frame_tx_t *cmd_processor_em410x_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -3451,7 +3477,6 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_SLOT_TAG_NICK,            NULL,                        cmd_processor_get_slot_tag_nick,             NULL                   },
     {    DATA_CMD_SLOT_DATA_CONFIG_SAVE,        NULL,                        cmd_processor_slot_data_config_save,         NULL                   },
     {    DATA_CMD_ENTER_BOOTLOADER,             NULL,                        cmd_processor_enter_bootloader,              NULL                   },
-    {    DATA_CMD_UPDATE_BL,                    NULL,                        cmd_processor_update_bl,                     NULL                   },
     {    DATA_CMD_GET_DEVICE_CHIP_ID,           NULL,                        cmd_processor_get_device_chip_id,            NULL                   },
     {    DATA_CMD_GET_DEVICE_ADDRESS,           NULL,                        cmd_processor_get_device_address,            NULL                   },
     {    DATA_CMD_SAVE_SETTINGS,                NULL,                        cmd_processor_save_settings,                 NULL                   },
@@ -3505,6 +3530,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_CHECK_KEYS_ON_BLOCK,      before_hf_reader_run,        cmd_processor_mf1_check_keys_on_block,       after_hf_reader_run    },
 
     {    DATA_CMD_EM410X_SCAN,                  before_reader_run,           cmd_processor_em410x_scan,                   NULL                   },
+    {    DATA_CMD_LF_SEARCH,                    before_reader_run,           cmd_processor_lf_search,                     NULL                   },
     {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_em410x_write_to_t55xx,         NULL                   },
     {    DATA_CMD_EM410X_ELECTRA_WRITE_TO_T55XX, before_reader_run,           cmd_processor_em410x_electra_write_to_t55xx, NULL                   },
     {    DATA_CMD_HIDPROX_SCAN,                 before_reader_run,           cmd_processor_hidprox_scan,                  NULL                   },

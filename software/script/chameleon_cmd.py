@@ -622,6 +622,25 @@ class ChameleonCMD:
         data = struct.pack('!bbbb', data['bcc'], data['cl2'], data['cl3'], data['rats'])
         return self.device.send_cmd_sync(Command.HF14A_SET_CONFIG, data)
 
+    @expect_response([Status.LF_TAG_OK, Status.LF_TAG_NO_FOUND])
+    def lf_search(self):
+        """
+        PM3-style LF search: sweep every supported LF decoder on the device and
+        return the first hit as (TagSpecificType, id_bytes), or (None, None) if
+        nothing was found.
+        """
+        resp = self.device.send_cmd_sync(Command.LF_SEARCH)
+        if resp.status == Status.LF_TAG_OK:
+            tag_type = struct.unpack('!H', resp.data[:2])[0]
+            try:
+                tt = TagSpecificType(tag_type)
+            except ValueError:
+                tt = tag_type   # not in the client enum (e.g. FDX-B) — keep raw value
+            resp.parsed = (tt, resp.data[2:])
+        else:
+            resp.parsed = (None, None)
+        return resp
+
     @expect_response(Status.LF_TAG_OK)
     def em410x_scan(self):
         """
