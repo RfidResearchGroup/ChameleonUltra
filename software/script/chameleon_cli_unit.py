@@ -5781,6 +5781,21 @@ class HFMFUEDetect(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
             print(f"{actual_index:3d}: {color_string((CY, password.upper()))}")
 
 
+@lf.command("search")
+class LFSearch(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Search for any supported LF tag (tries every decoder, PM3-style) and print the first match"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        tag_type, id_bytes = self.cmd.lf_search()
+        if tag_type is None:
+            print("No known LF tag found")
+            return
+        print(f"{tag_type}: {color_string((CG, id_bytes.hex()))}")
+
+
 @lf_em_410x.command("read")
 class LFEMRead(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
