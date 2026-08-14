@@ -52,7 +52,17 @@ static void nvmc_page_erase(uint32_t page_addr)
     nvmc_wait_ready();
     NRF_NVMC->CONFIG = (NVMC_CONFIG_WEN_Een << NVMC_CONFIG_WEN_Pos);
     nvmc_wait_ready();
-    NRF_NVMC->ERASEPAGE = page_addr;
+    if (page_addr == UICR_PAGE_ADDR) {
+        /* CRITICAL: the UICR is NOT in the code-flash area, so ERASEPAGE does
+         * not erase it on nRF52840 — it must be erased with ERASEUICR (which
+         * clears the whole UICR page). Using ERASEPAGE here was a silent no-op:
+         * the UICR stayed un-erased, so the restore-loop word writes only AND-ed
+         * into existing values, corrupting NRFFW[0] (0xEB000 & 0xF3000 = 0xE3000)
+         * and bricking the unit (MBR boots a garbage address). */
+        NRF_NVMC->ERASEUICR = 1;
+    } else {
+        NRF_NVMC->ERASEPAGE = page_addr;
+    }
     nvmc_wait_ready();
     NRF_NVMC->CONFIG = (NVMC_CONFIG_WEN_Ren << NVMC_CONFIG_WEN_Pos);
     nvmc_wait_ready();
@@ -124,6 +134,36 @@ bl_updater_status_t bl_updater_validate(void)
 }
 
 
+
+/* ---- ACL pre-flight -----------------------------------------------------
+ * If the OLD bootloader on this unit called nrf_bootloader_flash_protect(),
+ * its own flash pages are ACL write-locked. That lock latches until reset and
+ * CANNOT be cleared from the app (writing ACL[i].SIZE = 0 is silently ignored
+ * on nRF52840 — this is why flash_protect was removed from the BL entirely
+ * rather than "cleared").
+ *
+ * This updater does NOT try to write the locked pages. It writes the new BL to
+ * BL_REGION_START (0xF3000) and repoints UICR->NRFFW[0] there, so the old BL is
+ * stranded and never runs again (and so never re-arms its ACL). That works only
+ * if 0xF3000 itself is not inside a locked region. On a unit whose first BL sat
+ * lower (e.g. 0xEB000) and was small (MSC-only, no CDC), 0xF3000 is clear and
+ * this succeeds. If the old BL overlaps 0xF3000, we abort cleanly here — a
+ * temp-address relocation build (or SWD) is then required.
+ *
+ * Returns true if [start,end) overlaps any write-locked ACL region. */
+static bool region_acl_write_locked(uint32_t start, uint32_t end)
+{
+    uint32_t n = sizeof(NRF_ACL->ACL) / sizeof(NRF_ACL->ACL[0]);
+    for (uint32_t i = 0; i < n; i++) {
+        uint32_t a = NRF_ACL->ACL[i].ADDR;
+        uint32_t sz = NRF_ACL->ACL[i].SIZE;
+        if (sz == 0u) continue;                                   /* region unused */
+        if ((NRF_ACL->ACL[i].PERM & ACL_ACL_PERM_WRITE_Msk) == 0u) continue; /* not write-locked */
+        if (a < end && (a + sz) > start) return true;             /* overlaps target */
+    }
+    return false;
+}
+
 static bl_updater_status_t bl_updater_flash_bl(bool validate_first)
 {
     if (validate_first) {
@@ -133,6 +173,13 @@ static bl_updater_status_t bl_updater_flash_bl(bool validate_first)
         if (EMBEDDED_BOOTLOADER_BIN_SIZE == 0u)      return BL_UPDATER_ERR_EMPTY;
         if (EMBEDDED_BOOTLOADER_BIN_SIZE > BL_REGION_BYTES) return BL_UPDATER_ERR_TOO_LARGE;
     }
+
+    /* Refuse before touching flash if the target region is ACL write-locked by
+     * the old bootloader. Writing would be silently dropped and caught later by
+     * the memcmp verify, but returning a distinct status here makes the cause
+     * unambiguous (an ACL lock, not a bad CRC) and avoids a pointless erase. */
+    if (region_acl_write_locked(BL_REGION_START, BL_REGION_END))
+        return BL_UPDATER_ERR_ACL_LOCKED;
 
     if (nrf_sdh_is_enabled()) {
         ret_code_t err = nrf_sdh_disable_request();
@@ -183,6 +230,26 @@ static bl_updater_status_t bl_updater_flash_bl(bool validate_first)
     return BL_UPDATER_OK;
 }
 
+
+/* Read-only pre-flight: no flash writes, no side effects. Returns BL_UPDATER_OK
+ * only if a real run would succeed on THIS unit — embedded BL valid AND the
+ * target region (0xF3000) not ACL write-locked by the old bootloader. Use this
+ * to test a device safely before committing to the destructive flash. */
+bl_updater_status_t bl_updater_preflight(void)
+{
+    bl_updater_status_t st = bl_updater_validate();      /* size + CRC32, read-only */
+    if (st != BL_UPDATER_OK) return st;
+    if (region_acl_write_locked(BL_REGION_START, BL_REGION_END))
+        return BL_UPDATER_ERR_ACL_LOCKED;
+    return BL_UPDATER_OK;
+}
+
+/* Current bootloader start address the MBR will boot (UICR->NRFFW[0]).
+ * On a stuck unit this reports where the OLD BL lives (e.g. 0xEB000). */
+uint32_t bl_updater_current_bl_addr(void)
+{
+    return *(volatile uint32_t *)UICR_BOOTLOADER_ADDR;
+}
 
 bl_updater_status_t bl_updater_run(void)
 {
