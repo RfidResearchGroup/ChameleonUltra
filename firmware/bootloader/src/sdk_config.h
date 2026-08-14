@@ -1035,7 +1035,7 @@
 // <i> When signed updates are required, version checking should always be enabled.
 
 #ifndef NRF_DFU_APP_DOWNGRADE_PREVENTION
-#define NRF_DFU_APP_DOWNGRADE_PREVENTION 1
+#define NRF_DFU_APP_DOWNGRADE_PREVENTION 0
 #endif
 
 // <q> NRF_DFU_EXTERNAL_APP_VERSIONING  - Require versioning for external applications.

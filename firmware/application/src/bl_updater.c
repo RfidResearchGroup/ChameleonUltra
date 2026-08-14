@@ -157,10 +157,27 @@ static bl_updater_status_t bl_updater_flash_bl(bool validate_first)
     /* Ensure the UICR bootloader start address matches where we just wrote
      * the BL (0xF3000). UICR can only be written after a page erase; the
      * value only takes effect after a reset. Corrects any stale value
-     * (e.g. 0xEB000) left by earlier experiments. */
+     * (e.g. 0xEB000) left by earlier experiments.
+     *
+     * CAUTION: the UICR page also holds REGOUT0 (0x10001304) and other config
+     * (PSELRESET, NFCPINS, APPROTECT). On high-voltage-mode boards (battery ->
+     * VDDH -> REG0 -> VDD) REGOUT0 sets the core/GPIO voltage; the firmware
+     * never re-writes it, so a bare page-erase defaults it to 1.8V and bricks
+     * battery-powered units (powers on, but no USB and no LEDs). Dev boards
+     * feed VDD directly and are unaffected. So we back up the whole UICR page,
+     * change only NRFFW[0], erase, and restore every other programmed word. */
     if (*(volatile uint32_t *)UICR_BOOTLOADER_ADDR != UICR_BL_ADDR_STOCK) {
+        static uint32_t uicr_backup[256];   /* covers REGOUT0 @0x304 */
+        volatile uint32_t *uicr = (volatile uint32_t *)UICR_PAGE_ADDR;
+        for (uint32_t i = 0; i < 256; i++) uicr_backup[i] = uicr[i];
+        uicr_backup[(UICR_BOOTLOADER_ADDR - UICR_PAGE_ADDR) / 4] = UICR_BL_ADDR_STOCK;
+
         nvmc_page_erase(UICR_PAGE_ADDR);
-        nvmc_write_word(UICR_BOOTLOADER_ADDR, UICR_BL_ADDR_STOCK);
+        for (uint32_t i = 0; i < 256; i++) {
+            if (uicr_backup[i] != 0xFFFFFFFFUL) {
+                nvmc_write_word(UICR_PAGE_ADDR + i * 4, uicr_backup[i]);
+            }
+        }
     }
 
     return BL_UPDATER_OK;
