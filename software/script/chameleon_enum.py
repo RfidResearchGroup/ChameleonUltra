@@ -328,6 +328,7 @@ class TagSpecificType(enum.IntEnum):
     EM410X_64 = 103
     EM410X_ELECTRA = 104
     # FDX-B
+    FDXB = 105
     # securakey
     # gallagher
     # PAC/Stanley
@@ -424,6 +425,8 @@ class TagSpecificType(enum.IntEnum):
             return "EM410X/64"
         elif self == TagSpecificType.EM410X_ELECTRA:
             return "EM410X Electra"
+        elif self == TagSpecificType.FDXB:
+            return "FDX-B"
         elif self == TagSpecificType.HIDProx:
             return "HIDProx"
         elif self == TagSpecificType.ioProx:

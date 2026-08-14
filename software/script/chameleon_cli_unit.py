@@ -6074,16 +6074,6 @@ class HFMFUEDetect(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
 
 @lf.command("search")
 class LFSearch(ReaderRequiredUnit):
-    # Firmware tag_specific_type_t values (tag_base_type.h) for LF protocols the
-    # client TagSpecificType enum doesn't define (e.g. FDX-B) — named here so
-    # search output stays readable. Types the enum does know resolve via it.
-    _TYPE_NAMES = {
-        100: "EM410X", 101: "EM410X_16", 102: "EM410X_32", 103: "EM410X_64",
-        104: "EM410X_ELECTRA", 105: "FDX-B", 150: "PAC/Stanley",
-        170: "Viking", 180: "Jablotron", 200: "HID Prox", 201: "ioProx",
-        310: "IDTECK",
-    }
-
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = "Search for any supported LF tag — tries every decoder in turn (PM3-style) and reports the first match"
@@ -6094,11 +6084,7 @@ class LFSearch(ReaderRequiredUnit):
         if tag_type is None:
             print(color_string((CR, "No known LF tag found")))
             return
-        if isinstance(tag_type, TagSpecificType):
-            name = str(tag_type)
-        else:
-            name = self._TYPE_NAMES.get(tag_type, f"LF tag (type {tag_type})")
-        print(f"{color_string((CG, name))}: {color_string((CG, id_bytes.hex()))}")
+        print(f"{color_string((CG, str(tag_type)))}: {color_string((CG, id_bytes.hex()))}")
 
 
 @lf_em_410x.command("read")

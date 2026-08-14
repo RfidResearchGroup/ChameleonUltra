@@ -632,11 +632,7 @@ class ChameleonCMD:
         resp = self.device.send_cmd_sync(Command.LF_SEARCH)
         if resp.status == Status.LF_TAG_OK:
             tag_type = struct.unpack('!H', resp.data[:2])[0]
-            try:
-                tt = TagSpecificType(tag_type)
-            except ValueError:
-                tt = tag_type   # not in the client enum (e.g. FDX-B) — keep raw value
-            resp.parsed = (tt, resp.data[2:])
+            resp.parsed = (TagSpecificType(tag_type), resp.data[2:])
         else:
             resp.parsed = (None, None)
         return resp
