@@ -120,7 +120,11 @@ typedef struct standalone_mode_iface {
 
     bool                writes_tag;    /* requires HOST_OPTED_IN */
     bool                writes_slot;   /* requires HOST_OPTED_IN */
-    bool                wants_tick;    /* if true, on_tick called ~10 Hz */
+    bool                wants_tick;    /* if true, on_tick is called periodically */
+
+    /* on_tick period in milliseconds. 0 = framework default (~10 Hz).
+     * Latency-sensitive modes (relay: NFCT window ~77ms) set a small value. */
+    uint16_t            tick_interval_ms;
 
     standalone_rc_t   (*on_enter)(const uint8_t *cfg, size_t cfg_len);
     standalone_rc_t   (*on_exit)(void);

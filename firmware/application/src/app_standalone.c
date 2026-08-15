@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include "nrf_log.h"
+#include "app_timer.h"   /* APP_TIMER_TICKS / app_timer_cnt_diff_compute */
 #include "fds_util.h"
 #include "fds_ids.h"
 
@@ -462,13 +463,21 @@ void app_standalone_tick(uint32_t now_ticks) {
 
     if (m_ctx.state == STANDALONE_STATE_DISARMED) return;
 
-    /* Cheap throttle: use raw ticks deltas. The framework only needs
-     * "approximately 10 Hz", exact wall-time isn't important. */
-    if ((now_ticks - m_ctx.last_tick_ticks) < STANDALONE_TICK_THROTTLE_MS) return;
-    m_ctx.last_tick_ticks = now_ticks;
-
     const standalone_mode_iface_t *m = active_mode();
     if (m == NULL || !m->wants_tick || m->on_tick == NULL) return;
+
+    /* Throttle to the mode's requested period, defaulting to ~10 Hz. now_ticks
+     * is the raw 24-bit RTC counter, so convert the period with APP_TIMER_TICKS
+     * and compare via app_timer_cnt_diff_compute (handles the 24-bit wrap).
+     * Comparing raw ticks against a bare millisecond count fired every ~3ms
+     * (100 ticks @32768Hz) instead of every 100ms. Modes needing a faster tick
+     * set standalone_mode_iface_t.tick_interval_ms (e.g. relay = 5ms). */
+    uint32_t period_ms = m->tick_interval_ms ? m->tick_interval_ms
+                                             : STANDALONE_TICK_THROTTLE_MS;
+    if (app_timer_cnt_diff_compute(now_ticks, m_ctx.last_tick_ticks)
+            < APP_TIMER_TICKS(period_ms)) return;
+    m_ctx.last_tick_ticks = now_ticks;
+
     (void)m->on_tick(now_ticks);
 }
 
