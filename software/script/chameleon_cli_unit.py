@@ -6084,6 +6084,40 @@ class LFSearch(ReaderRequiredUnit):
         if tag_type is None:
             print(color_string((CR, "No known LF tag found")))
             return
+        # HID Prox does not report a raw id: the firmware hands back the already
+        # decoded wiegand card (see hidprox_get_data()), so print the same fields
+        # as 'lf hid prox read' instead of hexdumping the struct.
+        if tag_type == TagSpecificType.HIDProx:
+            (format, fc, cn1, cn2, il, oem) = struct.unpack(">BIBIBH", id_bytes[:13])
+            cn = (cn1 << 32) + cn2
+            print(f"HIDProx/{HIDFormat(format)}")
+            if fc > 0:
+                print(f" FC: {color_string((CG, fc))}")
+            if il > 0:
+                print(f" IL: {color_string((CG, il))}")
+            if oem > 0:
+                print(f" OEM: {color_string((CG, oem))}")
+            print(f" CN: {color_string((CG, cn))}")
+            return
+        # IDTECK hands back the whole 64-bit frame; show the decoded card id
+        # alongside it rather than only the raw hex.
+        if tag_type == TagSpecificType.IDTECK and len(id_bytes) == 8:
+            info = _idteck_frame_info(bytes(id_bytes))
+            cid = info["card_id"]
+            chk = info["checksum"]
+            print(f"IDTECK: {color_string((CG, id_bytes.hex().upper()))}")
+            print(f" Card ID: {color_string((CG, f'{cid} [0x{cid:06X}]'))}")
+            if not info["checksum_valid"]:
+                print(f" Checksum: {color_string((CY, f'0x{chk:02X} mismatch'))}")
+            return
+        # PAC hands back the 8 ASCII characters of the card number, not a binary
+        # id; hexdumping them prints the ASCII codes. Show the same fields as
+        # 'lf pac read'.
+        if tag_type == TagSpecificType.PAC and len(id_bytes) == 8:
+            card_id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in id_bytes)
+            raw = pac_encode_raw(bytes(id_bytes))
+            print(f" PAC/Stanley - CN: {color_string((CG, card_id_ascii))} | Raw: {raw.hex().upper()}")
+            return
         print(f"{color_string((CG, str(tag_type)))}: {color_string((CG, id_bytes.hex()))}")
 
 
