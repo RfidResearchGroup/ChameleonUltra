@@ -669,6 +669,17 @@ static inline void nfc_fdt_reset(void) {
     }
 }
 
+void nfc_tag_14a_cancel_deferred_response(void) {
+    /* Undo nfc_tag_14a_defer_response(): the response we held the slot open
+     * for is never coming. The RX_FRAMEEND handler skipped the re-arm on our
+     * behalf, so without this the peripheral never listens again — and nrfx
+     * only clears the FRAMEDELAYTIMEOUT error, it does not recover RX. */
+    if (!m_response_deferred) return;
+    m_response_deferred = false;
+    nfc_fdt_reset();
+    NRFX_NFCT_RX_BYTES
+}
+
 extern bool g_usb_led_marquee_enable;
 
 /**

@@ -143,6 +143,11 @@ void nfc_tag_14a_set_relay_hold(bool hold);
  * response will be transmitted asynchronously after the ISR returns. Keeps
  * the NFCT response window open for the deferred TX. */
 void nfc_tag_14a_defer_response(void);
+/* Relay support: abandon a deferred response. nfc_tag_14a_defer_response()
+ * leaves RX un-armed on purpose so the deferred TX owns the slot; if that TX
+ * never happens the NFCT stays deaf until the field drops. Call this from the
+ * give-up paths to hand the receiver back. No-op when nothing was deferred. */
+void nfc_tag_14a_cancel_deferred_response(void);
 void nfc_tag_14a_tx_bits(uint8_t *data, uint32_t bits);
 void nfc_tag_14a_tx_nbit(uint8_t data, uint32_t bits);
 
