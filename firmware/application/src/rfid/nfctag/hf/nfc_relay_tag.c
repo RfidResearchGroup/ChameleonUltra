@@ -15,6 +15,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include "nrf.h"   /* CMSIS core intrinsics: __DMB() memory barrier */
 
 #define NRF_LOG_MODULE_NAME nfc_relay_tag
 #include "nrf_log.h"
@@ -56,14 +57,48 @@ static uint8_t       s_response_buf[256];
 static uint16_t      s_response_len = 0;   /* bytes */
 static volatile bool s_wtx_active   = false;
 
+/* CID assigned by the reader for the exchange we are extending, or 0xFF when
+ * the reader addresses us without a CID. ISO 14443-4 §7.1.1.3: once a CID is
+ * assigned, the PICC's S-blocks must carry it — a WTX without it is addressed
+ * to PICC 0 and a CID-assigning reader discards it, so no ACK ever comes. */
+static volatile uint8_t s_wtx_cid = 0xFF;
+
+/* ISO 14443-4 §7.1 PCB encoding. An I-block has b8b7 = 00 and b2 = 1.
+ * R-blocks are 10xx xx1x, S-blocks are 11xx xx1x (0xC2 DESELECT, 0xF2 WTX).
+ *
+ * S(WTX) is only a legal reply to an I-block. Answering S(DESELECT) with a
+ * WTX aborts the deselect handshake, and sending one to a MIFARE Classic
+ * reader — which has no T=CL layer at all — puts a stray 4-byte 0xF2 frame on
+ * the air in place of the card's real answer. */
+static inline bool pcb_is_i_block(uint8_t pcb) {
+    return (pcb & 0xE2) == 0x02;
+}
+
+/* True when the emulated card is ISO14443-4 (RATS answered with a real ATS).
+ * Non-T=CL cards (MIFARE Classic, Ultralight) must never see WTX. */
+static inline bool relay_is_iso14443_4(void) {
+    return s_ats.length > 0;
+}
+
 /* S(WTX) request frame: PCB 0xF2, WTXM=1 (request minimal extension; the
  * actual extension is the reader's FWT × WTXM). CRC appended by tx path. */
 static void relay_send_wtx(void) {
-    uint8_t wtx[2] = { 0xF2, 0x01 };
+    uint8_t  wtx[3];
+    uint8_t  len;
+    if (s_wtx_cid != 0xFF) {
+        wtx[0] = 0xF2 | 0x08;        /* CID following */
+        wtx[1] = s_wtx_cid & 0x0F;
+        wtx[2] = 0x01;               /* WTXM */
+        len    = 3;
+    } else {
+        wtx[0] = 0xF2;
+        wtx[1] = 0x01;               /* WTXM */
+        len    = 2;
+    }
     /* Keep the response window wide so the WTX itself transmits late if the
      * ISR is delayed; reset to default happens in TX_FRAMEEND. */
     nfc_tag_14a_set_frame_delay_max(0xFFFFFUL);
-    nfc_tag_14a_tx_bytes(wtx, sizeof(wtx), true);  /* appendCrc=true */
+    nfc_tag_14a_tx_bytes(wtx, len, true);  /* appendCrc=true */
     s_wtx_active = true;
 }
 
@@ -105,8 +140,12 @@ static void relay_cb_state(uint8_t *data, uint16_t szBits) {
      * This is our cue: the reader granted more time and reset our NFCT window.
      * If the relayed response has arrived, transmit it now against this ACK.
      * Otherwise send another S(WTX) to buy a further window. Never relay the
-     * WTX ACK to the real card. */
-    if ((data[0] & 0xF7) == 0xF2) {
+     * WTX ACK to the real card.
+     *
+     * Gated on s_wtx_active so this only claims frames that answer a WTX we
+     * actually sent — otherwise a card command that happens to start 0xF2
+     * would be swallowed here instead of being relayed. */
+    if (s_wtx_active && (data[0] & 0xF7) == 0xF2) {
         if (s_response_pending) {
             relay_tx_buffered_response();
         } else if (s_awaiting_response) {
@@ -115,17 +154,36 @@ static void relay_cb_state(uint8_t *data, uint16_t szBits) {
         return;
     }
 
-    /* Normal I-block / S-block from the reader: forward to the real card and
-     * immediately request a waiting-time extension so the reader (and our own
-     * NFCT) tolerate the relay latency. */
+    /* Normal frame from the reader: forward it to the real card. */
     if (s_frame_cb) {
         s_awaiting_response = true;
         s_response_pending  = false;
         s_response_len      = 0;
+        s_wtx_active        = false;
         s_frame_cb(data, szBits);
-        /* Send S(WTX) right now, within the first NFCT window. The reader will
-         * ACK it; by the time the ACK returns the BLE response may be ready. */
-        relay_send_wtx();
+
+        /* Request a waiting-time extension so the reader tolerates the relay
+         * latency — but ONLY where WTX is meaningful. For a non-T=CL card or
+         * a non-I-block (S(DESELECT), R-blocks) we leave s_wtx_active false,
+         * and nfc_relay_tag_inject_response() then transmits the relayed
+         * answer directly against the original command's still-open window. */
+        if (relay_is_iso14443_4() && pcb_is_i_block(data[0])) {
+            /* Capture the CID the reader addressed us with (PCB b4 = 0x08,
+             * CID byte immediately after the PCB) so the S(WTX) echoes it. */
+            s_wtx_cid = ((data[0] & 0x08) && szBits >= 16)
+                        ? (data[1] & 0x0F) : 0xFF;
+            /* Send S(WTX) within this first NFCT window. The reader ACKs it;
+             * by the time the ACK returns the BLE response may be ready. */
+            relay_send_wtx();
+        } else {
+            /* Direct-transmit path. This ISR returns without transmitting, so
+             * without this call nfc_14a.c takes its "nothing to send" branch:
+             * it clamps the frame-delay window and re-arms RX, which both
+             * closes the slot the relayed answer needs and lets a main-loop TX
+             * race the ISR over the shared NFCT TX buffer. Deferring widens
+             * FRAMEDELAYMAX to ~77ms and leaves the slot ours. */
+            nfc_tag_14a_defer_response();
+        }
     }
 }
 
@@ -188,6 +246,7 @@ void nfc_relay_tag_install(const uint8_t *uid, uint8_t uid_len,
     s_response_pending  = false;
     s_response_len      = 0;
     s_wtx_active        = false;
+    s_wtx_cid           = 0xFF;
     s_frame_cb          = NULL;
 
     /* Install relay handler — nfc_tag_14a_set_handler just copies ptrs,
@@ -225,19 +284,45 @@ void nfc_relay_tag_inject_response(const uint8_t *data, uint16_t bit_count) {
     if (bytes == 0) return;
     if (bytes > sizeof(s_response_buf)) bytes = sizeof(s_response_buf);
 
-    /* Buffer the relayed response. It is NOT transmitted here — the original
-     * command's NFCT window closed when we sent S(WTX). Instead we hold the
-     * bytes and transmit them in relay_cb_state() when the reader's next
-     * S(WTX) ACK arrives (which opens a fresh window). This is the ISO 14443-4
-     * WTX mechanism: WTX request → reader ACK → real response.
-     *
-     * If a WTX ACK has not yet been seen, s_response_pending tells the ACK
-     * handler to transmit immediately on arrival. */
     memcpy(s_response_buf, data, bytes);
-    s_response_len     = bytes;
+    s_response_len = bytes;
+
+    if (!s_wtx_active) {
+        /* No WTX outstanding — the command was a non-I-block, or the card is
+         * not ISO14443-4 at all. The original command's response window is
+         * still ours, so transmit directly (the pre-WTX behaviour, which is
+         * what MIFARE Classic and S(DESELECT) need). */
+        relay_tx_buffered_response();
+        NRF_LOG_DEBUG("relay_tag: response sent direct %u bytes", bytes);
+        return;
+    }
+
+    /* WTX path: do NOT transmit here — the original command's NFCT window
+     * closed when we sent S(WTX). Hold the bytes and transmit them from
+     * relay_cb_state() when the reader's next S(WTX) ACK opens a fresh
+     * window. This is the ISO 14443-4 WTX mechanism: request → ACK → answer.
+     *
+     * The barrier publishes s_response_buf/s_response_len before the flag the
+     * NFCT ISR polls, matching the ordering used across mode_relay.c. */
+    __DMB();
     s_response_pending = true;
 
     NRF_LOG_DEBUG("relay_tag: response buffered %u bytes (awaiting WTX ACK)", bytes);
+}
+
+bool nfc_relay_tag_response_pending(void) {
+    return s_response_pending;
+}
+
+void nfc_relay_tag_abort_pending(void) {
+    if (!s_response_pending) return;
+    s_response_pending  = false;
+    s_response_len      = 0;
+    s_wtx_active        = false;
+    s_wtx_cid           = 0xFF;
+    s_awaiting_response = false;
+    nfc_tag_14a_cancel_deferred_response();
+    NRF_LOG_WARNING("relay_tag: buffered response discarded (no WTX ACK)");
 }
 
 void nfc_relay_tag_no_response(void) {
@@ -245,6 +330,10 @@ void nfc_relay_tag_no_response(void) {
     s_response_pending  = false;
     s_response_len      = 0;
     s_wtx_active        = false;
+    s_wtx_cid           = 0xFF;
+    /* The deferred TX we promised is never coming — give RX back, or the
+     * reader's next command is never received. */
+    nfc_tag_14a_cancel_deferred_response();
 }
 
 void nfc_relay_tag_clear(void) {
@@ -254,7 +343,12 @@ void nfc_relay_tag_clear(void) {
     s_response_pending  = false;
     s_response_len      = 0;
     s_wtx_active        = false;
+    s_wtx_cid           = 0xFF;
     s_frame_cb          = NULL;
+
+    /* Hand RX back before restoring normal timing — a session torn down while
+     * a deferred response was outstanding would otherwise leave NFCT deaf. */
+    nfc_tag_14a_cancel_deferred_response();
 
     /* Release the FRAMEDELAYMAX hold and restore the default window so normal
      * emulation/anticollision after the relay disarms uses standard timing. */
