@@ -33,6 +33,10 @@ void nfc_relay_tag_install(const uint8_t *uid, uint8_t uid_len,
 /** Register the frame callback (ISR-safe: copy + flag only).
  *  Called once per frame received from the reader after SELECT. */
 void nfc_relay_tag_set_frame_cb(void (*cb)(const uint8_t *data, uint16_t bits));
+/* Returns true once after a new RATS (new T=CL session) has reset the relay
+ * tag state; clears the flag on read. mode_relay uses this to force its own
+ * sub-state back to READY between auth-trace runs. */
+bool nfc_relay_tag_take_session_reset(void);
 
 /** Inject a raw response to be transmitted to the reader.
  *  Call from main-loop context after receiving the response from RELAY_READER.
@@ -41,6 +45,15 @@ void nfc_relay_tag_inject_response(const uint8_t *data, uint16_t bit_count);
 
 /** Signal that no response is coming (RELAY_READER reported no card response). */
 void nfc_relay_tag_no_response(void);
+
+/** True while a relayed response is buffered waiting for the reader's S(WTX)
+ *  ACK to open a transmit window. Only ever true on the WTX path. */
+bool nfc_relay_tag_response_pending(void);
+
+/** Discard a buffered response the reader never collected. Call from the mode
+ *  tick after a bounded wait: a reader that ignores our S(WTX) would otherwise
+ *  leave the bytes queued until its next frame, silently losing the exchange. */
+void nfc_relay_tag_abort_pending(void);
 
 /** Remove the relay handler and restore the previous tag handler.
  *  Call on disarm. */

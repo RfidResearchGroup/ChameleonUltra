@@ -57,6 +57,23 @@ const uint16_t ats_fsdi_table[] = {
 
 // Whether it is responding to
 static volatile bool m_is_responded = false;
+/* Deferred response: set by a tag handler (e.g. the relay) when it will
+ * transmit a response later, after this RX ISR returns. Prevents the
+ * RX_FRAMEEND path from running nfc_fdt_reset() + re-arming RX, which would
+ * close the response window before the deferred TX arrives. */
+static volatile bool m_response_deferred = false;
+
+/* When true, the relay owns the NFCT and the response window must stay wide
+ * (max FRAMEDELAYMAX ~77ms) for the entire armed session — NOT be clamped back
+ * to the 302us default after each TX. The relay's round-trip latency means any
+ * TX (WTX or buffered response) can be followed by another long wait, and a
+ * transient clamp to 302us would cause the nRF to abandon ("eat") the next
+ * response slot. Set by nfc_relay_tag on install, cleared on clear. */
+static volatile bool m_relay_hold_fdt_max = false;
+
+void nfc_tag_14a_set_relay_hold(bool hold) {
+    m_relay_hold_fdt_max = hold;
+}
 // Receiving buffer
 static uint8_t m_nfc_rx_buffer[MAX_NFC_RX_BUFFER_SIZE] = { 0x00 };
 
@@ -306,6 +323,17 @@ void nfc_tag_14a_tx_bytes(uint8_t *data, uint32_t bytes, bool appendCrc) {
     if (m_sniff_passive) return;   // passive tap: CU must never emit on air
     ASSERT(bytes <= MAX_NFC_TX_BUFFER_SIZE);
     NFC_14A_TX_BYTE_CORE(data, bytes, appendCrc, NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
+}
+
+void nfc_tag_14a_set_frame_delay_max(uint32_t ticks) {
+    nrf_nfct_frame_delay_max_set(ticks & 0xFFFFFUL);
+}
+
+void nfc_tag_14a_defer_response(void) {
+    /* Called from a tag handler's cb_state (NFCT ISR context) to signal that
+     * a response will be transmitted asynchronously after the ISR returns.
+     * Keeps the NFCT response window open instead of closing it. */
+    m_response_deferred = true;
 }
 
 /**
@@ -648,8 +676,22 @@ static inline void nrf_nfct_reset(void) {
 static inline void nfc_fdt_reset(void) {
     // STOP TX
     *(volatile uint32_t *)0x40005010 = 0x01;
-    // Reset fdt max
-    nrf_nfct_frame_delay_max_set(0x00001000UL);
+    // Reset fdt max — but not while the relay holds the NFCT (it needs the
+    // window to stay wide across its multi-round exchange).
+    if (!m_relay_hold_fdt_max) {
+        nrf_nfct_frame_delay_max_set(0x00001000UL);
+    }
+}
+
+void nfc_tag_14a_cancel_deferred_response(void) {
+    /* Undo nfc_tag_14a_defer_response(): the response we held the slot open
+     * for is never coming. The RX_FRAMEEND handler skipped the re-arm on our
+     * behalf, so without this the peripheral never listens again — and nrfx
+     * only clears the FRAMEDELAYTIMEOUT error, it does not recover RX. */
+    if (!m_response_deferred) return;
+    m_response_deferred = false;
+    nfc_fdt_reset();
+    NRFX_NFCT_RX_BYTES
 }
 
 extern bool g_usb_led_marquee_enable;
@@ -738,6 +780,19 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
         }
         case NRFX_NFCT_EVT_TX_FRAMEEND: {
             // NRF_LOG_INFO("TX end.\n");
+            /* Restore the default frame-delay window after every TX. The relay
+             * response path (nfc_relay_tag_inject_response) widens FRAMEDELAYMAX
+             * to 0xFFFFF to absorb BLE latency; reset it here — once the frame
+             * has actually gone out — so subsequent fast anticollision polling
+             * is answered with normal timing. Safe for non-relay TX too.
+             *
+             * EXCEPTION: while the relay holds the NFCT, keep the window wide.
+             * The relay's multi-round exchange means the very next frame may be
+             * another WTX/response that needs the long window, and clamping to
+             * 302us here would let the nRF abandon that next response slot. */
+            if (!m_relay_hold_fdt_max) {
+                nrf_nfct_frame_delay_max_set(0x00001000UL);
+            }
             // After the transmission is over, you need to be able to receive it
             NRFX_NFCT_RX_BYTES
             break;
@@ -751,14 +806,25 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             //   Otherwise, the nrfx_nfct_evt_tx_frameend conditions above will not be triggered, and nrfx_nfct_rx_bytes will not be called
             // All the next communication will have problems. How can I play if there is a problem? Play an egg.
             m_is_responded = false;
+            m_response_deferred = false;
             // One more layer of pressure stack, but it seems to have little effect on performance
             // This function processes the data sent by the card reader, and then read that you don't need to reply to the card reader. If you need it, reply
             // Don't reply if you don't need it, it makes sense, right?This is science.
             nfc_tag_14a_data_process(m_nfc_rx_buffer);
             // The above prompt tells us that when we do not need to reply to the card reader, we need to manually enable it
             if (!m_is_responded) {
-                nfc_fdt_reset();
-                NRFX_NFCT_RX_BYTES
+                if (m_response_deferred) {
+                    /* A handler (the relay) has taken ownership of this frame and
+                     * will transmit a response asynchronously once a remote
+                     * round-trip completes. Hold the response window open by
+                     * widening FRAMEDELAYMAX to its maximum (~77ms) and do NOT
+                     * re-arm RX — the deferred nfc_tag_14a_tx_bytes() will drive
+                     * TX, and the TX_FRAMEEND path will re-arm RX afterward. */
+                    nrf_nfct_frame_delay_max_set(0xFFFFFUL);
+                } else {
+                    nfc_fdt_reset();
+                    NRFX_NFCT_RX_BYTES
+                }
             }
             break;
         }
