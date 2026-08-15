@@ -48,14 +48,33 @@ NRF_LOG_MODULE_REGISTER();
 #define RELAY_MFR_MAGIC_H   0x52   /* 'R' */
 #define RELAY_MFR_MAGIC_L   0x4C   /* 'L' */
 #define RELAY_MFR_COMPANY   0x4359 /* 'CY' */
+#define RELAY_HEADER_SIZE   4      /* magic(2) + type(1) + seq(1) */
+#define RELAY_ADV_BUF_SIZE  255    /* extended advertising data buffer */
+
+/* Bytes adv_send() emits before the payload:
+ *   flags AD           : 02 01 06                 = 3
+ *   mfr AD len + type  : LL FF                    = 2
+ *   company id         : 59 43                    = 2
+ *   relay header       : MH ML type seq           = RELAY_HEADER_SIZE (4)
+ * The payload starts at this offset, so the largest payload that still fits
+ * s_relay_adv_raw[] is RELAY_ADV_BUF_SIZE - RELAY_ADV_HDR_BYTES. */
+#define RELAY_ADV_HDR_BYTES (3 + 2 + 2 + RELAY_HEADER_SIZE)   /* 11 */
+
 /* Extended advertising payload limit. Legacy adv capped this at ~22 bytes
  * (31-byte ADV_IND minus framing), which truncated DESFire AES auth frames
  * (e.g. the 41-byte E(RndA||RndB') I-block). Extended advertising (BLE 5)
  * raises the AdvData limit to 255 bytes, so a single packet now carries any
- * DESFire auth frame and most file/EMV reads without fragmentation. */
-#define RELAY_MAX_PAYLOAD   245
-#define RELAY_HEADER_SIZE   4      /* magic(2) + type(1) + seq(1) */
-#define RELAY_ADV_BUF_SIZE  255    /* extended advertising data buffer */
+ * DESFire auth frame and most file/EMV reads without fragmentation.
+ *
+ * Derived from the buffer size rather than hand-tuned: the previous literal
+ * 245 was one byte too large, so a max-size payload wrote one byte past
+ * s_relay_adv_raw[] and pushed adv_send()'s 8-bit offset to 256, which wrapped
+ * to 0 and published an empty advertisement. */
+#define RELAY_MAX_PAYLOAD   (RELAY_ADV_BUF_SIZE - RELAY_ADV_HDR_BYTES)  /* 244 */
+
+/* Compile-time guard so the two can never drift apart again. */
+typedef char relay_adv_buf_size_check[
+    (RELAY_ADV_HDR_BYTES + RELAY_MAX_PAYLOAD <= RELAY_ADV_BUF_SIZE) ? 1 : -1];
 
 /* Scan parameters: 100ms interval, 50ms window */
 /* Discovery phase — relaxed timing, conserves power */
@@ -151,7 +170,10 @@ static void adv_send(uint8_t type, const uint8_t *data, uint8_t dlen) {
      *   02 01 06                  flags
      *   LL FF 59 43 MH ML T S ... manufacturer specific
      */
-    uint8_t off = 0;
+    /* uint16_t, not uint8_t: with a full-size payload the final offset reaches
+     * RELAY_ADV_HDR_BYTES + RELAY_MAX_PAYLOAD == 255, and an 8-bit cursor would
+     * wrap to 0 on the next increment and publish a zero-length advertisement. */
+    uint16_t off = 0;
     s_relay_adv_raw[off++] = 2;
     s_relay_adv_raw[off++] = 0x01;
     s_relay_adv_raw[off++] = 0x06;
@@ -167,8 +189,10 @@ static void adv_send(uint8_t type, const uint8_t *data, uint8_t dlen) {
     s_relay_adv_raw[off++] = ++m_ctx.tx_seq;
     if (dlen && data) { memcpy(&s_relay_adv_raw[off], data, dlen); off += dlen; }
 
-    ble_main_relay_adv_set(s_relay_adv_raw, off);
-    NRF_LOG_DEBUG("relay: adv_send type=0x%02x seq=%u", type, m_ctx.tx_seq);
+    /* off <= 255 by construction (see relay_adv_buf_size_check), so the
+     * narrowing to ble_main_relay_adv_set()'s uint8_t length is lossless. */
+    ble_main_relay_adv_set(s_relay_adv_raw, (uint8_t)off);
+    NRF_LOG_DEBUG("relay: adv_send type=0x%02x seq=%u len=%u", type, m_ctx.tx_seq, off);
 }
 
 /* -----------------------------------------------------------------------
@@ -230,13 +254,32 @@ static bool parse_relay_adv(const ble_gap_evt_adv_report_t *rep,
                              const uint8_t **out_data, uint8_t *out_len) {
     const uint8_t *d = rep->data.p_data;
     uint16_t n = rep->data.len;
-    uint8_t off = 0;
+    if (d == NULL || n == 0) return false;
+
+    /* uint16_t, not uint8_t: an extended advertising report can be 255 bytes,
+     * and an 8-bit cursor wraps on `off += adlen + 1` near the end of the
+     * buffer — the walk then restarts in the middle and can loop forever
+     * inside the BLE interrupt handler. */
+    uint16_t off = 0;
     while (off + 1 < n) {
         uint8_t adlen = d[off];
         uint8_t adtyp = d[off + 1];
+
+        /* An AD structure occupies d[off] (the length byte) through
+         * d[off + adlen], i.e. adlen + 1 bytes. `adlen` comes straight off the
+         * air and any BLE device in range can lie about it, so reject an
+         * element that claims to extend past the end of the report BEFORE
+         * dereferencing anything inside it. Without this, the field reads
+         * below — and the caller's memcpy of *out_len bytes — run off the end
+         * of s_scan_buf. adlen == 0 is malformed and would also stall the walk
+         * (off would advance by 1 forever without ever matching). */
+        if (adlen == 0 || (uint32_t)off + 1 + adlen > n) break;
+
         if (adtyp == 0xFF && adlen >= 7) {
             /* adlen = type(1) + company(2) + header(4) + payload
-             * so payload_len = adlen - 7                         */
+             * so payload_len = adlen - 7. The bounds check above guarantees
+             * the whole payload lies inside the report, so this length is
+             * safe for the caller to copy. */
             uint16_t cid = d[off + 2] | ((uint16_t)d[off + 3] << 8);
             if (cid == RELAY_MFR_COMPANY &&
                 d[off + 4] == RELAY_MFR_MAGIC_H &&
