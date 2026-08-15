@@ -5793,6 +5793,29 @@ class LFSearch(ReaderRequiredUnit):
         if tag_type is None:
             print("No known LF tag found")
             return
+        # HID Prox does not report a raw id: the firmware hands back the already
+        # decoded wiegand card (see hidprox_get_data()), so print the same fields
+        # as 'lf hid prox read' instead of hexdumping the struct.
+        if tag_type == TagSpecificType.HIDProx:
+            (format, fc, cn1, cn2, il, oem) = struct.unpack(">BIBIBH", id_bytes[:13])
+            cn = (cn1 << 32) + cn2
+            print(f"HIDProx/{HIDFormat(format)}")
+            if fc > 0:
+                print(f" FC: {color_string((CG, fc))}")
+            if il > 0:
+                print(f" IL: {color_string((CG, il))}")
+            if oem > 0:
+                print(f" OEM: {color_string((CG, oem))}")
+            print(f" CN: {color_string((CG, cn))}")
+            return
+        # PAC hands back the 8 ASCII characters of the card number, not a binary
+        # id; hexdumping them prints the ASCII codes. Show the same fields as
+        # 'lf pac read'.
+        if tag_type == TagSpecificType.PAC and len(id_bytes) == 8:
+            card_id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in id_bytes)
+            raw = pac_encode_raw(bytes(id_bytes))
+            print(f" PAC/Stanley - CN: {color_string((CG, card_id_ascii))} | Raw: {raw.hex().upper()}")
+            return
         print(f"{tag_type}: {color_string((CG, id_bytes.hex()))}")
 
 
