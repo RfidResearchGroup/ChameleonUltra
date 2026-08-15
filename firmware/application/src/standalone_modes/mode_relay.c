@@ -62,6 +62,11 @@ bool g_is_standalone_armed = false;
                                            * generous because WTX keeps the reader
                                            * patient across many extension rounds */
 
+/* How long a relayed response may sit buffered waiting for the reader's
+ * S(WTX) ACK before we give up on it. A reader that supports WTX ACKs within
+ * one frame time, so anything past this means it ignored the request. */
+#define RELAY_WTX_ACK_TIMEOUT_MS 1000u
+
 /* ISO14443-4 S(WTX) block — reserved for a future WTX-ACK handshake
  * implementation (currently unused; BLE latency is absorbed by the
  * widened FRAMEDELAYMAX window in nfc_relay_tag_inject_response instead). */
@@ -163,6 +168,7 @@ static struct {
     /* Timing */
     uint32_t link_start_ticks;
     uint32_t frame_sent_ticks;
+    uint32_t response_tx_ticks;   /* when a response was handed to the NFCT layer */
 
     picc_14a_tag_t real_card;
     bool           real_card_found;
@@ -629,39 +635,90 @@ static void reader_relay_frame(const uint8_t *data, uint16_t bits) {
 }
 
 /* -------------------------------------------------------------------------
+ * ATS FWI patching
+ *
+ * The ATS we present to the reader must grant a Frame Waiting Time long
+ * enough to cover the BLE relay round-trip. A real card typically advertises
+ * FWI=8 (~77ms) and the round-trip is ~80ms, so the reader gives up just
+ * before our relayed response arrives. Forcing FWI=14 (~4.9s) gives the relay
+ * ample room. The reader honours whatever FWT we advertise, and the emulator
+ * appends the ATS CRC on TX, so rewriting the payload is safe.
+ *
+ * ATS layout: TL T0 [TA(1)] [TB(1)] [TC(1)] [T1..Tk historical]
+ *   TL    = total ATS length INCLUDING TL, EXCLUDING CRC. nfc_14a.c transmits
+ *           ats->data[0..length-1] verbatim, so TL and the stored length must
+ *           agree or the reader sees a malformed ATS.
+ *   T0    = 0x10 TA(1) present, 0x20 TB(1) present, 0x40 TC(1) present
+ *   TB(1) = (FWI << 4) | SFGI
+ * ------------------------------------------------------------------------- */
+#define RELAY_ATS_FWI  14u   /* ~4.9s FWT — max legal value (15 is RFU) */
+
+/* FSCI the spec assumes when an ATS carries no T0 byte: 2 => FSC = 32 bytes.
+ * Only used when we have to synthesize a T0 that was not there before. */
+#define RELAY_ATS_DEFAULT_FSCI  2u
+
+/* Rewrite ats[] in place so it advertises RELAY_ATS_FWI, inserting TB(1) —
+ * and T0 if even that is missing — when the real card's ATS lacks it.
+ * Returns the new length (unchanged if nothing could be done). */
+static uint8_t ats_force_fwi(uint8_t *ats, uint8_t len, uint8_t cap) {
+    if (len == 0) return 0;   /* not an ISO14443-4 card — no ATS to patch */
+
+    /* TL only, no T0 at all: synthesize a minimal T0 + TB(1). Without this
+     * the reader falls back to the default FWI of 4 (~4.8ms).
+     *
+     * FSCI must be written explicitly here because emitting a T0 replaces the
+     * implicit defaults that applied while T0 was absent. Those defaults are
+     * FSCI=2 (FSC=32 bytes) and FWI=4, so FSCI=2 is what keeps the frame size
+     * exactly as the card left it — we are only here to change FWI. Writing 0
+     * would silently downgrade the reader to 16-byte frames. */
+    if (len < 2) {
+        if (cap < 3) return len;
+        ats[1] = 0x20 | RELAY_ATS_DEFAULT_FSCI;  /* TB(1) present + FSCI */
+        ats[2] = (RELAY_ATS_FWI << 4);           /* FWI, SFGI = 0 */
+        ats[0] = 3;                              /* TL must match */
+        return 3;
+    }
+
+    uint8_t t0  = ats[1];
+    uint8_t idx = 2;                         /* first interface byte after T0 */
+    if (t0 & 0x10) idx++;                    /* skip TA(1) if present */
+
+    if (t0 & 0x20) {
+        /* TB(1) already present — patch FWI, preserve the SFGI low nibble. */
+        if (idx >= len) return len;          /* malformed: T0 lies about TB(1) */
+        ats[idx] = (RELAY_ATS_FWI << 4) | (ats[idx] & 0x0F);
+        return len;
+    }
+
+    /* TB(1) absent — insert one, shifting TC(1)/historical bytes right. The
+     * old code simply skipped this case, so any card whose ATS omits TB(1)
+     * kept the default FWI=4 (~4.8ms) and the relay overran it every time. */
+    if (idx > len || (uint16_t)len + 1 > cap) return len;
+    memmove(&ats[idx + 1], &ats[idx], len - idx);
+    ats[idx] = (RELAY_ATS_FWI << 4);         /* FWI, SFGI = 0 (default SFGT) */
+    ats[1]   = t0 | 0x20;                    /* declare TB(1) present */
+    len++;
+    ats[0]   = len;                          /* keep TL consistent */
+    return len;
+}
+
+/* -------------------------------------------------------------------------
  * RELAY_CARD NFCT setup
  * ------------------------------------------------------------------------- */
 static void card_setup_emulation(void) {
     if (!m_st.identity_received) return;
 
-    /* Patch the ATS we present to the reader so it grants a longer Frame
-     * Waiting Time (FWT). The real card's ATS advertises FWI=8 (~77ms), but
-     * the BLE relay round-trip is ~80ms — just over that limit, so the reader
-     * gives up microseconds before our relayed response is injected. Bumping
-     * FWI to 14 (~5s) gives the relay ample time. The reader honours whatever
-     * FWT we advertise, and the emulator recomputes the ATS CRC on TX, so
-     * patching the payload is safe.
-     *
-     * ATS layout: TL T0 [TA(1)] [TB(1)] [TC(1)] [historical...]
-     *   T0 bit4 (0x10) = TA present, bit5 (0x20) = TB present, bit6 (0x40) = TC
-     *   TB(1) = (FWI << 4) | SFGI  — FWI is the upper nibble.
-     */
-    uint8_t patched_ats[sizeof(m_st.identity.ats)];
+    uint8_t patched_ats[sizeof(m_st.identity.ats) + 1];
     uint8_t ats_len = m_st.identity.ats_len;
-    if (ats_len > sizeof(patched_ats)) ats_len = sizeof(patched_ats);
+    if (ats_len > sizeof(m_st.identity.ats)) ats_len = sizeof(m_st.identity.ats);
     memcpy(patched_ats, m_st.identity.ats, ats_len);
 
-    if (ats_len >= 2) {
-        uint8_t t0 = patched_ats[1];
-        uint8_t idx = 2;                 /* first byte after T0 */
-        if (t0 & 0x10) idx++;            /* skip TA(1) if present */
-        if ((t0 & 0x20) && idx < ats_len) {
-            /* TB(1) present at idx — force FWI=14, preserve SFGI low nibble */
-            uint8_t sfgi = patched_ats[idx] & 0x0F;
-            patched_ats[idx] = (14u << 4) | sfgi;
-            NRF_LOG_INFO("relay card: ATS FWI bumped, TB(1)=%02X", patched_ats[idx]);
-        }
+    uint8_t new_len = ats_force_fwi(patched_ats, ats_len, sizeof(patched_ats));
+    if (ats_len > 0) {
+        NRF_LOG_INFO("relay card: ATS FWI=%u len %u->%u",
+                     RELAY_ATS_FWI, ats_len, new_len);
     }
+    ats_len = new_len;
 
     /* Install slot-independent relay handler — works for any HF tag type */
     nfc_relay_tag_install(m_st.identity.uid, m_st.identity.uid_len,
@@ -842,6 +899,23 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
                 result_commit_live(RELAY_SESSION_OK);
             }
         }
+        /* A reader that ignores our S(WTX) never opens the window the buffered
+         * response needs, so the bytes sit in nfc_relay_tag until its next
+         * frame clears them — the exchange is lost with no diagnostic. Give up
+         * after a bounded wait and say so, rather than leaving stale bytes
+         * that could be transmitted against a later exchange. */
+        if (nfc_relay_tag_response_pending()) {
+            if (m_st.response_tx_ticks != 0 &&
+                app_timer_cnt_diff_compute(now_ticks, m_st.response_tx_ticks)
+                    >= APP_TIMER_TICKS(RELAY_WTX_ACK_TIMEOUT_MS)) {
+                nfc_relay_tag_abort_pending();
+                m_st.response_tx_ticks = 0;
+                NRF_LOG_WARNING("relay card: no WTX ACK from reader, response dropped");
+            }
+        } else {
+            m_st.response_tx_ticks = 0;
+        }
+
         /* Frame ISR set frame_pending when reader sends a command */
         if (m_st.frame_pending) {
             __DMB();  /* ensure frame_buf/frame_bits writes (ISR) are visible
@@ -909,9 +983,13 @@ static standalone_rc_t on_tick(uint32_t now_ticks) {
             if (!m_st.no_response && m_st.response_bits > 0) {
                 /* Log tag→reader response in trace */
                 trace_append(true, m_st.response_buf, m_st.response_bits);
-                /* Inject response into NFCT for transmission to reader */
+                /* Inject response into NFCT for transmission to reader.
+                 * On the WTX path this only buffers the bytes — they go out
+                 * when the reader ACKs. Stamp the time so RS_CARD_READY can
+                 * abandon it if that ACK never comes. */
                 nfc_relay_tag_inject_response(m_st.response_buf,
                                              m_st.response_bits);
+                m_st.response_tx_ticks = now_ticks ? now_ticks : 1;
             } else {
                 nfc_relay_tag_no_response();
                 NRF_LOG_INFO("relay card: no response from real card");
@@ -1177,6 +1255,14 @@ const standalone_mode_iface_t mode_relay_iface = {
     .writes_tag      = false,
     .writes_slot     = false,
     .wants_tick      = true,
+    /* The relay services the BLE event queue, injects the relayed response
+     * into NFCT, and forwards frames to the RC522 all from on_tick, so its
+     * poll period is added directly to the round-trip on both hops. The NFCT
+     * response window (FRAMEDELAYMAX) is only ~77ms wide, so the framework
+     * default of 100ms would blow the budget before any radio time is spent.
+     * 5ms keeps the tick well inside the 15-20ms BLE scan/advertising
+     * intervals, which are the real latency floor. */
+    .tick_interval_ms = 5,
     .on_enter        = on_enter,
     .on_exit         = on_exit,
     .on_button       = on_button,
