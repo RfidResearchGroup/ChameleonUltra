@@ -67,7 +67,7 @@ static data_frame_tx_t *cmd_processor_get_git_version(uint16_t cmd, uint16_t sta
 }
 
 
-#define BOOTLOADER_SETTINGS_ADDRESS             0xFE000UL
+#define BOOTLOADER_SETTINGS_ADDRESS             0xFF000UL
 #define DFU_SETTINGS_BL_VERSION_OFFSET          12U
 
 static data_frame_tx_t *cmd_processor_get_bootloader_version(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {

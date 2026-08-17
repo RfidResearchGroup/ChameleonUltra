@@ -197,7 +197,33 @@ static void dfu_observer(nrf_dfu_evt_type_t evt_type) {
 #define BOOTLOADER_DFU_UF2_MAGIC      (BOOTLOADER_DFU_START | BOOTLOADER_DFU_UF2_BIT_MASK)
 
 /**@brief Function for application main entry. */
+/* --- REGOUT0 self-heal (nRF52840 high-voltage-mode boards) ---------------
+ * On battery, VDD is REG0-regulated per UICR.REGOUT0. At the erased default
+ * (0xFFFFFFFF) that is 1.8V — too low for USB/LEDs, so the unit looks dead on
+ * battery and only recovers by disconnecting the battery. Any UICR erase (or a
+ * fresh/partly-provisioned chip) can leave it at default. Set it to 3.3V here
+ * if it is at the default: 0xFFFFFFFF -> 0xFFFFFFFD clears one bit, so NO page
+ * erase is needed and no REGOUT0 window is opened. Runs from USB normal-voltage
+ * power even when battery boot is dead, so it self-heals on the next USB boot
+ * and the unit works on battery again after one reset. */
+static void ensure_regout0_3v3(void)
+{
+    if ((NRF_UICR->REGOUT0 & UICR_REGOUT0_VOUT_Msk) !=
+        (UICR_REGOUT0_VOUT_DEFAULT << UICR_REGOUT0_VOUT_Pos)) {
+        return;                     /* already programmed — leave it */
+    }
+    NRF_NVMC->CONFIG = (NVMC_CONFIG_WEN_Wen << NVMC_CONFIG_WEN_Pos);
+    while (NRF_NVMC->READY == NVMC_READY_READY_Busy) {}
+    NRF_UICR->REGOUT0 = (NRF_UICR->REGOUT0 & ~(uint32_t)UICR_REGOUT0_VOUT_Msk) |
+                        (UICR_REGOUT0_VOUT_3V3 << UICR_REGOUT0_VOUT_Pos);
+    while (NRF_NVMC->READY == NVMC_READY_READY_Busy) {}
+    NRF_NVMC->CONFIG = (NVMC_CONFIG_WEN_Ren << NVMC_CONFIG_WEN_Pos);
+    while (NRF_NVMC->READY == NVMC_READY_READY_Busy) {}
+    NVIC_SystemReset();             /* REGOUT0 takes effect only after reset */
+}
+
 int main(void) {
+    ensure_regout0_3v3();   /* self-heal VDD rail before anything else */
     ret_code_t ret_val;
 
     // Must to init hardware connect.
