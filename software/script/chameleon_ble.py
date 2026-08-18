@@ -22,6 +22,7 @@ import asyncio
 import queue
 import threading
 import time
+import warnings
 from typing import Optional
 
 from bleak import BleakClient, BleakScanner
@@ -34,6 +35,10 @@ NUS_TX_CHAR_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"  # device -> host (not
 DEFAULT_NAME_PREFIX = "Chameleon"   # matches ChameleonUltra / ChameleonLite
 SCAN_TIMEOUT = 8.0
 CONNECT_TIMEOUT = 20.0
+
+# BlueZ warns when it hasn't acquired the negotiated MTU yet; we acquire it
+# in _negotiate_mtu(), but keep this as a cosmetic fallback.
+warnings.filterwarnings("ignore", message="Using default MTU value")
 
 
 class BLEConnectException(Exception):
@@ -112,12 +117,26 @@ class BLESerialShim:
                                    timeout=CONNECT_TIMEOUT)
         await self._client.connect()
         await self._client.start_notify(NUS_TX_CHAR_UUID, self._on_notify)
+        await self._negotiate_mtu()
+        self._connected.set()
+
+    async def _negotiate_mtu(self):
+        # Set TX chunk size from the negotiated ATT MTU (payload = MTU - 3).
+        # On the BlueZ backend the MTU isn't known until a characteristic is
+        # acquired; _acquire_mtu() forces that (BlueZ-only, private, so guard
+        # it). WinRT / CoreBluetooth expose mtu_size directly after connect.
+        acquire = getattr(self._client, "_acquire_mtu", None)
+        if acquire is not None:
+            try:
+                await acquire()
+            except Exception:
+                pass
         try:
-            if self._client.mtu_size and self._client.mtu_size > 3:
-                self._mtu = self._client.mtu_size - 3
+            mtu = self._client.mtu_size
+            if mtu and mtu > 3:
+                self._mtu = mtu - 3
         except Exception:
             pass
-        self._connected.set()
 
     def _on_disconnect(self, _client):
         self._connected.clear()
