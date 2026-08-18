@@ -25,6 +25,7 @@ class TransportType(Enum):
     NONE = auto()
     SERIAL = auto()
     SOCKET = auto()
+    BLE = auto()
 
 
 class NotOpenException(Exception):
@@ -104,6 +105,18 @@ class ChameleonCom:
                     print('Connecting to', host, int(port))
                     self.transport.connect((host, int(port)))
                     self.transport_type = TransportType.SOCKET
+                elif port == 'ble' or port.startswith('ble:'):
+                    try:
+                        from chameleon_ble import BLESerialShim
+                    except ImportError:
+                        sys.exit(color_string(
+                            CR, "BLE needs the 'bleak' package: pip install bleak"))
+                    target = port[4:] if port.startswith('ble:') else ''
+                    shim = BLESerialShim()
+                    print('Connecting over BLE', f'({target})' if target else '(scanning for Chameleon)')
+                    shim.connect(target)  # blocks; raises on failure
+                    self.transport = shim
+                    self.transport_type = TransportType.BLE
                 else:
                     if ANDROID:
                         sys.exit(color_string(
@@ -123,6 +136,8 @@ class ChameleonCom:
                 except Exception:
                     # not all serial support dtr, e.g. virtual serial over BLE
                     pass
+                self.transport.timeout = THREAD_BLOCKING_TIMEOUT
+            elif self.transport_type is TransportType.BLE:
                 self.transport.timeout = THREAD_BLOCKING_TIMEOUT
             else:  # SOCKET
                 self.transport.settimeout(THREAD_BLOCKING_TIMEOUT)
@@ -193,7 +208,7 @@ class ChameleonCom:
         while self.isOpen():
             # receive
             assert self.transport_type is not TransportType.NONE
-            if self.transport_type is TransportType.SERIAL:
+            if self.transport_type in (TransportType.SERIAL, TransportType.BLE):
                 try:
                     assert self.transport is not None
                     data_bytes = bytearray(self.transport.read())
@@ -315,7 +330,7 @@ class ChameleonCom:
             self.wait_response_map[task_cmd]['end_time'] = start_time + task_timeout
             self.wait_response_map[task_cmd]['is_timeout'] = False
             assert self.transport_type is not TransportType.NONE
-            if self.transport_type == TransportType.SERIAL:
+            if self.transport_type in (TransportType.SERIAL, TransportType.BLE):
                 try:
                     assert self.transport is not None
                     # send to device

@@ -1001,7 +1001,9 @@ class RootDumpHelp(BaseCLIUnit):
 class HWConnect(BaseCLIUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = "Connect to chameleon by serial port"
+        parser.description = ("Connect to chameleon by serial port, TCP, or BLE. "
+                              "Examples: -p /dev/ttyACM0 | -p tcp:127.0.0.1:4321 | "
+                              "-p ble (scan) | -p ble:AA:BB:CC:DD:EE:FF (needs 'bleak')")
         parser.add_argument("-p", "--port", type=str, required=False)
         return parser
 
@@ -8650,14 +8652,16 @@ def _print_14a_sniff_summary(frames):
                       f"need a second auth to crack{C0}")
                 print(f"   {CC}When paired, run:{C0} "
                       f"mfkey64 {uid} {n['nt']} {n['nr']} {n['ar']} <nt2>")
+
+
 def _get_capture():
-    """Return last capture buffer, or None if nothing has been captured yet."""
+    """Return last capture buffer or print error."""
     import chameleon_cli_unit as _m
-    buf = getattr(_m, '_last_capture', None)
-    if not buf:
+    if not _m._last_capture:
         return None
-    return buf
-    
+    return _m._last_capture
+
+
 @data.command('hexsamples')
 class DataHexsamples(BaseCLIUnit):
     def args_parser(self) -> ArgumentParserNoExit:
