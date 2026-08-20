@@ -1029,6 +1029,7 @@ lf_jablotron = lf.subgroup("jablotron", "Jablotron commands")
 lf_fdxb = lf.subgroup("fdxb", "FDX-B animal tag commands (134.2 kHz)")
 lf_generic = lf.subgroup("generic", "Generic commands")
 lf_idteck = lf.subgroup("idteck", "IDTECK commands")
+lf_t55xx = lf.subgroup("t55xx", "T55xx/T5577 raw block commands")
 
 
 @root.command("clear")
@@ -1129,7 +1130,9 @@ class RootDumpHelp(BaseCLIUnit):
 class HWConnect(BaseCLIUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = "Connect to chameleon by serial port"
+        parser.description = ("Connect to chameleon by serial port, TCP, or BLE. "
+                              "Examples: -p /dev/ttyACM0 | -p tcp:127.0.0.1:4321 | "
+                              "-p ble (scan) | -p ble:AA:BB:CC:DD:EE:FF (needs 'bleak')")
         parser.add_argument("-p", "--port", type=str, required=False)
         return parser
 
@@ -6149,6 +6152,264 @@ class LFEM410xWriteT55xx(LFEMIdArgsUnit, ReaderRequiredUnit):
         id_bytes = bytes.fromhex(id_hex)
         self.cmd.em410x_write_to_t55xx(id_bytes)
         print(f" - EM410x ID write done: {id_hex}")
+
+
+def _t55_hex4(s: str, name: str) -> bytes:
+    """Parse exactly 4 hex bytes, or raise a clean ArgsParserError."""
+    try:
+        b = bytes.fromhex(s)
+    except ValueError:
+        raise ArgsParserError(f"{name} must be 8 hex digits (4 bytes)")
+    if len(b) != 4:
+        raise ArgsParserError(f"{name} must be 8 hex digits (4 bytes)")
+    return b
+
+
+def _t55_amplitude_halfbits(samples, rf_n):
+    """Binarize a SAADC amplitude capture and recover the half-bit level stream
+    with a phase-locked sampler. Half-cell = rf_n/2 samples (SAADC samples once
+    per carrier cycle), known a priori. The half-bit level is a majority vote at
+    the cell centre, and the clock re-anchors on the nearest real transition each
+    cell, so run-length jitter and stretched/merged runs in the settling region
+    don't slip Manchester phase (the RLE round(run/unit) approach did). Returns
+    the half-bit list, or []."""
+    n = len(samples)
+    if n < 96:
+        return []
+    lo, hi = min(samples), max(samples)
+    if hi - lo < 8:
+        return []
+    thr = (lo + hi) / 2.0
+    b = [1 if s >= thr else 0 for s in samples]
+    hb_len = max(2, rf_n // 2)
+    edges = [i for i in range(1, n) if b[i] != b[i - 1]]
+    if not edges:
+        return []
+    win = max(2, hb_len // 3)
+    pos = edges[0]  # anchor phase on the first transition
+    hb = []
+    while pos + hb_len <= n:
+        c = pos + hb_len // 2
+        seg = b[max(0, c - win):c + win + 1]
+        hb.append(1 if sum(seg) * 2 >= len(seg) else 0)
+        nb = pos + hb_len
+        cand = [e for e in edges if abs(e - nb) <= hb_len // 3]
+        pos = min(cand, key=lambda e: abs(e - nb)) if cand else nb
+    return hb
+
+
+def _t55_manchester_decode(hb, off):
+    """Manchester-decode a half-bit stream from a start phase, with phase-slip
+    resync. Returns (bitstring, violations)."""
+    bits, viol, i = [], 0, off
+    while i + 1 < len(hb):
+        a, d = hb[i], hb[i + 1]
+        if a == 1 and d == 0:
+            bits.append(1); i += 2
+        elif a == 0 and d == 1:
+            bits.append(0); i += 2
+        else:
+            viol += 1; i += 1  # slip one half-cell to resync
+    return "".join(map(str, bits)), viol
+
+
+def _t55_amplitude_bits(samples, rf_n):
+    """Decode the amplitude capture to a bitstring (lower-violation phase)."""
+    hb = _t55_amplitude_halfbits(samples, rf_n)
+    if not hb:
+        return ""
+    s0, v0 = _t55_manchester_decode(hb, 0)
+    s1, v1 = _t55_manchester_decode(hb, 1)
+    return s0 if v0 <= v1 else s1
+
+
+def _t55_find_word(samples, word_bytes, rf_n):
+    """Search both half-bit phases and both Manchester polarities for a 32-bit
+    word. Returns (polarity, bit_offset) or None."""
+    hb = _t55_amplitude_halfbits(samples, rf_n)
+    if not hb:
+        return None
+    target = "".join(f"{x:08b}" for x in word_bytes)
+    for off in (0, 1):
+        s, _ = _t55_manchester_decode(hb, off)
+        if target in s:
+            return ("normal", s.index(target))
+        inv = "".join("1" if ch == "0" else "0" for ch in s)
+        if target in inv:
+            return ("inverted", inv.index(target))
+    return None
+
+
+def _t55_stream_block(bits):
+    """A T55xx block is 32 bits and the tag streams it repeatedly, so a correct
+    read is one 32-bit period — not the whole demodulated smear. Find the
+    smallest repeating period in the bitstream and return (period_bits,
+    period_bitstring). period_bits == 32 means a clean block; a proper divisor
+    of 32 (e.g. 16) means the read-back collapsed to a shorter period (the known
+    dense-word framing issue) and is NOT a trustworthy 32-bit value. Returns
+    (None, None) if no stable period is found."""
+    n = len(bits)
+    if n < 16:
+        return None, None
+    for p in range(8, min(33, n // 2 + 1)):
+        agree = sum(1 for i in range(n - p) if bits[i] == bits[i + p])
+        if agree / (n - p) >= 0.92:
+            return p, bits[:p]
+    return None, None
+
+
+@lf_t55xx.command("write")
+class LFT55xxWrite(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Write a raw 32-bit word to a T55xx block"
+        parser.add_argument("-b", "--block", type=int, required=True, metavar="<0-7>",
+                            help="Block number (0-7 on page 0, 0-3 on page 1)")
+        parser.add_argument("-d", "--data", type=str, required=True, metavar="<hex>",
+                            help="32-bit data word, 4 hex bytes")
+        parser.add_argument("-p", "--pwd", type=str, default=None, metavar="<hex>",
+                            help="Password, 4 hex bytes (password-protected write)")
+        parser.add_argument("--pg1", action="store_true", help="Target page 1")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        page1 = args.pg1
+        max_block = 3 if page1 else 7
+        if not (0 <= args.block <= max_block):
+            raise ArgsParserError(f"block must be 0-{max_block} on page {'1' if page1 else '0'}")
+        word = _t55_hex4(args.data, "data")
+        pwd = _t55_hex4(args.pwd, "pwd") if args.pwd is not None else None
+        self.cmd.lf_t55xx_write(args.block, word, pwd, page1)
+        print(f" - T55xx block {args.block}{' (pg1)' if page1 else ''} <- {word.hex().upper()}")
+
+
+@lf_t55xx.command("wipe")
+class LFT55xxWipe(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Wipe a T55xx: default config to block 0, zeros to blocks 1-7"
+        parser.add_argument("-c", "--cfg", type=str, default=None, metavar="<hex>",
+                            help="Override config block 0 (4 hex bytes)")
+        parser.add_argument("-p", "--pwd", type=str, default=None, metavar="<hex>",
+                            help="Current password, 4 hex bytes (to auth the wipe)")
+        parser.add_argument("--q5", action="store_true", help="Target Q5/T5555 (config 0x6001F004)")
+        parser.add_argument("--extended", action="store_true",
+                            help="Also zero block 3 page 1 (extended-mode config)")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.cfg is not None:
+            cfg = _t55_hex4(args.cfg, "cfg")
+        else:
+            cfg = bytes.fromhex("6001F004" if args.q5 else "000880E0")
+        pwd = _t55_hex4(args.pwd, "pwd") if args.pwd is not None else None
+        zero = b"\x00\x00\x00\x00"
+        # Block 0 first, authenticated if a password was supplied. The default
+        # config clears the pwd bit, so blocks 1-7 are then written open.
+        self.cmd.lf_t55xx_write(0, cfg, pwd, page1=False)
+        for blk in range(1, 8):
+            self.cmd.lf_t55xx_write(blk, zero, None, page1=False)
+        if args.extended:
+            self.cmd.lf_t55xx_write(3, zero, None, page1=True)
+        print(f" - T55xx wiped (block 0 = {cfg.hex().upper()}"
+              f"{', Q5' if args.q5 else ''}{', +pg1 blk3' if args.extended else ''})")
+
+
+@lf_t55xx.command("read")
+class LFT55xxRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Read a T55xx block (Manchester) and dump the demodulated bitstream"
+        parser.add_argument("-b", "--block", type=int, required=True, metavar="<0-7>")
+        parser.add_argument("--rf", type=int, default=32, metavar="<n>",
+                            help="Bitrate divisor RF/n (default 32; em410x uses 64)")
+        parser.add_argument("-p", "--pwd", type=str, default=None, metavar="<hex>",
+                            help="Password, 4 hex bytes")
+        parser.add_argument("--pg1", action="store_true", help="Target page 1")
+        parser.add_argument("--expect", type=str, default=None, metavar="<hex>",
+                            help="Verify: report whether this 32-bit word (4 hex bytes) is present")
+        parser.add_argument("--raw", action="store_true",
+                            help="Diagnostic: dump raw edge intervals (carrier cycles) instead of decoding")
+        parser.add_argument("--adc", action="store_true",
+                            help="Diagnostic: dump raw SAADC envelope amplitude (robust for dense data)")
+        parser.add_argument("--regread", action="store_true",
+                            help="Diagnostic: skip the addressed downlink, capture the regular-read stream")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        pwd = _t55_hex4(args.pwd, "pwd") if args.pwd else None
+        downlink = not args.regread
+        mode = "regular-read" if args.regread else "addressed"
+
+        # --raw: edge-interval diagnostic (fragile on dense data; see --adc).
+        if args.raw:
+            n, items = self.cmd.lf_t55xx_read(args.block, args.rf, pwd, args.pg1,
+                                              raw=True, downlink=downlink)
+            if n == 0:
+                print(f"{CR} - no response ({mode}; try --adc to see the envelope){C0}")
+                return
+            print(f" - {n} edge intervals ({mode}):")
+            for i in range(0, n, 20):
+                print("   " + " ".join(f"{v:3d}" for v in items[i:i + 20]))
+            nz = [v for v in items if v]
+            if nz:
+                hi = {}
+                for v in nz:
+                    hi[v] = hi.get(v, 0) + 1
+                top = sorted(hi.items(), key=lambda kv: -kv[1])[:6]
+                print("   most common: " + ", ".join(f"{v}({c})" for v, c in top))
+                print(f"   min={min(nz)} max={max(nz)}  (expect clusters near {args.rf}, "
+                      f"{args.rf * 3 // 2}, {args.rf * 2} for RF/{args.rf} Manchester)")
+            return
+
+        # Default: SAADC amplitude capture + host-side Manchester decode — robust
+        # to the weak transitions that defeat edge timing on dense words.
+        n, samples = self.cmd.lf_t55xx_read(args.block, args.rf, pwd, args.pg1,
+                                            adc=True, downlink=downlink)
+        if n == 0:
+            print(f"{CR} - no response ({mode}; check --rf){C0}")
+            return
+
+        if args.adc:
+            mean = sum(samples) / n
+            print(f" - {n} amplitude samples ({mode}), mean={mean:.1f} "
+                  f"min={min(samples)} max={max(samples)}:")
+            for i in range(0, n, 32):
+                print("   " + " ".join(f"{v:3d}" for v in samples[i:i + 32]))
+            trace = "".join("1" if v >= mean else "0" for v in samples)
+            print(" - threshold@mean:")
+            for i in range(0, len(trace), 64):
+                print("   " + trace[i:i + 64])
+
+        bits = _t55_amplitude_bits(samples, args.rf)
+        if not bits:
+            print(f"{CR} - decode failed: no clean modulation (check --rf / --adc){C0}")
+            return
+        period, unit = _t55_stream_block(bits)
+        if period is None:
+            print(f"{CY} - no stable period ({len(bits)} bits demodulated "
+                  f"@ RF/{args.rf}, {mode}):{C0}")
+            for i in range(0, len(bits), 64):
+                print(f"   {bits[i:i + 64]}")
+        else:
+            reps = 32 // period
+            blk = int((unit * (reps + 1))[:32], 2)
+            if period == 32:
+                note = "32-bit block"
+            else:
+                note = (f"{period}-bit period — a repetitive value or the known "
+                        f"dense-word read collapse")
+            print(f" - block {args.block} @ RF/{args.rf} ({mode}): {blk:08X}  "
+                  f"[{note}; may be inverted/rotated — use --expect to test a value]")
+        if args.expect is not None:
+            want = _t55_hex4(args.expect, "expect")
+            res = _t55_find_word(samples, want, args.rf)
+            if res:
+                polarity, off = res
+                tag = "" if polarity == "normal" else " (inverted)"
+                print(f"{CG} - verify OK: {args.expect.upper()} found at bit {off}{tag}{C0}")
+            else:
+                print(f"{CR} - verify MISMATCH: {args.expect.upper()} not in stream{C0}")
 
 
 @lf_hid_prox.command("read")

@@ -1,9 +1,14 @@
 #include "bsp_delay.h"
+#include "bsp_time.h"
+#include "circular_buffer.h"
 #include "hex_utils.h"
 #include "lf_125khz_radio.h"
+#include "lf_reader_data.h"
 #include "nrf_gpio.h"
 #include "protocols/t55xx.h"
 #include "timeslot.h"
+
+#include "utils/manchester.h"
 
 #define NRF_LOG_MODULE_NAME lf_t55xx
 #include "nrf_log.h"
@@ -143,4 +148,142 @@ void t55xx_reset_passwd(uint32_t old_passwd, uint32_t new_passwd) {
     t55xx_send_cmd(T5577_OPCODE_PAGE0, &old_passwd, 0, &new_passwd, 7);  // 0 area 7 blocks to write new passwords (passwords)
     t55xx_send_cmd(T5577_OPCODE_PAGE0, &old_passwd, 0, &new_passwd, 7);  // 0 area 7 blocks to write new passwords (passwords)
     t55xx_send_cmd(T5577_OPCODE_RESET, NULL, 0, NULL, 0);
+}
+
+// ---------------------------------------------------------------------------
+// T55xx block read — reuses the proven em410x edge-capture front-end
+// (register_rio_callback + gpiote + LF counter), same as em410x_read().
+//
+// Instrumented: mode 1 dumps the raw edge intervals (carrier cycles between
+// falling edges) so the signal can be inspected directly; mode 0 feeds the
+// manchester modem; mode 2 captures the raw SAADC envelope amplitude (the
+// robust path for dense data — immune to the comparator missing weak
+// transitions). downlink=1 sends the addressed read command first;
+// downlink=0 captures the free-running regular-read stream (blocks 1..maxblock).
+//
+// Manchester only for now. Covers default/wipe (0x000880E0, RF/32), em410x
+// (RF/64), viking (RF/32).
+// ---------------------------------------------------------------------------
+
+#define T55XX_CB_SIZE 256
+
+static circular_buffer t55xx_g_cb;
+static uint8_t t55xx_g_rf_n = 32;
+
+static void t55xx_edge_cb(void) {
+    uint32_t cnt = get_lf_counter_value();
+    uint16_t val = (cnt > 0xff) ? 0xff : (uint16_t)(cnt & 0xff);
+    cb_push_back(&t55xx_g_cb, &val);
+    clear_lf_counter_value();
+}
+
+/*
+ * Bitrate-scaled Manchester cell classifier. Derived from em4x05's RF/64
+ * table (T1=0x40, T15=0x60, T2=0x80, JIT=0x10) by the ratio rf_n/64.
+ */
+static uint8_t t55xx_manch_period(uint8_t iv) {
+    uint16_t t1  = t55xx_g_rf_n;
+    uint16_t t15 = (uint16_t)t55xx_g_rf_n * 3 / 2;
+    uint16_t t2  = (uint16_t)t55xx_g_rf_n * 2;
+    uint16_t jit = t55xx_g_rf_n / 4;
+    if (iv >= t1  - jit && iv <= t1  + jit) return 0;
+    if (iv >= t15 - jit && iv <= t15 + jit) return 1;
+    if (iv >= t2  - jit && iv <= t2  + jit) return 2;
+    return 3;
+}
+
+/**
+ * @brief Capture from a T55xx.
+ *
+ * @param rf_n       bitrate divisor (0 => 32); demod mode only
+ * @param mode       0 = Manchester-demod bits, 1 = raw edge intervals,
+ *                   2 = raw SAADC envelope amplitude (8-bit/sample)
+ * @param downlink   1 = send addressed read command first; 0 = regular read
+ * @param use_passwd password-protected read (downlink only)
+ * @param passwd     32-bit password
+ * @param block      block number
+ * @param page1      target page 1
+ * @param out        caller buffer: intervals/amplitude bytes, or 1-bit-per-byte
+ * @param max_out    capacity of out
+ * @param timeout_ms capture window
+ * @return number of items written (bits for demod, else bytes)
+ */
+uint16_t t55xx_read(uint8_t rf_n, uint8_t mode, uint8_t downlink,
+                    uint8_t use_passwd, uint32_t passwd,
+                    uint8_t block, uint8_t page1,
+                    uint8_t *out, uint16_t max_out, uint32_t timeout_ms) {
+    t55xx_g_rf_n = rf_n ? rf_n : 32;
+
+    uint8_t   opcode  = page1 ? T5577_OPCODE_PAGE1 : T5577_OPCODE_PAGE0;
+    uint32_t *pwd_ptr = use_passwd ? &passwd : NULL;
+
+    /* Mode 2: SAADC envelope amplitude — reuses the proven raw_read_to_buffer
+     * sampler (immune to comparator miss-triggering on dense data), but with
+     * the field held on after the addressed downlink instead of self-managed. */
+    if (mode == 2) {
+        start_lf_125khz_radio();
+        bsp_delay_ms(2);
+        if (downlink) {
+            t55xx_send_cmd(opcode, pwd_ptr, 0, NULL, block);  /* field stays on */
+        }
+        size_t outlen = 0;
+        raw_read_to_buffer_ex(out, max_out, timeout_ms, &outlen, false);
+        stop_lf_125khz_radio();
+        return (uint16_t)outlen;
+    }
+
+    /* Modes 0/1: edge front-end. Match em410x_read ordering — hook the edge
+     * front-end BEFORE the field. */
+    cb_init(&t55xx_g_cb, T55XX_CB_SIZE, sizeof(uint16_t));
+    register_rio_callback(t55xx_edge_cb);
+    lf_125khz_radio_gpiote_enable();
+    start_lf_125khz_radio();
+    bsp_delay_ms(2);  /* antenna settle, like raw_read_to_buffer */
+
+    if (downlink) {
+        /* data=NULL, lock_bit=0 => READ downlink; field left on, no RESET. */
+        t55xx_send_cmd(opcode, pwd_ptr, 0, NULL, block);
+    }
+    clear_lf_counter_value();
+
+    uint16_t n = 0;
+    autotimer *p_at = bsp_obtain_timer(0);
+
+    if (mode == 1) {
+        while (n < max_out && NO_TIMEOUT_1MS(p_at, timeout_ms)) {
+            uint16_t iv = 0;
+            if (!cb_pop_front(&t55xx_g_cb, &iv)) {
+                continue;
+            }
+            out[n++] = (uint8_t)(iv & 0xff);
+        }
+    } else {
+        manchester modem = {
+            .sync = true,
+            .rp   = t55xx_manch_period,
+        };
+        while (n < max_out && NO_TIMEOUT_1MS(p_at, timeout_ms)) {
+            uint16_t iv = 0;
+            if (!cb_pop_front(&t55xx_g_cb, &iv)) {
+                continue;
+            }
+            bool mbits[2] = {false, false};
+            int8_t mlen = 0;
+            manchester_feed(&modem, (uint8_t)iv, mbits, &mlen);
+            if (mlen == -1) {
+                manchester_reset(&modem);  /* resync only; keep the run intact */
+                continue;
+            }
+            for (int8_t i = 0; i < mlen && n < max_out; i++) {
+                out[n++] = mbits[i] ? 1 : 0;
+            }
+        }
+    }
+
+    bsp_return_timer(p_at);
+    lf_125khz_radio_gpiote_disable();
+    unregister_rio_callback();
+    cb_free(&t55xx_g_cb);
+    stop_lf_125khz_radio();
+    return n;
 }

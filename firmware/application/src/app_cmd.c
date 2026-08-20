@@ -1072,6 +1072,75 @@ static data_frame_tx_t *cmd_processor_lf_t55xx_write(uint16_t cmd, uint16_t stat
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+#define T55XX_READ_MAX_ITEMS 320   /* bits (demod) or interval bytes (mode 1) */
+#define T55XX_ADC_MAX_SAMPLES 2048 /* mode 2: ~64 bits at 32 samples/bit */
+static data_frame_tx_t *cmd_processor_lf_t55xx_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t block;
+        uint8_t page1;
+        uint8_t use_pwd;
+        uint8_t pwd[4];       /* 32-bit password, big-endian */
+        uint8_t rf_n;         /* bitrate divisor RF/n (demod only) */
+        uint8_t mode;         /* 0 = demod bits, 1 = raw edge intervals, 2 = SAADC amplitude */
+        uint8_t downlink;     /* 1 = addressed read downlink, 0 = regular read */
+        uint8_t max_items[2]; /* big-endian, clamped per mode */
+    } PACKED payload_t;
+
+    if (length < sizeof(payload_t)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    payload_t *p = (payload_t *)data;
+
+    uint8_t page1     = p->page1 ? 1 : 0;
+    uint8_t max_block = page1 ? 3u : 7u;
+    if (p->block > max_block) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    uint16_t cap  = (p->mode == 2) ? T55XX_ADC_MAX_SAMPLES : T55XX_READ_MAX_ITEMS;
+    uint16_t want = (uint16_t)bytes_to_num(p->max_items, 2);
+    if (want == 0 || want > cap) {
+        want = cap;
+    }
+
+    uint8_t *buf = malloc(cap);
+    if (buf == NULL) {
+        return data_frame_make(cmd, STATUS_MEM_ERR, 0, NULL);
+    }
+
+    uint16_t n = t55xx_read(p->rf_n, p->mode, p->downlink, p->use_pwd,
+                            (uint32_t)bytes_to_num(p->pwd, 4),
+                            p->block, page1, buf, want, 500);
+
+    /* Response: [u16 count][payload].
+     * mode 0 -> count = bits, payload = MSB-first packed bits.
+     * mode 1 -> count = interval bytes, payload verbatim.
+     * mode 2 -> count = amplitude samples, payload verbatim (8-bit each). */
+    uint16_t nbytes = (p->mode == 0) ? (uint16_t)((n + 7) / 8) : n;
+    uint8_t *out = malloc(2 + nbytes);
+    if (out == NULL) {
+        free(buf);
+        return data_frame_make(cmd, STATUS_MEM_ERR, 0, NULL);
+    }
+    out[0] = (uint8_t)(n >> 8);
+    out[1] = (uint8_t)(n & 0xff);
+    if (p->mode == 0) {
+        memset(out + 2, 0, nbytes);
+        for (uint16_t i = 0; i < n; i++) {
+            if (buf[i]) {
+                out[2 + (i >> 3)] |= (uint8_t)(0x80 >> (i & 7));
+            }
+        }
+    } else {
+        memcpy(out + 2, buf, n);
+    }
+
+    data_frame_tx_t *frame = data_frame_make(cmd, STATUS_LF_TAG_OK, 2 + nbytes, out);
+    free(out);
+    free(buf);
+    return frame;
+}
+
 #define GENERIC_READ_LEN 800
 #define GENERIC_READ_TIMEOUT_MS 500
 static data_frame_tx_t *cmd_processor_generic_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -3574,6 +3643,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
 #endif
     {    DATA_CMD_IDTECK_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_idteck_write_to_t55xx,         NULL                   },
     {    DATA_CMD_LF_T55XX_WRITE,               before_reader_run,           cmd_processor_lf_t55xx_write,                NULL                   },
+    {    DATA_CMD_LF_T55XX_READ,                before_reader_run,           cmd_processor_lf_t55xx_read,                 NULL                   },
     {    DATA_CMD_ADC_GENERIC_READ,             before_reader_run,           cmd_processor_generic_read,                  NULL                   },
 
     {    DATA_CMD_HF14A_SET_FIELD_ON,           before_reader_run,           cmd_processor_hf14a_set_field_on,            NULL                   },

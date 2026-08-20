@@ -671,6 +671,62 @@ class ChameleonCMD:
         raise ValueError("The id bytes length must equal 5 (EM410X) or 13 (Electra)")
 
     @expect_response(Status.LF_TAG_OK)
+    def lf_t55xx_write(self, block: int, word: bytes, pwd: bytes = None, page1: bool = False):
+        """
+        Write a raw 32-bit word to a T55xx block (Ultra only).
+
+        :param block: block number (0-7 page 0, 0-3 page 1)
+        :param word:  4-byte big-endian data word
+        :param pwd:   4-byte password, or None for open write
+        :param page1: target page 1 instead of page 0
+        """
+        use_pwd = pwd is not None
+        pwd_bytes = pwd if use_pwd else b'\x00\x00\x00\x00'
+        data = struct.pack('!B4sB4sB', block, word, int(use_pwd), pwd_bytes, int(page1))
+        return self.device.send_cmd_sync(Command.LF_T55XX_WRITE, data)
+
+    @expect_response(Status.LF_TAG_OK)
+    def lf_t55xx_read(self, block: int, rf_n: int = 32, pwd: bytes = None,
+                      page1: bool = False, raw: bool = False, downlink: bool = True,
+                      adc: bool = False, max_items: int = None):
+        """
+        Read a T55xx block (Ultra only).
+
+        Returns (n, items). mode 0 (default): items is a list of demod bits.
+        mode 1 (raw=True): items is a list of edge-interval integers. mode 2
+        (adc=True): items is a list of 8-bit SAADC envelope amplitude samples
+        (~32 samples/bit at RF/32) — the robust path for dense data.
+
+        :param block:    block number (0-7 page 0, 0-3 page 1)
+        :param rf_n:     bitrate divisor RF/n (demod only)
+        :param pwd:      4-byte password, or None for open read
+        :param page1:    target page 1
+        :param raw:      True => raw edge intervals (diagnostic)
+        :param downlink: True => send addressed read command; False => regular read
+        :param adc:      True => raw SAADC amplitude envelope (diagnostic)
+        :param max_items: capture ceiling (firmware clamps: 320 edge, 2048 adc)
+        """
+        mode = 2 if adc else (1 if raw else 0)
+        if max_items is None:
+            max_items = 2048 if adc else 320
+        use_pwd = pwd is not None
+        pwd_bytes = pwd if use_pwd else b'\x00\x00\x00\x00'
+        data = struct.pack('!BBB4sBBBH', block, int(page1), int(use_pwd), pwd_bytes,
+                           rf_n, mode, int(downlink), max_items)
+        resp = self.device.send_cmd_sync(Command.LF_T55XX_READ, data)
+        if resp.status == Status.LF_TAG_OK and len(resp.data) >= 2:
+            n = struct.unpack('!H', resp.data[:2])[0]
+            body = resp.data[2:]
+            if mode == 0:
+                items = [(body[i >> 3] >> (7 - (i & 7))) & 1 for i in range(n)]
+            else:
+                items = list(body[:n])
+            resp.parsed = (n, items)
+        else:
+            resp.parsed = (0, [])
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
     def hidprox_scan(self, format: int):
         """
         Read the length, facility code and card number of HID Prox.
