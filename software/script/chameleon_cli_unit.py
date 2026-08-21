@@ -6251,6 +6251,16 @@ def _t55_stream_block(bits):
     n = len(bits)
     if n < 16:
         return None, None
+    # Skip a long constant settling lead-in (the field-on ramp demodulates as one
+    # sustained level and otherwise dominates the period search).
+    lead = 1
+    while lead < n and bits[lead] == bits[0]:
+        lead += 1
+    if lead > 48:
+        bits = bits[lead:]
+        n = len(bits)
+        if n < 16:
+            return None, None
     for p in range(8, min(33, n // 2 + 1)):
         agree = sum(1 for i in range(n - p) if bits[i] == bits[i + p])
         if agree / (n - p) >= 0.92:
@@ -6292,22 +6302,122 @@ def _t55_parse_block0(b0):
     }
 
 
-def _t55_read_framed(cmd, block, rf, pwd, page1, modulation):
-    """Read a block and frame it to its repeating unit -> (period, unit) or
-    (None, None). modulation 0 = Manchester (SAADC amplitude, host-decoded, the
-    robust path); 1 = biphase (firmware diphase_feed demod, mode 0)."""
+def _t55_decode_bits(cmd, block, rf, pwd, page1, modulation):
+    """Return the raw demodulated bit STRING for a block before any 32-bit framing
+    (modulation 0 = Manchester via SAADC amplitude host decode; 1 = biphase via the
+    firmware diphase_feed demod), or "" on failure."""
     if modulation == 1:
         n, items = cmd.lf_t55xx_read(block, rf, pwd, page1, modulation=1)
-        if not items:
-            return None, None
-        return _t55_stream_block("".join("1" if b else "0" for b in items))
+        return "".join("1" if b else "0" for b in items) if items else ""
     n, samples = cmd.lf_t55xx_read(block, rf, pwd, page1, adc=True)
     if n == 0:
-        return None, None
-    bits = _t55_amplitude_bits(samples, rf)
+        return ""
+    return _t55_amplitude_bits(samples, rf) or ""
+
+
+def _t55_lock_config(bits, rf, want_mods):
+    """Slide a 32-bit window over the stream and return (block0, fields, inverted)
+    for the first window that REPEATS (== the next 32 bits) AND parses to a config
+    whose modulation is in want_mods, bitrate == rf, not extended. The repeat
+    requirement skips the settling lead-in, tolerates block rotation, and rejects
+    streaming tags (FDX-B) that never present a repeating 32-bit config block.
+    Mirrors PM3's stride-locked framing. Returns None if nothing matches."""
+    if not bits:
+        return None
+    n = len(bits)
+    for i in range(n - 64):
+        for inv in (0, 1):
+            seg = bits[i:i + 32]
+            nxt = bits[i + 32:i + 64]
+            if inv:
+                seg = "".join("1" if c == "0" else "0" for c in seg)
+                nxt = "".join("1" if c == "0" else "0" for c in nxt)
+            if seg != nxt:
+                continue
+            f = _t55_parse_block0(int(seg, 2))
+            if (f["modulation"] in want_mods and not f["extend"]
+                    and f["rf"] == rf and f["maxblock"] >= 1):
+                return int(seg, 2), f, inv
+    return None
+
+
+def _t55_detect_sources(cmd, rf, pwd, modcode):
+    """Candidate demodulated bit strings for detecting block 0 at this rate. For
+    Manchester, try the firmware EDGE decode first (block 0 is sparse, so the edge
+    path is reliable and sidesteps the amplitude decoder's phase ambiguity on config
+    words) plus the SAADC amplitude decode as a denser-config fallback. For biphase,
+    the firmware diphase edge decode."""
+    out = []
+    if modcode == 0:
+        n, items = cmd.lf_t55xx_read(0, rf, pwd, False, modulation=0)
+        if items:
+            out.append("".join("1" if b else "0" for b in items))
+        n, samples = cmd.lf_t55xx_read(0, rf, pwd, False, adc=True)
+        if n:
+            b = _t55_amplitude_bits(samples, rf)
+            if b:
+                out.append(b)
+    else:
+        n, items = cmd.lf_t55xx_read(0, rf, pwd, False, modulation=1)
+        if items:
+            out.append("".join("1" if b else "0" for b in items))
+    return out
+
+
+def _t55_read_framed(cmd, block, rf, pwd, page1, modulation):
+    """Read a block and frame it to its repeating unit -> (period, unit) or
+    (None, None)."""
+    bits = _t55_decode_bits(cmd, block, rf, pwd, page1, modulation)
     if not bits:
         return None, None
     return _t55_stream_block(bits)
+
+
+def _t55_frame_block(bits):
+    """Frame a demodulated stream to one 32-bit block: skip a long constant settling
+    lead-in, then return (value, note) for the most common 32-bit window that repeats
+    (== the next 32 bits) — any rotation of the true block, hence the caller's "may
+    be rotated" note. Falls back to the shortest repeating period (flagging a
+    collapse) when nothing repeats at 32; (None, None) if unusable."""
+    n = len(bits)
+    if n < 64:
+        return None, None
+    lead = 1
+    while lead < n and bits[lead] == bits[0]:
+        lead += 1
+    if lead > 48:
+        bits = bits[lead:]
+        n = len(bits)
+        if n < 64:
+            return None, None
+    reps = {}
+    for i in range(n - 64):
+        w = bits[i:i + 32]
+        if w == bits[i + 32:i + 64]:
+            reps[w] = reps.get(w, 0) + 1
+    if reps:
+        return int(max(reps, key=reps.get), 2), "32-bit block"
+    period, unit = _t55_stream_block(bits)
+    if period is None:
+        return None, None
+    return int((unit * (32 // period + 1))[:32], 2), \
+        f"{period}-bit period — repetitive value or dense-word collapse"
+
+
+def _t55_expect_match(bits, want):
+    """True if the 32-bit `want` appears as a repeating window in any rotation or
+    inverted polarity of the demodulated stream."""
+    wb = format(want, "032b")
+    cands = set()
+    for base in (wb, "".join("1" if c == "0" else "0" for c in wb)):
+        for r in range(32):
+            cands.add(base[r:] + base[:r])
+    n = len(bits)
+    for i in range(n - 64):
+        w = bits[i:i + 32]
+        if w == bits[i + 32:i + 64] and w in cands:
+            return True
+    return False
 
 
 @lf_t55xx.command("write")
@@ -6372,11 +6482,12 @@ class LFT55xxDetect(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = (
-            "Detect a T55xx tag by reading block 0 and decoding its config. "
-            "Right now only the Manchester feeder is wired into t55xx read, so detect "
-            "tries the common Manchester bit rates and reports the first self-consistent "
-            "hit (the firmware also has biphase and FSK feeders, not yet wired here; PSK "
-            "read is not implemented). Sets the default RF/n for subsequent `read`.")
+            "Detect a T55xx tag by reading block 0 and stride-locking its config: "
+            "slides a 32-bit window over the demodulated stream and accepts the first "
+            "window that repeats and parses to a valid config at the read rate. Tries "
+            "Manchester (amplitude path) and biphase (firmware diphase). FSK/PSK are not "
+            "wired; streaming tags with no addressable config block (e.g. FDX-B) are "
+            "reported as such. Sets the default RF/n for subsequent `read`.")
         parser.add_argument("-p", "--pwd", type=str, default=None, metavar="<hex>",
                             help="Password, 4 hex bytes (if block 0 is read-protected)")
         return parser
@@ -6390,29 +6501,26 @@ class LFT55xxDetect(ReaderRequiredUnit):
         # firmware diphase demod. FSK/PSK are not wired yet.
         for modname, modcode, want in (("manchester", 0, (8,)), ("biphase", 1, (16, 24))):
             for rf in (32, 64, 16, 40, 50, 100, 128, 8):
-                period, unit = _t55_read_framed(self.cmd, 0, rf, pwd, False, modcode)
-                if period != 32:
-                    continue
-                inv = "".join("1" if c == "0" else "0" for c in unit)
-                for b0 in (int(unit, 2), int(inv, 2)):
-                    f = _t55_parse_block0(b0)
-                    if f["modulation"] in want and not f["extend"] and f["rf"] == rf:
-                        _T55_DETECTED["rf"] = rf
-                        _T55_DETECTED["mod"] = modname
-                        print(f" - T55xx detected  (block 0 = {f['block0']:08X})")
-                        print(f"     modulation : {f['mod_name']}")
-                        print(f"     bit rate   : RF/{f['rf']}")
-                        print(f"     max block  : {f['maxblock']}")
-                        print(f"     password   : {'yes' if f['pwd'] else 'no'}")
-                        print(f"     seq term   : {'yes' if f['st'] else 'no'}")
-                        print(f"     inverted   : {'yes' if f['inverted'] else 'no'}")
-                        print(f"{CG} - read now defaults to RF/{rf} ({modname}). Reliable for "
-                              f"block 0 / sparse blocks; dense 32-bit data is still subject to "
-                              f"the known read issue.{C0}")
-                        return
-        print(f"{CR} - detect failed: no self-consistent Manchester or biphase config found.{C0}")
-        print(f"{CY}   The tag may be FSK/PSK (not wired into t55xx read) or a rate not tried. "
-              f"Inspect the envelope with `lf t55xx read -b 0 --adc`.{C0}")
+                for bits in _t55_detect_sources(self.cmd, rf, pwd, modcode):
+                    res = _t55_lock_config(bits, rf, want)
+                    if not res:
+                        continue
+                    b0, f, inv = res
+                    _T55_DETECTED["rf"] = rf
+                    _T55_DETECTED["mod"] = modname
+                    print(f" - T55xx detected  (block 0 = {f['block0']:08X})")
+                    print(f"     modulation : {f['mod_name']}")
+                    print(f"     bit rate   : RF/{f['rf']}")
+                    print(f"     max block  : {f['maxblock']}")
+                    print(f"     password   : {'yes' if f['pwd'] else 'no'}")
+                    print(f"     seq term   : {'yes' if f['st'] else 'no'}")
+                    print(f"     inverted   : {'yes' if f['inverted'] else 'no'}")
+                    print(f"{CG} - read now defaults to RF/{rf} ({modname}).{C0}")
+                    return
+        print(f"{CR} - detect failed: no repeating 32-bit config block found.{C0}")
+        print(f"{CY}   Likely a streaming tag with no addressable config block (e.g. FDX-B — "
+              f"use `lf fdxb`), or FSK/PSK (not wired into t55xx read), or a rate not tried. "
+              f"`lf t55xx read -b 0 --adc` shows the raw envelope.{C0}")
 
 
 @lf_t55xx.command("read")
@@ -6469,66 +6577,45 @@ class LFT55xxRead(ReaderRequiredUnit):
                       f"{args.rf * 3 // 2}, {args.rf * 2} for RF/{args.rf} Manchester)")
             return
 
-        # Default: SAADC amplitude capture + host-side Manchester decode — robust
-        # to the weak transitions that defeat edge timing on dense words.
-        n, samples = self.cmd.lf_t55xx_read(args.block, args.rf, pwd, args.pg1,
-                                            adc=True, downlink=downlink)
-        if n == 0:
-            print(f"{CR} - no response ({mode}; check --rf){C0}")
-            return
-
+        # Optional --adc: amplitude-envelope diagnostic dump (the block value itself
+        # is decoded from the firmware demod below).
         if args.adc:
-            mean = sum(samples) / n
-            print(f" - {n} amplitude samples ({mode}), mean={mean:.1f} "
-                  f"min={min(samples)} max={max(samples)}:")
-            for i in range(0, n, 32):
-                print("   " + " ".join(f"{v:3d}" for v in samples[i:i + 32]))
-            trace = "".join("1" if v >= mean else "0" for v in samples)
-            print(" - threshold@mean:")
-            for i in range(0, len(trace), 64):
-                print("   " + trace[i:i + 64])
+            n, samples = self.cmd.lf_t55xx_read(args.block, args.rf, pwd, args.pg1,
+                                                adc=True, downlink=downlink)
+            if n:
+                mean = sum(samples) / n
+                print(f" - {n} amplitude samples ({mode}), mean={mean:.1f} "
+                      f"min={min(samples)} max={max(samples)}:")
+                for i in range(0, n, 32):
+                    print("   " + " ".join(f"{v:3d}" for v in samples[i:i + 32]))
+                trace = "".join("1" if v >= mean else "0" for v in samples)
+                print(" - threshold@mean:")
+                for i in range(0, len(trace), 64):
+                    print("   " + trace[i:i + 64])
 
-        if modulation == 1:
-            # biphase: firmware diphase_feed demod (mode 0), framed to 32 bits
-            period, unit = _t55_read_framed(self.cmd, args.block, args.rf, pwd, args.pg1, 1)
-            if period is None:
-                print(f"{CR} - biphase decode: no stable period @ RF/{args.rf} ({mode}); "
-                      f"try --adc to inspect, or a different --rf.{C0}")
-                return
-            reps = 32 // period
-            blk = int((unit * (reps + 1))[:32], 2)
-            note = "32-bit block" if period == 32 else f"{period}-bit period"
-            print(f" - block {args.block} @ RF/{args.rf} ({mode}, biphase): {blk:08X}  "
-                  f"[{note}; may be inverted/rotated]")
+        # Block value via the firmware demod (edge path — the proven decoder detect
+        # uses; Manchester or biphase per --mod).
+        n, items = self.cmd.lf_t55xx_read(args.block, args.rf, pwd, args.pg1,
+                                          modulation=modulation, downlink=downlink)
+        if not items:
+            print(f"{CR} - no response ({mode}; check --rf / --mod){C0}")
             return
-
-        bits = _t55_amplitude_bits(samples, args.rf)
-        if not bits:
-            print(f"{CR} - decode failed: no clean modulation (check --rf / --adc){C0}")
-            return
-        period, unit = _t55_stream_block(bits)
-        if period is None:
-            print(f"{CY} - no stable period ({len(bits)} bits demodulated "
-                  f"@ RF/{args.rf}, {mode}):{C0}")
+        bits = "".join("1" if b else "0" for b in items)
+        label = "biphase" if modulation == 1 else "manchester"
+        val, note = _t55_frame_block(bits)
+        if val is None:
+            print(f"{CY} - no stable block ({len(bits)} bits demodulated @ RF/{args.rf}, "
+                  f"{mode}, {label}):{C0}")
             for i in range(0, len(bits), 64):
                 print(f"   {bits[i:i + 64]}")
-        else:
-            reps = 32 // period
-            blk = int((unit * (reps + 1))[:32], 2)
-            if period == 32:
-                note = "32-bit block"
-            else:
-                note = (f"{period}-bit period — a repetitive value or the known "
-                        f"dense-word read collapse")
-            print(f" - block {args.block} @ RF/{args.rf} ({mode}): {blk:08X}  "
-                  f"[{note}; may be inverted/rotated — use --expect to test a value]")
+            return
+        print(f" - block {args.block} @ RF/{args.rf} ({mode}, {label}): {val:08X}  "
+              f"[{note}; may be inverted/rotated — use --expect to test a value]")
         if args.expect is not None:
-            want = _t55_hex4(args.expect, "expect")
-            res = _t55_find_word(samples, want, args.rf)
-            if res:
-                polarity, off = res
-                tag = "" if polarity == "normal" else " (inverted)"
-                print(f"{CG} - verify OK: {args.expect.upper()} found at bit {off}{tag}{C0}")
+            want = int.from_bytes(_t55_hex4(args.expect, "expect"), "big")
+            if _t55_expect_match(bits, want):
+                print(f"{CG} - verify OK: {args.expect.upper()} present "
+                      f"(some rotation/polarity){C0}")
             else:
                 print(f"{CR} - verify MISMATCH: {args.expect.upper()} not in stream{C0}")
 
