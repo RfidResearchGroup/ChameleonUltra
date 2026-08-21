@@ -6258,6 +6258,40 @@ def _t55_stream_block(bits):
     return None, None
 
 
+# T5577 block-0 (configuration) decode, field layout per PM3 SetConfigWithBlock0Ex
+# (RfidResearchGroup/proxmark3 client/src/cmdlft55xx.c). Verified against known
+# configs 0x000880E0 (Manchester RF/32, maxblock 7) and 0x00148040 (em410x:
+# Manchester RF/64, maxblock 2).
+_T55_MOD = {0: "DIRECT (ASK/NRZ)", 1: "PSK1", 2: "PSK2", 3: "PSK3",
+            4: "FSK1", 5: "FSK2", 6: "FSK1a", 7: "FSK2a",
+            8: "Manchester", 16: "Biphase", 24: "Biphase-a (CDP)"}
+_T55_BITRATE = [8, 16, 32, 40, 50, 64, 100, 128]  # 3-bit non-extended dbr index
+
+# Detected config from `lf t55xx detect`, used as the default RF for `read`.
+_T55_DETECTED = {"rf": None}
+
+
+def _t55_parse_block0(b0):
+    """Decode a T5577 block-0 config word into its fields."""
+    extend = (b0 >> 17) & 0x01                 # X-mode / extended bit-rate
+    if extend:
+        dbr = (b0 >> 18) & 0x3F                 # extended rate table differs
+        rf = None
+    else:
+        dbr = (b0 >> 18) & 0x07
+        rf = _T55_BITRATE[dbr]
+    modulation = (b0 >> 12) & 0x1F
+    return {
+        "block0": b0, "extend": bool(extend), "rf": rf, "dbr": dbr,
+        "modulation": modulation,
+        "mod_name": _T55_MOD.get(modulation, f"0x{modulation:02X} (unknown)"),
+        "maxblock": (b0 >> 5) & 0x07,
+        "pwd": bool((b0 >> 4) & 1),
+        "st": bool((b0 >> 3) & 1),
+        "inverted": bool((b0 >> 1) & 1),
+    }
+
+
 @lf_t55xx.command("write")
 class LFT55xxWrite(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -6315,14 +6349,64 @@ class LFT55xxWipe(ReaderRequiredUnit):
               f"{', Q5' if args.q5 else ''}{', +pg1 blk3' if args.extended else ''})")
 
 
+@lf_t55xx.command("detect")
+class LFT55xxDetect(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Detect a T55xx tag by reading block 0 and decoding its config. "
+            "Right now only the Manchester feeder is wired into t55xx read, so detect "
+            "tries the common Manchester bit rates and reports the first self-consistent "
+            "hit (the firmware also has biphase and FSK feeders, not yet wired here; PSK "
+            "read is not implemented). Sets the default RF/n for subsequent `read`.")
+        parser.add_argument("-p", "--pwd", type=str, default=None, metavar="<hex>",
+                            help="Password, 4 hex bytes (if block 0 is read-protected)")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        pwd = _t55_hex4(args.pwd, "pwd") if args.pwd else None
+        # The winner is the rate whose block-0 decode is a clean 32-bit word AND
+        # self-consistent: block 0 must say Manchester at the very rate we read it
+        # at. That consistency check is what makes a hit trustworthy.
+        for rf in (32, 64, 16, 40, 50, 100, 128, 8):
+            n, samples = self.cmd.lf_t55xx_read(0, rf, pwd, False, adc=True)
+            if n == 0:
+                continue
+            bits = _t55_amplitude_bits(samples, rf)
+            if not bits:
+                continue
+            period, unit = _t55_stream_block(bits)
+            if period != 32:
+                continue
+            inv = "".join("1" if c == "0" else "0" for c in unit)
+            for b0 in (int(unit, 2), int(inv, 2)):
+                f = _t55_parse_block0(b0)
+                if f["modulation"] == 8 and not f["extend"] and f["rf"] == rf:
+                    _T55_DETECTED["rf"] = rf
+                    print(f" - T55xx detected  (block 0 = {f['block0']:08X})")
+                    print(f"     modulation : {f['mod_name']}")
+                    print(f"     bit rate   : RF/{f['rf']}")
+                    print(f"     max block  : {f['maxblock']}")
+                    print(f"     password   : {'yes' if f['pwd'] else 'no'}")
+                    print(f"     seq term   : {'yes' if f['st'] else 'no'}")
+                    print(f"     inverted   : {'yes' if f['inverted'] else 'no'}")
+                    print(f"{CG} - read now defaults to RF/{rf}. Reliable for block 0 / sparse "
+                          f"blocks; dense 32-bit data is still subject to the known read issue.{C0}")
+                    return
+        print(f"{CR} - detect failed: no self-consistent Manchester config block found.{C0}")
+        print(f"{CY}   The tag may be biphase/FSK/PSK or a rate not yet wired into t55xx read "
+              f"(the firmware has biphase + FSK feeders; only Manchester is wired here). "
+              f"Inspect the envelope with `lf t55xx read -b 0 --adc`.{C0}")
+
+
 @lf_t55xx.command("read")
 class LFT55xxRead(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = "Read a T55xx block (Manchester) and dump the demodulated bitstream"
         parser.add_argument("-b", "--block", type=int, required=True, metavar="<0-7>")
-        parser.add_argument("--rf", type=int, default=32, metavar="<n>",
-                            help="Bitrate divisor RF/n (default 32; em410x uses 64)")
+        parser.add_argument("--rf", type=int, default=None, metavar="<n>",
+                            help="Bitrate divisor RF/n (default: from `detect`, else 32; em410x uses 64)")
         parser.add_argument("-p", "--pwd", type=str, default=None, metavar="<hex>",
                             help="Password, 4 hex bytes")
         parser.add_argument("--pg1", action="store_true", help="Target page 1")
@@ -6337,6 +6421,8 @@ class LFT55xxRead(ReaderRequiredUnit):
         return parser
 
     def on_exec(self, args: argparse.Namespace):
+        if args.rf is None:
+            args.rf = _T55_DETECTED["rf"] or 32
         pwd = _t55_hex4(args.pwd, "pwd") if args.pwd else None
         downlink = not args.regread
         mode = "regular-read" if args.regread else "addressed"
