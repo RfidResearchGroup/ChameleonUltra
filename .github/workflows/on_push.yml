@@ -3,6 +3,10 @@ name: Push handler
 on:
   push:
 
+concurrency:
+  group: push-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   firmware_pipeline:
     name: Build Firmware
@@ -12,6 +16,8 @@ jobs:
     uses: ./.github/workflows/build_firmware.yml
   client_pipeline:
     name: Build Firmware
+    permissions:
+      contents: read
     uses: ./.github/workflows/build_client.yml
   create_dev_release:
     permissions:
@@ -24,15 +30,15 @@ jobs:
       - client_pipeline
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Download release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: release-artifacts-*
           merge-multiple: true
           path: release-artifacts
       - name: Upload to dev release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           body: |
             Auto-Generated DFU packages from latest `main` commit.
@@ -49,7 +55,7 @@ jobs:
       - name: Fix up release tag
         run: |
           git tag -f dev
-          git push --tags -f
+          git push origin refs/tags/dev --force
   create_release:
     permissions:
       contents: write
@@ -61,15 +67,17 @@ jobs:
       - client_pipeline
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Download release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: release-artifacts-*
           merge-multiple: true
           path: release-artifacts
       - name: Upload to tagged release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           body: |
             Auto-Generated DFU packages for Release ${{ github.ref_name }}
@@ -80,3 +88,15 @@ jobs:
           generate_release_notes: true
           append_body: true
           files: release-artifacts/*
+
+  start_feature_freeze:
+    name: Start the next PR review cycle
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: create_release
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    uses: ./.github/workflows/pr_review_cycle.yml
+    with:
+      start_feature_freeze: true

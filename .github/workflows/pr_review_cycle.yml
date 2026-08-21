@@ -1,0 +1,102 @@
+name: PR review cycle
+
+on:
+  # The tagged-release workflow calls this explicitly because events created by GITHUB_TOKEN do not normally start another workflow.
+  workflow_call:
+    inputs:
+      start_feature_freeze:
+        description: Label the next review batch
+        type: boolean
+        required: false
+        default: false
+  workflow_dispatch:
+  release:
+    types: [published]
+  pull_request_target:
+    types: [converted_to_draft, edited, ready_for_review, reopened, synchronize]
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: "23 4 * * *"
+
+env:
+  DRAFT_WARNING_DAYS: 30
+  DRAFT_RESPONSE_DAYS: 14
+  DRAFT_CLOSE_DAYS: 30
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr-review-cycle-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  start-feature-freeze:
+    name: Start feature-freeze batch
+    if: >-
+      inputs.start_feature_freeze == true ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'release' && github.event.release.prerelease == false)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out trusted automation
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Label all currently ready PRs
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const run = require('./.github/scripts/pr-review-cycle.js');
+            await run({ github, context, core, mode: 'start-feature-freeze' });
+
+  handle-pull-activity:
+    name: Update labels after PR activity
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out trusted automation
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Update the PR lifecycle
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const run = require('./.github/scripts/pr-review-cycle.js');
+            await run({ github, context, core, mode: 'pull-activity' });
+
+  handle-discussion-activity:
+    name: Reset inactive draft after discussion
+    if: github.event_name == 'issue_comment' && github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out trusted automation
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Update the draft lifecycle
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const run = require('./.github/scripts/pr-review-cycle.js');
+            await run({ github, context, core, mode: 'discussion-activity' });
+
+  scan-inactive-drafts:
+    name: Scan inactive drafts
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out trusted automation
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Warn, label, or close inactive drafts
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const run = require('./.github/scripts/pr-review-cycle.js');
+            await run({ github, context, core, mode: 'scan-drafts' });

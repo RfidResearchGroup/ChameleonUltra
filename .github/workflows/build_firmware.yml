@@ -6,38 +6,44 @@ on:
       checkout-sha:
         required: false
         type: string
+      publish-builder:
+        description: Build and publish the firmware builder image
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   build_fw_builder:
-    name: Build and push fw-builder Docker image
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-      contents: read
+    name: Build fw-builder Docker image
+    runs-on: ubuntu-latest # Inherits permissions from caller
     outputs:
-      image_hash: ${{ steps.push.outputs.digest }}
+      image_ref: ${{ steps.published-image.outputs.image_ref || steps.local-image.outputs.image_ref }}
     steps:
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v4
       - name: Check out the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.checkout-sha == null && github.sha || inputs.checkout-sha }}
           fetch-depth: 0
+          persist-credentials: false
       - name: ghcr.io login
-        uses: docker/login-action@v2
+        if: ${{ inputs.publish-builder }}
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Extract Docker metadata
+        if: ${{ inputs.publish-builder }}
         id: meta
-        uses: docker/metadata-action@v4
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}-fw-builder
       - name: Build and push Docker images
+        if: ${{ inputs.publish-builder }}
         id: push
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v7
         with:
           context: firmware
           push: true
@@ -45,26 +51,63 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Build Docker image for this workflow
+        if: ${{ !inputs.publish-builder }}
+        uses: docker/build-push-action@v7
+        with:
+          context: firmware
+          tags: chameleonultra-fw-builder:pr
+          outputs: type=docker,dest=${{ runner.temp }}/fw-builder.tar
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Upload Docker image
+        if: ${{ !inputs.publish-builder }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: firmware-builder-image
+          path: ${{ runner.temp }}/fw-builder.tar
+          retention-days: 1
+      - name: Use local builder image
+        if: ${{ !inputs.publish-builder }}
+        id: local-image
+        run: echo "image_ref=chameleonultra-fw-builder:pr" >> "$GITHUB_OUTPUT"
+      - name: Use published builder image
+        if: ${{ inputs.publish-builder }}
+        id: published-image
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}-fw-builder
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: echo "image_ref=${IMAGE,,}@${DIGEST}" >> "$GITHUB_OUTPUT"
   build_fw:
     name: Build firmware
     runs-on: ubuntu-latest
     needs: build_fw_builder
+    permissions:
+      contents: read
     strategy:
       matrix:
         device_type: [ultra, lite]
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.checkout-sha == null && github.sha || inputs.checkout-sha }}
           fetch-depth: 0
+          persist-credentials: false
+      - name: Download Docker image
+        if: ${{ !inputs.publish-builder }}
+        uses: actions/download-artifact@v8
+        with:
+          name: firmware-builder-image
+          path: ${{ runner.temp }}
+      - name: Load Docker image
+        if: ${{ !inputs.publish-builder }}
+        run: docker load --input "${{ runner.temp }}/fw-builder.tar"
       - name: Build firmware
-        env:
-          repo: ${{ github.repository }}
         run: |
-          docker run --rm -v ${PWD}:/workdir -e CURRENT_DEVICE_TYPE=${{ matrix.device_type }} ghcr.io/${repo,,}-fw-builder@${{ needs.build_fw_builder.outputs.image_hash }} firmware/build.sh
+          docker run --rm -v ${PWD}:/workdir -e CURRENT_DEVICE_TYPE=${{ matrix.device_type }} "${{ needs.build_fw_builder.outputs.image_ref }}" firmware/build.sh
       - name: Upload built binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.device_type }}-firmware
           path: firmware/objects/*.hex
@@ -76,17 +119,17 @@ jobs:
           unzip firmware/objects/${{ matrix.device_type }}-dfu-app.zip -d firmware/objects/${{ matrix.device_type }}-dfu-app
           unzip firmware/objects/${{ matrix.device_type }}-dfu-full.zip -d firmware/objects/${{ matrix.device_type }}-dfu-full
       - name: Upload dfu app image
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.device_type }}-dfu-app
           path: firmware/objects/${{ matrix.device_type }}-dfu-app/*
       - name: Upload dfu full image
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.device_type }}-dfu-full
           path: firmware/objects/${{ matrix.device_type }}-dfu-full/*
       - name: Upload release artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-artifacts-${{ matrix.device_type }}
           path: firmware/objects/*.zip
