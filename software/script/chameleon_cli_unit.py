@@ -6268,7 +6268,7 @@ _T55_MOD = {0: "DIRECT (ASK/NRZ)", 1: "PSK1", 2: "PSK2", 3: "PSK3",
 _T55_BITRATE = [8, 16, 32, 40, 50, 64, 100, 128]  # 3-bit non-extended dbr index
 
 # Detected config from `lf t55xx detect`, used as the default RF for `read`.
-_T55_DETECTED = {"rf": None}
+_T55_DETECTED = {"rf": None, "mod": "manchester"}
 
 
 def _t55_parse_block0(b0):
@@ -6290,6 +6290,24 @@ def _t55_parse_block0(b0):
         "st": bool((b0 >> 3) & 1),
         "inverted": bool((b0 >> 1) & 1),
     }
+
+
+def _t55_read_framed(cmd, block, rf, pwd, page1, modulation):
+    """Read a block and frame it to its repeating unit -> (period, unit) or
+    (None, None). modulation 0 = Manchester (SAADC amplitude, host-decoded, the
+    robust path); 1 = biphase (firmware diphase_feed demod, mode 0)."""
+    if modulation == 1:
+        n, items = cmd.lf_t55xx_read(block, rf, pwd, page1, modulation=1)
+        if not items:
+            return None, None
+        return _t55_stream_block("".join("1" if b else "0" for b in items))
+    n, samples = cmd.lf_t55xx_read(block, rf, pwd, page1, adc=True)
+    if n == 0:
+        return None, None
+    bits = _t55_amplitude_bits(samples, rf)
+    if not bits:
+        return None, None
+    return _t55_stream_block(bits)
 
 
 @lf_t55xx.command("write")
@@ -6365,37 +6383,35 @@ class LFT55xxDetect(ReaderRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         pwd = _t55_hex4(args.pwd, "pwd") if args.pwd else None
-        # The winner is the rate whose block-0 decode is a clean 32-bit word AND
-        # self-consistent: block 0 must say Manchester at the very rate we read it
-        # at. That consistency check is what makes a hit trustworthy.
-        for rf in (32, 64, 16, 40, 50, 100, 128, 8):
-            n, samples = self.cmd.lf_t55xx_read(0, rf, pwd, False, adc=True)
-            if n == 0:
-                continue
-            bits = _t55_amplitude_bits(samples, rf)
-            if not bits:
-                continue
-            period, unit = _t55_stream_block(bits)
-            if period != 32:
-                continue
-            inv = "".join("1" if c == "0" else "0" for c in unit)
-            for b0 in (int(unit, 2), int(inv, 2)):
-                f = _t55_parse_block0(b0)
-                if f["modulation"] == 8 and not f["extend"] and f["rf"] == rf:
-                    _T55_DETECTED["rf"] = rf
-                    print(f" - T55xx detected  (block 0 = {f['block0']:08X})")
-                    print(f"     modulation : {f['mod_name']}")
-                    print(f"     bit rate   : RF/{f['rf']}")
-                    print(f"     max block  : {f['maxblock']}")
-                    print(f"     password   : {'yes' if f['pwd'] else 'no'}")
-                    print(f"     seq term   : {'yes' if f['st'] else 'no'}")
-                    print(f"     inverted   : {'yes' if f['inverted'] else 'no'}")
-                    print(f"{CG} - read now defaults to RF/{rf}. Reliable for block 0 / sparse "
-                          f"blocks; dense 32-bit data is still subject to the known read issue.{C0}")
-                    return
-        print(f"{CR} - detect failed: no self-consistent Manchester config block found.{C0}")
-        print(f"{CY}   The tag may be biphase/FSK/PSK or a rate not yet wired into t55xx read "
-              f"(the firmware has biphase + FSK feeders; only Manchester is wired here). "
+        # The winner is the rate+modulation whose block-0 decode is a clean 32-bit
+        # word AND self-consistent: block 0 must say <that modulation> at the very
+        # rate we read it at. That consistency check is what makes a hit trustworthy.
+        # Manchester (8) uses the robust amplitude path; biphase (16/24) uses the
+        # firmware diphase demod. FSK/PSK are not wired yet.
+        for modname, modcode, want in (("manchester", 0, (8,)), ("biphase", 1, (16, 24))):
+            for rf in (32, 64, 16, 40, 50, 100, 128, 8):
+                period, unit = _t55_read_framed(self.cmd, 0, rf, pwd, False, modcode)
+                if period != 32:
+                    continue
+                inv = "".join("1" if c == "0" else "0" for c in unit)
+                for b0 in (int(unit, 2), int(inv, 2)):
+                    f = _t55_parse_block0(b0)
+                    if f["modulation"] in want and not f["extend"] and f["rf"] == rf:
+                        _T55_DETECTED["rf"] = rf
+                        _T55_DETECTED["mod"] = modname
+                        print(f" - T55xx detected  (block 0 = {f['block0']:08X})")
+                        print(f"     modulation : {f['mod_name']}")
+                        print(f"     bit rate   : RF/{f['rf']}")
+                        print(f"     max block  : {f['maxblock']}")
+                        print(f"     password   : {'yes' if f['pwd'] else 'no'}")
+                        print(f"     seq term   : {'yes' if f['st'] else 'no'}")
+                        print(f"     inverted   : {'yes' if f['inverted'] else 'no'}")
+                        print(f"{CG} - read now defaults to RF/{rf} ({modname}). Reliable for "
+                              f"block 0 / sparse blocks; dense 32-bit data is still subject to "
+                              f"the known read issue.{C0}")
+                        return
+        print(f"{CR} - detect failed: no self-consistent Manchester or biphase config found.{C0}")
+        print(f"{CY}   The tag may be FSK/PSK (not wired into t55xx read) or a rate not tried. "
               f"Inspect the envelope with `lf t55xx read -b 0 --adc`.{C0}")
 
 
@@ -6418,6 +6434,9 @@ class LFT55xxRead(ReaderRequiredUnit):
                             help="Diagnostic: dump raw SAADC envelope amplitude (robust for dense data)")
         parser.add_argument("--regread", action="store_true",
                             help="Diagnostic: skip the addressed downlink, capture the regular-read stream")
+        parser.add_argument("--mod", choices=("auto", "manchester", "biphase"), default="auto",
+                            help="Demod: manchester (SAADC amplitude, robust) or biphase "
+                                 "(firmware diphase_feed). auto = whatever `detect` found (else manchester).")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
@@ -6426,6 +6445,8 @@ class LFT55xxRead(ReaderRequiredUnit):
         pwd = _t55_hex4(args.pwd, "pwd") if args.pwd else None
         downlink = not args.regread
         mode = "regular-read" if args.regread else "addressed"
+        modname = _T55_DETECTED["mod"] if args.mod == "auto" else args.mod
+        modulation = 1 if modname == "biphase" else 0
 
         # --raw: edge-interval diagnostic (fragile on dense data; see --adc).
         if args.raw:
@@ -6466,6 +6487,20 @@ class LFT55xxRead(ReaderRequiredUnit):
             print(" - threshold@mean:")
             for i in range(0, len(trace), 64):
                 print("   " + trace[i:i + 64])
+
+        if modulation == 1:
+            # biphase: firmware diphase_feed demod (mode 0), framed to 32 bits
+            period, unit = _t55_read_framed(self.cmd, args.block, args.rf, pwd, args.pg1, 1)
+            if period is None:
+                print(f"{CR} - biphase decode: no stable period @ RF/{args.rf} ({mode}); "
+                      f"try --adc to inspect, or a different --rf.{C0}")
+                return
+            reps = 32 // period
+            blk = int((unit * (reps + 1))[:32], 2)
+            note = "32-bit block" if period == 32 else f"{period}-bit period"
+            print(f" - block {args.block} @ RF/{args.rf} ({mode}, biphase): {blk:08X}  "
+                  f"[{note}; may be inverted/rotated]")
+            return
 
         bits = _t55_amplitude_bits(samples, args.rf)
         if not bits:

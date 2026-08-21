@@ -9,6 +9,7 @@
 #include "timeslot.h"
 
 #include "utils/manchester.h"
+#include "utils/diphase.h"
 
 #define NRF_LOG_MODULE_NAME lf_t55xx
 #include "nrf_log.h"
@@ -208,7 +209,7 @@ static uint8_t t55xx_manch_period(uint8_t iv) {
  * @param timeout_ms capture window
  * @return number of items written (bits for demod, else bytes)
  */
-uint16_t t55xx_read(uint8_t rf_n, uint8_t mode, uint8_t downlink,
+uint16_t t55xx_read(uint8_t rf_n, uint8_t mode, uint8_t modulation, uint8_t downlink,
                     uint8_t use_passwd, uint32_t passwd,
                     uint8_t block, uint8_t page1,
                     uint8_t *out, uint16_t max_out, uint32_t timeout_ms) {
@@ -256,6 +257,29 @@ uint16_t t55xx_read(uint8_t rf_n, uint8_t mode, uint8_t downlink,
                 continue;
             }
             out[n++] = (uint8_t)(iv & 0xff);
+        }
+    } else if (modulation == 1) {
+        /* Biphase / diphase (jablotron, FDX-B, ...). Same edge-interval input
+         * and classifier as Manchester; only the decode rule differs. */
+        diphase modem = {
+            .boundary = true,
+            .rp       = t55xx_manch_period,
+        };
+        while (n < max_out && NO_TIMEOUT_1MS(p_at, timeout_ms)) {
+            uint16_t iv = 0;
+            if (!cb_pop_front(&t55xx_g_cb, &iv)) {
+                continue;
+            }
+            bool dbits[2] = {false, false};
+            int8_t dlen = 0;
+            diphase_feed(&modem, (uint8_t)iv, dbits, &dlen);
+            if (dlen == -1) {
+                diphase_reset(&modem);  /* resync only */
+                continue;
+            }
+            for (int8_t i = 0; i < dlen && n < max_out; i++) {
+                out[n++] = dbits[i] ? 1 : 0;
+            }
         }
     } else {
         manchester modem = {

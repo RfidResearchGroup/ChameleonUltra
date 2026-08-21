@@ -1082,6 +1082,7 @@ static data_frame_tx_t *cmd_processor_lf_t55xx_read(uint16_t cmd, uint16_t statu
         uint8_t pwd[4];       /* 32-bit password, big-endian */
         uint8_t rf_n;         /* bitrate divisor RF/n (demod only) */
         uint8_t mode;         /* 0 = demod bits, 1 = raw edge intervals, 2 = SAADC amplitude */
+        uint8_t modulation;   /* 0 = Manchester, 1 = biphase/diphase (mode 0 only) */
         uint8_t downlink;     /* 1 = addressed read downlink, 0 = regular read */
         uint8_t max_items[2]; /* big-endian, clamped per mode */
     } PACKED payload_t;
@@ -1108,7 +1109,7 @@ static data_frame_tx_t *cmd_processor_lf_t55xx_read(uint16_t cmd, uint16_t statu
         return data_frame_make(cmd, STATUS_MEM_ERR, 0, NULL);
     }
 
-    uint16_t n = t55xx_read(p->rf_n, p->mode, p->downlink, p->use_pwd,
+    uint16_t n = t55xx_read(p->rf_n, p->mode, p->modulation, p->downlink, p->use_pwd,
                             (uint32_t)bytes_to_num(p->pwd, 4),
                             p->block, page1, buf, want, 500);
 
