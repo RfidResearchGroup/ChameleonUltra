@@ -40,17 +40,19 @@ static void uninit_saadc_hw(void) {
     lf_125khz_radio_saadc_disable();
 }
 
-bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen) {
+bool raw_read_to_buffer_ex(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen, bool manage_field) {
     *outlen = 0;
 
     cb_init(&cb, CIRCULAR_BUFFER_SIZE, sizeof(uint16_t));
     init_saadc_hw();
-    start_lf_125khz_radio();
+    if (manage_field) {
+        start_lf_125khz_radio();
 
-    /* Wait for antenna to settle before capturing.
-     * The LC circuit rings for ~400µs on field startup, then takes
-     * another ~800µs to reach steady state. Skip 2ms to be safe. */
-    bsp_delay_ms(2);
+        /* Wait for antenna to settle before capturing.
+         * The LC circuit rings for ~400µs on field startup, then takes
+         * another ~800µs to reach steady state. Skip 2ms to be safe. */
+        bsp_delay_ms(2);
+    }
 
     autotimer *p_at = bsp_obtain_timer(0);
     while (NO_TIMEOUT_1MS(p_at, timeout_ms) && *outlen < maxlen) {
@@ -64,9 +66,16 @@ bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_
     }
 
     bsp_return_timer(p_at);
-    stop_lf_125khz_radio();
+    if (manage_field) {
+        stop_lf_125khz_radio();
+    }
     uninit_saadc_hw();
     cb_free(&cb);
 
     return true;
+}
+
+bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen) {
+    /* Field-managed variant: powers the field up/down around the capture. */
+    return raw_read_to_buffer_ex(data, maxlen, timeout_ms, outlen, true);
 }
