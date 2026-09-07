@@ -24,6 +24,7 @@ import hardnested_utils
 
 import chameleon_com
 import chameleon_cmd
+import chameleon_dfu
 from chameleon_utils import (
     ArgumentParserNoExit,
     ArgsParserError,
@@ -1001,9 +1002,7 @@ class RootDumpHelp(BaseCLIUnit):
 class HWConnect(BaseCLIUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = ("Connect to chameleon by serial port, TCP, or BLE. "
-                              "Examples: -p /dev/ttyACM0 | -p tcp:127.0.0.1:4321 | "
-                              "-p ble (scan) | -p ble:AA:BB:CC:DD:EE:FF (needs 'bleak')")
+        parser.description = "Connect to chameleon by serial port"
         parser.add_argument("-p", "--port", type=str, required=False)
         return parser
 
@@ -7106,6 +7105,71 @@ class HWDFU(DeviceRequiredUnit):
         print(" - Enter success @.@~")
         # let time for comm thread to send dfu cmd and close port
         time.sleep(0.1)
+
+
+@hw.command("flash")
+class HWFlash(BaseCLIUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Flash a DFU firmware package (.zip) to the device over Secure DFU. "
+            "Enters bootloader mode automatically, then uploads with no external "
+            "tools required (no nrfutil)."
+        )
+        parser.add_argument("file", type=str, help="Path to the DFU package .zip")
+        parser.add_argument("--no-enter", action="store_true",
+                            help="Skip enter-bootloader; device is already in DFU mode")
+        parser.add_argument("-p", "--port", type=str, default=None,
+                            help="DFU serial port (default: auto-detect the 1915:521f device)")
+        parser.add_argument("--wait", type=float, default=30.0,
+                            help="Seconds to wait for the DFU device to appear (default: 30)")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        # Unpack first so a bad package fails before we touch the device.
+        try:
+            dat, bin_ = chameleon_dfu.unpack_dfu_zip(args.file)
+        except FileNotFoundError:
+            print(color_string((CR, f"File not found: {args.file}")))
+            return
+        except chameleon_dfu.DFUError as e:
+            print(color_string((CR, f"Invalid DFU package: {e}")))
+            return
+
+        # Enter bootloader unless told the device is already in DFU.
+        already_dfu = chameleon_dfu.find_dfu_port() is not None
+        if not args.no_enter and not already_dfu:
+            if not self.device_com.isOpen():
+                print("Please connect to chameleon device first (use 'hw connect'), "
+                      "or pass --no-enter if it is already in DFU mode.")
+                return
+            print("Application restarting into DFU mode...")
+            self.cmd.enter_bootloader()
+            time.sleep(0.1)
+
+        # Locate the DFU device.
+        port = args.port
+        if port is None:
+            print("Waiting for DFU device...")
+            port = chameleon_dfu.wait_for_dfu_port(timeout=args.wait)
+            if port is None:
+                print(color_string((CR, "DFU device (1915:521f) not found. "
+                                        "Put the device in DFU mode and retry.")))
+                return
+        print(f"Flashing {os.path.basename(args.file)} via {port}")
+
+        def progress(pct):
+            print(f"\r - Uploading: {pct:3d}%", end="", flush=True)
+
+        try:
+            chameleon_dfu.flash_package(dat, bin_, port, progress=progress)
+        except chameleon_dfu.DFUError as e:
+            print()
+            print(color_string((CR, f"Flash failed: {e}")))
+            return
+        print()
+        print(color_string((CG, " - Firmware flashed. Device will reboot.")))
+        time.sleep(0.5)
 
 
 @hw_settings.command("animation")
