@@ -896,6 +896,7 @@ lf_em_410x = lf_em.subgroup("410x", "EM410x commands")
 lf_hid = lf.subgroup("hid", "HID commands")
 lf_hid_prox = lf_hid.subgroup("prox", "HID Prox commands")
 lf_ioprox = lf.subgroup("ioprox", "ioProx commands")
+lf_paradox = lf.subgroup("paradox", "Paradox commands")
 lf_pac = lf.subgroup("pac", "PAC/Stanley commands")
 lf_viking = lf.subgroup("viking", "Viking commands")
 lf_jablotron = lf.subgroup("jablotron", "Jablotron commands")
@@ -6032,6 +6033,74 @@ class LFIOProxEconfig(SlotIndexArgsAndGoUnit, LFIOProxIdArgsUnit):
             print(f"   ID: {color_string((CY, cn))}")
             print(f"   Raw: {color_string((CY, raw8.hex().upper()))}")
 
+
+@lf_paradox.command("econfig")
+class LFParadoxEconfig(SlotIndexArgsAndGoUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Get or set the emulated Paradox credential"
+        self.add_slot_args(parser)
+        parser.add_argument("--fc", type=int, help="Facility code (0..255)", metavar="<int>")
+        parser.add_argument("--cn", type=int, help="Card number (0..65535)", metavar="<int>")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        do_set = args.fc is not None or args.cn is not None
+        if do_set:
+            if args.fc is None or args.cn is None:
+                raise ArgsParserError("--fc and --cn must be provided together")
+            if not 0 <= args.fc <= 0xff:
+                raise ArgsParserError("--fc must be 0..255")
+            if not 0 <= args.cn <= 0xffff:
+                raise ArgsParserError("--cn must be 0..65535")
+
+            slotinfo = self.cmd.get_slot_info()
+            selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+            lf_tag_type = TagSpecificType(slotinfo[selected - 1]["lf"])
+            if lf_tag_type != TagSpecificType.Paradox:
+                print(f"{color_string((CR, 'WARNING'))}: Slot type is not Paradox.")
+
+            self.cmd.paradox_set_emu_id(struct.pack(">BHx", args.fc, args.cn))
+            fc, cn = args.fc, args.cn
+            action = "SET"
+        else:
+            fc, cn = self.cmd.paradox_get_emu_id()
+            action = "GET"
+
+        print(f" - {action} Paradox credential success.")
+        print(f"   FC: {color_string((CG, fc))}")
+        print(f"   CN: {color_string((CG, cn))}")
+
+
+@lf_paradox.command("read")
+class LFParadoxRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Scan a Paradox tag and decode its credential"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        fc, cn = self.cmd.paradox_scan()
+        print("Paradox")
+        print(f"   FC: {color_string((CG, fc))}")
+        print(f"   CN: {color_string((CG, cn))}")
+
+
+@lf_paradox.command("demod")
+class LFParadoxDemod(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Show raw FSK bits from the most recent Paradox scan"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        data = self.cmd.paradox_get_last_demod()
+        phase, pairing, errors, bit_count = data[:4]
+        bits = ''.join(f'{byte:08b}' for byte in data[4:])[:bit_count]
+        print(f" Phase: {phase}  pairing: {pairing}  Manchester errors: {errors}")
+        print(f" Bits ({bit_count}): {bits}")
+
+
 def jablotron_card_id(raw_bytes: bytes) -> int:
     """Convert 5 raw Jablotron bytes to decimal card number via BCD."""
     card_id = 0
@@ -6731,6 +6800,10 @@ class HWSlotList(DeviceRequiredUnit):
                     print(f"      {'Facility:':40}{color_string((CG, f'{fc} [0x{fc:02X}]'))}")
                     print(f"      {'ID:':40}{color_string((CY, cn))}")
                     print(f"      {'Raw:':40}{color_string((CY, raw8.hex().upper()))}")
+                if lf_tag_type == TagSpecificType.Paradox:
+                    fc, cn = self.cmd.paradox_get_emu_id()
+                    print(f"      {'Facility:':40}{color_string((CG, fc))}")
+                    print(f"      {'Card number:':40}{color_string((CY, cn))}")
                 if lf_tag_type == TagSpecificType.Viking:
                     id = self.cmd.viking_get_emu_id()
                     print(f"      {'ID:':40}{color_string((CY, id.hex().upper()))}")
