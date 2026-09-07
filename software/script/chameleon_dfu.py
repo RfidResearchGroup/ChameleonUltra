@@ -1,38 +1,36 @@
 """
-Self-contained Nordic Secure DFU (serial/USB-CDC) controller.
+Self-contained Nordic Secure DFU controller with pluggable transports.
 
-Speaks the nRF5 SDK Secure DFU serial transport directly over pyserial, so
-`hw flash` can push a DFU package without nrfutil or any external tool.
+Speaks the nRF5 SDK Secure DFU object protocol directly, so `hw flash` can
+push a DFU package without nrfutil or any external tool, over either:
 
-The protocol here mirrors the implementation the ChameleonUltraGUI / Sailfish
-frontends use against this same bootloader (SLIP framing, PRN=0, Get Serial
-MTU with a 2051-byte fallback, object select/create/write/checksum/execute,
-running standard CRC-32). Transport only: the package is unpacked by the
-caller and the bootloader validates the signature.
+  * Serial / USB-CDC  -> SerialTransport   (SLIP framing, Get-Serial-MTU)
+  * BLE               -> BleTransport       (Nordic DFU service 0xFE59, bleak)
+
+The object-level state machine (select/create/write/checksum/execute, running
+CRC-32, PRN, retry) is identical on both and lives in SecureDFU; only framing
+and the physical read/write differ per transport. This mirrors the flasher the
+ChameleonUltraGUI / Sailfish frontends use against this same bootloader. The
+package is unpacked by the caller and the bootloader validates the signature.
 """
 
 import struct
 import time
 import zlib
 
-import serial
 
-
-# --- Secure DFU opcodes (nRF5 SDK nrf_dfu_serial / dfu_transport_serial) -----
+# --- Secure DFU opcodes (nRF5 SDK nrf_dfu_req_handler) ------------------------
 class DfuOp:
     CREATE_OBJECT = 0x01
     SET_PRN = 0x02
     CALC_CHECKSUM = 0x03
     EXECUTE = 0x04
-    READ_ERROR = 0x05
-    SELECT_OBJECT = 0x06     # "read object" / select
-    GET_SERIAL_MTU = 0x07
-    WRITE_OBJECT = 0x08
-    PING = 0x09
+    SELECT_OBJECT = 0x06
+    GET_SERIAL_MTU = 0x07   # serial transport only
+    WRITE_OBJECT = 0x08     # serial transport only (BLE writes the packet char)
     RESPONSE = 0x60
 
 
-# --- Secure DFU result codes -------------------------------------------------
 DFU_RESULT = {
     0x00: "invalid code",
     0x01: "success",
@@ -40,19 +38,24 @@ DFU_RESULT = {
     0x03: "invalid parameter",
     0x04: "insufficient resources",
     0x05: "invalid object",
+    0x06: "invalid signature",
     0x07: "unsupported object type",
     0x08: "operation not permitted",
     0x0A: "operation failed",
     0x0B: "extended error",
 }
 
-# Object types used by Secure DFU.
 OBJ_TYPE_COMMAND = 0x01   # init packet (.dat)
 OBJ_TYPE_DATA = 0x02      # firmware image (.bin)
 
-# Nordic USB DFU VID/PID for the Chameleon bootloader.
+# Nordic USB DFU (serial) VID/PID for the Chameleon bootloader.
 DFU_VID = 0x1915
 DFU_PID = 0x521F
+
+# Nordic Secure DFU BLE service + characteristics.
+DFU_SERVICE_UUID = "0000fe59-0000-1000-8000-00805f9b34fb"
+DFU_CONTROL_UUID = "8ec90001-f315-4f60-9fb8-838830daea50"  # commands + notify
+DFU_PACKET_UUID = "8ec90002-f315-4f60-9fb8-838830daea50"   # object data
 
 
 class DFUError(Exception):
@@ -63,7 +66,22 @@ class DFUTransferError(DFUError):
     """Recoverable mid-transfer error (offset/CRC mismatch) -> retry object."""
 
 
-# --- SLIP (RFC 1055) ---------------------------------------------------------
+def check_response(resp: bytes, opcode: int) -> bytes:
+    """Validate a decoded control-point response, return its payload or raise."""
+    if len(resp) < 3 or resp[0] != DfuOp.RESPONSE:
+        raise DFUError(f"malformed DFU response: {resp.hex()}")
+    if resp[1] != opcode:
+        raise DFUTransferError(
+            f"unexpected DFU response opcode 0x{resp[1]:02x} (sent 0x{opcode:02x})")
+    result = resp[2]
+    if result == 0x01:
+        return resp[3:]
+    if result == 0x0B and len(resp) > 3:  # extended error
+        raise DFUError(f"DFU extended error 0x{resp[3]:02x}")
+    raise DFUError(f"DFU error: {DFU_RESULT.get(result, hex(result))}")
+
+
+# --- SLIP (RFC 1055), serial transport only ----------------------------------
 _SLIP_END = 0xC0
 _SLIP_ESC = 0xDB
 _SLIP_ESC_END = 0xDC
@@ -93,8 +111,7 @@ def slip_decode(data: bytes) -> bytes:
             elif b == _SLIP_ESC_ESC:
                 out.append(_SLIP_ESC)
             else:
-                # protocol violation; drop the frame
-                return b""
+                return b""  # protocol violation; drop frame
             esc = False
         elif b == _SLIP_ESC:
             esc = True
@@ -105,20 +122,27 @@ def slip_decode(data: bytes) -> bytes:
     return bytes(out)
 
 
-class DFUSerial:
-    """Secure DFU over a raw serial port (the bootloader's USB CDC ACM)."""
+# --- transports --------------------------------------------------------------
+class Transport:
+    """Interface the SecureDFU controller drives."""
 
-    def __init__(self, port: str, timeout: float = 20.0):
-        self.timeout = timeout
-        self.mtu = 0
-        self.prn = 0
-        self.serial = serial.Serial(port=port, baudrate=115200, timeout=timeout)
+    def command(self, opcode: int, data: bytes = b"") -> bytes:
+        """Send a control-point command, return its success payload or raise."""
+        raise NotImplementedError
 
-    def close(self):
-        try:
-            self.serial.close()
-        except Exception:
-            pass
+    def write_data(self, chunk: bytes) -> None:
+        """Send one chunk of object data (no response expected)."""
+        raise NotImplementedError
+
+    def data_chunk_size(self) -> int:
+        """Max bytes per write_data() call for this transport."""
+        raise NotImplementedError
+
+    def prepare(self) -> None:
+        """Optional negotiation after connect / after SET_PRN."""
+
+    def close(self) -> None:
+        pass
 
     def __enter__(self):
         return self
@@ -126,9 +150,17 @@ class DFUSerial:
     def __exit__(self, *exc):
         self.close()
 
-    # -- framed request/response --------------------------------------------
+
+class SerialTransport(Transport):
+    """Secure DFU over the bootloader's USB CDC ACM port (SLIP framing)."""
+
+    def __init__(self, port: str, timeout: float = 20.0):
+        import serial
+        self.timeout = timeout
+        self._chunk = None
+        self.serial = serial.Serial(port=port, baudrate=115200, timeout=timeout)
+
     def _read_packet(self) -> bytes:
-        """Read one SLIP frame (up to the END byte) and decode it."""
         raw = bytearray()
         deadline = time.time() + self.timeout
         while time.time() < deadline:
@@ -140,66 +172,168 @@ class DFUSerial:
                 return slip_decode(bytes(raw))
         raise DFUError("timeout waiting for DFU response")
 
-    def send_cmd(self, opcode: int, data: bytes = b"") -> bytes:
+    def command(self, opcode: int, data: bytes = b"") -> bytes:
         self.serial.reset_input_buffer()
         self.serial.write(slip_encode(bytes((opcode,)) + data))
-        resp = self._read_packet()
-        if len(resp) < 3 or resp[0] != DfuOp.RESPONSE:
-            raise DFUError(f"malformed DFU response: {resp.hex()}")
-        if resp[1] != opcode:
-            raise DFUTransferError(
-                f"unexpected DFU response opcode 0x{resp[1]:02x} (sent 0x{opcode:02x})")
-        result = resp[2]
-        if result == 0x01:  # success
-            return resp[3:]
-        if result == 0x0B and len(resp) > 3:  # extended error
-            raise DFUError(f"DFU extended error 0x{resp[3]:02x}")
-        raise DFUError(f"DFU error: {DFU_RESULT.get(result, hex(result))}")
+        return check_response(self._read_packet(), opcode)
 
-    # -- primitives ---------------------------------------------------------
-    def set_prn(self, prn: int = 0):
-        self.prn = prn
-        self.send_cmd(DfuOp.SET_PRN, struct.pack("<H", prn))
+    def write_data(self, chunk: bytes) -> None:
+        self.serial.write(slip_encode(bytes((DfuOp.WRITE_OBJECT,)) + chunk))
 
-    def get_mtu(self) -> int:
+    def data_chunk_size(self) -> int:
+        if self._chunk is None:
+            try:
+                mtu = struct.unpack("<H", self.command(DfuOp.GET_SERIAL_MTU)[:2])[0]
+            except DFUError:
+                mtu = 2051
+            if mtu == 0:
+                mtu = 2051
+            # SLIP worst case doubles every byte and one byte is the opcode.
+            self._chunk = max(1, (mtu - 1) // 2 - 1)
+        return self._chunk
+
+    def prepare(self) -> None:
+        self.data_chunk_size()  # negotiate serial MTU up front
+
+    def close(self) -> None:
         try:
-            resp = self.send_cmd(DfuOp.GET_SERIAL_MTU)
-            self.mtu = struct.unpack("<H", resp[:2])[0]
-        except DFUError:
-            self.mtu = 2051
-        if self.mtu == 0:
-            self.mtu = 2051
-        return self.mtu
+            self.serial.close()
+        except Exception:
+            pass
+
+
+class BleTransport(Transport):
+    """Secure DFU over the Nordic DFU service (0xFE59) using bleak.
+
+    Commands + response notifications ride the Control Point characteristic;
+    object data is written to the Packet characteristic with no response and no
+    SLIP framing. Chunk size follows the ATT MTU. PRN is kept at 0 (final CRC
+    only), so a small per-write delay paces the write-without-response stream.
+    """
+
+    def __init__(self, address: str = None, name: str = None,
+                 scan_timeout: float = 30.0, timeout: float = 20.0,
+                 chunk_delay: float = 0.005):
+        try:
+            import bleak  # noqa: F401
+        except ImportError:
+            raise DFUError("BLE DFU needs the 'bleak' package (pip install bleak)")
+        import asyncio
+        import threading
+
+        self._asyncio = asyncio
+        self.timeout = timeout
+        self.chunk_delay = chunk_delay
+        self._client = None
+        self._att_mtu = 23
+        self._loop = asyncio.new_event_loop()
+        self._thread = threading.Thread(target=self._loop.run_forever, daemon=True)
+        self._thread.start()
+        self._notif_q = None  # created on the loop
+        self._connect(address, name, scan_timeout)
+
+    def _run(self, coro, timeout=None):
+        fut = self._asyncio.run_coroutine_threadsafe(coro, self._loop)
+        return fut.result(timeout if timeout is not None else self.timeout + 5)
+
+    def _connect(self, address, name, scan_timeout):
+        from bleak import BleakScanner, BleakClient
+
+        async def _do():
+            self._notif_q = self._asyncio.Queue()
+            dev = None
+            if address:
+                dev = await BleakScanner.find_device_by_address(
+                    address, timeout=scan_timeout)
+            else:
+                def _match(d, adv):
+                    if name and (d.name or "") != name:
+                        return False
+                    uuids = [u.lower() for u in (adv.service_uuids or [])]
+                    return DFU_SERVICE_UUID.lower() in uuids or "fe59" in uuids
+                dev = await BleakScanner.find_device_by_filter(
+                    _match, timeout=scan_timeout)
+            if dev is None:
+                raise DFUError("no BLE device advertising the DFU service (0xFE59) found")
+            client = BleakClient(dev)
+            await client.connect()
+
+            def _on_notify(_char, data):
+                self._loop.call_soon_threadsafe(self._notif_q.put_nowait, bytes(data))
+
+            await client.start_notify(DFU_CONTROL_UUID, _on_notify)
+            self._client = client
+            try:
+                self._att_mtu = client.mtu_size or 23
+            except Exception:
+                self._att_mtu = 23
+
+        self._run(_do(), timeout=scan_timeout + 15)
+
+    def command(self, opcode: int, data: bytes = b"") -> bytes:
+        async def _do():
+            while not self._notif_q.empty():
+                self._notif_q.get_nowait()
+            await self._client.write_gatt_char(
+                DFU_CONTROL_UUID, bytes((opcode,)) + data, response=True)
+            resp = await self._asyncio.wait_for(self._notif_q.get(), self.timeout)
+            return check_response(resp, opcode)
+        return self._run(_do())
+
+    def write_data(self, chunk: bytes) -> None:
+        async def _do():
+            await self._client.write_gatt_char(DFU_PACKET_UUID, chunk, response=False)
+            if self.chunk_delay:
+                await self._asyncio.sleep(self.chunk_delay)
+        self._run(_do())
+
+    def data_chunk_size(self) -> int:
+        return max(1, self._att_mtu - 3)
+
+    def close(self) -> None:
+        try:
+            if self._client is not None:
+                self._run(self._client.disconnect(), timeout=10)
+        except Exception:
+            pass
+        try:
+            self._loop.call_soon_threadsafe(self._loop.stop)
+        except Exception:
+            pass
+
+
+# --- controller --------------------------------------------------------------
+class SecureDFU:
+    """Transport-agnostic Nordic Secure DFU object state machine."""
+
+    def __init__(self, transport: Transport, retries: int = 10):
+        self.t = transport
+        self.retries = retries
+
+    def set_prn(self, prn: int = 0):
+        self.t.command(DfuOp.SET_PRN, struct.pack("<H", prn))
 
     def select_object(self, obj_type: int):
-        resp = self.send_cmd(DfuOp.SELECT_OBJECT, bytes((obj_type,)))
+        resp = self.t.command(DfuOp.SELECT_OBJECT, bytes((obj_type,)))
         max_size, offset, crc = struct.unpack("<III", resp[:12])
         return max_size, offset, crc
 
     def create_object(self, obj_type: int, size: int):
-        self.send_cmd(DfuOp.CREATE_OBJECT, bytes((obj_type,)) + struct.pack("<I", size))
+        self.t.command(DfuOp.CREATE_OBJECT, bytes((obj_type,)) + struct.pack("<I", size))
 
     def calculate_checksum(self):
-        resp = self.send_cmd(DfuOp.CALC_CHECKSUM)
+        resp = self.t.command(DfuOp.CALC_CHECKSUM)
         offset, crc = struct.unpack("<II", resp[:8])
         return offset, crc
 
     def execute(self):
-        self.send_cmd(DfuOp.EXECUTE)
+        self.t.command(DfuOp.EXECUTE)
 
-    # -- transfer -----------------------------------------------------------
-    def _write_object(self, chunk: bytes, crc: int, offset: int):
-        """Stream one create-object window; validate offset+CRC at the end.
-
-        With PRN=0 there are no intermediate receipts, so we only checksum
-        once per object window (matches the reference flasher).
-        """
-        # SLIP worst case doubles every byte, and one byte is the opcode:
-        # keep each written frame's payload within (mtu-1)//2 - 1.
-        step = max(1, (self.mtu - 1) // 2 - 1)
+    def _stream(self, chunk: bytes, crc: int, offset: int) -> int:
+        step = self.t.data_chunk_size()
         for i in range(0, len(chunk), step):
             part = chunk[i:i + step]
-            self.serial.write(slip_encode(bytes((DfuOp.WRITE_OBJECT,)) + part))
+            self.t.write_data(part)
             offset += len(part)
             crc = zlib.crc32(part, crc) & 0xFFFFFFFF
         recv_offset, recv_crc = self.calculate_checksum()
@@ -210,8 +344,7 @@ class DFUSerial:
                 f"CRC mismatch: expected 0x{crc:08x}, got 0x{recv_crc:08x}")
         return crc
 
-    def flash_object(self, obj_type: int, data: bytes, progress=None, retries: int = 10):
-        """Program one Secure DFU object (init packet or firmware image)."""
+    def flash_object(self, obj_type: int, data: bytes, progress=None):
         max_size, _, _ = self.select_object(obj_type)
         if max_size == 0:
             max_size = len(data) or 1
@@ -220,13 +353,12 @@ class DFUSerial:
         for offset in range(0, len(data), max_size):
             window = data[offset:offset + max_size]
             crc_backup = crc
-            for attempt in range(retries):
+            for _ in range(self.retries):
                 self.create_object(obj_type, len(window))
                 try:
-                    crc = self._write_object(window, crc, offset)
+                    crc = self._stream(window, crc, offset)
                 except DFUTransferError:
-                    # re-select to resync and retry this window
-                    self.select_object(obj_type)
+                    self.select_object(obj_type)  # resync
                     crc = crc_backup
                     continue
                 self.execute()
@@ -237,7 +369,16 @@ class DFUSerial:
             if progress:
                 progress(min(100, round(sent * 100 / len(data))))
 
+    def flash(self, dat: bytes, bin_: bytes, progress=None):
+        if not dat or not bin_:
+            raise DFUError("empty init packet or firmware image")
+        self.set_prn(0)
+        self.t.prepare()
+        self.flash_object(OBJ_TYPE_COMMAND, dat, progress)   # init packet
+        self.flash_object(OBJ_TYPE_DATA, bin_, progress)     # firmware
 
+
+# --- serial device discovery -------------------------------------------------
 def find_dfu_port():
     """Return the serial device path of a Chameleon in DFU mode, or None."""
     import serial.tools.list_ports as list_ports
@@ -253,19 +394,26 @@ def wait_for_dfu_port(timeout: float = 30.0, poll: float = 0.25):
     while time.time() < deadline:
         port = find_dfu_port()
         if port:
-            # give the CDC endpoint a moment to be openable after enumeration
-            time.sleep(0.3)
+            time.sleep(0.3)  # let the CDC endpoint settle after enumeration
             return port
         time.sleep(poll)
     return None
 
 
-def unpack_dfu_zip(path: str):
-    """Extract (init_packet, firmware_image) from a Nordic DFU package .zip.
+# --- transport factories -----------------------------------------------------
+def serial_transport(port: str, timeout: float = 20.0) -> SerialTransport:
+    return SerialTransport(port, timeout=timeout)
 
-    Chameleon packages name the members application.dat / application.bin.
-    Falls back to the manifest.json if the names ever differ.
-    """
+
+def ble_transport(address: str = None, name: str = None,
+                  scan_timeout: float = 30.0, timeout: float = 20.0) -> BleTransport:
+    return BleTransport(address=address, name=name,
+                        scan_timeout=scan_timeout, timeout=timeout)
+
+
+# --- package handling --------------------------------------------------------
+def unpack_dfu_zip(path: str):
+    """Extract (init_packet, firmware_image) from a Nordic DFU package .zip."""
     import json
     import zipfile
 
@@ -284,15 +432,6 @@ def unpack_dfu_zip(path: str):
         return zf.read(dat_name), zf.read(bin_name)
 
 
-def flash_package(dat: bytes, bin_: bytes, port: str, progress=None, timeout: float = 20.0):
-    """Run the full Secure DFU sequence against a device already in DFU mode."""
-    if not dat or not bin_:
-        raise DFUError("empty init packet or firmware image")
-    dfu = DFUSerial(port, timeout=timeout)
-    try:
-        dfu.set_prn(0)
-        dfu.get_mtu()
-        dfu.flash_object(OBJ_TYPE_COMMAND, dat, progress)   # init packet
-        dfu.flash_object(OBJ_TYPE_DATA, bin_, progress)     # firmware
-    finally:
-        dfu.close()
+def flash_package(dat: bytes, bin_: bytes, transport: Transport, progress=None):
+    """Run the full Secure DFU sequence over an already-connected transport."""
+    SecureDFU(transport).flash(dat, bin_, progress)
