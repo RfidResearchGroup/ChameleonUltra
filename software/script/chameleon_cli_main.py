@@ -68,12 +68,14 @@ class ChameleonCLI:
 
         :return: current cmd prompt
         """
-        if self.device_com.isOpen():
-            status = color_string((CG, 'USB'))
-        else:
-            status = color_string((CR, 'Offline'))
-
-        return ANSI(f"[{status}] chameleon --> ")
+    if self.device_com.isOpen():
+        ttype = getattr(self.device_com, "transport_type", None)
+        label = {"SERIAL": "USB", "BLE": "BLE", "SOCKET": "TCP"}.get(
+            getattr(ttype, "name", ""), "USB")
+        status = color_string((CG, label))
+    else:
+        status = color_string((CR, 'Offline'))
+    return ANSI(f"[{status}] chameleon --> ")
 
     @staticmethod
     def print_banner():
