@@ -7851,7 +7851,7 @@ class HF14ASniff(BaseCLIUnit):
 
         for n, (szBits, data, is_tx, parity_bits) in enumerate(frames):
             if (len(data) == len(parity_bits)):
-                hex_str = ' '.join(f"{b:02x}{'!' if odd_parity_byte(b)!= p else ''}" for (b,p) in zip(data,parity_bits))
+                hex_str = ' '.join(f"{b:02x}{'!' if odd_parity_byte(b)!= p else ' '}" for (b,p) in zip(data,parity_bits))
             else:
                 hex_str = ' '.join(f"{b:02x}" for b in data)
 
