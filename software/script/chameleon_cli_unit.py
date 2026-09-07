@@ -32,6 +32,7 @@ from chameleon_utils import (
     execute_tool,
     tqdm_if_exists,
     print_key_table,
+    odd_parity_byte,
     default_cwd
 )
 
@@ -73,17 +74,28 @@ type_id_SAK_dict = {
 
 def load_key_file(import_key, keys):
     """
-    Load key file and append its content to the provided set of keys.
-    Each key is expected to be on a new line in the file.
+    Load binary key file and append its content to the provided set of keys.
+    Each key is 6 bytes concatenated.
     """
     with open(import_key.name, "rb") as file:
-        keys.update(
-            line.encode("utf-8") for line in file.read().decode("utf-8").splitlines()
-        )
+        data = file.read()
+    for i in range(0, len(data), 6):
+        key = data[i:i+6]
+        if len(key) == 6:
+            keys.add(key)
     return keys
 
 
 def load_dic_file(import_dic, keys):
+    """
+    Load dictionary file and append its content to the provided set of keys.
+    Each key is a 12-char hex string on a new line.
+    """
+    with open(import_dic.name, "r") as file:
+        for line in file:
+            line = line.strip()
+            if line:
+                keys.add(bytes.fromhex(line))
     return keys
 
 
@@ -7852,7 +7864,7 @@ class HF14ASniff(BaseCLIUnit):
         # Bit 15 of szBits: 0 = reader→card, 1 = card→reader (new firmware).
         # Old firmware always sends bit15=0; parser is backward compatible.
         buf = bytes(resp.data)
-        frames = []  # (szBits, data, is_tx)
+        frames = []  # (szBits, data, is_tx, parity)
         i = 0
         while i + 2 <= len(buf):
             hdr = (buf[i] << 8) | buf[i+1]
@@ -7866,6 +7878,9 @@ class HF14ASniff(BaseCLIUnit):
                 break
             raw = buf[i:i+szBytes]
             i += szBytes
+
+            # parity array: parity for each byte of data array
+            parity_bits = []
 
             # ISO14443-A frames include one parity bit per byte.
             # Short frames (< 8 bits, e.g. REQA=7 bits) have no parity.
@@ -7882,19 +7897,20 @@ class HF14ASniff(BaseCLIUnit):
                     for b in range(8):
                         val |= all_bits[nb * 9 + b] << b
                     stripped.append(val)
+                    parity_bits.append(all_bits[nb * 9 + 8])
                 data = bytes(stripped)
                 szBits = n_bytes * 8
             else:
                 data = raw
 
-            frames.append((szBits, data, is_tx))
+            frames.append((szBits, data, is_tx, parity_bits))
 
         if not frames:
             print(f"{CR}No frames decoded{C0}")
             return
 
-        rx_count = sum(1 for _, _, tx in frames if not tx)
-        tx_count = sum(1 for _, _, tx in frames if tx)
+        rx_count = sum(1 for _, _, tx, _ in frames if not tx)
+        tx_count = sum(1 for _, _, tx, _ in frames if tx)
         if tx_count > 0:
             print(f" Captured : {CG}{len(frames)}{C0} frame(s)  "
                   f"({CY}{rx_count}{C0} reader→card  {CG}{tx_count}{C0} card→reader)")
@@ -7910,8 +7926,11 @@ class HF14ASniff(BaseCLIUnit):
         last_auth_keytype = None
         last_auth_block = None
 
-        for n, (szBits, data, is_tx) in enumerate(frames):
-            hex_str = ' '.join(f'{b:02x}' for b in data)
+        for n, (szBits, data, is_tx, parity_bits) in enumerate(frames):
+            if (len(data) == len(parity_bits)):
+                hex_str = ' '.join(f"{b:02x}{'!' if odd_parity_byte(b)!= p else ' '}" for (b,p) in zip(data,parity_bits))
+            else:
+                hex_str = ' '.join(f"{b:02x}" for b in data)
 
             # is_tx==True means CU transmitted (card -> reader).
             # is_tx==False means reader -> card.
@@ -7953,7 +7972,7 @@ class HF14ASniff(BaseCLIUnit):
 
         # Summary block (pass only reader→card frames for protocol decode)
         print()
-        _print_14a_sniff_summary(frames)  # full frames needed for nonce extraction
+        _print_14a_sniff_summary([(szBits, data, is_tx) for (szBits, data, is_tx,parity) in frames])  # full frames needed for nonce extraction
 
 
 @hf_14a.command("auth-trace")
