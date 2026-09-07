@@ -7118,7 +7118,6 @@ class HWDFU(DeviceRequiredUnit):
         # let time for comm thread to send dfu cmd and close port
         time.sleep(0.1)
 
-
 @hw.command("flash")
 class HWFlash(BaseCLIUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -7132,7 +7131,9 @@ class HWFlash(BaseCLIUnit):
         parser.add_argument("--no-enter", action="store_true",
                             help="Skip enter-bootloader; device is already in DFU mode")
         parser.add_argument("-p", "--port", type=str, default=None,
-                            help="DFU serial port (default: auto-detect the 1915:521f device)")
+                            help="Override the upload transport (default: the same transport the "
+                                 "client is connected on). A serial port path, or "
+                                 "'ble' / 'ble:AA:BB:CC:DD:EE:FF' to force BLE DFU (needs bleak)")
         parser.add_argument("--wait", type=float, default=30.0,
                             help="Seconds to wait for the DFU device to appear (default: 30)")
         return parser
@@ -7148,69 +7149,78 @@ class HWFlash(BaseCLIUnit):
             print(color_string((CR, f"Invalid DFU package: {e}")))
             return
 
-        # Enter bootloader unless told the device is already in DFU.
-        already_dfu = chameleon_dfu.find_dfu_port() is not None
-        if not args.no_enter and not already_dfu:
-            if not self.device_com.isOpen():
-                print("Please connect to chameleon device first (use 'hw connect'), "
-                      "or pass --no-enter if it is already in DFU mode.")
-                return
-            print("Application restarting into DFU mode...")
-            self.cmd.enter_bootloader()
-            time.sleep(0.1)
+        # Pick the upload transport. An explicit --port overrides; otherwise
+        # inherit whatever the client is already connected on (USB serial or
+        # BLE). DFU entry rides that same link; the device then re-advertises
+        # USB DFU (1915:521f) and/or the BLE DFU service (0xFE59).
+        override = args.port
+        ble_address = None
+        serial_port = None
+        if override is not None and override.lower().startswith("ble"):
+            use_ble = True
+            ble_address = override.split(":", 1)[1] if ":" in override else None
+        elif override is not None:
+            use_ble = False
+            serial_port = override
+        else:
+            ttype = getattr(self.device_com, "transport_type", None)
+            use_ble = getattr(ttype, "name", "") == "BLE"
 
-        # Locate the DFU device.
-        port = args.port
-        if port is None:
-            print("Waiting for DFU device...")
-            port = chameleon_dfu.wait_for_dfu_port(timeout=args.wait)
-            if port is None:
-                print(color_string((CR, "DFU device (1915:521f) not found. "
-                                        "Put the device in DFU mode and retry.")))
-                return
-        print(f"Flashing {os.path.basename(args.file)} via {port}")
+        # Enter bootloader unless the device is already in DFU or told to skip.
+        if not args.no_enter:
+            already_dfu = (not use_ble) and chameleon_dfu.find_dfu_port() is not None
+            if not already_dfu:
+                if not self.device_com.isOpen():
+                    print("Please connect to chameleon device first (use 'hw connect'), "
+                          "or pass --no-enter if it is already in DFU mode.")
+                    return
+                print("Application restarting into DFU mode...")
+                self.cmd.enter_bootloader()
+                time.sleep(0.1)
+
+        # Release the app link before the upload (frees the serial port / BLE
+        # central so the DFU transport can take it).
+        if self.device_com.isOpen():
+            self.device_com.close()
+
+        # Build the upload transport.
+        try:
+            if use_ble:
+                print("Scanning for DFU device (BLE, service 0xFE59)...")
+                transport = chameleon_dfu.ble_transport(address=ble_address,
+                                                        scan_timeout=args.wait)
+                where = f"BLE {ble_address}" if ble_address else "BLE"
+            else:
+                port = serial_port
+                if port is None:
+                    print("Waiting for DFU device...")
+                    port = chameleon_dfu.wait_for_dfu_port(timeout=args.wait)
+                    if port is None:
+                        print(color_string((CR, "DFU device (1915:521f) not found. "
+                                                "Put the device in DFU mode and retry.")))
+                        return
+                transport = chameleon_dfu.serial_transport(port)
+                where = port
+        except chameleon_dfu.DFUError as e:
+            print(color_string((CR, f"Could not open DFU transport: {e}")))
+            return
+
+        print(f"Flashing {os.path.basename(args.file)} via {where}")
 
         def progress(pct):
             print(f"\r - Uploading: {pct:3d}%", end="", flush=True)
 
         try:
-            chameleon_dfu.flash_package(dat, bin_, port, progress=progress)
+            chameleon_dfu.flash_package(dat, bin_, transport, progress=progress)
         except chameleon_dfu.DFUError as e:
             print()
             print(color_string((CR, f"Flash failed: {e}")))
             return
+        finally:
+            transport.close()
         print()
         print(color_string((CG, " - Firmware flashed. Device will reboot.")))
         time.sleep(0.5)
-
-
-@hw_settings.command("animation")
-class HWSettingsAnimation(DeviceRequiredUnit):
-    def args_parser(self) -> ArgumentParserNoExit:
-        parser = ArgumentParserNoExit()
-        parser.description = "Get or change current animation mode value"
-        mode_names = [m.name for m in list(AnimationMode)]
-        help_str = "Mode: " + ", ".join(mode_names)
-        parser.add_argument(
-            "-m",
-            "--mode",
-            type=str,
-            required=False,
-            help=help_str,
-            metavar="MODE",
-            choices=mode_names,
-        )
-        return parser
-
-    def on_exec(self, args: argparse.Namespace):
-        if args.mode is not None:
-            mode = AnimationMode[args.mode]
-            self.cmd.set_animation_mode(mode)
-            print("Animation mode change success.")
-            print(color_string((CY, "Do not forget to store your settings in flash!")))
-        else:
-            print(AnimationMode(self.cmd.get_animation_mode()))
-
 
 @hw_settings.command("sleeptimeout")
 class HWSettingsSleepTimeout(DeviceRequiredUnit):
