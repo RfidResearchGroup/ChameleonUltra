@@ -7950,7 +7950,7 @@ class HWFlash(BaseCLIUnit):
     def on_exec(self, args: argparse.Namespace):
         # Unpack first so a bad package fails before we touch the device.
         try:
-            dat, bin_ = chameleon_dfu.unpack_dfu_zip(args.file)
+            images = chameleon_dfu.unpack_dfu_zip(args.file)
         except FileNotFoundError:
             print(color_string((CR, f"File not found: {args.file}")))
             return
@@ -8014,13 +8014,14 @@ class HWFlash(BaseCLIUnit):
             print(color_string((CR, f"Could not open DFU transport: {e}")))
             return
 
-        print(f"Flashing {os.path.basename(args.file)} via {where}")
+        kinds = ", ".join(i["type"] for i in images)
+        print(f"Flashing {os.path.basename(args.file)} ({kinds}) via {where}")
 
         def progress(pct):
             print(f"\r - Uploading: {pct:3d}%", end="", flush=True)
 
         try:
-            chameleon_dfu.flash_package(dat, bin_, transport, progress=progress)
+            chameleon_dfu.flash_package(images, transport, progress=progress)
         except chameleon_dfu.DFUError as e:
             print()
             print(color_string((CR, f"Flash failed: {e}")))
