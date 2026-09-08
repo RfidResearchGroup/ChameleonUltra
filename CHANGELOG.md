@@ -4,6 +4,8 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 
 ## [unreleased][unreleased]
  - Fix wrong data reported by hf 14a sniff on frames containing more than 7 parity bits (@DidierA)
+
+## [v2.2.0][2026-07-04]
  - Added Jablotron LF protocol support: read, emulate and T55xx clone (@midlan)
  - Added IDTECK LF protocol support: tag emulation (PSK1 RF/32) and T55xx clone. No reader path yet; PSK demodulation on the envelope-only receive chain is left for a follow-up.
  - Added PAC/Stanley LF protocol support: read, emulate and T55xx clone (@kevihiiin, @danieltwagner)
@@ -25,6 +27,8 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Fix Windows build (@suut)
  - Added `hf 14a config` to deal with badly configured cards (@azuwis)
  - New Symmetrical LED Animation Mode and Improved Minimal Mode (@WillyJL)
+ - Fix MF1 state reset logic and access control conditions (@unkernet)
+ - Added support for SEOS credentials (@aaronjamt)
 
 ## [v2.1.0][2025-09-02]
  - Added UV, formatter and linter. Contribution guidelines. (@GameTec-live)
