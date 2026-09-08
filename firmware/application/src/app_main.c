@@ -32,6 +32,7 @@ NRF_LOG_MODULE_REGISTER();
 #include "bsp_time.h"
 #include "bsp_wdt.h"
 #include "dataframe.h"
+#include "battery_health.h"
 #include "fds_util.h"
 #include "hex_utils.h"
 #include "rfid_main.h"
@@ -48,6 +49,7 @@ NRF_LOG_MODULE_REGISTER();
 
 // Defining soft timers
 APP_TIMER_DEF(m_button_check_timer); // Timer for button debounce
+#define BATTERY_STATUS_DISPLAY_DURATION_MS  5000U
 
 static uint32_t m_last_btn_press = 0;
 
@@ -60,6 +62,16 @@ static bool m_is_b_btn_release = false;
 static bool m_is_a_btn_release = false;
 
 static bool m_system_off_processing = false;
+static bool m_battery_status_display_active = false;
+static uint32_t m_battery_status_display_started_at = 0;
+static uint8_t m_battery_status_display_leds = 0;
+extern bool g_usb_led_marquee_enable;
+
+static void battery_status_display_restore_slot(void);
+static void battery_status_display_stop(void);
+static bool battery_status_display_cancel_on_button(void);
+static void battery_status_display_on_button_cancel(void);
+static void play_power_on_animation(uint8_t slot, uint8_t dir, uint8_t color);
 
 // NFC field generator state
 volatile bool m_is_field_on = false;
@@ -595,7 +607,41 @@ static void cycle_slot(bool dec) {
     apply_slot_change(slot_now, slot_new);
 }
 
+static void battery_status_display_restore_slot(void) {
+    uint8_t slot = tag_emulation_get_slot();
+    uint8_t color = get_color_by_slot(slot);
+    uint8_t dir = slot > 3 ? 1 : 0;
+
+    rgb_marquee_stop();
+    set_slot_light_color(color);
+    uint32_t *led_pins = hw_get_led_array();
+    for (int i = m_battery_status_display_leds; i > 0; i--) {
+        nrf_gpio_pin_clear(led_pins[i - 1]);
+        bsp_delay_ms(50);
+    }
+    play_power_on_animation(slot, dir, color);
+}
+
+static void battery_status_display_stop(void) {
+    battery_status_display_restore_slot();
+    m_battery_status_display_active = false;
+}
+
 static void show_battery(void) {
+    static const uint8_t health_colors[] = {
+        RGB_RED,
+        RGB_YELLOW,
+        RGB_YELLOW,
+        RGB_GREEN,
+        RGB_CYAN,
+    };
+    static const uint8_t health_blinks[] = {
+        2U,
+        1U,
+        0U,
+        0U,
+        0U,
+    };
     rgb_marquee_stop();
     uint32_t *led_pins = hw_get_led_array();
     // if still in the first 4s after boot, blink red while waiting for battery info
@@ -610,19 +656,102 @@ static void show_battery(void) {
         }
         bsp_delay_ms(100);
     }
-    // ok we have data, show level with cyan LEDs
+    battery_health_t battery_health = battery_health_from_measurement(
+        batt_lvl_in_milli_volts,
+        percentage_batt_lvl);
+    uint8_t health_index = battery_health_to_code(battery_health);
+    uint8_t fill_color = health_colors[health_index];
+    uint8_t extra_blinks = health_blinks[health_index];
+
+    // ok we have data, show the level using a color that reflects the health
     for (int i = 0; i < RGB_LIST_NUM; i++) {
         nrf_gpio_pin_clear(led_pins[i]);
     }
-    set_slot_light_color(RGB_CYAN);
-    uint8_t nleds = (percentage_batt_lvl * 2) / 25; // 0->7 (8 for 100% but this is ignored)
+    set_slot_light_color(fill_color);
+    uint8_t nleds = (percentage_batt_lvl * RGB_LIST_NUM + 99U) / 100U;
+    if (nleds > RGB_LIST_NUM) {
+        nleds = RGB_LIST_NUM;
+    }
     for (int i = 0; i < RGB_LIST_NUM; i++) {
-        if (i <= nleds) {
+        if (i < nleds) {
             nrf_gpio_pin_set(led_pins[i]);
             bsp_delay_ms(50);
         }
     }
-    // nothing special to finish, we wait for sleep or slot change
+    if (extra_blinks > 0U) {
+        for (uint8_t blink = 0U; blink < extra_blinks; blink++) {
+            bsp_delay_ms(180);
+            for (int i = 0; i < RGB_LIST_NUM; i++) {
+                nrf_gpio_pin_clear(led_pins[i]);
+            }
+            bsp_delay_ms(140);
+            for (int i = 0; i < RGB_LIST_NUM; i++) {
+                if (i < nleds) {
+                    nrf_gpio_pin_set(led_pins[i]);
+                }
+            }
+        }
+    }
+    m_battery_status_display_leds = nleds;
+    m_battery_status_display_active = true;
+    m_battery_status_display_started_at = app_timer_cnt_get();
+}
+
+static void play_power_on_animation(uint8_t slot, uint8_t dir, uint8_t color) {
+    uint8_t animation_config = settings_get_animation_config();
+    if (animation_config == SettingsAnimationModeFull) {
+        rgb_marquee_sweep_to(color, !dir, 11);
+        rgb_marquee_sweep_to(color, dir, 11);
+        rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
+    } else if (animation_config == SettingsAnimationModeMinimal) {
+        rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
+    } else if (animation_config == SettingsAnimationModeSymmetric) {
+        rgb_marquee_symmetric_out(color, slot);
+    }
+
+    set_slot_light_color(color);
+    light_up_by_slot();
+}
+
+static void battery_status_display_process(void) {
+    if (!m_battery_status_display_active) {
+        return;
+    }
+
+    if (battery_status_display_cancel_on_button()) {
+        battery_status_display_on_button_cancel();
+        return;
+    }
+
+    uint32_t now = app_timer_cnt_get();
+    if (app_timer_cnt_diff_compute(now, m_battery_status_display_started_at) >= APP_TIMER_TICKS(BATTERY_STATUS_DISPLAY_DURATION_MS)) {
+        battery_status_display_stop();
+    }
+}
+
+static bool battery_status_display_cancel_on_button(void) {
+    if (!m_battery_status_display_active) {
+        return false;
+    }
+
+    if (!(m_is_a_btn_release || m_is_b_btn_release)) {
+        return false;
+    }
+
+    m_is_a_btn_release = false;
+    m_is_b_btn_release = false;
+    m_is_a_btn_press = false;
+    m_is_b_btn_press = false;
+    m_is_btn_long_press = false;
+    battery_status_display_stop();
+    return true;
+}
+
+static void battery_status_display_on_button_cancel(void) {
+    g_usb_led_marquee_enable = false;
+    if (!m_is_field_on) {
+        sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
+    }
 }
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
@@ -916,10 +1045,13 @@ static void run_button_function_by_settings(settings_button_function_t sbf) {
 
 /**@brief button press event process
  */
-extern bool g_usb_led_marquee_enable;
 static void button_press_process(void) {
     // Make sure that one of the AB buttons has a click event
     if (m_is_b_btn_release || m_is_a_btn_release) {
+        if (battery_status_display_cancel_on_button()) {
+            battery_status_display_on_button_cancel();
+            return;
+        }
         if (m_is_a_btn_release) {
             if (!m_is_btn_long_press) {
                 run_button_function_by_settings(settings_get_button_press_config('a'));
@@ -1038,16 +1170,19 @@ int main(void) {
     while (1) {
         // process lesc event
         lesc_event_process();
+        battery_status_display_process();
         // Button event process
         button_press_process();
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
         // Field generator rainbow animation
-        field_generator_rainbow_loop();
+        if (!m_battery_status_display_active) {
+            field_generator_rainbow_loop();
+        }
 #endif
 
         // Led blink at usb status (only if field generator is off)
-        if (!m_is_field_on) {
+        if (!m_is_field_on && !m_battery_status_display_active) {
             blink_usb_led_status();
         }
 
