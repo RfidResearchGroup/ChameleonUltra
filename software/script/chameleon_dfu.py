@@ -344,14 +344,17 @@ class SecureDFU:
                 f"CRC mismatch: expected 0x{crc:08x}, got 0x{recv_crc:08x}")
         return crc
 
-    def flash_object(self, obj_type: int, data: bytes, progress=None):
+    def flash_object(self, obj_type: int, data: bytes, progress=None,
+                     tolerate_reset: bool = False):
         max_size, _, _ = self.select_object(obj_type)
         if max_size == 0:
             max_size = len(data) or 1
+        offsets = list(range(0, len(data), max_size))
         crc = 0
         sent = 0
-        for offset in range(0, len(data), max_size):
+        for idx, offset in enumerate(offsets):
             window = data[offset:offset + max_size]
+            is_final = tolerate_reset and idx == len(offsets) - 1
             crc_backup = crc
             for _ in range(self.retries):
                 self.create_object(obj_type, len(window))
@@ -361,7 +364,17 @@ class SecureDFU:
                     self.select_object(obj_type)  # resync
                     crc = crc_backup
                     continue
-                self.execute()
+                try:
+                    self.execute()
+                except DFUError:
+                    # The data was CRC-validated before this execute, so on the
+                    # last window a missing ack means the device activated and
+                    # reset (expected for SD/BL) rather than a real failure.
+                    if is_final:
+                        if progress:
+                            progress(100)
+                        return
+                    raise
                 break
             else:
                 raise DFUError(f"unable to program object at offset {offset}")
@@ -369,13 +382,32 @@ class SecureDFU:
             if progress:
                 progress(min(100, round(sent * 100 / len(data))))
 
-    def flash(self, dat: bytes, bin_: bytes, progress=None):
+    def flash(self, images, progress=None):
+        """Flash one or more DFU images (each {'type','dat','bin'}), in order.
+
+        Nordic requires the init packet (command object) before the firmware
+        (data object) for every image. For SoftDevice/bootloader images the
+        device activates and resets right after the final execute, so a missing
+        ack on that last execute — after its CRC already validated — is treated
+        as success rather than a failure.
+        """
+        if not images:
+            raise DFUError("no firmware images in package")
+        if len(images) > 1:
+            kinds = " + ".join(i.get("type", "?") for i in images)
+            raise DFUError(
+                f"package has multiple images ({kinds}); the device resets after the "
+                "softdevice/bootloader stage, so flash each stage as its own package "
+                "with a reconnect in between (e.g. the SD+BL zip, then the app zip)")
+        img = images[0]
+        dat, bin_ = img.get("dat"), img.get("bin")
         if not dat or not bin_:
-            raise DFUError("empty init packet or firmware image")
+            raise DFUError(f"empty init packet or firmware for image '{img.get('type')}'")
         self.set_prn(0)
         self.t.prepare()
-        self.flash_object(OBJ_TYPE_COMMAND, dat, progress)   # init packet
-        self.flash_object(OBJ_TYPE_DATA, bin_, progress)     # firmware
+        self.flash_object(OBJ_TYPE_COMMAND, dat)                     # init packet
+        self.flash_object(OBJ_TYPE_DATA, bin_, progress,
+                          tolerate_reset=True)                       # firmware (device resets)
 
 
 # --- serial device discovery -------------------------------------------------
@@ -412,26 +444,50 @@ def ble_transport(address: str = None, name: str = None,
 
 
 # --- package handling --------------------------------------------------------
+# Flash SoftDevice/bootloader before the application, per Nordic ordering.
+_IMAGE_ORDER = ["softdevice", "bootloader", "softdevice_bootloader", "application"]
+
+
 def unpack_dfu_zip(path: str):
-    """Extract (init_packet, firmware_image) from a Nordic DFU package .zip."""
+    """Return the DFU images in a Nordic package as a list of dicts.
+
+    Each entry is {'type': <manifest key>, 'dat': <init packet>, 'bin': <image>}.
+    Reads manifest.json so it works for any package type — application,
+    bootloader, softdevice, or a combined softdevice_bootloader (the members are
+    named after the image, e.g. bootloader.dat/.bin, not application.dat/.bin).
+    """
     import json
     import zipfile
 
     with zipfile.ZipFile(path) as zf:
         names = set(zf.namelist())
-        dat_name, bin_name = "application.dat", "application.bin"
-        if dat_name not in names or bin_name not in names:
-            if "manifest.json" in names:
-                manifest = json.loads(zf.read("manifest.json"))
-                app = manifest.get("manifest", {}).get("application", {})
-                dat_name = app.get("dat_file", dat_name)
-                bin_name = app.get("bin_file", bin_name)
-            else:
-                raise DFUError(
-                    "not a Chameleon DFU package (no application.dat/.bin or manifest.json)")
-        return zf.read(dat_name), zf.read(bin_name)
+        images = []
+        if "manifest.json" in names:
+            manifest = json.loads(zf.read("manifest.json")).get("manifest", {})
+            keys = sorted(manifest.keys(),
+                          key=lambda k: _IMAGE_ORDER.index(k) if k in _IMAGE_ORDER else 99)
+            for k in keys:
+                entry = manifest[k]
+                if not isinstance(entry, dict):
+                    continue
+                dat_name = entry.get("dat_file")
+                bin_name = entry.get("bin_file")
+                if not dat_name or not bin_name:
+                    continue
+                images.append({"type": k,
+                               "dat": zf.read(dat_name),
+                               "bin": zf.read(bin_name)})
+        if not images and {"application.dat", "application.bin"} <= names:
+            # legacy package with no manifest
+            images.append({"type": "application",
+                           "dat": zf.read("application.dat"),
+                           "bin": zf.read("application.bin")})
+        if not images:
+            raise DFUError(
+                "no DFU images found (need manifest.json or application.dat/.bin)")
+        return images
 
 
-def flash_package(dat: bytes, bin_: bytes, transport: Transport, progress=None):
-    """Run the full Secure DFU sequence over an already-connected transport."""
-    SecureDFU(transport).flash(dat, bin_, progress)
+def flash_package(images, transport: Transport, progress=None):
+    """Run the full Secure DFU sequence for the given images over a transport."""
+    SecureDFU(transport).flash(images, progress)
