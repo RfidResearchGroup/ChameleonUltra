@@ -42,6 +42,9 @@
 #ifndef CONFIG_STANDALONE_EMUL_TRACE
 #define CONFIG_STANDALONE_EMUL_TRACE  1
 #endif
+#ifndef CONFIG_STANDALONE_HF14A_TAP_SNIFF
+#define CONFIG_STANDALONE_HF14A_TAP_SNIFF  1
+#endif
 
 /* -------------------------------------------------------------------------
  * FDS record keys (file ID FDS_STANDALONE_FILE_ID defined in fds_ids.h)
@@ -110,6 +113,9 @@ static const standalone_mode_iface_t * const m_modes[] = {
 #endif
 #if defined(PROJECT_CHAMELEON_ULTRA)
     &mode_relay_iface,
+#endif
+#if CONFIG_STANDALONE_HF14A_TAP_SNIFF && defined(PROJECT_CHAMELEON_ULTRA)
+    &mode_hf14a_tap_sniff_iface,
 #endif
 };
 
@@ -308,7 +314,6 @@ standalone_rc_t app_standalone_load_result_buf(standalone_mode_t mode,
  * ------------------------------------------------------------------------- */
 
 static bool mode_permitted(const standalone_mode_iface_t *m, uint8_t flags) {
-    if (m == NULL) return false;
     if ((m->writes_tag || m->writes_slot) &&
         !(flags & STANDALONE_FLAG_HOST_OPTED_IN)) {
         return false;
@@ -399,7 +404,7 @@ standalone_rc_t app_standalone_set_mode(standalone_mode_t mode, uint8_t flags) {
     }
 
     const standalone_mode_iface_t *m = find_mode(mode);
-    if (m == NULL)                       return STANDALONE_RC_INVALID_CFG;
+    if (m == NULL)                       return STANDALONE_RC_MODE_UNAVAILABLE;
     if (!mode_permitted(m, flags))       return STANDALONE_RC_NOT_PERMITTED;
 
     if (m_ctx.state != STANDALONE_STATE_DISARMED && m_ctx.mode != mode) {

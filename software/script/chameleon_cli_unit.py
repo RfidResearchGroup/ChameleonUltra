@@ -12515,7 +12515,7 @@ class StandaloneSetMode(DeviceRequiredUnit):
         parser.description = 'Set standalone mode'
         parser.add_argument('mode', help='mode name (authtrace, emul-trace, relay, slot-cycle, '
                                          'autoclone, read-replay, dict-check, '
-                                         'disabled)')
+                                         'hf14a-tap-sniff, disabled)')
         parser.add_argument('--opt-in', action='store_true',
                             help='set HOST_OPTED_IN flag (required for '
                                  'autoclone and read-replay)')
@@ -12537,7 +12537,10 @@ class StandaloneSetMode(DeviceRequiredUnit):
 
         result = self.cmd.standalone_set_mode(mode, flags)
         if not isinstance(result, tuple):
-            if result.status == Status.PAR_ERR:
+            if result.status == Status.NOT_IMPLEMENTED:
+                print(color_string((CR,
+                    f"refused: mode '{mode.name}' is not available on this device/firmware build")))
+            elif result.status == Status.PAR_ERR:
                 print(color_string((CR,
                     f"refused: mode '{mode.name}' requires --opt-in")))
             else:
@@ -12662,7 +12665,7 @@ class StandaloneGetResult(DeviceRequiredUnit):
             return
 
         if mode not in (StandaloneMode.AUTHTRACE, StandaloneMode.EMUL_TRACE,
-                        StandaloneMode.RELAY):
+                        StandaloneMode.RELAY, StandaloneMode.HF14A_TAP_SNIFF):
             print(color_string((CY,
                 f"got {len(raw)} bytes; mode={mode.name} has no parser. "
                 f"use --raw -f <path> to dump.")))
@@ -12749,6 +12752,7 @@ class StandaloneLs(DeviceRequiredUnit):
         5: 'dict_check',
         6: 'emul_trace',
         7: 'relay',
+        8: 'hf14a_tap_sniff',
     }
 
     def args_parser(self) -> ArgumentParserNoExit:
@@ -12809,10 +12813,18 @@ class StandaloneConfig(DeviceRequiredUnit):
         u8  key[6]      (candidate sector key)
         u8  reserved1[4]
 
+    HF14A tap-sniff config format (8 bytes):
+        u8  version=1
+        u8  reserved0
+        u16 timeout_ms  (100..30000, per-capture listen duration)
+        u8  reserved1[4]
+
     Examples:
         standalone config authtrace                       (read current)
         standalone config authtrace --block 4 --key-type A
         standalone config authtrace --key FFFFFFFFFFFF --timeout 5000
+        standalone config hf14a-tap-sniff                  (read current)
+        standalone config hf14a-tap-sniff --timeout 8000
     """
 
     def args_parser(self) -> ArgumentParserNoExit:
@@ -12827,8 +12839,9 @@ class StandaloneConfig(DeviceRequiredUnit):
                             help='[authtrace] 12-hex-char sector key '
                                  '(e.g. FFFFFFFFFFFF)')
         parser.add_argument('--timeout',  type=int, default=None,
-                            help='[authtrace] tag-poll timeout in ms '
-                                 '(100-30000)')
+                            help='[authtrace] tag-poll timeout in ms (100-30000); '
+                                 '[hf14a-tap-sniff] capture duration in ms (100-30000); '
+                                 '[relay] WTX ms (500-10000)')
         return parser
 
     def on_exec(self, args):
@@ -12882,6 +12895,37 @@ class StandaloneConfig(DeviceRequiredUnit):
             print(color_string((CY,
                 "emul_trace has no config — it uses the active emulation slot as-is.\n"
                 "Set up your slot normally, then arm the mode.")))
+            return
+
+        if mode == StandaloneMode.HF14A_TAP_SNIFF:
+            if any(v is not None for v in (args.block, args.key_type, args.key)):
+                print(color_string((CR,
+                    "hf14a-tap-sniff config does not use --block/--key-type/--key")))
+                return
+            if args.timeout is not None:
+                timeout_ms = int(args.timeout)
+                if not (100 <= timeout_ms <= 30000):
+                    print(color_string((CR, "timeout must be 100..30000 ms")))
+                    return
+                cfg = struct.pack('<BBH', 1, 0, timeout_ms) + b'\x00' * 4
+                resp = self.cmd.standalone_set_config(mode, cfg)
+                if resp.status == Status.SUCCESS:
+                    print(color_string((CG,
+                        f"hf14a-tap-sniff timeout set to {timeout_ms} ms")))
+                else:
+                    print(color_string((CR,
+                        f"set-config failed: status={resp.status}")))
+                return
+            # No setter args — read and display current config
+            blob = self.cmd.standalone_get_config(mode)
+            if blob and len(blob) >= 4:
+                ver, _r0, timeout_ms = struct.unpack('<BBH', blob[:4])
+                print(color_string((CG, "hf14a-tap-sniff config:")))
+                print(f"  version:  {ver}")
+                print(f"  timeout:  {timeout_ms} ms")
+            else:
+                print(color_string((CY,
+                    "no persisted config — default timeout 5000 ms")))
             return
 
         if not any_setter:

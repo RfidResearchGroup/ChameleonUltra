@@ -745,6 +745,7 @@ class StandaloneMode(enum.IntEnum):
     DICT_CHECK  = 0x05
     EMUL_TRACE  = 0x06   # CU as card; logs reader auth exchanges (mfkey-ready)
     RELAY       = 0x07   # two-CU BLE peer relay (Ultra only)
+    HF14A_TAP_SNIFF = 0x08   # passive hf14a tap sniff (Ultra only)
 
     @classmethod
     def from_name(cls, name: str) -> "StandaloneMode":

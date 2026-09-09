@@ -27,6 +27,7 @@ static chameleon_rgb_type_t m_palette[STANDALONE_MODE__COUNT] = {
     [STANDALONE_MODE_DICT_CHECK]  = RGB_WHITE,
     [STANDALONE_MODE_EMUL_TRACE]  = RGB_CYAN,
     [STANDALONE_MODE_RELAY]       = RGB_BLUE,
+    [STANDALONE_MODE_HF14A_TAP_SNIFF] = RGB_GREEN,
 };
 
 static bool m_initialised = false;

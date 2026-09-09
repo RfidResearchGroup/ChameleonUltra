@@ -22,13 +22,13 @@ wait_for_dfu() {
 device_type=ultra
 lsusb | grep 1915:521f | grep -q ChameleonLite && device_type=lite
 
-sdbl_zip="objects/${device_type}-dfu-sdbl.zip"
-[ -f "$sdbl_zip" ] || { echo "missing $sdbl_zip — run ./build.sh"; exit 1; }
+bl_zip="objects/${device_type}-dfu-bl.zip"
+[ -f "$bl_zip" ] || { echo "missing $bl_zip — run ./build.sh"; exit 1; }
 
 echo "=== Flashing composite bootloader (SD+BL) via serial DFU ==="
 ../resource/tools/enter_dfu.py || echo "Manually: cold-boot + hold B + plug"
 wait_for_dfu
-nrfutil device program --firmware "$sdbl_zip" --traits nordicDfu
+nrfutil device program --firmware "$bl_zip" --traits nordicDfu
 
 echo
 echo "Done. Composite bootloader (UF2 + CDC serial DFU) installed at 0xF3000."

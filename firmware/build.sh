@@ -86,11 +86,10 @@ fi
     # SD+BL DFU zip — composite BL at 0xF3000, flashable from stock
     nrfutil nrf5sdk-tools pkg generate \
       --hw-version $hw_version \
-      --bootloader  bootloader.hex --bootloader-version $bootloader_version \
-      --softdevice  softdevice.hex \
-      --sd-req ${softdevice_id} --sd-id ${softdevice_id} \
+      --bootloader bootloader.hex --bootloader-version $bootloader_version \
+      --sd-req ${softdevice_id} \
       --key-file ../../resource/dfu_key/chameleon.pem \
-      ${device_type}-dfu-sdbl.zip
+      ${device_type}-dfu-bl.zip
 
     nrfutil nrf5sdk-tools pkg generate \
       --hw-version $hw_version \
@@ -140,7 +139,7 @@ fi
     echo
     echo "=========================================================="
     echo "Build complete."
-    echo "  SD+BL      : objects/${device_type}-dfu-sdbl.zip"
+    echo "  SD+BL      : objects/${device_type}-dfu-bl.zip"
     echo "  App        : objects/${device_type}-dfu-app.zip"
     echo "  Full image : objects/${device_type}-fullimage.uf2"
     echo "Use flash-dfu-sdbl.sh to install both stages."

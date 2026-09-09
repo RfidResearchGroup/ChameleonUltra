@@ -30,18 +30,19 @@
 
 static uint16_t rc_to_status(standalone_rc_t rc) {
     switch (rc) {
-        case STANDALONE_RC_OK:              return STATUS_SUCCESS;
-        case STANDALONE_RC_BUSY:            return STATUS_DEVICE_MODE_ERROR;
-        case STANDALONE_RC_INVALID_STATE:   return STATUS_DEVICE_MODE_ERROR;
-        case STANDALONE_RC_NOT_PERMITTED:   return STATUS_PAR_ERR;
-        case STANDALONE_RC_INVALID_CFG:     return STATUS_PAR_ERR;
-        case STANDALONE_RC_NO_TAG:          return STATUS_HF_TAG_NO;
-        case STANDALONE_RC_NO_FREE_SLOT:    return STATUS_PAR_ERR;
-        case STANDALONE_RC_WRITE_FAIL:      return STATUS_FLASH_WRITE_FAIL;
-        case STANDALONE_RC_BUFFER_FULL:     return STATUS_PAR_ERR;
-        case STANDALONE_RC_NO_RESULT:       return STATUS_SUCCESS;  /* empty */
-        case STANDALONE_RC_INTERNAL:        /* fallthrough */
-        default:                            return STATUS_NOT_IMPLEMENTED;
+        case STANDALONE_RC_OK:               return STATUS_SUCCESS;
+        case STANDALONE_RC_BUSY:             return STATUS_DEVICE_MODE_ERROR;
+        case STANDALONE_RC_INVALID_STATE:    return STATUS_DEVICE_MODE_ERROR;
+        case STANDALONE_RC_NOT_PERMITTED:    return STATUS_PAR_ERR;
+        case STANDALONE_RC_MODE_UNAVAILABLE: return STATUS_NOT_IMPLEMENTED;
+        case STANDALONE_RC_INVALID_CFG:      return STATUS_PAR_ERR;
+        case STANDALONE_RC_NO_TAG:           return STATUS_HF_TAG_NO;
+        case STANDALONE_RC_NO_FREE_SLOT:     return STATUS_PAR_ERR;
+        case STANDALONE_RC_WRITE_FAIL:       return STATUS_FLASH_WRITE_FAIL;
+        case STANDALONE_RC_BUFFER_FULL:      return STATUS_PAR_ERR;
+        case STANDALONE_RC_NO_RESULT:        return STATUS_SUCCESS;  /* empty */
+        case STANDALONE_RC_INTERNAL:         /* fallthrough */
+        default:                             return STATUS_NOT_IMPLEMENTED;
     }
 }
 

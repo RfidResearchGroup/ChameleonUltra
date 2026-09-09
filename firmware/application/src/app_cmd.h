@@ -43,6 +43,26 @@ uint8_t hf14a_auth_trace_run(uint8_t type, uint8_t block,
 const uint8_t *hf14a_auth_trace_get_buf(uint16_t *out_len);
 
 /* -------------------------------------------------------------------------
+ * HF14A passive tap-sniff capture engine (PROJECT_CHAMELEON_ULTRA only).
+ *
+ * Runs one passive tap-sniff window: CU stays silent, a real card in the
+ * field answers a real reader, NFCT captures the downlink and the RC522
+ * captures the uplink from the shared coil. Blocks for timeout_ms.
+ *
+ * Device must already be in emulator mode (hw mode --emulator) with a slot
+ * active before calling. Shared by CMD 2019 (cmd_processor_hf14a_sniff,
+ * --tap) and STANDALONE_MODE_HF14A_TAP_SNIFF.
+ *
+ * Returns the finalized capture length in bytes (0 if nothing captured).
+ * *out_cb_count receives the raw NFCT downlink callback count (may be NULL).
+ */
+uint16_t hf14a_sniff_tap_run(uint32_t timeout_ms, uint16_t *out_cb_count);
+
+/* Pointer to the buffer most recently filled by hf14a_sniff_tap_run() (or by
+ * classic-mode CMD 2019). Valid until the next capture call. */
+const uint8_t *hf14a_sniff_get_buf(uint16_t *out_len);
+
+/* -------------------------------------------------------------------------
  * Standalone subsystem command handlers (see app_cmd_standalone.c).
  * Bound to DATA_CMD_STANDALONE_* (7000-7006) in the m_data_cmd_map[] table.
  */
