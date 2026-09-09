@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Fixed ISO14443-4 reader-side response chaining in `hf14a_4_emv_scan` and `HF14A_4_READER_APDU`: the chaining check used PCB bit `0x20`, which is part of the I-block identifier (always 0 on an I-block), so a card chaining its response (any response larger than the reader's FSD) had every block after the first silently dropped; also toggle the R(ACK) block number and derive the next block number from the final I-block (@whitewhidow)
 
 ## [v2.2.0][2026-07-04]
  - Added Jablotron LF protocol support: read, emulate and T55xx clone (@midlan)
