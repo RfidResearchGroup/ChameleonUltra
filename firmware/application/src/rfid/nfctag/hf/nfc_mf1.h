@@ -80,8 +80,11 @@ typedef struct {
     uint8_t field_off_do_reset: 1;
     // PRNG type: 0=static 1=weak/LFSR(default) 2=hard/rand
     uint8_t prng_type: 2;
-    // reserved
-    uint8_t reserved1: 1;
+    /**
+     * Strictly enforce the NXP MF1 rule: reject Key B authentication when Key B readable via Key A.
+     * Default OFF for compatibility, many clones and accept Key B auth regardless of the access bits.
+     */
+    uint8_t mode_strict_key_b_auth: 1;
     uint8_t reserved2;
     uint8_t reserved3;
 } nfc_tag_mf1_configure_t;
@@ -172,5 +175,7 @@ bool nfc_tag_mf1_is_field_off_do_reset(void);
 void nfc_tag_mf1_prng_seed(uint32_t seed);  // seed MFC LFSR PRNG from hardware RNG
 void nfc_tag_mf1_set_prng_type(uint8_t type);  // 0=static 1=weak(LFSR) 2=hard(rand)
 uint8_t nfc_tag_mf1_get_prng_type(void);
+void nfc_tag_mf1_set_strict_key_b_auth(bool enable);  // reject Key B auth when readable via Key A
+bool nfc_tag_mf1_is_strict_key_b_auth(void);
 
 #endif

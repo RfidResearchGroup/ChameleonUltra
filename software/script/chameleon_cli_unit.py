@@ -4050,6 +4050,19 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
             action="store_true",
             help="Disable FIELD_OFF_DO_RESET",
         )
+        strict_key_b_auth_group = parser.add_mutually_exclusive_group()
+        strict_key_b_auth_group.add_argument(
+            "--enable_strict_key_b_auth",
+            action="store_true",
+            help="Enable strict key B auth. "
+            "When enabled, Key B authentication is rejected on sectors whose access "
+            "bits make Key B readable via Key A (NXP spec).",
+        )
+        strict_key_b_auth_group.add_argument(
+            "--disable_strict_key_b_auth",
+            action="store_true",
+            help="Disable strict key B auth",
+        )
         return parser
 
     def on_exec(self, args: argparse.Namespace):
@@ -4083,6 +4096,7 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
         block_anti_coll_mode = mfc_config["block_anti_coll_mode"]
         write_mode = MifareClassicWriteMode(mfc_config["write_mode"])
         detection = mfc_config["detection"]
+        strict_key_b_auth = mfc_config["strict_key_b_auth"]
         change_requested, change_done, uid, atqa, sak, ats = self.update_hf14a_anticoll(
             args, uid, atqa, sak, ats
         )
@@ -4189,6 +4203,26 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 print(
                     f'{color_string((CY, "Requested FIELD_OFF_DO_RESET already disabled"))}'
                 )
+        if args.enable_strict_key_b_auth:
+            change_requested = True
+            if not strict_key_b_auth:
+                strict_key_b_auth = True
+                self.cmd.mf1_set_strict_key_b_auth(field_off_do_reset)
+                change_done = True
+            else:
+                print(
+                    f'{color_string((CY, "Requested strict key B auth already enabled"))}'
+                )
+        elif args.disable_strict_key_b_auth:
+            change_requested = True
+            if strict_key_b_auth:
+                strict_key_b_auth = False
+                self.cmd.mf1_set_strict_key_b_auth(strict_key_b_auth)
+                change_done = True
+            else:
+                print(
+                    f'{color_string((CY, "Requested strict key B auth already disabled"))}'
+                )
 
         if change_done:
             print(" - MF1 Emulator settings updated")
@@ -4220,6 +4254,9 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 print(f'- {"Write mode:":40}{color_string((CR, "invalid value!"))}')
             print(
                 f'- {"Log (mfkey32) mode:":40}{f"{enabled_str}" if detection else f"{disabled_str}"}'
+            )
+            print(
+                f'- {"Strict key B auth:":40}{f"{enabled_str}" if strict_key_b_auth else f"{disabled_str}"}'
             )
             print(
                 f'- {"FIELD_OFF_DO_RESET:":40}{f"{enabled_str}" if field_off_do_reset else f"{disabled_str}"}'
@@ -6722,6 +6759,10 @@ class HWSlotList(DeviceRequiredUnit):
                     print(
                         f'      {"Log (mfkey32) mode:":40}'
                         f'{enabled_str if config["detection"] else disabled_str}'
+                    )
+                    print(
+                        f'      {"Strict key B auth:":40}'
+                        f'{enabled_str if config["strict_key_b_auth"] else disabled_str}'
                     )
                     try:
                         prng_resp = self.cmd.mf1_get_prng_type()

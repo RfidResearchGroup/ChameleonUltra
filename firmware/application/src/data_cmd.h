@@ -168,6 +168,8 @@
 #define DATA_CMD_SEOS_READ_EMU_DATA             (4042)
 #define DATA_CMD_SEOS_WRITE_EMU_DATA            (4043)
 #define DATA_CMD_SEOS_WRITE_EMU_KEYS            (4044)
+#define DATA_CMD_MF1_GET_STRICT_KEY_B_AUTH      (4045)
+#define DATA_CMD_MF1_SET_STRICT_KEY_B_AUTH      (4046)
 //
 // ******************************************************************
 
