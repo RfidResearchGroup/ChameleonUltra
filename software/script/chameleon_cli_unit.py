@@ -8489,6 +8489,13 @@ def _extract_sniff_nonces(frames):
             nr_hex = ''.join(f'{b:02X}' for b in d2[:4])
             ar_hex = ''.join(f'{b:02X}' for b in d2[4:])
 
+            # frame i+3: card→reader, exactly 4 bytes = {at} (tag answer), optional
+            at_hex = None
+            if i + 3 < len(frames):
+                _, d3, tx3 = frames[i + 3]
+                if tx3 and len(d3) == 4:
+                    at_hex = ''.join(f'{b:02X}' for b in d3)
+
             nonces.append({
                 'uid':      uid_hex or '00000000',
                 'block':    block,
@@ -8496,6 +8503,7 @@ def _extract_sniff_nonces(frames):
                 'nt':       nt_hex,
                 'nr':       nr_hex,
                 'ar':       ar_hex,
+                'at':       at_hex,
             })
 
     return nonces
@@ -8649,65 +8657,59 @@ def _print_14a_sniff_summary(frames):
         for (uid, block, kt), ns in groups.items():
             print(f"   Block {block} Key {kt}  uid={uid}")
             for idx, n in enumerate(ns):
-                print(f"     [{idx}] nt={n['nt']}  nr={n['nr']}  ar={n['ar']}")
+                print(f"     [{idx}] nt={n['nt']}  nr={n['nr']}  ar={n['ar']} at={n['at']}")
 
-            if len(ns) >= 2:
-                # Case A: two paired incomplete auths.
-                # ns[1].nt is the {at} the CU sent after exchange 0's {nr}/{ar};
-                # the reader treated it as the fresh nt for the next auth round.
-                # mfkey64 is deterministic; mfkey32v2 is a probabilistic fallback.
-                n0, n1 = ns[0], ns[1]
-                cmd64 = (f"mfkey64 {uid} {n0['nt']} {n0['nr']} {n0['ar']} {n1['nt']}")
-                cmd32 = (f"mfkey32v2 {uid} {n0['nt']} {n0['nr']} {n0['ar']}"
-                         f" {n1['nt']} {n1['nr']} {n1['ar']}")
-
-                # Always print both command strings so the user can run them
-                # manually even when the binaries are unavailable/blocked.
-                print(f"   {CC}mfkey64 :{C0} {cmd64}")
-                print(f"   {CC}mfkey32v2:{C0} {cmd32}")
-
-                key = _run_mfkey64(uid, n0['nt'], n0['nr'], n0['ar'], n1['nt'])
-
-                if key not in (_TOOL_MISSING, _TOOL_BLOCKED, _TOOL_NO_KEY):
-                    print(f"   {CG}Key: [{key.upper()}]{C0}")
-
-                elif key == _TOOL_MISSING:
-                    print(f"   {CY}mfkey64 binary not found in bin/ — "
-                          f"copy the command above and run it manually{C0}")
-
-                elif key == _TOOL_BLOCKED:
-                    print(f"   {CY}mfkey64 could not be executed "
-                          f"(antivirus / permissions) — "
-                          f"run the command above manually{C0}")
-
-                else:
-                    # _TOOL_NO_KEY — mfkey64 ran but found nothing (rare);
-                    # try mfkey32v2 as probabilistic fallback.
-                    result32 = _run_mfkey32v2_sniff(n0, n1)
-
-                    if result32 not in (_TOOL_MISSING, _TOOL_BLOCKED, _TOOL_NO_KEY):
-                        print(f"   {CG}Key: [{result32.upper()}]{C0} (via mfkey32v2)")
-
-                    elif result32 == _TOOL_MISSING:
-                        print(f"   {CY}mfkey64 found no key and mfkey32v2 is not in bin/ — "
-                              f"run the commands above manually{C0}")
-
-                    elif result32 == _TOOL_BLOCKED:
-                        print(f"   {CY}mfkey64 found no key and mfkey32v2 could not be "
-                              f"executed (antivirus / permissions) — "
-                              f"run the commands above manually{C0}")
-
+            import itertools
+            found_at = False
+            for n in ns:
+                if n.get('at'):
+                    # Case A: completed auth
+                    found_at = True
+                    cmd64 = f"mfkey64 {uid} {n['nt']} {n['nr']} {n['ar']} {n['at']}"
+                    print(f"     {CC}mfkey64:{C0} {cmd64}")
+                    key = _run_mfkey64(uid, n['nt'], n['nr'], n['ar'], n['at'])
+                    if key not in (_TOOL_MISSING, _TOOL_BLOCKED, _TOOL_NO_KEY):
+                        print(f"     {CG}Key: [{key.upper()}]{C0}")
+                    elif key == _TOOL_MISSING:
+                        print(f"     {CY}mfkey64 binary not found in bin/ — "
+                              f"copy the command above and run it manually{C0}")
+                    elif key == _TOOL_BLOCKED:
+                        print(f"     {CY}mfkey64 could not be executed "
+                              f"(antivirus / permissions) — "
+                              f"run the command above manually{C0}")
                     else:
-                        print(f"   {CR}Key not found by either tool — "
-                              f"capture more nonce exchanges and retry{C0}")
+                        print(f"   {CR}mfkey64 found no key{C0}")
+                    break
 
-            elif len(ns) == 1:
-                # Single capture — can't crack without a paired exchange
-                n = ns[0]
-                print(f"   {CY}Only one exchange captured — "
-                      f"need a second auth to crack{C0}")
-                print(f"   {CC}When paired, run:{C0} "
-                      f"mfkey64 {uid} {n['nt']} {n['nr']} {n['ar']} <nt2>")
+            if not found_at:
+                if len(ns) >= 2:
+                    # Case B: two paired incomplete auths
+                    possible_keys = set()
+                    for n0, n1 in itertools.combinations(ns, 2):
+                        cmd32 = f"mfkey32v2 {uid} {n0['nt']} {n0['nr']} {n0['ar']} {n1['nt']} {n1['nr']} {n1['ar']}"
+                        print(f"     {CC}mfkey32v2:{C0} {cmd32}")
+                        key = _run_mfkey32v2_sniff(n0, n1)
+                        if key not in (_TOOL_MISSING, _TOOL_BLOCKED, _TOOL_NO_KEY):
+                            possible_keys.add(key.upper())
+                        elif key == _TOOL_MISSING:
+                            print(f"     {CY}mfkey32v2 binary not found in bin/ — "
+                                  f"run the commands above manually{C0}")
+                        elif key == _TOOL_BLOCKED:
+                            print(f"     {CY}mfkey32v2 could not be executed "
+                                  f"(antivirus / permissions) — "
+                                  f"run the commands above manually{C0}")
+                    if len(possible_keys) == 0:
+                        print(f"     {CR}mfkey32v2 found no key{C0}")
+                    elif len(possible_keys) == 1:
+                        print(f"     {CG}Key: [{next(iter(possible_keys))}]{C0}")
+                    else:
+                        print(f"     {CG}Key candidates: [{", ".join(possible_keys)}]{C0}")
+                else:
+                    n = ns[0]
+                    print(f"     {CY}Only one exchange captured — "
+                          f"need a second auth to crack{C0}")
+                    print(f"     {CC}When paired, run:{C0} "
+                          f"mfkey64 {uid} {n['nt']} {n['nr']} {n['ar']} <nt2>")
 
 
 def _get_capture():
