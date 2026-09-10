@@ -1,0 +1,9 @@
+[submodule "firmware/application/src/rfid/nfctag/hf/desfire/core"]
+	path = firmware/application/src/rfid/nfctag/hf/desfire/core
+	url = https://github.com/cindersocket/dfc-core.git
+[submodule "firmware/application/src/rfid/nfctag/hf/desfire/crypto/tiny-AES-c"]
+	path = firmware/application/src/rfid/nfctag/hf/desfire/crypto/tiny-AES-c
+	url = https://github.com/mistial-dev/tiny-AES-c.git
+[submodule "firmware/application/src/rfid/nfctag/hf/desfire/crypto/tiny-DES-c"]
+	path = firmware/application/src/rfid/nfctag/hf/desfire/crypto/tiny-DES-c
+	url = https://github.com/mistial-dev/tiny-DES-c.git

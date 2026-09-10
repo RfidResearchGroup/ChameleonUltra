@@ -1,0 +1,23 @@
+Filetype: Flipper DFC Credential
+Version: 2
+UID: 04 11 22 33 44 55 66
+PICC Key Settings 1: 0F
+PICC Key Settings 2: 01
+PICC Authentication Mode: DES/2K3DES
+PICC Key: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+PICC Key Version: 00
+Application Count: 01
+Application 00 AID: 01 00 00
+Application 00 Key Settings 1: 0F
+Application 00 Key Settings 2: 01
+Application 00 Authentication Mode: DES/2K3DES
+Application 00 Key Count: 01
+Application 00 Key 00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Application 00 Key 00 Version: 00
+File Count: 01
+File Entry 00 App: 00
+File Entry 00 Number: 00
+File Entry 00 Type: Standard Data
+File Entry 00 Communication Settings: 00
+File Entry 00 Access Rights: EE EE
+File Entry 00 Data: DE AD BE EF 00 00 00 00

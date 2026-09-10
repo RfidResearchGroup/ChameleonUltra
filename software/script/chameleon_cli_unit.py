@@ -24,6 +24,7 @@ import hardnested_utils
 
 import chameleon_com
 import chameleon_cmd
+from chameleon_dfc import DfcCredential, DfcError
 from chameleon_utils import (
     ArgumentParserNoExit,
     ArgsParserError,
@@ -10205,6 +10206,211 @@ _DESFIRE_PROTOCOL = {
 # hw_major -> SW major (EV generation number), used as fallback when the SW
 # frame returns no data (some reader/BLE stacks don't relay it).
 _DESFIRE_HW_MAJOR_TO_SW_MAJOR = {0x01: 1, 0x12: 2, 0x30: 3, 0x33: 3}
+
+
+def dfc_read_credential_file(path: str) -> DfcCredential:
+    """Read a credential from either encoding.
+
+    A binary credential always opens with octet 0x60, which is what every other
+    loader sniffs for, so the file's extension is not consulted.
+    """
+    with open(path, "rb") as fh:
+        raw = fh.read()
+    if raw[:1] == b"\x60":
+        return DfcCredential.from_wire(raw)
+    return DfcCredential.parse_text(raw.decode("utf-8", errors="replace"))
+
+
+@hf_des.command("parse")
+class HfDesParse(BaseCLIUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Parse a credential file, in either encoding, and show what it contains. "
+            "Needs no device, so it is the quickest way to check a file before loading it."
+        )
+        parser.add_argument("-f", "--file", required=True,
+                            help="path to a .dfc or .dfcb file")
+        parser.add_argument("--hexdump", action="store_true",
+                            help="also print the .dfcb octets the device would receive")
+        parser.epilog = "examples:\n  hf des parse -f card.dfc\n  hf des parse -f card.dfcb\n"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            cred = dfc_read_credential_file(args.file)
+        except (OSError, DfcError) as e:
+            print(f" {CR}[!] {e}{C0}")
+            return
+        print(cred.describe())
+        try:
+            blob = cred.to_wire()
+        except DfcError as e:
+            print(f" {CR}[!] cannot be encoded for the device: {e}{C0}")
+            return
+        print(f" Wire blob     : {len(blob)} bytes (.dfcb)")
+        if args.hexdump:
+            print(blob.hex())
+
+
+@hf_des.command("eload")
+class HfDesELoad(SlotIndexArgsAndGoUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Load a credential, in either encoding, into a DESFire emulation slot."
+        )
+        self.add_slot_args(parser)
+        parser.add_argument("-f", "--file", required=True,
+                            help="path to a .dfc or .dfcb file")
+        parser.epilog = ("examples:\n  hf des eload -f card.dfc\n"
+                         "  hf des eload -f card.dfcb -s 2\n")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            cred = dfc_read_credential_file(args.file)
+        except (OSError, DfcError) as e:
+            print(f" {CR}[!] {e}{C0}")
+            return
+
+        try:
+            blob = cred.to_wire()
+        except DfcError as e:
+            print(f" {CR}[!] cannot be encoded for the device: {e}{C0}")
+            return
+        # The slot has to be a DESFire type before the credential will be accepted.
+        self.cmd.set_slot_tag_type(self.slot_num, TagSpecificType.DESFIRE_EV1_2K)
+        self.cmd.set_slot_data_default(self.slot_num, TagSpecificType.DESFIRE_EV1_2K)
+        self.cmd.set_slot_enable(self.slot_num, TagSenseType.HF, True)
+
+        # The slot's anti-collision record is the device's to settle: it is the
+        # only party that knows what the engine answers activation with for the
+        # fields a credential leaves out. Setting it from here would mean
+        # duplicating those defaults, and getting them wrong clears values the
+        # card needs.
+
+        def progress(sent, total):
+            print(".", end="", flush=True)
+
+        try:
+            self.cmd.desfire_set_credential(blob, progress=progress)
+        except Exception as e:
+            print(f"\n {CR}[!] device rejected the credential: {e}{C0}")
+            return
+        print(f"\n - Loaded {len(blob)} bytes into slot {self.slot_num}")
+        print(f"   UID {cred.uid.hex().upper()}, "
+              f"{len(cred.apps)} application(s), {len(cred.files)} file(s)")
+        print(f" {CY}Run 'hw slot store' to keep it across a power cycle.{C0}")
+
+
+@hf_des.command("edump")
+class HfDesEDump(SlotIndexArgsAndGoUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Read a DESFire emulation slot's credential back."
+        self.add_slot_args(parser)
+        parser.add_argument("-f", "--file", help="write the raw .dfcb blob to this path")
+        parser.epilog = "examples:\n  hf des edump\n  hf des edump -f slot.dfcb\n"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            blob = self.cmd.desfire_get_credential()
+        except Exception as e:
+            print(f" {CR}[!] {e}{C0}")
+            return
+        try:
+            cred = DfcCredential.from_wire(blob)
+        except DfcError as e:
+            print(f" {CR}[!] device returned an unusable blob: {e}{C0}")
+            return
+        print(cred.describe())
+        if args.file:
+            with open(args.file, "wb") as fh:
+                fh.write(blob)
+            print(f" - Wrote {len(blob)} bytes to {args.file}")
+
+
+@hf_des.command("einfo")
+class HfDesEInfo(SlotIndexArgsAndGoUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Show the DESFire emulation slot summary."
+        self.add_slot_args(parser)
+        parser.epilog = "examples:\n  hf des einfo\n"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        info = self.cmd.desfire_get_info()
+        print(f" UID           : {info['uid'].hex().upper()}")
+        print(f" Applications  : {info['num_apps']} / {info['max_apps']}")
+        print(f" Files         : {info['num_files']} / {info['max_files']}")
+        print(f" File data pool: {info['pool_used']} / {info['pool_size']} bytes")
+        print(f" Keys per app  : up to {info['max_keys']}")
+        print(f" PICC auth     : 0x{info['picc_auth_command']:02X}")
+        print(f" Credential    : {info['cred_size']} bytes on device")
+
+
+@hf_des.command("eblank")
+class HfDesEBlank(SlotIndexArgsAndGoUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Reset a DESFire emulation slot to a blank card: one application, "
+            "one all-zero DES key, and one writable Standard Data file."
+        )
+        self.add_slot_args(parser)
+        parser.add_argument("-u", "--uid", type=str,
+                           help="7-byte UID in hex, must start with 04. Random if omitted.")
+        parser.epilog = "examples:\n  hf des eblank\n  hf des eblank -u 04112233445566\n"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        uid = b''
+        if args.uid:
+            try:
+                uid = bytes.fromhex(args.uid.replace(" ", ""))
+            except ValueError:
+                print(f" {CR}[!] UID is not valid hex{C0}")
+                return
+            if len(uid) != 7 or uid[0] != 0x04:
+                print(f" {CR}[!] UID must be 7 bytes starting with 04{C0}")
+                return
+        self.cmd.set_slot_tag_type(self.slot_num, TagSpecificType.DESFIRE_EV1_2K)
+        self.cmd.set_slot_data_default(self.slot_num, TagSpecificType.DESFIRE_EV1_2K)
+        installed = self.cmd.desfire_factory_blank(uid)
+        print(f" - Blank DESFire card in slot {self.slot_num}, UID {installed.hex().upper()}")
+
+
+@hf_des.command("estats")
+class HfDesEStats(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "DESFire emulation diagnostics. max_handler_us is the worst observed "
+            "engine time for one frame; it must stay well under the ~19 ms frame "
+            "delay budget. entropy_starvations should stay at 0."
+        )
+        parser.epilog = "examples:\n  hf des estats\n"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        st = self.cmd.desfire_get_stats()
+        print(f" Frames received : {st['frames_rx']}")
+        print(f" Frames sent     : {st['frames_tx']}")
+        print(f" Engine errors   : {st['engine_errors']}")
+        print(f" Max handler time: {st['max_handler_us']} us")
+        if 'activation_requests' in st:
+            print(f" Activation reqs : {st['activation_requests']}")
+            print(f" ATQA sent       : {st['atqa_tx']}")
+            timeouts = st['fdt_timeouts']
+            colour = CR if timeouts else CG
+            print(f" FDT timeouts    : {colour}{timeouts}{C0}")
+            print(f" Max reset time  : {st['max_reset_us']} us")
+        starv = st['entropy_starvations']
+        colour = CR if starv else CG
+        print(f" Entropy misses  : {colour}{starv}{C0}")
 
 
 @hf_des.command("info")
