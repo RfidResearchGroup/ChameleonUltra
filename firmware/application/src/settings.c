@@ -58,6 +58,11 @@ void settings_init_sleep_timeout_config(void) {
     config.sleep_timeout = SETTINGS_SLEEP_TIMEOUT_DEFAULT_S;
 }
 
+// add on version7
+void settings_init_long_press_threshold_config(void) {
+    config.long_press_threshold = SETTINGS_LONG_PRESS_THRESHOLD_DEFAULT_MS;
+}
+
 void settings_init_config(void) {
     settings_update_version_for_config();
     config.animation_config = SettingsAnimationModeFull; // add on version1
@@ -66,6 +71,7 @@ void settings_init_config(void) {
     settings_init_ble_connect_key_config();
     settings_init_ble_pairing_enable_config();
     settings_init_sleep_timeout_config();
+    settings_init_long_press_threshold_config();
 }
 
 void settings_migrate(void) {
@@ -88,6 +94,9 @@ void settings_migrate(void) {
 
         case 5:
             settings_init_sleep_timeout_config();
+
+        case 6:
+            settings_init_long_press_threshold_config();
 
             /*
              * Add new migration steps ABOVE THIS COMMENT
@@ -307,4 +316,15 @@ uint32_t settings_get_sleep_timeout(void) {
 
 void settings_set_sleep_timeout(uint8_t seconds) {
     config.sleep_timeout = seconds;
+}
+
+uint16_t settings_get_long_press_threshold(void) {
+    return config.long_press_threshold;
+}
+
+void settings_set_long_press_threshold(uint16_t duration) {
+    if (duration < SETTINGS_LONG_PRESS_THRESHOLD_MIN_MS) {
+        duration = SETTINGS_LONG_PRESS_THRESHOLD_MIN_MS;
+    }
+    config.long_press_threshold = duration;
 }

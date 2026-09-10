@@ -48,6 +48,8 @@
 #define DATA_CMD_GET_ALL_SLOT_NICKS             (1038)
 #define DATA_CMD_GET_SLEEP_TIMEOUT              (1039)
 #define DATA_CMD_SET_SLEEP_TIMEOUT              (1040)
+#define DATA_CMD_GET_LONG_PRESS_THRESHOLD       (1041)
+#define DATA_CMD_SET_LONG_PRESS_THRESHOLD       (1042)
 
 //
 // ******************************************************************
