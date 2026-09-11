@@ -367,6 +367,81 @@ ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
 
   CFLAGS += -DPROJECT_CHAMELEON_ULTRA
 
+# DESFire EV1 tag emulation. Crypto comes from tiny-DES-c and tiny-AES-c behind
+# an mbedTLS-compatible shim, so no mbedTLS or OpenSSL dependency is added.
+# tiny_des.c / tiny_aes.c are named with the tiny_ prefix on purpose: object
+# files all land in one flat directory, where a bare des.c or aes.c would be
+# liable to collide with an SDK source of the same name.
+  DESFIRE_DIR := $(PROJ_DIR)/rfid/nfctag/hf/desfire
+  TINY_AES_DIR := $(DESFIRE_DIR)/crypto/tiny-AES-c
+  TINY_DES_DIR := $(DESFIRE_DIR)/crypto/tiny-DES-c
+
+  SRC_FILES +=\
+    $(DESFIRE_DIR)/desfire_shim.c \
+    $(DESFIRE_DIR)/nfc_desfire.c \
+    $(DESFIRE_DIR)/core/src/dfc_virtual_picc.c \
+    $(DESFIRE_DIR)/core/src/dfc_emulator.c \
+    $(DESFIRE_DIR)/core/src/dfc_emulator_commands.c \
+    $(DESFIRE_DIR)/core/src/dfc_emulator_crypto.c \
+    $(DESFIRE_DIR)/core/src/dfc_emulator_iso7816.c \
+    $(DESFIRE_DIR)/core/src/dfc_credential.c \
+    $(DESFIRE_DIR)/core/src/dfc_der.c \
+    $(DESFIRE_DIR)/core/src/dfc_secure_messaging.c \
+    $(DESFIRE_DIR)/core/src/dfc_common.c \
+    $(DESFIRE_DIR)/core/src/dfc_crypto.c \
+    $(DESFIRE_DIR)/core/src/dfc_profile.c \
+    $(DESFIRE_DIR)/core/src/dfc_ev2.c \
+    $(DESFIRE_DIR)/core/src/aes_cmac.c \
+    $(DESFIRE_DIR)/core/src/des_cmac.c \
+    $(TINY_DES_DIR)/des.c \
+    $(TINY_AES_DIR)/aes.c \
+
+  INC_FOLDERS +=\
+    ${DESFIRE_DIR} \
+    ${DESFIRE_DIR}/core/src \
+    ${DESFIRE_DIR}/core/port \
+    ${TINY_DES_DIR} \
+    ${TINY_AES_DIR} \
+
+  # The device carries the EV1 feature set, which is what its slot record and
+  # its flash budget hold. Raising the profile grows DfcCredential and the
+  # static assertion in nfc_desfire.c reports it.
+  CFLAGS += -DDFC_BUILD_PROFILE=DFC_PROFILE_FULL_EV1
+  CFLAGS += -DDFC_CRYPTO_BACKEND_TINY=1
+  CFLAGS += -DAES_ENABLE_CBC=1 -DAES_ENABLE_CTR=0
+  CFLAGS += -DDES_ENABLE_ECB=1 -DDES_ENABLE_CBC=1
+  CFLAGS += -DDES_ENABLE_CTR=0 -DDES_ENABLE_TDES=1
+  # The device emulates; it does not read or write credential files, so neither
+  # codec is built. The text codec would also pull in formatted output.
+  CFLAGS += -DDFC_ENABLE_TEXT_CODEC=0
+  CFLAGS += -DPROJECT_DESFIRE_EMULATION
+  CFLAGS += -DDFC_FIRMWARE_BUILD
+# Device capacity limits. These fix sizeof(DfcCredential), which fixes the
+# persisted slot record layout -- changing any of them invalidates stored
+# DESFire slots, so treat them as frozen once released.
+#
+# The ceiling is the _Static_assert in nfc_desfire.c: the whole slot record has
+# to fit the 4500-octet shared HF tag buffer. At these limits the credential is
+# 4052 octets and the record 4344, leaving 156 spare there and 3848 spare
+# against the 8192-octet flash-record ceiling.
+#
+# Key material is pooled rather than reserved per application, so the key count
+# now costs one version octet per slot instead of 24, which is what makes 14
+# keys -- the per-application maximum this engine emulates -- affordable. The
+# pool is sized like the file pool: generously for real credentials rather than
+# at the theoretical worst case of every application holding every key. It still
+# holds one application's full 14 keys at the widest key type.
+  CFLAGS += -DDFC_MAX_APPS=8 -DDFC_MAX_KEYS=14 -DDFC_MAX_FILES=14
+  CFLAGS += -DDFC_FILE_POOL_SIZE=2048 -DDFC_MAX_FILE_DATA=2048
+  CFLAGS += -DDFC_KEY_POOL_SIZE=448
+
+# The credential codec runs once per load, never per frame. Its writer makes two
+# passes over the same body callbacks, and at -O3 GCC devirtualises and inlines
+# every one of them at every call site, which costs roughly 15 KiB of flash for
+# no useful speed. Build this one translation unit for size; the trailing -Os
+# wins over the global -O3.
+%/dfc_der.c.o: CFLAGS += -Os
+
 $(info  Chameleon Ultra <Application>: reader and tag emulation module enable.)
 else ifeq (${CURRENT_DEVICE_TYPE}, ${CHAMELEON_LITE})
 
