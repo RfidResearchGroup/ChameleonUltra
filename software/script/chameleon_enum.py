@@ -176,9 +176,13 @@ class Command(enum.IntEnum):
     JABLOTRON_GET_EMU_ID = 5011
     IDTECK_SET_EMU_ID = 5012
     IDTECK_GET_EMU_ID = 5013
+    PARADOX_SET_EMU_ID = 5014
+    PARADOX_GET_EMU_ID = 5015
     EM4X05_SCAN = 3030
     EM4X05_READSNIFF = 3032
     LF_SNIFF = 3031
+    PARADOX_SCAN = 3033
+    PARADOX_GET_LAST_DEMOD = 3034
 
 
 @enum.unique
@@ -322,8 +326,7 @@ class TagSpecificType(enum.IntEnum):
     # FSK Tag-Talk-First      200
     HIDProx = 200
     ioProx = 201
-    # AWID
-    # Paradox
+    Paradox = 203  # 202 is reserved for AWID
 
     # PSK Tag-Talk-First      300
     # Indala
@@ -409,6 +412,8 @@ class TagSpecificType(enum.IntEnum):
             return "HIDProx"
         elif self == TagSpecificType.ioProx:
             return "ioProx"
+        elif self == TagSpecificType.Paradox:
+            return "Paradox"
         elif self == TagSpecificType.PAC:
             return "PAC/Stanley"
         elif self == TagSpecificType.Viking:

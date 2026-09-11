@@ -7,11 +7,12 @@
 #define PI 3.14159265358979f
 #define GOERTZEL(FREQ, SAMPLE_RATE) (2.0 * cos((2.0 * PI * FREQ) / (SAMPLE_RATE)))
 
-static float goertzel_power(float coef, const uint16_t samples[], int n) {
+static float goertzel_power(float coef, const uint16_t samples[], int n,
+                            float mean) {
     float z1 = 0;
     float z2 = 0;
     for (int i = 0; i < n; i++) {
-        float z0 = coef * z1 - z2 + (float)(samples[i]);
+        float z0 = coef * z1 - z2 + ((float)samples[i] - mean);
         z2 = z1;
         z1 = z0;
     }
@@ -37,8 +38,13 @@ bool fsk_feed(fsk_t *m, uint16_t sample, bool *bit) {
     if (m->c < m->bitrate) {
         return false;
     }
-    float bit0 = goertzel_power(m->goertzel_fc_8,  m->samples, m->bitrate);
-    float bit1 = goertzel_power(m->goertzel_fc_10, m->samples, m->bitrate);
+    uint32_t sample_sum = 0;
+    for (uint8_t i = 0; i < m->bitrate; i++) {
+        sample_sum += m->samples[i];
+    }
+    float mean = (float)sample_sum / m->bitrate;
+    float bit0 = goertzel_power(m->goertzel_fc_8, m->samples, m->bitrate, mean);
+    float bit1 = goertzel_power(m->goertzel_fc_10, m->samples, m->bitrate, mean);
     *bit = (bit1 > bit0);
 
     // Reset counter and clear sample buffer for the next bit

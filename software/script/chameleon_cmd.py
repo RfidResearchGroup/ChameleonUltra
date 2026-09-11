@@ -666,6 +666,22 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
+    def paradox_scan(self):
+        """Read a Paradox facility code and card number."""
+        resp = self.device.send_cmd_sync(Command.PARADOX_SCAN, timeout=10)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = struct.unpack(">BHx", resp.data[:4])
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def paradox_get_last_demod(self):
+        """Return metadata and raw FSK bits from the most recent scan."""
+        resp = self.device.send_cmd_sync(Command.PARADOX_GET_LAST_DEMOD)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = bytes(resp.data)
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
     def ioprox_write_to_t55xx(self, id_bytes: bytes):
         """
         Write ioProx card data to a T55XX tag.
@@ -1034,6 +1050,21 @@ class ChameleonCMD:
         resp = self.device.send_cmd_sync(Command.IOPROX_GET_EMU_ID)
         if resp.status == Status.SUCCESS:
             resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def paradox_set_emu_id(self, credential: bytes):
+        """Set the Paradox facility code and card number on the active slot."""
+        if len(credential) != 4:
+            raise ValueError("The Paradox credential must be exactly 4 bytes")
+        return self.device.send_cmd_sync(Command.PARADOX_SET_EMU_ID, credential)
+
+    @expect_response(Status.SUCCESS)
+    def paradox_get_emu_id(self):
+        """Get the Paradox facility code and card number from the active slot."""
+        resp = self.device.send_cmd_sync(Command.PARADOX_GET_EMU_ID)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = struct.unpack(">BHx", resp.data[:4])
         return resp
 
     @expect_response(Status.SUCCESS)
