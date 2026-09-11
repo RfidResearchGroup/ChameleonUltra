@@ -31,6 +31,7 @@ from chameleon_utils import (
     execute_tool,
     tqdm_if_exists,
     print_key_table,
+    odd_parity_byte,
     default_cwd
 )
 
@@ -72,17 +73,28 @@ type_id_SAK_dict = {
 
 def load_key_file(import_key, keys):
     """
-    Load key file and append its content to the provided set of keys.
-    Each key is expected to be on a new line in the file.
+    Load binary key file and append its content to the provided set of keys.
+    Each key is 6 bytes concatenated.
     """
     with open(import_key.name, "rb") as file:
-        keys.update(
-            line.encode("utf-8") for line in file.read().decode("utf-8").splitlines()
-        )
+        data = file.read()
+    for i in range(0, len(data), 6):
+        key = data[i:i+6]
+        if len(key) == 6:
+            keys.add(key)
     return keys
 
 
 def load_dic_file(import_dic, keys):
+    """
+    Load dictionary file and append its content to the provided set of keys.
+    Each key is a 12-char hex string on a new line.
+    """
+    with open(import_dic.name, "r") as file:
+        for line in file:
+            line = line.strip()
+            if line:
+                keys.add(bytes.fromhex(line))
     return keys
 
 
@@ -2629,6 +2641,7 @@ class HFMFAutopwn(ReaderRequiredUnit):
             nested = HFMFNested.__new__(HFMFNested)
             BaseCLIUnit.__init__(nested)
             nested._device_cmd = self.cmd
+            hardnested = None
             for missing_key_num, key_type_target in missing_keys.items():
                 if current_keys_found.get(missing_key_num) is not None:
                     print(f" {CG}[+]{C0}  Key {missing_key_num} found by reuse")
@@ -2641,16 +2654,38 @@ class HFMFAutopwn(ReaderRequiredUnit):
                     key_type_target,
                 )
                 if nested_key is None:
-                    continue
-                print(
-                    f" {CG}[+]{C0}  Found key {missing_key_num}: {nested_key.upper()}"
-                )
-                current_keys_found[missing_key_num] = bytes.fromhex(nested_key)
+                    if hardnested is None:
+                        hardnested = HFMFHardNested.__new__(HFMFHardNested)
+                        BaseCLIUnit.__init__(hardnested)
+                        hardnested._device_cmd = self.cmd
+                    hn_key = hardnested.recover_key(
+                        False,
+                        block_known,
+                        type_known,
+                        key_known_bytes,
+                        (missing_key_num // 2) * 4,
+                        key_type_target,
+                        False,
+                        200,
+                        3,
+                    )
+                    if hn_key is None:
+                        continue
+                    current_keys_found[missing_key_num] = bytes.fromhex(hn_key)
+                    print(
+                        f" {CG}[+]{C0}  Found key {missing_key_num}: {hn_key.upper()}"
+                    )
+                else:
+                    print(
+                        f" {CG}[+]{C0}  Found key {missing_key_num}: {nested_key.upper()}"
+                    )
+                    current_keys_found[missing_key_num] = bytes.fromhex(nested_key)
                 current_keys_found = dict(sorted(current_keys_found.items()))
                 _, mask_bytes = self.mask_from_keys(missing_keys)
+                new_key = current_keys_found[missing_key_num]
                 current_keys_found = self.merge_found_sector_keys(
                     current_keys_found,
-                    self.try_key(bytes.fromhex(nested_key), self.neg_bytes(mask_bytes)),
+                    self.try_key(new_key, self.neg_bytes(mask_bytes)),
                 )
             if len(current_keys_found) < total:
                 current_keys_found = self.run_senested(
@@ -3127,34 +3162,50 @@ class HFMFDump(MF1AuthArgsUnit):
 
         # iterate over sectors
         for s in range(16):
-            # try all keys for this sector
-            typ = None
+            # find working keys for this sector (both A and B)
+            type_a = type_b = None
+            key_a = key_b = None
             for key in keys:
-                # first try key B
-                try:
-                    self.cmd.mf1_read_one_block(4 * s, MfcKeyType.B, key)
-                    typ = MfcKeyType.B
+                if type_b is None:
+                    try:
+                        self.cmd.mf1_read_one_block(4 * s, MfcKeyType.B, key)
+                        type_b = MfcKeyType.B
+                        key_b = key
+                    except UnexpectedResponseError:
+                        pass
+                if type_a is None:
+                    try:
+                        self.cmd.mf1_read_one_block(4 * s, MfcKeyType.A, key)
+                        type_a = MfcKeyType.A
+                        key_a = key
+                    except UnexpectedResponseError:
+                        pass
+                if type_a is not None and type_b is not None:
                     break
-                except UnexpectedResponseError:
-                    # ignore read errors at this stage as we want to try key A
-                    pass
-                # try with key A if B was unsuccessful
-                try:
-                    self.cmd.mf1_read_one_block(4 * s, MfcKeyType.A, key)
-                    typ = MfcKeyType.A
-                    break
-                except UnexpectedResponseError:
-                    pass
-            else:
+            if type_a is None and type_b is None:
                 raise Exception(f"No key found for sector {s}")
+
+            typ = type_a if type_a is not None else type_b
+            key = key_a if type_a is not None else key_b
             # iterate over blocks
-            for b in range(4):
+            for b in range(3):
                 block_data = self.cmd.mf1_read_one_block(4 * s + b, typ, key)
-                # add data to buffer
                 if content_type == "bin":
                     buffer.extend(block_data)
                 elif content_type == "hex":
                     buffer.extend(block_data.hex().encode("utf-8"))
+
+            # sector trailer: fill key bytes from known keys
+            trailer = bytearray(self.cmd.mf1_read_one_block(4 * s + 3, typ, key))
+            if key_a is not None:
+                trailer[0:6] = key_a
+            if key_b is not None:
+                trailer[10:16] = key_b
+            trailer = bytes(trailer)
+            if content_type == "bin":
+                buffer.extend(trailer)
+            elif content_type == "hex":
+                buffer.extend(trailer.hex().encode("utf-8"))
         # write buffer to file
         args.dump_file.write(buffer)
 
@@ -7789,7 +7840,7 @@ class HF14ASniff(BaseCLIUnit):
         # Bit 15 of szBits: 0 = reader→card, 1 = card→reader (new firmware).
         # Old firmware always sends bit15=0; parser is backward compatible.
         buf = bytes(resp.data)
-        frames = []  # (szBits, data, is_tx)
+        frames = []  # (szBits, data, is_tx, parity)
         i = 0
         while i + 2 <= len(buf):
             hdr = (buf[i] << 8) | buf[i+1]
@@ -7803,6 +7854,9 @@ class HF14ASniff(BaseCLIUnit):
                 break
             raw = buf[i:i+szBytes]
             i += szBytes
+
+            # parity array: parity for each byte of data array
+            parity_bits = []
 
             # ISO14443-A frames include one parity bit per byte.
             # Short frames (< 8 bits, e.g. REQA=7 bits) have no parity.
@@ -7819,19 +7873,20 @@ class HF14ASniff(BaseCLIUnit):
                     for b in range(8):
                         val |= all_bits[nb * 9 + b] << b
                     stripped.append(val)
+                    parity_bits.append(all_bits[nb * 9 + 8])
                 data = bytes(stripped)
                 szBits = n_bytes * 8
             else:
                 data = raw
 
-            frames.append((szBits, data, is_tx))
+            frames.append((szBits, data, is_tx, parity_bits))
 
         if not frames:
             print(f"{CR}No frames decoded{C0}")
             return
 
-        rx_count = sum(1 for _, _, tx in frames if not tx)
-        tx_count = sum(1 for _, _, tx in frames if tx)
+        rx_count = sum(1 for _, _, tx, _ in frames if not tx)
+        tx_count = sum(1 for _, _, tx, _ in frames if tx)
         if tx_count > 0:
             print(f" Captured : {CG}{len(frames)}{C0} frame(s)  "
                   f"({CY}{rx_count}{C0} reader→card  {CG}{tx_count}{C0} card→reader)")
@@ -7847,8 +7902,11 @@ class HF14ASniff(BaseCLIUnit):
         last_auth_keytype = None
         last_auth_block = None
 
-        for n, (szBits, data, is_tx) in enumerate(frames):
-            hex_str = ' '.join(f'{b:02x}' for b in data)
+        for n, (szBits, data, is_tx, parity_bits) in enumerate(frames):
+            if (len(data) == len(parity_bits)):
+                hex_str = ' '.join(f"{b:02x}{'!' if odd_parity_byte(b)!= p else ' '}" for (b,p) in zip(data,parity_bits))
+            else:
+                hex_str = ' '.join(f"{b:02x}" for b in data)
 
             # is_tx==True means CU transmitted (card -> reader).
             # is_tx==False means reader -> card.
@@ -7890,7 +7948,7 @@ class HF14ASniff(BaseCLIUnit):
 
         # Summary block (pass only reader→card frames for protocol decode)
         print()
-        _print_14a_sniff_summary(frames)  # full frames needed for nonce extraction
+        _print_14a_sniff_summary([(szBits, data, is_tx) for (szBits, data, is_tx,parity) in frames])  # full frames needed for nonce extraction
 
 
 @hf_14a.command("auth-trace")
