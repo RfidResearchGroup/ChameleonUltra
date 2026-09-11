@@ -58,6 +58,11 @@ void settings_init_sleep_timeout_config(void) {
     config.sleep_timeout = SETTINGS_SLEEP_TIMEOUT_DEFAULT_S;
 }
 
+// add on version7
+void settings_init_ble_advertising_enable_config(void) {
+    config.ble_advertising_enable = true;
+}
+
 void settings_init_config(void) {
     settings_update_version_for_config();
     config.animation_config = SettingsAnimationModeFull; // add on version1
@@ -66,6 +71,7 @@ void settings_init_config(void) {
     settings_init_ble_connect_key_config();
     settings_init_ble_pairing_enable_config();
     settings_init_sleep_timeout_config();
+    settings_init_ble_advertising_enable_config();
 }
 
 void settings_migrate(void) {
@@ -88,6 +94,9 @@ void settings_migrate(void) {
 
         case 5:
             settings_init_sleep_timeout_config();
+
+        case 6:
+            settings_init_ble_advertising_enable_config();
 
             /*
              * Add new migration steps ABOVE THIS COMMENT
@@ -299,6 +308,14 @@ bool settings_get_ble_pairing_enable(void) {
 
 bool settings_get_ble_pairing_enable_first_load(void) {
     return m_ble_pairing_enable_first_load_value;
+}
+
+void settings_set_ble_advertising_enable(bool enable) {
+    config.ble_advertising_enable = enable;
+}
+
+bool settings_get_ble_advertising_enable(void) {
+    return config.ble_advertising_enable;
 }
 
 uint32_t settings_get_sleep_timeout(void) {
