@@ -11,7 +11,8 @@ from chameleon_enum import MfcKeyType, MfcValueBlockOperator
 CURRENT_VERSION_SETTINGS = 6
 
 new_key = b'\x20\x20\x66\x66'
-old_keys = [b'\x51\x24\x36\x48', b'\x19\x92\x04\x27']
+# Passwords tried to unlock a protected T55xx (includes the default new_key)
+old_keys = [b'\x51\x24\x36\x48', b'\x19\x92\x04\x27', b'\x20\x20\x66\x66']
 
 
 class ChameleonCMD:
@@ -615,18 +616,20 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
-    def em410x_write_to_t55xx(self, id_bytes: bytes):
+    def em410x_write_to_t55xx(self, id_bytes: bytes, no_pwd: bool = False):
         """
         Write EM410X card number into T55XX.
 
         :param id_bytes: ID card number
+        :param no_pwd: if True, leave the tag password-free
         :return:
         """
+        flag = b'\x01' if no_pwd else b''
         if len(id_bytes) == 5:
-            data = struct.pack(f'!5s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+            data = struct.pack(f'!5s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys)) + flag
             return self.device.send_cmd_sync(Command.EM410X_WRITE_TO_T55XX, data)
         if len(id_bytes) == 13:
-            data = struct.pack(f'!13s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+            data = struct.pack(f'!13s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys)) + flag
             return self.device.send_cmd_sync(Command.EM410X_ELECTRA_WRITE_TO_T55XX, data)
         raise ValueError("The id bytes length must equal 5 (EM410X) or 13 (Electra)")
 

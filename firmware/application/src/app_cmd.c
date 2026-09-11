@@ -689,11 +689,22 @@ static data_frame_tx_t *cmd_processor_em410x_write_to_t55xx(uint16_t cmd, uint16
         uint8_t old_keys[4]; // we can have more than one... struct just to compute offsets with min 1 key
     } PACKED payload_t;
     payload_t *payload = (payload_t *)data;
-    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+    if (length < sizeof(payload_t)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    // Optional trailing no-password flag byte: old_keys are 4 bytes each, so a
+    // remainder of exactly 1 after the fixed fields means a flag byte is appended.
+    uint16_t keys_len = length - offsetof(payload_t, old_keys);
+    bool no_password = false;
+    if (keys_len % sizeof(payload->old_keys) == 1) {
+        no_password = data[length - 1] != 0;
+        keys_len -= 1;
+    }
+    if (keys_len == 0 || keys_len % sizeof(payload->old_keys) != 0) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
-    status = write_em410x_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+    status = write_em410x_to_t55xx(payload->id, payload->new_key, payload->old_keys, keys_len / sizeof(payload->old_keys), no_password);
     return data_frame_make(cmd, status, 0, NULL);
 }
 
@@ -704,11 +715,22 @@ static data_frame_tx_t *cmd_processor_em410x_electra_write_to_t55xx(uint16_t cmd
         uint8_t old_keys[4]; // we can have more than one... struct just to compute offsets with min 1 key
     } PACKED payload_t;
     payload_t *payload = (payload_t *)data;
-    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+    if (length < sizeof(payload_t)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    // Optional trailing no-password flag byte: old_keys are 4 bytes each, so a
+    // remainder of exactly 1 after the fixed fields means a flag byte is appended.
+    uint16_t keys_len = length - offsetof(payload_t, old_keys);
+    bool no_password = false;
+    if (keys_len % sizeof(payload->old_keys) == 1) {
+        no_password = data[length - 1] != 0;
+        keys_len -= 1;
+    }
+    if (keys_len == 0 || keys_len % sizeof(payload->old_keys) != 0) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
-    status = write_em410x_electra_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+    status = write_em410x_electra_to_t55xx(payload->id, payload->new_key, payload->old_keys, keys_len / sizeof(payload->old_keys), no_password);
     return data_frame_make(cmd, status, 0, NULL);
 }
 
