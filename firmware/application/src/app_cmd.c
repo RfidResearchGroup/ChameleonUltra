@@ -2596,9 +2596,15 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
     }
     blk_num ^= 1;
 
-    /* ISO14443-4 chaining: PCB bit5 (0x20) set means more blocks follow */
-    while (resp_pcb & 0x20) {
-        uint8_t rack = 0xA2 | (resp_pcb & 0x01); /* R(ACK) block_num matches received I-block */
+    /* ISO14443-4 chaining: the I-block chaining bit is 0x10 (b5). NB 0x20 (b6) is
+     * part of the I-block identifier (b8..b6 == 000) so it is ALWAYS 0 on a valid
+     * I-block -- `& 0x20` never fired, so a card that chained its response (any
+     * response larger than the reader's FSD, e.g. a long READ RECORD) had every
+     * block after the first silently dropped. 0x10 is also set on S(WTX) (0xF2). */
+    while (resp_pcb & 0x10) {
+        /* R(ACK) block number must be the received block TOGGLED; mirroring it
+         * makes the PICC retransmit the same block forever. */
+        uint8_t rack = 0xA2 | ((resp_pcb & 0x01) ^ 1);
         uint8_t rack_frame[3];
         rack_frame[0] = rack;
         crc_14a_append(rack_frame, 1);
@@ -2654,7 +2660,10 @@ static bool tcl_apdu_(
     crc_14a_calculate(rbuf, rb - 2u, crc);
     if (rbuf[rb - 2] != crc[0] || rbuf[rb - 1] != crc[1]) return false;
 
-    *blk_p ^= 1;
+    /* NB: the next-command block number is derived from the FINAL I-block below,
+     * not blindly toggled once here -- a chained response toggles the block number
+     * once per block, so a single toggle is wrong for an even block count and
+     * desyncs the NEXT APDU in a multi-command scan. */
     uint8_t  resp_pcb  = rbuf[0];
     uint16_t chain_len = 0;
     uint8_t  dlen      = (uint8_t)(rb - 3u);
@@ -2663,10 +2672,14 @@ static bool tcl_apdu_(
         chain_len = dlen;
     }
 
-    /* Handle card-side chaining ---------------------------------------- */
+    /* Handle card-side chaining ----------------------------------------
+     * Chaining bit is 0x10 (b5), NOT 0x20 (b6): b6 is part of the I-block
+     * identifier and is always 0 on a valid I-block, so `& 0x20` never matched a
+     * chained I-block and every block after the first was dropped. 0x10 is also
+     * set on S(WTX) (0xF2), handled in the S-block branch below. */
     uint16_t chain_rbits = 0;   /* hoisted: used in both WTX and R(ACK) paths */
     uint8_t  chain_st    = STATUS_HF_TAG_OK;
-    while (resp_pcb & 0x20u) {
+    while (resp_pcb & 0x10u) {
         if ((resp_pcb & 0xC0u) != 0x00u) {
             /* S-block: handle S(WTX), reject others.
              * Some Visa/MC cards send WTX (PCB=0xF2) before their FCI,
@@ -2698,9 +2711,10 @@ static bool tcl_apdu_(
             break; /* other S-blocks (DESELECT etc.): stop */
         }
 
-        /* R(ACK) block_num must match the received I-block's block_num */
+        /* R(ACK) block number must be the received I-block's block number
+         * TOGGLED; mirroring it makes the PICC retransmit the same block forever. */
         uint8_t rf[3];
-        rf[0] = 0xA2u | (resp_pcb & 0x01u);
+        rf[0] = 0xA2u | ((resp_pcb & 0x01u) ^ 1u);
         crc_14a_append(rf, 1);
 
         /* Use bytes_transfer for chain R(ACK) — clear stale RxIRq first */
@@ -2723,6 +2737,13 @@ static bool tcl_apdu_(
         }
     }
 
+    /* Next reader block number = the FINAL I-block's block number toggled. A
+     * chained response toggles the block number once per block, so the correct
+     * next value depends on the block count -- deriving it from the last received
+     * I-block is right for any count (verified on-card: after a 2-block chained
+     * SELECT the card expects the next command as block 0, not block 1). Only an
+     * I-block sets it (skip if the loop ended on an S-block). */
+    if ((resp_pcb & 0xC0u) == 0x00u) *blk_p = (resp_pcb & 0x01u) ^ 1u;
     *rdata_ptr = chain_buf;
     *rlen_ptr  = chain_len;
     return chain_len > 0u;
