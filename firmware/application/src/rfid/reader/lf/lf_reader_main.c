@@ -56,6 +56,13 @@ uint8_t scan_ioprox(uint8_t *data, uint8_t format_hint) {
     return STATUS_LF_TAG_NO_FOUND;
 }
 
+uint8_t scan_paradox(uint8_t *data) {
+    if (paradox_read(data, g_timeout_readem_ms)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
 /**
  * @brief Decode raw8 data to structured ioProx format
  * @param raw8 Input 8 bytes
