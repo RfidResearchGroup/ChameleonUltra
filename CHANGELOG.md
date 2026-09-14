@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Restored `hf mfu nfcimport` and its `--amiibo` PWD/PACK option, originally added by @fmuk in #357 and subsequently removed accidentally (@ZenithSeraph).
 
 ## [v2.2.0][2026-07-04]
  - Added Jablotron LF protocol support: read, emulate and T55xx clone (@midlan)
