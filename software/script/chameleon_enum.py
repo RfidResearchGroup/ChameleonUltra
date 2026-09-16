@@ -152,6 +152,10 @@ class Command(enum.IntEnum):
     MF1_GET_PRNG_TYPE = 4040
     MF1_SET_PRNG_TYPE = 4041
 
+    SEOS_READ_EMU_DATA = 4042
+    SEOS_WRITE_EMU_DATA = 4043
+    SEOS_WRITE_EMU_KEYS = 4044
+
     # ISO14443-4 T=CL emulation
     HF14A_4_APDU_RECV = 6000
     HF14A_4_APDU_SEND = 6001
@@ -362,6 +366,7 @@ class TagSpecificType(enum.IntEnum):
 
     # ISO14443-4 T=CL emulation
     HF14A_4 = 3000
+    SEOS = 3001
 
     @staticmethod
     def list(exclude_meta=True):
@@ -440,6 +445,8 @@ class TagSpecificType(enum.IntEnum):
             return "NTAG 210"
         elif self == TagSpecificType.NTAG_212:
             return "NTAG 212"
+        elif self == TagSpecificType.SEOS:
+            return "SEOS"
         elif self < TagSpecificType.OLD_TAG_TYPES_END:
             return "Old tag type, must be migrated! Upgrade fw!"
         return "Invalid"
