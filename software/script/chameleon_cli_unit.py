@@ -3405,8 +3405,6 @@ class HFMFClone(MF1AuthArgsUnit):
                 self.cmd.mf1_write_one_block(4 * s + b, MfcKeyType.A, keyA, block_data)
 
 
-@hf_mf.command("value")
-
 @lf_fdxb.command("read")
 class LFFdxbRead(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
