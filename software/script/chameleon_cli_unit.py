@@ -3489,6 +3489,7 @@ class LFFdxbClone(LFFdxbWriteT55xx):
         print(f" - FDX-B clone complete: {data_bytes.hex().upper()}")
 
 
+@hf_mf.command("value")
 class HFMFVALUE(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
