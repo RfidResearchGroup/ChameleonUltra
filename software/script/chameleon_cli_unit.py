@@ -814,51 +814,6 @@ def _idteck_frame_info(frame: bytes) -> dict:
     }
 
 
-class LFFdxbIdArgsUnit(DeviceRequiredUnit):
-    """Argument parser for FDX-B: 26 hex chars = 13 bytes (destuffed frame)."""
-
-    @staticmethod
-    def add_card_arg(parser: ArgumentParserNoExit, required=False):
-        parser.add_argument(
-            "--id", type=str, required=required,
-            help="FDX-B frame (13 bytes hex: national_id[5] + country[2] + crc[2] + reserved[4])",
-            metavar="<hex>"
-        )
-        return parser
-
-    def before_exec(self, args: argparse.Namespace):
-        if not super().before_exec(args):
-            return False
-        if args.id is None or not re.match(r"^[a-fA-F0-9]{26}$", args.id):
-            raise ArgsParserError("FDX-B ID must include 26 HEX symbols (13 bytes)")
-        # Structural sanity: the CRC-16 in bytes 8-9 must cover bytes 0-7.
-        # A hand-edited ID whose CRC no longer matches will not round-trip and
-        # may be rejected by third-party readers.  Warn rather than block, so a
-        # deliberately malformed frame can still be written for testing, unless
-        # the frame is also unreadable by our own decoder (see _fdxb_frame_ok).
-        frame = bytes.fromhex(args.id)
-        ok, reason = _fdxb_frame_ok(frame)
-        if not ok:
-            raise ArgsParserError(f"FDX-B frame invalid: {reason}")
-        return True
-
-    def args_parser(self) -> ArgumentParserNoExit:
-        raise NotImplementedError("Please implement this")
-
-    def on_exec(self, args: argparse.Namespace):
-        raise NotImplementedError("Please implement this")
-
-
-def _fdxb_crc16(data: bytes) -> int:
-    """CRC-16 as computed by the firmware's fdxb_crc16 (reflected 0x8408)."""
-    crc = 0x0000
-    for byte in data:
-        crc ^= byte
-        for _ in range(8):
-            crc = (crc >> 1) ^ 0x8408 if crc & 1 else crc >> 1
-    return crc & 0xFFFF
-
-
 def _fdxb_frame_ok(frame: bytes) -> "tuple[bool, str]":
     """
     Validate a 13-byte destuffed FDX-B frame for writability.
@@ -9005,16 +8960,19 @@ class DataPlot(BaseCLIUnit):
         if not args.ascii:
             # Try PyQt5 first, then matplotlib
             if importlib.util.find_spec("PyQt5.QtWidgets") is not None and importlib.util.find_spec("pyqtgraph") is not None:
-                _plot_pyqtgraph(xs, view, mean, threshold, start, end)
-                return
-            if importlib.util.find_spec("matplotlib") is not None:
-                import matplotlib
                 try:
-                    matplotlib.use('Qt5Agg')
+                    _plot_pyqtgraph(xs, view, mean, threshold, start, end)
+                    return
                 except ImportError:
                     pass
-                _plot_matplotlib(xs, view, mean, threshold, start, end)
-                return
+            if importlib.util.find_spec("matplotlib") is not None:
+                try:
+                    import matplotlib
+                    matplotlib.use('Qt5Agg')
+                    _plot_matplotlib(xs, view, mean, threshold, start, end)
+                    return
+                except ImportError:
+                    pass
             print(" No GUI library found (install PyQt5+pyqtgraph or matplotlib)")
             print(" Falling back to ASCII plot...")
 
@@ -10864,11 +10822,11 @@ class HFSeosELoad(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
         parser.add_argument("-d", "--data", type=str, default=None, metavar="<hex>",
                             help="Data to present to reader (2-255 bytes). Must be valid BER-TLV.")
         parser.add_argument("-o", "--oid", type=str, default=None, metavar="<hex>",
-                            help=f"Target OID (1-32 bytes).")
+                            help="Target OID (1-32 bytes).")
         parser.add_argument("-t", "--tag", type=str, default=None, metavar="<hex>",
-                            help=f"Tag of presented data (1-2 bytes).")
+                            help="Tag of presented data (1-2 bytes).")
         parser.add_argument("--diversifier", type=str, default=None, metavar="<hex>",
-                            help=f"Simulated card diversifier (1-16 bytes).")
+                            help="Simulated card diversifier (1-16 bytes).")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
@@ -10885,7 +10843,7 @@ class HFSeosELoad(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
         anti_coll_data = self.cmd.hf14a_get_anti_coll_data()
         if anti_coll_data is None or len(anti_coll_data) == 0:
             print(
-                f"{color_string((CR, f'Slot does not contain any HF 14A config'))}"
+                f"{color_string((CR, 'Slot does not contain any HF 14A config'))}"
             )
             return
         uid = anti_coll_data["uid"]
