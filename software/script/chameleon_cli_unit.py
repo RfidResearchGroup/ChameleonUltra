@@ -1,5 +1,6 @@
 import binascii
 import glob
+import importlib.util
 import math
 import os
 import tempfile
@@ -17,7 +18,6 @@ import queue
 from enum import Enum
 from multiprocessing import Pool, cpu_count
 from typing import Union
-from pathlib import Path
 from platform import uname
 from datetime import datetime
 import hardnested_utils
@@ -6195,7 +6195,7 @@ class LFIOProxRead(LFIOProxReadArgsUnit, ReaderRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         ver, fc, cn, raw8, *futureuse = self.cmd.ioprox_scan()
-        print(f"ioProx XSF format")
+        print("ioProx XSF format")
         print(f"   Version: {color_string((CG, ver))}")
         print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
         print(f"   ID: {color_string((CY, cn))}")
@@ -6230,9 +6230,9 @@ class LFIOProxWriteT55xx(LFIOProxIdArgsUnit, ReaderRequiredUnit):
             cn & 0xFFFF,
             raw8
         )
-        result = self.cmd.ioprox_write_to_t55xx(payload16)
+        self.cmd.ioprox_write_to_t55xx(payload16)
 
-        print(f"ioProx XSF format")
+        print("ioProx XSF format")
         print(f"   Version: {color_string((CG, ver))}")
         print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
         print(f"   ID: {color_string((CY, cn))}")
@@ -6281,9 +6281,9 @@ class LFIOProxEconfig(SlotIndexArgsAndGoUnit, LFIOProxIdArgsUnit):
                 raw8
             )
 
-            result = self.cmd.ioprox_set_emu_id(payload16)
+            self.cmd.ioprox_set_emu_id(payload16)
 
-            print(f"ioProx XSF format")
+            print("ioProx XSF format")
             print(f"   Version: {color_string((CG, ver))}")
             print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
             print(f"   ID: {color_string((CY, cn))}")
@@ -6292,7 +6292,7 @@ class LFIOProxEconfig(SlotIndexArgsAndGoUnit, LFIOProxIdArgsUnit):
         else:
             # GET
             ver, fc, cn, raw8, *futureuse = self.cmd.ioprox_get_emu_id()
-            print(f"ioProx XSF format")
+            print("ioProx XSF format")
             print(f"   Version: {color_string((CG, ver))}")
             print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
             print(f"   ID: {color_string((CY, cn))}")
@@ -6664,7 +6664,7 @@ class LFT55xxClone(ReaderRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         # Clone requires LF writer — only available on Chameleon Ultra (not Lite)
         if self.cmd.get_device_model() != 0:
-            print(f" - Error: LF clone requires Chameleon Ultra. Lite has no LF writer.")
+            print(" - Error: LF clone requires Chameleon Ultra. Lite has no LF writer.")
             return
         t = args.type
 
@@ -6702,7 +6702,7 @@ class LFT55xxClone(ReaderRequiredUnit):
                 oem,
             )
             self.cmd.hidprox_write_to_t55xx(id_bytes)
-            print(f" - HID Prox cloned to T55xx")
+            print(" - HID Prox cloned to T55xx")
             print(f"   Format : {fmt.name}")
             if fc:
                 print(f"   FC     : {fc}")
@@ -6724,7 +6724,7 @@ class LFT55xxClone(ReaderRequiredUnit):
                 raw8 = res[3]
             payload16 = struct.pack(">BBH8s4x", ver & 0xFF, fc & 0xFF, cn & 0xFFFF, raw8)
             self.cmd.ioprox_write_to_t55xx(payload16)
-            print(f" - ioProx cloned to T55xx")
+            print(" - ioProx cloned to T55xx")
             print(f"   Ver    : {ver}")
             print(f"   FC     : {fc} [0x{fc:02X}]")
             print(f"   CN     : {cn}")
@@ -7752,7 +7752,7 @@ class HWRaw(DeviceRequiredUnit):
         if response.data:
             print(f"   Data (HEX): {response.data.hex()}")
         else:
-            print(f"   Data (HEX): (none)")
+            print("   Data (HEX): (none)")
 
 
 @hf_14a.command("raw")
@@ -9005,29 +9005,19 @@ class DataPlot(BaseCLIUnit):
 
         if not args.ascii:
             # Try PyQt5 first, then matplotlib
-            try:
-                from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
-                from PyQt5.QtCore import Qt
-                import pyqtgraph as pg
+            if importlib.util.find_spec("PyQt5.QtWidgets") is not None and importlib.util.find_spec("pyqtgraph") is not None:
                 _plot_pyqtgraph(xs, view, mean, threshold, start, end)
                 return
-            except ImportError:
-                pass
-            try:
+            if importlib.util.find_spec("matplotlib") is not None:
                 import matplotlib
-                matplotlib.use('Qt5Agg')
-                import matplotlib.pyplot as plt
+                try:
+                    matplotlib.use('Qt5Agg')
+                except ImportError:
+                    pass
                 _plot_matplotlib(xs, view, mean, threshold, start, end)
                 return
-            except ImportError:
-                pass
-            try:
-                import matplotlib.pyplot as plt
-                _plot_matplotlib(xs, view, mean, threshold, start, end)
-                return
-            except ImportError:
-                print(" No GUI library found (install PyQt5+pyqtgraph or matplotlib)")
-                print(" Falling back to ASCII plot...")
+            print(" No GUI library found (install PyQt5+pyqtgraph or matplotlib)")
+            print(" Falling back to ASCII plot...")
 
         # ASCII fallback
         w = 64
@@ -9101,9 +9091,7 @@ def _plot_matplotlib(xs, ys, mean, threshold, start, end):
 
 def _plot_pyqtgraph(xs, ys, mean, threshold, start, end):
     import sys
-    from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel
-    from PyQt5.QtCore import Qt
-    from PyQt5.QtGui import QFont
+    from PyQt5.QtWidgets import QApplication
     import pyqtgraph as pg
 
     pg.setConfigOption('background', '#0d1117')
@@ -9293,10 +9281,6 @@ class DataModulation(BaseCLIUnit):
         if len(runs) < 4:
             print(f" Modulation: {CR}insufficient transitions{C0}")
             return
-
-        runs_sorted = sorted(runs)
-        # Remove outliers (top/bottom 10%)
-        trim = max(1, len(runs) // 10)
 
         # Estimate clock: most common run length = half-period
         from collections import Counter
@@ -9675,7 +9659,7 @@ class EMVScan(DeviceRequiredUnit):
         tags[0x9F12] = app_tags[0x9F12]
         tags[0x50] = app_tags[0x50]
 
-        print(f'')
+        print('')
         print(f' {CG}── Card Details ──────────────────────{C0}')
 
         # App label — show first unique label only
@@ -9960,32 +9944,32 @@ class EMVLoad(DeviceRequiredUnit):
 
         try:
             v = data['PPSE']['FCITemplate']['value'].replace(' ', '')
-            l = data['PPSE']['FCITemplate']['length']
+            length_hex = data['PPSE']['FCITemplate']['length']
             static_pairs.append((
                 bytes.fromhex('00a404000e325041592e5359532e4444463031'),
-                tlv_resp('6F', l, v),
+                tlv_resp('6F', length_hex, v),
                 'SELECT PPSE'))
         except Exception as e:
             print(f' {CR}PPSE: {e}{C0}')
 
         try:
             v = data['Application']['FCITemplate']['value'].replace(' ', '')
-            l = data['Application']['FCITemplate']['length']
+            length_hex = data['Application']['FCITemplate']['length']
             aid = data['Application']['AID'].replace(' ', '')
             static_pairs.append((
                 bytes.fromhex('00a4040007' + aid),
-                tlv_resp('6F', l, v),
+                tlv_resp('6F', length_hex, v),
                 'SELECT AID'))
         except Exception as e:
             print(f' {CR}Application FCI: {e}{C0}')
 
         try:
             v = data['Application']['GPO']['value'].replace(' ', '')
-            l = data['Application']['GPO']['length']
+            length_hex = data['Application']['GPO']['length']
             tag = data['Application']['GPO'].get('tag', '77')
             static_pairs.append((
                 bytes.fromhex('80a80000'),
-                tlv_resp(tag, l, v),
+                tlv_resp(tag, length_hex, v),
                 'GPO'))
         except Exception as e:
             print(f' {CR}GPO: {e}{C0}')
@@ -9995,12 +9979,12 @@ class EMVLoad(DeviceRequiredUnit):
                 sfi_n = int(rec['SFI'], 16)
                 rec_n = int(rec['RecordNum'], 16)
                 v = rec['Data']['value'].replace(' ', '')
-                l = rec['Data']['length']
+                length_hex = rec['Data']['length']
                 tag = rec['Data'].get('tag', '70')
                 p2 = (sfi_n << 3) | 4
                 static_pairs.append((
                     bytes([0x00, 0xB2, rec_n, p2, 0x00]),
-                    tlv_resp(tag, l, v),
+                    tlv_resp(tag, length_hex, v),
                     f'READ RECORD SFI={sfi_n} rec={rec_n}'))
         except Exception as e:
             print(f' {CR}Records: {e}{C0}')
@@ -10056,7 +10040,7 @@ class EMVApdu(DeviceRequiredUnit):
         timeout_ms = max(1000, min(60000, args.timeout))
 
         print(f' {CY}ISO14443-4 T=CL APDU relay started{C0}')
-        print(f' Waiting for a reader to connect (SAK=20 slot required)...')
+        print(' Waiting for a reader to connect (SAK=20 slot required)...')
         print(f' Type {CY}quit{C0} to exit, or enter hex response bytes when prompted.')
 
         exchange_count = 0
@@ -10400,41 +10384,61 @@ def _desfire_get_version(cmd) -> dict:
     info: dict = {}
     hw = resp[:-1]
     # HW frame — individual guards so a short frame still populates what it has
-    if len(hw) >= 1: info['hw_vendor']  = hw[0]
-    if len(hw) >= 2: info['hw_type']    = hw[1]
-    if len(hw) >= 3: info['hw_subtype'] = hw[2]
-    if len(hw) >= 4: info['hw_major']   = hw[3]
-    if len(hw) >= 5: info['hw_minor']   = hw[4]
-    if len(hw) >= 6: info['hw_storage'] = hw[5]
-    if len(hw) >= 7: info['hw_proto']   = hw[6]
+    if len(hw) >= 1:
+        info['hw_vendor'] = hw[0]
+    if len(hw) >= 2:
+        info['hw_type'] = hw[1]
+    if len(hw) >= 3:
+        info['hw_subtype'] = hw[2]
+    if len(hw) >= 4:
+        info['hw_major'] = hw[3]
+    if len(hw) >= 5:
+        info['hw_minor'] = hw[4]
+    if len(hw) >= 6:
+        info['hw_storage'] = hw[5]
+    if len(hw) >= 7:
+        info['hw_proto'] = hw[6]
 
     if resp[-1] == 0xAF:
         resp2 = _des_transceive(cmd, 0xAF)
         sw = resp2[:-1]
         # SW frame — same per-field guards
-        if len(sw) >= 1: info['sw_vendor']  = sw[0]
-        if len(sw) >= 2: info['sw_type']    = sw[1]
-        if len(sw) >= 3: info['sw_subtype'] = sw[2]
-        if len(sw) >= 4: info['sw_major']   = sw[3]
-        if len(sw) >= 5: info['sw_minor']   = sw[4]
-        if len(sw) >= 6: info['sw_storage'] = sw[5]
-        if len(sw) >= 7: info['sw_proto']   = sw[6]
+        if len(sw) >= 1:
+            info['sw_vendor'] = sw[0]
+        if len(sw) >= 2:
+            info['sw_type'] = sw[1]
+        if len(sw) >= 3:
+            info['sw_subtype'] = sw[2]
+        if len(sw) >= 4:
+            info['sw_major'] = sw[3]
+        if len(sw) >= 5:
+            info['sw_minor'] = sw[4]
+        if len(sw) >= 6:
+            info['sw_storage'] = sw[5]
+        if len(sw) >= 7:
+            info['sw_proto'] = sw[6]
 
         # Fallback: derive SW fields from HW when SW frame payload is empty
         if 'sw_major' not in info and 'hw_major' in info:
             info['sw_major'] = _DESFIRE_HW_MAJOR_TO_SW_MAJOR.get(
                 info['hw_major'], info['hw_major'])
             info['sw_minor'] = 0
-        if 'sw_storage' not in info: info['sw_storage'] = info.get('hw_storage')
-        if 'sw_proto'   not in info: info['sw_proto']   = info.get('hw_proto')
+        if 'sw_storage' not in info:
+            info['sw_storage'] = info.get('hw_storage')
+        if 'sw_proto' not in info:
+            info['sw_proto'] = info.get('hw_proto')
 
         if resp2[-1] == 0xAF:
             resp3 = _des_transceive(cmd, 0xAF)
             p3 = resp3[:-1]
-            if len(p3) >= 7:  info['uid']       = p3[:7].hex().upper()
-            if len(p3) >= 12: info['batch']     = p3[7:12].hex().upper()
-            if len(p3) >= 13: info['prod_week'] = p3[12]
-            if len(p3) >= 14: info['prod_year'] = p3[13]
+            if len(p3) >= 7:
+                info['uid'] = p3[:7].hex().upper()
+            if len(p3) >= 12:
+                info['batch'] = p3[7:12].hex().upper()
+            if len(p3) >= 13:
+                info['prod_week'] = p3[12]
+            if len(p3) >= 14:
+                info['prod_year'] = p3[13]
     return info
 
 
@@ -10521,7 +10525,7 @@ class HfDesInfo(ReaderRequiredUnit):
                 for aid in aids:
                     print(f"   AID: {aid.hex().upper()}  ({int.from_bytes(aid, 'little'):06X})")
             else:
-                print(f"\n Applications  : none")
+                print("\n Applications  : none")
         except Exception as e:
             print(f" {CY}[!] GetApplicationIDs failed: {e}{C0}")
 
@@ -10726,10 +10730,7 @@ class HfDesChk(ReaderRequiredUnit):
             return False
 
     def on_exec(self, args: argparse.Namespace):
-        try:
-            from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-            from cryptography.hazmat.backends import default_backend
-        except ImportError:
+        if importlib.util.find_spec("cryptography") is None:
             print(f" {CR}[!] 'cryptography' library required: pip install cryptography{C0}")
             return
 
@@ -10742,7 +10743,7 @@ class HfDesChk(ReaderRequiredUnit):
         key_no = args.keyno
 
         # Select card and get AID list
-        print(f" Selecting card...")
+        print(" Selecting card...")
         try:
             uid_bytes, sak, _ = _des_select(self.cmd)
         except RuntimeError as e:
