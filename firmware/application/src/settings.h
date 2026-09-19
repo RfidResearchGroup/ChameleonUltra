@@ -5,7 +5,7 @@
 
 #include "utils.h"
 
-#define SETTINGS_CURRENT_VERSION 6
+#define SETTINGS_CURRENT_VERSION 7
 #define SETTINGS_SLEEP_TIMEOUT_DEFAULT_S 8   // default wake timeout in seconds (matches SLEEP_DELAY_MS_BUTTON_WAKEUP)
 #define SETTINGS_SLEEP_TIMEOUT_MIN_S      5
 #define SETTINGS_SLEEP_TIMEOUT_MAX_S      60
@@ -33,6 +33,8 @@ typedef enum {
     SettingsButtonShowBattery = 4U,
     // Toggle NFC field generator on/off (Ultra only, must be in reader mode)
     SettingsButtonNfcFieldGenerator = 5U,
+    // Offline full MIFARE Classic autopwn: try default keys, attack unknown sectors, save dump to slot 8
+    SettingsButtonAutoPwn = 6U,
 } settings_button_function_t;
 
 typedef struct ALIGN_U32 {

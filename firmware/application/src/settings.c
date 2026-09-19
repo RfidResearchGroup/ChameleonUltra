@@ -39,7 +39,7 @@ void settings_init_button_press_config(void) {
 // add on version3
 void settings_init_button_long_press_config(void) {
     config.button_a_long_press = SettingsButtonCloneIcUid;
-    config.button_b_long_press = SettingsButtonShowBattery;
+    config.button_b_long_press = SettingsButtonAutoPwn;
 }
 
 // add on version4
@@ -88,6 +88,13 @@ void settings_migrate(void) {
 
         case 5:
             settings_init_sleep_timeout_config();
+
+        case 6:
+            // Migrate old B long-press "ShowBattery" (4) to new "AutoPwn" (6)
+            if (config.button_b_long_press == SettingsButtonShowBattery) {
+                config.button_b_long_press = SettingsButtonAutoPwn;
+                NRF_LOG_INFO("Migrated B long-press from ShowBattery to AutoPwn");
+            }
 
             /*
              * Add new migration steps ABOVE THIS COMMENT

