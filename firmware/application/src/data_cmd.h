@@ -165,6 +165,9 @@
 #define DATA_CMD_MF1_GET_FIELD_OFF_DO_RESET     (4039)
 #define DATA_CMD_MF1_GET_PRNG_TYPE              (4040)  // 0=static 1=weak(LFSR) 2=hard(rand)
 #define DATA_CMD_MF1_SET_PRNG_TYPE              (4041)
+#define DATA_CMD_SEOS_READ_EMU_DATA             (4042)
+#define DATA_CMD_SEOS_WRITE_EMU_DATA            (4043)
+#define DATA_CMD_SEOS_WRITE_EMU_KEYS            (4044)
 //
 // ******************************************************************
 

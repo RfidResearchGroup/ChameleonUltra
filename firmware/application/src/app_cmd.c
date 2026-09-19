@@ -1163,6 +1163,88 @@ static data_frame_tx_t *cmd_processor_idteck_get_emu_id(uint16_t cmd, uint16_t s
     return data_frame_make(cmd, STATUS_SUCCESS, LF_IDTECK_TAG_ID_SIZE, buffer->buffer);
 }
 
+static data_frame_tx_t *cmd_processor_seos_read_emu_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_SEOS);
+    nfc_tag_seos_information_t *info = (nfc_tag_seos_information_t *)buffer->buffer;
+
+    uint8_t output[1+info->diversifier_len + 1+info->oid_len + 1+info->data_tag_len + 1+info->data_len + 2];
+    uint16_t offset = 0;
+
+    output[offset++] = info->data_len;
+    memcpy(output+offset, info->data, info->data_len);
+    offset += info->data_len;
+
+    output[offset++] = info->oid_len;
+    memcpy(output+offset, info->oid, info->oid_len);
+    offset += info->oid_len;
+
+    output[offset++] = info->data_tag_len;
+    memcpy(output+offset, info->data_tag, info->data_tag_len);
+    offset += info->data_tag_len;
+
+    output[offset++] = info->diversifier_len;
+    memcpy(output+offset, info->diversifier, info->diversifier_len);
+    offset += info->diversifier_len;
+
+    output[offset++] = info->hash_alg;
+    output[offset++] = info->encr_alg;
+
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(output), output);
+}
+
+static data_frame_tx_t *cmd_processor_seos_write_emu_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length < 6) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_SEOS);
+    nfc_tag_seos_information_t *info = (nfc_tag_seos_information_t *)buffer->buffer;
+
+    uint16_t offset = 0;
+
+    uint8_t len = data[offset++];
+    if (len > NFC_TAG_SEOS_DATA_MAX) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    info->data_len = len;
+    memcpy(info->data, data+offset, len);
+    offset += len;
+
+    len = data[offset++];
+    if (len > NFC_TAG_SEOS_OID_MAX) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    info->oid_len = len;
+    memcpy(info->oid, data+offset, len);
+    offset += len;
+
+    len = data[offset++];
+    if (len > NFC_TAG_SEOS_DATA_TAG_MAX) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    info->data_tag_len = len;
+    memcpy(info->data_tag, data+offset, len);
+    offset += len;
+
+    len = data[offset++];
+    if (len > NFC_TAG_SEOS_DIVERSIFIER_MAX) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    info->diversifier_len = len;
+    memcpy(info->diversifier, data+offset, len);
+    offset += len;
+
+    info->hash_alg = data[offset++];
+    info->encr_alg = data[offset++];
+
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_seos_write_emu_keys(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 16 * 3) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_SEOS);
+    nfc_tag_seos_information_t *info = (nfc_tag_seos_information_t *)buffer->buffer;
+
+    memcpy(info->authkey, data+ 0, 16);
+    memcpy(info->privenc, data+16, 16);
+    memcpy(info->privmac, data+32, 16);
+
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
 #if defined(PROJECT_CHAMELEON_ULTRA)
 // T55xx clone is only available on Chameleon Ultra; the Lite firmware
 // has no LF reader hardware and does not compile the write_*_to_t55xx
@@ -1283,6 +1365,9 @@ static nfc_tag_14a_coll_res_reference_t *get_coll_res_data(bool write) {
             break;
         case TAG_TYPE_HF14A_4:
             info = nfc_tag_14a_4_get_coll_res();
+            break;
+        case TAG_TYPE_SEOS:
+            info = nfc_tag_seos_get_coll_res();
             break;
         default:
             // no collision resolution data for slot
@@ -3121,6 +3206,11 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_JABLOTRON_GET_EMU_ID,           NULL,                      cmd_processor_jablotron_get_emu_id,          NULL                   },
     {    DATA_CMD_IDTECK_SET_EMU_ID,              NULL,                      cmd_processor_idteck_set_emu_id,             NULL                   },
     {    DATA_CMD_IDTECK_GET_EMU_ID,              NULL,                      cmd_processor_idteck_get_emu_id,             NULL                   },
+
+    {    DATA_CMD_SEOS_READ_EMU_DATA,             NULL,                      cmd_processor_seos_read_emu_data,            NULL                   },
+    {    DATA_CMD_SEOS_WRITE_EMU_DATA,            NULL,                      cmd_processor_seos_write_emu_data,           NULL                   },
+    {    DATA_CMD_SEOS_WRITE_EMU_KEYS,            NULL,                      cmd_processor_seos_write_emu_keys,           NULL                   },
+
     /* ISO14443-4 T=CL emulation */
 #if defined(PROJECT_CHAMELEON_ULTRA)
     /* ISO14443-4 T=CL emulation */
