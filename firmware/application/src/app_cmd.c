@@ -2549,6 +2549,21 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
     NRF_LOG_INFO("14A4_READER_APDU: scan_auto OK sak=%02x ats_len=%d",
                  taginfo.sak, taginfo.ats_len);
 
+    /* After scan_auto completes RATS, give the RC522 time to settle and
+     * clear its stale post-receive state, exactly like the EMV scan does
+     * (see cmd_processor_hf14a_4_emv_scan). Without this, the next
+     * transceive exits instantly on a stale RxIRq / busy TRANSCEIVE state
+     * and always returns "no response". */
+    bsp_delay_ms(5);
+    write_register_single(CommandReg, PCD_IDLE);
+    {
+        uint16_t _w = 0;
+        while ((read_register_single(CommandReg) & 0x0F) != PCD_IDLE && _w++ < 1000);
+    }
+    write_register_single(ComIrqReg,  0x7F);          /* clear ALL IRQ flags */
+    set_register_mask(FIFOLevelReg,   0x80);          /* flush FIFO */
+    clear_register_mask(BitFramingReg, 0x80);         /* clear StartSend */
+
     /* Step 3: wrap APDU in I-block (PCB=0x02) and send */
     uint8_t frame_buf[64];
     frame_buf[0] = 0x02;  /* PCB: I-block, block_num=0, no CID, no NAD */
