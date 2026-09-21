@@ -2587,18 +2587,18 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
     }
 
     /* Copy data portion (strip PCB + CRC), then handle chaining */
-    uint8_t blk_num = 0;
     uint8_t resp_pcb = resp_buf[0];
     uint8_t dlen = resp_bytes - 3; /* subtract PCB(1) + CRC(2) */
     if (dlen > 0 && resp_chain_len + dlen < sizeof(resp_chain)) {
         memcpy(&resp_chain[resp_chain_len], &resp_buf[1], dlen);
         resp_chain_len += dlen;
     }
-    blk_num ^= 1;
-
-    /* ISO14443-4 chaining: PCB bit5 (0x20) set means more blocks follow */
-    while (resp_pcb & 0x20) {
-        uint8_t rack = 0xA2 | (resp_pcb & 0x01); /* R(ACK) block_num matches received I-block */
+    /* ISO14443-4 chaining: the M flag is bit 4 (0x10) -- see PCB_CHAIN in
+     * nfc_14a_4.c. 0x20 is clear in I-blocks and set in R-blocks. */
+    while (resp_pcb & 0x10) {
+        /* R(ACK) N(R) is the block number of the NEXT I-block expected, i.e.
+         * the complement of the received block number (blocks alternate). */
+        uint8_t rack = 0xA2 | ((resp_pcb & 0x01) ^ 0x01);
         uint8_t rack_frame[3];
         rack_frame[0] = rack;
         crc_14a_append(rack_frame, 1);
@@ -2617,7 +2617,6 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
             memcpy(&resp_chain[resp_chain_len], &resp_buf[1], dlen);
             resp_chain_len += dlen;
         }
-        blk_num ^= 1;
     }
 
     return data_frame_make(cmd, STATUS_HF_TAG_OK, resp_chain_len, resp_chain);
@@ -2666,7 +2665,9 @@ static bool tcl_apdu_(
     /* Handle card-side chaining ---------------------------------------- */
     uint16_t chain_rbits = 0;   /* hoisted: used in both WTX and R(ACK) paths */
     uint8_t  chain_st    = STATUS_HF_TAG_OK;
-    while (resp_pcb & 0x20u) {
+    /* ISO14443-4 chaining: the M flag is bit 4 (0x10), not 0x20 -- see
+     * PCB_CHAIN in nfc_14a_4.c. */
+    while (resp_pcb & 0x10u) {
         if ((resp_pcb & 0xC0u) != 0x00u) {
             /* S-block: handle S(WTX), reject others.
              * Some Visa/MC cards send WTX (PCB=0xF2) before their FCI,
@@ -2698,9 +2699,10 @@ static bool tcl_apdu_(
             break; /* other S-blocks (DESELECT etc.): stop */
         }
 
-        /* R(ACK) block_num must match the received I-block's block_num */
+        /* R(ACK) N(R) is the block number of the NEXT I-block expected, i.e.
+         * the complement of the received block number (blocks alternate). */
         uint8_t rf[3];
-        rf[0] = 0xA2u | (resp_pcb & 0x01u);
+        rf[0] = 0xA2u | ((resp_pcb & 0x01u) ^ 0x01u);
         crc_14a_append(rf, 1);
 
         /* Use bytes_transfer for chain R(ACK) — clear stale RxIRq first */

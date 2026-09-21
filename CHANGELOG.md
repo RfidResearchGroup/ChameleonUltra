@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Fixed ISO 14443-4 chaining in the `hf 14a apdu` (6004) and EMV scan (6005) reader paths: the chaining flag is bit 4 (`0x10`), not `0x20`, so chained responses were silently truncated to their first block; and the R(ACK) must carry the next expected block number rather than the received one, or the card repeats its block indefinitely. Also removed a dead `blk_num` variable from the same loop, which failed the build under `-Werror` on newer GCC due to `-Wunused-but-set-variable`. (@hansfbaier)
 
 ## [v2.2.0][2026-07-04]
  - Added Jablotron LF protocol support: read, emulate and T55xx clone (@midlan)
