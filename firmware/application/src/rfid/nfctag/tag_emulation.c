@@ -586,7 +586,7 @@ void tag_emulation_set_slot(uint8_t index) {
 }
 
 /**
- * Get the currently activated card slot's LED color
+ * Get the queried card slot's LED color
  */
 uint8_t tag_emulation_get_color(uint8_t index) {
     return slotConfig.slots[index].light_color;
@@ -595,8 +595,9 @@ uint8_t tag_emulation_get_color(uint8_t index) {
 /**
  * Set the currently activated card slot's LED color
  */
-void tag_emulation_set_color(uint8_t index, uint8_t newColor) {
-    slotConfig.slots[index].light_color = newColor;  // Re -set to the new switched card slot
+void tag_emulation_set_color(uint8_t newColor) {
+    slotConfig.slots[slotConfig.active_slot].light_color = newColor;  // Set to the new color
+    // Due to some strange issue the RGB reset doesnt do anything
     rgb_marquee_reset();                             // force animation color refresh according to new color
 }
 

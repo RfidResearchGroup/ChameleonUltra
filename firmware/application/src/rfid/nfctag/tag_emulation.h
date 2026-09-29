@@ -106,7 +106,7 @@ uint8_t tag_emulation_get_slot(void);
 // Get the slot's color
 uint8_t tag_emulation_get_color(uint8_t index);
 // Set the slot's color
-void tag_emulation_set_color(uint8_t index, uint8_t newColor);
+void tag_emulation_set_color(uint8_t newColor);
 // Switch the card slot to control whether the passing parameter control is closed during the switching period to listen to
 void tag_emulation_change_slot(uint8_t index, bool sense_disable);
 // Get the card slot to enable the state

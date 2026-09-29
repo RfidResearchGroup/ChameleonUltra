@@ -1530,6 +1530,25 @@ class ChameleonCMD:
         """
         data = struct.pack('!B', value)
         return self.device.send_cmd_sync(Command.SET_ANIMATION_MODE, data)
+    
+    @expect_response(Status.SUCCESS)
+    def get_slot_color(self, slot=None):
+        """
+        Get current slot LED color
+        """
+        if slot!=None: resp = self.device.send_cmd_sync(Command.GET_SLOT_COLOR, struct.pack('!B', slot))
+        else: resp = self.device.send_cmd_sync(Command.GET_SLOT_COLOR)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data[0]
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def set_slot_color(self, color: int):
+        """
+        Set current slot LED color
+        """
+        data = struct.pack('!B', color)
+        return self.device.send_cmd_sync(Command.SET_SLOT_COLOR, data)
 
     @expect_response(Status.SUCCESS)
     def get_sleep_timeout(self):

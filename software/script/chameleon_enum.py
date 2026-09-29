@@ -60,6 +60,9 @@ class Command(enum.IntEnum):
     GET_SLEEP_TIMEOUT = 1039
     SET_SLEEP_TIMEOUT = 1040
 
+    GET_SLOT_COLOR = 1041
+    SET_SLOT_COLOR = 1042
+
     HF14A_SCAN = 2000
     MF1_DETECT_SUPPORT = 2001
     MF1_DETECT_PRNG = 2002
@@ -582,6 +585,33 @@ class AnimationMode(enum.IntEnum):
         elif self == AnimationMode.NONE:
             return "No animation"
 
+@enum.unique
+class SlotColor(enum.IntEnum):
+    RED = 0
+    GREEN = 1
+    BLUE = 2
+    MAGENTA = 3
+    YELLOW = 4
+    CYAN = 5
+    WHITE = 6
+    DEFAULT = 7
+
+    def __str__(self):
+        from chameleon_utils import CR, CG, CB, CM, CY, CC, C0 
+        if self == SlotColor.RED:
+            return CR
+        elif self == SlotColor.GREEN:
+            return CG
+        elif self == SlotColor.BLUE:
+            return CB
+        elif self == SlotColor.MAGENTA:
+            return CM
+        elif self == SlotColor.YELLOW:
+            return CY
+        elif self == SlotColor.CYAN:
+            return CC
+        elif self == SlotColor.WHITE or self == SlotColor.DEFAULT:
+            return C0
 
 @enum.unique
 class ButtonType(enum.IntEnum):

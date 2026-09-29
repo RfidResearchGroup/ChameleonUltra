@@ -1070,21 +1070,20 @@ static data_frame_tx_t *cmd_processor_get_slot_info(uint16_t cmd, uint16_t statu
 }
 
 static data_frame_tx_t *cmd_processor_get_slot_color(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    typedef struct {
-        uint8_t num_slot;
-    } PACKED payload_t;
-    payload_t *payload = (payload_t *)data;
-    uint8_t color = tag_emulation_get_color(payload->num_slot);
+    // Due to how I ended up implementing this function I have to make a bodge
+    uint8_t color;
+    if (length == 1)
+        color = tag_emulation_get_color(data[0]);
+    else
+        color = tag_emulation_get_color(tag_emulation_get_slot());
     return data_frame_make(cmd, STATUS_SUCCESS, 1, &color);
 }
 
 static data_frame_tx_t *cmd_processor_set_slot_color(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    typedef struct {
-        uint8_t num_slot;
-        uint8_t color;
-    } PACKED payload_t;
-    payload_t *payload = (payload_t *)data;
-    tag_emulation_set_color(payload->num_slot, payload->color);
+    if (length != 1 || data[0] > 7) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    tag_emulation_set_color(data[0]);
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
