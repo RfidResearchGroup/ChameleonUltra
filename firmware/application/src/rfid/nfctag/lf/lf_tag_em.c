@@ -88,7 +88,8 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     g_usb_led_marquee_enable = false;
 
     // LED status update
-    set_slot_light_color(RGB_BLUE);
+    //set_slot_light_color(RGB_BLUE);
+    set_slot_light_color(get_color_by_slot(tag_emulation_get_slot()));
     TAG_FIELD_LED_ON()
 
     // Play a finite burst then stop — field check happens in EVT_STOPPED after

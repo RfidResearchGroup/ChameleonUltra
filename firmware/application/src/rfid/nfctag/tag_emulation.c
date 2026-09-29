@@ -597,7 +597,7 @@ uint8_t tag_emulation_get_color(uint8_t index) {
  */
 void tag_emulation_set_color(uint8_t newColor) {
     slotConfig.slots[slotConfig.active_slot].light_color = newColor;  // Set to the new color
-    // Due to some strange issue the RGB reset doesnt do anything
+    // Due to some strange issue the RGB reset doesnt do anything when no LED motion is happening
     rgb_marquee_reset();                             // force animation color refresh according to new color
 }
 
