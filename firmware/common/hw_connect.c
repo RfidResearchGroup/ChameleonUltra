@@ -264,6 +264,7 @@ void set_slot_light_color(chameleon_rgb_type_t color) {
             nrf_gpio_pin_clear(LED_G);
             nrf_gpio_pin_clear(LED_B);
             break;
+        case RGB_DEFAULT: // This is frankly not how I want it
         case RGB_WHITE:
             nrf_gpio_pin_clear(LED_R);
             nrf_gpio_pin_clear(LED_G);

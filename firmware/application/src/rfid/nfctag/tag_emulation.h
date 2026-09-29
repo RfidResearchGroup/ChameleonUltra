@@ -45,7 +45,7 @@ typedef struct {
  * This configuration can be preserved by persistently to Flash
  * 4 bytes a word, keep in mind the entire word alignment
  */
-#define TAG_SLOT_CONFIG_CURRENT_VERSION 8
+#define TAG_SLOT_CONFIG_CURRENT_VERSION 9
 // Intended struct size, for static assert
 #define TAG_SLOT_CONFIG_CURRENT_SIZE 68
 
@@ -58,6 +58,7 @@ typedef struct {
         // Individual slot configuration
         uint32_t enabled_hf : 1;  // Whether to enable the HF card
         uint32_t enabled_lf : 1;  // Whether to enable the LF card
+        uint8_t light_color : 3;  // Custom user color to display
         uint32_t : 0;             // U32 align
         // Specific type of emulated card
         union {
@@ -102,6 +103,10 @@ tag_data_buffer_t *get_buffer_by_tag_type(tag_specific_type_t type);
 void tag_emulation_set_slot(uint8_t index);
 // Get the card slot currently used
 uint8_t tag_emulation_get_slot(void);
+// Get the slot's color
+uint8_t tag_emulation_get_color(uint8_t index);
+// Set the slot's color
+void tag_emulation_set_color(uint8_t index, uint8_t newColor);
 // Switch the card slot to control whether the passing parameter control is closed during the switching period to listen to
 void tag_emulation_change_slot(uint8_t index, bool sense_disable);
 // Get the card slot to enable the state

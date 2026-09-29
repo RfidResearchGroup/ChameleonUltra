@@ -69,14 +69,14 @@ static tag_slot_config_t slotConfig ALIGN_U32 = {
     // Configuration card slots
     // See tag_emulation_factory_init for actual tag content
     .slots = {
-        { .enabled_hf = true,  .enabled_lf = true,  .tag_hf = TAG_TYPE_MIFARE_1024, .tag_lf = TAG_TYPE_EM410X,    },  // 1
-        { .enabled_hf = true,  .enabled_lf = false, .tag_hf = TAG_TYPE_MF0ICU1,     .tag_lf = TAG_TYPE_UNDEFINED, },  // 2
-        { .enabled_hf = false, .enabled_lf = true,  .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_EM410X,    },  // 3
-        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 4
-        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 5
-        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 6
-        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 7
-        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 8
+        { .enabled_hf = true,  .enabled_lf = true,  .light_color = RGB_DEFAULT, .tag_hf = TAG_TYPE_MIFARE_1024, .tag_lf = TAG_TYPE_EM410X,    },  // 1
+        { .enabled_hf = true,  .enabled_lf = false, .light_color = RGB_DEFAULT, .tag_hf = TAG_TYPE_MF0ICU1,     .tag_lf = TAG_TYPE_UNDEFINED, },  // 2
+        { .enabled_hf = false, .enabled_lf = true,  .light_color = RGB_DEFAULT, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_EM410X,    },  // 3
+        { .enabled_hf = false, .enabled_lf = false, .light_color = RGB_DEFAULT, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 4
+        { .enabled_hf = false, .enabled_lf = false, .light_color = RGB_DEFAULT, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 5
+        { .enabled_hf = false, .enabled_lf = false, .light_color = RGB_DEFAULT, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 6
+        { .enabled_hf = false, .enabled_lf = false, .light_color = RGB_DEFAULT, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 7
+        { .enabled_hf = false, .enabled_lf = false, .light_color = RGB_DEFAULT, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 8
     },
 };
 // The card slot configuration unique CRC, once the slot configuration changes, can be checked by CRC
@@ -583,6 +583,21 @@ uint8_t tag_emulation_get_slot(void) {
 void tag_emulation_set_slot(uint8_t index) {
     slotConfig.active_slot = index;  // Re -set to the new switched card slot
     rgb_marquee_reset();             // force animation color refresh according to new slot
+}
+
+/**
+ * Get the currently activated card slot's LED color
+ */
+uint8_t tag_emulation_get_color(uint8_t index) {
+    return slotConfig.slots[index].light_color;
+}
+
+/**
+ * Set the currently activated card slot's LED color
+ */
+void tag_emulation_set_color(uint8_t index, uint8_t newColor) {
+    slotConfig.slots[index].light_color = newColor;  // Re -set to the new switched card slot
+    rgb_marquee_reset();                             // force animation color refresh according to new color
 }
 
 /**
