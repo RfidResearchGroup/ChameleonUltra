@@ -476,6 +476,7 @@ static void tag_emulation_migrate_slot_config_v0_to_v8(void) {
  * To avoid confusion, all configs must be set to have the LED as RGB_DEFAULT. Otherwise everything will just be red, regardless of payload.
  */
 static void tag_emulation_migrate_slot_config_v8_to_v9(void) {
+    slotConfig.version = TAG_SLOT_CONFIG_CURRENT_VERSION; // this may be unwanted
     for (uint8_t i = 0; i < ARRAYLEN(slotConfig.slots); i++) {
         slotConfig.slots[i].light_color = RGB_DEFAULT;
         NRF_LOG_INFO("Slot %i LED configuration set to default", i);
