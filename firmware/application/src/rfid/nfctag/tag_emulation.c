@@ -471,6 +471,17 @@ static void tag_emulation_migrate_slot_config_v0_to_v8(void) {
     }
 }
 
+/** v9 introduces support for custom LED colors.
+ * For compatibility the original color has been appended instead of being prepended, making it index 7 instead of index 0.
+ * To avoid confusion, all configs must be set to have the LED as RGB_DEFAULT. Otherwise everything will just be red, regardless of payload.
+ */
+static void tag_emulation_migrate_slot_config_v8_to_v9(void) {
+    for (uint8_t i = 0; i < ARRAYLEN(slotConfig.slots); i++) {
+        slotConfig.slots[i].light_color = RGB_DEFAULT;
+        NRF_LOG_INFO("Slot %i LED configuration set to default", i);
+    }
+}
+
 static void tag_emulation_migrate_slot_config(void) {
     switch (slotConfig.version) {
         case 0:
@@ -482,7 +493,8 @@ static void tag_emulation_migrate_slot_config(void) {
         case 6:
         case 7:
             tag_emulation_migrate_slot_config_v0_to_v8();
-
+        case 8:
+            tag_emulation_migrate_slot_config_v8_to_v9();
             /*
              * Add new migration steps ABOVE THIS COMMENT
              * `tag_emulation_save_config()` and `break` statements should only be used on the last migration step, all the previous steps must fall
