@@ -655,37 +655,42 @@ class ChameleonCMD:
         self._t55xx_opt_in = (commands, supported)
         return supported
 
-    def _t55xx_key_tail(self, password: Union[bytes, None]) -> bytes:
+    def _t55xx_key_tail(self, password: Union[bytes, None], current_password: Union[bytes, None] = None) -> bytes:
         """
         Build the part of a T55xx write request that follows the card data:
         new key, old keys, then the flags byte when the firmware understands it.
 
         :param password: 4-byte password to set, or None to leave the tag without one
+        :param current_password: 4-byte password the tag is protected with now, tried first
         """
-        if password is not None and len(password) != 4:
-            raise ValueError("The T55xx password must be 4 bytes")
+        for name, value in (("password", password), ("current password", current_password)):
+            if value is not None and len(value) != 4:
+                raise ValueError(f"The T55xx {name} must be 4 bytes")
+        keys = b''.join(([current_password] if current_password is not None else []) + old_keys)
         if not self.t55xx_password_opt_in():
             # Older firmware: no flags byte. It turns password mode on with whatever key it is sent,
             # so an explicit password still works; the no-password default cannot be honoured.
-            return (password or new_key) + b''.join(old_keys)
+            return (password or new_key) + keys
         if password is None:
-            return no_password_key + b''.join(old_keys) + bytes([T55XX_WRITE_FLAG_NO_PASSWORD])
-        return password + b''.join(old_keys) + bytes([T55XX_WRITE_FLAG_SET_PASSWORD])
+            return no_password_key + keys + bytes([T55XX_WRITE_FLAG_NO_PASSWORD])
+        return password + keys + bytes([T55XX_WRITE_FLAG_SET_PASSWORD])
 
     @expect_response(Status.LF_TAG_OK)
-    def em410x_write_to_t55xx(self, id_bytes: bytes, password: Union[bytes, None] = None):
+    def em410x_write_to_t55xx(self, id_bytes: bytes, password: Union[bytes, None] = None,
+                              current_password: Union[bytes, None] = None):
         """
         Write EM410X card number into T55XX.
 
         :param id_bytes: ID card number
         :param password: 4-byte T55xx password to set; None (default) sets no password
+        :param current_password: 4-byte password the tag is protected with now, if known
         :return:
         """
         if len(id_bytes) == 5:
-            data = id_bytes + self._t55xx_key_tail(password)
+            data = id_bytes + self._t55xx_key_tail(password, current_password)
             return self.device.send_cmd_sync(Command.EM410X_WRITE_TO_T55XX, data)
         if len(id_bytes) == 13:
-            data = id_bytes + self._t55xx_key_tail(password)
+            data = id_bytes + self._t55xx_key_tail(password, current_password)
             return self.device.send_cmd_sync(Command.EM410X_ELECTRA_WRITE_TO_T55XX, data)
         raise ValueError("The id bytes length must equal 5 (EM410X) or 13 (Electra)")
 
@@ -702,17 +707,19 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
-    def hidprox_write_to_t55xx(self, id_bytes: bytes, password: Union[bytes, None] = None):
+    def hidprox_write_to_t55xx(self, id_bytes: bytes, password: Union[bytes, None] = None,
+                               current_password: Union[bytes, None] = None):
         """
         Write HID Prox card number into T55XX.
 
         :param id_bytes: ID card number
         :param password: 4-byte T55xx password to set; None (default) sets no password
+        :param current_password: 4-byte password the tag is protected with now, if known
         :return:
         """
         if len(id_bytes) != 13:
             raise ValueError("The id bytes length must equal 13")
-        data = id_bytes + self._t55xx_key_tail(password)
+        data = id_bytes + self._t55xx_key_tail(password, current_password)
         return self.device.send_cmd_sync(Command.HIDPROX_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
@@ -726,16 +733,18 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
-    def ioprox_write_to_t55xx(self, id_bytes: bytes, password: Union[bytes, None] = None):
+    def ioprox_write_to_t55xx(self, id_bytes: bytes, password: Union[bytes, None] = None,
+                              current_password: Union[bytes, None] = None):
         """
         Write ioProx card data to a T55XX tag.
 
         :param password: 4-byte T55xx password to set; None (default) sets no password
+        :param current_password: 4-byte password the tag is protected with now, if known
         """
         if len(id_bytes) != 16:
             raise ValueError("The ioProx id bytes length must equal 16")
 
-        data = id_bytes + self._t55xx_key_tail(password)
+        data = id_bytes + self._t55xx_key_tail(password, current_password)
         return self.device.send_cmd_sync(Command.IOPROX_WRITE_TO_T55XX, data)
 
     @expect_response(Status.SUCCESS)
@@ -810,17 +819,19 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
-    def viking_write_to_t55xx(self, id_bytes: bytes, password: Union[bytes, None] = None):
+    def viking_write_to_t55xx(self, id_bytes: bytes, password: Union[bytes, None] = None,
+                              current_password: Union[bytes, None] = None):
         """
         Write Viking card number into T55XX.
 
         :param id_bytes: ID card number
         :param password: 4-byte T55xx password to set; None (default) sets no password
+        :param current_password: 4-byte password the tag is protected with now, if known
         :return:
         """
         if len(id_bytes) != 4:
             raise ValueError("The id bytes length must equal 4")
-        data = id_bytes + self._t55xx_key_tail(password)
+        data = id_bytes + self._t55xx_key_tail(password, current_password)
         return self.device.send_cmd_sync(Command.VIKING_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
@@ -836,17 +847,19 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
-    def pac_write_to_t55xx(self, id_bytes: bytes, password: Union[bytes, None] = None):
+    def pac_write_to_t55xx(self, id_bytes: bytes, password: Union[bytes, None] = None,
+                           current_password: Union[bytes, None] = None):
         """
         Write PAC/Stanley card data to a T55XX tag.
 
         :param id_bytes: 8-byte ASCII card ID
         :param password: 4-byte T55xx password to set; None (default) sets no password
+        :param current_password: 4-byte password the tag is protected with now, if known
         :return:
         """
         if len(id_bytes) != 8:
             raise ValueError("The id bytes length must equal 8")
-        data = id_bytes + self._t55xx_key_tail(password)
+        data = id_bytes + self._t55xx_key_tail(password, current_password)
         return self.device.send_cmd_sync(Command.PAC_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
@@ -862,31 +875,35 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
-    def jablotron_write_to_t55xx(self, id_bytes: bytes, password: Union[bytes, None] = None):
+    def jablotron_write_to_t55xx(self, id_bytes: bytes, password: Union[bytes, None] = None,
+                                 current_password: Union[bytes, None] = None):
         """
         Write Jablotron card number into T55XX.
 
         :param id_bytes: 5-byte Jablotron card ID
         :param password: 4-byte T55xx password to set; None (default) sets no password
+        :param current_password: 4-byte password the tag is protected with now, if known
         :return:
         """
         if len(id_bytes) != 5:
             raise ValueError("The id bytes length must equal 5")
-        data = id_bytes + self._t55xx_key_tail(password)
+        data = id_bytes + self._t55xx_key_tail(password, current_password)
         return self.device.send_cmd_sync(Command.JABLOTRON_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
-    def idteck_write_to_t55xx(self, id_bytes: bytes, password: Union[bytes, None] = None):
+    def idteck_write_to_t55xx(self, id_bytes: bytes, password: Union[bytes, None] = None,
+                              current_password: Union[bytes, None] = None):
         """
         Write an IDTECK 64-bit PSK1 frame onto a T55xx tag.
 
         :param id_bytes: 8 bytes = full 64-bit frame (preamble 4 bytes + data 4 bytes)
         :param password: 4-byte T55xx password to set; None (default) sets no password
+        :param current_password: 4-byte password the tag is protected with now, if known
         :return:
         """
         if len(id_bytes) != 8:
             raise ValueError("The id bytes length must equal 8")
-        data = id_bytes + self._t55xx_key_tail(password)
+        data = id_bytes + self._t55xx_key_tail(password, current_password)
         return self.device.send_cmd_sync(Command.IDTECK_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
