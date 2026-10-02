@@ -3,7 +3,7 @@ import ctypes
 from typing import Union
 
 import chameleon_com
-from chameleon_utils import expect_response, reconstruct_full_nt, parity_to_str
+from chameleon_utils import expect_response, reconstruct_full_nt, parity_to_str, UnexpectedResponseError
 from chameleon_enum import Command, SlotNumber, Status, TagSenseType, TagSpecificType
 from chameleon_enum import ButtonPressFunction, ButtonType, MifareClassicDarksideStatus
 from chameleon_enum import MfcKeyType, MfcValueBlockOperator
@@ -650,8 +650,10 @@ class ChameleonCMD:
                 # Firmware without the command, and without a capability list to say so
                 supported = False
             else:
-                supported = (resp.status == Status.SUCCESS and len(resp.data) >= 1
-                             and bool(resp.data[0] & T55XX_WRITE_FEATURE_PASSWORD_OPT_IN))
+                # Listed but no valid answer is an error, not older firmware, for the same reason
+                if resp.status != Status.SUCCESS or len(resp.data) < 1:
+                    raise UnexpectedResponseError(f"T55xx write features query failed: status {resp.status}")
+                supported = bool(resp.data[0] & T55XX_WRITE_FEATURE_PASSWORD_OPT_IN)
         self._t55xx_opt_in = (commands, supported)
         return supported
 
