@@ -8,7 +8,7 @@ from chameleon_enum import Command, SlotNumber, Status, TagSenseType, TagSpecifi
 from chameleon_enum import ButtonPressFunction, ButtonType, MifareClassicDarksideStatus
 from chameleon_enum import MfcKeyType, MfcValueBlockOperator
 
-CURRENT_VERSION_SETTINGS = 6
+CURRENT_VERSION_SETTINGS = 7
 
 new_key = b'\x20\x20\x66\x66'
 old_keys = [b'\x51\x24\x36\x48', b'\x19\x92\x04\x27']
@@ -1810,6 +1810,23 @@ class ChameleonCMD:
     def set_ble_pairing_enable(self, enabled: bool):
         data = struct.pack('!B', enabled)
         return self.device.send_cmd_sync(Command.SET_BLE_PAIRING_ENABLE, data)
+
+    @expect_response(Status.SUCCESS)
+    def get_ble_advertising_enable(self):
+        """
+        Is ble advertising enabled?
+
+        :return: True if BLE advertising is enabled, False for USB-only mode
+        """
+        resp = self.device.send_cmd_sync(Command.GET_BLE_ADVERTISING_ENABLE)
+        if resp.status == Status.SUCCESS:
+            resp.parsed, = struct.unpack('!?', resp.data)
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def set_ble_advertising_enable(self, enabled: bool):
+        data = struct.pack('!B', enabled)
+        return self.device.send_cmd_sync(Command.SET_BLE_ADVERTISING_ENABLE, data)
 
     @expect_response(Status.SUCCESS)
     def mf1_get_field_off_do_reset(self):
