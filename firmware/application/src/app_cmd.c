@@ -682,6 +682,41 @@ static data_frame_tx_t *cmd_processor_em410x_scan(uint16_t cmd, uint16_t status,
     return data_frame_make(cmd, STATUS_LF_TAG_OK, 2 + id_size, card_buffer);
 }
 
+/**
+ * Parse the tail shared by every *_WRITE_TO_T55XX request: the new key at old_keys_offset - 4,
+ * one or more 4-byte old keys, then an optional flags byte.
+ * Keys are 4 bytes each, so a remainder of exactly 1 after them is the flags byte.
+ * Without it the tag gets no password: clients that predate the byte always sent a
+ * key the user never chose, so a key alone is not a request for password mode.
+ * The old keys are tried either way, so tags locked by earlier firmware stay rewritable.
+ */
+static bool parse_t55xx_write_keys(const uint8_t *data, uint16_t length, uint16_t old_keys_offset, uint8_t *old_key_count, bool *use_passwd) {
+    if (length < old_keys_offset + 4) {
+        return false;
+    }
+    uint16_t keys_len = length - old_keys_offset;
+    *use_passwd = false;
+    if (keys_len % 4 == 1) {
+        uint8_t flags = data[length - 1];
+        if (flags == T55XX_WRITE_FLAG_SET_PASSWORD) {
+            *use_passwd = true;
+        } else if (flags != T55XX_WRITE_FLAG_NO_PASSWORD) {
+            return false;
+        }
+        keys_len -= 1;
+    }
+    if (keys_len % 4 != 0 || keys_len / 4 > UINT8_MAX) {
+        return false;
+    }
+    *old_key_count = keys_len / 4;
+    return true;
+}
+
+static data_frame_tx_t *cmd_processor_lf_t55xx_write_features(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t features = T55XX_WRITE_FEATURE_PASSWORD_OPT_IN;
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(features), &features);
+}
+
 static data_frame_tx_t *cmd_processor_em410x_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     typedef struct {
         uint8_t id[5];
@@ -689,11 +724,13 @@ static data_frame_tx_t *cmd_processor_em410x_write_to_t55xx(uint16_t cmd, uint16
         uint8_t old_keys[4]; // we can have more than one... struct just to compute offsets with min 1 key
     } PACKED payload_t;
     payload_t *payload = (payload_t *)data;
-    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+    uint8_t old_key_count;
+    bool use_passwd;
+    if (!parse_t55xx_write_keys(data, length, offsetof(payload_t, old_keys), &old_key_count, &use_passwd)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
-    status = write_em410x_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+    status = write_em410x_to_t55xx(payload->id, payload->new_key, payload->old_keys, old_key_count, use_passwd);
     return data_frame_make(cmd, status, 0, NULL);
 }
 
@@ -704,11 +741,13 @@ static data_frame_tx_t *cmd_processor_em410x_electra_write_to_t55xx(uint16_t cmd
         uint8_t old_keys[4]; // we can have more than one... struct just to compute offsets with min 1 key
     } PACKED payload_t;
     payload_t *payload = (payload_t *)data;
-    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+    uint8_t old_key_count;
+    bool use_passwd;
+    if (!parse_t55xx_write_keys(data, length, offsetof(payload_t, old_keys), &old_key_count, &use_passwd)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
-    status = write_em410x_electra_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+    status = write_em410x_electra_to_t55xx(payload->id, payload->new_key, payload->old_keys, old_key_count, use_passwd);
     return data_frame_make(cmd, status, 0, NULL);
 }
 
@@ -719,7 +758,9 @@ static data_frame_tx_t *cmd_processor_hidprox_write_to_t55xx(uint16_t cmd, uint1
         uint8_t old_keys[4]; // we can have more than one... struct just to compute offsets with min 1 key
     } PACKED payload_t;
     payload_t *payload = (payload_t *)data;
-    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+    uint8_t old_key_count;
+    bool use_passwd;
+    if (!parse_t55xx_write_keys(data, length, offsetof(payload_t, old_keys), &old_key_count, &use_passwd)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
@@ -729,7 +770,7 @@ static data_frame_tx_t *cmd_processor_hidprox_write_to_t55xx(uint16_t cmd, uint1
     cn = (cn << 32) | (bytes_to_num(payload->id + 6, 4));
     uint32_t il = payload->id[10];
     uint32_t oem = bytes_to_num(payload->id + 11, 2);
-    status = write_hidprox_to_t55xx(format, fc, cn, il, oem, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+    status = write_hidprox_to_t55xx(format, fc, cn, il, oem, payload->new_key, payload->old_keys, old_key_count, use_passwd);
     return data_frame_make(cmd, status, 0, NULL);
 }
 
@@ -762,20 +803,19 @@ static data_frame_tx_t *cmd_processor_ioprox_write_to_t55xx(uint16_t cmd, uint16
 
     payload_t *payload = (payload_t *)data;
 
-    // Validate packet length
-    if (length < sizeof(payload_t) ||
-            (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+    uint8_t old_key_count;
+    bool use_passwd;
+    if (!parse_t55xx_write_keys(data, length, offsetof(payload_t, old_keys), &old_key_count, &use_passwd)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-
-    uint8_t old_cnt = (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys);
 
     // Pass card_data (including raw8 at index 4-11) directly to the T55xx writer.
     status = write_ioprox_to_t55xx(
                  payload->card_data,
                  payload->new_key,
                  payload->old_keys,
-                 old_cnt
+                 old_key_count,
+                 use_passwd
              );
 
     return data_frame_make(cmd, status, 0, NULL);
@@ -848,11 +888,13 @@ static data_frame_tx_t *cmd_processor_viking_write_to_t55xx(uint16_t cmd, uint16
         uint8_t old_keys[4]; // we can have more than one... struct just to compute offsets with min 1 key
     } PACKED payload_t;
     payload_t *payload = (payload_t *)data;
-    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+    uint8_t old_key_count;
+    bool use_passwd;
+    if (!parse_t55xx_write_keys(data, length, offsetof(payload_t, old_keys), &old_key_count, &use_passwd)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
-    status = write_viking_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+    status = write_viking_to_t55xx(payload->id, payload->new_key, payload->old_keys, old_key_count, use_passwd);
     return data_frame_make(cmd, status, 0, NULL);
 }
 
@@ -864,10 +906,12 @@ static data_frame_tx_t *cmd_processor_pac_write_to_t55xx(uint16_t cmd, uint16_t 
         uint8_t old_keys[4];
     } PACKED payload_t;
     payload_t *payload = (payload_t *)data;
-    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+    uint8_t old_key_count;
+    bool use_passwd;
+    if (!parse_t55xx_write_keys(data, length, offsetof(payload_t, old_keys), &old_key_count, &use_passwd)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-    status = write_pac_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+    status = write_pac_to_t55xx(payload->id, payload->new_key, payload->old_keys, old_key_count, use_passwd);
     return data_frame_make(cmd, status, 0, NULL);
 }
 
@@ -887,10 +931,12 @@ static data_frame_tx_t *cmd_processor_jablotron_write_to_t55xx(uint16_t cmd, uin
         uint8_t old_keys[4];
     } PACKED payload_t;
     payload_t *payload = (payload_t *)data;
-    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+    uint8_t old_key_count;
+    bool use_passwd;
+    if (!parse_t55xx_write_keys(data, length, offsetof(payload_t, old_keys), &old_key_count, &use_passwd)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-    status = write_jablotron_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+    status = write_jablotron_to_t55xx(payload->id, payload->new_key, payload->old_keys, old_key_count, use_passwd);
     return data_frame_make(cmd, status, 0, NULL);
 }
 
@@ -1258,13 +1304,13 @@ static data_frame_tx_t *cmd_processor_idteck_write_to_t55xx(uint16_t cmd, uint16
 
     payload_t *payload = (payload_t *)data;
 
-    if (length < sizeof(payload_t) ||
-        (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+    uint8_t old_key_count;
+    bool use_passwd;
+    if (!parse_t55xx_write_keys(data, length, offsetof(payload_t, old_keys), &old_key_count, &use_passwd)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
-    uint8_t old_cnt = (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys);
-    status = write_idteck_to_t55xx(payload->card_data, payload->new_key, payload->old_keys, old_cnt);
+    status = write_idteck_to_t55xx(payload->card_data, payload->new_key, payload->old_keys, old_key_count, use_passwd);
     return data_frame_make(cmd, status, 0, NULL);
 }
 #endif
@@ -3132,6 +3178,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_JABLOTRON_WRITE_TO_T55XX,     before_reader_run,           cmd_processor_jablotron_write_to_t55xx,      NULL                   },
     {    DATA_CMD_IDTECK_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_idteck_write_to_t55xx,         NULL                   },
     {    DATA_CMD_LF_T55XX_WRITE,               before_reader_run,           cmd_processor_lf_t55xx_write,                NULL                   },
+    {    DATA_CMD_LF_T55XX_WRITE_FEATURES,      NULL,                        cmd_processor_lf_t55xx_write_features,       NULL                   },
     {    DATA_CMD_ADC_GENERIC_READ,             before_reader_run,           cmd_processor_generic_read,                  NULL                   },
 
     {    DATA_CMD_HF14A_SET_FIELD_ON,           before_reader_run,           cmd_processor_hf14a_set_field_on,            NULL                   },
