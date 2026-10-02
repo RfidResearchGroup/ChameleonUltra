@@ -1823,6 +1823,49 @@ class ChameleonCMD:
         data = struct.pack('!B', enabled)
         return self.device.send_cmd_sync(Command.MF1_SET_FIELD_OFF_DO_RESET, data)
 
+    @expect_response(Status.SUCCESS)
+    def seos_read_emu_data(self):
+        resp = self.device.send_cmd_sync(Command.SEOS_READ_EMU_DATA, None)
+        resp.parsed = {}
+
+        def extract_next():
+            length = resp.data[0]
+            value = resp.data[1:length+1]
+            resp.data = resp.data[length+1:]
+            return value
+
+        data, oid, tag, diversifier = extract_next(), extract_next(), extract_next(), extract_next()
+        hash_alg, encr_alg = struct.unpack('!BB', resp.data)
+
+        resp.parsed = {
+            "data": data, "oid": oid, "tag": tag, "diversifier": diversifier,
+            "hash_alg": hash_alg, "encr_alg": encr_alg
+        }
+
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def seos_write_emu_data(self, data: bytes, oid: bytes, tag: bytes, diversifier: bytes, hash_alg: int, encr_alg: int):
+        data = bytes([len(data)]) + data
+        oid = bytes([len(oid)]) + oid
+        tag = bytes([len(tag)]) + tag
+        diversifier = bytes([len(diversifier)]) + diversifier
+        
+        payload = (
+            data + oid + tag + diversifier +
+            struct.pack('!BB', hash_alg, encr_alg)
+        )
+        
+        if len(payload) > 4096:
+            raise ValueError("Too much provided data")
+
+        return self.device.send_cmd_sync(Command.SEOS_WRITE_EMU_DATA, payload)
+    
+    @expect_response(Status.SUCCESS)
+    def seos_write_emu_keys(self, auth: bytes, privenc: bytes, privmac: bytes):
+        payload = auth + privenc + privmac
+        return self.device.send_cmd_sync(Command.SEOS_WRITE_EMU_KEYS, payload)
+
 
 def test_fn():
     # connect to chameleon
