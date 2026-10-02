@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Changed LF T55xx write commands to leave the tag without a password unless one is requested. Write commands take an optional trailing flags byte (0x01 no password, 0x02 set the given key as password); without it no password is set. Tags protected by earlier firmware can still be rewritten. New command 3029 reports T55xx write features. CLI write and clone commands gain `--password`, and `--current-password` to rewrite or unlock a tag protected with a password of your own (#436) (@mfcarroll, @naaraxi)
 
 ## [v2.2.0][2026-07-04]
  - Added Jablotron LF protocol support: read, emulate and T55xx clone (@midlan)

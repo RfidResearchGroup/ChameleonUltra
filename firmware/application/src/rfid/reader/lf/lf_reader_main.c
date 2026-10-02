@@ -127,9 +127,18 @@ static void try_reset_t55xx_passwd(uint32_t new_passwd, uint8_t *old_passwds, ui
 
 /**
  * Write card data to t55xx
+ *
+ * new_passwd is always stored in block 7; use_passwd decides whether block 0 turns password mode on.
+ * The two are independent, so any value, 00000000 included, can be a password.
  */
-static uint8_t write_t55xx(uint32_t *blks, uint8_t blk_count, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+static uint8_t write_t55xx(uint32_t *blks, uint8_t blk_count, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool use_passwd) {
     uint32_t passwd = bytes_to_num(new_passwd, 4);
+
+    // The reset below runs either way, so a tag protected with one of the old passwords is
+    // re-keyed to `passwd` first and accepts the writes that follow, including a block 0 without PWD.
+    if (use_passwd && blk_count > 0) {
+        blks[0] |= T5577_PWD;
+    }
 
     start_lf_125khz_radio();
     bsp_delay_ms(1);  // Delays for a while after starting the field
@@ -146,28 +155,28 @@ static uint8_t write_t55xx(uint32_t *blks, uint8_t blk_count, uint8_t *new_passw
 /**
  * Write em410x card data to t55xx
  */
-uint8_t write_em410x_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+uint8_t write_em410x_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool use_passwd) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = em410x_t55xx_writer(uid, blks);
     if (blk_count == 0) {
         return STATUS_PAR_ERR;
     }
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, use_passwd);
 }
 
-uint8_t write_em410x_electra_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+uint8_t write_em410x_electra_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool use_passwd) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = em410x_electra_t55xx_writer(uid, blks);
     if (blk_count == 0) {
         return STATUS_PAR_ERR;
     }
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, use_passwd);
 }
 
 /**
  * Write hidprox card data to t55xx
  */
-uint8_t write_hidprox_to_t55xx(uint8_t format, uint32_t fc, uint64_t cn, uint32_t il, uint32_t oem, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+uint8_t write_hidprox_to_t55xx(uint8_t format, uint32_t fc, uint64_t cn, uint32_t il, uint32_t oem, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool use_passwd) {
     wiegand_card_t card = {
         .format = format,
         .card_number = cn,
@@ -180,13 +189,13 @@ uint8_t write_hidprox_to_t55xx(uint8_t format, uint32_t fc, uint64_t cn, uint32_
     if (blk_count == 0) {
         return STATUS_PAR_ERR;
     }
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, use_passwd);
 }
 
 /**
  * Write ioprox card data to t55xx
  */
-uint8_t write_ioprox_to_t55xx(uint8_t *card_data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+uint8_t write_ioprox_to_t55xx(uint8_t *card_data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool use_passwd) {
     // Prepare T5577 block array: index 0 = config word, 1-2 = data blocks
     uint32_t blks[3] = {0x00};
 
@@ -196,48 +205,48 @@ uint8_t write_ioprox_to_t55xx(uint8_t *card_data, uint8_t *new_passwd, uint8_t *
         return STATUS_PAR_ERR;
     }
 
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, use_passwd);
 }
 
 /**
  * Write viking card data to t55xx
  */
-uint8_t write_viking_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+uint8_t write_viking_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool use_passwd) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = viking_t55xx_writer(uid, blks);
     if (blk_count == 0) {
         return STATUS_PAR_ERR;
     }
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, use_passwd);
 }
 
-uint8_t write_pac_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+uint8_t write_pac_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool use_passwd) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = pac_t55xx_writer(data, blks);
     if (blk_count == 0) return STATUS_PAR_ERR;
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, use_passwd);
 }
 
 /**
  * Write jablotron card data to t55xx
  */
-uint8_t write_jablotron_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+uint8_t write_jablotron_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool use_passwd) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = jablotron_t55xx_writer(uid, blks);
     if (blk_count == 0) {
         return STATUS_PAR_ERR;
     }
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, use_passwd);
 }
 
 /**
  * Write IDTECK card data to t55xx (PSK1 RF/32, 64-bit frame).
  */
-uint8_t write_idteck_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+uint8_t write_idteck_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool use_passwd) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = idteck_t55xx_writer(data, blks);
     if (blk_count == 0) return STATUS_PAR_ERR;
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, use_passwd);
 }
 
 /**

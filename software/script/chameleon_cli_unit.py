@@ -483,6 +483,46 @@ class MFUAuthArgsUnit(ReaderRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
+class T55xxPasswordArgsUnit(DeviceRequiredUnit):
+    @staticmethod
+    def add_password_arg(parser: ArgumentParserNoExit):
+        parser.add_argument(
+            "--password", type=str, required=False, metavar="<hex>",
+            help="Protect the T55xx with this 8-hex-digit password (any value, 00000000 included). "
+                 "Default: no password",
+        )
+        parser.add_argument(
+            "--current-password", type=str, required=False, metavar="<hex>",
+            help="Password the T55xx is protected with now, if it isn't one of the defaults "
+                 "tried automatically. Needed to rewrite or unlock a tag with your own password",
+        )
+        return parser
+
+    @staticmethod
+    def _parse_t55xx_key(value: Union[str, None], option: str) -> Union[bytes, None]:
+        if value is None:
+            return None
+        if not re.match(r"^[a-fA-F0-9]{8}$", value):
+            raise ArgsParserError(f"{option} must be exactly 8 hex characters")
+        return bytes.fromhex(value)
+
+    def t55xx_keys(self, args: argparse.Namespace) -> dict:
+        """
+        Keyword arguments for the cmd *_write_to_t55xx methods: the password the user asked for
+        (or None) and the tag's current password (or None). Warns when the firmware cannot write
+        without a password.
+        """
+        password = self._parse_t55xx_key(args.password, "--password")
+        current_password = self._parse_t55xx_key(args.current_password, "--current-password")
+        # Skip the warning on devices without T55xx writers (Lite): the write itself will say so
+        commands = self.device_com.commands
+        has_writers = not len(commands) or Command.EM410X_WRITE_TO_T55XX in commands
+        if password is None and has_writers and not self.cmd.t55xx_password_opt_in():
+            print(f"{color_string((CY, 'WARNING'))}: this firmware protects every T55xx write with "
+                  f"password 20206666. Update the firmware to write without a password.")
+        return {"password": password, "current_password": current_password}
+
+
 class LFEMIdArgsUnit(DeviceRequiredUnit):
     @staticmethod
     def add_card_arg(parser: ArgumentParserNoExit, required=False):
@@ -5845,11 +5885,12 @@ class LFEMRead(ReaderRequiredUnit):
 
 
 @lf_em_410x.command("write")
-class LFEM410xWriteT55xx(LFEMIdArgsUnit, ReaderRequiredUnit):
+class LFEM410xWriteT55xx(LFEMIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = "Write em410x id to t55xx"
-        return self.add_card_arg(parser, required=True)
+        self.add_card_arg(parser, required=True)
+        return self.add_password_arg(parser)
 
     def on_exec(self, args: argparse.Namespace):
         id_hex = args.id
@@ -5858,7 +5899,7 @@ class LFEM410xWriteT55xx(LFEMIdArgsUnit, ReaderRequiredUnit):
                 "Writing to T55xx supports 5-byte EM410X (10 hex) or 13-byte Electra (26 hex) IDs."
             )
         id_bytes = bytes.fromhex(id_hex)
-        self.cmd.em410x_write_to_t55xx(id_bytes)
+        self.cmd.em410x_write_to_t55xx(id_bytes, **self.t55xx_keys(args))
         print(f" - EM410x ID write done: {id_hex}")
 
 
@@ -5886,11 +5927,12 @@ class LFHIDProxRead(LFHIDIdReadArgsUnit, ReaderRequiredUnit):
 
 
 @lf_hid_prox.command("write")
-class LFHIDProxWriteT55xx(LFHIDIdArgsUnit, ReaderRequiredUnit):
+class LFHIDProxWriteT55xx(LFHIDIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = "Write hidprox card data to t55xx"
-        return self.add_card_arg(parser, required=True)
+        self.add_card_arg(parser, required=True)
+        return self.add_password_arg(parser)
 
     def on_exec(self, args: argparse.Namespace):
         if args.fc is None:
@@ -5909,7 +5951,7 @@ class LFHIDProxWriteT55xx(LFHIDIdArgsUnit, ReaderRequiredUnit):
             args.il,
             args.oem,
         )
-        self.cmd.hidprox_write_to_t55xx(id)
+        self.cmd.hidprox_write_to_t55xx(id, **self.t55xx_keys(args))
         print(f"HIDProx/{format}")
         if args.fc > 0:
             print(f" FC: {args.fc}")
@@ -5988,11 +6030,12 @@ class LFIOProxRead(LFIOProxReadArgsUnit, ReaderRequiredUnit):
 
 
 @lf_ioprox.command("write")
-class LFIOProxWriteT55xx(LFIOProxIdArgsUnit, ReaderRequiredUnit):
+class LFIOProxWriteT55xx(LFIOProxIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = "Write ioProx card data to t55xx"
-        return self.add_card_arg(parser, required=False)
+        self.add_card_arg(parser, required=False)
+        return self.add_password_arg(parser)
 
     def on_exec(self, args: argparse.Namespace):
         # defaults
@@ -6015,7 +6058,7 @@ class LFIOProxWriteT55xx(LFIOProxIdArgsUnit, ReaderRequiredUnit):
             cn & 0xFFFF,
             raw8
         )
-        result = self.cmd.ioprox_write_to_t55xx(payload16)
+        result = self.cmd.ioprox_write_to_t55xx(payload16, **self.t55xx_keys(args))
 
         print(f"ioProx XSF format")
         print(f"   Version: {color_string((CG, ver))}")
@@ -6234,15 +6277,16 @@ class LFPacIdArgsUnit(DeviceRequiredUnit):
 
 
 @lf_pac.command('write')
-class LFPacWriteT55xx(LFPacIdArgsUnit, ReaderRequiredUnit):
+class LFPacWriteT55xx(LFPacIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = 'Write PAC/Stanley id to T55xx'
-        return self.add_card_arg(parser, required=True)
+        self.add_card_arg(parser, required=True)
+        return self.add_password_arg(parser)
 
     def on_exec(self, args: argparse.Namespace):
         id_bytes = bytes.fromhex(args.id)
-        self.cmd.pac_write_to_t55xx(id_bytes)
+        self.cmd.pac_write_to_t55xx(id_bytes, **self.t55xx_keys(args))
         id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in id_bytes)
         raw = pac_encode_raw(id_bytes)
         print(f" - PAC/Stanley write done - CN: {id_ascii} | Raw: {raw.hex().upper()}")
@@ -6287,30 +6331,32 @@ class LFVikingRead(ReaderRequiredUnit):
 
 
 @lf_viking.command("write")
-class LFVikingWriteT55xx(LFVikingIdArgsUnit, ReaderRequiredUnit):
+class LFVikingWriteT55xx(LFVikingIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = "Write Viking id to t55xx"
-        return self.add_card_arg(parser, required=True)
+        self.add_card_arg(parser, required=True)
+        return self.add_password_arg(parser)
 
     def on_exec(self, args: argparse.Namespace):
         id_hex = args.id
         id_bytes = bytes.fromhex(id_hex)
-        self.cmd.viking_write_to_t55xx(id_bytes)
+        self.cmd.viking_write_to_t55xx(id_bytes, **self.t55xx_keys(args))
         print(f" - Viking ID(8H): {id_hex} write done.")
 
 
 @lf_idteck.command("write")
-class LFIdteckWriteT55xx(LFIdteckIdArgsUnit, ReaderRequiredUnit):
+class LFIdteckWriteT55xx(LFIdteckIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = "Clone an IDTECK PSK1 frame onto a T55xx tag."
-        return self.add_card_arg(parser, required=True)
+        self.add_card_arg(parser, required=True)
+        return self.add_password_arg(parser)
 
     def on_exec(self, args: argparse.Namespace):
         id_hex = args.id
         id_bytes = bytes.fromhex(id_hex)
-        self.cmd.idteck_write_to_t55xx(id_bytes)
+        self.cmd.idteck_write_to_t55xx(id_bytes, **self.t55xx_keys(args))
         print(f" - IDTECK frame {id_hex} written to T55xx.")
 
 
@@ -6349,7 +6395,7 @@ class LFIdteckEconfig(SlotIndexArgsAndGoUnit, LFIdteckIdArgsUnit):
 
 
 @lf.command("clone")
-class LFT55xxClone(ReaderRequiredUnit):
+class LFT55xxClone(T55xxPasswordArgsUnit, ReaderRequiredUnit):
     """
     Clone a scanned or manually-specified LF card ID onto a blank T55xx tag.
 
@@ -6374,6 +6420,7 @@ class LFT55xxClone(ReaderRequiredUnit):
         parser.description = (
             "Clone a LF card ID onto a blank T55xx tag.\n"
             "Supported types: em410x, electra, hid, ioprox, pac, viking, idteck.\n"
+            "The tag is written without a password unless --password is given.\n"
             "Only supported on Chameleon Ultra (Lite has no LF writer)."
         )
         parser.add_argument(
@@ -6444,7 +6491,7 @@ class LFT55xxClone(ReaderRequiredUnit):
             metavar="HEX",
             help="ioProx raw 8 bytes in hex, e.g. 007854E03A5D65AB",
         )
-        return parser
+        return self.add_password_arg(parser)
 
     def on_exec(self, args: argparse.Namespace):
         # Clone requires LF writer — only available on Chameleon Ultra (not Lite)
@@ -6452,6 +6499,7 @@ class LFT55xxClone(ReaderRequiredUnit):
             print(f" - Error: LF clone requires Chameleon Ultra. Lite has no LF writer.")
             return
         t = args.type
+        keys = self.t55xx_keys(args)
 
         if t in ("em410x", "electra"):
             if args.id is None:
@@ -6462,7 +6510,7 @@ class LFT55xxClone(ReaderRequiredUnit):
                     f"--id must be exactly {expected} hex characters for {t}"
                 )
             id_bytes = bytes.fromhex(args.id)
-            self.cmd.em410x_write_to_t55xx(id_bytes)
+            self.cmd.em410x_write_to_t55xx(id_bytes, **keys)
             label = "EM410x Electra" if t == "electra" else "EM410x"
             print(f" - {label} ID cloned to T55xx: {args.id.upper()}")
 
@@ -6486,7 +6534,7 @@ class LFT55xxClone(ReaderRequiredUnit):
                 il,
                 oem,
             )
-            self.cmd.hidprox_write_to_t55xx(id_bytes)
+            self.cmd.hidprox_write_to_t55xx(id_bytes, **keys)
             print(f" - HID Prox cloned to T55xx")
             print(f"   Format : {fmt.name}")
             if fc:
@@ -6508,7 +6556,7 @@ class LFT55xxClone(ReaderRequiredUnit):
                 res = self.cmd.ioprox_compose_id(ver, fc, cn)
                 raw8 = res[3]
             payload16 = struct.pack(">BBH8s4x", ver & 0xFF, fc & 0xFF, cn & 0xFFFF, raw8)
-            self.cmd.ioprox_write_to_t55xx(payload16)
+            self.cmd.ioprox_write_to_t55xx(payload16, **keys)
             print(f" - ioProx cloned to T55xx")
             print(f"   Ver    : {ver}")
             print(f"   FC     : {fc} [0x{fc:02X}]")
@@ -6521,7 +6569,7 @@ class LFT55xxClone(ReaderRequiredUnit):
             if len(args.id) != 8:
                 raise ArgsParserError("--id must be exactly 8 ASCII characters for pac")
             id_bytes = args.id.encode("ascii")
-            self.cmd.pac_write_to_t55xx(id_bytes)
+            self.cmd.pac_write_to_t55xx(id_bytes, **keys)
             print(f" - PAC/Stanley ID cloned to T55xx: {args.id}")
 
         elif t == "viking":
@@ -6530,7 +6578,7 @@ class LFT55xxClone(ReaderRequiredUnit):
             if not re.match(r"^[a-fA-F0-9]{8}$", args.id):
                 raise ArgsParserError("--id must be exactly 8 hex characters for viking")
             id_bytes = bytes.fromhex(args.id)
-            self.cmd.viking_write_to_t55xx(id_bytes)
+            self.cmd.viking_write_to_t55xx(id_bytes, **keys)
             print(f" - Viking ID cloned to T55xx: {args.id.upper()}")
 
         elif t == "idteck":
@@ -6543,7 +6591,7 @@ class LFT55xxClone(ReaderRequiredUnit):
             else:
                 raise ArgsParserError("--id must be 8 or 16 hex characters for idteck")
             id_bytes = bytes.fromhex(id_hex)
-            self.cmd.idteck_write_to_t55xx(id_bytes)
+            self.cmd.idteck_write_to_t55xx(id_bytes, **keys)
             print(f" - IDTECK frame cloned to T55xx: {id_hex.upper()}")
 
 
@@ -7016,16 +7064,17 @@ class LFJablotronRead(ReaderRequiredUnit):
 
 
 @lf_jablotron.command("write")
-class LFJablotronWriteT55xx(LFJablotronIdArgsUnit, ReaderRequiredUnit):
+class LFJablotronWriteT55xx(LFJablotronIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = "Write Jablotron id to t55xx"
-        return self.add_card_arg(parser, required=True)
+        self.add_card_arg(parser, required=True)
+        return self.add_password_arg(parser)
 
     def on_exec(self, args: argparse.Namespace):
         id_hex = args.id
         id_bytes = bytes.fromhex(id_hex)
-        self.cmd.jablotron_write_to_t55xx(id_bytes)
+        self.cmd.jablotron_write_to_t55xx(id_bytes, **self.t55xx_keys(args))
         print(f" - Jablotron ID: {id_hex.upper()} write done.")
 
 
