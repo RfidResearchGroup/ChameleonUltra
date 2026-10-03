@@ -161,6 +161,11 @@ class Command(enum.IntEnum):
     HF14A_4_STATIC_RESP = 6003
     HF14A_4_READER_APDU = 6004
     HF14A_4_EMV_SCAN = 6005
+    DESFIRE_SET_CREDENTIAL = 6006
+    DESFIRE_GET_CREDENTIAL = 6007
+    DESFIRE_GET_INFO = 6008
+    DESFIRE_FACTORY_BLANK = 6009
+    DESFIRE_GET_STATS = 6011
 
     EM410X_SET_EMU_ID = 5000
     EM410X_GET_EMU_ID = 5001
@@ -359,6 +364,9 @@ class TagSpecificType(enum.IntEnum):
     NTAG_212 = 1108
     # MIFARE Plus series     1200
     # DESFire series         1300
+    DESFIRE_EV1_2K = 1300
+    DESFIRE_EV1_4K = 1301
+    DESFIRE_EV1_8K = 1302
 
     # ST25TA series          2000
 
@@ -445,6 +453,14 @@ class TagSpecificType(enum.IntEnum):
             return "NTAG 212"
         elif self == TagSpecificType.SEOS:
             return "SEOS"
+        elif self == TagSpecificType.DESFIRE_EV1_2K:
+            return "DESFire EV1 2K"
+        elif self == TagSpecificType.DESFIRE_EV1_4K:
+            return "DESFire EV1 4K"
+        elif self == TagSpecificType.DESFIRE_EV1_8K:
+            return "DESFire EV1 8K"
+        elif self == TagSpecificType.HF14A_4:
+            return "ISO14443-4"
         elif self < TagSpecificType.OLD_TAG_TYPES_END:
             return "Old tag type, must be migrated! Upgrade fw!"
         return "Invalid"

@@ -115,6 +115,14 @@ uint8_t get_color_by_slot(uint8_t slot) {
     tag_emulation_get_specific_types_by_slot(slot, &tag_types);
     bool enabled_lf = is_slot_enabled(slot, TAG_SENSE_LF);
     bool enabled_hf = is_slot_enabled(slot, TAG_SENSE_HF);
+#if defined(PROJECT_DESFIRE_EMULATION)
+    if (enabled_hf &&
+            (tag_types.tag_hf == TAG_TYPE_DESFIRE_EV1_2K ||
+             tag_types.tag_hf == TAG_TYPE_DESFIRE_EV1_4K ||
+             tag_types.tag_hf == TAG_TYPE_DESFIRE_EV1_8K)) {
+        return RGB_MAGENTA;
+    }
+#endif
     if (tag_types.tag_hf != TAG_TYPE_UNDEFINED && tag_types.tag_lf != TAG_TYPE_UNDEFINED && enabled_hf && enabled_lf) {
         return 0;   // Dual -frequency card emulation, return R, indicate a dual -frequency card
     } else if (tag_types.tag_hf != TAG_TYPE_UNDEFINED && enabled_hf) {   //High -frequency emulation, return G

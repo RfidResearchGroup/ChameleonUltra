@@ -83,6 +83,7 @@ typedef struct {
 
 // Communication reception function that needs to be implemented
 typedef void (*nfc_tag_14a_reset_handler_t)(void);
+typedef void (*nfc_tag_14a_field_handler_t)(bool present);
 
 /* Sniff callback — called for every received frame before the tag handler.
  * data    : raw frame bytes (after parity strip)
@@ -110,6 +111,7 @@ typedef nfc_tag_14a_coll_res_reference_t *(*nfc_tag_14a_coll_handler_t)(void);
 // The interface that 14A communication receiver needs to be implemented
 typedef struct {
     nfc_tag_14a_reset_handler_t cb_reset;
+    nfc_tag_14a_field_handler_t cb_field;
     nfc_tag_14a_state_handler_t cb_state;
     nfc_tag_14a_coll_handler_t get_coll_res;
 } nfc_tag_14a_handler_t;
@@ -140,5 +142,10 @@ bool is_valid_uid_size(uint8_t uid_length);
 // Reset nfc peripheral after field lost
 void nfc_tag_14a_set_reset_enable(bool enable);
 bool nfc_tag_14a_is_reset_enable();
+
+void nfc_tag_14a_get_activation_stats(
+    uint16_t *requests,
+    uint16_t *atqa_tx,
+    uint16_t *fdt_timeouts);
 
 #endif

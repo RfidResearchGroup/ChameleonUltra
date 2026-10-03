@@ -188,6 +188,12 @@
 #define DATA_CMD_HF14A_4_READER_APDU            (6004)  /* select+RATS+send APDU, keep field   */
 #define DATA_CMD_HF14A_4_EMV_SCAN               (6005)  /* full EMV scan in one call            */
 
+#define DATA_CMD_DESFIRE_SET_CREDENTIAL         (6006)  /* chunked .dfcb octets -> active slot  */
+#define DATA_CMD_DESFIRE_GET_CREDENTIAL         (6007)  /* chunked .dfcb octets <- active slot  */
+#define DATA_CMD_DESFIRE_GET_INFO               (6008)  /* summary of the active DESFire slot   */
+#define DATA_CMD_DESFIRE_FACTORY_BLANK          (6009)  /* re-init slot to a blank card         */
+#define DATA_CMD_DESFIRE_GET_STATS              (6011)  /* RF frame counters + max handler us   */
+
 #define DATA_CMD_EM410X_SET_EMU_ID              (5000)
 #define DATA_CMD_EM410X_GET_EMU_ID              (5001)
 #define DATA_CMD_HIDPROX_SET_EMU_ID             (5002)

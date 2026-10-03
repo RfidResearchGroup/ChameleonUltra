@@ -30,6 +30,14 @@ extern void nfc_tag_14a_set_tx_sniff_cb(void (*cb)(const uint8_t *, uint16_t));
 extern void nfc_tag_14a_clear_tx_sniff_cb(void);
 extern void nfc_tag_14a_set_sniff_passive(bool passive);
 #include "nfc_14a_4.h"
+#if defined(PROJECT_DESFIRE_EMULATION)
+#include "dfc_der.h"
+#include "desfire/desfire_shim.h"
+#include "desfire/nfc_desfire.h"
+/* Ceiling on a transferable credential blob. Sized from the engine capacities
+ * rather than the frame cap, so growing DFC_MAX_* cannot silently overflow. */
+#define DESFIRE_BLOB_MAX 4096
+#endif
 
 #define NRF_LOG_MODULE_NAME app_cmd
 #include "nrf_log.h"
@@ -1369,6 +1377,13 @@ static nfc_tag_14a_coll_res_reference_t *get_coll_res_data(bool write) {
         case TAG_TYPE_SEOS:
             info = nfc_tag_seos_get_coll_res();
             break;
+#if defined(PROJECT_DESFIRE_EMULATION)
+        case TAG_TYPE_DESFIRE_EV1_2K:
+        case TAG_TYPE_DESFIRE_EV1_4K:
+        case TAG_TYPE_DESFIRE_EV1_8K:
+            info = nfc_tag_desfire_get_coll_res();
+            break;
+#endif
         default:
             // no collision resolution data for slot
             info = NULL;
@@ -2744,6 +2759,187 @@ static bool tcl_apdu_(
  * Returns STATUS_HF_TAG_OK with packed data on success (partial data if
  * some APDUs fail — num_apdus reflects how many completed).
  */
+#if defined(PROJECT_DESFIRE_EMULATION)
+/* DESFire credential transfer.
+ *
+ * Chunked in both directions even though a device-limit blob currently fits one
+ * 4096-byte frame: the DFC_MAX_* limits are build flags that will grow, and BLE
+ * fragments poorly at that size. Carrying offset and total in every chunk keeps
+ * a retry safe -- the host just restarts at offset 0.
+ */
+#define DESFIRE_XFER_CHUNK 1024
+
+static uint8_t m_desfire_xfer[DESFIRE_BLOB_MAX];
+static uint16_t m_desfire_xfer_total = 0;
+static uint16_t m_desfire_xfer_have = 0;
+
+static data_frame_tx_t *cmd_processor_desfire_set_credential(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length < 6) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    /* Refuse while a reader is talking to us: the engine holds pointers into the
+     * credential from the NFC interrupt. */
+    if (g_is_tag_emulating) return data_frame_make(cmd, STATUS_DEVICE_MODE_ERROR, 0, NULL);
+    if (nfc_tag_desfire_get_credential() == NULL) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+
+    uint16_t total  = (uint16_t)((data[0] << 8) | data[1]);
+    uint16_t offset = (uint16_t)((data[2] << 8) | data[3]);
+    uint16_t chunk  = (uint16_t)((data[4] << 8) | data[5]);
+    if (length != 6 + chunk) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    if (total == 0 || total > sizeof(m_desfire_xfer)) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    if ((uint32_t)offset + chunk > total) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+
+    if (offset == 0) {
+        /* Every credential starts with the 0x60 identifier. Checking it on the
+         * first chunk refuses a wrong encoding before the rest of the transfer,
+         * and separates it cleanly from a host still sending the old fixed
+         * layout, whose first octet was ASCII 'D'. */
+        if (chunk == 0 || data[6] != 0x60) {
+            m_desfire_xfer_total = 0;
+            m_desfire_xfer_have = 0;
+            NRF_LOG_ERROR("DESFire load rejected: first octet 0x%02X is not 0x60",
+                          chunk ? data[6] : 0);
+            uint8_t code = (uint8_t)DfcDerMalformed;
+            return data_frame_make(cmd, STATUS_PAR_ERR, 1, &code);
+        }
+        m_desfire_xfer_total = total;
+        m_desfire_xfer_have = 0;
+    } else if (total != m_desfire_xfer_total || offset != m_desfire_xfer_have) {
+        /* Out of order or a different transfer; make the host start again. */
+        m_desfire_xfer_total = 0;
+        m_desfire_xfer_have = 0;
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    memcpy(&m_desfire_xfer[offset], &data[6], chunk);
+    m_desfire_xfer_have = offset + chunk;
+    if (m_desfire_xfer_have < m_desfire_xfer_total) {
+        return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+    }
+
+    /* The decoder writes straight into the slot: a spare 4 KiB credential will
+     * not fit in RAM, so there is nowhere to stage one. A refusal therefore
+     * cannot leave the previous credential intact, and must not leave a
+     * half-decoded one either -- reset the slot to a blank card so it is always
+     * a valid, emulatable state, and say so. */
+    DfcCredential *cred = nfc_tag_desfire_get_credential();
+    DfcDerStatus st = dfc_der_decode(cred, m_desfire_xfer, m_desfire_xfer_total);
+    if (st == DfcDerOk && !dfc_credential_picc_ats_is_consistent(cred)) {
+        /* Well formed, and the codecs round-trip it, but the stored ATS does not
+         * describe itself: emulating it would mean answering RATS with a frame no
+         * card would send. Unsupported rather than malformed. */
+        st = DfcDerUnsupported;
+    }
+    if (st == DfcDerOk) {
+        /* A credential may know only a prefix of a file's contents. The device
+         * is the card from here on, so give every file its declared allocation
+         * before the emulator binds to it. The transfer buffer is free now, so
+         * it doubles as the scratch that carries each known prefix across the
+         * reallocation. */
+        if (!dfc_credential_materialize_contents(cred, m_desfire_xfer, sizeof(m_desfire_xfer))) {
+            st = DfcDerCapacity;
+        }
+    }
+    m_desfire_xfer_total = 0;
+    m_desfire_xfer_have = 0;
+    if (st != DfcDerOk) {
+        NRF_LOG_ERROR("DESFire load rejected: %s; slot reset to a blank card",
+                      dfc_der_status_name(st));
+        dfc_credential_init_blank(cred);
+        (void)nfc_tag_desfire_reload();
+        uint8_t code = (uint8_t)st;
+        return data_frame_make(cmd, STATUS_PAR_ERR, 1, &code);
+    }
+    if (!nfc_tag_desfire_reload()) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_desfire_get_credential(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 2) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    DfcCredential *cred = nfc_tag_desfire_get_credential();
+    if (cred == NULL) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+
+    uint16_t offset = (uint16_t)((data[0] << 8) | data[1]);
+    size_t total = 0;
+    DfcDerStatus st = dfc_der_encode(cred, m_desfire_xfer, sizeof(m_desfire_xfer), &total);
+    if (st != DfcDerOk) {
+        NRF_LOG_ERROR("DESFire dump failed: %s", dfc_der_status_name(st));
+        uint8_t code = (uint8_t)st;
+        return data_frame_make(cmd, STATUS_PAR_ERR, 1, &code);
+    }
+    if (total == 0) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    if (offset > total) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+
+    uint16_t chunk = (uint16_t)(total - offset);
+    if (chunk > DESFIRE_XFER_CHUNK) chunk = DESFIRE_XFER_CHUNK;
+
+    uint8_t resp[6 + DESFIRE_XFER_CHUNK];
+    resp[0] = (uint8_t)(total >> 8);
+    resp[1] = (uint8_t)total;
+    resp[2] = (uint8_t)(offset >> 8);
+    resp[3] = (uint8_t)offset;
+    resp[4] = (uint8_t)(chunk >> 8);
+    resp[5] = (uint8_t)chunk;
+    memcpy(&resp[6], &m_desfire_xfer[offset], chunk);
+    return data_frame_make(cmd, STATUS_SUCCESS, 6 + chunk, resp);
+}
+
+static data_frame_tx_t *cmd_processor_desfire_get_info(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    DfcCredential *cred = nfc_tag_desfire_get_credential();
+    if (cred == NULL) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+
+    uint8_t resp[20];
+    uint16_t pool_used = (uint16_t)cred->file_pool_used;
+    resp[0] = (uint8_t)cred->uid_len;
+    memcpy(&resp[1], cred->uid, DFC_DESFIRE_UID_LEN);
+    resp[8]  = (uint8_t)cred->num_apps;
+    resp[9]  = (uint8_t)cred->num_files;
+    resp[10] = (uint8_t)(pool_used >> 8);
+    resp[11] = (uint8_t)pool_used;
+    resp[12] = (uint8_t)(DFC_FILE_POOL_SIZE >> 8);
+    resp[13] = (uint8_t)DFC_FILE_POOL_SIZE;
+    resp[14] = (uint8_t)(sizeof(DfcCredential) >> 8);
+    resp[15] = (uint8_t)sizeof(DfcCredential);
+    resp[16] = DFC_MAX_APPS;
+    resp[17] = DFC_MAX_KEYS;
+    resp[18] = DFC_MAX_FILES;
+    resp[19] = cred->picc_auth_command;
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(resp), resp);
+}
+
+static data_frame_tx_t *cmd_processor_desfire_factory_blank(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (g_is_tag_emulating) return data_frame_make(cmd, STATUS_DEVICE_MODE_ERROR, 0, NULL);
+    DfcCredential *cred = nfc_tag_desfire_get_credential();
+    if (cred == NULL) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+
+    dfc_credential_init_blank(cred);
+    if (length >= 1 && data[0] == DFC_DESFIRE_UID_LEN) {
+        if (length < 1 + DFC_DESFIRE_UID_LEN) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+        if (data[1] != DFC_DESFIRE_UID_FIRST_BYTE) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+        memcpy(cred->uid, &data[1], DFC_DESFIRE_UID_LEN);
+    }
+    if (!nfc_tag_desfire_reload()) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    return data_frame_make(cmd, STATUS_SUCCESS, DFC_DESFIRE_UID_LEN, cred->uid);
+}
+
+static data_frame_tx_t *cmd_processor_desfire_get_stats(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint16_t rx = 0, tx = 0, errs = 0, us = 0;
+    uint16_t activations = 0, atqa = 0, timeouts = 0, reset_us = 0;
+    nfc_tag_desfire_get_stats(
+        &rx, &tx, &errs, &us, &activations, &atqa, &timeouts, &reset_us);
+    unsigned starv = desfire_random_starvations();
+    uint8_t resp[18];
+    resp[0] = (uint8_t)(rx >> 8);   resp[1] = (uint8_t)rx;
+    resp[2] = (uint8_t)(tx >> 8);   resp[3] = (uint8_t)tx;
+    resp[4] = (uint8_t)(errs >> 8); resp[5] = (uint8_t)errs;
+    resp[6] = (uint8_t)(us >> 8);   resp[7] = (uint8_t)us;
+    resp[8] = (uint8_t)(starv >> 8); resp[9] = (uint8_t)starv;
+    resp[10] = (uint8_t)(activations >> 8); resp[11] = (uint8_t)activations;
+    resp[12] = (uint8_t)(atqa >> 8); resp[13] = (uint8_t)atqa;
+    resp[14] = (uint8_t)(timeouts >> 8); resp[15] = (uint8_t)timeouts;
+    resp[16] = (uint8_t)(reset_us >> 8); resp[17] = (uint8_t)reset_us;
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(resp), resp);
+}
+#endif
+
 static data_frame_tx_t *cmd_processor_hf14a_4_emv_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     static uint8_t out[NETDATA_MAX_DATA_LENGTH];
     uint16_t out_len = 0;
@@ -3220,6 +3416,13 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_HF14A_4_STATIC_RESP,            NULL,                        cmd_processor_hf14a_4_static_resp,           NULL                   },
     {    DATA_CMD_HF14A_4_READER_APDU,            before_hf_reader_run,        cmd_processor_hf14a_4_reader_apdu,           NULL                   },
     {    DATA_CMD_HF14A_4_EMV_SCAN,               before_hf_reader_run,        cmd_processor_hf14a_4_emv_scan,              NULL                   },
+#if defined(PROJECT_DESFIRE_EMULATION)
+    {    DATA_CMD_DESFIRE_SET_CREDENTIAL,         NULL,                        cmd_processor_desfire_set_credential,        NULL                   },
+    {    DATA_CMD_DESFIRE_GET_CREDENTIAL,         NULL,                        cmd_processor_desfire_get_credential,        NULL                   },
+    {    DATA_CMD_DESFIRE_GET_INFO,               NULL,                        cmd_processor_desfire_get_info,              NULL                   },
+    {    DATA_CMD_DESFIRE_FACTORY_BLANK,          NULL,                        cmd_processor_desfire_factory_blank,         NULL                   },
+    {    DATA_CMD_DESFIRE_GET_STATS,              NULL,                        cmd_processor_desfire_get_stats,             NULL                   },
+#endif
     {    6010,                                     NULL,                        cmd_processor_hf14a_4_debug_counters,        NULL                   },
     /* HF14A scan keeping field alive */
     {    DATA_CMD_HF14A_SCAN_KEEP,                before_hf_reader_run,        cmd_processor_hf14a_scan_keep,               NULL                   },
