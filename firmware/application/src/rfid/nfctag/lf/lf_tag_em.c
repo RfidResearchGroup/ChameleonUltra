@@ -14,7 +14,9 @@
 #include "nrfx_timer.h"
 #include "protocols/em410x.h"
 #include "protocols/hidprox.h"
+#include "protocols/idteck.h"
 #include "protocols/ioprox.h"
+#include "protocols/jablotron.h"
 #include "protocols/pac.h"
 #include "protocols/indala.h"
 #include "protocols/viking.h"
@@ -169,12 +171,16 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     set_slot_light_color(RGB_BLUE);
     TAG_FIELD_LED_ON()
 
-    // Start modulation: PSK uses Timer+GPIO (jitter-free), ASK/FSK use looped PWM.
-    // Field-loss for the PWM path is detected in pwm_handler via EVT_END_SEQ0.
+    // Start modulation: PSK uses Timer+GPIO (jitter-free); ASK/FSK and PSK1-on-PWM use a finite
+    // PWM burst, with the field checked in pwm_handler on EVT_STOPPED.
     if (is_psk_tag_type(m_tag_type)) {
         psk_timer_start();
     } else {
-        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 1, NRFX_PWM_FLAG_LOOP);
+        // Play a finite burst then stop — field check happens in EVT_STOPPED after
+        // PWM has fully released LF_MOD, so ANT_NO_MOD() and the settle delay are
+        // effective. NRFX_PWM_FLAG_LOOP kept the pin owned by the peripheral,
+        // making the field check always read "present" due to self-drive on LF_RSSI.
+        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
     }
 
     NRF_LOG_INFO("LF FIELD DETECTED");
@@ -192,23 +198,20 @@ static void lpcomp_init(void) {
 }
 
 static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
-    if (event_type == NRFX_PWM_EVT_END_SEQ0) {
-        // Fired at end of each loop iteration — check field without stopping PWM.
-        // Mask UP interrupt while sampling to prevent re-entrancy.
-        NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_UP_Msk;
-        if (!is_lf_field_exists()) {
-            // Field gone — stop the loop; pwm_handler will get EVT_STOPPED next.
-            nrfx_pwm_stop(&m_broadcast, false);
-        }
-        // Re-enable will happen either in lf_field_lost (via INTENSET) or stays
-        // suppressed while PWM keeps looping (we only need it after field_lost).
-        return;
-    }
     if (event_type != NRFX_PWM_EVT_STOPPED) {
         return;
     }
+    // PWM has fully stopped — LF_MOD is released back to GPIO.
+    // Now ANT_NO_MOD() and the settle delay are effective.
     ANT_NO_MOD();
-    lf_field_lost();
+    bsp_delay_ms(2);  // let peak detector drain: ~2 ms time constant on LF_RSSI
+    if (is_lf_field_exists()) {
+        // Field still present — play another finite burst then check again.
+        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
+    } else {
+        // Field gone — clean up.
+        lf_field_lost();
+    }
 }
 
 static void pwm_init_with_clock(nrf_pwm_clk_t clk) {
@@ -233,11 +236,18 @@ static bool is_psk_tag_type(tag_specific_type_t type) {
     return type == TAG_TYPE_INDALA;
 }
 
+// Base clock depends on the tag type. Legacy ASK/FSK protocols (EM410x, HID,
+// ioProx, Viking, PAC) use 125kHz base so that their hardcoded counter_top
+// values (8-64 range) produce the correct absolute timing. PSK1 protocols on
+// the PWM path need finer resolution for the 16us subcarrier period, so they
+// use 1MHz base with counter_top=16. See tag_base_type.h IS_PSK1_TYPE.
+// Indala uses Timer3+GPIO instead (see psk_timer_init).
+static nrf_pwm_clk_t pwm_clock_for(tag_specific_type_t type) {
+    return IS_PSK1_TYPE(type) ? NRF_PWM_CLK_1MHz : NRF_PWM_CLK_125kHz;
+}
+
 static void pwm_init(void) {
-    // PWM is only used for ASK/FSK protocols (125 kHz clock).
-    // PSK protocols use Timer3+GPIO instead (see psk_timer_init).
-    nrf_pwm_clk_t clk = NRF_PWM_CLK_125kHz;
-    pwm_init_with_clock(clk);
+    pwm_init_with_clock(pwm_clock_for(m_tag_type));
 }
 
 // Reinitialize PWM with a different base clock if needed.
@@ -369,8 +379,12 @@ static void lf_sense_enable(void) {
     // chip-to-chip spread that NRZ readers — which see cumulative error across
     // runs of same-polarity bits with no intra-run resync — reject even when
     // Manchester/FSK readers don't. Holding HFXO brings the PWM clock to
-    // ±40 ppm. We can't lock to the reader's carrier (tag-mode antenna taps
-    // on this board are envelope-only), so this is as good as it gets.
+    // ±40 ppm, which is also tight enough for differential PSK encodings
+    // (e.g. IDTECK) where what the reader decodes are bit-to-bit phase
+    // transitions, so absolute phase lock to the reader's carrier is not
+    // required. The tag-mode antenna taps on this board are envelope-only,
+    // which rules out coherent demodulation or phase-lock-based approaches,
+    // but does not preclude the differential-phase encodings supported here.
     //
     // Paired release in lf_sense_disable(). SD reference-counts HFXO requests,
     // so this coexists with BLE. Both functions run from thread context
@@ -439,11 +453,11 @@ void lf_tag_125khz_sense_switch(bool enable) {
  * @param buffer   Data buffer
  */
 int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
-    // ASK/FSK protocols use PWM at 125 kHz clock.
-    // PSK protocols use Timer3+GPIO (no PWM needed), but still build the
+    // PWM protocols need the base clock for their type (see pwm_clock_for).
+    // Indala uses Timer3+GPIO (no PWM needed), but still builds the
     // modulator's PWM sequence to extract the bit pattern.
     if (!is_psk_tag_type(type)) {
-        pwm_reinit_clock(NRF_PWM_CLK_125kHz);
+        pwm_reinit_clock(pwm_clock_for(type));
     }
 
     // ensure buffer size is large enough for specific tag type,
@@ -492,6 +506,24 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
         pac.free(codec);
         NRF_LOG_INFO("load lf pac data finish.");
         return LF_PAC_TAG_ID_SIZE;
+    }
+
+    if (type == TAG_TYPE_JABLOTRON && buffer->length >= LF_JABLOTRON_TAG_ID_SIZE) {
+        m_tag_type = type;
+        void *codec = jablotron.alloc();
+        m_pwm_seq = jablotron.modulator(codec, buffer->buffer);
+        jablotron.free(codec);
+        NRF_LOG_INFO("load lf jablotron data finish.");
+        return LF_JABLOTRON_TAG_ID_SIZE;
+    }
+
+    if (type == TAG_TYPE_IDTECK && buffer->length >= LF_IDTECK_TAG_ID_SIZE) {
+        m_tag_type = type;
+        void *codec = idteck.alloc();
+        m_pwm_seq = idteck.modulator(codec, buffer->buffer);
+        idteck.free(codec);
+        NRF_LOG_INFO("load lf idteck data finish.");
+        return LF_IDTECK_TAG_ID_SIZE;
     }
 
     // PSK protocols: build PWM sequence then convert to timer pattern
@@ -582,7 +614,8 @@ bool lf_tag_data_factory(uint8_t slot, tag_specific_type_t tag_type, uint8_t *ta
 bool lf_tag_em410x_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     static const uint8_t tag_id_base[LF_EM410X_TAG_ID_SIZE] = {0xDE, 0xAD, 0xBE, 0xEF, 0x88};
     static const uint8_t tag_id_electra[LF_EM410X_ELECTRA_TAG_ID_SIZE] = {0xDE, 0xAD, 0xBE, 0xEF, 0x88,
-                                                                          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+                                                                          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+                                                                         };
 
     switch (tag_type) {
         case TAG_TYPE_EM410X_ELECTRA:
@@ -612,7 +645,7 @@ bool lf_tag_hidprox_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
  */
 bool lf_tag_ioprox_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     uint8_t tag_id[16] = {
-        0x01,0xAA,0x30,0x39,0x00,0x78,0x6A,0xA0,0x33,0x09,0xCF,0xEF,0x00,0x00,0x00,0x00
+        0x01, 0xAA, 0x30, 0x39, 0x00, 0x78, 0x6A, 0xA0, 0x33, 0x09, 0xCF, 0xEF, 0x00, 0x00, 0x00, 0x00
     };
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
 }
@@ -635,6 +668,30 @@ int lf_tag_pac_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) 
 bool lf_tag_pac_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     // default id: 8 ASCII bytes
     uint8_t tag_id[8] = {'C', 'A', 'R', 'D', '0', '0', '0', '1'};
+    return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
+}
+
+int lf_tag_jablotron_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return m_tag_type == TAG_TYPE_JABLOTRON ? LF_JABLOTRON_TAG_ID_SIZE : 0;
+}
+
+bool lf_tag_jablotron_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    // default id: 5 bytes (top bit must be 0)
+    uint8_t tag_id[5] = {0x01, 0xB6, 0x69, 0x00, 0x00};
+    return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
+}
+
+/** @brief IDTECK data save callback. */
+int lf_tag_idteck_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return m_tag_type == TAG_TYPE_IDTECK ? LF_IDTECK_TAG_ID_SIZE : 0;
+}
+
+/** @brief IDTECK default frame: preamble "IDTK" + 32-bit placeholder card data. */
+bool lf_tag_idteck_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    uint8_t tag_id[LF_IDTECK_TAG_ID_SIZE] = {
+        0x49, 0x44, 0x54, 0x4B,   // "IDTK" preamble (MSB first)
+        0xDE, 0xAD, 0xBE, 0xEF,   // default card data
+    };
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
 }
 

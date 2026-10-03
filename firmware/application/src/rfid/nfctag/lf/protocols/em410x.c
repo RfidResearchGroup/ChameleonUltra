@@ -358,10 +358,10 @@ const protocol em410x_electra = {
     .get_data = (codec_get_data)em410x_get_data,
     .modulator = (modulator)em410x_electra_modulator,
     .decoder =
-        {
-            .start = (decoder_start)em410x_electra_decoder_start,
-            .feed = (decoder_feed)em410x_electra_decoder_feed,
-        },
+    {
+        .start = (decoder_start)em410x_electra_decoder_start,
+        .feed = (decoder_feed)em410x_electra_decoder_feed,
+    },
 };
 
 // EM-Micro, EM410x/64 (std)
@@ -373,10 +373,10 @@ const protocol em410x_64 = {
     .get_data = (codec_get_data)em410x_get_data,
     .modulator = (modulator)em410x_modulator,
     .decoder =
-        {
-            .start = (decoder_start)em410x_decoder_start,
-            .feed = (decoder_feed)em410x_decoder_feed,
-        },
+    {
+        .start = (decoder_start)em410x_decoder_start,
+        .feed = (decoder_feed)em410x_decoder_feed,
+    },
 };
 
 // EM-Micro, EM410x/32
@@ -388,10 +388,10 @@ const protocol em410x_32 = {
     .get_data = (codec_get_data)em410x_get_data,
     .modulator = (modulator)em410x_modulator,
     .decoder =
-        {
-            .start = (decoder_start)em410x_decoder_start,
-            .feed = (decoder_feed)em410x_decoder_feed,
-        },
+    {
+        .start = (decoder_start)em410x_decoder_start,
+        .feed = (decoder_feed)em410x_decoder_feed,
+    },
 };
 
 // EM-Micro, EM410x/16
@@ -403,10 +403,10 @@ const protocol em410x_16 = {
     .get_data = (codec_get_data)em410x_get_data,
     .modulator = (modulator)em410x_modulator,
     .decoder =
-        {
-            .start = (decoder_start)em410x_decoder_start,
-            .feed = (decoder_feed)em410x_decoder_feed,
-        },
+    {
+        .start = (decoder_start)em410x_decoder_start,
+        .feed = (decoder_feed)em410x_decoder_feed,
+    },
 };
 
 // Encode EM410X card number to T55xx blocks.

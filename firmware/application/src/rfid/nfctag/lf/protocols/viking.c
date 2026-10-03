@@ -20,7 +20,7 @@
 
 #define VIKING_T55XX_BLOCK_COUNT (3) // config + 2 data blocks
 
-// Duration between falling edges is... 
+// Duration between falling edges is...
 #define VIKING_READ_TIME1_BASE (0x20) // on 16, off 16 cycles
 #define VIKING_READ_TIME2_BASE (0x30) // on 16, off 32 cycles  (or on 32 cycles, off 16 cycles)
 #define VIKING_READ_TIME3_BASE (0x40) // on 32, off 32 cycles
@@ -94,7 +94,7 @@ static void viking_free(viking_codec *d) {
     free(d);
 };
 
-static uint8_t *viking_get_data(viking_codec *d) { 
+static uint8_t *viking_get_data(viking_codec *d) {
     return d->data;
 };
 
@@ -111,7 +111,7 @@ static bool viking_decode_feed(viking_codec *d, bool bit) {
     if (bit) {
         d->raw |= 0x01;
     }
-    if (d->raw_length < (VIKING_RAW_SIZE-2)) {
+    if (d->raw_length < (VIKING_RAW_SIZE - 2)) {
         return false;
     }
 
@@ -132,7 +132,7 @@ static bool viking_decode_feed(viking_codec *d, bool bit) {
     // Validate CRC
     uint8_t crc = 0x5A;
     for (int i = 0; i < VIKING_DATA_SIZE; i++) {
-        uint8_t data = (d->raw >> ((i+1)*8)) & 0xff;
+        uint8_t data = (d->raw >> ((i + 1) * 8)) & 0xff;
         crc ^= data;
         d->data[VIKING_DATA_SIZE - i - 1] |= data;
     }
@@ -144,7 +144,7 @@ static bool viking_decoder_feed(viking_codec *d, uint16_t interval) {
     bool bits[2] = {0};
     int8_t bitlen = 0;
 
-    // Hack: due to hardware sometimes not detecting a time2 pulse. Rather than 
+    // Hack: due to hardware sometimes not detecting a time2 pulse. Rather than
     // reset when interval is really long, assume there was a time2 pulse.
     if (interval > VIKING_READ_TIME3_BASE + VIKING_READ_JITTER_TIME_BASE) {
         interval -= VIKING_READ_TIME2_BASE;
@@ -203,10 +203,10 @@ const protocol viking = {
     .get_data = (codec_get_data)viking_get_data,
     .modulator = (modulator)viking_modulator,
     .decoder =
-        {
-            .start = (decoder_start)viking_decoder_start,
-            .feed = (decoder_feed)viking_decoder_feed,
-        },
+    {
+        .start = (decoder_start)viking_decoder_start,
+        .feed = (decoder_feed)viking_decoder_feed,
+    },
 };
 
 // Encode viking card number to T55xx blocks.

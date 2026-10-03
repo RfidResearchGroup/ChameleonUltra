@@ -25,7 +25,8 @@ nrf_pwm_sequence_t const m_lf_125khz_pwm_seq_obj = {
     .values.p_individual = m_lf_125khz_pwm_seq_val,
     .length = NRF_PWM_VALUES_LENGTH(m_lf_125khz_pwm_seq_val),
     .repeats = 0,
-    .end_delay = 0};
+    .end_delay = 0
+};
 
 /**
  * LF reading card decrease along the trigger collection event
@@ -96,9 +97,9 @@ static void pwm_timer_count_ppi_init(void) {
     APP_ERROR_CHECK(err_code);
 
     err_code = nrfx_ppi_channel_assign(
-        m_pwm_timer_count_ppi_channel,
-        nrfx_pwm_event_address_get(&m_pwm, NRF_PWM_EVENT_PWMPERIODEND),
-        nrfx_timer_task_address_get(&m_pwm_timer_counter, NRF_TIMER_TASK_COUNT));
+                   m_pwm_timer_count_ppi_channel,
+                   nrfx_pwm_event_address_get(&m_pwm, NRF_PWM_EVENT_PWMPERIODEND),
+                   nrfx_timer_task_address_get(&m_pwm_timer_counter, NRF_TIMER_TASK_COUNT));
     APP_ERROR_CHECK(err_code);
 }
 
@@ -110,9 +111,9 @@ static void pwm_saadc_sample_ppi_init(void) {
     APP_ERROR_CHECK(err_code);
 
     err_code = nrfx_ppi_channel_assign(
-        m_pwm_saadc_sample_ppi_channel,
-        nrfx_pwm_event_address_get(&m_pwm, NRF_PWM_EVENT_PWMPERIODEND),
-        nrf_saadc_task_address_get(NRF_SAADC_TASK_SAMPLE));
+                   m_pwm_saadc_sample_ppi_channel,
+                   nrfx_pwm_event_address_get(&m_pwm, NRF_PWM_EVENT_PWMPERIODEND),
+                   nrf_saadc_task_address_get(NRF_SAADC_TASK_SAMPLE));
     APP_ERROR_CHECK(err_code);
 }
 

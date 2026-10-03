@@ -249,7 +249,7 @@ static int compare_count_bitflip_bitarrays(const void *b1, const void *b2) {
 
 static void init_bitflip_bitarrays(void) {
 
-    //	z_stream compressed_stream;
+    //  z_stream compressed_stream;
     lzma_stream strm = LZMA_STREAM_INIT;
 
     for (odd_even_t odd_even = EVEN_STATE; odd_even <= ODD_STATE; odd_even++) {

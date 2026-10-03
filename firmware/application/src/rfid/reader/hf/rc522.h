@@ -201,25 +201,25 @@ void pcd_14a_reader_timeout_set(uint16_t timeout_ms);
 
 // Device communication interface
 uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command,
-                                      uint8_t *pIn,
-                                      uint8_t  InLenByte,
-                                      uint8_t *pOut,
-                                      uint16_t *pOutLenBit,
-                                      uint16_t maxOutLenBit);
+uint8_t *pIn,
+uint8_t  InLenByte,
+uint8_t *pOut,
+uint16_t *pOutLenBit,
+uint16_t maxOutLenBit);
 uint8_t pcd_14a_reader_bytes_transfer_flags(uint8_t Command,
-        uint8_t *pIn,
-        uint8_t  InLenByte,
-        uint8_t *pOut,
-        uint16_t *pOutLenBit,
-        uint16_t maxOutLenBit,
-        uint32_t flags);
+uint8_t *pIn,
+uint8_t  InLenByte,
+uint8_t *pOut,
+uint16_t *pOutLenBit,
+uint16_t maxOutLenBit,
+uint32_t flags);
 uint8_t pcd_14a_reader_bits_transfer(uint8_t *pTx,
-                                     uint16_t  szTxBits,
-                                     uint8_t *pTxPar,
-                                     uint8_t *pRx,
-                                     uint8_t *pRxPar,
-                                     uint16_t *pRxLenBit,
-                                     uint16_t szRxLenBitMax);
+uint16_t  szTxBits,
+uint8_t *pTxPar,
+uint8_t *pRx,
+uint8_t *pRxPar,
+uint16_t *pRxLenBit,
+uint16_t szRxLenBitMax);
 
 // Device auto append and check 14443-A parity enable or disable.
 void pcd_14a_reader_parity_on(void);
@@ -248,7 +248,7 @@ uint8_t pcd_14a_reader_halt_tag(void);
 void pcd_14a_reader_fast_halt_tag(void);
 
 uint8_t pcd_14a_reader_raw_cmd(bool openRFField, bool waitResp, bool appendCrc, bool autoSelect, bool keepField, bool checkCrc, uint16_t waitRespTimeout,
-                               uint16_t szDataSendBits, uint8_t *pDataSend, uint8_t *pDataRecv, uint16_t *pszDataRecv, uint16_t szDataRecvBitMax);
+uint16_t szDataSendBits, uint8_t *pDataSend, uint8_t *pDataRecv, uint16_t *pszDataRecv, uint16_t szDataRecvBitMax);
 
 // UID & UFUID tag operation
 uint8_t pcd_14a_reader_gen1a_unlock(void);

@@ -322,7 +322,7 @@ bool em4x05_read(em4x05_data_t *out, uint32_t timeout_ms) {
 
     uint32_t uid_lo = 0, uid_hi = 0;
     if (em4x05_read_block(EM4X69_BLOCK_UID_LO, &uid_lo, block_timeout) &&
-        em4x05_read_block(EM4X69_BLOCK_UID_HI, &uid_hi, block_timeout)) {
+            em4x05_read_block(EM4X69_BLOCK_UID_HI, &uid_hi, block_timeout)) {
         out->uid_hi    = uid_hi;
         out->uid       = uid_lo;
         out->is_em4x69 = true;

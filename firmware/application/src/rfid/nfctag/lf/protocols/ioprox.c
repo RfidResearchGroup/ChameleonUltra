@@ -31,8 +31,7 @@ void ioprox_reset_bits(ioprox_codec_t *d) {
     d->bit_len = 0;
 }
 
-static inline void push_bit(ioprox_codec_t *d, uint8_t bit)
-{
+static inline void push_bit(ioprox_codec_t *d, uint8_t bit) {
     if (d->bit_len < IOPROX_MAX_BITS) {
         d->bits[d->bit_len++] = bit;
         return;
@@ -42,15 +41,13 @@ static inline void push_bit(ioprox_codec_t *d, uint8_t bit)
     d->bits[IOPROX_MAX_BITS - 1] = bit;
 }
 
-static inline uint8_t get_bit_inv(const uint8_t *bits, uint16_t pos, bool inv)
-{
+static inline uint8_t get_bit_inv(const uint8_t *bits, uint16_t pos, bool inv) {
     uint8_t b = bits[pos] & 1u;
     return inv ? (uint8_t)(b ^ 1u) : b;
 }
 
 // Converts a bit array to a 32-bit big-endian integer.
-static inline uint32_t bytebits_to_byte(const uint8_t *bits, uint16_t len)
-{
+static inline uint32_t bytebits_to_byte(const uint8_t *bits, uint16_t len) {
     uint32_t val = 0;
     for (uint16_t i = 0; i < len; i++) {
         val = (val << 1) | (bits[i] & 1u);
@@ -59,8 +56,7 @@ static inline uint32_t bytebits_to_byte(const uint8_t *bits, uint16_t len)
 }
 
 // Reads 8 bits MSB-first from bits[start_pos], optionally inverting each bit.
-static inline uint8_t bytebits_to_u8_msb_inv(const uint8_t *bits, uint16_t start_pos, bool inv)
-{
+static inline uint8_t bytebits_to_u8_msb_inv(const uint8_t *bits, uint16_t start_pos, bool inv) {
     uint8_t v = 0;
     for (int i = 0; i < 8; i++) {
         v = (uint8_t)((v << 1) | get_bit_inv(bits, (uint16_t)(start_pos + i), inv));
@@ -81,16 +77,14 @@ bool ioprox_raw8_to_bits(const uint8_t *raw8, ioprox_codec_t *d) {
 }
 
 // ioProx checksum: 0xFF - (sum(b1..b5) & 0xFF)
-static inline uint8_t ioprox_checksum5(uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5)
-{
+static inline uint8_t ioprox_checksum5(uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5) {
     uint16_t sum = (uint16_t)b1 + b2 + b3 + b4 + b5;
     return (uint8_t)(0xFFu - (uint8_t)(sum & 0xFFu));
 }
 
 // Returns true if 10 starting bits form a valid ioProx preamble.
 // Preamble is 9 zeros followed by 1 one (inverted when inv=true).
-static bool preamble_match(const uint8_t *d, uint16_t off, bool inv)
-{
+static bool preamble_match(const uint8_t *d, uint16_t off, bool inv) {
     for (int k = 0; k < 9; k++) {
         if ((d[off + k] & 1u) != (inv ? 1u : 0u)) return false;
     }
@@ -115,8 +109,7 @@ static bool preamble_match(const uint8_t *d, uint16_t off, bool inv)
 //   [2-3]   card number (big-endian)
 //   [4-11]  raw8 frame bytes (for debugging and storage)
 //   [12-15] reserved (0x00)
-static bool decode_and_pack(ioprox_codec_t *d, uint16_t idx, bool inv)
-{
+static bool decode_and_pack(ioprox_codec_t *d, uint16_t idx, bool inv) {
     uint8_t  b1, b2, b3, b4, b5, b6;
     uint16_t number;
     uint32_t raw_block1;
@@ -172,8 +165,7 @@ bool ioprox_decode_raw_to_data(const uint8_t *raw8, uint8_t *output) {
 }
 
 // Writes 8 bits of v MSB-first into bits[] starting at position pos.
-static void write_bits_msb(uint8_t *bits, uint16_t pos, uint8_t v)
-{
+static void write_bits_msb(uint8_t *bits, uint16_t pos, uint8_t v) {
     for (uint8_t i = 0; i < 8; i++) {
         bits[pos + i] = (v >> (7 - i)) & 1;
     }
@@ -182,8 +174,7 @@ static void write_bits_msb(uint8_t *bits, uint16_t pos, uint8_t v)
 // Encodes ioProx card parameters into the 16-byte output buffer.
 // The encoded frame uses 8+1 bit framing (8 data bits + 1 separator per group).
 // Returns false if output pointer is NULL.
-bool ioprox_encode_params_to_data(uint8_t version, uint8_t facility, uint16_t number, uint8_t *output)
-{
+bool ioprox_encode_params_to_data(uint8_t version, uint8_t facility, uint16_t number, uint8_t *output) {
     if (!output) return false;
 
     uint8_t b0 = 0x00;
@@ -197,12 +188,18 @@ bool ioprox_encode_params_to_data(uint8_t version, uint8_t facility, uint16_t nu
     uint8_t bits[64] = {0};
 
     // Pack 7 data bytes using 8+1 framing (data bits + separator)
-    write_bits_msb(bits,  0, b0); bits[ 8] = 0;
-    write_bits_msb(bits,  9, b1); bits[17] = 1;
-    write_bits_msb(bits, 18, b2); bits[26] = 1;
-    write_bits_msb(bits, 27, b3); bits[35] = 1;
-    write_bits_msb(bits, 36, b4); bits[44] = 1;
-    write_bits_msb(bits, 45, b5); bits[53] = 1;
+    write_bits_msb(bits,  0, b0);
+    bits[ 8] = 0;
+    write_bits_msb(bits,  9, b1);
+    bits[17] = 1;
+    write_bits_msb(bits, 18, b2);
+    bits[26] = 1;
+    write_bits_msb(bits, 27, b3);
+    bits[35] = 1;
+    write_bits_msb(bits, 36, b4);
+    bits[44] = 1;
+    write_bits_msb(bits, 45, b5);
+    bits[53] = 1;
     write_bits_msb(bits, 54, b6);
     bits[62] = 1;
     bits[63] = 1;
@@ -227,8 +224,7 @@ bool ioprox_encode_params_to_data(uint8_t version, uint8_t facility, uint16_t nu
 // Scans the tail of the bit buffer for a valid ioProx frame.
 // To keep CPU load low, only the last ~5 frames (320 bits) are scanned.
 // Returns true if a valid frame (checksum OK) was decoded into d->data.
-static bool scan_tail(ioprox_codec_t *d)
-{
+static bool scan_tail(ioprox_codec_t *d) {
     // Need at least 128 bits to verify two consecutive 64-bit frames
     if (d->bit_len < 128) return false;
 
@@ -277,8 +273,7 @@ static bool scan_tail(ioprox_codec_t *d)
 
 // --- Protocol callbacks ---
 
-static void *ioprox_codec_alloc(void)
-{
+static void *ioprox_codec_alloc(void) {
     ioprox_codec_t *d = (ioprox_codec_t *)malloc(sizeof(ioprox_codec_t));
     if (!d) return NULL;
     memset(d, 0, sizeof(*d));
@@ -286,8 +281,7 @@ static void *ioprox_codec_alloc(void)
     return d;
 }
 
-static void ioprox_codec_free(void *codec)
-{
+static void ioprox_codec_free(void *codec) {
     ioprox_codec_t *d = (ioprox_codec_t *)codec;
     if (!d) return;
     if (d->modem) {
@@ -297,14 +291,12 @@ static void ioprox_codec_free(void *codec)
     free(d);
 }
 
-static uint8_t *ioprox_get_data(void *codec)
-{
+static uint8_t *ioprox_get_data(void *codec) {
     ioprox_codec_t *d = (ioprox_codec_t *)codec;
     return d->data;
 }
 
-static void ioprox_decoder_start(void *codec, uint8_t format_hint)
-{
+static void ioprox_decoder_start(void *codec, uint8_t format_hint) {
     (void)format_hint;
     ioprox_codec_t *d = (ioprox_codec_t *)codec;
     d->bit_len = 0;
@@ -312,8 +304,7 @@ static void ioprox_decoder_start(void *codec, uint8_t format_hint)
     memset(d->data, 0, sizeof(d->data));
 }
 
-static bool ioprox_decoder_feed(void *codec, uint16_t val)
-{
+static bool ioprox_decoder_feed(void *codec, uint16_t val) {
     ioprox_codec_t *d = (ioprox_codec_t *)codec;
     if (!d || !d->modem) return false;
 
@@ -340,8 +331,7 @@ static bool ioprox_decoder_feed(void *codec, uint16_t val)
     return false;
 }
 
-static inline void ioprox_emit_bit(int *k, bool bit)
-{
+static inline void ioprox_emit_bit(int *k, bool bit) {
     if (!bit) {
         for (int j = 0; j < LF_FSK2a_PWM_HI_FREQ_LOOP; j++) {
             m_ioprox_pwm_seq_vals[*k].channel_0    = LF_FSK2a_PWM_HI_FREQ_TOP_VALUE / 2;
@@ -358,8 +348,7 @@ static inline void ioprox_emit_bit(int *k, bool bit)
 }
 
 // FSK2a modulator: converts the 8 raw card bytes into a PWM sequence for LF transmission.
-const nrf_pwm_sequence_t *ioprox_modulator(ioprox_codec_t *d, uint8_t *buf)
-{
+const nrf_pwm_sequence_t *ioprox_modulator(ioprox_codec_t *d, uint8_t *buf) {
     (void)d;
 
     // Raw card data starts at buf[4] (bytes 0-3 are decoded fields)

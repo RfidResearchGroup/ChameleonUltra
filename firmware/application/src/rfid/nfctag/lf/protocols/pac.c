@@ -97,7 +97,7 @@ static bool get_bit(pac_codec *d, uint16_t pos) {
 // Decode a 10-bit UART frame at bit position 'start'.
 // Frame: start(0) + 7 data bits LSB-first + odd parity + stop(1).
 static int decode_uart_byte(pac_codec *d, uint16_t start, bool inverted) {
-    #define RD(pos) (inverted ? !get_bit(d, (pos)) : get_bit(d, (pos)))
+#define RD(pos) (inverted ? !get_bit(d, (pos)) : get_bit(d, (pos)))
 
     if (RD(start)) {
         return -1;
@@ -123,7 +123,7 @@ static int decode_uart_byte(pac_codec *d, uint16_t start, bool inverted) {
         return -1;
     }
 
-    #undef RD
+#undef RD
     return byte_val;
 }
 
@@ -393,8 +393,8 @@ const protocol pac = {
     .get_data = (codec_get_data)pac_get_data,
     .modulator = (modulator)pac_modulator,
     .decoder =
-        {
-            .start = (decoder_start)pac_decoder_start,
-            .feed = (decoder_feed)pac_decoder_feed,
-        },
+    {
+        .start = (decoder_start)pac_decoder_start,
+        .feed = (decoder_feed)pac_decoder_feed,
+    },
 };

@@ -287,6 +287,9 @@ void rgb_marquee_slot_switch(uint8_t led_down, uint8_t color_led_down, uint8_t l
             light_level --;
         }
     }
+    for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
+        nrf_gpio_pin_clear(led_pins[i]);
+    }
     if (led_up >= 0 && led_up <= 7) {
         //Treatment
         pwm_config.output_pins[0] = led_pins[led_up];
@@ -562,24 +565,24 @@ void rgb_marquee_symmetric_out(uint8_t color, uint8_t slot) {
         for (uint8_t offset = 0; offset < length; offset++) {
             if (step < offset || step >= (offset + half_leds)) continue;
             switch (offset) {
-            case 0:
-            case length - 1:
-                pwm_config.output_pins[0] = led_pins[3 - step + offset];
-                pwm_config.output_pins[3] = led_pins[4 + step - offset];
-                break;
-            case 1:
-            case length - 2:
-                pwm_config.output_pins[1] = led_pins[3 - step + offset];
-                pwm_config.output_pins[2] = led_pins[4 + step - offset];
-                break;
-            default:
-                nrf_gpio_pin_set(led_pins[3 - step + offset]);
-                nrf_gpio_pin_set(led_pins[4 + step - offset]);
+                case 0:
+                case length - 1:
+                    pwm_config.output_pins[0] = led_pins[3 - step + offset];
+                    pwm_config.output_pins[3] = led_pins[4 + step - offset];
+                    break;
+                case 1:
+                case length - 2:
+                    pwm_config.output_pins[1] = led_pins[3 - step + offset];
+                    pwm_config.output_pins[2] = led_pins[4 + step - offset];
+                    break;
+                default:
+                    nrf_gpio_pin_set(led_pins[3 - step + offset]);
+                    nrf_gpio_pin_set(led_pins[4 + step - offset]);
             }
         }
 
         if ((slot <= 3 && slot > (3 - step + slide_leds)) ||
-            (slot >= 4 && slot < (4 + step - slide_leds))) {
+                (slot >= 4 && slot < (4 + step - slide_leds))) {
             nrf_gpio_pin_set(led_pins[slot]);
             for (uint8_t j = 0; j < 4; j++) {
                 if (pwm_config.output_pins[j] == led_pins[slot]) {
@@ -622,24 +625,24 @@ void rgb_marquee_symmetric_in(uint8_t color, uint8_t slot) {
         for (uint8_t offset = 0; offset < length; offset++) {
             if (step < offset || step >= (offset + half_leds)) continue;
             switch (offset) {
-            case 0:
-            case length - 1:
-                pwm_config.output_pins[0] = led_pins[0 + step - offset];
-                pwm_config.output_pins[3] = led_pins[7 - step + offset];
-                break;
-            case 1:
-            case length - 2:
-                pwm_config.output_pins[1] = led_pins[0 + step - offset];
-                pwm_config.output_pins[2] = led_pins[7 - step + offset];
-                break;
-            default:
-                nrf_gpio_pin_set(led_pins[0 + step - offset]);
-                nrf_gpio_pin_set(led_pins[7 - step + offset]);
+                case 0:
+                case length - 1:
+                    pwm_config.output_pins[0] = led_pins[0 + step - offset];
+                    pwm_config.output_pins[3] = led_pins[7 - step + offset];
+                    break;
+                case 1:
+                case length - 2:
+                    pwm_config.output_pins[1] = led_pins[0 + step - offset];
+                    pwm_config.output_pins[2] = led_pins[7 - step + offset];
+                    break;
+                default:
+                    nrf_gpio_pin_set(led_pins[0 + step - offset]);
+                    nrf_gpio_pin_set(led_pins[7 - step + offset]);
             }
         }
 
         if ((slot <= 3 && slot > (0 + step - slide_leds)) ||
-            (slot >= 4 && slot < (7 - step + slide_leds))) {
+                (slot >= 4 && slot < (7 - step + slide_leds))) {
             nrf_gpio_pin_set(led_pins[slot]);
             for (uint8_t j = 0; j < 4; j++) {
                 if (pwm_config.output_pins[j] == led_pins[slot]) {

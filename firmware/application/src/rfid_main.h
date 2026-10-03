@@ -8,6 +8,7 @@
 #include "nfc_14a.h"
 #include "nfc_mf0_ntag.h"
 #include "nfc_mf1.h"
+#include "nfc_seos.h"
 #include "nrf_gpio.h"
 #include "tag_emulation.h"
 
