@@ -48,6 +48,7 @@ from chameleon_enum import (
 from chameleon_enum import MifareUltralightWriteMode
 from chameleon_enum import (
     AnimationMode,
+    SlotColor,
     ButtonPressFunction,
     ButtonType,
     MfcValueBlockOperator,
@@ -6854,6 +6855,41 @@ class HWSlotSet(SlotIndexArgsUnit):
         slot_index = args.slot
         self.cmd.set_active_slot(slot_index)
         print(f" - Set slot {slot_index} activated success.")
+
+@hw_slot.command("color")
+class HWSlotColor(SlotIndexArgsAndGoUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Get or set slot's LED color."
+        self.add_slot_args(parser)
+        parser.add_argument(
+            "-c",
+            "--color",
+            type=str,
+            choices=["red", "green", "blue", "magenta", "yellow", "cyan", "white", "default"],
+            metavar="<red|green|blue|magenta|yellow|cyan|white|default>",
+            help="LED color: default = change per tag tech type, others = as named",
+            default=None,
+        )
+        return parser
+        
+
+    def on_exec(self, args: argparse.Namespace):
+        color_names = ["red", "green", "blue", "magenta", "yellow", "cyan", "white", "default"]
+        if args.color is None:
+            # Read current color
+            if args.slot is None: resp = self.cmd.get_slot_color()
+            else: resp = self.cmd.get_slot_color(args.slot)
+            try:
+                current_color = SlotColor(resp)
+                print(f" - Slot {self.slot_num} color: {color_string((current_color, str(color_names[resp])))} ({resp})")
+            except ValueError:
+                print(f" - Slot {self.slot_num} color: {color_string((CR, f'unknown ({resp})'))} ")
+        else:
+            newColor = color_names.index(args.color)
+            self.cmd.set_slot_color(newColor)
+            current_color = SlotColor(newColor)
+            print(f" - Slot {self.slot_num} color set to: {color_string((current_color, str(args.color)))}")
 
 
 @hw_slot.command("type")

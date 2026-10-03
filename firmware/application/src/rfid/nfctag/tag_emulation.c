@@ -69,14 +69,14 @@ static tag_slot_config_t slotConfig ALIGN_U32 = {
     // Configuration card slots
     // See tag_emulation_factory_init for actual tag content
     .slots = {
-        { .enabled_hf = true,  .enabled_lf = true,  .tag_hf = TAG_TYPE_MIFARE_1024, .tag_lf = TAG_TYPE_EM410X,    },  // 1
-        { .enabled_hf = true,  .enabled_lf = false, .tag_hf = TAG_TYPE_MF0ICU1,     .tag_lf = TAG_TYPE_UNDEFINED, },  // 2
-        { .enabled_hf = false, .enabled_lf = true,  .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_EM410X,    },  // 3
-        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 4
-        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 5
-        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 6
-        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 7
-        { .enabled_hf = false, .enabled_lf = false, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 8
+        { .enabled_hf = true,  .enabled_lf = true,  .light_color = RGB_DEFAULT, .tag_hf = TAG_TYPE_MIFARE_1024, .tag_lf = TAG_TYPE_EM410X,    },  // 1
+        { .enabled_hf = true,  .enabled_lf = false, .light_color = RGB_DEFAULT, .tag_hf = TAG_TYPE_MF0ICU1,     .tag_lf = TAG_TYPE_UNDEFINED, },  // 2
+        { .enabled_hf = false, .enabled_lf = true,  .light_color = RGB_DEFAULT, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_EM410X,    },  // 3
+        { .enabled_hf = false, .enabled_lf = false, .light_color = RGB_DEFAULT, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 4
+        { .enabled_hf = false, .enabled_lf = false, .light_color = RGB_DEFAULT, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 5
+        { .enabled_hf = false, .enabled_lf = false, .light_color = RGB_DEFAULT, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 6
+        { .enabled_hf = false, .enabled_lf = false, .light_color = RGB_DEFAULT, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 7
+        { .enabled_hf = false, .enabled_lf = false, .light_color = RGB_DEFAULT, .tag_hf = TAG_TYPE_UNDEFINED,   .tag_lf = TAG_TYPE_UNDEFINED, },  // 8
     },
 };
 // The card slot configuration unique CRC, once the slot configuration changes, can be checked by CRC
@@ -471,6 +471,18 @@ static void tag_emulation_migrate_slot_config_v0_to_v8(void) {
     }
 }
 
+/** v9 introduces support for custom LED colors.
+ * For compatibility the original color has been appended instead of being prepended, making it index 7 instead of index 0.
+ * To avoid confusion, all configs must be set to have the LED as RGB_DEFAULT. Otherwise everything will just be red, regardless of payload.
+ */
+static void tag_emulation_migrate_slot_config_v8_to_v9(void) {
+    slotConfig.version = TAG_SLOT_CONFIG_CURRENT_VERSION; // this may be unwanted
+    for (uint8_t i = 0; i < ARRAYLEN(slotConfig.slots); i++) {
+        slotConfig.slots[i].light_color = RGB_DEFAULT;
+        NRF_LOG_INFO("Slot %i LED configuration set to default", i);
+    }
+}
+
 static void tag_emulation_migrate_slot_config(void) {
     switch (slotConfig.version) {
         case 0:
@@ -482,7 +494,8 @@ static void tag_emulation_migrate_slot_config(void) {
         case 6:
         case 7:
             tag_emulation_migrate_slot_config_v0_to_v8();
-
+        case 8:
+            tag_emulation_migrate_slot_config_v8_to_v9();
             /*
              * Add new migration steps ABOVE THIS COMMENT
              * `tag_emulation_save_config()` and `break` statements should only be used on the last migration step, all the previous steps must fall
@@ -583,6 +596,22 @@ uint8_t tag_emulation_get_slot(void) {
 void tag_emulation_set_slot(uint8_t index) {
     slotConfig.active_slot = index;  // Re -set to the new switched card slot
     rgb_marquee_reset();             // force animation color refresh according to new slot
+}
+
+/**
+ * Get the queried card slot's LED color
+ */
+uint8_t tag_emulation_get_color(uint8_t index) {
+    return slotConfig.slots[index].light_color;
+}
+
+/**
+ * Set the currently activated card slot's LED color
+ */
+void tag_emulation_set_color(uint8_t newColor) {
+    slotConfig.slots[slotConfig.active_slot].light_color = newColor;  // Set to the new color
+    // Due to some strange issue the RGB reset doesnt do anything when no LED motion is happening
+    rgb_marquee_reset();                             // force animation color refresh according to new color
 }
 
 /**

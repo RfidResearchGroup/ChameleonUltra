@@ -1069,6 +1069,24 @@ static data_frame_tx_t *cmd_processor_get_slot_info(uint16_t cmd, uint16_t statu
     return data_frame_make(cmd, STATUS_SUCCESS, sizeof(payload), (uint8_t *)&payload);
 }
 
+static data_frame_tx_t *cmd_processor_get_slot_color(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    // Due to how I ended up implementing this function I have to make a bodge
+    uint8_t color;
+    if (length == 1)
+        color = tag_emulation_get_color(data[0]);
+    else
+        color = tag_emulation_get_color(tag_emulation_get_slot());
+    return data_frame_make(cmd, STATUS_SUCCESS, 1, &color);
+}
+
+static data_frame_tx_t *cmd_processor_set_slot_color(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 1 || data[0] > 7) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    tag_emulation_set_color(data[0]);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
 static data_frame_tx_t *cmd_processor_wipe_fds(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     bool success = fds_wipe();
     status = success ? STATUS_SUCCESS : STATUS_FLASH_WRITE_FAIL;
@@ -3096,6 +3114,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_SLEEP_TIMEOUT,            NULL,                        cmd_processor_get_sleep_timeout,             NULL                   },
     {    DATA_CMD_SET_SLEEP_TIMEOUT,            NULL,                        cmd_processor_set_sleep_timeout,             NULL                   },
     {    DATA_CMD_GET_ALL_SLOT_NICKS,           NULL,                        cmd_processor_get_all_slot_nicks,            NULL                   },
+    {    DATA_CMD_GET_SLOT_COLOR,               NULL,                        cmd_processor_get_slot_color,                NULL                   },
+    {    DATA_CMD_SET_SLOT_COLOR,               NULL,                        cmd_processor_set_slot_color,                NULL                   },
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 

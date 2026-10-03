@@ -652,7 +652,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             g_is_tag_emulating = true;
             g_usb_led_marquee_enable = false;
 
-            set_slot_light_color(RGB_GREEN);
+            set_slot_light_color(tag_emulation_get_color(tag_emulation_get_slot()) == 7 ? RGB_GREEN : get_color_by_slot(tag_emulation_get_slot()));
             TAG_FIELD_LED_ON()
 
             NRF_LOG_INFO("HF FIELD DETECTED");
@@ -713,7 +713,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             break;
         }
         case NRFX_NFCT_EVT_RX_FRAMEEND: {
-            set_slot_light_color(RGB_GREEN);
+            set_slot_light_color(tag_emulation_get_color(tag_emulation_get_slot()) == 7 ? RGB_GREEN : get_color_by_slot(tag_emulation_get_slot()));
             TAG_FIELD_LED_ON()
 
             // NRF_LOG_INFO("RX FRAMEEND.\n");
