@@ -7,6 +7,7 @@
 #include "protocols.h"
 #include "t55xx.h"
 #include "tag_base_type.h"
+#include "utils/psk1.h"
 #include "utils/pskdemod.h"
 
 #define NRF_LOG_MODULE_NAME indala
@@ -18,16 +19,18 @@ NRF_LOG_MODULE_REGISTER();
 #define INDALA_RAW_SIZE (64)  // 64-bit frame
 #define INDALA_DATA_SIZE (8)  // 8 bytes stored
 
-// PSK1 fc/2 RF/32: 16 fc/2 subcarrier cycles per bit.
-// Each fc/2 cycle = 2 entries: one carrier cycle ON, one OFF (or vice versa).
-// The modulator builds a PWM-format array that is converted to a simple 0/1
-// timer pattern by psk_build_pattern() in lf_tag_em.c.
-// Timer3 ISR plays back the pattern at exactly 125 kHz (8us per entry).
-#define INDALA_PSK_CYCLES_PER_BIT (16)
-#define INDALA_PSK_ENTRIES_PER_CYCLE (2)
-#define INDALA_PSK_COUNTER_TOP (4)   // arbitrary (only ch0 > 0 vs == 0 matters for pattern)
-
 #define INDALA_T55XX_BLOCK_COUNT (3) // config + 2 data blocks
+
+#define INDALA_PWM_ENTRIES (INDALA_RAW_SIZE * LF_PSK1_RF32_SUBCYCLES_PER_BIT)
+
+static nrf_pwm_values_wave_form_t m_indala_pwm_seq_vals[INDALA_PWM_ENTRIES] = {};
+
+static nrf_pwm_sequence_t m_indala_pwm_seq = {
+    .values.p_wave_form = m_indala_pwm_seq_vals,
+    .length = NRF_PWM_VALUES_LENGTH(m_indala_pwm_seq_vals),
+    .repeats = 0,
+    .end_delay = 0,
+};
 
 // Indala 64-bit preamble (33 bits): {1,0,1, 29×0, 1}
 // In shift register (MSB = first bit): bits 63..31 must match exactly
@@ -219,37 +222,16 @@ static bool indala_decoder_feed(indala_codec *d, uint16_t val) {
     return false;
 };
 
-// PSK1 modulator: fc/2 carrier at RF/32 (1 MHz PWM clock, counter_top=8)
-// Each fc/2 cycle uses 2 PWM entries with counter_top=8 (8us each):
-//   Phase A (bit=0): {ch0=CT,ct=CT},{ch0=0,ct=CT} -> FET ON 8us, OFF 8us
-//   Phase B (bit=1): {ch0=0,ct=CT},{ch0=CT,ct=CT} -> FET OFF 8us, ON 8us (180 shifted)
-// 16 fc/2 cycles per bit = 32 PWM entries per bit.
+// buf is the 8-byte frame, MSB first on air. Same PSK1 RF/32 fc/2 air layer as
+// IDTECK, so it uses the shared PSK1 sequence builder (utils/psk1.h).
 static const nrf_pwm_sequence_t *indala_modulator(indala_codec *d, uint8_t *buf) {
-    int k = 0;
+    (void)d;
 
-    for (int i = 0; i < INDALA_RAW_SIZE; i++) {
-        uint8_t byte_idx = i / 8;
-        uint8_t bit_idx = 7 - (i % 8); // MSB first
-        bool cur_bit = (buf[byte_idx] >> bit_idx) & 1;
-
-        // PSK1: phase = data bit value
-        // ch0 = COUNTER_TOP -> 100% duty (FET ON), ch0 = 0 -> 0% duty (FET OFF)
-        uint16_t first  = cur_bit ? 0 : INDALA_PSK_COUNTER_TOP;
-        uint16_t second = cur_bit ? INDALA_PSK_COUNTER_TOP : 0;
-
-        for (int j = 0; j < INDALA_PSK_CYCLES_PER_BIT; j++) {
-            psk_shared_pwm_vals[k].channel_0 = first;
-            psk_shared_pwm_vals[k].counter_top = INDALA_PSK_COUNTER_TOP;
-            k++;
-            psk_shared_pwm_vals[k].channel_0 = second;
-            psk_shared_pwm_vals[k].counter_top = INDALA_PSK_COUNTER_TOP;
-            k++;
-        }
-    }
-
-    psk_shared_pwm_seq.length = k * 4;
-    return &psk_shared_pwm_seq;
-};
+    size_t n = lf_psk1_build_sequence(buf, INDALA_RAW_SIZE,
+                                      m_indala_pwm_seq_vals, INDALA_PWM_ENTRIES);
+    m_indala_pwm_seq.length = (uint16_t)(n * 4);   // 4 uint16 fields per wave-form entry
+    return &m_indala_pwm_seq;
+}
 
 const protocol indala = {
     .tag_type = TAG_TYPE_INDALA,

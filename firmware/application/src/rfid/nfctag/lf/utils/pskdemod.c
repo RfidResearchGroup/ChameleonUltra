@@ -6,15 +6,6 @@
 // Shared static sample buffer for PSK reader codecs.
 uint16_t psk_shared_samples[PSK_SHARED_BUF_SIZE];
 
-// Shared static PWM buffer for PSK emulation modulators.
-nrf_pwm_values_wave_form_t psk_shared_pwm_vals[PSK_PWM_MAX_ENTRIES] = {};
-nrf_pwm_sequence_t psk_shared_pwm_seq = {
-    .values.p_wave_form = psk_shared_pwm_vals,
-    .length = 0,
-    .repeats = 0,
-    .end_delay = 0,
-};
-
 // cos(2π·2·n/8) × 1024, period 4 samples.
 // At fs=166.67kHz, DFT bin k=2 of N=8 → 2×166.67/8 = 41.67kHz.
 // 125kHz carrier aliases to 166.67-125 = 41.67kHz — matches bin k=2.

@@ -1,24 +1,20 @@
 #include "lf_tag_em.h"
 
 #include <stdint.h>
-#include <string.h>
 
 #include "bsp_delay.h"
 #include "fds_util.h"
 #include "nrf_gpio.h"
-#include "nrfx_gpiote.h"
 #include "nrf_soc.h"
 #include "nrfx_lpcomp.h"
-#include "nrfx_ppi.h"
 #include "nrfx_pwm.h"
-#include "nrfx_timer.h"
 #include "protocols/em410x.h"
 #include "protocols/hidprox.h"
 #include "protocols/idteck.h"
+#include "protocols/indala.h"
 #include "protocols/ioprox.h"
 #include "protocols/jablotron.h"
 #include "protocols/pac.h"
-#include "protocols/indala.h"
 #include "protocols/viking.h"
 #include "syssleep.h"
 #include "tag_emulation.h"
@@ -31,10 +27,6 @@
 NRF_LOG_MODULE_REGISTER();
 
 #define ANT_NO_MOD() nrf_gpio_pin_clear(LF_MOD)
-// PSK timer-based modulation needs a repeat counter (PWM FLAG_LOOP is for ASK/FSK only).
-// PSK entries are 64x shorter (8µs vs 512µs); 30 repeats ≈ 491ms, which keeps the PM3
-// reader's ~314ms capture window gap-free. (broadcast=100 raised PM3 errCnt.)
-#define LF_PSK_BROADCAST_MAX (30)
 
 // Whether the USB light effect is allowed to enable
 extern bool g_usb_led_marquee_enable;
@@ -43,81 +35,10 @@ extern bool g_usb_led_marquee_enable;
 static volatile bool m_is_lf_emulating = false;
 // Cache tag type
 static tag_specific_type_t m_tag_type = TAG_TYPE_UNDEFINED;
-// Buffer pointer for interactive Hitag2 crypto simulation
-// The pwm to broadcast modulated card id (ASK/FSK protocols)
+
+// The pwm to broadcast modulated card id
 const nrfx_pwm_t m_broadcast = NRFX_PWM_INSTANCE(0);
 const nrf_pwm_sequence_t *m_pwm_seq = NULL;
-
-// Track current PWM base clock
-static nrf_pwm_clk_t m_current_pwm_clk = NRF_PWM_CLK_125kHz;
-static bool m_pwm_initialized = false;
-
-// ---------------------------------------------------------------------------
-// Timer-based PSK emulation (jitter-free fc/2 subcarrier)
-// ---------------------------------------------------------------------------
-// TIMER3 fires every 8us (one 125 kHz carrier cycle). ISR reads from a
-// pattern buffer and sets LF_MOD HIGH or LOW. PPI+GPIOTE turns FET OFF
-// at a precise sub-cycle offset for asymmetric duty (LC tank recovery).
-// Phase training: alternate normal/inverted pattern each frame repeat.
-
-// Dual-PPI architecture: BOTH ON and OFF edges are hardware-timed via PPI+GPIOTE.
-// CC[0] → PPI_CH_SET → GPIOTE SET (FET ON, zero latency)
-// CC[1] → PPI_CH_CLR → GPIOTE CLR (FET OFF, zero latency)
-// ISR on CC[0] only manages which FUTURE cycles get a SET pulse.
-// This eliminates ISR latency jitter on the ON edge that corrupted fc/2 alternation.
-#define PSK_TIMER_TICKS  (128)  // 16 MHz / 128 = 125 kHz (8us carrier cycle)
-#define PSK_PULSE_TICKS  (72)   // 4.5us PPI CLR. Most robust across drive modes.
-                                // Resonance band 4.5-5.25us (72-84 ticks). 72 chosen for
-                                // cross-unit tolerance: ±1us shift stays in band.
-#define PSK_PATTERN_MAX  (3072) // 96 bits * 32 entries/bit (NexWatch)
-
-static nrfx_timer_t m_psk_timer = NRFX_TIMER_INSTANCE(3);
-static uint8_t m_psk_pattern[PSK_PATTERN_MAX];
-static uint8_t m_psk_pattern_inv[PSK_PATTERN_MAX];
-static uint16_t m_psk_pattern_len = 0;
-static volatile uint16_t m_psk_idx = 0;
-static volatile uint8_t m_psk_repeat = 0;
-static volatile bool m_psk_use_inv = false;
-static bool m_psk_timer_initialized = false;
-static nrf_ppi_channel_t m_psk_ppi_ch_set;  // CC[0] → GPIOTE SET (ON edge)
-static nrf_ppi_channel_t m_psk_ppi_ch_clr;  // CC[1] → GPIOTE CLR (OFF edge)
-
-static void psk_broadcast_done(void);
-
-static void psk_timer_handler(nrf_timer_event_t event, void *ctx) {
-    (void)ctx;
-    if (event != NRF_TIMER_EVENT_COMPARE0) return;
-
-    // Current cycle's ON edge already happened (PPI fired before ISR entered).
-    // Now decide the NEXT cycle by enabling/disabling PPI_CH_SET.
-    m_psk_idx++;
-    if (m_psk_idx >= m_psk_pattern_len) {
-        m_psk_idx = 0;
-        m_psk_repeat++;
-        m_psk_use_inv = !m_psk_use_inv;
-
-        if (m_psk_repeat >= LF_PSK_BROADCAST_MAX) {
-            nrf_ppi_channel_disable(m_psk_ppi_ch_set);
-            nrfx_timer_disable(&m_psk_timer);
-            nrfx_gpiote_clr_task_trigger(LF_MOD);
-            psk_broadcast_done();
-            return;
-        }
-    }
-
-    const uint8_t *pat = m_psk_use_inv ? m_psk_pattern_inv : m_psk_pattern;
-    if (pat[m_psk_idx]) {
-        nrf_ppi_channel_enable(m_psk_ppi_ch_set);   // next CC[0] will SET
-    } else {
-        nrf_ppi_channel_disable(m_psk_ppi_ch_set);  // next CC[0] won't SET
-    }
-}
-
-static bool is_psk_tag_type(tag_specific_type_t type);
-static void psk_full_teardown(void);
-static void psk_timer_init(void);
-static void psk_timer_start(void);
-static void psk_timer_stop(void);
 
 static void lf_field_lost(void) {
     // Open the incident interruption, so that the next event can be in and out normally
@@ -171,17 +92,11 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     set_slot_light_color(RGB_BLUE);
     TAG_FIELD_LED_ON()
 
-    // Start modulation: PSK uses Timer+GPIO (jitter-free); ASK/FSK and PSK1-on-PWM use a finite
-    // PWM burst, with the field checked in pwm_handler on EVT_STOPPED.
-    if (is_psk_tag_type(m_tag_type)) {
-        psk_timer_start();
-    } else {
-        // Play a finite burst then stop — field check happens in EVT_STOPPED after
-        // PWM has fully released LF_MOD, so ANT_NO_MOD() and the settle delay are
-        // effective. NRFX_PWM_FLAG_LOOP kept the pin owned by the peripheral,
-        // making the field check always read "present" due to self-drive on LF_RSSI.
-        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
-    }
+    // Play a finite burst then stop — field check happens in EVT_STOPPED after
+    // PWM has fully released LF_MOD, so ANT_NO_MOD() and the settle delay are
+    // effective. NRFX_PWM_FLAG_LOOP kept the pin owned by the peripheral,
+    // making the field check always read "present" due to self-drive on LF_RSSI.
+    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
 
     NRF_LOG_INFO("LF FIELD DETECTED");
 }
@@ -214,163 +129,26 @@ static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
     }
 }
 
-static void pwm_init_with_clock(nrf_pwm_clk_t clk) {
+static void pwm_init(void) {
     nrfx_pwm_config_t cfg = NRFX_PWM_DEFAULT_CONFIG;
     cfg.output_pins[0] = LF_MOD;
     for (uint8_t i = 1; i < NRF_PWM_CHANNEL_COUNT; i++) {
         cfg.output_pins[i] = NRFX_PWM_PIN_NOT_USED;
     }
     cfg.irq_priority = APP_IRQ_PRIORITY_LOW;
-    cfg.base_clock = clk;
+    // Base clock depends on the currently-loaded tag type. Legacy ASK/FSK
+    // protocols (EM410x, HID, ioProx, Viking, PAC) use 125kHz base so that
+    // their hardcoded counter_top values (8-64 range) produce the correct
+    // absolute timing. PSK1 protocols need finer resolution for the 16us
+    // subcarrier period, so pwm_init uses 1MHz base with counter_top=16.
+    // See tag_base_type.h IS_PSK1_TYPE for the list of qualifying types.
+    cfg.base_clock = IS_PSK1_TYPE(m_tag_type) ? NRF_PWM_CLK_1MHz : NRF_PWM_CLK_125kHz;
     cfg.count_mode = NRF_PWM_MODE_UP;
     cfg.load_mode = NRF_PWM_LOAD_WAVE_FORM;
     cfg.step_mode = NRF_PWM_STEP_AUTO;
 
     nrfx_err_t err_code = nrfx_pwm_init(&m_broadcast, &cfg, pwm_handler);
     APP_ERROR_CHECK(err_code);
-    m_current_pwm_clk = clk;
-    m_pwm_initialized = true;
-}
-
-static bool is_psk_tag_type(tag_specific_type_t type) {
-    return type == TAG_TYPE_INDALA;
-}
-
-// Base clock depends on the tag type. Legacy ASK/FSK protocols (EM410x, HID,
-// ioProx, Viking, PAC) use 125kHz base so that their hardcoded counter_top
-// values (8-64 range) produce the correct absolute timing. PSK1 protocols on
-// the PWM path need finer resolution for the 16us subcarrier period, so they
-// use 1MHz base with counter_top=16. See tag_base_type.h IS_PSK1_TYPE.
-// Indala uses Timer3+GPIO instead (see psk_timer_init).
-static nrf_pwm_clk_t pwm_clock_for(tag_specific_type_t type) {
-    return IS_PSK1_TYPE(type) ? NRF_PWM_CLK_1MHz : NRF_PWM_CLK_125kHz;
-}
-
-static void pwm_init(void) {
-    pwm_init_with_clock(pwm_clock_for(m_tag_type));
-}
-
-// Reinitialize PWM with a different base clock if needed.
-static void pwm_reinit_clock(nrf_pwm_clk_t clk) {
-    if (!m_pwm_initialized) return;
-    if (m_current_pwm_clk == clk) return;
-    nrfx_pwm_uninit(&m_broadcast);
-    m_pwm_initialized = false;
-    pwm_init_with_clock(clk);
-}
-
-// --- PSK Timer management ---
-
-static void psk_full_teardown(void) {
-    if (!m_psk_timer_initialized) return;
-    psk_timer_stop();
-    nrfx_ppi_channel_disable(m_psk_ppi_ch_set);
-    nrfx_ppi_channel_free(m_psk_ppi_ch_set);
-    nrfx_ppi_channel_disable(m_psk_ppi_ch_clr);
-    nrfx_ppi_channel_free(m_psk_ppi_ch_clr);
-    nrfx_gpiote_out_task_disable(LF_MOD);
-    nrfx_gpiote_out_uninit(LF_MOD);
-    nrfx_timer_uninit(&m_psk_timer);
-    m_psk_timer_initialized = false;
-    nrf_gpio_cfg_output(LF_MOD);
-    ANT_NO_MOD();
-}
-
-static void psk_timer_init(void) {
-    psk_full_teardown();
-
-    // --- Timer3: 16 MHz, fires every 8us (CC[0]) ---
-    nrfx_timer_config_t cfg = NRFX_TIMER_DEFAULT_CONFIG;
-    cfg.frequency = NRF_TIMER_FREQ_16MHz;
-    cfg.mode = NRF_TIMER_MODE_TIMER;
-    cfg.bit_width = NRF_TIMER_BIT_WIDTH_16;
-    cfg.interrupt_priority = APP_IRQ_PRIORITY_HIGH;
-
-    nrfx_err_t err = nrfx_timer_init(&m_psk_timer, &cfg, psk_timer_handler);
-    APP_ERROR_CHECK(err);
-
-    // CC[0]: carrier cycle boundary. SHORT: CC[0] → CLEAR (auto-restart).
-    // Also generates ISR for pattern advancement.
-    nrfx_timer_extended_compare(&m_psk_timer, NRF_TIMER_CC_CHANNEL0,
-        PSK_TIMER_TICKS, NRF_TIMER_SHORT_COMPARE0_CLEAR_MASK, true);
-
-    // CC[1]: FET turn-off point within carrier cycle. No ISR, PPI only.
-    nrfx_timer_compare(&m_psk_timer, NRF_TIMER_CC_CHANNEL1, PSK_PULSE_TICKS, false);
-
-    // --- GPIOTE: configure LF_MOD as task pin (supports SET and CLR tasks) ---
-    nrfx_gpiote_out_config_t gpiote_cfg = NRFX_GPIOTE_CONFIG_OUT_TASK_LOW;
-    err = nrfx_gpiote_out_init(LF_MOD, &gpiote_cfg);
-    APP_ERROR_CHECK(err);
-    nrfx_gpiote_out_task_enable(LF_MOD);
-
-    // --- PPI_CH_SET: CC[0] event → GPIOTE SET (FET ON at carrier cycle start) ---
-    err = nrfx_ppi_channel_alloc(&m_psk_ppi_ch_set);
-    APP_ERROR_CHECK(err);
-    err = nrfx_ppi_channel_assign(m_psk_ppi_ch_set,
-        nrfx_timer_event_address_get(&m_psk_timer, NRF_TIMER_EVENT_COMPARE0),
-        nrfx_gpiote_set_task_addr_get(LF_MOD));
-    APP_ERROR_CHECK(err);
-    // Don't enable yet — psk_timer_start() pre-arms based on pattern[0],
-    // ISR manages enable/disable for subsequent cycles.
-
-    // --- PPI_CH_CLR: CC[1] event → GPIOTE CLR (FET OFF after pulse width) ---
-    err = nrfx_ppi_channel_alloc(&m_psk_ppi_ch_clr);
-    APP_ERROR_CHECK(err);
-    err = nrfx_ppi_channel_assign(m_psk_ppi_ch_clr,
-        nrfx_timer_event_address_get(&m_psk_timer, NRF_TIMER_EVENT_COMPARE1),
-        nrfx_gpiote_clr_task_addr_get(LF_MOD));
-    APP_ERROR_CHECK(err);
-    err = nrfx_ppi_channel_enable(m_psk_ppi_ch_clr);
-    APP_ERROR_CHECK(err);
-    // CLR channel is always enabled — fires every cycle. On OFF cycles (pin already LOW)
-    // it's a no-op. On ON cycles it creates the precise OFF edge.
-
-    m_psk_timer_initialized = true;
-}
-
-static void psk_timer_start(void) {
-    m_psk_idx = 0;
-    m_psk_repeat = 0;
-    m_psk_use_inv = false;
-    // Pre-arm PPI_CH_SET for the first carrier cycle based on pattern[0]
-    if (m_psk_pattern[0]) {
-        nrf_ppi_channel_enable(m_psk_ppi_ch_set);
-    } else {
-        nrf_ppi_channel_disable(m_psk_ppi_ch_set);
-    }
-    nrfx_timer_enable(&m_psk_timer);
-}
-
-static void psk_timer_stop(void) {
-    nrfx_timer_disable(&m_psk_timer);
-    nrf_gpio_cfg_output(LF_MOD);
-    ANT_NO_MOD();
-}
-
-static void psk_broadcast_done(void) {
-    nrfx_gpiote_clr_task_trigger(LF_MOD);
-    bsp_delay_ms(1);
-    NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk |
-                            LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
-    if (is_lf_field_exists()) {
-        nrfx_lpcomp_disable();
-        psk_timer_start();
-    } else {
-        lf_field_lost();
-    }
-}
-
-static void psk_build_pattern(const nrf_pwm_sequence_t *seq) {
-    const nrf_pwm_values_wave_form_t *vals = seq->values.p_wave_form;
-    uint16_t n_entries = seq->length / 4;
-    if (n_entries > PSK_PATTERN_MAX) n_entries = PSK_PATTERN_MAX;
-
-    for (uint16_t i = 0; i < n_entries; i++) {
-        uint8_t on = (vals[i].channel_0 > 0) ? 1 : 0;
-        m_psk_pattern[i] = on;
-        m_psk_pattern_inv[i] = on ^ 1;
-    }
-    m_psk_pattern_len = n_entries;
 }
 
 static void lf_sense_enable(void) {
@@ -396,22 +174,14 @@ static void lf_sense_enable(void) {
     }
 
     lpcomp_init();
-    if (is_psk_tag_type(m_tag_type)) {
-        psk_timer_init();
-    } else {
-        pwm_init();
-    }
+    pwm_init();  // use precise hardware pwm to broadcast card id
     if (is_lf_field_exists()) {
         lpcomp_event_handler(NRF_LPCOMP_EVENT_UP);
     }
 }
 
 static void lf_sense_disable(void) {
-    psk_full_teardown();
-    if (m_pwm_initialized) {
-        nrfx_pwm_uninit(&m_broadcast);
-        m_pwm_initialized = false;
-    }
+    nrfx_pwm_uninit(&m_broadcast);
     nrfx_lpcomp_uninit();
     m_pwm_seq = NULL;
     m_is_lf_emulating = false;
@@ -453,13 +223,6 @@ void lf_tag_125khz_sense_switch(bool enable) {
  * @param buffer   Data buffer
  */
 int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
-    // PWM protocols need the base clock for their type (see pwm_clock_for).
-    // Indala uses Timer3+GPIO (no PWM needed), but still builds the
-    // modulator's PWM sequence to extract the bit pattern.
-    if (!is_psk_tag_type(type)) {
-        pwm_reinit_clock(pwm_clock_for(type));
-    }
-
     // ensure buffer size is large enough for specific tag type,
     // so that tag data (e.g., card numbers) can be converted to corresponding pwm sequence here.
     if ((type == TAG_TYPE_EM410X || type == TAG_TYPE_EM410X_ELECTRA) && buffer->length >= lf_em410x_id_size(type)) {
@@ -526,12 +289,10 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
         return LF_IDTECK_TAG_ID_SIZE;
     }
 
-    // PSK protocols: build PWM sequence then convert to timer pattern
     if (type == TAG_TYPE_INDALA && buffer->length >= LF_INDALA_TAG_ID_SIZE) {
         m_tag_type = type;
         void *codec = indala.alloc();
-        const nrf_pwm_sequence_t *seq = indala.modulator(codec, buffer->buffer);
-        psk_build_pattern(seq);
+        m_pwm_seq = indala.modulator(codec, buffer->buffer);
         indala.free(codec);
         NRF_LOG_INFO("load lf indala data finish.");
         return LF_INDALA_TAG_ID_SIZE;

@@ -119,7 +119,7 @@ typedef enum {
 // base clock to be set to 1MHz (see lf_tag_em.c pwm_init) so the 16us
 // subcarrier period can be expressed with a counter_top valid under the
 // nRF52 PWM spec. Legacy ASK/FSK types keep the default 125kHz base.
-#define IS_PSK1_TYPE(t) ((t) == TAG_TYPE_IDTECK)
+#define IS_PSK1_TYPE(t) ((t) == TAG_TYPE_IDTECK || (t) == TAG_TYPE_INDALA)
 
 #define TAG_SPECIFIC_TYPE_HF_VALUES                                   \
     TAG_TYPE_MIFARE_Mini, TAG_TYPE_MIFARE_1024, TAG_TYPE_MIFARE_2048, \
