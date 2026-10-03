@@ -17,10 +17,14 @@ NRF_LOG_MODULE_REGISTER();
 
 /*
  * Circular buffer for SAADC samples.
- * Increased from 128 to 512 to reduce overrun risk during USB transfer.
- * The main loop drains it as fast as possible into the output buffer.
+ *
+ * It must hold a whole SAADC batch: the SAADC hands saadc_cb() ADC_BUF_SIZE
+ * (2048, ble_main.c) samples at once, every 16.4ms, and anything that doesn't
+ * fit is dropped. 2560 holds one batch with slack; the main loop drains it
+ * long before the next. It is malloc'd, so __HEAP_SIZE in application/Makefile
+ * must cover it.
  */
-#define CIRCULAR_BUFFER_SIZE (512)
+#define CIRCULAR_BUFFER_SIZE (2560)
 static circular_buffer cb;
 
 static void saadc_cb(nrf_saadc_value_t *vals, size_t size) {
