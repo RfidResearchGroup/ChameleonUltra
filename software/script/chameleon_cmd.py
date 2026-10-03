@@ -1423,17 +1423,21 @@ class ChameleonCMD:
             [2] - mf1_is_gen2_magic_mode
             [3] - mf1_is_use_mf1_coll_res (use UID/BCC/SAK/ATQA from 0 block)
             [4] - mf1_get_write_mode
+            [5] - mf1_get_strict_key_b_auth
 
         :return:
         """
         resp = self.device.send_cmd_sync(Command.MF1_GET_EMULATOR_CONFIG)
         if resp.status == Status.SUCCESS:
-            b1, b2, b3, b4, b5 = struct.unpack('!????B', resp.data)
-            resp.parsed = {'detection': b1,
-                           'gen1a_mode': b2,
-                           'gen2_mode': b3,
-                           'block_anti_coll_mode': b4,
-                           'write_mode': b5}
+            b1, b2, b3, b4, b5, b6 = struct.unpack('!????B?', resp.data)
+            resp.parsed = {
+                'detection': b1,
+                'gen1a_mode': b2,
+                'gen2_mode': b3,
+                'block_anti_coll_mode': b4,
+                'write_mode': b5,
+                'strict_key_b_auth': b6,
+            }
         return resp
 
     @expect_response(Status.SUCCESS)
@@ -1487,6 +1491,26 @@ class ChameleonCMD:
         """
         data = struct.pack('!B', prng_type)
         return self.device.send_cmd_sync(Command.MF1_SET_PRNG_TYPE, data)
+
+    @expect_response(Status.SUCCESS)
+    def mf1_get_strict_key_b_auth(self):
+        """
+        Get strict Key B auth mode:
+          False = permissive, matches clones
+          True  = NXP-strict
+        """
+        resp = self.device.send_cmd_sync(Command.MF1_GET_STRICT_KEY_B_AUTH)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = struct.unpack('!B', resp.data)[0] == 1
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mf1_set_strict_key_b_auth(self, enabled: bool):
+        """
+        Set strict Key B auth mode
+        """
+        data = struct.pack('!B', enabled)
+        return self.device.send_cmd_sync(Command.MF1_SET_STRICT_KEY_B_AUTH, data)
 
     @expect_response(Status.SUCCESS)
     def slot_data_config_save(self):
