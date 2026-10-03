@@ -707,7 +707,9 @@ class ChameleonCMD:
 
         :return:
         """
-        resp = self.device.send_cmd_sync(Command.INDALA_SCAN)
+        # The firmware reads for up to 3s (several captures, two must agree), but
+        # only checks its budget between captures, so leave headroom.
+        resp = self.device.send_cmd_sync(Command.INDALA_SCAN, timeout=5)
         if resp.status == Status.LF_TAG_OK:
             resp.parsed = resp.data
         return resp

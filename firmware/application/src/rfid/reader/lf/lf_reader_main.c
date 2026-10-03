@@ -247,8 +247,14 @@ uint8_t write_idteck_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_p
  */
 void set_scan_tag_timeout(uint32_t ms) { g_timeout_readem_ms = ms; }
 
+// An Indala read takes several 33ms captures and needs two to agree, so it gets a
+// longer budget than the other scans' default. 3s covers the whole phase rotation
+// in lf_indala_data.c (8 phases x 8 captures), so the backup phases get tried.
+#define INDALA_READ_TIMEOUT_MS 3000
+
 uint8_t scan_indala(uint8_t *data) {
-    if (psk_generic_read(&indala, data, g_timeout_readem_ms)) {
+    uint32_t timeout = g_timeout_readem_ms > INDALA_READ_TIMEOUT_MS ? g_timeout_readem_ms : INDALA_READ_TIMEOUT_MS;
+    if (indala_read(data, timeout)) {
         return STATUS_LF_TAG_OK;
     }
     return STATUS_LF_TAG_NO_FOUND;
