@@ -236,6 +236,39 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.HF_TAG_OK)
+    def mf0_ulc_auth(self, key: bytes):
+        assert len(key) == 16
+        resp = self.device.send_cmd_sync(Command.MF0_ULC_AUTH, struct.pack('!16s', key))
+        resp.parsed = resp.status == Status.HF_TAG_OK
+        return resp
+
+    @expect_response(Status.HF_TAG_OK)
+    def mf0_ulc_read(self, key: bytes, page: int, count: int):
+        assert len(key) == 16
+        data = struct.pack('!16sBB', key, page, count)
+        resp = self.device.send_cmd_sync(Command.MF0_ULC_READ, data)
+        resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.HF_TAG_OK)
+    def mf0_ulc_write(self, key: bytes, page: int, page_data: bytes):
+        assert len(key) == 16
+        assert len(page_data) == 4
+        data = struct.pack('!16sB4s', key, page, page_data)
+        resp = self.device.send_cmd_sync(Command.MF0_ULC_WRITE, data)
+        resp.parsed = resp.status == Status.HF_TAG_OK
+        return resp
+
+    @expect_response(Status.HF_TAG_OK)
+    def mf0_ulc_set_key(self, old_key: bytes, new_key: bytes):
+        assert len(old_key) == 16
+        assert len(new_key) == 16
+        data = struct.pack('!16s16s', old_key, new_key)
+        resp = self.device.send_cmd_sync(Command.MF0_ULC_SET_KEY, data)
+        resp.parsed = resp.status == Status.HF_TAG_OK
+        return resp
+
+    @expect_response(Status.HF_TAG_OK)
     def hf14a_scan_keep(self):
         """
         Scan ISO14443-A tag with full select + RATS, keeping field alive.
@@ -1833,6 +1866,49 @@ class ChameleonCMD:
     def mf1_set_field_off_do_reset(self, enabled: bool):
         data = struct.pack('!B', enabled)
         return self.device.send_cmd_sync(Command.MF1_SET_FIELD_OFF_DO_RESET, data)
+
+    @expect_response(Status.SUCCESS)
+    def seos_read_emu_data(self):
+        resp = self.device.send_cmd_sync(Command.SEOS_READ_EMU_DATA, None)
+        resp.parsed = {}
+
+        def extract_next():
+            length = resp.data[0]
+            value = resp.data[1:length+1]
+            resp.data = resp.data[length+1:]
+            return value
+
+        data, oid, tag, diversifier = extract_next(), extract_next(), extract_next(), extract_next()
+        hash_alg, encr_alg = struct.unpack('!BB', resp.data)
+
+        resp.parsed = {
+            "data": data, "oid": oid, "tag": tag, "diversifier": diversifier,
+            "hash_alg": hash_alg, "encr_alg": encr_alg
+        }
+
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def seos_write_emu_data(self, data: bytes, oid: bytes, tag: bytes, diversifier: bytes, hash_alg: int, encr_alg: int):
+        data = bytes([len(data)]) + data
+        oid = bytes([len(oid)]) + oid
+        tag = bytes([len(tag)]) + tag
+        diversifier = bytes([len(diversifier)]) + diversifier
+        
+        payload = (
+            data + oid + tag + diversifier +
+            struct.pack('!BB', hash_alg, encr_alg)
+        )
+        
+        if len(payload) > 4096:
+            raise ValueError("Too much provided data")
+
+        return self.device.send_cmd_sync(Command.SEOS_WRITE_EMU_DATA, payload)
+    
+    @expect_response(Status.SUCCESS)
+    def seos_write_emu_keys(self, auth: bytes, privenc: bytes, privmac: bytes):
+        payload = auth + privenc + privmac
+        return self.device.send_cmd_sync(Command.SEOS_WRITE_EMU_KEYS, payload)
 
 
 def test_fn():

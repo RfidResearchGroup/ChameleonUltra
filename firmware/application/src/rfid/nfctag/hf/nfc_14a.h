@@ -36,10 +36,11 @@
 
 // ISO14443-A Universal state machine
 typedef enum {
-    NFC_TAG_STATE_14A_IDLE,     // Leisure, you can wait for any instructions
-    NFC_TAG_STATE_14A_READY,    // Select card status, currently the standard 14A anti -rushing collision
-    NFC_TAG_STATE_14A_ACTIVE,   // Select cards or other instructions to enter the working status, which can receive all data
-    NFC_TAG_STATE_14A_HALTED,   // The label stops working status and can only be awakened by Halt or other special instructions (non -labels)
+    NFC_TAG_STATE_14A_IDLE,        // Leisure, you can wait for any instructions
+    NFC_TAG_STATE_14A_READY,       // Select card status, currently the standard 14A anti -rushing collision
+    NFC_TAG_STATE_14A_ACTIVE,      // Select cards or other instructions to enter the working status, which can receive all data
+    NFC_TAG_STATE_14A_HALTED,      // The label stops working status and can only be awakened by Halt or other special instructions (non -labels)
+    NFC_TAG_STATE_14A_PROPRIETARY, // Card is in proprietary state; all commands handled only by state_handler
 } nfc_tag_14a_state_t;
 
 // UID of the length in the enumeration specification
@@ -132,6 +133,7 @@ void nfc_tag_14a_set_state(nfc_tag_14a_state_t state);
 void nfc_tag_14a_tx_bytes(uint8_t *data, uint32_t bytes, bool appendCrc);
 void nfc_tag_14a_tx_bits(uint8_t *data, uint32_t bits);
 void nfc_tag_14a_tx_nbit(uint8_t data, uint32_t bits);
+void nfc_tag_14a_set_frame_delay_max(uint32_t max_ticks);
 
 // Determine whether it is an effective UID length
 bool is_valid_uid_size(uint8_t uid_length);

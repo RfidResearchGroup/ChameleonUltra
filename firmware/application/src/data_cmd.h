@@ -69,6 +69,10 @@
 #define DATA_CMD_MF1_READ_ONE_BLOCK             (2008)
 #define DATA_CMD_MF1_WRITE_ONE_BLOCK            (2009)
 #define DATA_CMD_HF14A_RAW                      (2010)
+#define DATA_CMD_MF0_ULC_AUTH                   (2018)
+#define DATA_CMD_MF0_ULC_READ                   (2019)
+#define DATA_CMD_MF0_ULC_WRITE                  (2021)
+#define DATA_CMD_MF0_ULC_SET_KEY                (2022)
 #define DATA_CMD_HF14A_SCAN_KEEP                (2016)  /* scan+RATS, keep field alive for APDU exchange */
 #define DATA_CMD_HF14A_AUTH_TRACE               (2017)  /* full anticoll + Crypto1 auth, every frame returned for inspection */
 #define DATA_CMD_MF1_MANIPULATE_VALUE_BLOCK     (2011)
@@ -166,6 +170,9 @@
 #define DATA_CMD_MF1_GET_FIELD_OFF_DO_RESET     (4039)
 #define DATA_CMD_MF1_GET_PRNG_TYPE              (4040)  // 0=static 1=weak(LFSR) 2=hard(rand)
 #define DATA_CMD_MF1_SET_PRNG_TYPE              (4041)
+#define DATA_CMD_SEOS_READ_EMU_DATA             (4042)
+#define DATA_CMD_SEOS_WRITE_EMU_DATA            (4043)
+#define DATA_CMD_SEOS_WRITE_EMU_KEYS            (4044)
 //
 // ******************************************************************
 
