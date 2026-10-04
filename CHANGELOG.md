@@ -3,6 +3,8 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Fix wrong data reported by hf 14a sniff on frames containing more than 7 parity bits (@DidierA)
+ - Added MIFARE Ultralight C authentication and emulation (@Foxushka)
 
 ## [v2.2.0][2026-07-04]
  - Added Jablotron LF protocol support: read, emulate and T55xx clone (@midlan)
@@ -26,6 +28,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Fix Windows build (@suut)
  - Added `hf 14a config` to deal with badly configured cards (@azuwis)
  - New Symmetrical LED Animation Mode and Improved Minimal Mode (@WillyJL)
+ - Fixed formatting returned keys by static and staticnested (@triplesprawl)
  - Fix MF1 state reset logic and access control conditions (@unkernet)
  - Added support for SEOS credentials (@aaronjamt)
 
@@ -68,6 +71,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Fixed watchdog trigger during `hw factory_reset` (@doegox)
  - Added PyInstaller support for CLI client (@augustozanellato)
  - Added proper Mifare Ultralight (original, C, EV1) / NTAG (213, 215, 216) emulation (@turbocooler).
+
 
 ## [v2.0.0][2023-09-26]
  - Added `hw slot nick delete` and DELETE_SLOT_TAG_NICK (@doegox)
