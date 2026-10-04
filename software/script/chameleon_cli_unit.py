@@ -443,8 +443,6 @@ class MFUAuthArgsUnit(ReaderRequiredUnit):
 
             if len(key) not in [4, 16]:
                 raise ValueError("Key should either be 4 or 16 bytes long")
-            elif len(key) == 16:
-                raise ValueError("Ultralight-C authentication isn't supported yet")
 
             return key
 
@@ -453,7 +451,8 @@ class MFUAuthArgsUnit(ReaderRequiredUnit):
             "--key",
             type=key_parser,
             metavar="<hex>",
-            help="Authentication key (EV1/NTAG 4 bytes).",
+            help="Authentication key: 4 bytes (UL EV1/NTAG password) "
+                 "or 16 bytes (Ultralight-C 3DES key, cipher order).",
         )
         parser.add_argument(
             "-l",
@@ -2641,6 +2640,7 @@ class HFMFAutopwn(ReaderRequiredUnit):
             nested = HFMFNested.__new__(HFMFNested)
             BaseCLIUnit.__init__(nested)
             nested._device_cmd = self.cmd
+            hardnested = None
             for missing_key_num, key_type_target in missing_keys.items():
                 if current_keys_found.get(missing_key_num) is not None:
                     print(f" {CG}[+]{C0}  Key {missing_key_num} found by reuse")
@@ -2653,16 +2653,38 @@ class HFMFAutopwn(ReaderRequiredUnit):
                     key_type_target,
                 )
                 if nested_key is None:
-                    continue
-                print(
-                    f" {CG}[+]{C0}  Found key {missing_key_num}: {nested_key.upper()}"
-                )
-                current_keys_found[missing_key_num] = bytes.fromhex(nested_key)
+                    if hardnested is None:
+                        hardnested = HFMFHardNested.__new__(HFMFHardNested)
+                        BaseCLIUnit.__init__(hardnested)
+                        hardnested._device_cmd = self.cmd
+                    hn_key = hardnested.recover_key(
+                        False,
+                        block_known,
+                        type_known,
+                        key_known_bytes,
+                        (missing_key_num // 2) * 4,
+                        key_type_target,
+                        False,
+                        200,
+                        3,
+                    )
+                    if hn_key is None:
+                        continue
+                    current_keys_found[missing_key_num] = bytes.fromhex(hn_key)
+                    print(
+                        f" {CG}[+]{C0}  Found key {missing_key_num}: {hn_key.upper()}"
+                    )
+                else:
+                    print(
+                        f" {CG}[+]{C0}  Found key {missing_key_num}: {nested_key.upper()}"
+                    )
+                    current_keys_found[missing_key_num] = bytes.fromhex(nested_key)
                 current_keys_found = dict(sorted(current_keys_found.items()))
                 _, mask_bytes = self.mask_from_keys(missing_keys)
+                new_key = current_keys_found[missing_key_num]
                 current_keys_found = self.merge_found_sector_keys(
                     current_keys_found,
-                    self.try_key(bytes.fromhex(nested_key), self.neg_bytes(mask_bytes)),
+                    self.try_key(new_key, self.neg_bytes(mask_bytes)),
                 )
             if len(current_keys_found) < total:
                 current_keys_found = self.run_senested(
@@ -3139,34 +3161,50 @@ class HFMFDump(MF1AuthArgsUnit):
 
         # iterate over sectors
         for s in range(16):
-            # try all keys for this sector
-            typ = None
+            # find working keys for this sector (both A and B)
+            type_a = type_b = None
+            key_a = key_b = None
             for key in keys:
-                # first try key B
-                try:
-                    self.cmd.mf1_read_one_block(4 * s, MfcKeyType.B, key)
-                    typ = MfcKeyType.B
+                if type_b is None:
+                    try:
+                        self.cmd.mf1_read_one_block(4 * s, MfcKeyType.B, key)
+                        type_b = MfcKeyType.B
+                        key_b = key
+                    except UnexpectedResponseError:
+                        pass
+                if type_a is None:
+                    try:
+                        self.cmd.mf1_read_one_block(4 * s, MfcKeyType.A, key)
+                        type_a = MfcKeyType.A
+                        key_a = key
+                    except UnexpectedResponseError:
+                        pass
+                if type_a is not None and type_b is not None:
                     break
-                except UnexpectedResponseError:
-                    # ignore read errors at this stage as we want to try key A
-                    pass
-                # try with key A if B was unsuccessful
-                try:
-                    self.cmd.mf1_read_one_block(4 * s, MfcKeyType.A, key)
-                    typ = MfcKeyType.A
-                    break
-                except UnexpectedResponseError:
-                    pass
-            else:
+            if type_a is None and type_b is None:
                 raise Exception(f"No key found for sector {s}")
+
+            typ = type_a if type_a is not None else type_b
+            key = key_a if type_a is not None else key_b
             # iterate over blocks
-            for b in range(4):
+            for b in range(3):
                 block_data = self.cmd.mf1_read_one_block(4 * s + b, typ, key)
-                # add data to buffer
                 if content_type == "bin":
                     buffer.extend(block_data)
                 elif content_type == "hex":
                     buffer.extend(block_data.hex().encode("utf-8"))
+
+            # sector trailer: fill key bytes from known keys
+            trailer = bytearray(self.cmd.mf1_read_one_block(4 * s + 3, typ, key))
+            if key_a is not None:
+                trailer[0:6] = key_a
+            if key_b is not None:
+                trailer[10:16] = key_b
+            trailer = bytes(trailer)
+            if content_type == "bin":
+                buffer.extend(trailer)
+            elif content_type == "hex":
+                buffer.extend(trailer.hex().encode("utf-8"))
         # write buffer to file
         args.dump_file.write(buffer)
 
@@ -4255,6 +4293,14 @@ class HFMFURDPG(MFUAuthArgsUnit):
     def on_exec(self, args: argparse.Namespace):
         param = self.get_param(args)
 
+        if param.key is not None and len(param.key) == 16:
+            try:
+                data = self.cmd.mf0_ulc_read(param.key, args.page, 1)
+                print(f" - Data: {bytes(data[:4]).hex()}")
+            except UnexpectedResponseError:
+                print(color_string((CR, " - Auth failed")))
+            return
+
         options = {
             "activate_rf_field": 0,
             "wait_response": 1,
@@ -4340,6 +4386,14 @@ class HFMFUWRPG(MFUAuthArgsUnit):
             )
             return
 
+        if param.key is not None and len(param.key) == 16:
+            try:
+                self.cmd.mf0_ulc_write(param.key, args.page, data)
+                print(" - Ok")
+            except UnexpectedResponseError:
+                print(color_string((CR, "Write failed.")))
+            return
+
         options = {
             "activate_rf_field": 0,
             "wait_response": 1,
@@ -4395,6 +4449,47 @@ class HFMFUWRPG(MFUAuthArgsUnit):
                 # we may lose the tag again here
                 pass
             print(color_string((CR, " - Auth failed")))
+
+
+@hf_mfu.command("setkey")
+class HFMFUSETKEY(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Change the MIFARE Ultralight C 3DES key (authenticate with the current key, then write the new key)"
+
+        def key16(key: str) -> bytes:
+            try:
+                key = bytes.fromhex(key)
+            except ValueError:
+                raise ValueError("Key should be a hex string")
+            if len(key) != 16:
+                raise ValueError("Ultralight-C 3DES key must be 16 bytes")
+            return key
+
+        parser.add_argument(
+            "-k",
+            "--key",
+            type=key16,
+            required=True,
+            metavar="<hex>",
+            help="Current 16-byte 3DES key (cipher order).",
+        )
+        parser.add_argument(
+            "-n",
+            "--new-key",
+            type=key16,
+            required=True,
+            metavar="<hex>",
+            help="New 16-byte 3DES key (cipher order).",
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            self.cmd.mf0_ulc_set_key(args.key, args.new_key)
+            print(" - Ok")
+        except UnexpectedResponseError:
+            print(color_string((CR, " - Failed (wrong current key or key page locked)")))
 
 
 @hf_mfu.command("eview")
@@ -4601,6 +4696,10 @@ class HFMFURCNT(MFUAuthArgsUnit):
     def on_exec(self, args: argparse.Namespace):
         param = self.get_param(args)
 
+        if param.key is not None and len(param.key) == 16:
+            print(color_string((CR, "rcnt is not available for Ultralight-C (3DES) tags.")))
+            return
+
         options = {
             "activate_rf_field": 0,
             "wait_response": 1,
@@ -4712,6 +4811,31 @@ class HFMFUDUMP(MFUAuthArgsUnit):
                 )
             )
             print(f"- {err}")
+            return
+
+        if param.key is not None and len(param.key) == 16:
+            print(" - Detected tag type as Mifare Ultralight C.")
+            ulc_stop = stop_page if stop_page is not None else 0x2C
+            count = min(ulc_stop - args.page, 48)
+            if count > 0:
+                try:
+                    data = bytes(self.cmd.mf0_ulc_read(param.key, args.page, count))
+                except UnexpectedResponseError:
+                    print(color_string((CR, " - Auth failed")))
+                    data = b""
+                pages_read = len(data) // 4
+                for idx in range(pages_read):
+                    page_data = data[idx * 4: idx * 4 + 4]
+                    print(f" - Page {args.page + idx:2}: {page_data.hex()}")
+                    if fd is not None:
+                        if save_as_eml:
+                            fd.write(page_data.hex() + "\n")
+                        else:
+                            fd.write(page_data)
+                if 0 < pages_read < count:
+                    print(f"- {color_string((CY, 'Dump stopped early (page not readable without/again auth).'))}")
+                if fd is not None and args.file != "":
+                    print(f"- {color_string((CG, f'Dump written in {args.file}.'))}")
             return
 
         options = {

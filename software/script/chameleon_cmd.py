@@ -236,6 +236,39 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.HF_TAG_OK)
+    def mf0_ulc_auth(self, key: bytes):
+        assert len(key) == 16
+        resp = self.device.send_cmd_sync(Command.MF0_ULC_AUTH, struct.pack('!16s', key))
+        resp.parsed = resp.status == Status.HF_TAG_OK
+        return resp
+
+    @expect_response(Status.HF_TAG_OK)
+    def mf0_ulc_read(self, key: bytes, page: int, count: int):
+        assert len(key) == 16
+        data = struct.pack('!16sBB', key, page, count)
+        resp = self.device.send_cmd_sync(Command.MF0_ULC_READ, data)
+        resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.HF_TAG_OK)
+    def mf0_ulc_write(self, key: bytes, page: int, page_data: bytes):
+        assert len(key) == 16
+        assert len(page_data) == 4
+        data = struct.pack('!16sB4s', key, page, page_data)
+        resp = self.device.send_cmd_sync(Command.MF0_ULC_WRITE, data)
+        resp.parsed = resp.status == Status.HF_TAG_OK
+        return resp
+
+    @expect_response(Status.HF_TAG_OK)
+    def mf0_ulc_set_key(self, old_key: bytes, new_key: bytes):
+        assert len(old_key) == 16
+        assert len(new_key) == 16
+        data = struct.pack('!16s16s', old_key, new_key)
+        resp = self.device.send_cmd_sync(Command.MF0_ULC_SET_KEY, data)
+        resp.parsed = resp.status == Status.HF_TAG_OK
+        return resp
+
+    @expect_response(Status.HF_TAG_OK)
     def hf14a_scan_keep(self):
         """
         Scan ISO14443-A tag with full select + RATS, keeping field alive.
