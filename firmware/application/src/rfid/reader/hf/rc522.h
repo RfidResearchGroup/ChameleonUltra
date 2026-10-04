@@ -240,6 +240,8 @@ uint8_t pcd_14a_reader_mf1_write(uint8_t addr, uint8_t *pData);
 // cardReadingOperation
 uint16_t pcd_14a_reader_mf1_read_by_cmd(uint8_t cmd, uint8_t addr, uint8_t *p);
 uint16_t pcd_14a_reader_mf1_read(uint8_t addr, uint8_t *pData);
+uint8_t pcd_14a_reader_mf0_ulc_auth(uint8_t *key);
+uint8_t pcd_14a_reader_mf0_ult_write_page(uint8_t page, uint8_t *data);
 // value block operation
 uint8_t pcd_14a_reader_mf1_manipulate_value_block(uint8_t operator, uint8_t addr, int32_t operand);
 uint8_t pcd_14a_reader_mf1_transfer_value_block(uint8_t addr);
