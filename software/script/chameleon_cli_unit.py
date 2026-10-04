@@ -159,7 +159,7 @@ class BaseCLIUnit:
         """
         return True
 
-    def on_exec(self, args: argparse.Namespace):
+    def on_exec(self, args: argparse.Namespace) -> None:
         """
             Call a function on cmd match.
 
@@ -713,6 +713,32 @@ class LFIOProxReadArgsUnit(DeviceRequiredUnit):
         return parser
 
 
+class LFParadoxIdArgsUnit(DeviceRequiredUnit):
+    @staticmethod
+    def add_card_arg(parser: ArgumentParserNoExit, required=False):
+        parser.add_argument(
+            "--id",
+            type=str,
+            required=required,
+            help="Paradox tag data (6 bytes hex)",
+            metavar="<hex>",
+        )
+        return parser
+
+    def before_exec(self, args: argparse.Namespace):
+        if not super().before_exec(args):
+            return False
+        if args.id is not None and not re.match(r"^[a-fA-F0-9]{12}$", args.id):
+            raise ArgsParserError("ID must include 12 HEX symbols (6 bytes)")
+        return True
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        raise NotImplementedError("Please implement this")
+
+    def on_exec(self, args: argparse.Namespace) -> None:
+        raise NotImplementedError("Please implement this")
+
+
 class LFVikingIdArgsUnit(DeviceRequiredUnit):
     @staticmethod
     def add_card_arg(parser: ArgumentParserNoExit, required=False):
@@ -908,6 +934,7 @@ lf_em_410x = lf_em.subgroup("410x", "EM410x commands")
 lf_hid = lf.subgroup("hid", "HID commands")
 lf_hid_prox = lf_hid.subgroup("prox", "HID Prox commands")
 lf_ioprox = lf.subgroup("ioprox", "ioProx commands")
+lf_paradox = lf.subgroup("paradox", "Paradox commands")
 lf_pac = lf.subgroup("pac", "PAC/Stanley commands")
 lf_viking = lf.subgroup("viking", "Viking commands")
 lf_jablotron = lf.subgroup("jablotron", "Jablotron commands")
@@ -6083,6 +6110,65 @@ class LFIOProxEconfig(SlotIndexArgsAndGoUnit, LFIOProxIdArgsUnit):
             print(f"   ID: {color_string((CY, cn))}")
             print(f"   Raw: {color_string((CY, raw8.hex().upper()))}")
 
+
+@lf_paradox.command("read")
+class LFParadoxRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Scan Paradox tag and print card data"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        data = self.cmd.paradox_scan()
+        fc, card_id, crc = paradox_fields(data)
+        print(" Paradox")
+        print(f"   Data: {color_string((CY, data.hex().upper()))}")
+        print(f"   FC: {color_string((CG, fc))}")
+        print(f"   Card: {color_string((CG, card_id))}")
+        print(f"   CRC: {color_string((CG, crc))} ({paradox_crc_status(data)})")
+
+
+@lf_paradox.command("write")
+class LFParadoxWriteT55xx(LFParadoxIdArgsUnit, ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Write Paradox card data to t55xx"
+        return self.add_card_arg(parser, required=True)
+
+    def on_exec(self, args: argparse.Namespace):
+        id_hex = args.id
+        write_and_verify_paradox(self.cmd, bytes.fromhex(id_hex))
+
+
+@lf_paradox.command("econfig")
+class LFParadoxEconfig(SlotIndexArgsAndGoUnit, LFParadoxIdArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Set or get emulated Paradox card data"
+        self.add_slot_args(parser)
+        self.add_card_arg(parser)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.id is not None:
+            slotinfo = self.cmd.get_slot_info()
+            selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+            lf_tag_type = TagSpecificType(slotinfo[selected - 1]["lf"])
+            if lf_tag_type != TagSpecificType.Paradox:
+                print(f"{color_string((CR, 'WARNING'))}: Slot type not set to Paradox.")
+            data = bytes.fromhex(args.id)
+            self.cmd.paradox_set_emu_id(data)
+            print(" - Set Paradox tag data success.")
+        else:
+            data = self.cmd.paradox_get_emu_id()
+            fc, card_id, crc = paradox_fields(data)
+            print(" - Get Paradox tag data success.")
+            print(f"Data: {color_string((CY, data.hex().upper()))}")
+            print(f"FC: {color_string((CG, fc))}")
+            print(f"Card: {color_string((CG, card_id))}")
+            print(f"CRC: {color_string((CG, crc))} ({paradox_crc_status(data)})")
+
+
 def jablotron_card_id(raw_bytes: bytes) -> int:
     """Convert 5 raw Jablotron bytes to decimal card number via BCD."""
     card_id = 0
@@ -6090,6 +6176,111 @@ def jablotron_card_id(raw_bytes: bytes) -> int:
         card_id = card_id * 100 + ((b >> 4) * 10) + (b & 0x0F)
     return card_id
 
+
+def paradox_fields(raw_bytes: bytes) -> tuple[int, int, int]:
+    """Extract Paradox facility, card number, and CRC fields."""
+    if len(raw_bytes) != 6:
+        raise ValueError("Paradox data must be exactly 6 bytes")
+    value = int.from_bytes(raw_bytes, byteorder="big")
+    return ((value >> 30) & 0xFF, (value >> 14) & 0xFFFF, (value >> 6) & 0xFF)
+
+
+def _paradox_manchester_u16(value: int) -> int:
+    encoded = 0
+    for bit in range(16):
+        encoded = (encoded << 2) | (2 if value & (0x8000 >> bit) else 1)
+    return encoded
+
+
+def _paradox_crc_for_fields(facility_code: int, card_number: int) -> int:
+    facility_encoded = _paradox_manchester_u16(facility_code)
+    card_encoded = _paradox_manchester_u16(card_number)
+    crc_input = bytes(
+        (
+            0x05,
+            0x55,
+            0x55,
+            (facility_encoded >> 8) & 0xFF,
+            facility_encoded & 0xFF,
+            (card_encoded >> 24) & 0xFF,
+            (card_encoded >> 16) & 0xFF,
+            (card_encoded >> 8) & 0xFF,
+            card_encoded & 0xFF,
+        )
+    )
+    crc = 0
+    for byte in crc_input:
+        crc ^= byte
+        for _ in range(8):
+            crc = (crc >> 1) ^ 0x8C if crc & 1 else crc >> 1
+    return crc ^ 0x06
+
+
+def paradox_crc_info(raw_bytes: bytes) -> tuple[int, int, bool, bool]:
+    """Return stored CRC, expected CRC, field match, and canonical-layout status."""
+    if len(raw_bytes) != 6:
+        raise ValueError("Paradox data must be exactly 6 bytes")
+    value = int.from_bytes(raw_bytes, byteorder="big")
+    facility_code, card_number, stored_crc = paradox_fields(raw_bytes)
+    expected_crc = _paradox_crc_for_fields(facility_code, card_number)
+    canonical_layout = (value >> 38) == 0 and ((value >> 4) & 0x03) == 0x03
+    return stored_crc, expected_crc, stored_crc == expected_crc, canonical_layout
+
+
+def paradox_crc_status(raw_bytes: bytes) -> str:
+    """Describe CRC result without calling noncanonical frame data valid."""
+    stored_crc, expected_crc, matches, canonical_layout = paradox_crc_info(raw_bytes)
+    if canonical_layout and matches:
+        result = "valid"
+    elif canonical_layout:
+        result = "mismatch"
+    elif matches:
+        result = "matches fields; noncanonical frame layout"
+    else:
+        result = "mismatch; noncanonical frame layout"
+    return f"{result}; expected {expected_crc}"
+
+
+def paradox_wire_payload(raw_bytes: bytes) -> bytes:
+    """Normalize Paradox data to its 44 transmitted bits for comparison."""
+    if len(raw_bytes) != 6:
+        raise ValueError("Paradox data must be exactly 6 bytes")
+    return bytes(raw_bytes[:5]) + bytes((raw_bytes[5] & 0xF0,))
+
+
+def write_and_verify_paradox(cmd: chameleon_cmd.ChameleonCMD, id_bytes: bytes) -> bool:
+    """Write once, then read the T55xx once and compare its transmitted bits."""
+    print(
+        " WARNING: T55xx write enables password mode with password "
+        f"{chameleon_cmd.new_key.hex().upper()}."
+    )
+    cmd.paradox_write_to_t55xx(id_bytes)
+    print(f" - Paradox ID write command sent: {id_bytes.hex().upper()}")
+    response = cmd.paradox_scan_response()
+    if response.status == Status.LF_TAG_NO_FOUND:
+        print(" - Paradox T55xx write submitted; read-back failed: tag not found.")
+        return False
+    if response.status != Status.LF_TAG_OK:
+        try:
+            status_text = str(Status(response.status))
+        except ValueError:
+            status_text = f"unknown status 0x{int(response.status):02X}"
+        raise UnexpectedResponseError(f"Paradox T55xx read-back failed: {status_text}")
+
+    readback = response.parsed
+    if not isinstance(readback, bytes) or len(readback) != 6:
+        raise UnexpectedResponseError("Paradox T55xx read-back returned invalid data")
+
+    expected_wire = paradox_wire_payload(id_bytes)
+    readback_wire = paradox_wire_payload(readback)
+    if expected_wire != readback_wire:
+        print(" - Paradox T55xx write submitted; read-back mismatch.")
+        print(f"   Expected 44 bits: {expected_wire.hex().upper()}")
+        print(f"   Read-back 44 bits: {readback_wire.hex().upper()}")
+        return False
+
+    print(" - Paradox T55xx write verified: read-back matches 44 data bits.")
+    return True
 
 
 def pac_encode_raw(card_id: bytes) -> bytes:
@@ -6359,6 +6550,7 @@ class LFT55xxClone(ReaderRequiredUnit):
       electra  --id <26 hex>         e.g. --id DEADBEEF880102030405060708
       hid      -f <format> --cn <n>  e.g. -f H10301 --fc 10 --cn 1234
       ioprox   --ver <n> --fc <n> --cn <n>   OR   --raw8 <16 hex>
+      paradox  --id <12 hex>        e.g. --id 123456789AB0
       pac      --id <8 ASCII>        e.g. --id 11223344
       viking   --id <8 hex>          e.g. --id DEADBEEF
       idteck   --id <16 hex>         e.g. --id 4944544BDEADBEEF
@@ -6367,13 +6559,13 @@ class LFT55xxClone(ReaderRequiredUnit):
     Only supported on Chameleon Ultra (Lite has no LF writer).
     """
 
-    TYPES = ["em410x", "electra", "hid", "ioprox", "pac", "viking", "idteck"]
+    TYPES = ["em410x", "electra", "hid", "ioprox", "paradox", "pac", "viking", "idteck"]
 
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = (
             "Clone a LF card ID onto a blank T55xx tag.\n"
-            "Supported types: em410x, electra, hid, ioprox, pac, viking, idteck.\n"
+            "Supported types: em410x, electra, hid, ioprox, paradox, pac, viking, idteck.\n"
             "Only supported on Chameleon Ultra (Lite has no LF writer)."
         )
         parser.add_argument(
@@ -6390,7 +6582,7 @@ class LFT55xxClone(ReaderRequiredUnit):
             type=str,
             required=False,
             metavar="HEX",
-            help="Card ID in hex: 10 for em410x, 26 for electra, 8 for viking, 8 or 16 for idteck; 8 ASCII chars for pac",
+            help="Card ID in hex: 10 for em410x, 26 for electra, 12 for paradox, 8 for viking, 8 or 16 for idteck; 8 ASCII chars for pac",
         )
         # HID Prox
         parser.add_argument(
@@ -6514,6 +6706,16 @@ class LFT55xxClone(ReaderRequiredUnit):
             print(f"   FC     : {fc} [0x{fc:02X}]")
             print(f"   CN     : {cn}")
             print(f"   Raw8   : {raw8.hex().upper()}")
+
+        elif t == "paradox":
+            if args.id is None:
+                raise ArgsParserError("--id is required for paradox")
+            if not re.match(r"^[a-fA-F0-9]{12}$", args.id):
+                raise ArgsParserError(
+                    "--id must be exactly 12 hex characters for paradox"
+                )
+            id_bytes = bytes.fromhex(args.id)
+            write_and_verify_paradox(self.cmd, id_bytes)
 
         elif t == "pac":
             if args.id is None:
@@ -6782,6 +6984,13 @@ class HWSlotList(DeviceRequiredUnit):
                     print(f"      {'Facility:':40}{color_string((CG, f'{fc} [0x{fc:02X}]'))}")
                     print(f"      {'ID:':40}{color_string((CY, cn))}")
                     print(f"      {'Raw:':40}{color_string((CY, raw8.hex().upper()))}")
+                if lf_tag_type == TagSpecificType.Paradox:
+                    data = self.cmd.paradox_get_emu_id()
+                    fc, card_id, crc = paradox_fields(data)
+                    print(f"      {'Data:':40}{color_string((CY, data.hex().upper()))}")
+                    print(f"      {'FC:':40}{color_string((CG, fc))}")
+                    print(f"      {'Card:':40}{color_string((CG, card_id))}")
+                    print(f"      {'CRC:':40}{color_string((CG, crc))} ({paradox_crc_status(data)})")
                 if lf_tag_type == TagSpecificType.Viking:
                     id = self.cmd.viking_get_emu_id()
                     print(f"      {'ID:':40}{color_string((CY, id.hex().upper()))}")

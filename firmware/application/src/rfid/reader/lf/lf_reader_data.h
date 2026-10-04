@@ -21,6 +21,7 @@ void clear_lf_counter_value(void);
 bool em410x_read(uint8_t *data, uint32_t timeout_ms);
 bool ioprox_read(uint8_t *data, uint8_t format_hint, uint32_t timeout_ms);
 bool hidprox_read(uint8_t *data, uint8_t format_hint, uint32_t timeout_ms);
+bool paradox_read(uint8_t *data, uint32_t timeout_ms);
 bool pac_read(uint8_t *data, uint32_t timeout_ms);
 bool viking_read(uint8_t *data, uint32_t timeout_ms);
 bool jablotron_read(uint8_t *data, uint32_t timeout_ms);

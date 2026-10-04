@@ -63,6 +63,14 @@ extern "C" {
     T5577_PWD |                \
     (3 << T5577_MAXBLOCK_SHIFT))
 
+// Paradox uses FSK2a at RF/50 and three data blocks. Project T55xx writers
+// enable password mode; write_t55xx sets block 7 to the configured new key.
+#define T5577_PARADOX_CONFIG ( \
+    T5577_BITRATE_RF_50 |      \
+    T5577_MODULATION_FSK2a |   \
+    T5577_PWD |                \
+    (3 << T5577_MAXBLOCK_SHIFT))
+
 #define T5577_IOPROX_CONFIG ( \
     T5577_BITRATE_RF_64 |      \
     T5577_MODULATION_FSK2a |   \

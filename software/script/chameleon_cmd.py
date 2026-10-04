@@ -665,6 +665,31 @@ class ChameleonCMD:
             resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
         return resp
 
+    def paradox_scan_response(self):
+        """Read Paradox and return raw response status for verification paths."""
+        resp = self.device.send_cmd_sync(Command.PARADOX_SCAN)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data[:6]
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def paradox_scan(self):
+        """Read the six-byte Paradox card payload."""
+        return self.paradox_scan_response()
+
+    @expect_response(Status.LF_TAG_OK)
+    def paradox_write_to_t55xx(self, id_bytes: bytes):
+        """Write six-byte Paradox data using project T55XX password sequence.
+
+        Firmware tries configured legacy passwords, sets configured new password,
+        then sends config/data writes. T5577 has no write acknowledgement; read
+        the tag back to verify its contents.
+        """
+        if len(id_bytes) != 6:
+            raise ValueError("The Paradox id bytes length must equal 6")
+        data = struct.pack(f'!6s4s{4 * len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.PARADOX_WRITE_TO_T55XX, data)
+
     @expect_response(Status.LF_TAG_OK)
     def ioprox_write_to_t55xx(self, id_bytes: bytes):
         """
@@ -1034,6 +1059,21 @@ class ChameleonCMD:
         resp = self.device.send_cmd_sync(Command.IOPROX_GET_EMU_ID)
         if resp.status == Status.SUCCESS:
             resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def paradox_set_emu_id(self, id: bytes):
+        """Set six-byte Paradox data for the active LF slot."""
+        if len(id) != 6:
+            raise ValueError("The id bytes length must equal 6")
+        return self.device.send_cmd_sync(Command.PARADOX_SET_EMU_ID, id)
+
+    @expect_response(Status.SUCCESS)
+    def paradox_get_emu_id(self):
+        """Get six-byte Paradox data for the active LF slot."""
+        resp = self.device.send_cmd_sync(Command.PARADOX_GET_EMU_ID)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data[:6]
         return resp
 
     @expect_response(Status.SUCCESS)

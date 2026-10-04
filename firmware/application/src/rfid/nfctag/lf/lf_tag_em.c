@@ -14,6 +14,7 @@
 #include "protocols/ioprox.h"
 #include "protocols/jablotron.h"
 #include "protocols/pac.h"
+#include "protocols/paradox.h"
 #include "protocols/viking.h"
 #include "syssleep.h"
 #include "tag_emulation.h"
@@ -138,7 +139,8 @@ static void pwm_init(void) {
     // Base clock depends on the currently-loaded tag type. Legacy ASK/FSK
     // protocols (EM410x, HID, ioProx, Viking, PAC) use 125kHz base so that
     // their hardcoded counter_top values (8-64 range) produce the correct
-    // absolute timing. PSK1 protocols need finer resolution for the 16us
+    // absolute timing. Paradox uses the same FSK2a timing as HID Prox.
+    // PSK1 protocols need finer resolution for the 16us
     // subcarrier period, so pwm_init uses 1MHz base with counter_top=16.
     // See tag_base_type.h IS_PSK1_TYPE for the list of qualifying types.
     cfg.base_clock = IS_PSK1_TYPE(m_tag_type) ? NRF_PWM_CLK_1MHz : NRF_PWM_CLK_125kHz;
@@ -252,6 +254,15 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
         return LF_IOPROX_TAG_ID_SIZE;
     }
 
+    if (type == TAG_TYPE_PARADOX && buffer->length >= LF_PARADOX_TAG_ID_SIZE) {
+        m_tag_type = type;
+        void *codec = paradox.alloc();
+        m_pwm_seq = paradox.modulator(codec, buffer->buffer);
+        paradox.free(codec);
+        NRF_LOG_INFO("load lf paradox data finish.");
+        return LF_PARADOX_TAG_ID_SIZE;
+    }
+
     if (type == TAG_TYPE_VIKING && buffer->length >= LF_VIKING_TAG_ID_SIZE) {
         m_tag_type = type;
         void *codec = viking.alloc();
@@ -331,6 +342,11 @@ int lf_tag_ioprox_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffe
     return m_tag_type == TAG_TYPE_IOPROX ? LF_IOPROX_TAG_ID_SIZE : 0;
 }
 
+/** @brief Paradox data save callback. */
+int lf_tag_paradox_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return m_tag_type == TAG_TYPE_PARADOX ? LF_PARADOX_TAG_ID_SIZE : 0;
+}
+
 /** @brief Id card deposit card number before callback
  * @param type      Refined tag type
  * @param buffer    Data buffer
@@ -399,6 +415,14 @@ bool lf_tag_ioprox_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
         0x01, 0xAA, 0x30, 0x39, 0x00, 0x78, 0x6A, 0xA0, 0x33, 0x09, 0xCF, 0xEF, 0x00, 0x00, 0x00, 0x00
     };
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
+}
+
+/** @brief Paradox default data. */
+bool lf_tag_paradox_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    static const uint8_t tag_id[LF_PARADOX_TAG_ID_SIZE] = {
+        0x00, 0x00, 0x40, 0x00, 0x7A, 0xC0
+    };
+    return lf_tag_data_factory(slot, tag_type, (uint8_t *)tag_id, sizeof(tag_id));
 }
 
 /** @brief Id card deposit card number before callback

@@ -678,6 +678,11 @@ static void btn_fn_copy_lf(uint8_t slot, tag_specific_type_t type) {
             size = LF_IOPROX_TAG_ID_SIZE;
             data = id_buffer;
             break;
+        case TAG_TYPE_PARADOX:
+            status = scan_paradox(id_buffer);
+            size = LF_PARADOX_TAG_ID_SIZE;
+            data = id_buffer;
+            break;
         case TAG_TYPE_EM410X:
         case TAG_TYPE_EM410X_ELECTRA: {
             status = scan_em410x(id_buffer);
