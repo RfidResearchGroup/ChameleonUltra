@@ -48,8 +48,10 @@
 #define DATA_CMD_GET_ALL_SLOT_NICKS             (1038)
 #define DATA_CMD_GET_SLEEP_TIMEOUT              (1039)
 #define DATA_CMD_SET_SLEEP_TIMEOUT              (1040)
-#define DATA_CMD_GET_BLE_ADVERTISING_ENABLE     (1041)
-#define DATA_CMD_SET_BLE_ADVERTISING_ENABLE     (1042)
+#define DATA_CMD_GET_LONG_PRESS_THRESHOLD       (1041)
+#define DATA_CMD_SET_LONG_PRESS_THRESHOLD       (1042)
+#define DATA_CMD_GET_BLE_ADVERTISING_ENABLE     (1043)
+#define DATA_CMD_SET_BLE_ADVERTISING_ENABLE     (1044)
 
 //
 // ******************************************************************
@@ -71,6 +73,10 @@
 #define DATA_CMD_MF1_READ_ONE_BLOCK             (2008)
 #define DATA_CMD_MF1_WRITE_ONE_BLOCK            (2009)
 #define DATA_CMD_HF14A_RAW                      (2010)
+#define DATA_CMD_MF0_ULC_AUTH                   (2018)
+#define DATA_CMD_MF0_ULC_READ                   (2019)
+#define DATA_CMD_MF0_ULC_WRITE                  (2021)
+#define DATA_CMD_MF0_ULC_SET_KEY                (2022)
 #define DATA_CMD_HF14A_SCAN_KEEP                (2016)  /* scan+RATS, keep field alive for APDU exchange */
 #define DATA_CMD_HF14A_AUTH_TRACE               (2017)  /* full anticoll + Crypto1 auth, every frame returned for inspection */
 #define DATA_CMD_MF1_MANIPULATE_VALUE_BLOCK     (2011)

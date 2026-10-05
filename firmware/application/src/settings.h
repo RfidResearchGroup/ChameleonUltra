@@ -5,10 +5,12 @@
 
 #include "utils.h"
 
-#define SETTINGS_CURRENT_VERSION 7
+#define SETTINGS_CURRENT_VERSION 8
 #define SETTINGS_SLEEP_TIMEOUT_DEFAULT_S 8   // default wake timeout in seconds (matches SLEEP_DELAY_MS_BUTTON_WAKEUP)
 #define SETTINGS_SLEEP_TIMEOUT_MIN_S      5
 #define SETTINGS_SLEEP_TIMEOUT_MAX_S      60
+#define SETTINGS_LONG_PRESS_THRESHOLD_DEFAULT_MS 1000
+#define SETTINGS_LONG_PRESS_THRESHOLD_MIN_MS     200
 #define BLE_PAIRING_KEY_LEN 6
 #define DEFAULT_BLE_PAIRING_KEY "123456"  // length must == 6
 
@@ -41,7 +43,7 @@ typedef struct ALIGN_U32 {
     // 1 byte
     uint8_t animation_config : 2;
     uint8_t ble_pairing_enable : 1;
-    uint8_t ble_advertising_enable : 1; // add on version7; 0 = USB-only, BLE radio silent
+    uint8_t ble_advertising_enable : 1; // add on version8; 0 = USB-only, BLE radio silent
     uint8_t reserved0 : 4; // If you are add switch field, reallocating me.
 
     // 1 byte
@@ -57,6 +59,9 @@ typedef struct ALIGN_U32 {
 
     // 1 byte (add on version6)
     uint8_t sleep_timeout; // wake timeout in seconds after button wakeup
+
+    // 2 bytes (add on version7)
+    uint16_t long_press_threshold; // long button press threshold in ms
 
     /*
      * Warning !!!!!!!!!!!!!!!!!!!!!! <-------------
@@ -88,4 +93,7 @@ void settings_init_ble_advertising_enable_config(void);
 uint32_t settings_get_sleep_timeout(void);
 void settings_set_sleep_timeout(uint8_t seconds);
 void settings_init_sleep_timeout_config(void);
+uint16_t settings_get_long_press_threshold(void);
+void settings_set_long_press_threshold(uint16_t duration);
+void settings_init_long_press_threshold_config(void);
 #endif
