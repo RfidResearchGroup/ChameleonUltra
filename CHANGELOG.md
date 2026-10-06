@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Fix LF reader carrier uses crystal (HFXO) not internal RC oscillator. More accurate 125 kHz field allows reading PSK emulation from a second Chameleon (@mfcarroll)
  - Fix wrong data reported by hf 14a sniff on frames containing more than 7 parity bits (@DidierA)
  - Added MIFARE Ultralight C authentication and emulation (@Foxushka)
 
