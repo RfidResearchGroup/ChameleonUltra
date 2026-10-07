@@ -608,6 +608,30 @@ void advertising_stop(void) {
     sd_ble_gap_adv_stop(m_advertising.adv_handle);
 }
 
+/**@brief Stop advertising if it is running and nothing is connected. Returns true if it was stopped.
+ */
+bool advertising_pause(void) {
+    if (g_is_ble_connected || m_advertising.adv_mode_current == BLE_ADV_MODE_IDLE) {
+        return false;
+    }
+    return sd_ble_gap_adv_stop(m_advertising.adv_handle) == NRF_SUCCESS;
+}
+
+/**@brief Restart advertising stopped by advertising_pause(). Logs a failure instead of asserting.
+ */
+void advertising_resume(void) {
+    if (g_is_ble_connected) {
+        return;
+    }
+    if (settings_get_ble_pairing_enable_first_load()) {
+        whitelist_set(PM_PEER_ID_LIST_SKIP_NO_ID_ADDR);
+    }
+    ret_code_t ret = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
+    if (ret != NRF_SUCCESS) {
+        NRF_LOG_WARNING("advertising_resume: %d", ret);
+    }
+}
+
 /**@brief Function for handling Peer Manager events.
  *
  * @param[in] p_evt  Peer Manager event.

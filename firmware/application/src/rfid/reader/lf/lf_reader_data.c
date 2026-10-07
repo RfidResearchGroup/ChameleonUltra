@@ -1,5 +1,6 @@
 #include "lf_reader_data.h"
 
+#include "ble_main.h"
 #include "nrfx_timer.h"
 
 RIO_CALLBACK_S RIO_callback;
@@ -28,3 +29,13 @@ uint32_t get_lf_counter_value(void) {
 
 // Clear the value of the counter
 void clear_lf_counter_value(void) { nrfx_timer_clear(&m_pwm_timer_counter); }
+
+bool lf_adv_suspend(void) {
+    return advertising_pause();
+}
+
+void lf_adv_resume(bool paused) {
+    if (paused) {
+        advertising_resume();
+    }
+}

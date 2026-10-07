@@ -80,6 +80,7 @@ static void uninit_ioprox_hw(void) {
 }
 
 bool ioprox_read(uint8_t *data, uint8_t format_hint, uint32_t timeout_ms) {
+    const bool adv_paused = lf_adv_suspend();
     void      *codec = NULL;
     autotimer *p_at  = NULL;
     uint16_t   val   = 0;
@@ -107,5 +108,6 @@ bool ioprox_read(uint8_t *data, uint8_t format_hint, uint32_t timeout_ms) {
     cb_free(&cb);
     ioprox.free(codec);
 
+    lf_adv_resume(adv_paused);
     return ok;
 }

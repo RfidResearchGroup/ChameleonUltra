@@ -40,6 +40,7 @@ static void uninit_pac_hw(void) {
 }
 
 bool pac_read(uint8_t *data, uint32_t timeout_ms) {
+    const bool adv_paused = lf_adv_suspend();
     void *codec = pac.alloc();
     pac.decoder.start(codec, 0);
 
@@ -71,5 +72,6 @@ bool pac_read(uint8_t *data, uint32_t timeout_ms) {
     cb_free(&cb);
 
     pac.free(codec);
+    lf_adv_resume(adv_paused);
     return ok;
 }

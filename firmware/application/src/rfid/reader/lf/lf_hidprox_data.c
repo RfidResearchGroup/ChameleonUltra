@@ -40,6 +40,7 @@ static void uninit_hidprox_hw(void) {
 }
 
 bool hidprox_read(uint8_t *data, uint8_t format_hint, uint32_t timeout_ms) {
+    const bool adv_paused = lf_adv_suspend();
     void *codec = hidprox.alloc();
     hidprox.decoder.start(codec, format_hint);
 
@@ -66,5 +67,6 @@ bool hidprox_read(uint8_t *data, uint8_t format_hint, uint32_t timeout_ms) {
     cb_free(&cb);
 
     hidprox.free(codec);
+    lf_adv_resume(adv_paused);
     return ok;
 }
