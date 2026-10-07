@@ -8,7 +8,7 @@ from chameleon_enum import Command, SlotNumber, Status, TagSenseType, TagSpecifi
 from chameleon_enum import ButtonPressFunction, ButtonType, MifareClassicDarksideStatus
 from chameleon_enum import MfcKeyType, MfcValueBlockOperator
 
-CURRENT_VERSION_SETTINGS = 6
+CURRENT_VERSION_SETTINGS = 7
 
 # Key sent in the new-key slot of a T55xx write when no password is requested, on firmware
 # that predates opt-in passwords: it always turns password mode on with this key.
@@ -247,6 +247,39 @@ class ChameleonCMD:
         """
         data = struct.pack('!BB6s16s', type_value, block, key, block_data)
         resp = self.device.send_cmd_sync(Command.MF1_WRITE_ONE_BLOCK, data)
+        resp.parsed = resp.status == Status.HF_TAG_OK
+        return resp
+
+    @expect_response(Status.HF_TAG_OK)
+    def mf0_ulc_auth(self, key: bytes):
+        assert len(key) == 16
+        resp = self.device.send_cmd_sync(Command.MF0_ULC_AUTH, struct.pack('!16s', key))
+        resp.parsed = resp.status == Status.HF_TAG_OK
+        return resp
+
+    @expect_response(Status.HF_TAG_OK)
+    def mf0_ulc_read(self, key: bytes, page: int, count: int):
+        assert len(key) == 16
+        data = struct.pack('!16sBB', key, page, count)
+        resp = self.device.send_cmd_sync(Command.MF0_ULC_READ, data)
+        resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.HF_TAG_OK)
+    def mf0_ulc_write(self, key: bytes, page: int, page_data: bytes):
+        assert len(key) == 16
+        assert len(page_data) == 4
+        data = struct.pack('!16sB4s', key, page, page_data)
+        resp = self.device.send_cmd_sync(Command.MF0_ULC_WRITE, data)
+        resp.parsed = resp.status == Status.HF_TAG_OK
+        return resp
+
+    @expect_response(Status.HF_TAG_OK)
+    def mf0_ulc_set_key(self, old_key: bytes, new_key: bytes):
+        assert len(old_key) == 16
+        assert len(new_key) == 16
+        data = struct.pack('!16s16s', old_key, new_key)
+        resp = self.device.send_cmd_sync(Command.MF0_ULC_SET_KEY, data)
         resp.parsed = resp.status == Status.HF_TAG_OK
         return resp
 
@@ -1907,6 +1940,22 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(Command.MF1_SET_FIELD_OFF_DO_RESET, data)
 
     @expect_response(Status.SUCCESS)
+    def get_long_press_threshold(self):
+        """
+        Get the long button press threshold (in ms)
+        """
+        resp = self.device.send_cmd_sync(Command.GET_LONG_PRESS_THRESHOLD)
+        if resp.status == Status.SUCCESS:
+            resp.parsed, = struct.unpack('!H', resp.data)
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def set_long_press_threshold(self, duration: int):
+        """
+        Set the long button press threshold (in ms)
+        """
+        data = struct.pack('!H', duration)
+        return self.device.send_cmd_sync(Command.SET_LONG_PRESS_THRESHOLD, data)
     def seos_read_emu_data(self):
         resp = self.device.send_cmd_sync(Command.SEOS_READ_EMU_DATA, None)
         resp.parsed = {}
