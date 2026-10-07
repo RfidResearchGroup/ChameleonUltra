@@ -41,6 +41,7 @@ static void uninit_jablotron_hw(void) {
 }
 
 bool jablotron_read(uint8_t *data, uint32_t timeout_ms) {
+    const bool adv_paused = lf_adv_suspend();
     void *codec = jablotron.alloc();
     jablotron.decoder.start(codec, 0);
 
@@ -67,5 +68,6 @@ bool jablotron_read(uint8_t *data, uint32_t timeout_ms) {
     cb_free(&cb);
 
     jablotron.free(codec);
+    lf_adv_resume(adv_paused);
     return ok;
 }

@@ -27,6 +27,11 @@ bool jablotron_read(uint8_t *data, uint32_t timeout_ms);
 
 bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen);
 
+// Pause BLE advertising during an LF capture: an advertising event drops the field for ~1.6 ms.
+// Returns whether it was paused; pass that to lf_adv_resume().
+bool lf_adv_suspend(void);
+void lf_adv_resume(bool paused);
+
 #ifdef __cplusplus
 }
 #endif
