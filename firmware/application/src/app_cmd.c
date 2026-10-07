@@ -236,6 +236,37 @@ static data_frame_tx_t *cmd_processor_set_ble_pairing_enable(uint16_t cmd, uint1
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
+static data_frame_tx_t *cmd_processor_get_ble_advertising_enable(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t is_enable = settings_get_ble_advertising_enable();
+    return data_frame_make(cmd, STATUS_SUCCESS, 1, &is_enable);
+}
+
+static data_frame_tx_t *cmd_processor_set_ble_advertising_enable(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 1 || data[0] > 1) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    // This setting can only be changed over USB, so a BLE client can't turn off
+    // the radio it is connected through (and lock itself out).
+    if (!is_usb_working()) {
+        return data_frame_make(cmd, STATUS_DEVICE_MODE_ERROR, 0, NULL);
+    }
+    // Nothing to do if unchanged. Starting advertising again while it is already
+    // running would fail in the SoftDevice and trip APP_ERROR_CHECK.
+    if (data[0] == settings_get_ble_advertising_enable()) {
+        return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+    }
+    settings_set_ble_advertising_enable(data[0]);
+    // Apply the change immediately so it takes effect without a reboot.
+    if (data[0]) {
+        advertising_start(false);
+    } else {
+        advertising_stop();
+        // Tear down any active link so disabling really means USB-only.
+        ble_disconnect();
+    }
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
 static data_frame_tx_t *cmd_processor_get_long_press_threshold(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     // Ignore unused parameters
     (void)status;
@@ -3237,6 +3268,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_SET_BLE_PAIRING_ENABLE,       NULL,                        cmd_processor_set_ble_pairing_enable,        NULL                   },
     {    DATA_CMD_GET_SLEEP_TIMEOUT,            NULL,                        cmd_processor_get_sleep_timeout,             NULL                   },
     {    DATA_CMD_SET_SLEEP_TIMEOUT,            NULL,                        cmd_processor_set_sleep_timeout,             NULL                   },
+    {    DATA_CMD_GET_BLE_ADVERTISING_ENABLE,   NULL,                        cmd_processor_get_ble_advertising_enable,    NULL                   },
+    {    DATA_CMD_SET_BLE_ADVERTISING_ENABLE,   NULL,                        cmd_processor_set_ble_advertising_enable,    NULL                   },
     {    DATA_CMD_GET_ALL_SLOT_NICKS,           NULL,                        cmd_processor_get_all_slot_nicks,            NULL                   },
     {    DATA_CMD_GET_LONG_PRESS_THRESHOLD,     NULL,                        cmd_processor_get_long_press_threshold,      NULL                   },
     {    DATA_CMD_SET_LONG_PRESS_THRESHOLD,     NULL,                        cmd_processor_set_long_press_threshold,      NULL                   },
