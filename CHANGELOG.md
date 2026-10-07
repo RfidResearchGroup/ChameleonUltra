@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Fix LF Viking reads failing when nothing disturbs the field (@mfcarroll)
  - Fix wrong data reported by hf 14a sniff on frames containing more than 7 parity bits (@DidierA)
  - Added MIFARE Ultralight C authentication and emulation (@Foxushka)
 
