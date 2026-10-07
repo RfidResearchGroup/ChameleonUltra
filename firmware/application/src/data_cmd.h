@@ -119,6 +119,17 @@
 #define DATA_CMD_IDTECK_WRITE_TO_T55XX          (3018)
 #define DATA_CMD_JABLOTRON_SCAN                 (3019)
 #define DATA_CMD_JABLOTRON_WRITE_TO_T55XX       (3020)
+// Provisional ID: 3021/3022 and 3033-3036 are claimed by open PRs.
+#define DATA_CMD_LF_T55XX_WRITE_FEATURES        (3029)
+
+// Optional trailing byte on the *_WRITE_TO_T55XX commands, after the old keys.
+// Without it, the tag is written with no password.
+#define T55XX_WRITE_FLAG_NO_PASSWORD            (0x01)
+#define T55XX_WRITE_FLAG_SET_PASSWORD           (0x02)
+
+// Bits returned by DATA_CMD_LF_T55XX_WRITE_FEATURES.
+// Bit 0: password mode is opt-in and the trailing flag byte above is understood.
+#define T55XX_WRITE_FEATURE_PASSWORD_OPT_IN     (1 << 0)
 
 //
 // ******************************************************************
