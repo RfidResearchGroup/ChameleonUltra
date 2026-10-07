@@ -153,6 +153,8 @@ def print_mem_dump(bindata, blocksize, blocks_per_sector=4):
     blk_index = 0
     for b in blocks:
         sec_index = blk_index // blocks_per_sector
+        if sec_index > 31:
+            blocks_per_sector = 16
         sec_str = f"{sec_index:2}" if blk_index % blocks_per_sector == 0 else "  "
         hexstr = ' '.join(b.hex()[i:i+2] for i in range(0, len(b.hex()), 2))
         asciistr = ''.join([chr(b[i]) if (b[i] > 31 and b[i] < 127) else '.' for i in range(0, len(b), 1)])
