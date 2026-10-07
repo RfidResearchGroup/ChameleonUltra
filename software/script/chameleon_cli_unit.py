@@ -1,5 +1,6 @@
 import binascii
 import glob
+import importlib.util
 import math
 import os
 import tempfile
@@ -17,10 +18,10 @@ import queue
 from enum import Enum
 from multiprocessing import Pool, cpu_count
 from typing import Union
-from pathlib import Path
 from platform import uname
 from datetime import datetime
 import hardnested_utils
+from fdxb_country import describe_country_code
 
 import chameleon_com
 import chameleon_cmd
@@ -812,6 +813,85 @@ def _idteck_frame_info(frame: bytes) -> dict:
     }
 
 
+def _fdxb_frame_ok(frame: bytes) -> "tuple[bool, str]":
+    """
+    Validate a 13-byte destuffed FDX-B frame for writability.
+
+    Returns (True, "") if structurally sound, else (False, reason).
+
+    The 64-bit block in bytes 0-7 is laid out (LSB first):
+        bits  0-37  national ID
+        bits 38-47  country code
+        bit  48     extended-data flag (a.k.a. data-block / application bit)
+        bits 49-62  reserved -- MUST be zero on a conformant tag
+        bit  63     animal flag
+
+    A frame with nonzero reserved bits is emitted fine by the T55xx but
+    rejected as malformed by conformant readers, so the written tag reads
+    back as "not found".  That is the hard failure we block here.
+    """
+    if len(frame) != 13:
+        return False, f"expected 13 bytes, got {len(frame)}"
+
+    v = int.from_bytes(frame[0:8], "little")
+    reserved = (v >> 49) & ((1 << 14) - 1)
+    if reserved != 0:
+        return False, (f"reserved bits 49-62 are nonzero (0x{reserved:04x}); "
+                       f"a conformant reader will reject this frame as malformed "
+                       f"and the written tag will read back as not found")
+    return True, ""
+
+
+def _fdxb_crc16(data: bytes) -> int:
+    """CRC-16 as computed by the firmware's fdxb_crc16 (reflected 0x8408)."""
+    crc = 0x0000
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            crc = (crc >> 1) ^ 0x8408 if crc & 1 else crc >> 1
+    return crc & 0xFFFF
+
+
+def _fdxb_crc_ok(frame: bytes) -> bool:
+    """True if bytes 8-9 match the CRC-16 over bytes 0-7."""
+    stored = int.from_bytes(frame[8:10], "little")
+    return stored == _fdxb_crc16(frame[0:8])
+
+
+def _fdxb_build_frame(country: int, national: int, animal: int = 1,
+                      extended: int = 0) -> bytes:
+    """
+    Build a 13-byte destuffed FDX-B frame from logical fields.
+
+    Reserved bits 49-62 are left zero by construction, so a frame built this
+    way can never hit the "reserved bits nonzero -> unreadable" footgun.
+
+        bits  0-37  national ID     (<= 274877906943)
+        bits 38-47  country code    (<= 1023)
+        bit  48     extended flag   (set iff extended != 0)
+        bits 49-62  reserved        (always 0 here)
+        bit  63     animal flag
+        bytes 8-9   CRC-16 over bytes 0-7
+        bytes 10-12 extended data   (24 bits, 0 if unused)
+    """
+    if not 0 <= country <= 0x3FF:
+        raise ArgsParserError("country must be 0-1023")
+    if not 0 <= national <= ((1 << 38) - 1):
+        raise ArgsParserError("national ID must be 0-274877906943 (38-bit field)")
+    if not 0 <= extended <= 0xFFFFFF:
+        raise ArgsParserError("extended data must be 0-16777215 (24-bit field)")
+
+    v = national & ((1 << 38) - 1)
+    v |= (country & 0x3FF) << 38
+    v |= (1 if extended else 0) << 48
+    v |= (animal & 1) << 63
+
+    head = v.to_bytes(8, "little")
+    crc = _fdxb_crc16(head).to_bytes(2, "little")
+    ext = (extended & 0xFFFFFF).to_bytes(3, "little")
+    return head + crc + ext
+
+
 class LFIdteckIdArgsUnit(DeviceRequiredUnit):
     """Argument parser for IDTECK: 16-hex = full 64-bit frame (preamble + payload)."""
 
@@ -910,6 +990,7 @@ lf_ioprox = lf.subgroup("ioprox", "ioProx commands")
 lf_pac = lf.subgroup("pac", "PAC/Stanley commands")
 lf_viking = lf.subgroup("viking", "Viking commands")
 lf_jablotron = lf.subgroup("jablotron", "Jablotron commands")
+lf_fdxb = lf.subgroup("fdxb", "FDX-B animal tag commands (134.2 kHz)")
 lf_generic = lf.subgroup("generic", "Generic commands")
 lf_idteck = lf.subgroup("idteck", "IDTECK commands")
 
@@ -3316,6 +3397,134 @@ class HFMFClone(MF1AuthArgsUnit):
                 except UnexpectedResponseError:
                     pass
                 self.cmd.mf1_write_one_block(4 * s + b, MfcKeyType.A, keyA, block_data)
+
+
+@lf_fdxb.command("read")
+class LFFdxbRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Scan FDX-B animal tag (134.2 kHz) and print id"
+        parser.add_argument("--raw", action="store_true", help="also print the raw 13-byte frame")
+        parser.add_argument("-@", dest="continuous", action="store_true",
+                            help="continuous scan until a key is pressed (helps locate an implant)")
+        return parser
+
+    def _print_result(self, resp, show_raw: bool) -> bool:
+        if not resp or not hasattr(resp, 'parsed') or resp.parsed is None:
+            return False
+        tag_type, frame = resp.parsed
+        # Parse the 13-byte destuffed frame
+        v = int.from_bytes(frame[0:8], "little")
+        national = v & ((1 << 38) - 1)
+        country = (v >> 38) & 0x3FF
+        app_bit = (v >> 48) & 1
+        animal = (v >> 63) & 1
+        crc = int.from_bytes(frame[8:10], "little")
+
+        print(" FDX-B (ISO 11784/11785)")
+        print(f"  Country    : {describe_country_code(country)}")
+        print(f"  National ID: {color_string((CG, str(national)))}")
+        print(f"  Animal flag: {animal}")
+        print(f"  App bit    : {app_bit}")
+        print(f"  CRC-16     : 0x{crc:04x}")
+        if show_raw:
+            print(f"  Raw frame  : {frame.hex()}")
+        return True
+
+    def on_exec(self, args: argparse.Namespace):
+        if not args.continuous:
+            if not self._print_result(self.cmd.fdxb_scan(), args.raw):
+                print(" No FDX-B tag found")
+            return
+
+        # Continuous mode: rescan until the user presses a key.  A hit does
+        # not stop the loop -- sweeping past the implant should keep printing
+        # so the strongest position is easy to find.
+        print("[=] Press <Enter> to stop")
+        try:
+            while not self._key_pressed():
+                if not self._print_result(self.cmd.fdxb_scan(), args.raw):
+                    # brief spacer so the terminal shows scanning is live
+                    print(" ...", end="\r")
+        except KeyboardInterrupt:
+            pass
+        print()
+
+    @staticmethod
+    def _key_pressed() -> bool:
+        """Non-blocking check for any keypress, portable across OSes."""
+        if sys.platform == "win32":
+            import msvcrt
+            if msvcrt.kbhit():
+                msvcrt.getch()
+                return True
+            return False
+        import select
+        dr, _, _ = select.select([sys.stdin], [], [], 0)
+        if dr:
+            sys.stdin.readline()
+            return True
+        return False
+
+
+@lf_fdxb.command("write")
+class LFFdxbWriteT55xx(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Write FDX-B frame to T55xx (by fields, or raw --id)"
+        parser.add_argument("--country", type=int, metavar="<0-1023>",
+                            help="country/manufacturer code (ISO 3166 numeric, e.g. 208 for Denmark)")
+        parser.add_argument("--national", type=int, metavar="<id>",
+                            help="national ID, up to 274877906943 (38-bit)")
+        parser.add_argument("--animal", type=int, default=1, choices=(0, 1),
+                            help="animal flag (default 1)")
+        parser.add_argument("--extended", type=lambda x: int(x, 0), default=0, metavar="<0-0xFFFFFF>",
+                            help="optional 24-bit extended data (default 0)")
+        parser.add_argument("--id", type=str, metavar="<hex>",
+                            help="raw 26-hex frame instead of fields (advanced; not validated for reserved bits)")
+        return parser
+
+    def _resolve_frame(self, args) -> bytes:
+        """Field args take priority; fall back to raw --id.  Returns 13 bytes."""
+        if args.country is not None or args.national is not None:
+            if args.country is None or args.national is None:
+                raise ArgsParserError("both --country and --national are required when building by fields")
+            return _fdxb_build_frame(args.country, args.national, args.animal, args.extended)
+        if args.id is not None:
+            if not re.match(r"^[a-fA-F0-9]{26}$", args.id):
+                raise ArgsParserError("FDX-B --id must be 26 HEX symbols (13 bytes)")
+            frame = bytes.fromhex(args.id)
+            ok, reason = _fdxb_frame_ok(frame)
+            if not ok:
+                raise ArgsParserError(f"FDX-B frame invalid: {reason}")
+            return frame
+        raise ArgsParserError("provide --country and --national, or a raw --id")
+
+    def on_exec(self, args: argparse.Namespace):
+        data_bytes = self._resolve_frame(args)
+        if not _fdxb_crc_ok(data_bytes):
+            calc = _fdxb_crc16(data_bytes[0:8])
+            print(f" [!] CRC-16 in frame does not match data (expected 0x{calc:04x}); "
+                  f"writing anyway, but the tag may not verify on other readers")
+        self.cmd.fdxb_write_to_t55xx(data_bytes)
+        print(f" - FDX-B frame: {data_bytes.hex().upper()} written to T55xx")
+
+
+@lf_fdxb.command("clone")
+class LFFdxbClone(LFFdxbWriteT55xx):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = super().args_parser()
+        parser.description = "Clone FDX-B animal tag to T55xx (alias for 'write')"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        data_bytes = self._resolve_frame(args)
+        if not _fdxb_crc_ok(data_bytes):
+            calc = _fdxb_crc16(data_bytes[0:8])
+            print(f" [!] CRC-16 in frame does not match data (expected 0x{calc:04x}); "
+                  f"cloning anyway, but the tag may not verify on other readers")
+        self.cmd.fdxb_write_to_t55xx(data_bytes)
+        print(f" - FDX-B clone complete: {data_bytes.hex().upper()}")
 
 
 @hf_mf.command("value")
@@ -6065,7 +6274,7 @@ class LFIOProxRead(LFIOProxReadArgsUnit, ReaderRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         ver, fc, cn, raw8, *futureuse = self.cmd.ioprox_scan()
-        print(f"ioProx XSF format")
+        print("ioProx XSF format")
         print(f"   Version: {color_string((CG, ver))}")
         print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
         print(f"   ID: {color_string((CY, cn))}")
@@ -6100,9 +6309,9 @@ class LFIOProxWriteT55xx(LFIOProxIdArgsUnit, ReaderRequiredUnit):
             cn & 0xFFFF,
             raw8
         )
-        result = self.cmd.ioprox_write_to_t55xx(payload16)
+        self.cmd.ioprox_write_to_t55xx(payload16)
 
-        print(f"ioProx XSF format")
+        print("ioProx XSF format")
         print(f"   Version: {color_string((CG, ver))}")
         print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
         print(f"   ID: {color_string((CY, cn))}")
@@ -6151,9 +6360,9 @@ class LFIOProxEconfig(SlotIndexArgsAndGoUnit, LFIOProxIdArgsUnit):
                 raw8
             )
 
-            result = self.cmd.ioprox_set_emu_id(payload16)
+            self.cmd.ioprox_set_emu_id(payload16)
 
-            print(f"ioProx XSF format")
+            print("ioProx XSF format")
             print(f"   Version: {color_string((CG, ver))}")
             print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
             print(f"   ID: {color_string((CY, cn))}")
@@ -6162,7 +6371,7 @@ class LFIOProxEconfig(SlotIndexArgsAndGoUnit, LFIOProxIdArgsUnit):
         else:
             # GET
             ver, fc, cn, raw8, *futureuse = self.cmd.ioprox_get_emu_id()
-            print(f"ioProx XSF format")
+            print("ioProx XSF format")
             print(f"   Version: {color_string((CG, ver))}")
             print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
             print(f"   ID: {color_string((CY, cn))}")
@@ -6534,7 +6743,7 @@ class LFT55xxClone(ReaderRequiredUnit):
     def on_exec(self, args: argparse.Namespace):
         # Clone requires LF writer — only available on Chameleon Ultra (not Lite)
         if self.cmd.get_device_model() != 0:
-            print(f" - Error: LF clone requires Chameleon Ultra. Lite has no LF writer.")
+            print(" - Error: LF clone requires Chameleon Ultra. Lite has no LF writer.")
             return
         t = args.type
 
@@ -6572,7 +6781,7 @@ class LFT55xxClone(ReaderRequiredUnit):
                 oem,
             )
             self.cmd.hidprox_write_to_t55xx(id_bytes)
-            print(f" - HID Prox cloned to T55xx")
+            print(" - HID Prox cloned to T55xx")
             print(f"   Format : {fmt.name}")
             if fc:
                 print(f"   FC     : {fc}")
@@ -6594,7 +6803,7 @@ class LFT55xxClone(ReaderRequiredUnit):
                 raw8 = res[3]
             payload16 = struct.pack(">BBH8s4x", ver & 0xFF, fc & 0xFF, cn & 0xFFFF, raw8)
             self.cmd.ioprox_write_to_t55xx(payload16)
-            print(f" - ioProx cloned to T55xx")
+            print(" - ioProx cloned to T55xx")
             print(f"   Ver    : {ver}")
             print(f"   FC     : {fc} [0x{fc:02X}]")
             print(f"   CN     : {cn}")
@@ -7649,7 +7858,7 @@ class HWRaw(DeviceRequiredUnit):
         if response.data:
             print(f"   Data (HEX): {response.data.hex()}")
         else:
-            print(f"   Data (HEX): (none)")
+            print("   Data (HEX): (none)")
 
 
 @hf_14a.command("raw")
@@ -8821,15 +9030,14 @@ def _print_14a_sniff_summary(frames):
                 print(f"   {CC}When paired, run:{C0} "
                       f"mfkey64 {uid} {n['nt']} {n['nr']} {n['ar']} <nt2>")
 
-
 def _get_capture():
-    """Return last capture buffer or print error."""
+    """Return last capture buffer, or None if nothing has been captured yet."""
     import chameleon_cli_unit as _m
-    if not _m._last_capture:
+    buf = getattr(_m, '_last_capture', None)
+    if not buf:
         return None
-    return _m._last_capture
-
-
+    return buf
+    
 @data.command('hexsamples')
 class DataHexsamples(BaseCLIUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -8903,29 +9111,22 @@ class DataPlot(BaseCLIUnit):
 
         if not args.ascii:
             # Try PyQt5 first, then matplotlib
-            try:
-                from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
-                from PyQt5.QtCore import Qt
-                import pyqtgraph as pg
-                _plot_pyqtgraph(xs, view, mean, threshold, start, end)
-                return
-            except ImportError:
-                pass
-            try:
-                import matplotlib
-                matplotlib.use('Qt5Agg')
-                import matplotlib.pyplot as plt
-                _plot_matplotlib(xs, view, mean, threshold, start, end)
-                return
-            except ImportError:
-                pass
-            try:
-                import matplotlib.pyplot as plt
-                _plot_matplotlib(xs, view, mean, threshold, start, end)
-                return
-            except ImportError:
-                print(" No GUI library found (install PyQt5+pyqtgraph or matplotlib)")
-                print(" Falling back to ASCII plot...")
+            if importlib.util.find_spec("PyQt5.QtWidgets") is not None and importlib.util.find_spec("pyqtgraph") is not None:
+                try:
+                    _plot_pyqtgraph(xs, view, mean, threshold, start, end)
+                    return
+                except ImportError:
+                    pass
+            if importlib.util.find_spec("matplotlib") is not None:
+                try:
+                    import matplotlib
+                    matplotlib.use('Qt5Agg')
+                    _plot_matplotlib(xs, view, mean, threshold, start, end)
+                    return
+                except ImportError:
+                    pass
+            print(" No GUI library found (install PyQt5+pyqtgraph or matplotlib)")
+            print(" Falling back to ASCII plot...")
 
         # ASCII fallback
         w = 64
@@ -8999,9 +9200,7 @@ def _plot_matplotlib(xs, ys, mean, threshold, start, end):
 
 def _plot_pyqtgraph(xs, ys, mean, threshold, start, end):
     import sys
-    from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel
-    from PyQt5.QtCore import Qt
-    from PyQt5.QtGui import QFont
+    from PyQt5.QtWidgets import QApplication
     import pyqtgraph as pg
 
     pg.setConfigOption('background', '#0d1117')
@@ -9191,10 +9390,6 @@ class DataModulation(BaseCLIUnit):
         if len(runs) < 4:
             print(f" Modulation: {CR}insufficient transitions{C0}")
             return
-
-        runs_sorted = sorted(runs)
-        # Remove outliers (top/bottom 10%)
-        trim = max(1, len(runs) // 10)
 
         # Estimate clock: most common run length = half-period
         from collections import Counter
@@ -9573,7 +9768,7 @@ class EMVScan(DeviceRequiredUnit):
         tags[0x9F12] = app_tags[0x9F12]
         tags[0x50] = app_tags[0x50]
 
-        print(f'')
+        print('')
         print(f' {CG}── Card Details ──────────────────────{C0}')
 
         # App label — show first unique label only
@@ -9858,32 +10053,32 @@ class EMVLoad(DeviceRequiredUnit):
 
         try:
             v = data['PPSE']['FCITemplate']['value'].replace(' ', '')
-            l = data['PPSE']['FCITemplate']['length']
+            length_hex = data['PPSE']['FCITemplate']['length']
             static_pairs.append((
                 bytes.fromhex('00a404000e325041592e5359532e4444463031'),
-                tlv_resp('6F', l, v),
+                tlv_resp('6F', length_hex, v),
                 'SELECT PPSE'))
         except Exception as e:
             print(f' {CR}PPSE: {e}{C0}')
 
         try:
             v = data['Application']['FCITemplate']['value'].replace(' ', '')
-            l = data['Application']['FCITemplate']['length']
+            length_hex = data['Application']['FCITemplate']['length']
             aid = data['Application']['AID'].replace(' ', '')
             static_pairs.append((
                 bytes.fromhex('00a4040007' + aid),
-                tlv_resp('6F', l, v),
+                tlv_resp('6F', length_hex, v),
                 'SELECT AID'))
         except Exception as e:
             print(f' {CR}Application FCI: {e}{C0}')
 
         try:
             v = data['Application']['GPO']['value'].replace(' ', '')
-            l = data['Application']['GPO']['length']
+            length_hex = data['Application']['GPO']['length']
             tag = data['Application']['GPO'].get('tag', '77')
             static_pairs.append((
                 bytes.fromhex('80a80000'),
-                tlv_resp(tag, l, v),
+                tlv_resp(tag, length_hex, v),
                 'GPO'))
         except Exception as e:
             print(f' {CR}GPO: {e}{C0}')
@@ -9893,12 +10088,12 @@ class EMVLoad(DeviceRequiredUnit):
                 sfi_n = int(rec['SFI'], 16)
                 rec_n = int(rec['RecordNum'], 16)
                 v = rec['Data']['value'].replace(' ', '')
-                l = rec['Data']['length']
+                length_hex = rec['Data']['length']
                 tag = rec['Data'].get('tag', '70')
                 p2 = (sfi_n << 3) | 4
                 static_pairs.append((
                     bytes([0x00, 0xB2, rec_n, p2, 0x00]),
-                    tlv_resp(tag, l, v),
+                    tlv_resp(tag, length_hex, v),
                     f'READ RECORD SFI={sfi_n} rec={rec_n}'))
         except Exception as e:
             print(f' {CR}Records: {e}{C0}')
@@ -9954,7 +10149,7 @@ class EMVApdu(DeviceRequiredUnit):
         timeout_ms = max(1000, min(60000, args.timeout))
 
         print(f' {CY}ISO14443-4 T=CL APDU relay started{C0}')
-        print(f' Waiting for a reader to connect (SAK=20 slot required)...')
+        print(' Waiting for a reader to connect (SAK=20 slot required)...')
         print(f' Type {CY}quit{C0} to exit, or enter hex response bytes when prompted.')
 
         exchange_count = 0
@@ -10298,41 +10493,61 @@ def _desfire_get_version(cmd) -> dict:
     info: dict = {}
     hw = resp[:-1]
     # HW frame — individual guards so a short frame still populates what it has
-    if len(hw) >= 1: info['hw_vendor']  = hw[0]
-    if len(hw) >= 2: info['hw_type']    = hw[1]
-    if len(hw) >= 3: info['hw_subtype'] = hw[2]
-    if len(hw) >= 4: info['hw_major']   = hw[3]
-    if len(hw) >= 5: info['hw_minor']   = hw[4]
-    if len(hw) >= 6: info['hw_storage'] = hw[5]
-    if len(hw) >= 7: info['hw_proto']   = hw[6]
+    if len(hw) >= 1:
+        info['hw_vendor'] = hw[0]
+    if len(hw) >= 2:
+        info['hw_type'] = hw[1]
+    if len(hw) >= 3:
+        info['hw_subtype'] = hw[2]
+    if len(hw) >= 4:
+        info['hw_major'] = hw[3]
+    if len(hw) >= 5:
+        info['hw_minor'] = hw[4]
+    if len(hw) >= 6:
+        info['hw_storage'] = hw[5]
+    if len(hw) >= 7:
+        info['hw_proto'] = hw[6]
 
     if resp[-1] == 0xAF:
         resp2 = _des_transceive(cmd, 0xAF)
         sw = resp2[:-1]
         # SW frame — same per-field guards
-        if len(sw) >= 1: info['sw_vendor']  = sw[0]
-        if len(sw) >= 2: info['sw_type']    = sw[1]
-        if len(sw) >= 3: info['sw_subtype'] = sw[2]
-        if len(sw) >= 4: info['sw_major']   = sw[3]
-        if len(sw) >= 5: info['sw_minor']   = sw[4]
-        if len(sw) >= 6: info['sw_storage'] = sw[5]
-        if len(sw) >= 7: info['sw_proto']   = sw[6]
+        if len(sw) >= 1:
+            info['sw_vendor'] = sw[0]
+        if len(sw) >= 2:
+            info['sw_type'] = sw[1]
+        if len(sw) >= 3:
+            info['sw_subtype'] = sw[2]
+        if len(sw) >= 4:
+            info['sw_major'] = sw[3]
+        if len(sw) >= 5:
+            info['sw_minor'] = sw[4]
+        if len(sw) >= 6:
+            info['sw_storage'] = sw[5]
+        if len(sw) >= 7:
+            info['sw_proto'] = sw[6]
 
         # Fallback: derive SW fields from HW when SW frame payload is empty
         if 'sw_major' not in info and 'hw_major' in info:
             info['sw_major'] = _DESFIRE_HW_MAJOR_TO_SW_MAJOR.get(
                 info['hw_major'], info['hw_major'])
             info['sw_minor'] = 0
-        if 'sw_storage' not in info: info['sw_storage'] = info.get('hw_storage')
-        if 'sw_proto'   not in info: info['sw_proto']   = info.get('hw_proto')
+        if 'sw_storage' not in info:
+            info['sw_storage'] = info.get('hw_storage')
+        if 'sw_proto' not in info:
+            info['sw_proto'] = info.get('hw_proto')
 
         if resp2[-1] == 0xAF:
             resp3 = _des_transceive(cmd, 0xAF)
             p3 = resp3[:-1]
-            if len(p3) >= 7:  info['uid']       = p3[:7].hex().upper()
-            if len(p3) >= 12: info['batch']     = p3[7:12].hex().upper()
-            if len(p3) >= 13: info['prod_week'] = p3[12]
-            if len(p3) >= 14: info['prod_year'] = p3[13]
+            if len(p3) >= 7:
+                info['uid'] = p3[:7].hex().upper()
+            if len(p3) >= 12:
+                info['batch'] = p3[7:12].hex().upper()
+            if len(p3) >= 13:
+                info['prod_week'] = p3[12]
+            if len(p3) >= 14:
+                info['prod_year'] = p3[13]
     return info
 
 
@@ -10419,7 +10634,7 @@ class HfDesInfo(ReaderRequiredUnit):
                 for aid in aids:
                     print(f"   AID: {aid.hex().upper()}  ({int.from_bytes(aid, 'little'):06X})")
             else:
-                print(f"\n Applications  : none")
+                print("\n Applications  : none")
         except Exception as e:
             print(f" {CY}[!] GetApplicationIDs failed: {e}{C0}")
 
@@ -10624,10 +10839,7 @@ class HfDesChk(ReaderRequiredUnit):
             return False
 
     def on_exec(self, args: argparse.Namespace):
-        try:
-            from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-            from cryptography.hazmat.backends import default_backend
-        except ImportError:
+        if importlib.util.find_spec("cryptography") is None:
             print(f" {CR}[!] 'cryptography' library required: pip install cryptography{C0}")
             return
 
@@ -10640,7 +10852,7 @@ class HfDesChk(ReaderRequiredUnit):
         key_no = args.keyno
 
         # Select card and get AID list
-        print(f" Selecting card...")
+        print(" Selecting card...")
         try:
             uid_bytes, sak, _ = _des_select(self.cmd)
         except RuntimeError as e:
@@ -10762,11 +10974,11 @@ class HFSeosELoad(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
         parser.add_argument("-d", "--data", type=str, default=None, metavar="<hex>",
                             help="Data to present to reader (2-255 bytes). Must be valid BER-TLV.")
         parser.add_argument("-o", "--oid", type=str, default=None, metavar="<hex>",
-                            help=f"Target OID (1-32 bytes).")
+                            help="Target OID (1-32 bytes).")
         parser.add_argument("-t", "--tag", type=str, default=None, metavar="<hex>",
-                            help=f"Tag of presented data (1-2 bytes).")
+                            help="Tag of presented data (1-2 bytes).")
         parser.add_argument("--diversifier", type=str, default=None, metavar="<hex>",
-                            help=f"Simulated card diversifier (1-16 bytes).")
+                            help="Simulated card diversifier (1-16 bytes).")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
@@ -10783,7 +10995,7 @@ class HFSeosELoad(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
         anti_coll_data = self.cmd.hf14a_get_anti_coll_data()
         if anti_coll_data is None or len(anti_coll_data) == 0:
             print(
-                f"{color_string((CR, f'Slot does not contain any HF 14A config'))}"
+                f"{color_string((CR, 'Slot does not contain any HF 14A config'))}"
             )
             return
         uid = anti_coll_data["uid"]
