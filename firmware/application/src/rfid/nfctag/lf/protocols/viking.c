@@ -170,6 +170,9 @@ static bool viking_decoder_feed(viking_codec *d, uint16_t interval) {
         }
         d->raw = 0;
         d->raw_length = 0;
+        // Re-sync when out of phase. Without this a decoder that starts off out of phase never
+        // recovers unless a glitch in the field resets it (e.g. BLE advertising event)
+        manchester_reset(d->modem);
         return false;
     }
     for (int i = 0; i < bitlen; i++) {
