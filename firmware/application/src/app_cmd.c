@@ -18,7 +18,6 @@
 #include "bsp_wdt.h"
 #include "lf_reader_generic.h"
 #include "lf_em4x05_data.h"
-#include "lf_psk_reader.h"
 #include "rc522.h"
 #include "mf1_crapto1.h"
 #include "parity.h"
@@ -1053,19 +1052,14 @@ static data_frame_tx_t *cmd_processor_indala_write_to_t55xx(uint16_t cmd, uint16
     typedef struct {
         uint8_t id[LF_INDALA_TAG_ID_SIZE];
         uint8_t new_key[4];
-        uint8_t old_keys[4];
+        uint8_t old_keys[4]; // we can have more than one... struct just to compute offsets with min 1 key
     } PACKED payload_t;
     payload_t *payload = (payload_t *)data;
-    if (length < sizeof(payload_t)) {
+    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-    uint16_t tail = length - offsetof(payload_t, old_keys);
-    bool fc8 = (tail % 4 == 1) ? data[length - 1] : 0;
-    uint8_t key_count = (tail - (tail % 4 == 1 ? 1 : 0)) / 4;
-    if (key_count == 0) {
-        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
-    }
-    status = write_indala_to_t55xx(payload->id, payload->new_key, payload->old_keys, key_count, fc8);
+
+    status = write_indala_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
     return data_frame_make(cmd, status, 0, NULL);
 }
 
