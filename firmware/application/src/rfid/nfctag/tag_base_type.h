@@ -55,8 +55,8 @@ typedef enum {
     //////// FSK Tag-Talk-First   200
     TAG_TYPE_HID_PROX = 200,
     TAG_TYPE_IOPROX,
-    // AWID
-    // Paradox
+    // 202 is reserved for AWID.
+    TAG_TYPE_PARADOX = 203,
 
     //////// PSK Tag-Talk-First   300
     // Indala
@@ -112,7 +112,7 @@ typedef enum {
     }
 
 #define TAG_SPECIFIC_TYPE_LF_VALUES \
-    TAG_TYPE_EM410X, TAG_TYPE_EM410X_ELECTRA, TAG_TYPE_PAC, TAG_TYPE_HID_PROX, TAG_TYPE_IOPROX, TAG_TYPE_VIKING, TAG_TYPE_JABLOTRON, TAG_TYPE_IDTECK
+    TAG_TYPE_EM410X, TAG_TYPE_EM410X_ELECTRA, TAG_TYPE_PAC, TAG_TYPE_HID_PROX, TAG_TYPE_IOPROX, TAG_TYPE_PARADOX, TAG_TYPE_VIKING, TAG_TYPE_JABLOTRON, TAG_TYPE_IDTECK
 
 // Tag types that use PSK1 modulation for emulation. These require the PWM
 // base clock to be set to 1MHz (see lf_tag_em.c pwm_init) so the 16us
