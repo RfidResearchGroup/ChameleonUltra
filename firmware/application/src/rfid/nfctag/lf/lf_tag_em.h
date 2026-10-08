@@ -13,6 +13,7 @@
 #define LF_PAC_TAG_ID_SIZE 8
 #define LF_JABLOTRON_TAG_ID_SIZE 5
 #define LF_IDTECK_TAG_ID_SIZE 8
+#define LF_PYRAMID_TAG_ID_SIZE 16
 
 void lf_tag_125khz_sense_switch(bool enable);
 int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer);
@@ -30,4 +31,6 @@ int lf_tag_jablotron_data_savecb(tag_specific_type_t type, tag_data_buffer_t *bu
 bool lf_tag_jablotron_data_factory(uint8_t slot, tag_specific_type_t tag_type);
 int lf_tag_idteck_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 bool lf_tag_idteck_data_factory(uint8_t slot, tag_specific_type_t tag_type);
+int lf_tag_pyramid_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
+bool lf_tag_pyramid_data_factory(uint8_t slot, tag_specific_type_t tag_type);
 bool is_lf_field_exists(void);

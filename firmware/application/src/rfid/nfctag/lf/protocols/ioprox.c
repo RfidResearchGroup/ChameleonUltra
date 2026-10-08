@@ -278,6 +278,11 @@ static void *ioprox_codec_alloc(void) {
     if (!d) return NULL;
     memset(d, 0, sizeof(*d));
     d->modem = fsk_alloc(FSK_BITRATE_IOPROX);
+    if (d->modem) {
+        // Subtract a running DC baseline before the Goertzel (weak-coupling
+        // robustness; see hidprox_codec_alloc). Same FSK demod path.
+        d->modem->dc_block = true;
+    }
     return d;
 }
 
