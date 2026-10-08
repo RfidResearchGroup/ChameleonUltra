@@ -460,12 +460,8 @@ int lf_tag_indala_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffe
     return m_tag_type == TAG_TYPE_INDALA ? LF_INDALA_TAG_ID_SIZE : 0;
 }
 
-/** @brief Id card deposit card number before callback
- * @param slot      Card slot number
- * @param tag_type  Refined tag type
- * @return Whether the format is successful, if the formatting is successful, it will return to True, otherwise False will be returned
- */
+/** @brief Indala default frame: 26-bit format, FC 52, card 63612. */
 bool lf_tag_indala_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
-    uint8_t tag_id[8] = {0xDE, 0xAD, 0xBE, 0xEF, 0x88, 0x77, 0x66, 0x55};
+    uint8_t tag_id[8] = {0xA0, 0x00, 0x00, 0x00, 0xE6, 0xBD, 0x0E, 0x91};
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
 }
