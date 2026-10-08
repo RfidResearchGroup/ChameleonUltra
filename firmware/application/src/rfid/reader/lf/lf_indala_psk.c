@@ -102,7 +102,6 @@ bool indala_psk_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
     if (n > INDALA_PSK_CAPTURE_SAMPLES) {
         n = INDALA_PSK_CAPTURE_SAMPLES;
     }
-    out->energy = 0;
     baseband_in_place(samples, n);
 
     int32_t integ[INDALA_PSK_MAX_BITS];
@@ -111,10 +110,8 @@ bool indala_psk_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
     int32_t best_amp = -1;
     int32_t best_min = 0;
     uint8_t best_off = 0;
-    bool best_inv = false;
     bool found = false;
     bool rejected = false;
-    int32_t best_energy = 0;
 
     /* The bit boundary within the 32-sample period is unknown, so every offset is
      * tried. Several offsets can match the preamble exactly while straddling the
@@ -125,27 +122,21 @@ bool indala_psk_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
         if (nb > INDALA_PSK_MAX_BITS) {
             nb = INDALA_PSK_MAX_BITS;
         }
-        // |integ| <= 4 * 32 * 16383 and nb <= 128, so the sum fits in int32.
-        int32_t sum_abs = 0;
         for (size_t k = 0; k < nb; k++) {
             integ[k] = bit_integrator(samples, n, off + k * INDALA_PSK_BIT_SAMPLES);
             bits[k] = (integ[k] > 0) ? 1u : 0u;
-            sum_abs += (integ[k] < 0) ? -integ[k] : integ[k];
-        }
-        int32_t mean_abs = sum_abs / (int32_t)nb;
-        if (mean_abs > best_energy) {
-            best_energy = mean_abs;
         }
         if (nb < INDALA_PSK_FRAME_BITS) {
             continue;
         }
 
-        for (size_t i = 0; i + INDALA_PSK_FRAME_BITS <= nb; i++) {
-            if (!rejected && i + IDTECK_PREAMBLE_BITS <= nb &&
-                    (preamble_match(bits, i, false, IDTECK_PREAMBLE, IDTECK_PREAMBLE_BITS) ||
-                     preamble_match(bits, i, true, IDTECK_PREAMBLE, IDTECK_PREAMBLE_BITS))) {
+        for (size_t i = 0; !rejected && i + IDTECK_PREAMBLE_BITS <= nb; i++) {
+            if (preamble_match(bits, i, false, IDTECK_PREAMBLE, IDTECK_PREAMBLE_BITS) ||
+                    preamble_match(bits, i, true, IDTECK_PREAMBLE, IDTECK_PREAMBLE_BITS)) {
                 rejected = true;
             }
+        }
+        for (size_t i = 0; i + INDALA_PSK_FRAME_BITS <= nb; i++) {
             for (uint8_t inv = 0; inv < 2; inv++) {
                 if (!preamble_match(bits, i, inv != 0, INDALA_PREAMBLE, INDALA_PSK_PREAMBLE_BITS)) {
                     continue;
@@ -154,9 +145,9 @@ bool indala_psk_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
                 for (size_t k = 0; k < INDALA_PSK_FRAME_BITS; k++) {
                     cand[k] = inv ? (uint8_t)(1u - bits[i + k]) : bits[i + k];
                 }
-                /* The Flipper's Indala26 decoder requires bits 60 and 61 to be zero.
-                 * In testing this rejected only wrong frames, though a 64-bit format
-                 * that sets either bit would now be refused. */
+                /* Bits 60 and 61 must be zero, as in the Flipper's Indala26 decoder: on
+                 * recorded captures this rejected only wrong frames. A 64-bit format that
+                 * sets either bit is not read. */
                 if (cand[60] != 0 || cand[61] != 0) {
                     continue;
                 }
@@ -175,7 +166,6 @@ bool indala_psk_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
                     best_amp = amp;
                     best_min = mn;
                     best_off = (uint8_t)off;
-                    best_inv = (inv != 0);
                     memcpy(best_word, cand, sizeof(best_word));
                     found = true;
                 }
@@ -183,7 +173,6 @@ bool indala_psk_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
         }
     }
 
-    out->energy = best_energy;
     if (rejected || !found) {
         return false;
     }
@@ -202,8 +191,5 @@ bool indala_psk_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
         out->id[k] = byte;
     }
     out->offset = best_off;
-    out->inverted = best_inv;
-    out->amp = mean_amp;
-    out->min_amp = best_min;
     return true;
 }

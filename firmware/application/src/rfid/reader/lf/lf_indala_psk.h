@@ -46,11 +46,6 @@
 typedef struct {
     uint8_t id[INDALA_PSK_FRAME_BITS / 8];  // the frame, first bit on air is the MSB of id[0]
     uint8_t offset;                         // winning sample offset within the bit, 0..31
-    bool inverted;                          // the frame was found with inverted polarity
-    int32_t amp;                            // mean |bit integrator| over the frame
-    int32_t min_amp;                        // smallest |bit integrator| in the frame
-    int32_t energy;                         // set even when no frame decodes: the largest
-                                            // mean |bit integrator| over the whole capture
 } indala_psk_result_t;
 
 /**
@@ -61,8 +56,7 @@ typedef struct {
  *
  * @param samples  14-bit ADC conversions, one per carrier period
  * @param n        sample count, at least INDALA_PSK_MIN_SAMPLES
- * @param out      filled in on success; `out->energy` is filled in whenever the
- *                 capture was long enough to decode
+ * @param out      filled in on success
  * @return         true if a frame was recovered
  */
 bool indala_psk_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
