@@ -734,6 +734,37 @@ class LFVikingIdArgsUnit(DeviceRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
+def pyramid_id_bytes(fc: int, cn: int) -> bytes:
+    # Flipper layout: [format=26][facility][card_hi][card_lo]
+    return bytes([26, fc & 0xFF, (cn >> 8) & 0xFF, cn & 0xFF])
+
+
+class LFPyramidIdArgsUnit(DeviceRequiredUnit):
+    @staticmethod
+    def add_card_arg(parser: ArgumentParserNoExit, required=False):
+        parser.add_argument("--fc", type=int, required=required, help="Facility code (0-255)", metavar="<dec>")
+        parser.add_argument("--cn", type=int, required=required, help="Card number (0-65535)", metavar="<dec>")
+        return parser
+
+    def before_exec(self, args: argparse.Namespace):
+        if not super().before_exec(args):
+            return False
+        if args.fc is not None or args.cn is not None:
+            if args.fc is None or args.cn is None:
+                raise ArgsParserError("Provide both --fc and --cn")
+            if not (0 <= args.fc <= 0xFF):
+                raise ArgsParserError("--fc must be 0-255")
+            if not (0 <= args.cn <= 0xFFFF):
+                raise ArgsParserError("--cn must be 0-65535")
+        return True
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        raise NotImplementedError("Please implement this")
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError("Please implement this")
+
+
 class LFJablotronIdArgsUnit(DeviceRequiredUnit):
     @staticmethod
     def add_card_arg(parser: ArgumentParserNoExit, required=False):
@@ -910,6 +941,7 @@ lf_ioprox = lf.subgroup("ioprox", "ioProx commands")
 lf_pac = lf.subgroup("pac", "PAC/Stanley commands")
 lf_viking = lf.subgroup("viking", "Viking commands")
 lf_jablotron = lf.subgroup("jablotron", "Jablotron commands")
+lf_pyramid = lf.subgroup("pyramid", "Farpointe/Keri Pyramid commands")
 lf_generic = lf.subgroup("generic", "Generic commands")
 lf_idteck = lf.subgroup("idteck", "IDTECK commands")
 
@@ -7138,6 +7170,57 @@ class LFJablotronEconfig(SlotIndexArgsAndGoUnit, LFJablotronIdArgsUnit):
             print(" - Get Jablotron tag id success.")
             print(f"ID: {response.hex().upper()}")
             print(f"Card: {card_id}")
+
+
+def print_pyramid_id(id_bytes: bytes):
+    fmt, fc = id_bytes[0], id_bytes[1]
+    cn = (id_bytes[2] << 8) | id_bytes[3]
+    print(f" Pyramid: {color_string((CG, f'FC {fc} Card {cn}'))} (fmt {fmt}, raw {id_bytes.hex().upper()})")
+
+
+@lf_pyramid.command("read")
+class LFPyramidRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Scan Pyramid tag and print facility code / card number"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        print_pyramid_id(self.cmd.pyramid_scan())
+
+
+@lf_pyramid.command("write")
+class LFPyramidWriteT55xx(LFPyramidIdArgsUnit, ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Clone a Pyramid frame onto a T55xx tag"
+        return self.add_card_arg(parser, required=True)
+
+    def on_exec(self, args: argparse.Namespace):
+        self.cmd.pyramid_write_to_t55xx(pyramid_id_bytes(args.fc, args.cn))
+        print(f" - Pyramid FC {args.fc} Card {args.cn} write done.")
+
+
+@lf_pyramid.command("econfig")
+class LFPyramidEconfig(SlotIndexArgsAndGoUnit, LFPyramidIdArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Set or get the emulated Pyramid card id"
+        self.add_slot_args(parser)
+        self.add_card_arg(parser)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.fc is not None:
+            slotinfo = self.cmd.get_slot_info()
+            selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+            lf_tag_type = TagSpecificType(slotinfo[selected - 1]["lf"])
+            if lf_tag_type != TagSpecificType.Pyramid:
+                print(f"{color_string((CR, 'WARNING'))}: Slot type not set to Pyramid.")
+            self.cmd.pyramid_set_emu_id(pyramid_id_bytes(args.fc, args.cn))
+            print(" - Set Pyramid tag id success.")
+        else:
+            print_pyramid_id(self.cmd.pyramid_get_emu_id())
 
 
 @hw_slot.command("nick")

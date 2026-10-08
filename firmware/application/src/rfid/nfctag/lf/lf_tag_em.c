@@ -14,6 +14,7 @@
 #include "protocols/ioprox.h"
 #include "protocols/jablotron.h"
 #include "protocols/pac.h"
+#include "protocols/pyramid.h"
 #include "protocols/viking.h"
 #include "syssleep.h"
 #include "tag_emulation.h"
@@ -288,6 +289,15 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
         return LF_IDTECK_TAG_ID_SIZE;
     }
 
+    if (type == TAG_TYPE_PYRAMID && buffer->length >= LF_PYRAMID_TAG_ID_SIZE) {
+        m_tag_type = type;
+        void *codec = pyramid.alloc();
+        m_pwm_seq = pyramid.modulator(codec, buffer->buffer);
+        pyramid.free(codec);
+        NRF_LOG_INFO("load lf pyramid data finish.");
+        return LF_PYRAMID_TAG_ID_SIZE;
+    }
+
     NRF_LOG_ERROR("no valid data exists in buffer for tag type: %d.", type);
     return 0;
 }
@@ -443,5 +453,16 @@ bool lf_tag_idteck_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
         0x49, 0x44, 0x54, 0x4B,   // "IDTK" preamble (MSB first)
         0xDE, 0xAD, 0xBE, 0xEF,   // default card data
     };
+    return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
+}
+
+/** @brief Pyramid data save callback. */
+int lf_tag_pyramid_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return m_tag_type == TAG_TYPE_PYRAMID ? LF_PYRAMID_TAG_ID_SIZE : 0;
+}
+
+/** @brief Pyramid default id: 26-bit format, FC 0, card 0. */
+bool lf_tag_pyramid_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    uint8_t tag_id[LF_PYRAMID_TAG_ID_SIZE] = {0x1A, 0x00, 0x00, 0x00};
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
 }

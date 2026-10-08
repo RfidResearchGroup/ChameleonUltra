@@ -14,6 +14,7 @@
 #include "protocols/jablotron.h"
 #include "protocols/pac.h"
 #include "protocols/viking.h"
+#include "protocols/pyramid.h"
 
 #define NRF_LOG_MODULE_NAME lf_main
 #include "nrf_log.h"
@@ -115,6 +116,16 @@ uint8_t scan_jablotron(uint8_t *uid) {
 }
 
 /**
+ * Search Pyramid tag
+ */
+uint8_t scan_pyramid(uint8_t *uid) {
+    if (pyramid_read(uid, g_timeout_readem_ms)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
+/**
  * Try reset t55XX tag passwords by enumerating old passwords.
  */
 static void try_reset_t55xx_passwd(uint32_t new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
@@ -205,6 +216,15 @@ uint8_t write_ioprox_to_t55xx(uint8_t *card_data, uint8_t *new_passwd, uint8_t *
 uint8_t write_viking_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = viking_t55xx_writer(uid, blks);
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
+    }
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
+uint8_t write_pyramid_to_t55xx(uint8_t *id, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[7] = {0x00};
+    uint8_t blk_count = pyramid_t55xx_writer(id, blks);
     if (blk_count == 0) {
         return STATUS_PAR_ERR;
     }

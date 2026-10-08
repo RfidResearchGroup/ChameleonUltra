@@ -1112,6 +1112,53 @@ class ChameleonCMD:
         resp.parsed = resp.data
         return resp
 
+    @expect_response(Status.LF_TAG_OK)
+    def pyramid_scan(self):
+        """
+        Read a Farpointe/Keri Pyramid tag.
+
+        :return: 4-byte id: [format][facility][card_hi][card_lo]
+        """
+        resp = self.device.send_cmd_sync(Command.PYRAMID_SCAN)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def pyramid_write_to_t55xx(self, id_bytes: bytes):
+        """
+        Write a Pyramid id into T55XX.
+
+        :param id_bytes: 4-byte id [format][facility][card_hi][card_lo]
+        :return:
+        """
+        if len(id_bytes) != 4:
+            raise ValueError("The id bytes length must equal 4")
+        data = struct.pack(f'!4s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.PYRAMID_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.SUCCESS)
+    def pyramid_set_emu_id(self, id: bytes):
+        """
+        Set the card id emulated by Pyramid.
+
+        :param id: 4-byte id [format][facility][card_hi][card_lo]
+        :return:
+        """
+        if len(id) != 4:
+            raise ValueError("The id bytes length must equal 4")
+        data = struct.pack('4s', id)
+        return self.device.send_cmd_sync(Command.PYRAMID_SET_EMU_ID, data)
+
+    @expect_response(Status.SUCCESS)
+    def pyramid_get_emu_id(self):
+        """
+        Get the emulated Pyramid card id
+        """
+        resp = self.device.send_cmd_sync(Command.PYRAMID_GET_EMU_ID)
+        resp.parsed = resp.data
+        return resp
+
     @expect_response(Status.SUCCESS)
     def pac_set_emu_id(self, id: bytes):
         """
