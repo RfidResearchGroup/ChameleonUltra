@@ -69,6 +69,12 @@ extern "C" {
     T5577_PWD |                \
     (2 << T5577_MAXBLOCK_SHIFT))
 
+#define T5577_PYRAMID_CONFIG ( \
+    T5577_BITRATE_RF_50 |      \
+    T5577_MODULATION_FSK2a |   \
+    T5577_PWD |                \
+    (4 << T5577_MAXBLOCK_SHIFT))
+
 #define T5577_VIKING_CONFIG (     \
     T5577_BITRATE_RF_32 |         \
     T5577_MODULATION_MANCHESTER | \

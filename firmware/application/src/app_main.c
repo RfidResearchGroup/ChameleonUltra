@@ -13,6 +13,7 @@
 #include "nrf_drv_gpiote.h"
 #include "nrf_drv_rng.h"
 #include "nfc_mf1.h"         // for nfc_tag_mf1_prng_seed
+#include "protocols/pyramid.h"  // for LF_PYRAMID_TAG_ID_SIZE
 #include "nrf_power.h"
 #include "nrf_pwr_mgmt.h"
 #include "nrfx_nfct.h"
@@ -703,6 +704,11 @@ static void btn_fn_copy_lf(uint8_t slot, tag_specific_type_t type) {
         case TAG_TYPE_JABLOTRON:
             status = scan_jablotron(id_buffer);
             size = LF_JABLOTRON_TAG_ID_SIZE;
+            data = id_buffer;
+            break;
+        case TAG_TYPE_PYRAMID:
+            status = scan_pyramid(id_buffer);
+            size = LF_PYRAMID_TAG_ID_SIZE;
             data = id_buffer;
             break;
         default:
