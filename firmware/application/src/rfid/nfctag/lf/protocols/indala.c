@@ -20,16 +20,6 @@ NRF_LOG_MODULE_REGISTER();
 
 #define INDALA_T55XX_BLOCK_COUNT (3) // config + 2 data blocks
 
-#define INDALA_PWM_ENTRIES (INDALA_RAW_SIZE * LF_PSK1_RF32_SUBCYCLES_PER_BIT)
-
-static nrf_pwm_values_wave_form_t m_indala_pwm_seq_vals[INDALA_PWM_ENTRIES] = {};
-
-static nrf_pwm_sequence_t m_indala_pwm_seq = {
-    .values.p_wave_form = m_indala_pwm_seq_vals,
-    .length = NRF_PWM_VALUES_LENGTH(m_indala_pwm_seq_vals),
-    .repeats = 0,
-    .end_delay = 0,
-};
 
 typedef struct {
     uint8_t data[INDALA_DATA_SIZE];
@@ -66,10 +56,7 @@ static bool indala_decoder_feed(indala_codec *d, uint16_t val) {
 static const nrf_pwm_sequence_t *indala_modulator(indala_codec *d, uint8_t *buf) {
     (void)d;
 
-    size_t n = lf_psk1_build_sequence(buf, INDALA_RAW_SIZE,
-                                      m_indala_pwm_seq_vals, INDALA_PWM_ENTRIES);
-    m_indala_pwm_seq.length = (uint16_t)(n * 4);   // 4 uint16 fields per wave-form entry
-    return &m_indala_pwm_seq;
+    return lf_psk1_sequence(buf, INDALA_RAW_SIZE);
 }
 
 const protocol indala = {
