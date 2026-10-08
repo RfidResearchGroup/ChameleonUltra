@@ -53,7 +53,10 @@ static void uninit_saadc_hw(void) {
 bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen) {
     *outlen = 0;
 
-    cb_init(&cb, CIRCULAR_BUFFER_SIZE, sizeof(uint16_t));
+    m_cb_dropped = 0;
+    if (!cb_init(&cb, CIRCULAR_BUFFER_SIZE, sizeof(uint16_t))) {
+        return false;
+    }
     init_saadc_hw();
     start_lf_125khz_radio();
 
