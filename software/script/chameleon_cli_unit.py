@@ -7234,11 +7234,22 @@ def indala_encode_raw(fc: int, cn: int) -> bytes:
     return bytes(raw)
 
 
+def indala_is_26bit(raw: bytes) -> bool:
+    """True if the preamble (bits 0-32), parity (34, 38) and checksum (62, 63) are those of a 26-bit frame."""
+    fc, cn = indala_decode_raw(raw)
+    expected = indala_encode_raw(fc, cn)
+
+    def bit(b, i):
+        return (b[i // 8] >> (7 - i % 8)) & 1
+    return all(bit(raw, i) == bit(expected, i) for i in (*range(33), 34, 38, 62, 63))
+
+
 def indala_format_output(raw: bytes) -> str:
     """Format Indala raw bytes as PM3-style output string."""
-    fc, cn = indala_decode_raw(raw)
     lines = [f"Indala (len 64)  Raw: {raw.hex().upper()}"]
-    lines.append(f"   Fmt 26  FC: {fc}  Card: {cn}")
+    if indala_is_26bit(raw):
+        fc, cn = indala_decode_raw(raw)
+        lines.append(f"   Fmt 26  FC: {fc}  Card: {cn}")
     return "\n".join(lines)
 
 
