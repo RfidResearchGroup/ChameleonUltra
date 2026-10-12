@@ -13,6 +13,7 @@
 #include "protocols/t55xx.h"
 #include "protocols/jablotron.h"
 #include "protocols/pac.h"
+#include "protocols/paradox.h"
 #include "protocols/viking.h"
 
 #define NRF_LOG_MODULE_NAME lf_main
@@ -51,6 +52,16 @@ uint8_t scan_hidprox(uint8_t *data, uint8_t format_hint) {
  */
 uint8_t scan_ioprox(uint8_t *data, uint8_t format_hint) {
     if (ioprox_read(data, format_hint, g_timeout_readem_ms)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
+/**
+ * Search Paradox tag
+ */
+uint8_t scan_paradox(uint8_t *data) {
+    if (paradox_read(data, g_timeout_readem_ms)) {
         return STATUS_LF_TAG_OK;
     }
     return STATUS_LF_TAG_NO_FOUND;
@@ -236,6 +247,20 @@ uint8_t write_jablotron_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old
 uint8_t write_idteck_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = idteck_t55xx_writer(data, blks);
+    if (blk_count == 0) return STATUS_PAR_ERR;
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
+/**
+ * Write Paradox card data to t55xx (FSK2a RF/50, 96-bit frame).
+ *
+ * Uses common T55xx writer password behavior: try supplied legacy passwords,
+ * attempt to set new_passwd in block 7, then send passworded and open writes. T5577
+ * provides no write acknowledgement; caller must read the tag back.
+ */
+uint8_t write_paradox_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[PARADOX_T55XX_BLOCK_COUNT] = {0x00};
+    uint8_t blk_count = paradox_t55xx_writer(data, blks);
     if (blk_count == 0) return STATUS_PAR_ERR;
     return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
 }
