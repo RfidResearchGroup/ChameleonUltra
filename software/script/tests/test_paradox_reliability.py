@@ -134,8 +134,8 @@ static bool feed_noise(void) {
 
 static void test_all_sample_offsets_and_payloads(void) {
     const uint8_t payloads[][PARADOX_DATA_SIZE] = {
-        {0x12, 0x34, 0x56, 0x78, 0x9A, 0xB0},
-        {0xA5, 0xC3, 0x3C, 0x5A, 0x01, 0x90},
+        {0x00, 0x04, 0x8D, 0x15, 0x87, 0xB0},
+        {0x00, 0x29, 0x56, 0x8F, 0x0A, 0xF0},
     };
 
     for (size_t payload = 0; payload < sizeof(payloads) / sizeof(payloads[0]); payload++) {
@@ -146,7 +146,7 @@ static void test_all_sample_offsets_and_payloads(void) {
 }
 
 static void test_dc_margin_and_carrier_phase(void) {
-    const uint8_t payload[PARADOX_DATA_SIZE] = {0x12, 0x34, 0x56, 0x78, 0x9A, 0xB0};
+    const uint8_t payload[PARADOX_DATA_SIZE] = {0x00, 0x04, 0x8D, 0x15, 0x87, 0xB0};
     for (uint32_t offset = 0; offset < 50; offset++) {
         assert(feed_signal(payload, offset, 8192.0, 500.0, PI / 2.0, 0.0, false));
     }
@@ -155,15 +155,15 @@ static void test_dc_margin_and_carrier_phase(void) {
 }
 
 static void test_rejects_invalid_input(void) {
-    const uint8_t payload[PARADOX_DATA_SIZE] = {0x12, 0x34, 0x56, 0x78, 0x9A, 0xB0};
+    const uint8_t payload[PARADOX_DATA_SIZE] = {0x00, 0x04, 0x8D, 0x15, 0x87, 0xB0};
     assert(!feed_constant(8192));
     assert(!feed_noise());
     assert(!feed_signal(payload, 0, 8192.0, 2000.0, 0.0, 0.0, true));
 }
 
 static void test_reset_reuses_all_phase_state(void) {
-    const uint8_t first[PARADOX_DATA_SIZE] = {0x12, 0x34, 0x56, 0x78, 0x9A, 0xB0};
-    const uint8_t second[PARADOX_DATA_SIZE] = {0xA5, 0xC3, 0x3C, 0x5A, 0x01, 0x90};
+    const uint8_t first[PARADOX_DATA_SIZE] = {0x00, 0x04, 0x8D, 0x15, 0x87, 0xB0};
+    const uint8_t second[PARADOX_DATA_SIZE] = {0x00, 0x29, 0x56, 0x8F, 0x0A, 0xF0};
     void *codec = paradox.alloc();
     double phase = 0.0;
     assert(codec != NULL);

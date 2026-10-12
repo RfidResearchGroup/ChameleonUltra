@@ -51,26 +51,26 @@ HOST_TEST = r"""
 #define BUFFER_BYTES (13)
 
 static const uint8_t expected_data[PARADOX_DATA_SIZE] = {
-    0x12, 0x34, 0x56, 0x78, 0x9A, 0xB0,
+    0x00, 0x04, 0x8D, 0x15, 0x87, 0xB0,
 };
 
 /* 0x0F preamble followed by 44 Manchester pairs for expected_data. */
 static const uint8_t expected_frame[FRAME_BYTES] = {
-    0x0F, 0x56, 0x59, 0x5A, 0x65, 0x66,
-    0x69, 0x6A, 0x95, 0x96, 0x99, 0x9A,
+    0x0F, 0x55, 0x55, 0x55, 0x65, 0x95,
+    0xA6, 0x56, 0x66, 0x95, 0x6A, 0x9A,
 };
 
 /* Decoder confirms frame preamble with next frame's 0x0F preamble. */
 static const uint8_t expected_stream[BUFFER_BYTES] = {
-    0x0F, 0x56, 0x59, 0x5A, 0x65, 0x66,
-    0x69, 0x6A, 0x95, 0x96, 0x99, 0x9A, 0x0F,
+    0x0F, 0x55, 0x55, 0x55, 0x65, 0x95,
+    0xA6, 0x56, 0x66, 0x95, 0x6A, 0x9A, 0x0F,
 };
 
 static const uint32_t expected_t55xx_blocks[PARADOX_T55XX_BLOCK_COUNT] = {
     0x00107070,
-    0x0F56595A,
-    0x6566696A,
-    0x9596999A,
+    0x0F555555,
+    0x6595A656,
+    0x66956A9A,
 };
 
 static uint8_t frame_bit(const uint8_t *frame, uint16_t position) {
@@ -102,6 +102,35 @@ static void test_valid_payload(void) {
     paradox.decoder.start(codec, 0);
     assert(feed_bits(codec, expected_stream, BUFFER_BITS, &sample_index) == 1);
     assert(memcmp(paradox.get_data(codec), expected_data, PARADOX_DATA_SIZE) == 0);
+    paradox.free(codec);
+}
+
+static void test_crc_rejection_and_recovery(void) {
+    const uint8_t second_data[PARADOX_DATA_SIZE] = {
+        0x00, 0x29, 0x56, 0x8F, 0x0A, 0xF0,
+    };
+    const uint8_t second_stream[BUFFER_BYTES] = {
+        0x0F, 0x55, 0x55, 0x59, 0x96, 0x66,
+        0x69, 0x95, 0xAA, 0x55, 0x99, 0xAA, 0x0F,
+    };
+    uint8_t bad_frame[BUFFER_BYTES];
+    void *codec = paradox.alloc();
+    uint32_t sample_index = 0;
+    assert(codec != NULL);
+    paradox.decoder.start(codec, 0);
+    assert(feed_bits(codec, expected_stream, BUFFER_BITS, &sample_index) == 1);
+
+    /* Flip each protected data or CRC bit while retaining valid Manchester pairs. */
+    for (uint16_t bit = 0; bit < 42; bit++) {
+        memcpy(bad_frame, expected_stream, sizeof(bad_frame));
+        uint16_t position = 8 + bit * 2;
+        bad_frame[position / 8] ^= (uint8_t)(0xC0 >> (position % 8));
+        assert(feed_bits(codec, bad_frame, BUFFER_BITS, &sample_index) == 0);
+        assert(memcmp(paradox.get_data(codec), expected_data, PARADOX_DATA_SIZE) == 0);
+    }
+
+    assert(feed_bits(codec, second_stream, BUFFER_BITS, &sample_index) == 1);
+    assert(memcmp(paradox.get_data(codec), second_data, PARADOX_DATA_SIZE) == 0);
     paradox.free(codec);
 }
 
@@ -167,7 +196,7 @@ static void test_payload_preserved_after_rejected_frame(void) {
 
 static void test_t55xx_writer_preserves_wire_bits(void) {
     uint8_t data_with_padding[PARADOX_DATA_SIZE] = {
-        0x12, 0x34, 0x56, 0x78, 0x9A, 0xBF,
+        0x00, 0x04, 0x8D, 0x15, 0x87, 0xBF,
     };
     uint32_t blocks[PARADOX_T55XX_BLOCK_COUNT] = {0};
 
@@ -205,6 +234,7 @@ static void test_pwm_frame_consistency(void) {
 
 int main(void) {
     test_valid_payload();
+    test_crc_rejection_and_recovery();
     test_bad_preamble();
     test_manchester_resync();
     test_repeated_frames_and_reset();

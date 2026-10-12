@@ -128,6 +128,28 @@ static bool paradox_fsk_feed(paradox_fsk_demod *demod, uint16_t sample, bool *bi
     return true;
 }
 
+static uint8_t paradox_frame_crc(const uint8_t *frame) {
+    /*
+     * CRC-8/MAXIM covers the 68 Manchester bits preceding the CRC, with
+     * four leading zero bits to restore byte alignment (Proxmark3 format).
+     * Initial value is zero; reflected polynomial is 0x8C; final XOR is 0x06.
+     */
+    uint8_t crc = 0;
+    uint8_t position = PARADOX_PREAMBLE_BITS;
+    for (uint8_t byte_index = 0; byte_index < 9; byte_index++) {
+        uint8_t byte = 0;
+        uint8_t bit_count = byte_index == 0 ? 4 : 8;
+        for (uint8_t bit = 0; bit < bit_count; bit++) {
+            byte = (uint8_t)((byte << 1) | frame[position++]);
+        }
+        crc ^= byte;
+        for (uint8_t bit = 0; bit < 8; bit++) {
+            crc = (uint8_t)((crc >> 1) ^ ((crc & 1) ? 0x8C : 0));
+        }
+    }
+    return (uint8_t)(crc ^ 0x06);
+}
+
 static bool paradox_decode_frame(const paradox_phase *phase, uint8_t *output) {
     uint8_t decoded[PARADOX_DATA_SIZE] = {0};
 
@@ -152,6 +174,11 @@ static bool paradox_decode_frame(const paradox_phase *phase, uint8_t *output) {
         }
 
         decoded[i / 8] |= (uint8_t)(bit << (7 - (i % 8)));
+    }
+
+    uint8_t stored_crc = (uint8_t)((decoded[4] << 2) | (decoded[5] >> 6));
+    if (stored_crc != paradox_frame_crc(phase->encoded_bits)) {
+        return false;
     }
 
     /* Four low padding bits stay zero, matching the six-byte wire format. */
