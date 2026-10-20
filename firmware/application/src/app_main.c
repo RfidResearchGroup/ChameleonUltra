@@ -513,6 +513,9 @@ static void check_wakeup_src(void) {
             }
         }
 
+        // Start emulating before the animation because the reader is already waiting
+        tag_mode_enter();
+
         // It is currently the wake-up system of the emulation card event, we can make the strong lights on the field first
         TAG_FIELD_LED_ON();
 
