@@ -69,7 +69,13 @@ static uint32_t m_reset_source;
 static uint32_t m_gpregret_val;
 
 #define GPREGRET_CLEAR_VALUE_DEFAULT (0xFFFFFFFFUL)
-#define RESET_ON_LF_FIELD_EXISTS_Msk (1UL)
+
+// Bit 1 not 0, because the bootloader clears bit 0 as part of BOOTLOADER_SKIP_CRC
+#define RESET_ON_LF_FIELD_EXISTS_Msk (2UL)
+
+// SDK BOOTLOADER_DFU_SKIP_CRC: skip CRC on the next boot
+// Without this set it only skips CRC for a wake caused by a button press
+#define BOOTLOADER_SKIP_CRC          (0xA9UL)
 
 extern bool g_is_low_battery_shutdown;
 
@@ -410,11 +416,15 @@ static void system_off_enter(void) {
         nrf_drv_lpcomp_disable();
         // Set the reason for Reset. After restarting, you need to get this reason to avoid misjudgment from the source of wake up.
         sd_power_gpregret_clr(1, GPREGRET_CLEAR_VALUE_DEFAULT);
-        sd_power_gpregret_set(1, RESET_ON_LF_FIELD_EXISTS_Msk);
+        sd_power_gpregret_set(1, RESET_ON_LF_FIELD_EXISTS_Msk | BOOTLOADER_SKIP_CRC);
         // Trigger the RESET awakening system, restart the emulation process
         nrf_pwr_mgmt_shutdown(NRF_PWR_MGMT_SHUTDOWN_RESET);
         return;
     };
+
+    // Set the bootloader to skip the CRC because the flash cannot change while in system-off mode
+    sd_power_gpregret_clr(1, GPREGRET_CLEAR_VALUE_DEFAULT);
+    sd_power_gpregret_set(1, BOOTLOADER_SKIP_CRC);
 
     // Last call, gate is closing
     NRF_LOG_FLUSH();
