@@ -4,7 +4,9 @@
 
 #include "bsp_delay.h"
 #include "fds_util.h"
+#include "nrf_clock.h"
 #include "nrf_gpio.h"
+#include "nrf_sdh.h"
 #include "nrf_soc.h"
 #include "nrfx_lpcomp.h"
 #include "nrfx_pwm.h"
@@ -72,6 +74,10 @@ bool is_lf_field_exists(void) {
 static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // Only when the lf-frequency emulation is not launched, and the analog card is started
     if (m_is_lf_emulating || event != NRF_LPCOMP_EVENT_UP) {
+        return;
+    }
+    // No tag data loaded yet (a new slot before its default data is written)
+    if (m_pwm_seq == NULL) {
         return;
     }
 
@@ -150,6 +156,45 @@ static void pwm_init(void) {
     APP_ERROR_CHECK(err_code);
 }
 
+// HFXO started without the SoftDevice: a field wake-up emulates before the SoftDevice is enabled
+static bool m_hfclk_direct = false;
+
+static void hfclk_request(void) {
+    if (nrf_sdh_is_enabled()) {
+        sd_clock_hfclk_request();
+        uint32_t hfclk_running = 0;
+        while (!hfclk_running) {
+            sd_clock_hfclk_is_running(&hfclk_running);
+        }
+    } else {
+        nrf_clock_task_trigger(NRF_CLOCK_TASK_HFCLKSTART);
+        while (!nrf_clock_hf_is_running(NRF_CLOCK_HFCLK_HIGH_ACCURACY)) {
+        }
+        m_hfclk_direct = true;
+    }
+}
+
+static void hfclk_release(void) {
+    if (m_hfclk_direct) {
+        m_hfclk_direct = false;
+        nrf_clock_task_trigger(NRF_CLOCK_TASK_HFCLKSTOP);
+    } else {
+        sd_clock_hfclk_release();
+    }
+}
+
+// The SoftDevice now owns the clock: move the direct request to it so it keeps HFXO running
+static void lf_sdh_state_handler(nrf_sdh_state_evt_t state, void *p_context) {
+    if (state == NRF_SDH_EVT_STATE_ENABLED && m_hfclk_direct) {
+        m_hfclk_direct = false;
+        sd_clock_hfclk_request();
+    }
+}
+
+NRF_SDH_STATE_OBSERVER(m_lf_sdh_state_observer, 0) = {
+    .handler = lf_sdh_state_handler,
+};
+
 static void lf_sense_enable(void) {
     // PWM bit timing divides HFCLK by a fixed ratio. On HFINT (64 MHz RC,
     // ±1.5% at 25°C after factory trim, wider over temperature) this gives a
@@ -166,11 +211,7 @@ static void lf_sense_enable(void) {
     // Paired release in lf_sense_disable(). SD reference-counts HFXO requests,
     // so this coexists with BLE. Both functions run from thread context
     // (tag_mode_enter/tag_emulation_sense_end) where SVCs are safe.
-    sd_clock_hfclk_request();
-    uint32_t hfclk_running = 0;
-    while (!hfclk_running) {
-        sd_clock_hfclk_is_running(&hfclk_running);
-    }
+    hfclk_request();
 
     lpcomp_init();
     pwm_init();  // use precise hardware pwm to broadcast card id
@@ -184,7 +225,7 @@ static void lf_sense_disable(void) {
     nrfx_lpcomp_uninit();
     m_pwm_seq = NULL;
     m_is_lf_emulating = false;
-    sd_clock_hfclk_release();
+    hfclk_release();
 }
 
 static enum {
