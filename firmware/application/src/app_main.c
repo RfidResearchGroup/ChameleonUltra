@@ -13,7 +13,10 @@
 #include "nrf_drv_gpiote.h"
 #include "nrf_drv_rng.h"
 #include "nfc_mf1.h"         // for nfc_tag_mf1_prng_seed
+#include "nrf_clock.h"
 #include "nrf_power.h"
+#include "nrf_rng.h"
+#include "nrf_sdh.h"
 #include "nrf_pwr_mgmt.h"
 #include "nrfx_nfct.h"
 #include "nrfx_power.h"
@@ -435,6 +438,49 @@ static void system_off_enter(void) {
     // jlink connection, power consumption will rise, and hibernation will also be stuck in this step.
     while (1)
         NRF_LOG_PROCESS();
+}
+
+/**
+ * @brief Start the LFXO early. The SoftDevice waits for the LFXO when it is enabled.
+ */
+static void lfclk_start(void) {
+    nrf_clock_lf_src_set((nrf_clock_lfclk_t)NRF_SDH_CLOCK_LF_SRC);
+    nrf_clock_task_trigger(NRF_CLOCK_TASK_LFCLKSTART);
+}
+
+/**
+ * @brief Wait until the LFXO drives LFCLK, instead of the RC oscillator it runs from while the LFXO starts,
+ * so that enabling the SoftDevice doesn't block the emulation interrupt handlers while it waits. Max 1 second.
+ */
+static void lfclk_wait(void) {
+    for (uint32_t i = 0; i < 10000; i++) {
+        uint32_t stat = NRF_CLOCK->LFCLKSTAT;
+        if ((stat & CLOCK_LFCLKSTAT_STATE_Msk) &&
+            ((stat & CLOCK_LFCLKSTAT_SRC_Msk) >> CLOCK_LFCLKSTAT_SRC_Pos) == NRF_SDH_CLOCK_LF_SRC) {
+            return;
+        }
+        nrf_delay_us(100);
+    }
+}
+
+/**
+ * @brief Seed rand() and the MIFARE Classic nonces before emulating, so an early reader doesn't get the same nonces
+ * every wake. This reads the RNG directly, which is only allowed before the SoftDevice is enabled.
+ * rng_drv_and_srand_init() re-seeds later.
+ */
+static void rng_seed_early(void) {
+    uint32_t seed = 0;
+    nrf_rng_event_clear(NRF_RNG_EVENT_VALRDY);
+    nrf_rng_task_trigger(NRF_RNG_TASK_START);
+    for (int i = 0; i < 4; i++) {
+        while (!nrf_rng_event_get(NRF_RNG_EVENT_VALRDY)) {
+        }
+        nrf_rng_event_clear(NRF_RNG_EVENT_VALRDY);
+        seed = (seed << 8) | nrf_rng_random_value_get();
+    }
+    nrf_rng_task_trigger(NRF_RNG_TASK_STOP);
+    srand(seed);
+    nfc_tag_mf1_prng_seed(seed);
 }
 
 /**
@@ -1011,9 +1057,9 @@ int main(void) {
     app_timers_init();        // Initialize soft timer
     power_management_init();  // Power management initialization
     usb_cdc_init();           // USB cdc emulation initialization
-    ble_slave_init();         // Bluetooth protocol stack initialization
+    lfclk_start();            // Start the LFXO; the SoftDevice waits for it
 
-    rng_drv_and_srand_init(); // Random number generator initialization
+    rng_seed_early();         // Seed rand() and the MIFARE Classic nonces before emulating
     bsp_timer_init();         // Initialize timeout timer
     bsp_timer_start();        // Start BSP TIMER and prepare it for processing business logic
     button_init();            // Button initialization for handling business logic
@@ -1021,13 +1067,17 @@ int main(void) {
     tag_emulation_init();     // Analog card initialization
     rgb_marquee_init();       // Light effect initialization
 
+    tag_mode_enter();         // Enter card emulation mode by default, before Bluetooth starts as a reader may be waiting
+    lfclk_wait();             // Must come before ble_slave_init(), see lfclk_wait()
+
+    ble_slave_init();         // Bluetooth protocol stack initialization
+    rng_drv_and_srand_init(); // Random number generator initialization
     ble_passkey_init();       // init ble connect key.
 
     // cmd callback register
     on_data_frame_complete(on_data_frame_received);
 
     check_wakeup_src();       // Detect wake-up source and decide BLE broadcast and subsequent hibernation action according to the wake-up source
-    tag_mode_enter();         // Enter card emulation mode by default
 
     // usbd event listener
     APP_ERROR_CHECK(app_usbd_power_events_enable());
