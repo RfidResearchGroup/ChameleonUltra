@@ -70,6 +70,7 @@ NRF_LOG_MODULE_REGISTER();
 #define ADC_CHANNEL                    0
 #define ADC_BUF_SIZE                   2048
 #define ADC_BUF_COUNT                  2
+#define LOW_BATT_SHUTDOWN_COUNT        2     //!< Number of consecutive 0% battery readings neccessary to trigger a shutdown
 
 
 /**@brief Macro to convert the result of ADC conversion in millivolts.
@@ -90,6 +91,7 @@ BLE_ADVERTISING_DEF(m_advertising);                                             
 
 uint16_t          batt_lvl_in_milli_volts = 0;
 uint8_t           percentage_batt_lvl = 0;
+static uint8_t    m_low_battery_count = 0;
 static nrf_saadc_value_t adc_buf[ADC_BUF_COUNT][ADC_BUF_SIZE];
 static uint16_t   m_conn_handle          = BLE_CONN_HANDLE_INVALID;                 /**< Handle of the current connection. */
 static uint16_t   m_ble_nus_max_data_len = BLE_GATT_ATT_MTU_DEFAULT - 3;            /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
@@ -744,12 +746,16 @@ static void battery_level_meas_timeout_handler(void *p_context) {
         APP_ERROR_HANDLER(err_code);
     }
 
-    // check low battery level, if level == 0, we can try to shutdown.
+    // check low battery level, if level == 0 for several consecutive readings in a row,
+    // we can try to shutdown. A single sample is not trusted on its own.
     if (percentage_batt_lvl == 0) {
-        NRF_LOG_INFO("battery too low, try to shutdown...");
-        g_is_low_battery_shutdown = true;
-        sleep_timer_start(SLEEP_NO_BATTERY_SHUTDOWN);
+        if (++m_low_battery_count >= LOW_BATT_SHUTDOWN_COUNT) {
+            NRF_LOG_INFO("battery too low, try to shutdown...");
+            g_is_low_battery_shutdown = true;
+            sleep_timer_start(SLEEP_NO_BATTERY_SHUTDOWN);
+        }
     } else {
+        m_low_battery_count = 0;
         g_is_low_battery_shutdown = false;
     }
 }
