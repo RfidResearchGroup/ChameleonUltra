@@ -3,6 +3,8 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+
+## [v2.3.0][2026-10-24]
  - Added Farpointe/Pyramid LF protocol support: read and emulate (FSK2a, RF/50)
  - Fix CLI non-interactive help and add one-shot `--command` flag; gate hardware acquisition test on `CHAMELEON_PORT` env var (@melxusgid)
  - Fix wrong data reported by hf 14a sniff on frames containing more than 7 parity bits (@DidierA)
