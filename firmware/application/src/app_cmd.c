@@ -1177,7 +1177,8 @@ static data_frame_tx_t *cmd_processor_set_slot_data_default(uint16_t cmd, uint16
     if (payload->num_slot >= TAG_MAX_SLOT_NUM || !is_tag_specific_type_valid(tag_type)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-    status = tag_emulation_factory_data(payload->num_slot, tag_type) ? STATUS_SUCCESS : STATUS_NOT_IMPLEMENTED;
+    // Every valid type has a factory, so a failure here is the flash write.
+    status = tag_emulation_factory_data(payload->num_slot, tag_type) ? STATUS_SUCCESS : STATUS_FLASH_WRITE_FAIL;
     return data_frame_make(cmd, status, 0, NULL);
 }
 
