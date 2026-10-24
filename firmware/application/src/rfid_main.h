@@ -27,6 +27,7 @@ typedef enum {
 // functions define
 void init_leds(void);
 void light_up_by_slot(void);
+void slot_light_process(void);
 void apply_slot_change(uint8_t slot_now, uint8_t slot_new);
 void reader_mode_enter(void);
 void tag_mode_enter(void);

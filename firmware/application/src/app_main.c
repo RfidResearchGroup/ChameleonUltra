@@ -1168,6 +1168,7 @@ int main(void) {
         // Led blink at usb status (only if field generator is off)
         if (!m_is_field_on && !m_battery_status_display_active) {
             blink_usb_led_status();
+            slot_light_process();
         }
 
         // Data pack process
