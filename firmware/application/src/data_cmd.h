@@ -50,6 +50,7 @@
 #define DATA_CMD_SET_SLEEP_TIMEOUT              (1040)
 #define DATA_CMD_GET_LONG_PRESS_THRESHOLD       (1041)
 #define DATA_CMD_SET_LONG_PRESS_THRESHOLD       (1042)
+#define DATA_CMD_GET_BATTERY_INFO_EX            (1043)
 
 //
 // ******************************************************************
