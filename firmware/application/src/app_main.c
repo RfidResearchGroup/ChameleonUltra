@@ -36,6 +36,9 @@ NRF_LOG_MODULE_REGISTER();
 #include "fds_util.h"
 #include "hex_utils.h"
 #include "rfid_main.h"
+#if defined(PROJECT_DESFIRE_EMULATION)
+#include "desfire_shim.h"
+#endif
 #include "syssleep.h"
 #include "tag_emulation.h"
 #include "usb_main.h"
@@ -1179,6 +1182,13 @@ int main(void) {
         if (!m_battery_status_display_active) {
             field_generator_rainbow_loop();
         }
+#endif
+
+#if defined(PROJECT_DESFIRE_EMULATION)
+        // Refill the entropy reserve the DESFire emulator draws on for RndB.
+        // Must happen here rather than on demand: the emulator runs in the NFC
+        // interrupt, where the RNG path is neither callable nor fast enough.
+        desfire_random_pump();
 #endif
 
         // Led blink at usb status (only if field generator is off)
