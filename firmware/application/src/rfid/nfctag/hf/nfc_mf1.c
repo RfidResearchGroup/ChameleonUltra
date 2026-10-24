@@ -397,6 +397,14 @@ uint8_t nfc_tag_mf1_get_prng_type(void) {
     return m_tag_information->config.prng_type;
 }
 
+void nfc_tag_mf1_set_strict_key_b_auth(bool enable) {
+    m_tag_information->config.mode_strict_key_b_auth = enable ? 1 : 0;
+}
+
+bool nfc_tag_mf1_is_strict_key_b_auth(void) {
+    return m_tag_information->config.mode_strict_key_b_auth != 0;
+}
+
 /** @brief MF1 Get a random number.
  *  PRNG type is per-slot, persisted in FDS via the config struct.
  *    0 = STATIC  — fixed nonce (0x01020304), for testing
@@ -749,10 +757,17 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                 num_to_bytes(ar ^ crypto1_word(pcs, 0, 0), 4, &p_data[4]);
 #endif
                 uint8_t Acc = abTrailerAccessConditions[ GetAccessCondition(3) ][ KEY_A ];
+                // NXP MF1 spec: when the sector's access bits make Key B readable via Key A, Key B
+                // cannot be used for authentication. Many card clones rely on the permissive behaviour.
+                bool key_b_lockout = m_tag_information->config.mode_strict_key_b_auth
+                                     && KeyInUse == KEY_B
+                                     && (Acc & ACC_TRAILER_READ_KEYB) != 0;
+                if (key_b_lockout) {
+                    NRF_LOG_INFO("MF1 auth: rejecting Key B - readable via Key A (strict mode)");
+                }
                 // Was the random number of the return of the card reader was sent by us
-                // Also prevent authentication with Key B if it is readable using Key A
                 if ((p_data[4] == ReaderResponse[0]) && (p_data[5] == ReaderResponse[1]) && (p_data[6] == ReaderResponse[2]) && (p_data[7] == ReaderResponse[3])
-                    && (KeyInUse != KEY_B || (Acc & ACC_TRAILER_READ_KEYB) == 0)
+                    && !key_b_lockout
                 ) {
                     // The reader has passed the authentication.The estimated calculation card response data and generating the puppet test position.
                     m_tag_tx_buffer.tx_raw_buffer[0] = CardResponse[0];
@@ -1226,6 +1241,7 @@ nfc_tag_14a_coll_res_reference_t *get_saved_mifare_coll_res() {
 void nfc_tag_mf1_reset_handler() {
     m_mf1_state = MF1_STATE_UNAUTHENTICATED;
     m_gen1a_state = GEN1A_STATE_DISABLE;
+    AuthenticatedSector = 0xFF;
     nfc_tag_14a_set_state(NFC_TAG_STATE_14A_IDLE);
 
 #ifndef NFC_MF1_FAST_SIM
@@ -1336,7 +1352,8 @@ bool nfc_tag_mf1_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
 
     // PRNG type defaults to WEAK (1) — real MFC LFSR, compatible with Eltis readers
     p_mf1_information->config.prng_type = 1;
-    p_mf1_information->config.reserved1 = 0x00;
+    // Default to permissive Key B auth, matches most clones. Enable for strict NXP-spec conformance.
+    p_mf1_information->config.mode_strict_key_b_auth = false;
     p_mf1_information->config.reserved2 = 0x00;
     p_mf1_information->config.reserved3 = 0x00;
 
