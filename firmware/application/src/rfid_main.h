@@ -31,6 +31,6 @@ void apply_slot_change(uint8_t slot_now, uint8_t slot_new);
 void reader_mode_enter(void);
 void tag_mode_enter(void);
 device_mode_t get_device_mode(void);
-uint8_t get_color_by_slot(uint8_t slot);
+uint32_t get_color_by_slot(uint8_t slot);
 
 #endif

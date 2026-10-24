@@ -71,7 +71,7 @@ static void battery_status_display_restore_slot(void);
 static void battery_status_display_stop(void);
 static bool battery_status_display_cancel_on_button(void);
 static void battery_status_display_on_button_cancel(void);
-static void play_power_on_animation(uint8_t slot, uint8_t dir, uint8_t color);
+static void play_power_on_animation(uint8_t slot, uint8_t dir, uint32_t color);
 
 // NFC field generator state
 volatile bool m_is_field_on = false;
@@ -323,12 +323,12 @@ static void system_off_enter(void) {
         uint8_t animation_config = settings_get_animation_config();
         uint8_t slot = tag_emulation_get_slot();
         uint8_t dir = slot > 3 ? 1 : 0;
-        uint8_t color = get_color_by_slot(slot);
+        uint32_t color = get_color_by_slot(slot);
         if (m_reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) {
             if (m_reset_source & NRF_POWER_RESETREAS_NFC_MASK) {
-                color = 1;
+                color = RGB_HEX_GREEN;
             } else {
-                color = 2;
+                color = RGB_HEX_BLUE;
             }
         }
         if (animation_config == SettingsAnimationModeFull) {
@@ -343,6 +343,7 @@ static void system_off_enter(void) {
             if (m_system_off_processing) rgb_marquee_symmetric_in(color, slot);
         }
         rgb_marquee_stop();
+        hw_rgb_pwm_release();
         if (!m_system_off_processing) {
             for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
                 nrf_gpio_pin_clear(p_led_array[i]);
@@ -473,28 +474,14 @@ static void check_wakeup_src(void) {
 
     uint8_t slot = tag_emulation_get_slot();
     uint8_t dir = slot > 3 ? 1 : 0;
-    uint8_t color = get_color_by_slot(slot);
+    uint32_t color = get_color_by_slot(slot);
 
     if (m_reset_source & NRF_POWER_RESETREAS_OFF_MASK) {
         NRF_LOG_INFO("WakeUp from button");
         advertising_start(false); // Turn on Bluetooth radio
 
         // Button wake-up boot animation
-        uint8_t animation_config = settings_get_animation_config();
-        if (animation_config == SettingsAnimationModeFull) {
-            rgb_marquee_sweep_to(color, !dir, 11);
-            rgb_marquee_sweep_to(color, dir, 11);
-            rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
-        } else if (animation_config == SettingsAnimationModeMinimal) {
-            rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
-        } else if (animation_config == SettingsAnimationModeSymmetric) {
-            rgb_marquee_symmetric_out(color, slot);
-        } else {
-            set_slot_light_color(color);
-        }
-
-        // The indicator of the current card slot lights up at the end of the animation
-        light_up_by_slot();
+        play_power_on_animation(slot, dir, color);
 
         // If no operation follows, wait for the configured timeout and then deep hibernate
         sleep_timer_start(settings_get_sleep_timeout());
@@ -504,10 +491,10 @@ static void check_wakeup_src(void) {
 
         // wake up from hf field.
         if (m_reset_source & NRF_POWER_RESETREAS_NFC_MASK) {
-            color = 1;  // HF field show G.
+            color = RGB_HEX_GREEN;  // HF field show G.
             NRF_LOG_INFO("WakeUp from HF");
         } else {
-            color = 2;  // LF filed show B.
+            color = RGB_HEX_BLUE;  // LF filed show B.
             if (m_gpregret_val & RESET_ON_LF_FIELD_EXISTS_Msk) {
                 NRF_LOG_INFO("Reset by LF");
             } else {
@@ -525,7 +512,7 @@ static void check_wakeup_src(void) {
         } else if (animation_config == SettingsAnimationModeSymmetric) {
             rgb_marquee_symmetric_out(color, slot);
         } else {
-            set_slot_light_color(color);
+            set_slot_light_rgb(color);
         }
         light_up_by_slot();
 
@@ -555,21 +542,20 @@ static void check_wakeup_src(void) {
         // RGB
         uint8_t animation_config = settings_get_animation_config();
         if (animation_config == SettingsAnimationModeFull) {
-            rgb_marquee_sweep_to(0, !dir, 11);
-            rgb_marquee_sweep_to(1, dir, 11);
-            rgb_marquee_sweep_to(2, !dir, 11);
+            rgb_marquee_sweep_to(RGB_HEX_RED, !dir, 11);
+            rgb_marquee_sweep_to(RGB_HEX_GREEN, dir, 11);
+            rgb_marquee_sweep_to(RGB_HEX_BLUE, !dir, 11);
         } else if (animation_config == SettingsAnimationModeMinimal) {
-            rgb_marquee_sweep_from_to(0, 0, 2);
-            rgb_marquee_sweep_from_to(1, 2, 5);
-            rgb_marquee_sweep_from_to(2, 5, 7);
+            rgb_marquee_sweep_from_to(RGB_HEX_RED, 0, 2);
+            rgb_marquee_sweep_from_to(RGB_HEX_GREEN, 2, 5);
+            rgb_marquee_sweep_from_to(RGB_HEX_BLUE, 5, 7);
         } else if (animation_config == SettingsAnimationModeSymmetric) {
-            rgb_marquee_symmetric_out(0, ~0);
-            rgb_marquee_symmetric_in(1, ~0);
-            rgb_marquee_symmetric_out(2, ~0);
+            rgb_marquee_symmetric_out(RGB_HEX_RED, ~0);
+            rgb_marquee_symmetric_in(RGB_HEX_GREEN, ~0);
+            rgb_marquee_symmetric_out(RGB_HEX_BLUE, ~0);
         }
 
         // Show RGB for slot.
-        set_slot_light_color(color);
         light_up_by_slot();
 
         // If the USB is plugged in when first powered up, we can do something accordingly
@@ -609,11 +595,11 @@ static void cycle_slot(bool dec) {
 
 static void battery_status_display_restore_slot(void) {
     uint8_t slot = tag_emulation_get_slot();
-    uint8_t color = get_color_by_slot(slot);
+    uint32_t color = get_color_by_slot(slot);
     uint8_t dir = slot > 3 ? 1 : 0;
 
     rgb_marquee_stop();
-    set_slot_light_color(color);
+    set_slot_light_rgb(color);
     uint32_t *led_pins = hw_get_led_array();
     for (int i = m_battery_status_display_leds; i > 0; i--) {
         nrf_gpio_pin_clear(led_pins[i - 1]);
@@ -697,7 +683,7 @@ static void show_battery(void) {
     m_battery_status_display_started_at = app_timer_cnt_get();
 }
 
-static void play_power_on_animation(uint8_t slot, uint8_t dir, uint8_t color) {
+static void play_power_on_animation(uint8_t slot, uint8_t dir, uint32_t color) {
     uint8_t animation_config = settings_get_animation_config();
     if (animation_config == SettingsAnimationModeFull) {
         rgb_marquee_sweep_to(color, !dir, 11);
@@ -707,9 +693,11 @@ static void play_power_on_animation(uint8_t slot, uint8_t dir, uint8_t color) {
         rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
     } else if (animation_config == SettingsAnimationModeSymmetric) {
         rgb_marquee_symmetric_out(color, slot);
+    } else {
+        set_slot_light_rgb(color);
     }
 
-    set_slot_light_color(color);
+    // The indicator of the current card slot lights up at the end of the animation
     light_up_by_slot();
 }
 
@@ -759,8 +747,6 @@ static void battery_status_display_on_button_cancel(void) {
 static void offline_status_blink_color(uint8_t blink_color) {
     uint8_t slot = tag_emulation_get_slot();
 
-    uint8_t color = get_color_by_slot(slot);
-
     uint32_t *p_led_array = hw_get_led_array();
 
     set_slot_light_color(blink_color);
@@ -775,7 +761,7 @@ static void offline_status_blink_color(uint8_t blink_color) {
         bsp_delay_ms(10);
     }
 
-    set_slot_light_color(color);
+    light_up_by_slot();
 }
 
 static void offline_status_error(void) {
@@ -1080,13 +1066,12 @@ static void button_press_process(void) {
 extern bool g_usb_port_opened;
 static void blink_usb_led_status(void) {
     uint8_t slot = tag_emulation_get_slot();
-    uint8_t color = get_color_by_slot(slot);
+    uint32_t color = get_color_by_slot(slot);
     uint8_t dir = slot > 3 ? 1 : 0;
     static bool is_working = false;
     if (nrfx_power_usbstatus_get() == NRFX_POWER_USB_STATE_DISCONNECTED) {
         if (is_working) {
             rgb_marquee_stop();
-            set_slot_light_color(color);
             light_up_by_slot();
             is_working = false;
         }
@@ -1108,7 +1093,6 @@ static void blink_usb_led_status(void) {
             if (is_working) {
                 is_working = false;
                 rgb_marquee_stop();
-                set_slot_light_color(color);
                 light_up_by_slot();
             }
         }

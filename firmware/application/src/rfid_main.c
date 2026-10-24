@@ -79,6 +79,7 @@ void light_up_by_slot(void) {
     uint32_t *led_pins = hw_get_led_array();
     // The current lighting logic has not changed very much, so we only need to light up the specified lamp for the time being.
     uint8_t slot = tag_emulation_get_slot();
+    rgb_slot_indicator_show(get_color_by_slot(slot));
     for (int i = 0; i < RGB_LIST_NUM; i++) {
         if (i == slot) {
             nrf_gpio_pin_set(led_pins[i]);
@@ -92,8 +93,8 @@ void light_up_by_slot(void) {
  * @brief Apply visual and state changes after switching slot
  */
 void apply_slot_change(uint8_t slot_now, uint8_t slot_new) {
-    uint8_t color_now = get_color_by_slot(slot_now);
-    uint8_t color_new = get_color_by_slot(slot_new);
+    uint32_t color_now = get_color_by_slot(slot_now);
+    uint32_t color_new = get_color_by_slot(slot_new);
     rgb_marquee_slot_switch(slot_now, color_now, slot_new, color_new);
 }
 
@@ -108,18 +109,18 @@ device_mode_t get_device_mode(void) {
  * @brief Get the color by slot
  *
  * @param slot slot number, 0 - 7
- * @return uint8_t Color 0R, 1G, 2B
+ * @return uint32_t Color 0xRRGGBB
  */
-uint8_t get_color_by_slot(uint8_t slot) {
+uint32_t get_color_by_slot(uint8_t slot) {
     tag_slot_specific_type_t tag_types;
     tag_emulation_get_specific_types_by_slot(slot, &tag_types);
     bool enabled_lf = is_slot_enabled(slot, TAG_SENSE_LF);
     bool enabled_hf = is_slot_enabled(slot, TAG_SENSE_HF);
     if (tag_types.tag_hf != TAG_TYPE_UNDEFINED && tag_types.tag_lf != TAG_TYPE_UNDEFINED && enabled_hf && enabled_lf) {
-        return 0;   // Dual -frequency card emulation, return R, indicate a dual -frequency card
+        return RGB_HEX_RED;   // Dual -frequency card emulation, return R, indicate a dual -frequency card
     } else if (tag_types.tag_hf != TAG_TYPE_UNDEFINED && enabled_hf) {   //High -frequency emulation, return G
-        return 1;
+        return RGB_HEX_GREEN;
     } else {    // Low -frequency emulation, return B
-        return 2;
+        return RGB_HEX_BLUE;
     }
 }
