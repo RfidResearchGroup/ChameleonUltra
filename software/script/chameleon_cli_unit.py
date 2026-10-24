@@ -40,6 +40,7 @@ from chameleon_utils import CR, CG, CB, CC, CY, C0, color_string
 from chameleon_utils import print_mem_dump
 from chameleon_enum import Command, Status, SlotNumber, TagSenseType, TagSpecificType
 from chameleon_enum import (
+    BatteryHealth,
     MifareClassicWriteMode,
     MifareClassicPrngType,
     MifareClassicDarksideStatus,
@@ -7448,16 +7449,39 @@ class HWBatteryInfo(DeviceRequiredUnit):
     # How much remaining battery is considered low?
     BATTERY_LOW_LEVEL = 30
 
+    @staticmethod
+    def battery_condition(voltage: int, percentage: int) -> str:
+        if voltage >= 4100 and percentage >= 80:
+            return "excellent"
+        if voltage >= 3950 and percentage >= 60:
+            return "good"
+        if voltage >= 3750 and percentage >= 30:
+            return "fair"
+        if voltage >= 3600 and percentage >= 15:
+            return "low"
+        return "critical"
+
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = "Get battery information, voltage and level"
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        voltage, percentage = self.cmd.get_battery_info()
+        try:
+            voltage, percentage, condition_code = self.cmd.get_battery_info_ex()
+        except UnexpectedResponseError:
+            voltage, percentage = self.cmd.get_battery_info()
+            condition_code = None
+        condition = HWBatteryInfo.battery_condition(voltage, percentage)
+        if condition_code is not None:
+            try:
+                condition = BatteryHealth(condition_code).name.lower()
+            except ValueError:
+                pass
         print(" - Battery information:")
         print(f"   voltage    -> {voltage} mV")
         print(f"   percentage -> {percentage}%")
+        print(f"   condition  -> {condition}")
         if percentage < HWBatteryInfo.BATTERY_LOW_LEVEL:
             print(color_string((CR, "[!] Low battery, please charge.")))
 
@@ -7610,6 +7634,33 @@ class HWBlePair(DeviceRequiredUnit):
             self.cmd.set_ble_pairing_enable(False)
             print(f" - Successfully change ble pairing to {disabled_str}.")
             print(color_string((CY, "Do not forget to store your settings in flash!")))
+
+@hw_settings.command("longpressthreshold")
+class HWSettingsLongPressThreshold(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Get or set the long button press threshold (200-65535 ms)"
+        parser.add_argument(
+            "-d",
+            "--duration",
+            type=int,
+            required=False,
+            help="Threshold in milliseconds (200-65535)",
+            metavar="MS",
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.duration is not None:
+            if args.duration < 200 or args.duration > 65535:
+                print(color_string((CR, "Error: value must be between 200 and 65535 ms.")))
+                return
+            self.cmd.set_long_press_threshold(args.duration)
+            print(f"Long press threshold set to {args.duration} ms.")
+            print(color_string((CY, "Do not forget to store your settings in flash!")))
+        else:
+            current = self.cmd.get_long_press_threshold()
+            print(f"Current long press threshold: {current} ms")
 
 
 @hw.command("raw")
@@ -10754,7 +10805,6 @@ class HfDesChk(ReaderRequiredUnit):
                 print(f"\n   {CG}{algo:8s}  AID {aid}  key#{kno}  {key_hex}{C0}")
         else:
             print(f"\n {CR}No keys found{C0}")
-
 @hf_seos.command("eview")
 class HFSeosEView(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
