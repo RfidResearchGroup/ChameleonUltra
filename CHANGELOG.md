@@ -3,7 +3,15 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Fix CLI non-interactive help and add one-shot `--command` flag; gate hardware acquisition test on `CHAMELEON_PORT` env var (@melxusgid)
+ - Fix wrong data reported by hf 14a sniff on frames containing more than 7 parity bits (@DidierA)
+ - Added MIFARE Ultralight C authentication and emulation (@Foxushka)
+
+## [v2.2.0][2026-07-04]
  - Added Jablotron LF protocol support: read, emulate and T55xx clone (@midlan)
+ - Fix battery level never reaching 100% on fully charged devices by calibrating the battery curve to the conservative lower bound of the settled full-charge range (`4160-4190 mV`), and add a recommended battery calibration procedure.
+ - Added an extended battery info command so `hw battery` can report a qualitative battery condition hint (`excellent`, `good`, `fair`, `low`, or `critical`) while staying compatible with older firmware.
+ - Battery screen now uses the same health state on-device by coloring the battery bar and blinking for `low` and `critical` states.
  - Added IDTECK LF protocol support: tag emulation (PSK1 RF/32) and T55xx clone. No reader path yet; PSK demodulation on the envelope-only receive chain is left for a follow-up.
  - Added PAC/Stanley LF protocol support: read, emulate and T55xx clone (@kevihiiin, @danieltwagner)
  - Fix firmware application USB serial number (@taichunmin)
@@ -24,6 +32,9 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Fix Windows build (@suut)
  - Added `hf 14a config` to deal with badly configured cards (@azuwis)
  - New Symmetrical LED Animation Mode and Improved Minimal Mode (@WillyJL)
+ - Fixed formatting returned keys by static and staticnested (@triplesprawl)
+ - Fix MF1 state reset logic and access control conditions (@unkernet)
+ - Added support for SEOS credentials (@aaronjamt)
 
 ## [v2.1.0][2025-09-02]
  - Added UV, formatter and linter. Contribution guidelines. (@GameTec-live)
@@ -64,6 +75,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Fixed watchdog trigger during `hw factory_reset` (@doegox)
  - Added PyInstaller support for CLI client (@augustozanellato)
  - Added proper Mifare Ultralight (original, C, EV1) / NTAG (213, 215, 216) emulation (@turbocooler).
+
 
 ## [v2.0.0][2023-09-26]
  - Added `hw slot nick delete` and DELETE_SLOT_TAG_NICK (@doegox)

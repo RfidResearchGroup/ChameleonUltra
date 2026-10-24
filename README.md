@@ -47,4 +47,9 @@ Where do you find the community?
   * Devices/chameleon-ultra for usage discussions
 * [GameTec_live discord server](https://discord.gg/DJ2A4wxncK)
 
+Other notable projects:
+* [Fantasi](https://fantasi.cloud)
+  * [Discord](https://fantasi.cloud/discord)
+* [chameleon-ultra.js](https://github.com/taichunmin/chameleon-ultra.js/) 
+
 ###### Searching for the docs repo? Find it [here](https://github.com/RfidResearchGroup/ChameleonUltraDocs)

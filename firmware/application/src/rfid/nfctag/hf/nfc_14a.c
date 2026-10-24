@@ -335,6 +335,10 @@ void nfc_tag_14a_tx_nbit(uint8_t data, uint32_t bits) {
     NFC_14A_TX_BITS_CORE(bits, NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
 }
 
+void nfc_tag_14a_set_frame_delay_max(uint32_t max_ticks) {
+    nrf_nfct_frame_delay_max_set(max_ticks);
+}
+
 /**
  * 14A monitoring the packaging function of data processing from PCD
  */
@@ -377,6 +381,11 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
         // The trigger conditions are: REQA response in non -Halt mode
         // Temporary through: Wupa response in non -choice state, no matter what state is in the state, you can use the Wupa instruction to wake up
         if ((szDataBits == 7) && ((isREQA && m_tag_state_14a != NFC_TAG_STATE_14A_HALTED) || isWUPA)) {
+            // Received 7-bit command (REQA or WUPA) while the tag is active — reset state machine
+            if (m_tag_state_14a != NFC_TAG_STATE_14A_IDLE && m_tag_state_14a != NFC_TAG_STATE_14A_HALTED) {
+                m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
+                return;
+            }
             // The receiver of the 14A communication is notified, the internal state machine is reset
             if (m_tag_handler.cb_reset != NULL) {
                 m_tag_handler.cb_reset();
@@ -576,8 +585,16 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
             // No processing is successful, it may be some other data. You need to re-post processing
             if (m_tag_handler.cb_state != NULL) {    //Activation status, transfer the message to other registered processor processing
                 m_tag_handler.cb_state(p_data, szDataBits);
-                break;
             }
+            break;
+        }
+        case NFC_TAG_STATE_14A_PROPRIETARY: {
+            if (m_tag_handler.cb_state != NULL) {
+                m_tag_handler.cb_state(p_data, szDataBits);
+            } else {
+                m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
+            }
+            break;
         }
     }
 }
@@ -682,13 +699,8 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
                 uint32_t amt  = NRF_NFCT->TXD.AMOUNT;
                 uint16_t tx_bytes = (amt >> NFCT_TXD_AMOUNT_TXDATABYTES_Pos)
                                     & (NFCT_TXD_AMOUNT_TXDATABYTES_Msk >> NFCT_TXD_AMOUNT_TXDATABYTES_Pos);
-                uint16_t tx_bits_rem = (amt >> NFCT_TXD_AMOUNT_TXDATABITS_Pos)
-                                       & (NFCT_TXD_AMOUNT_TXDATABITS_Msk >> NFCT_TXD_AMOUNT_TXDATABITS_Pos);
-                uint16_t tx_bits = (tx_bits_rem > 0)
-                                   ? ((tx_bytes - 1) * 8 + tx_bits_rem)
-                                   : (tx_bytes * 8);
-                if (tx_bits > 0 && tx_bytes <= MAX_NFC_TX_BUFFER_SIZE) {
-                    m_tx_sniff_cb(m_nfc_tx_buffer, tx_bits);
+                if (amt > 0 && tx_bytes <= MAX_NFC_TX_BUFFER_SIZE) {
+                    m_tx_sniff_cb(m_nfc_tx_buffer, amt);
                 }
             }
             break;
