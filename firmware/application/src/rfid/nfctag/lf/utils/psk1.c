@@ -1,5 +1,7 @@
 #include "psk1.h"
 
+#include "nordic_common.h"
+
 // Extract bit at index `bit_idx` from a MSB-first bit stream stored in
 // frame_bytes. bit_idx=0 is the MSB of frame_bytes[0].
 static inline bool read_bit_msb_first(const uint8_t *frame_bytes, size_t bit_idx) {
@@ -45,4 +47,19 @@ size_t lf_psk1_build_sequence(const uint8_t *frame_bytes,
     }
 
     return k;
+}
+
+static nrf_pwm_values_wave_form_t m_psk1_seq_vals[LF_PSK1_MAX_FRAME_BITS * LF_PSK1_RF32_SUBCYCLES_PER_BIT] = {};
+
+static nrf_pwm_sequence_t m_psk1_seq = {
+    .values.p_wave_form = m_psk1_seq_vals,
+    .length = NRF_PWM_VALUES_LENGTH(m_psk1_seq_vals),
+    .repeats = 0,
+    .end_delay = 0,
+};
+
+const nrf_pwm_sequence_t *lf_psk1_sequence(const uint8_t *frame_bytes, size_t bit_count) {
+    size_t n = lf_psk1_build_sequence(frame_bytes, bit_count, m_psk1_seq_vals, ARRAY_SIZE(m_psk1_seq_vals));
+    m_psk1_seq.length = (uint16_t)(n * 4);   // 4 uint16 fields per wave-form entry
+    return &m_psk1_seq;
 }

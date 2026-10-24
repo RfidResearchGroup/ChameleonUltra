@@ -3,6 +3,8 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Added Indala LF protocol support: read, emulate and T55xx clone (@kevihiiin, @mfcarroll)
+ - Fix LF raw captures (`lf sniff`) dropping most samples: the capture buffer was smaller than one ADC batch (@mfcarroll)
  - Fix wrong data reported by hf 14a sniff on frames containing more than 7 parity bits (@DidierA)
  - Added MIFARE Ultralight C authentication and emulation (@Foxushka)
 

@@ -7,9 +7,10 @@
 #include "lf_125khz_radio.h"
 #include "lf_reader_data.h"
 #include "protocols/em410x.h"
-#include "protocols/ioprox.h"
 #include "protocols/hidprox.h"
 #include "protocols/idteck.h"
+#include "protocols/indala.h"
+#include "protocols/ioprox.h"
 #include "protocols/t55xx.h"
 #include "protocols/jablotron.h"
 #include "protocols/pac.h"
@@ -244,6 +245,26 @@ uint8_t write_idteck_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_p
  * Set the LF card scanning timeout value (in milliseconds).
  */
 void set_scan_tag_timeout(uint32_t ms) { g_timeout_readem_ms = ms; }
+
+// An Indala read takes several 33ms captures and needs two to agree, so it gets a
+// longer budget than the other scans' default. 3s covers the whole phase rotation
+// in lf_indala_data.c (8 phases x 8 captures), so the backup phases get tried.
+#define INDALA_READ_TIMEOUT_MS 3000
+
+uint8_t scan_indala(uint8_t *data) {
+    uint32_t timeout = g_timeout_readem_ms > INDALA_READ_TIMEOUT_MS ? g_timeout_readem_ms : INDALA_READ_TIMEOUT_MS;
+    if (indala_read(data, timeout)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
+uint8_t write_indala_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[7] = {0x00};
+    uint8_t blk_count = indala_t55xx_writer(data, blks);
+    if (blk_count == 0) return STATUS_PAR_ERR;
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 /**

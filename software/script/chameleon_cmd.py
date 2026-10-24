@@ -734,6 +734,55 @@ class ChameleonCMD:
             resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
         return resp
 
+    def indala_scan(self):
+        """
+        Read the card number of Indala.
+
+        :return:
+        """
+        # The firmware reads for up to 3s (several captures, two must agree), but
+        # only checks its budget between captures, so leave headroom.
+        resp = self.device.send_cmd_sync(Command.INDALA_SCAN, timeout=5)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def indala_set_emu_id(self, id: bytes):
+        """
+        Set the card number emulated by Indala.
+
+        :param id: byte of the card number
+        :return:
+        """
+        if len(id) != 8:
+            raise ValueError("Indala ID must be 8 bytes")
+        return self.device.send_cmd_sync(Command.INDALA_SET_EMU_ID, id)
+
+    @expect_response(Status.SUCCESS)
+    def indala_get_emu_id(self):
+        """
+        Get the emulated Indala card id
+        """
+        resp = self.device.send_cmd_sync(Command.INDALA_GET_EMU_ID)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def indala_write_to_t55xx(self, id_bytes: bytes):
+        """
+        Write Indala card number into T55XX.
+
+        :param id_bytes: 8-byte raw Indala frame
+        :return:
+        """
+        if len(id_bytes) != 8:
+            raise ValueError("The id bytes length must equal 8")
+        data = struct.pack(f'!8s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.INDALA_WRITE_TO_T55XX, data)
+
+
     def lf_sniff(self, timeout_ms: int = 2000):
         """
         Capture raw LF field ADC samples.
