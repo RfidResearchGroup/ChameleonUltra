@@ -9,6 +9,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Fix CLI non-interactive help and add one-shot `--command` flag; gate hardware acquisition test on `CHAMELEON_PORT` env var (@melxusgid)
  - Fix wrong data reported by hf 14a sniff on frames containing more than 7 parity bits (@DidierA)
  - Added MIFARE Ultralight C authentication and emulation (@Foxushka)
+ - Fix spurious battery-level shutdown triggered by a single 0% reading right after wake (@Sebastian-Schneider)
 
 ## [v2.2.0][2026-07-04]
  - Added Jablotron LF protocol support: read, emulate and T55xx clone (@midlan)
