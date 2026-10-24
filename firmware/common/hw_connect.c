@@ -235,10 +235,17 @@ void init_leds(void) {
 }
 
 /**
+ * @brief Hand the RGB pins back to GPIO, the application overrides this when it drives them with PWM
+ */
+__WEAK void hw_rgb_pwm_release(void) {
+}
+
+/**
  * @brief Function for enter tag emulation mode
  * @param color: 0 means r, 1 means g, 2 means b
  */
 void set_slot_light_color(chameleon_rgb_type_t color) {
+    hw_rgb_pwm_release();
     nrf_gpio_pin_set(LED_R);
     nrf_gpio_pin_set(LED_G);
     nrf_gpio_pin_set(LED_B);

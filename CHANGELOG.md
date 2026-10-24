@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Added per-card slot LED colors: the RGB lines are driven by PWM to show any color, a slot with an HF and an LF card alternates between their colors; new `DATA_CMD_SET_SLOT_COLOR` / `DATA_CMD_GET_ALL_SLOT_COLORS` and `hw slot color` (@m0n5ter)
 
 ## [v2.3.0][2026-10-24]
  - Added Farpointe/Pyramid LF protocol support: read and emulate (FSK2a, RF/50)
