@@ -60,6 +60,9 @@ class Command(enum.IntEnum):
     GET_SLEEP_TIMEOUT = 1039
     SET_SLEEP_TIMEOUT = 1040
 
+    GET_LONG_PRESS_THRESHOLD = 1041
+    SET_LONG_PRESS_THRESHOLD = 1042
+
     HF14A_SCAN = 2000
     MF1_DETECT_SUPPORT = 2001
     MF1_DETECT_PRNG = 2002
@@ -71,6 +74,10 @@ class Command(enum.IntEnum):
     MF1_READ_ONE_BLOCK = 2008
     MF1_WRITE_ONE_BLOCK = 2009
     HF14A_RAW = 2010
+    MF0_ULC_AUTH = 2018
+    MF0_ULC_READ = 2019
+    MF0_ULC_WRITE = 2021
+    MF0_ULC_SET_KEY = 2022
     HF14A_SCAN_KEEP = 2016
     HF14A_AUTH_TRACE = 2017
     MF1_MANIPULATE_VALUE_BLOCK = 2011
@@ -98,6 +105,8 @@ class Command(enum.IntEnum):
     IOPROX_COMPOSE_ID = 3013
     LF_T55XX_WRITE = 3016
     IDTECK_WRITE_TO_T55XX = 3018
+    JABLOTRON_SCAN = 3019
+    JABLOTRON_WRITE_TO_T55XX = 3020
 
     MF1_WRITE_EMU_BLOCK_DATA = 4000
     HF14A_SET_ANTI_COLL_DATA = 4001
@@ -148,6 +157,10 @@ class Command(enum.IntEnum):
     MF1_GET_PRNG_TYPE = 4040
     MF1_SET_PRNG_TYPE = 4041
 
+    SEOS_READ_EMU_DATA = 4042
+    SEOS_WRITE_EMU_DATA = 4043
+    SEOS_WRITE_EMU_KEYS = 4044
+
     # ISO14443-4 T=CL emulation
     HF14A_4_APDU_RECV = 6000
     HF14A_4_APDU_SEND = 6001
@@ -166,6 +179,8 @@ class Command(enum.IntEnum):
     PAC_GET_EMU_ID = 5007
     IOPROX_SET_EMU_ID = 5008
     IOPROX_GET_EMU_ID = 5009
+    JABLOTRON_SET_EMU_ID = 5010
+    JABLOTRON_GET_EMU_ID = 5011
     IDTECK_SET_EMU_ID = 5012
     IDTECK_GET_EMU_ID = 5013
     EM4X05_SCAN = 3030
@@ -309,7 +324,7 @@ class TagSpecificType(enum.IntEnum):
     # Visa2000
     Viking = 170
     # Noralsy
-    # Jablotron
+    Jablotron = 180
 
     # FSK Tag-Talk-First      200
     HIDProx = 200
@@ -356,6 +371,7 @@ class TagSpecificType(enum.IntEnum):
 
     # ISO14443-4 T=CL emulation
     HF14A_4 = 3000
+    SEOS = 3001
 
     @staticmethod
     def list(exclude_meta=True):
@@ -404,6 +420,8 @@ class TagSpecificType(enum.IntEnum):
             return "PAC/Stanley"
         elif self == TagSpecificType.Viking:
             return "Viking"
+        elif self == TagSpecificType.Jablotron:
+            return "Jablotron"
         elif self == TagSpecificType.IDTECK:
             return "IDTECK"
         elif self == TagSpecificType.MIFARE_Mini:
@@ -432,6 +450,8 @@ class TagSpecificType(enum.IntEnum):
             return "NTAG 210"
         elif self == TagSpecificType.NTAG_212:
             return "NTAG 212"
+        elif self == TagSpecificType.SEOS:
+            return "SEOS"
         elif self < TagSpecificType.OLD_TAG_TYPES_END:
             return "Old tag type, must be migrated! Upgrade fw!"
         return "Invalid"

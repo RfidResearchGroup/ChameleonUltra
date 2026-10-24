@@ -24,7 +24,20 @@ CY = colorama.Fore.YELLOW
 CM = colorama.Fore.MAGENTA
 C0 = colorama.Style.RESET_ALL
 
-default_cwd = Path.cwd() / Path(__file__).with_name("bin")
+
+def get_resource_dir(relative_path: str):
+    """
+    Get the resource directory of the program.
+    Returns the temporary directory where files are extracted after being packaged with PyInstaller, or the directory where the script is located in the development environment.
+    """
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        base_dir = Path(sys._MEIPASS)
+    else:
+        base_dir = Path(__file__).parent
+    return base_dir / relative_path
+
+
+default_cwd = get_resource_dir("bin")
 
 
 class ArgsParserError(Exception):
@@ -128,20 +141,24 @@ def print_help(self):
     self.help_requested = True
 
 
-def print_mem_dump(bindata, blocksize):
+def print_mem_dump(bindata, blocksize, blocks_per_sector=4):
 
     hexadecimal_len = blocksize*3+1
     ascii_len = blocksize+1
-    print(f"[=] ----+{hexadecimal_len*'-'}+{ascii_len*'-'}")
-    print(f"[=] blk | data{(hexadecimal_len-5)*' '}| ascii")
-    print(f"[=] ----+{hexadecimal_len*'-'}+{ascii_len*'-'}")
+    print(f"[=] ----+-----+{hexadecimal_len*'-'}+{ascii_len*'-'}")
+    print(f"[=] sec | blk | data{(hexadecimal_len-5)*' '}| ascii")
+    print(f"[=] ----+-----+{hexadecimal_len*'-'}+{ascii_len*'-'}")
 
     blocks = [bindata[i:i+blocksize] for i in range(0, len(bindata), blocksize)]
-    blk_index = 1
+    blk_index = 0
     for b in blocks:
+        sec_index = blk_index // blocks_per_sector
+        if sec_index > 31:
+            blocks_per_sector = 16
+        sec_str = f"{sec_index:2}" if blk_index % blocks_per_sector == 0 else "  "
         hexstr = ' '.join(b.hex()[i:i+2] for i in range(0, len(b.hex()), 2))
         asciistr = ''.join([chr(b[i]) if (b[i] > 31 and b[i] < 127) else '.' for i in range(0, len(b), 1)])
-        print(f"[=] {blk_index:3} | {hexstr.upper()} | {asciistr} ")
+        print(f"[=]  {sec_str} | {blk_index:3} | {hexstr.upper()} | {asciistr} ")
         blk_index += 1
 
 
@@ -196,6 +213,11 @@ def parity_to_str(nt_par_err):
         ]
     )
 
+def odd_parity_byte(value: int) -> int:
+    assert(value >=0 and value <= 255)
+    for i in [4, 2, 1]:
+        value ^= value >> i
+    return (value & 1) ^ 1
 
 def execute_tool(tool_name, args):
     if sys.platform == "win32":

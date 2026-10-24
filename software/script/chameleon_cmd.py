@@ -8,7 +8,7 @@ from chameleon_enum import Command, SlotNumber, Status, TagSenseType, TagSpecifi
 from chameleon_enum import ButtonPressFunction, ButtonType, MifareClassicDarksideStatus
 from chameleon_enum import MfcKeyType, MfcValueBlockOperator
 
-CURRENT_VERSION_SETTINGS = 6
+CURRENT_VERSION_SETTINGS = 7
 
 new_key = b'\x20\x20\x66\x66'
 old_keys = [b'\x51\x24\x36\x48', b'\x19\x92\x04\x27']
@@ -232,6 +232,39 @@ class ChameleonCMD:
         """
         data = struct.pack('!BB6s16s', type_value, block, key, block_data)
         resp = self.device.send_cmd_sync(Command.MF1_WRITE_ONE_BLOCK, data)
+        resp.parsed = resp.status == Status.HF_TAG_OK
+        return resp
+
+    @expect_response(Status.HF_TAG_OK)
+    def mf0_ulc_auth(self, key: bytes):
+        assert len(key) == 16
+        resp = self.device.send_cmd_sync(Command.MF0_ULC_AUTH, struct.pack('!16s', key))
+        resp.parsed = resp.status == Status.HF_TAG_OK
+        return resp
+
+    @expect_response(Status.HF_TAG_OK)
+    def mf0_ulc_read(self, key: bytes, page: int, count: int):
+        assert len(key) == 16
+        data = struct.pack('!16sBB', key, page, count)
+        resp = self.device.send_cmd_sync(Command.MF0_ULC_READ, data)
+        resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.HF_TAG_OK)
+    def mf0_ulc_write(self, key: bytes, page: int, page_data: bytes):
+        assert len(key) == 16
+        assert len(page_data) == 4
+        data = struct.pack('!16sB4s', key, page, page_data)
+        resp = self.device.send_cmd_sync(Command.MF0_ULC_WRITE, data)
+        resp.parsed = resp.status == Status.HF_TAG_OK
+        return resp
+
+    @expect_response(Status.HF_TAG_OK)
+    def mf0_ulc_set_key(self, old_key: bytes, new_key: bytes):
+        assert len(old_key) == 16
+        assert len(new_key) == 16
+        data = struct.pack('!16s16s', old_key, new_key)
+        resp = self.device.send_cmd_sync(Command.MF0_ULC_SET_KEY, data)
         resp.parsed = resp.status == Status.HF_TAG_OK
         return resp
 
@@ -788,6 +821,31 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(Command.PAC_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
+    def jablotron_scan(self):
+        """
+        Read the card number of Jablotron.
+
+        :return:
+        """
+        resp = self.device.send_cmd_sync(Command.JABLOTRON_SCAN)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data[:5]
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def jablotron_write_to_t55xx(self, id_bytes: bytes):
+        """
+        Write Jablotron card number into T55XX.
+
+        :param id_bytes: 5-byte Jablotron card ID
+        :return:
+        """
+        if len(id_bytes) != 5:
+            raise ValueError("The id bytes length must equal 5")
+        data = struct.pack(f'!5s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.JABLOTRON_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
     def idteck_write_to_t55xx(self, id_bytes: bytes):
         """
         Write an IDTECK 64-bit PSK1 frame onto a T55xx tag.
@@ -1074,6 +1132,28 @@ class ChameleonCMD:
         """
         resp = self.device.send_cmd_sync(Command.PAC_GET_EMU_ID)
         resp.parsed = resp.data[:8]
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def jablotron_set_emu_id(self, id: bytes):
+        """
+        Set the card number emulated by Jablotron.
+
+        :param id: 5-byte Jablotron card ID
+        :return:
+        """
+        if len(id) != 5:
+            raise ValueError("The id bytes length must equal 5")
+        data = struct.pack('5s', id)
+        return self.device.send_cmd_sync(Command.JABLOTRON_SET_EMU_ID, data)
+
+    @expect_response(Status.SUCCESS)
+    def jablotron_get_emu_id(self):
+        """
+        Get the emulated Jablotron card id
+        """
+        resp = self.device.send_cmd_sync(Command.JABLOTRON_GET_EMU_ID)
+        resp.parsed = resp.data[:5]
         return resp
 
     @expect_response(Status.SUCCESS)
@@ -1775,6 +1855,65 @@ class ChameleonCMD:
     def mf1_set_field_off_do_reset(self, enabled: bool):
         data = struct.pack('!B', enabled)
         return self.device.send_cmd_sync(Command.MF1_SET_FIELD_OFF_DO_RESET, data)
+
+    @expect_response(Status.SUCCESS)
+    def get_long_press_threshold(self):
+        """
+        Get the long button press threshold (in ms)
+        """
+        resp = self.device.send_cmd_sync(Command.GET_LONG_PRESS_THRESHOLD)
+        if resp.status == Status.SUCCESS:
+            resp.parsed, = struct.unpack('!H', resp.data)
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def set_long_press_threshold(self, duration: int):
+        """
+        Set the long button press threshold (in ms)
+        """
+        data = struct.pack('!H', duration)
+        return self.device.send_cmd_sync(Command.SET_LONG_PRESS_THRESHOLD, data)
+    def seos_read_emu_data(self):
+        resp = self.device.send_cmd_sync(Command.SEOS_READ_EMU_DATA, None)
+        resp.parsed = {}
+
+        def extract_next():
+            length = resp.data[0]
+            value = resp.data[1:length+1]
+            resp.data = resp.data[length+1:]
+            return value
+
+        data, oid, tag, diversifier = extract_next(), extract_next(), extract_next(), extract_next()
+        hash_alg, encr_alg = struct.unpack('!BB', resp.data)
+
+        resp.parsed = {
+            "data": data, "oid": oid, "tag": tag, "diversifier": diversifier,
+            "hash_alg": hash_alg, "encr_alg": encr_alg
+        }
+
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def seos_write_emu_data(self, data: bytes, oid: bytes, tag: bytes, diversifier: bytes, hash_alg: int, encr_alg: int):
+        data = bytes([len(data)]) + data
+        oid = bytes([len(oid)]) + oid
+        tag = bytes([len(tag)]) + tag
+        diversifier = bytes([len(diversifier)]) + diversifier
+        
+        payload = (
+            data + oid + tag + diversifier +
+            struct.pack('!BB', hash_alg, encr_alg)
+        )
+        
+        if len(payload) > 4096:
+            raise ValueError("Too much provided data")
+
+        return self.device.send_cmd_sync(Command.SEOS_WRITE_EMU_DATA, payload)
+    
+    @expect_response(Status.SUCCESS)
+    def seos_write_emu_keys(self, auth: bytes, privenc: bytes, privmac: bytes):
+        payload = auth + privenc + privmac
+        return self.device.send_cmd_sync(Command.SEOS_WRITE_EMU_KEYS, payload)
 
 
 def test_fn():

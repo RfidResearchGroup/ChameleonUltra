@@ -236,6 +236,30 @@ static data_frame_tx_t *cmd_processor_set_ble_pairing_enable(uint16_t cmd, uint1
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
+static data_frame_tx_t *cmd_processor_get_long_press_threshold(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    // Ignore unused parameters
+    (void)status;
+    (void)length;
+    (void)data;
+
+    uint16_t duration = settings_get_long_press_threshold();
+    uint8_t resp_data[2];
+    // Pack as big-endian (network byte order)
+    resp_data[0] = (uint8_t)(duration >> 8);
+    resp_data[1] = (uint8_t)(duration & 0xFF);
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(resp_data), resp_data);
+}
+
+static data_frame_tx_t *cmd_processor_set_long_press_threshold(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 2) { // Check for 2 bytes
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    // Unpack uint16_t from data (assuming big-endian/network byte order)
+    uint16_t duration = ((uint16_t)data[0] << 8) | data[1];
+    settings_set_long_press_threshold(duration);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
 static data_frame_tx_t *cmd_processor_hf14a_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -514,6 +538,127 @@ static data_frame_tx_t *cmd_processor_mf1_write_one_block(uint16_t cmd, uint16_t
     }
     status = pcd_14a_reader_mf1_write(payload->block, payload->block_data);
     return data_frame_make(cmd, status, 0, NULL);
+}
+
+#define MF0_ULC_READ_MAX_PAGES 48
+
+static data_frame_tx_t *cmd_processor_mf0_ulc_auth(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t key[16];
+    } PACKED payload_t;
+    if (length != sizeof(payload_t)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    payload_t *payload = (payload_t *)data;
+    picc_14a_tag_t taginfo;
+    status = pcd_14a_reader_scan_auto(&taginfo);
+    if (status != STATUS_HF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    status = pcd_14a_reader_mf0_ulc_auth(payload->key);
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ulc_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t key[16];
+        uint8_t page;
+        uint8_t count;
+    } PACKED payload_t;
+    if (length != sizeof(payload_t)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    payload_t *payload = (payload_t *)data;
+    if (payload->count == 0 || payload->count > MF0_ULC_READ_MAX_PAGES) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    picc_14a_tag_t taginfo;
+    status = pcd_14a_reader_scan_auto(&taginfo);
+    if (status != STATUS_HF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    status = pcd_14a_reader_mf0_ulc_auth(payload->key);
+    if (status != STATUS_HF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+
+    uint8_t out[MF0_ULC_READ_MAX_PAGES * 4];
+    uint16_t out_len = 0;
+    for (uint8_t i = 0; i < payload->count;) {
+        uint8_t block[16];
+        status = pcd_14a_reader_mf1_read(payload->page + i, block);
+        if (status != STATUS_HF_TAG_OK) {
+            break;
+        }
+        uint8_t take = ((payload->count - i) < 4) ? (payload->count - i) : 4;
+        memcpy(&out[out_len], block, (size_t)take * 4);
+        out_len += (uint16_t)take * 4;
+        i += take;
+    }
+    if (out_len == 0) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_HF_TAG_OK, out_len, out);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ulc_write(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t key[16];
+        uint8_t page;
+        uint8_t page_data[4];
+    } PACKED payload_t;
+    if (length != sizeof(payload_t)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    payload_t *payload = (payload_t *)data;
+    picc_14a_tag_t taginfo;
+    status = pcd_14a_reader_scan_auto(&taginfo);
+    if (status != STATUS_HF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    status = pcd_14a_reader_mf0_ulc_auth(payload->key);
+    if (status != STATUS_HF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    status = pcd_14a_reader_mf0_ult_write_page(payload->page, payload->page_data);
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_mf0_ulc_set_key(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t old_key[16];
+        uint8_t new_key[16];
+    } PACKED payload_t;
+    if (length != sizeof(payload_t)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    payload_t *payload = (payload_t *)data;
+    picc_14a_tag_t taginfo;
+    status = pcd_14a_reader_scan_auto(&taginfo);
+    if (status != STATUS_HF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    status = pcd_14a_reader_mf0_ulc_auth(payload->old_key);
+    if (status != STATUS_HF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+
+    uint8_t card[16];
+    for (int i = 0; i < 8; i++) card[i] = payload->new_key[7 - i];
+    for (int i = 0; i < 8; i++) card[8 + i] = payload->new_key[15 - i];
+
+    for (uint8_t i = 0; i < 4; i++) {
+        status = pcd_14a_reader_mf0_ult_write_page(0x2C + i, &card[i * 4]);
+        if (status != STATUS_HF_TAG_OK) {
+            return data_frame_make(cmd, status, 0, NULL);
+        }
+    }
+    return data_frame_make(cmd, STATUS_HF_TAG_OK, 0, NULL);
 }
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
@@ -871,6 +1016,29 @@ static data_frame_tx_t *cmd_processor_pac_write_to_t55xx(uint16_t cmd, uint16_t 
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+static data_frame_tx_t *cmd_processor_jablotron_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t card_buffer[5] = {0x00};
+    status = scan_jablotron(card_buffer);
+    if (status != STATUS_LF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_buffer), card_buffer);
+}
+
+static data_frame_tx_t *cmd_processor_jablotron_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t id[5];
+        uint8_t new_key[4];
+        uint8_t old_keys[4];
+    } PACKED payload_t;
+    payload_t *payload = (payload_t *)data;
+    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    status = write_jablotron_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
 static data_frame_tx_t *cmd_processor_lf_t55xx_write(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     typedef struct {
         uint8_t block;    /* block number */
@@ -1140,6 +1308,88 @@ static data_frame_tx_t *cmd_processor_idteck_get_emu_id(uint16_t cmd, uint16_t s
     return data_frame_make(cmd, STATUS_SUCCESS, LF_IDTECK_TAG_ID_SIZE, buffer->buffer);
 }
 
+static data_frame_tx_t *cmd_processor_seos_read_emu_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_SEOS);
+    nfc_tag_seos_information_t *info = (nfc_tag_seos_information_t *)buffer->buffer;
+
+    uint8_t output[1+info->diversifier_len + 1+info->oid_len + 1+info->data_tag_len + 1+info->data_len + 2];
+    uint16_t offset = 0;
+
+    output[offset++] = info->data_len;
+    memcpy(output+offset, info->data, info->data_len);
+    offset += info->data_len;
+
+    output[offset++] = info->oid_len;
+    memcpy(output+offset, info->oid, info->oid_len);
+    offset += info->oid_len;
+
+    output[offset++] = info->data_tag_len;
+    memcpy(output+offset, info->data_tag, info->data_tag_len);
+    offset += info->data_tag_len;
+
+    output[offset++] = info->diversifier_len;
+    memcpy(output+offset, info->diversifier, info->diversifier_len);
+    offset += info->diversifier_len;
+
+    output[offset++] = info->hash_alg;
+    output[offset++] = info->encr_alg;
+
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(output), output);
+}
+
+static data_frame_tx_t *cmd_processor_seos_write_emu_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length < 6) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_SEOS);
+    nfc_tag_seos_information_t *info = (nfc_tag_seos_information_t *)buffer->buffer;
+
+    uint16_t offset = 0;
+
+    uint8_t len = data[offset++];
+    if (len > NFC_TAG_SEOS_DATA_MAX) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    info->data_len = len;
+    memcpy(info->data, data+offset, len);
+    offset += len;
+
+    len = data[offset++];
+    if (len > NFC_TAG_SEOS_OID_MAX) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    info->oid_len = len;
+    memcpy(info->oid, data+offset, len);
+    offset += len;
+
+    len = data[offset++];
+    if (len > NFC_TAG_SEOS_DATA_TAG_MAX) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    info->data_tag_len = len;
+    memcpy(info->data_tag, data+offset, len);
+    offset += len;
+
+    len = data[offset++];
+    if (len > NFC_TAG_SEOS_DIVERSIFIER_MAX) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    info->diversifier_len = len;
+    memcpy(info->diversifier, data+offset, len);
+    offset += len;
+
+    info->hash_alg = data[offset++];
+    info->encr_alg = data[offset++];
+
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_seos_write_emu_keys(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 16 * 3) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_SEOS);
+    nfc_tag_seos_information_t *info = (nfc_tag_seos_information_t *)buffer->buffer;
+
+    memcpy(info->authkey, data+ 0, 16);
+    memcpy(info->privenc, data+16, 16);
+    memcpy(info->privmac, data+32, 16);
+
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
 #if defined(PROJECT_CHAMELEON_ULTRA)
 // T55xx clone is only available on Chameleon Ultra; the Lite firmware
 // has no LF reader hardware and does not compile the write_*_to_t55xx
@@ -1214,6 +1464,26 @@ static data_frame_tx_t *cmd_processor_pac_get_emu_id(uint16_t cmd, uint16_t stat
     return data_frame_make(cmd, STATUS_SUCCESS, LF_PAC_TAG_ID_SIZE, buffer->buffer);
 }
 
+static data_frame_tx_t *cmd_processor_jablotron_set_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != LF_JABLOTRON_TAG_ID_SIZE) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_JABLOTRON);
+    memcpy(buffer->buffer, data, LF_JABLOTRON_TAG_ID_SIZE);
+    tag_emulation_load_by_buffer(TAG_TYPE_JABLOTRON, false);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_jablotron_get_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    tag_slot_specific_type_t tag_types;
+    tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &tag_types);
+    if (tag_types.tag_lf != TAG_TYPE_JABLOTRON) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, data);
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_JABLOTRON);
+    return data_frame_make(cmd, STATUS_SUCCESS, LF_JABLOTRON_TAG_ID_SIZE, buffer->buffer);
+}
+
 static nfc_tag_14a_coll_res_reference_t *get_coll_res_data(bool write) {
     nfc_tag_14a_coll_res_reference_t *info;
     tag_slot_specific_type_t tag_types;
@@ -1240,6 +1510,9 @@ static nfc_tag_14a_coll_res_reference_t *get_coll_res_data(bool write) {
             break;
         case TAG_TYPE_HF14A_4:
             info = nfc_tag_14a_4_get_coll_res();
+            break;
+        case TAG_TYPE_SEOS:
+            info = nfc_tag_seos_get_coll_res();
             break;
         default:
             // no collision resolution data for slot
@@ -2459,14 +2732,12 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
     }
 
     /* Copy data portion (strip PCB + CRC), then handle chaining */
-    uint8_t blk_num = 0;
     uint8_t resp_pcb = resp_buf[0];
     uint8_t dlen = resp_bytes - 3; /* subtract PCB(1) + CRC(2) */
     if (dlen > 0 && resp_chain_len + dlen < sizeof(resp_chain)) {
         memcpy(&resp_chain[resp_chain_len], &resp_buf[1], dlen);
         resp_chain_len += dlen;
     }
-    blk_num ^= 1;
 
     /* ISO14443-4 chaining: PCB bit5 (0x20) set means more blocks follow */
     while (resp_pcb & 0x20) {
@@ -2489,7 +2760,6 @@ static data_frame_tx_t *cmd_processor_hf14a_4_reader_apdu(uint16_t cmd, uint16_t
             memcpy(&resp_chain[resp_chain_len], &resp_buf[1], dlen);
             resp_chain_len += dlen;
         }
-        blk_num ^= 1;
     }
 
     return data_frame_make(cmd, STATUS_HF_TAG_OK, resp_chain_len, resp_chain);
@@ -2968,6 +3238,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_SLEEP_TIMEOUT,            NULL,                        cmd_processor_get_sleep_timeout,             NULL                   },
     {    DATA_CMD_SET_SLEEP_TIMEOUT,            NULL,                        cmd_processor_set_sleep_timeout,             NULL                   },
     {    DATA_CMD_GET_ALL_SLOT_NICKS,           NULL,                        cmd_processor_get_all_slot_nicks,            NULL                   },
+    {    DATA_CMD_GET_LONG_PRESS_THRESHOLD,     NULL,                        cmd_processor_get_long_press_threshold,      NULL                   },
+    {    DATA_CMD_SET_LONG_PRESS_THRESHOLD,     NULL,                        cmd_processor_set_long_press_threshold,      NULL                   },
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
@@ -2983,6 +3255,10 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_AUTH_ONE_KEY_BLOCK,       before_hf_reader_run,        cmd_processor_mf1_auth_one_key_block,        after_hf_reader_run    },
     {    DATA_CMD_MF1_READ_ONE_BLOCK,           before_hf_reader_run,        cmd_processor_mf1_read_one_block,            after_hf_reader_run    },
     {    DATA_CMD_MF1_WRITE_ONE_BLOCK,          before_hf_reader_run,        cmd_processor_mf1_write_one_block,           after_hf_reader_run    },
+    {    DATA_CMD_MF0_ULC_AUTH,                 before_hf_reader_run,        cmd_processor_mf0_ulc_auth,                  after_hf_reader_run    },
+    {    DATA_CMD_MF0_ULC_READ,                 before_hf_reader_run,        cmd_processor_mf0_ulc_read,                  after_hf_reader_run    },
+    {    DATA_CMD_MF0_ULC_WRITE,                before_hf_reader_run,        cmd_processor_mf0_ulc_write,                 after_hf_reader_run    },
+    {    DATA_CMD_MF0_ULC_SET_KEY,              before_hf_reader_run,        cmd_processor_mf0_ulc_set_key,               after_hf_reader_run    },
     {    DATA_CMD_HF14A_RAW,                    before_reader_run,           cmd_processor_hf14a_raw,                     NULL                   },
     {    DATA_CMD_MF1_MANIPULATE_VALUE_BLOCK,   before_hf_reader_run,        cmd_processor_mf1_manipulate_value_block,    after_hf_reader_run    },
     {    DATA_CMD_MF1_CHECK_KEYS_OF_SECTORS,    before_hf_reader_run,        cmd_processor_mf1_check_keys_of_sectors,     after_hf_reader_run    },
@@ -3000,6 +3276,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_IOPROX_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_ioprox_write_to_t55xx,         NULL                   },
     {    DATA_CMD_PAC_SCAN,                     before_reader_run,           cmd_processor_pac_scan,                      NULL                   },
     {    DATA_CMD_PAC_WRITE_TO_T55XX,           before_reader_run,           cmd_processor_pac_write_to_t55xx,            NULL                   },
+    {    DATA_CMD_JABLOTRON_SCAN,               before_reader_run,           cmd_processor_jablotron_scan,                NULL                   },
+    {    DATA_CMD_JABLOTRON_WRITE_TO_T55XX,     before_reader_run,           cmd_processor_jablotron_write_to_t55xx,      NULL                   },
     {    DATA_CMD_IDTECK_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_idteck_write_to_t55xx,         NULL                   },
     {    DATA_CMD_LF_T55XX_WRITE,               before_reader_run,           cmd_processor_lf_t55xx_write,                NULL                   },
     {    DATA_CMD_ADC_GENERIC_READ,             before_reader_run,           cmd_processor_generic_read,                  NULL                   },
@@ -3072,8 +3350,15 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_VIKING_GET_EMU_ID,              NULL,                      cmd_processor_viking_get_emu_id,             NULL                   },
     {    DATA_CMD_PAC_SET_EMU_ID,                 NULL,                      cmd_processor_pac_set_emu_id,                NULL                   },
     {    DATA_CMD_PAC_GET_EMU_ID,                 NULL,                      cmd_processor_pac_get_emu_id,                NULL                   },
+    {    DATA_CMD_JABLOTRON_SET_EMU_ID,           NULL,                      cmd_processor_jablotron_set_emu_id,          NULL                   },
+    {    DATA_CMD_JABLOTRON_GET_EMU_ID,           NULL,                      cmd_processor_jablotron_get_emu_id,          NULL                   },
     {    DATA_CMD_IDTECK_SET_EMU_ID,              NULL,                      cmd_processor_idteck_set_emu_id,             NULL                   },
     {    DATA_CMD_IDTECK_GET_EMU_ID,              NULL,                      cmd_processor_idteck_get_emu_id,             NULL                   },
+
+    {    DATA_CMD_SEOS_READ_EMU_DATA,             NULL,                      cmd_processor_seos_read_emu_data,            NULL                   },
+    {    DATA_CMD_SEOS_WRITE_EMU_DATA,            NULL,                      cmd_processor_seos_write_emu_data,           NULL                   },
+    {    DATA_CMD_SEOS_WRITE_EMU_KEYS,            NULL,                      cmd_processor_seos_write_emu_keys,           NULL                   },
+
     /* ISO14443-4 T=CL emulation */
 #if defined(PROJECT_CHAMELEON_ULTRA)
     /* ISO14443-4 T=CL emulation */

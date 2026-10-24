@@ -50,6 +50,7 @@ typedef enum {
     TAG_TYPE_VIKING = 170,
     // Noralsy
     // Jablotron
+    TAG_TYPE_JABLOTRON = 180,
 
     //////// FSK Tag-Talk-First   200
     TAG_TYPE_HID_PROX = 200,
@@ -93,6 +94,7 @@ typedef enum {
 
     // HF14A-4 series            3000
     TAG_TYPE_HF14A_4 = 3000,
+    TAG_TYPE_SEOS,
 
 } tag_specific_type_t;
 
@@ -110,7 +112,7 @@ typedef enum {
     }
 
 #define TAG_SPECIFIC_TYPE_LF_VALUES \
-    TAG_TYPE_EM410X, TAG_TYPE_EM410X_ELECTRA, TAG_TYPE_PAC, TAG_TYPE_HID_PROX, TAG_TYPE_IOPROX, TAG_TYPE_VIKING, TAG_TYPE_IDTECK
+    TAG_TYPE_EM410X, TAG_TYPE_EM410X_ELECTRA, TAG_TYPE_PAC, TAG_TYPE_HID_PROX, TAG_TYPE_IOPROX, TAG_TYPE_VIKING, TAG_TYPE_JABLOTRON, TAG_TYPE_IDTECK
 
 // Tag types that use PSK1 modulation for emulation. These require the PWM
 // base clock to be set to 1MHz (see lf_tag_em.c pwm_init) so the 16us
@@ -123,7 +125,7 @@ typedef enum {
         TAG_TYPE_MIFARE_4096, TAG_TYPE_NTAG_213, TAG_TYPE_NTAG_215,   \
         TAG_TYPE_NTAG_216, TAG_TYPE_MF0ICU1, TAG_TYPE_MF0ICU2,        \
         TAG_TYPE_MF0UL11, TAG_TYPE_MF0UL21, TAG_TYPE_NTAG_210,        \
-        TAG_TYPE_NTAG_212, TAG_TYPE_HF14A_4
+        TAG_TYPE_NTAG_212, TAG_TYPE_HF14A_4, TAG_TYPE_SEOS
 
 typedef struct {
     tag_specific_type_t tag_hf;
