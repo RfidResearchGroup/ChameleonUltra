@@ -4,7 +4,10 @@ LFSR48_FILTER_A = 0x9E98
 LFSR48_FILTER_B = 0xB48E
 LFSR48_FILTER_C = 0xEC57E80A
 LFSR48_POLY = 0xE882B0AD621
-U8_TO_ODD4 = [((i & 0x80) >> 4) + ((i & 0x20) >> 3) + ((i & 0x08) >> 2) + ((i & 0x02) >> 1) for i in range(256)]
+U8_TO_ODD4 = [
+    ((i & 0x80) >> 4) + ((i & 0x20) >> 3) + ((i & 0x08) >> 2) + ((i & 0x02) >> 1)
+    for i in range(256)
+]
 EVEN_PARITY_U8 = [0 for i in range(256)]
 
 
@@ -84,7 +87,11 @@ class Crypto1:
 
     def lfsr48_bit(self, bit_in: int = 0, is_encrypted: bool = False) -> int:
         out_bit = self.lfsr48_filter()
-        bit_feedback = even_parity_u48(LFSR48_POLY & self.lfsr48) ^ (bit_in & 1) ^ (is_encrypted & out_bit)
+        bit_feedback = (
+            even_parity_u48(LFSR48_POLY & self.lfsr48)
+            ^ (bit_in & 1)
+            ^ (is_encrypted & out_bit)
+        )
         self.lfsr48 = (bit_feedback << 47) | (self.lfsr48 >> 1)
         return out_bit
 
@@ -110,7 +117,9 @@ class Crypto1:
         return swap_endian_u32(lfsr32)
 
     @staticmethod
-    def mfkey32_is_reader_has_key(uid: int, nt: int, nrEnc: int, arEnc: int, key: str) -> bool:
+    def mfkey32_is_reader_has_key(
+        uid: int, nt: int, nrEnc: int, arEnc: int, key: str
+    ) -> bool:
         state = Crypto1()
         state.key = key
         state.lfsr48_u32(uid ^ nt, False)  # ks0

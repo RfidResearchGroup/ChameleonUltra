@@ -5,11 +5,18 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 ## [unreleased][unreleased]
  - Added Indala LF protocol support: read, emulate and T55xx clone (@kevihiiin, @mfcarroll)
  - Fix LF raw captures (`lf sniff`) dropping most samples: the capture buffer was smaller than one ADC batch (@mfcarroll)
+
+## [v2.3.0][2026-10-24]
+ - Added Farpointe/Pyramid LF protocol support: read and emulate (FSK2a, RF/50)
+ - Fix CLI non-interactive help and add one-shot `--command` flag; gate hardware acquisition test on `CHAMELEON_PORT` env var (@melxusgid)
  - Fix wrong data reported by hf 14a sniff on frames containing more than 7 parity bits (@DidierA)
  - Added MIFARE Ultralight C authentication and emulation (@Foxushka)
 
 ## [v2.2.0][2026-07-04]
  - Added Jablotron LF protocol support: read, emulate and T55xx clone (@midlan)
+ - Fix battery level never reaching 100% on fully charged devices by calibrating the battery curve to the conservative lower bound of the settled full-charge range (`4160-4190 mV`), and add a recommended battery calibration procedure.
+ - Added an extended battery info command so `hw battery` can report a qualitative battery condition hint (`excellent`, `good`, `fair`, `low`, or `critical`) while staying compatible with older firmware.
+ - Battery screen now uses the same health state on-device by coloring the battery bar and blinking for `low` and `critical` states.
  - Added IDTECK LF protocol support: tag emulation (PSK1 RF/32) and T55xx clone. No reader path yet; PSK demodulation on the envelope-only receive chain is left for a follow-up.
  - Added PAC/Stanley LF protocol support: read, emulate and T55xx clone (@kevihiiin, @danieltwagner)
  - Fix firmware application USB serial number (@taichunmin)
