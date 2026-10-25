@@ -43,6 +43,7 @@ nfc_tag_14a_state_t m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
 // 14443A protocol processor
 nfc_tag_14a_handler_t m_tag_handler = {
     .cb_reset = NULL,       // Tag Reset callback
+    .cb_field = NULL,       // Physical field lifecycle callback
     .cb_state = NULL,       // Label status machine callback
     .get_coll_res = NULL,   // Obtain packaging of anti -conflict resources of labels
 };
@@ -94,6 +95,11 @@ static uint8_t m_nfc_tx_buffer[MAX_NFC_TX_BUFFER_SIZE] = { 0x00 };
 static uint8_t m_uid_incomplete_sak[] = { 0x04, 0xda, 0x17 };
 // Reset nfc peripheral after field lost?
 static bool reset_if_field_lost = false; // default is 'false', Unless there is a genuine need for a reset.
+
+// RF activation/ATQA/timeout counters (DESFire diagnostics -- desfireGetStats)
+static volatile uint16_t m_activation_requests = 0;
+static volatile uint16_t m_atqa_tx = 0;
+static volatile uint16_t m_fdt_timeouts = 0;
 
 
 /**
@@ -381,6 +387,7 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
         // The trigger conditions are: REQA response in non -Halt mode
         // Temporary through: Wupa response in non -choice state, no matter what state is in the state, you can use the Wupa instruction to wake up
         if ((szDataBits == 7) && ((isREQA && m_tag_state_14a != NFC_TAG_STATE_14A_HALTED) || isWUPA)) {
+            if (m_activation_requests != UINT16_MAX) m_activation_requests++;
             // Received 7-bit command (REQA or WUPA) while the tag is active — reset state machine
             if (m_tag_state_14a != NFC_TAG_STATE_14A_IDLE && m_tag_state_14a != NFC_TAG_STATE_14A_HALTED) {
                 m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
@@ -394,11 +401,10 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
             if (auto_coll_res != NULL) {
                 // The status machine is set to the preparation state, and the next operation is to enter the card selection link
                 m_tag_state_14a = NFC_TAG_STATE_14A_READY;
-                if (!m_sniff_passive) {
-                    // After receiving the WUPA or REQA instruction, we need to reply to ATQA
-                    nfc_tag_14a_tx_bytes(auto_coll_res->atqa, 2, false);
-                    // NRF_LOG_INFO("ATQA reply: %02x%02x", auto_coll_res->atqa[0], auto_coll_res->atqa[1]);
-                }
+                // After receiving the WUPA or REQA instruction, we need to reply to ATQA
+                if (m_atqa_tx != UINT16_MAX) m_atqa_tx++;
+                nfc_tag_14a_tx_bytes(auto_coll_res->atqa, 2, false);
+                // NRF_LOG_INFO("ATQA reply: %02x%02x", auto_coll_res->atqa[0], auto_coll_res->atqa[1]);
             } else {
                 m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
                 NRF_LOG_INFO("Auto anti-collision resource no exists.");
@@ -661,6 +667,8 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
 
             NRF_LOG_INFO("HF FIELD DETECTED");
 
+            if (m_tag_handler.cb_field != NULL) m_tag_handler.cb_field(true);
+
             //Turn off the automatic anti -collision, MCU management all the interaction process, and then enable the NFC peripherals so that Io can be performed after enable
             // 20221108 Fix the different enable switching process of NRF52840 and NRF52832
 #if defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
@@ -682,6 +690,10 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
 
             TAG_FIELD_LED_OFF()
             m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
+
+            // Notify the active tag handler that the field is gone. DESFire
+            // needs this to drop an authenticated session.
+            if (m_tag_handler.cb_field != NULL) m_tag_handler.cb_field(false);
 
             if (reset_if_field_lost) {
                 // Fix a bug where certain special conditions prevent triggering TX start events and actually transmit incorrect data to the card reader.
@@ -738,6 +750,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
                     //If we respond to the label in the communication window, but we did not respond in time, then we need to make an error printing
                     // If this error appears very frequently, it may be that the MCU processing speed does not keep up. At this time, the developer needs to optimize the code
                     if (m_is_responded) {
+                        if (m_fdt_timeouts != UINT16_MAX) m_fdt_timeouts++;
                         NRF_LOG_ERROR("NRFX_NFCT_ERROR_FRAMEDELAYTIMEOUT: %d", m_tag_state_14a);
                     }
                     break;
@@ -772,6 +785,7 @@ void nfc_tag_14a_set_handler(nfc_tag_14a_handler_t *handler) {
     if (handler != NULL) {
         // Take it directly to the implementation of the introduction to our global object
         m_tag_handler.cb_reset = handler->cb_reset;
+        m_tag_handler.cb_field = handler->cb_field;
         m_tag_handler.cb_state = handler->cb_state;
         m_tag_handler.get_coll_res = handler->get_coll_res;
     }
@@ -821,4 +835,13 @@ void nfc_tag_14a_set_reset_enable(bool enable) {
 
 bool nfc_tag_14a_is_reset_enable() {
     return reset_if_field_lost;
+}
+
+void nfc_tag_14a_get_activation_stats(
+    uint16_t *requests,
+    uint16_t *atqa_tx,
+    uint16_t *fdt_timeouts) {
+    if (requests) *requests = m_activation_requests;
+    if (atqa_tx) *atqa_tx = m_atqa_tx;
+    if (fdt_timeouts) *fdt_timeouts = m_fdt_timeouts;
 }
