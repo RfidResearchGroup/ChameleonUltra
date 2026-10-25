@@ -889,9 +889,10 @@ class ChameleonCMD:
         """
         if len(id_bytes) != 8:
             raise ValueError("The id bytes length must equal 8")
-        data = struct.pack(f'!8s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+        data = struct.pack(
+            f"!8s4s{4 * len(old_keys)}s", id_bytes, new_key, b"".join(old_keys)
+        )
         return self.device.send_cmd_sync(Command.INDALA_WRITE_TO_T55XX, data)
-
 
     def lf_sniff(self, timeout_ms: int = 2000):
         """
