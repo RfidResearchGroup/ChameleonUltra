@@ -121,7 +121,7 @@
 #define DATA_CMD_JABLOTRON_SCAN                 (3019)
 #define DATA_CMD_JABLOTRON_WRITE_TO_T55XX       (3020)
 #define DATA_CMD_PYRAMID_SCAN                   (3021)
-// Provisional ID: 3021/3022 and 3033-3036 are claimed by open PRs.
+// Provisional ID: 3022 and 3033-3036 are claimed by open PRs.
 #define DATA_CMD_LF_T55XX_WRITE_FEATURES        (3029)
 
 // Optional trailing byte on the *_WRITE_TO_T55XX commands, after the old keys.
