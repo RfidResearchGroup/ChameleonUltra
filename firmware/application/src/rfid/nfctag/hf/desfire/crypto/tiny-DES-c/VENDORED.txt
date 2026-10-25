@@ -1,0 +1,3 @@
+Vendored from https://github.com/mistial-dev/tiny-DES-c
+License: Unlicense (public domain). Pinned copy, no submodule.
+Provides DES + 2K/3K 3DES (ECB/CBC), verified against reference KATs.

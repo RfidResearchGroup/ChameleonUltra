@@ -9,6 +9,9 @@
 #include "nfc_mf1.h"
 #include "nfc_14a_4.h"
 #include "nfc_seos.h"
+#if defined(PROJECT_DESFIRE_EMULATION)
+#include "desfire/nfc_desfire.h"
+#endif
 #include "rgb_marquee.h"
 #include "tag_persistence.h"
 
@@ -55,7 +58,7 @@ static uint8_t m_tag_data_buffer_lf[20];  // LF card data buffer
 static uint16_t m_tag_data_lf_crc;
 static tag_data_buffer_t m_tag_data_lf = {sizeof(m_tag_data_buffer_lf), m_tag_data_buffer_lf, &m_tag_data_lf_crc};
 
-static uint8_t m_tag_data_buffer_hf[4500];  // HF card data buffer
+static uint8_t m_tag_data_buffer_hf[8192];  // HF card data buffer (= 1 FDS page; holds EV2 record)
 static uint16_t m_tag_data_hf_crc;
 static tag_data_buffer_t m_tag_data_hf = {sizeof(m_tag_data_buffer_hf), m_tag_data_buffer_hf, &m_tag_data_hf_crc};
 
@@ -119,6 +122,14 @@ static tag_base_handler_map_t tag_base_map[] = {
     // ISO14443-4 T=CL emulation
     {TAG_SENSE_HF, TAG_TYPE_HF14A_4,     nfc_tag_14a_4_data_loadcb,    nfc_tag_14a_4_data_savecb,    nfc_tag_14a_4_data_factory,    &m_tag_data_hf},
     {TAG_SENSE_HF, TAG_TYPE_SEOS,        nfc_tag_seos_data_loadcb,     nfc_tag_seos_data_savecb,     nfc_tag_seos_data_factory,     &m_tag_data_hf},
+#if defined(PROJECT_DESFIRE_EMULATION)
+    {TAG_SENSE_HF, TAG_TYPE_DESFIRE_EV1_2K, nfc_tag_desfire_data_loadcb, nfc_tag_desfire_data_savecb, nfc_tag_desfire_data_factory, &m_tag_data_hf},
+    {TAG_SENSE_HF, TAG_TYPE_DESFIRE_EV1_4K, nfc_tag_desfire_data_loadcb, nfc_tag_desfire_data_savecb, nfc_tag_desfire_data_factory, &m_tag_data_hf},
+    {TAG_SENSE_HF, TAG_TYPE_DESFIRE_EV1_8K, nfc_tag_desfire_data_loadcb, nfc_tag_desfire_data_savecb, nfc_tag_desfire_data_factory, &m_tag_data_hf},
+    {TAG_SENSE_HF, TAG_TYPE_DESFIRE_EV2_2K, nfc_tag_desfire_data_loadcb, nfc_tag_desfire_data_savecb, nfc_tag_desfire_data_factory, &m_tag_data_hf},
+    {TAG_SENSE_HF, TAG_TYPE_DESFIRE_EV2_4K, nfc_tag_desfire_data_loadcb, nfc_tag_desfire_data_savecb, nfc_tag_desfire_data_factory, &m_tag_data_hf},
+    {TAG_SENSE_HF, TAG_TYPE_DESFIRE_EV2_8K, nfc_tag_desfire_data_loadcb, nfc_tag_desfire_data_savecb, nfc_tag_desfire_data_factory, &m_tag_data_hf},
+#endif
 };
 
 static void tag_emulation_load_config(void);
