@@ -902,22 +902,34 @@ class LFIndalaIdArgsUnit(DeviceRequiredUnit):
     @staticmethod
     def add_card_arg(parser: ArgumentParserNoExit, required=False):
         group = parser.add_mutually_exclusive_group(required=required)
-        group.add_argument("-r", "--raw", type=str,
-                           help="Raw 64-bit frame (16 hex chars)",
-                           metavar="<hex>")
-        group.add_argument("--fc", type=int, dest="_indala_fc",
-                           help="Facility code (26-bit format, use with --cn)",
-                           metavar="<dec>")
-        parser.add_argument("--cn", type=int, dest="_indala_cn",
-                            help="Card number (26-bit format, use with --fc)",
-                            metavar="<dec>")
+        group.add_argument(
+            "-r",
+            "--raw",
+            type=str,
+            help="Raw 64-bit frame (16 hex chars)",
+            metavar="<hex>",
+        )
+        group.add_argument(
+            "--fc",
+            type=int,
+            dest="_indala_fc",
+            help="Facility code (26-bit format, use with --cn)",
+            metavar="<dec>",
+        )
+        parser.add_argument(
+            "--cn",
+            type=int,
+            dest="_indala_cn",
+            help="Card number (26-bit format, use with --fc)",
+            metavar="<dec>",
+        )
         return parser
 
     def before_exec(self, args: argparse.Namespace):
         if not super().before_exec(args):
             return False
-        fc = getattr(args, '_indala_fc', None)
-        cn = getattr(args, '_indala_cn', None)
+        fc = getattr(args, "_indala_fc", None)
+        cn = getattr(args, "_indala_cn", None)
         if fc is not None or cn is not None:
             if fc is None or cn is None:
                 raise ArgsParserError("--fc and --cn must be used together")
@@ -7300,10 +7312,18 @@ def indala_encode_raw(fc: int, cn: int) -> bytes:
     bits[41] = cn & 1
 
     # checksum (sum of specific cn bits)
-    chk = sum([
-        (cn >> 14) & 1, (cn >> 12) & 1, (cn >> 9) & 1, (cn >> 8) & 1,
-        (cn >> 6) & 1, (cn >> 5) & 1, (cn >> 2) & 1, cn & 1,
-    ])
+    chk = sum(
+        [
+            (cn >> 14) & 1,
+            (cn >> 12) & 1,
+            (cn >> 9) & 1,
+            (cn >> 8) & 1,
+            (cn >> 6) & 1,
+            (cn >> 5) & 1,
+            (cn >> 2) & 1,
+            cn & 1,
+        ]
+    )
     if chk % 2 == 0:
         bits[62], bits[63] = 1, 0
     else:
@@ -7333,6 +7353,7 @@ def indala_is_26bit(raw: bytes) -> bool:
 
     def bit(b, i):
         return (b[i // 8] >> (7 - i % 8)) & 1
+
     return all(bit(raw, i) == bit(expected, i) for i in (*range(33), 34, 38, 62, 63))
 
 
@@ -7364,21 +7385,25 @@ class LFIndalaRead(ReaderRequiredUnit):
 class LFIndalaWriteT55xx(LFIndalaIdArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = "Clone Indala tag to T55XX (use -r <hex>, or --fc <n> --cn <n>)"
+        parser.description = (
+            "Clone Indala tag to T55XX (use -r <hex>, or --fc <n> --cn <n>)"
+        )
         return self.add_card_arg(parser, required=True)
 
     def on_exec(self, args: argparse.Namespace):
         id_bytes = bytes.fromhex(args.raw)
         self.cmd.indala_write_to_t55xx(id_bytes)
         print(f" {indala_format_output(id_bytes)}")
-        print(f" Write done. Verify with 'lf indala read'.")
+        print(" Write done. Verify with 'lf indala read'.")
 
 
 @lf_indala.command("econfig")
 class LFIndalaEconfig(SlotIndexArgsAndGoUnit, LFIndalaIdArgsUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = "Set or get emulated Indala card (use -r/--fc+--cn to set, omit to get)"
+        parser.description = (
+            "Set or get emulated Indala card (use -r/--fc+--cn to set, omit to get)"
+        )
         self.add_slot_args(parser)
         self.add_card_arg(parser)
         return parser
@@ -7387,11 +7412,11 @@ class LFIndalaEconfig(SlotIndexArgsAndGoUnit, LFIndalaIdArgsUnit):
         if args.raw is not None:
             id_bytes = bytes.fromhex(args.raw)
             self.cmd.indala_set_emu_id(id_bytes)
-            print(f" - Set emulated Indala:")
+            print(" - Set emulated Indala:")
             print(f"   {indala_format_output(id_bytes)}")
         else:
             response = self.cmd.indala_get_emu_id()
-            print(f" - Get emulated Indala:")
+            print(" - Get emulated Indala:")
             print(f"   {indala_format_output(response)}")
 
 
