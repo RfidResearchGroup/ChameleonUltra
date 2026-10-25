@@ -486,14 +486,20 @@ class T55xxPasswordArgsUnit(DeviceRequiredUnit):
     @staticmethod
     def add_password_arg(parser: ArgumentParserNoExit):
         parser.add_argument(
-            "--password", type=str, required=False, metavar="<hex>",
+            "--password",
+            type=str,
+            required=False,
+            metavar="<hex>",
             help="Protect the T55xx with this 8-hex-digit password (any value, 00000000 included). "
-                 "Default: no password",
+            "Default: no password",
         )
         parser.add_argument(
-            "--current-password", type=str, required=False, metavar="<hex>",
+            "--current-password",
+            type=str,
+            required=False,
+            metavar="<hex>",
             help="Password the T55xx is protected with now, if it isn't one of the defaults "
-                 "tried automatically. Needed to rewrite or unlock a tag with your own password",
+            "tried automatically. Needed to rewrite or unlock a tag with your own password",
         )
         return parser
 
@@ -512,13 +518,17 @@ class T55xxPasswordArgsUnit(DeviceRequiredUnit):
         without a password.
         """
         password = self._parse_t55xx_key(args.password, "--password")
-        current_password = self._parse_t55xx_key(args.current_password, "--current-password")
+        current_password = self._parse_t55xx_key(
+            args.current_password, "--current-password"
+        )
         # Skip the warning on devices without T55xx writers (Lite): the write itself will say so
         commands = self.device_com.commands
         has_writers = not len(commands) or Command.EM410X_WRITE_TO_T55XX in commands
         if password is None and has_writers and not self.cmd.t55xx_password_opt_in():
-            print(f"{color_string((CY, 'WARNING'))}: this firmware protects every T55xx write with "
-                  f"password 20206666. Update the firmware to write without a password.")
+            print(
+                f"{color_string((CY, 'WARNING'))}: this firmware protects every T55xx write with "
+                f"password 20206666. Update the firmware to write without a password."
+            )
         return {"password": password, "current_password": current_password}
 
 
@@ -6189,14 +6199,8 @@ class LFIOProxWriteT55xx(LFIOProxIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequir
             res = self.cmd.ioprox_compose_id(args.ver, args.fc, args.cn)
             raw8 = res[3]
 
-        payload16 = struct.pack(
-            ">BBH8s4x",
-            ver & 0xFF,
-            fc & 0xFF,
-            cn & 0xFFFF,
-            raw8
-        )
-        result = self.cmd.ioprox_write_to_t55xx(payload16, **self.t55xx_keys(args))
+        payload16 = struct.pack(">BBH8s4x", ver & 0xFF, fc & 0xFF, cn & 0xFFFF, raw8)
+        self.cmd.ioprox_write_to_t55xx(payload16, **self.t55xx_keys(args))
 
         print("ioProx XSF format")
         print(f"   Version: {color_string((CG, ver))}")
@@ -6431,18 +6435,18 @@ class LFPacIdArgsUnit(DeviceRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
-@lf_pac.command('write')
+@lf_pac.command("write")
 class LFPacWriteT55xx(LFPacIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = 'Write PAC/Stanley id to T55xx'
+        parser.description = "Write PAC/Stanley id to T55xx"
         self.add_card_arg(parser, required=True)
         return self.add_password_arg(parser)
 
     def on_exec(self, args: argparse.Namespace):
         id_bytes = bytes.fromhex(args.id)
         self.cmd.pac_write_to_t55xx(id_bytes, **self.t55xx_keys(args))
-        id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in id_bytes)
+        id_ascii = "".join(chr(b) if 0x20 <= b < 0x7F else "." for b in id_bytes)
         raw = pac_encode_raw(id_bytes)
         print(f" - PAC/Stanley write done - CN: {id_ascii} | Raw: {raw.hex().upper()}")
 
@@ -6708,7 +6712,7 @@ class LFT55xxClone(T55xxPasswordArgsUnit, ReaderRequiredUnit):
                 oem,
             )
             self.cmd.hidprox_write_to_t55xx(id_bytes, **keys)
-            print(f" - HID Prox cloned to T55xx")
+            print(" - HID Prox cloned to T55xx")
             print(f"   Format : {fmt.name}")
             if fc:
                 print(f"   FC     : {fc}")
@@ -6728,9 +6732,11 @@ class LFT55xxClone(T55xxPasswordArgsUnit, ReaderRequiredUnit):
             else:
                 res = self.cmd.ioprox_compose_id(ver, fc, cn)
                 raw8 = res[3]
-            payload16 = struct.pack(">BBH8s4x", ver & 0xFF, fc & 0xFF, cn & 0xFFFF, raw8)
+            payload16 = struct.pack(
+                ">BBH8s4x", ver & 0xFF, fc & 0xFF, cn & 0xFFFF, raw8
+            )
             self.cmd.ioprox_write_to_t55xx(payload16, **keys)
-            print(f" - ioProx cloned to T55xx")
+            print(" - ioProx cloned to T55xx")
             print(f"   Ver    : {ver}")
             print(f"   FC     : {fc} [0x{fc:02X}]")
             print(f"   CN     : {cn}")
@@ -7300,7 +7306,9 @@ class LFPyramidRead(ReaderRequiredUnit):
 
 
 @lf_jablotron.command("write")
-class LFJablotronWriteT55xx(LFJablotronIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequiredUnit):
+class LFJablotronWriteT55xx(
+    LFJablotronIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequiredUnit
+):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = "Write Jablotron id to t55xx"
