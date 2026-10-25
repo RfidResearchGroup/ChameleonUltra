@@ -25,18 +25,19 @@ Usage:  python3 test_jablotron_modulator.py
 # -------- constants (match jablotron.c) --------
 JABLOTRON_RAW_SIZE = 64
 JABLOTRON_DATA_SIZE = 5
-COUNTER_TOP = 31          # 32 ticks per entry at NRF_PWM_CLK_125kHz = 32 carrier cycles
-CC_HIGH = 32              # counter_top + 1: pin held HIGH (no compare match)
-CC_LOW = 0                # compare = 0: pin held LOW
+COUNTER_TOP = 31  # 32 ticks per entry at NRF_PWM_CLK_125kHz = 32 carrier cycles
+CC_HIGH = 32  # counter_top + 1: pin held HIGH (no compare match)
+CC_LOW = 0  # compare = 0: pin held LOW
 
 # decoder interval classification thresholds (jablotron.c)
-READ_TIME1_BASE = 0x40    # 64   (1T)
-READ_TIME2_BASE = 0x60    # 96   (1.5T)
-READ_TIME3_BASE = 0x80    # 128  (2T)
-JITTER = 0x10             # ±16
+READ_TIME1_BASE = 0x40  # 64   (1T)
+READ_TIME2_BASE = 0x60  # 96   (1.5T)
+READ_TIME3_BASE = 0x80  # 128  (2T)
+JITTER = 0x10  # ±16
 
 
 # -------- modulator side --------
+
 
 def jablotron_raw_data(uid: bytes) -> int:
     """Build 64-bit raw frame: 16-bit preamble + 40-bit data + 8-bit checksum."""
@@ -63,16 +64,16 @@ def jablotron_modulator(uid: bytes, double_frame: bool = True) -> list:
     """
     raw = jablotron_raw_data(uid)
     entries = []
-    level = False   # persists across both passes when double_frame=True
+    level = False  # persists across both passes when double_frame=True
 
     passes = 2 if double_frame else 1
     for _ in range(passes):
         for i in range(JABLOTRON_RAW_SIZE):
             bit = (raw >> (JABLOTRON_RAW_SIZE - 1 - i)) & 1
-            level = not level                # boundary flip
+            level = not level  # boundary flip
             entries.append((CC_HIGH if level else CC_LOW, COUNTER_TOP))
             if not bit:
-                level = not level            # mid-bit flip
+                level = not level  # mid-bit flip
             entries.append((CC_HIGH if level else CC_LOW, COUNTER_TOP))
     return entries
 
@@ -111,6 +112,7 @@ def edges_to_intervals(edges: list) -> list:
 
 
 # -------- decoder side (matches diphase.c + jablotron.c) --------
+
 
 def jablotron_period(interval: int) -> int:
     """Classify interval into 0=1T / 1=1.5T / 2=2T / 3=invalid."""
@@ -184,13 +186,16 @@ def jablotron_decode(intervals: list) -> tuple:
             chksum ^= 0x3A
             if chksum != (raw & 0xFF):
                 continue
-            data = bytes(((raw >> (40 - 8 * i)) & 0xFF) for i in range(JABLOTRON_DATA_SIZE))
+            data = bytes(
+                ((raw >> (40 - 8 * i)) & 0xFF) for i in range(JABLOTRON_DATA_SIZE)
+            )
             return (True, data)
 
     return (False, b"")
 
 
 # -------- round-trip check --------
+
 
 def roundtrip(uid: bytes, double_frame: bool, repeats: int = 3):
     """
@@ -209,14 +214,14 @@ def roundtrip(uid: bytes, double_frame: bool, repeats: int = 3):
 # valid Jablotron IDs have bit 47 (MSB of data[0]) = 0, i.e., data[0] < 0x80.
 # IDs chosen to cover both odd and even zero-count cases (printed below).
 TEST_IDS = [
-    "0000000001",   # minimal
-    "01B6690000",   # firmware default
-    "00DEADBEEF",   # arbitrary
-    "7FFFFFFFFF",   # max valid data[0]
-    "0012345678",   # odd zero_count — regression case for the frame-boundary bug
+    "0000000001",  # minimal
+    "01B6690000",  # firmware default
+    "00DEADBEEF",  # arbitrary
+    "7FFFFFFFFF",  # max valid data[0]
+    "0012345678",  # odd zero_count — regression case for the frame-boundary bug
     "4242424242",
     "1234567890",
-    "000103070F",   # synthetic odd zero_count, bit-pattern varies across bytes
+    "000103070F",  # synthetic odd zero_count, bit-pattern varies across bytes
 ]
 
 
@@ -230,7 +235,7 @@ def main():
     for hex_id in TEST_IDS:
         uid = bytes.fromhex(hex_id)
         frame = jablotron_raw_data(uid)
-        zero_count = 64 - bin(frame).count('1')
+        zero_count = 64 - bin(frame).count("1")
         parity = "odd" if zero_count & 1 else "even"
         if parity == "odd":
             expected_single_fails += 1
@@ -246,16 +251,20 @@ def main():
 
     print("-" * 72)
     expected_single_passes = len(TEST_IDS) - expected_single_fails
-    print(f"single-frame: {single_pass}/{len(TEST_IDS)} "
-          f"(expected {expected_single_passes} — fails when zero_count is odd)")
+    print(
+        f"single-frame: {single_pass}/{len(TEST_IDS)} "
+        f"(expected {expected_single_passes} — fails when zero_count is odd)"
+    )
     print(f"double-frame: {double_pass}/{len(TEST_IDS)} (expected {len(TEST_IDS)})")
 
     # regression assertions
-    assert double_pass == len(TEST_IDS), \
+    assert double_pass == len(TEST_IDS), (
         f"double-frame encoding must decode all valid IDs (got {double_pass}/{len(TEST_IDS)})"
-    assert single_pass == expected_single_passes, \
-        f"single-frame encoding should still fail on odd-zero-count IDs " \
+    )
+    assert single_pass == expected_single_passes, (
+        f"single-frame encoding should still fail on odd-zero-count IDs "
         f"(got {single_pass} passes, expected {expected_single_passes})"
+    )
     print("\nAll assertions passed.")
 
 
