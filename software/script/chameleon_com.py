@@ -12,7 +12,7 @@ import socket
 from chameleon_utils import CR, CG, CC, CY, color_string
 from chameleon_enum import Command, Status
 
-ANDROID = 'android' in platform.release()
+ANDROID = "android" in platform.release()
 
 # each thread is waiting for its data for 100 ms before looping again
 THREAD_BLOCKING_TIMEOUT = 0.1
@@ -29,28 +29,28 @@ class TransportType(Enum):
 
 class NotOpenException(Exception):
     """
-        Chameleon err status
+    Chameleon err status
     """
 
 
 class OpenFailException(Exception):
     """
-        Chameleon open fail(serial port may be error)
+    Chameleon open fail(serial port may be error)
     """
 
 
 class CMDInvalidException(Exception):
     """
-        CMD invalid(Unsupported)
+    CMD invalid(Unsupported)
     """
 
 
 class Response:
     """
-        Chameleon Response Data
+    Chameleon Response Data
     """
 
-    def __init__(self, cmd, status, data=b'', parsed=None):
+    def __init__(self, cmd, status, data=b"", parsed=None):
         self.cmd = cmd
         self.status = status
         self.data: bytes = data
@@ -59,16 +59,17 @@ class Response:
 
 class ChameleonCom:
     """
-        Chameleon device base class
-        Communication and Data frame implemented
+    Chameleon device base class
+    Communication and Data frame implemented
     """
+
     data_frame_sof = 0x11
     data_max_length = 4096
     commands = []
 
     def __init__(self):
         """
-            Create a chameleon device instance
+        Create a chameleon device instance
         """
         self.transport: Union[serial.Serial, socket.socket, None] = None
         self.transport_type = TransportType.NONE
@@ -82,7 +83,9 @@ class ChameleonCom:
 
         :return:
         """
-        return self.transport is not None and (self.transport_type is TransportType.SOCKET or self.transport.is_open)
+        return self.transport is not None and (
+            self.transport_type is TransportType.SOCKET or self.transport.is_open
+        )
 
     def open(self, port) -> "ChameleonCom":
         """
@@ -96,18 +99,22 @@ class ChameleonCom:
             error = None
             try:
                 # open serial port
-                if port.startswith('tcp:'):
-                    host, _, port = port[4:].partition(':')
+                if port.startswith("tcp:"):
+                    host, _, port = port[4:].partition(":")
                     if not host or not port:
-                        sys.exit(color_string(CR, 'Usage: tcp:127.0.0.1:4321'))
+                        sys.exit(color_string(CR, "Usage: tcp:127.0.0.1:4321"))
                     self.transport = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    print('Connecting to', host, int(port))
+                    print("Connecting to", host, int(port))
                     self.transport.connect((host, int(port)))
                     self.transport_type = TransportType.SOCKET
                 else:
                     if ANDROID:
-                        sys.exit(color_string(
-                            CR, 'COM port is not supported on Android, make a USB-serial to TCP communication bridge'))
+                        sys.exit(
+                            color_string(
+                                CR,
+                                "COM port is not supported on Android, make a USB-serial to TCP communication bridge",
+                            )
+                        )
                     self.transport = serial.Serial(port=port, baudrate=115200)
                     self.transport_type = TransportType.SERIAL
             except Exception as e:
@@ -208,7 +215,7 @@ class ChameleonCom:
                 except socket.timeout:
                     continue
                 except OSError:
-                    print(color_string(CR, 'socket closed'))
+                    print(color_string(CR, "socket closed"))
                     self.transport = None
                     break
 
@@ -216,40 +223,53 @@ class ChameleonCom:
                 data_byte = data_bytes[0]
                 data_bytes = data_bytes[1:]
                 data_buffer.append(data_byte)
-                if data_position < struct.calcsize('!BB'):  # start of frame + lrc1
+                if data_position < struct.calcsize("!BB"):  # start of frame + lrc1
                     if data_position == 0:
                         if data_buffer[data_position] != self.data_frame_sof:
                             print("Data frame no sof byte.")
                             data_position = 0
                             data_buffer.clear()
                             continue
-                    if data_position == struct.calcsize('!B'):
-                        if data_buffer[data_position] != self.lrc_calc(data_buffer[:data_position]):
+                    if data_position == struct.calcsize("!B"):
+                        if data_buffer[data_position] != self.lrc_calc(
+                            data_buffer[:data_position]
+                        ):
                             data_position = 0
                             data_buffer.clear()
                             print("Data frame sof lrc error.")
                             continue
-                elif data_position == struct.calcsize('!BBHHH'):  # frame head lrc
-                    if data_buffer[data_position] != self.lrc_calc(data_buffer[:data_position]):
+                elif data_position == struct.calcsize("!BBHHH"):  # frame head lrc
+                    if data_buffer[data_position] != self.lrc_calc(
+                        data_buffer[:data_position]
+                    ):
                         data_position = 0
                         data_buffer.clear()
                         print("Data frame head lrc error.")
                         continue
                     # frame head complete, cache info
-                    _, _, data_cmd, data_status, data_length = struct.unpack("!BBHHH", data_buffer[:data_position])
+                    _, _, data_cmd, data_status, data_length = struct.unpack(
+                        "!BBHHH", data_buffer[:data_position]
+                    )
                     if data_length > self.data_max_length:
                         data_position = 0
                         data_buffer.clear()
                         print("Data frame data length larger than max.")
                         continue
-                elif data_position > struct.calcsize('!BBHHH'):  # // frame data
-                    if data_position == (struct.calcsize(f'!BBHHHB{data_length}s')):
-                        if data_buffer[data_position] == self.lrc_calc(data_buffer[:data_position]):
+                elif data_position > struct.calcsize("!BBHHH"):  # // frame data
+                    if data_position == (struct.calcsize(f"!BBHHHB{data_length}s")):
+                        if data_buffer[data_position] == self.lrc_calc(
+                            data_buffer[:data_position]
+                        ):
                             # ok, lrc for data is correct.
                             # and we are receive completed
                             # print(f"Buffer data = {data_buffer.hex()}")
-                            data_response = bytes(data_buffer[struct.calcsize('!BBHHHB'):
-                                                              struct.calcsize(f'!BBHHHB{data_length}s')])
+                            data_response = bytes(
+                                data_buffer[
+                                    struct.calcsize("!BBHHHB") : struct.calcsize(
+                                        f"!BBHHHB{data_length}s"
+                                    )
+                                ]
+                            )
                             if DEBUG:
                                 try:
                                     command = Command(data_cmd)
@@ -259,18 +279,29 @@ class ChameleonCom:
                                 try:
                                     status_string = str(Status(data_status))
                                     if data_status == Status.SUCCESS:
-                                        status_string = color_string((CG, status_string.ljust(30)))
+                                        status_string = color_string(
+                                            (CG, status_string.ljust(30))
+                                        )
                                     else:
-                                        status_string = color_string((CR, status_string.ljust(30)))
+                                        status_string = color_string(
+                                            (CR, status_string.ljust(30))
+                                        )
                                 except ValueError:
                                     status_string = f"{data_status:30x}"
-                                    response = data_response.hex() if data_response is not None else ""
+                                    response = (
+                                        data_response.hex()
+                                        if data_response is not None
+                                        else ""
+                                    )
                                     print(
-                                        f"<={color_string((CC, command_string.ljust(40)), (CR, status_string), (CY, response))}")
+                                        f"<={color_string((CC, command_string.ljust(40)), (CR, status_string), (CY, response))}"
+                                    )
                             if data_cmd in self.wait_response_map:
                                 # call processor
-                                if 'callback' in self.wait_response_map[data_cmd]:
-                                    fn_call = self.wait_response_map[data_cmd]['callback']
+                                if "callback" in self.wait_response_map[data_cmd]:
+                                    fn_call = self.wait_response_map[data_cmd][
+                                        "callback"
+                                    ]
                                 else:
                                     fn_call = None
                                 if callable(fn_call):
@@ -278,8 +309,9 @@ class ChameleonCom:
                                     del self.wait_response_map[data_cmd]
                                     fn_call(data_cmd, data_status, data_response)
                                 else:
-                                    self.wait_response_map[data_cmd]['response'] = Response(data_cmd, data_status,
-                                                                                            data_response)
+                                    self.wait_response_map[data_cmd]["response"] = (
+                                        Response(data_cmd, data_status, data_response)
+                                    )
                             else:
                                 print(f"No task wait process: ${data_cmd}")
                         else:
@@ -298,28 +330,32 @@ class ChameleonCom:
         while self.isOpen():
             # get a task from queue(if exists)
             try:
-                task = self.send_data_queue.get(block=True, timeout=THREAD_BLOCKING_TIMEOUT)
+                task = self.send_data_queue.get(
+                    block=True, timeout=THREAD_BLOCKING_TIMEOUT
+                )
             except queue.Empty:
                 continue
-            task_cmd = task['cmd']
-            task_timeout = task['timeout']
-            task_close = task['close']
+            task_cmd = task["cmd"]
+            task_timeout = task["timeout"]
+            task_close = task["close"]
             # register to wait map
-            if 'callback' in task and callable(task['callback']):
-                self.wait_response_map[task_cmd] = {'callback': task['callback']}  # The callback for this task
+            if "callback" in task and callable(task["callback"]):
+                self.wait_response_map[task_cmd] = {
+                    "callback": task["callback"]
+                }  # The callback for this task
             else:
-                self.wait_response_map[task_cmd] = {'response': None}
+                self.wait_response_map[task_cmd] = {"response": None}
             # set start time
             start_time = time.time()
-            self.wait_response_map[task_cmd]['start_time'] = start_time
-            self.wait_response_map[task_cmd]['end_time'] = start_time + task_timeout
-            self.wait_response_map[task_cmd]['is_timeout'] = False
+            self.wait_response_map[task_cmd]["start_time"] = start_time
+            self.wait_response_map[task_cmd]["end_time"] = start_time + task_timeout
+            self.wait_response_map[task_cmd]["is_timeout"] = False
             assert self.transport_type is not TransportType.NONE
             if self.transport_type == TransportType.SERIAL:
                 try:
                     assert self.transport is not None
                     # send to device
-                    self.transport.write(task['frame'])
+                    self.transport.write(task["frame"])
                 except Exception as e:
                     print(f"Serial Error {e}, thread for transfer exit.")
                     self.close()
@@ -327,10 +363,10 @@ class ChameleonCom:
             else:  # SOCKET
                 try:
                     assert self.transport is not None
-                    self.transport.sendall(task['frame'])
+                    self.transport.sendall(task["frame"])
                 except OSError as e:
                     self.transport = None
-                    print(f'Socket error {e}, thread for transfer exit.')
+                    print(f"Socket error {e}, thread for transfer exit.")
                     self.close()
                     break
             # update queue status
@@ -347,35 +383,61 @@ class ChameleonCom:
         """
         while self.isOpen():
             for task_cmd in self.wait_response_map.keys():
-                if time.time() > self.wait_response_map[task_cmd]['end_time']:
-                    if 'callback' in self.wait_response_map[task_cmd]:
+                if time.time() > self.wait_response_map[task_cmd]["end_time"]:
+                    if "callback" in self.wait_response_map[task_cmd]:
                         # not sync, call function to notify timeout.
-                        self.wait_response_map[task_cmd]['callback'](task_cmd, None, None)
+                        self.wait_response_map[task_cmd]["callback"](
+                            task_cmd, None, None
+                        )
                     else:
                         # sync mode, set timeout flag
-                        self.wait_response_map[task_cmd]['is_timeout'] = True
+                        self.wait_response_map[task_cmd]["is_timeout"] = True
             time.sleep(THREAD_BLOCKING_TIMEOUT)
 
-    def make_data_frame_bytes(self, cmd: int, data: Union[bytes, None] = None, status: int = 0) -> bytes:
+    def make_data_frame_bytes(
+        self, cmd: int, data: Union[bytes, None] = None, status: int = 0
+    ) -> bytes:
         """
             Make data frame
 
         :return: frame
         """
         if data is None:
-            data = b''
-        frame = bytearray(struct.pack(f'!BBHHHB{len(data)}sB',
-                                      self.data_frame_sof, 0x00, cmd, status, len(data), 0x00, data, 0x00))
+            data = b""
+        frame = bytearray(
+            struct.pack(
+                f"!BBHHHB{len(data)}sB",
+                self.data_frame_sof,
+                0x00,
+                cmd,
+                status,
+                len(data),
+                0x00,
+                data,
+                0x00,
+            )
+        )
         # lrc1
-        frame[struct.calcsize('!B')] = self.lrc_calc(frame[:struct.calcsize('!B')])
+        frame[struct.calcsize("!B")] = self.lrc_calc(frame[: struct.calcsize("!B")])
         # lrc2
-        frame[struct.calcsize('!BBHHH')] = self.lrc_calc(frame[:struct.calcsize('!BBHHH')])
+        frame[struct.calcsize("!BBHHH")] = self.lrc_calc(
+            frame[: struct.calcsize("!BBHHH")]
+        )
         # lrc3
-        frame[struct.calcsize(f'!BBHHHB{len(data)}s')] = self.lrc_calc(frame[:struct.calcsize(f'!BBHHHB{len(data)}s')])
+        frame[struct.calcsize(f"!BBHHHB{len(data)}s")] = self.lrc_calc(
+            frame[: struct.calcsize(f"!BBHHHB{len(data)}s")]
+        )
         return bytes(frame)
 
-    def send_cmd_auto(self, cmd: int, data: Union[bytes, None] = None, status: int = 0, callback=None, timeout: int = 3,
-                      close: bool = False):
+    def send_cmd_auto(
+        self,
+        cmd: int,
+        data: Union[bytes, None] = None,
+        status: int = 0,
+        callback=None,
+        timeout: int = 3,
+        close: bool = False,
+    ):
         """
             Send cmd to device
 
@@ -398,17 +460,24 @@ class ChameleonCom:
                 command_name = f"{command.name}"
             except ValueError:
                 command_name = "(UNKNOWN)"
-            cmd_string = f'{cmd:4} {command_name}{f"[{status:04x}]" if status != 0 else ""}'
+            cmd_string = (
+                f"{cmd:4} {command_name}{f'[{status:04x}]' if status != 0 else ''}"
+            )
             hexdata = data.hex() if data is not None else ""
             print(f"<={color_string((CC, cmd_string.ljust(40)), (CY, hexdata))}")
         data_frame = self.make_data_frame_bytes(cmd, data, status)
-        task = {'cmd': cmd, 'frame': data_frame, 'timeout': timeout, 'close': close}
+        task = {"cmd": cmd, "frame": data_frame, "timeout": timeout, "close": close}
         if callable(callback):
-            task['callback'] = callback
+            task["callback"] = callback
         self.send_data_queue.put(task)
 
-    def send_cmd_sync(self, cmd: int, data: Union[bytes, None] = None, status: int = 0,
-                      timeout: int = 3) -> Response:
+    def send_cmd_sync(
+        self,
+        cmd: int,
+        data: Union[bytes, None] = None,
+        status: int = 0,
+        timeout: int = 3,
+    ) -> Response:
         """
             Send cmd to device, and block receive data.
 
@@ -421,31 +490,36 @@ class ChameleonCom:
         if len(self.commands):
             # check if chameleon can understand this command
             if cmd not in self.commands:
-                raise CMDInvalidException(f"This device doesn't declare that it can support this command: {cmd}.\n"
-                                          f"Make sure firmware is up to date and matches client")
+                raise CMDInvalidException(
+                    f"This device doesn't declare that it can support this command: {cmd}.\n"
+                    f"Make sure firmware is up to date and matches client"
+                )
         # first to send cmd, no callback mode(sync)
         self.send_cmd_auto(cmd, data, status, None, timeout)
         # wait cmd start process
         while cmd not in self.wait_response_map:
             time.sleep(0.01)
         # wait response data set
-        while self.wait_response_map[cmd]['response'] is None:
-            if 'is_timeout' in self.wait_response_map[cmd] and self.wait_response_map[cmd]['is_timeout']:
+        while self.wait_response_map[cmd]["response"] is None:
+            if (
+                "is_timeout" in self.wait_response_map[cmd]
+                and self.wait_response_map[cmd]["is_timeout"]
+            ):
                 raise TimeoutError(f"CMD {cmd} exec timeout")
             time.sleep(0.01)
         # ok, data received.
-        data_response = self.wait_response_map[cmd]['response']
+        data_response = self.wait_response_map[cmd]["response"]
         del self.wait_response_map[cmd]
         if data_response.status == Status.INVALID_CMD:
             raise CMDInvalidException(f"Device unsupported cmd: {cmd}")
         return data_response
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
-        cml = ChameleonCom().open('com19')
+        cml = ChameleonCom().open("com19")
     except OpenFailException:
-        cml = ChameleonCom().open('/dev/ttyACM0')
+        cml = ChameleonCom().open("/dev/ttyACM0")
     resp = cml.send_cmd_sync(0x03E8, None, 0)
     print(resp.status)
     print(resp.data)
