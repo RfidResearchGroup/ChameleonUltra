@@ -2086,6 +2086,26 @@ static data_frame_tx_t *before_reader_run(uint16_t cmd, uint16_t status, uint16_
  * before reader run, reset reader and on antenna,
  * we must to wait some time, to init picc(power).
  */
+// BLE advertising drops the 125 kHz field for ~1.6 ms per event, which corrupts LF reads and writes.
+// Pause it for the whole LF command; nothing is paused while a client is connected.
+static bool m_lf_adv_paused = false;
+
+static data_frame_tx_t *before_lf_reader_run(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    data_frame_tx_t *ret = before_reader_run(cmd, status, length, data);
+    if (ret == NULL) {
+        m_lf_adv_paused = advertising_pause();
+    }
+    return ret;
+}
+
+static data_frame_tx_t *after_lf_reader_run(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (m_lf_adv_paused) {
+        m_lf_adv_paused = false;
+        advertising_resume();
+    }
+    return NULL;
+}
+
 static data_frame_tx_t *before_hf_reader_run(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     data_frame_tx_t *ret = before_reader_run(cmd, status, length, data);
     if (ret == NULL) {
@@ -3290,23 +3310,23 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_HARDNESTED_ACQUIRE,       before_hf_reader_run,        cmd_processor_mf1_hardnested_nonces_acquire, after_hf_reader_run    },
     {    DATA_CMD_MF1_CHECK_KEYS_ON_BLOCK,      before_hf_reader_run,        cmd_processor_mf1_check_keys_on_block,       after_hf_reader_run    },
 
-    {    DATA_CMD_EM410X_SCAN,                  before_reader_run,           cmd_processor_em410x_scan,                   NULL                   },
-    {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_em410x_write_to_t55xx,         NULL                   },
-    {    DATA_CMD_EM410X_ELECTRA_WRITE_TO_T55XX, before_reader_run,           cmd_processor_em410x_electra_write_to_t55xx, NULL                   },
-    {    DATA_CMD_HIDPROX_SCAN,                 before_reader_run,           cmd_processor_hidprox_scan,                  NULL                   },
-    {    DATA_CMD_HIDPROX_WRITE_TO_T55XX,       before_reader_run,           cmd_processor_hidprox_write_to_t55xx,        NULL                   },
-    {    DATA_CMD_VIKING_SCAN,                  before_reader_run,           cmd_processor_viking_scan,                   NULL                   },
-    {    DATA_CMD_VIKING_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_viking_write_to_t55xx,         NULL                   },
-    {    DATA_CMD_IOPROX_SCAN,                  before_reader_run,           cmd_processor_ioprox_scan,                   NULL                   },
-    {    DATA_CMD_IOPROX_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_ioprox_write_to_t55xx,         NULL                   },
-    {    DATA_CMD_PAC_SCAN,                     before_reader_run,           cmd_processor_pac_scan,                      NULL                   },
-    {    DATA_CMD_PAC_WRITE_TO_T55XX,           before_reader_run,           cmd_processor_pac_write_to_t55xx,            NULL                   },
-    {    DATA_CMD_JABLOTRON_SCAN,               before_reader_run,           cmd_processor_jablotron_scan,                NULL                   },
-    {    DATA_CMD_JABLOTRON_WRITE_TO_T55XX,     before_reader_run,           cmd_processor_jablotron_write_to_t55xx,      NULL                   },
-    {    DATA_CMD_PYRAMID_SCAN,                 before_reader_run,           cmd_processor_pyramid_scan,                  NULL                   },
-    {    DATA_CMD_IDTECK_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_idteck_write_to_t55xx,         NULL                   },
-    {    DATA_CMD_LF_T55XX_WRITE,               before_reader_run,           cmd_processor_lf_t55xx_write,                NULL                   },
-    {    DATA_CMD_ADC_GENERIC_READ,             before_reader_run,           cmd_processor_generic_read,                  NULL                   },
+    {    DATA_CMD_EM410X_SCAN,                  before_lf_reader_run,        cmd_processor_em410x_scan,                   after_lf_reader_run    },
+    {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_lf_reader_run,        cmd_processor_em410x_write_to_t55xx,         after_lf_reader_run    },
+    {    DATA_CMD_EM410X_ELECTRA_WRITE_TO_T55XX, before_lf_reader_run,        cmd_processor_em410x_electra_write_to_t55xx, after_lf_reader_run    },
+    {    DATA_CMD_HIDPROX_SCAN,                 before_lf_reader_run,        cmd_processor_hidprox_scan,                  after_lf_reader_run    },
+    {    DATA_CMD_HIDPROX_WRITE_TO_T55XX,       before_lf_reader_run,        cmd_processor_hidprox_write_to_t55xx,        after_lf_reader_run    },
+    {    DATA_CMD_VIKING_SCAN,                  before_lf_reader_run,        cmd_processor_viking_scan,                   after_lf_reader_run    },
+    {    DATA_CMD_VIKING_WRITE_TO_T55XX,        before_lf_reader_run,        cmd_processor_viking_write_to_t55xx,         after_lf_reader_run    },
+    {    DATA_CMD_IOPROX_SCAN,                  before_lf_reader_run,        cmd_processor_ioprox_scan,                   after_lf_reader_run    },
+    {    DATA_CMD_IOPROX_WRITE_TO_T55XX,        before_lf_reader_run,        cmd_processor_ioprox_write_to_t55xx,         after_lf_reader_run    },
+    {    DATA_CMD_PAC_SCAN,                     before_lf_reader_run,        cmd_processor_pac_scan,                      after_lf_reader_run    },
+    {    DATA_CMD_PAC_WRITE_TO_T55XX,           before_lf_reader_run,        cmd_processor_pac_write_to_t55xx,            after_lf_reader_run    },
+    {    DATA_CMD_JABLOTRON_SCAN,               before_lf_reader_run,        cmd_processor_jablotron_scan,                after_lf_reader_run    },
+    {    DATA_CMD_JABLOTRON_WRITE_TO_T55XX,     before_lf_reader_run,        cmd_processor_jablotron_write_to_t55xx,      after_lf_reader_run    },
+    {    DATA_CMD_PYRAMID_SCAN,                 before_lf_reader_run,        cmd_processor_pyramid_scan,                  after_lf_reader_run    },
+    {    DATA_CMD_IDTECK_WRITE_TO_T55XX,        before_lf_reader_run,        cmd_processor_idteck_write_to_t55xx,         after_lf_reader_run    },
+    {    DATA_CMD_LF_T55XX_WRITE,               before_lf_reader_run,        cmd_processor_lf_t55xx_write,                after_lf_reader_run    },
+    {    DATA_CMD_ADC_GENERIC_READ,             before_lf_reader_run,        cmd_processor_generic_read,                  after_lf_reader_run    },
 
     {    DATA_CMD_HF14A_SET_FIELD_ON,           before_reader_run,           cmd_processor_hf14a_set_field_on,            NULL                   },
     {    DATA_CMD_HF14A_SET_FIELD_OFF,          before_reader_run,           cmd_processor_hf14a_set_field_off,           NULL                   },
@@ -3316,8 +3336,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
 
     {    DATA_CMD_IOPROX_DECODE_RAW,            NULL,                        cmd_processor_ioprox_decode_raw,             NULL                   },
     {    DATA_CMD_IOPROX_COMPOSE_ID,            NULL,                        cmd_processor_ioprox_compose_id,             NULL                   },
-    {    DATA_CMD_EM4X05_SCAN,                  before_reader_run,           cmd_processor_em4x05_scan,                   NULL                   },
-    {    DATA_CMD_LF_SNIFF,                     before_reader_run,           cmd_processor_lf_sniff,                      NULL                   },
+    {    DATA_CMD_EM4X05_SCAN,                  before_lf_reader_run,        cmd_processor_em4x05_scan,                   after_lf_reader_run    },
+    {    DATA_CMD_LF_SNIFF,                     before_lf_reader_run,        cmd_processor_lf_sniff,                      after_lf_reader_run    },
     {    DATA_CMD_HF14A_SNIFF,                  NULL,                        cmd_processor_hf14a_sniff,                   NULL                   },
     {    DATA_CMD_HF14A_AUTH_TRACE,             before_hf_reader_run,        cmd_processor_hf14a_auth_trace,              after_hf_reader_run    },
 
