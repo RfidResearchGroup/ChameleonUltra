@@ -42,6 +42,13 @@ const nrf_pwm_sequence_t *m_pwm_seq = NULL;
 // The PWM base clock currently in use
 static nrf_pwm_clk_t m_pwm_clk = NRF_PWM_CLK_125kHz;
 
+// pwm_handler() checks the field between bursts. Each check pauses the signal and restarts the frame.
+// Bursts last about 500 ms. That keeps the pauses rare, and the device still notices a reader leave within 500 ms.
+#define LF_TAG_BURST_TARGET_MS 500
+#define LF_TAG_BURST_MIN_FRAMES 2
+#define LF_TAG_BURST_MAX_FRAMES 255
+static uint16_t m_frames_per_burst = LF_TAG_BURST_MIN_FRAMES;
+
 static void lf_field_lost(void) {
     // Open the incident interruption, so that the next event can be in and out normally
     g_is_tag_emulating = false;  // Reset the flag in the emulation
@@ -102,7 +109,7 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // PWM has fully released LF_MOD, so ANT_NO_MOD() and the settle delay are
     // effective. NRFX_PWM_FLAG_LOOP kept the pin owned by the peripheral,
     // making the field check always read "present" due to self-drive on LF_RSSI.
-    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
+    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, m_frames_per_burst, NRFX_PWM_FLAG_STOP);
 
     NRF_LOG_INFO("LF FIELD DETECTED");
 }
@@ -128,7 +135,7 @@ static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
     bsp_delay_ms(2);  // let peak detector drain: ~2 ms time constant on LF_RSSI
     if (is_lf_field_exists()) {
         // Field still present — play another finite burst then check again.
-        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
+        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, m_frames_per_burst, NRFX_PWM_FLAG_STOP);
     } else {
         // Field gone — clean up.
         lf_field_lost();
@@ -351,12 +358,38 @@ static int lf_tag_data_load(tag_specific_type_t type, tag_data_buffer_t *buffer)
     return 0;
 }
 
+// Sizes bursts for the loaded waveform, at the clock pwm_init() picks for its type
+static void update_frames_per_burst(void) {
+    const size_t entries = (size_t)m_pwm_seq->length / 4u;
+    uint64_t ticks = 0;
+    for (size_t i = 0; i < entries; i++) {
+        ticks += m_pwm_seq->values.p_wave_form[i].counter_top;
+    }
+    ticks *= (uint64_t)m_pwm_seq->repeats + 1u;
+    const uint32_t hz = (pwm_clk_for_type(m_tag_type) == NRF_PWM_CLK_1MHz) ? 1000000u : 125000u;
+    const uint64_t frame_us = ticks * 1000000u / hz;
+    // pwm_handler() reads the count between bursts, so write it once
+    uint64_t n = LF_TAG_BURST_MIN_FRAMES;
+    if (frame_us > 0) {
+        n = ((uint64_t)LF_TAG_BURST_TARGET_MS * 1000u + frame_us - 1u) / frame_us;
+    }
+    if (n < LF_TAG_BURST_MIN_FRAMES) {
+        n = LF_TAG_BURST_MIN_FRAMES;
+    } else if (n > LF_TAG_BURST_MAX_FRAMES) {
+        n = LF_TAG_BURST_MAX_FRAMES;
+    }
+    m_frames_per_burst = (uint16_t)n;
+}
+
 /** @brief lf card data loader
  * @param type     Refined tag type
  * @param buffer   Data buffer
  */
 int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     int ret = lf_tag_data_load(type, buffer);
+    if (ret > 0) {
+        update_frames_per_burst();
+    }
     // pwm_init() picks the base clock from the tag type, but only runs when sense is enabled. Restart emulation as
     // well if it isn't running: a reader whose field is already on doesn't raise another field-detect interrupt.
     if (ret > 0 && m_lf_sense_state == LF_SENSE_STATE_ENABLE &&
