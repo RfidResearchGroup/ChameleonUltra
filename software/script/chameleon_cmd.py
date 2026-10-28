@@ -2130,6 +2130,130 @@ class ChameleonCMD:
         payload = auth + privenc + privmac
         return self.device.send_cmd_sync(Command.SEOS_WRITE_EMU_KEYS, payload)
 
+    @staticmethod
+    def _sl1_header(slot: int) -> bytes:
+        if type(slot) is not int or not 0 <= slot <= 7:
+            raise ValueError("Slot must be 0..7")
+        return bytes((1, slot))
+
+    def _sl1_exchange(self, command: Command, payload: bytes) -> bytes:
+        from sl1_profile import ProfileCommandError
+
+        response = self.device.send_cmd_sync(command, payload)
+        if response.status != Status.SUCCESS:
+            raise ProfileCommandError(
+                int(response.status),
+                f"Command {int(command)} failed: {response.status}",
+            )
+        return bytes(response.data)
+
+    def sl1_profile_status(self, slot: int) -> dict[str, int]:
+        data = self._sl1_exchange(Command.SL1_PROFILE_STATUS, self._sl1_header(slot))
+        if len(data) != 14:
+            raise ValueError("Invalid profile status length")
+        values = struct.unpack("!BBBHBHHHBB", data)
+        if values[0] != 1 or values[1] != slot:
+            raise ValueError("Invalid profile status version/slot")
+        return dict(
+            zip(
+                (
+                    "version",
+                    "slot",
+                    "flags",
+                    "tagType",
+                    "scenario",
+                    "keyNumber",
+                    "receivedBlocks",
+                    "expectedBlocks",
+                    "lastStatus",
+                    "lastStage",
+                ),
+                values,
+            )
+        )
+
+    def sl1_profile_begin(self, slot: int, payload: bytes) -> None:
+        if len(payload) < 34 or len(payload) != 34 + payload[13]:
+            raise ValueError("Invalid profile BEGIN length")
+        self._sl1_exchange(Command.SL1_PROFILE_BEGIN, self._sl1_header(slot) + payload)
+
+    def sl1_profile_write(self, slot: int, first: int, data: bytes) -> None:
+        if (
+            type(first) is not int
+            or not 0 <= first <= 255
+            or not 16 <= len(data) <= 128
+            or len(data) % 16
+            or first + len(data) // 16 > 256
+        ):
+            raise ValueError("Invalid profile WRITE range")
+        self._sl1_exchange(
+            Command.SL1_PROFILE_WRITE,
+            self._sl1_header(slot) + struct.pack("!H", first) + data,
+        )
+
+    def sl1_profile_save(self, slot: int) -> None:
+        self._sl1_exchange(Command.SL1_PROFILE_SAVE, self._sl1_header(slot))
+
+    def sl1_profile_cancel(self, slot: int) -> None:
+        self._sl1_exchange(Command.SL1_PROFILE_CANCEL, self._sl1_header(slot))
+
+    def sl1_profile_clear(self, slot: int) -> None:
+        self._sl1_exchange(Command.SL1_PROFILE_CLEAR, self._sl1_header(slot))
+
+    def sl1_profile_set_enabled(self, slot: int, enabled: bool) -> None:
+        if type(enabled) is not bool:
+            raise ValueError("Enabled must be boolean")
+        self._sl1_exchange(
+            Command.SL1_PROFILE_SET_ENABLED,
+            self._sl1_header(slot) + bytes((int(enabled),)),
+        )
+
+    def sl1_profile_scan(self) -> dict[str, Union[str, None]]:
+        """Select exactly one card and return its complete selection identity."""
+        cards = self.hf14a_scan()
+        if not isinstance(cards, list) or len(cards) != 1:
+            raise ValueError(
+                "Exactly one card must be selected for profile acquisition"
+            )
+        card = cards[0]
+        return {
+            name: bytes(card[name]).hex().upper()
+            for name in ("uid", "atqa", "sak", "ats")
+        }
+
+    def sl1_profile_check_keys(
+        self, block: int, key_type: int, keys: list[bytes]
+    ) -> Union[bytes, None]:
+        """Check only supplied candidate keys through the existing Classic API."""
+        if (
+            not 0 <= block <= 255
+            or key_type not in (0x60, 0x61)
+            or not 1 <= len(keys) <= 83
+            or any(len(key) != 6 for key in keys)
+        ):
+            raise ValueError("Invalid supplied-key check parameters")
+        found = self.mf1_check_keys_on_block(block, key_type, keys)
+        if found is None:
+            return None
+        if not isinstance(found, bytes) or found not in keys:
+            raise ValueError("Invalid supplied-key check response")
+        return found
+
+    def sl1_profile_read_block(
+        self, block: int, type_value: MfcKeyType, key: bytes
+    ) -> bytes:
+        """Use the Classic read command while preserving its numeric failure status."""
+        from sl1_profile import ReadError
+
+        if not 0 <= block <= 255 or len(key) != 6:
+            raise ValueError("Invalid block or Classic key")
+        response = self.device.send_cmd_sync(
+            Command.MF1_READ_ONE_BLOCK, struct.pack("!BB6s", type_value, block, key)
+        )
+        if response.status != Status.HF_TAG_OK:
+            raise ReadError(int(response.status), str(response.status))
+        return bytes(response.data)
+
 
 def test_fn():
     # connect to chameleon
