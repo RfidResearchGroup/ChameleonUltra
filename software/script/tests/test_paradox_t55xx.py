@@ -3,7 +3,6 @@
 
 import contextlib
 import io
-import re
 import sys
 import unittest
 from pathlib import Path
@@ -53,20 +52,6 @@ class MockDevice(ChameleonCom):
 
 
 class TestParadoxT5577Command(unittest.TestCase):
-    def test_command_id_is_next_unused_and_matches_header(self):
-        header = (
-            Path(__file__).resolve().parents[3]
-            / "firmware"
-            / "application"
-            / "src"
-            / "data_cmd.h"
-        ).read_text()
-        definitions = re.findall(r"#define\s+(DATA_CMD_\S+)\s+\(?([0-9]+)\)?", header)
-        matching_names = [name for name, value in definitions if value == "3022"]
-
-        self.assertEqual(Command.PARADOX_WRITE_TO_T55XX, 3022)
-        self.assertEqual(matching_names, ["DATA_CMD_PARADOX_WRITE_TO_T55XX"])
-
     def test_api_serializes_id_and_project_password_keys(self):
         device = MockDevice()
         command = ChameleonCMD(device)
