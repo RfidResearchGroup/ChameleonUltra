@@ -1,5 +1,13 @@
 include ../Makefile.defs
 
+ifeq (${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
+SRC_FILES += \
+  $(PROJ_DIR)/rfid/nfctag/hf/sl1_profile.c \
+  $(PROJ_DIR)/rfid/nfctag/hf/sl1/sl1_cardauth.c \
+  $(PROJ_DIR)/rfid/nfctag/hf/sl1/sl1_framing.c \
+  $(PROJ_DIR)/rfid/nfctag/hf/sl1/vendor/aes.c
+endif
+
 TARGETS          := application
 $(OUTPUT_DIRECTORY)/application.out: \
   LINKER_SCRIPT  := application.ld

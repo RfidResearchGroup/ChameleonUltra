@@ -87,7 +87,7 @@ void tag_emulation_sense_end(void);
 // Farming response enable state switching package function
 void tag_emulation_sense_switch(tag_sense_type_t type, bool enable);
 // Delete the type of card specified in the card slot
-void tag_emulation_delete_data(uint8_t slot, tag_sense_type_t sense_type);
+bool tag_emulation_delete_data(uint8_t slot, tag_sense_type_t sense_type);
 // Initial data of the factory data of the specified card slot into the factory of the specified type of card
 bool tag_emulation_factory_data(uint8_t slot, tag_specific_type_t tag_type);
 // Change the type of the card that is being emulated
@@ -117,5 +117,9 @@ void tag_emulation_factory_init(void);
 uint8_t tag_emulation_slot_find_next(uint8_t slot_now);
 uint8_t tag_emulation_slot_find_prev(uint8_t slot_now);
 bool is_tag_specific_type_valid(tag_specific_type_t tag_type);
+
+bool tag_emulation_profile_save_config(uint8_t slot, uint16_t type);
+bool tag_emulation_profile_reload_active(void);
+bool tag_emulation_profile_hf_quarantined(uint8_t slot);
 
 #endif

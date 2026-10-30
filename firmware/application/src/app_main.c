@@ -45,6 +45,7 @@ NRF_LOG_MODULE_REGISTER();
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 #include "rc522.h"
+#include "sl1_profile.h"
 #endif
 
 // Defining soft timers
@@ -1170,6 +1171,10 @@ int main(void) {
     while (1) {
         // process lesc event
         lesc_event_process();
+        nfc_tag_mf1_sl1_poll();
+#if defined(PROJECT_CHAMELEON_ULTRA)
+        sl1_profile_poll();
+#endif
         battery_status_display_process();
         // Button event process
         button_press_process();

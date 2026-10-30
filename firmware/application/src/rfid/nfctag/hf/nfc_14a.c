@@ -84,10 +84,22 @@ void nfc_tag_14a_clear_tx_sniff_cb(void) {
 
 /* Passive sniff mode: suppress all tag TX responses so the CU does not
  * participate in anticollision and avoids colliding with the real card. */
-static bool m_sniff_passive = false;
+static volatile bool m_sniff_passive = false;
+static volatile bool m_nfct_field_present = false;
 
 void nfc_tag_14a_set_sniff_passive(bool passive) {
+    bool entering = passive && !m_sniff_passive;
     m_sniff_passive = passive;
+    if (entering && m_tag_handler.cb_unload) m_tag_handler.cb_unload();
+}
+
+bool nfc_tag_14a_is_sniff_passive(void) {
+    return m_sniff_passive;
+}
+
+bool nfc_tag_14a_field_present(void) {
+    return m_nfct_field_present ||
+           (nrf_nfct_field_status_get() & NFCT_FIELDPRESENT_FIELDPRESENT_Msk) != 0;
 }
 static uint8_t m_nfc_tx_buffer[MAX_NFC_TX_BUFFER_SIZE] = { 0x00 };
 // The N -secondary connection needs to use SAK, when the "third 'bit' in SAK is 1 is 1, the logo UID is incomplete
@@ -212,50 +224,35 @@ uint8_t nfc_tag_14a_wrap_frame(const uint8_t *pbtTx, const size_t szTxBits, cons
 *          pbtRxPar: The buffer of the bitstream Store after the packaging, the coupling school inspection area
 * @retval :The data length of the bitstream packaging, note that the length of the data area is the length of the data area.retval / 8
 */
-uint8_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBits, uint8_t *pbtRx, uint8_t *pbtRxPar) {
-    uint8_t btFrame;
-    uint8_t btData;
-    uint8_t uiBitPos;
-    uint32_t uiDataPos = 0;
-    uint8_t *pbtFramePos = (uint8_t *)pbtFrame;
-    size_t szBitsLeft = szFrameBits;
-    size_t szRxBits = 0;
-
-    // Make sure we should frame at least something
-    if (szBitsLeft == 0)
-        return 0;
-
-    // Handle a short response (1byte) as a special case
-    if (szBitsLeft < 9) {
+uint16_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBits, uint8_t *pbtRx, uint8_t *pbtRxPar) {
+    if (!pbtFrame || !pbtRx || szFrameBits > MAX_NFC_RX_BUFFER_SIZE * 8U) return 0;
+    if (szFrameBits == 0) return 0;
+    if (szFrameBits < 9) {
         *pbtRx = *pbtFrame;
-        szRxBits = szFrameBits;
-        return szRxBits;
+        return szFrameBits;
     }
-
-    // Calculate the data length in bits
-    szRxBits = szFrameBits - (szFrameBits / 9);
-
-    // Parse the frame bytes, remove the parity bits and store them in the parity array
-    // This process is the reverse of WrapFrame(), look there for more info
-    while (1) {
-        for (uiBitPos = 0; uiBitPos < 8; uiBitPos++) {
-            btFrame = byte_mirror[pbtFramePos[uiDataPos]];
-            btData = (btFrame << uiBitPos);
-            btFrame = byte_mirror[pbtFramePos[uiDataPos + 1]];
-            btData |= (btFrame >> (8 - uiBitPos));
-            pbtRx[uiDataPos] = byte_mirror[btData];
-            if (pbtRxPar != NULL)
-                pbtRxPar[uiDataPos] = ((btFrame >> (7 - uiBitPos)) & 0x01);
-            // Increase the data (without parity bit) position
-            uiDataPos++;
-            // Test if we are done
-            if (szBitsLeft < 9)
-                return szRxBits;
-            szBitsLeft -= 9;
+    const size_t rx_bits = szFrameBits - szFrameBits / 9U;
+    const size_t rx_bytes = (rx_bits + 7U) / 8U;
+    const size_t frame_bytes = (szFrameBits + 7U) / 8U;
+    for (size_t i = 0; i < rx_bytes; ++i) {
+        const size_t bit = i * 9U;
+        const size_t byte = bit / 8U;
+        const uint8_t shift = bit % 8U;
+        uint16_t value = pbtFrame[byte] >> shift;
+        if (shift && byte + 1U < frame_bytes) {
+            value |= (uint16_t)pbtFrame[byte + 1U] << (8U - shift);
         }
-        // Every 8 data bytes we lose one frame byte to the parities
-        pbtFramePos++;
+        const size_t remaining = rx_bits - i * 8U;
+        const uint8_t mask = remaining < 8U ? (1U << remaining) - 1U : 0xFF;
+        /* Read parity before writing output: pbtFrame == pbtRx is supported. */
+        if (pbtRxPar) {
+            const size_t parity_bit = bit + 8U;
+            pbtRxPar[i] = parity_bit < szFrameBits ?
+                (pbtFrame[parity_bit / 8U] >> (parity_bit % 8U)) & 1U : 0;
+        }
+        pbtRx[i] = value & mask;
     }
+    return rx_bits;
 }
 
 /**
@@ -342,6 +339,13 @@ void nfc_tag_14a_set_frame_delay_max(uint32_t max_ticks) {
 /**
  * 14A monitoring the packaging function of data processing from PCD
  */
+/* Strict ATS validation for opt-in lifecycle; never truncate a length-tagged ATS. */
+static bool nfc_tag_14a_extended_ats_fits(const nfc_14a_ats_t *ats, uint8_t rats) {
+    uint8_t fsdi = (rats >> 4) & 0x0F;
+    return ats && fsdi <= 8 && (rats & 0x0F) <= 14 && ats->length >= 2 &&
+           ats->data[0] == ats->length && ats->length <= ats_fsdi_table[fsdi] - 2;
+}
+
 void nfc_tag_14a_data_process(uint8_t *p_data) {
     // Compute the number of bits currently received
     uint16_t szDataBits = (NRF_NFCT->RXD.AMOUNT & (NFCT_RXD_AMOUNT_RXDATABITS_Msk | NFCT_RXD_AMOUNT_RXDATABYTES_Msk));
@@ -554,18 +558,30 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
         // Activation status, re-post processing of any message
         case NFC_TAG_STATE_14A_ACTIVE: {
             // You need to judge whether you have received instructions that need to be handled directly without forwarding
-            if (szDataBits == 32) {
+            if (szDataBits == 32 && (!m_tag_handler.cb_plaintext_allowed ||
+                    m_tag_handler.cb_plaintext_allowed())) {
                 // Halt instruction
                 if (p_data[0] == NFC_TAG_14A_CMD_HALT && p_data[1] == 0x00 && p_data[2] == 0x57 && p_data[3] == 0xCD) {
+                    if (m_tag_handler.cb_session_reset) m_tag_handler.cb_session_reset();
                     // Set the status machine to the suspension state, and then wait for the next round of communication
                     m_tag_state_14a = NFC_TAG_STATE_14A_HALTED;
                     return;
                 }
                 // RATS instruction
                 if (p_data[0] == NFC_TAG_14A_CMD_RATS && nfc_tag_14a_checks_crc(p_data, 4)) {
+                    bool extended = m_tag_handler.cb_session_reset && m_tag_handler.cb_session_reset();
                     // Reset T=CL layer state for the new session
-                    if (m_tag_handler.cb_reset != NULL) {
+                    if (!extended && m_tag_handler.cb_reset != NULL) {
                         m_tag_handler.cb_reset();
+                    }
+                    if (extended) {
+                        if (auto_coll_res && nfc_tag_14a_extended_ats_fits(auto_coll_res->ats, p_data[1])) {
+                            nfc_tag_14a_set_state(NFC_TAG_STATE_14A_ACTIVE);
+                            nfc_tag_14a_tx_bytes(auto_coll_res->ats->data, auto_coll_res->ats->length, true);
+                        } else {
+                            nfc_tag_14a_set_state(NFC_TAG_STATE_14A_IDLE);
+                        }
+                        return;
                     }
                     // Make sure the sub -packaging opens the support of ATS
                     if (auto_coll_res->ats->length > 0) {
@@ -651,6 +667,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
     // Select action to process.
     switch (p_event->evt_id) {
         case NRFX_NFCT_EVT_FIELD_DETECTED: {
+            m_nfct_field_present = true;
             sleep_timer_stop();
 
             g_is_tag_emulating = true;
@@ -676,11 +693,13 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             break;
         }
         case NRFX_NFCT_EVT_FIELD_LOST: {
+            m_nfct_field_present = false;
             g_is_tag_emulating = false;
             // call sleep_timer_start *after* unsetting g_is_tag_emulating
             sleep_timer_start(SLEEP_DELAY_MS_FIELD_NFC_LOST);
 
             TAG_FIELD_LED_OFF()
+            if (m_tag_handler.cb_session_reset) m_tag_handler.cb_session_reset();
             m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
 
             if (reset_if_field_lost) {
@@ -732,6 +751,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             break;
         }
         case NRFX_NFCT_EVT_ERROR: {
+            if (m_tag_handler.cb_session_reset) m_tag_handler.cb_session_reset();
             // According to the error reasons, the log prints to help the development of the possibilities during development
             switch (p_event->params.error.reason) {
                 case NRFX_NFCT_ERROR_FRAMEDELAYTIMEOUT: {
@@ -770,10 +790,14 @@ void nfc_tag_14a_set_state(nfc_tag_14a_state_t state) {
  */
 void nfc_tag_14a_set_handler(nfc_tag_14a_handler_t *handler) {
     if (handler != NULL) {
+        if (m_tag_handler.cb_unload) m_tag_handler.cb_unload();
         // Take it directly to the implementation of the introduction to our global object
         m_tag_handler.cb_reset = handler->cb_reset;
         m_tag_handler.cb_state = handler->cb_state;
         m_tag_handler.get_coll_res = handler->get_coll_res;
+        m_tag_handler.cb_unload = handler->cb_unload;
+        m_tag_handler.cb_session_reset = handler->cb_session_reset;
+        m_tag_handler.cb_plaintext_allowed = handler->cb_plaintext_allowed;
     }
 }
 
@@ -788,6 +812,11 @@ static enum  {
  * @param enable Whether to make the field induction
  */
 void nfc_tag_14a_sense_switch(bool enable) {
+    /* A mode/profile disable invalidates the sidecar even if NFCT was disabled. */
+    if (!enable) {
+        if (m_tag_handler.cb_unload) m_tag_handler.cb_unload();
+        m_nfct_field_present = false;
+    }
     if (m_nfc_sense_state == NFC_SENSE_STATE_NONE || m_nfc_sense_state == NFC_SENSE_STATE_DISABLE) {
         if (enable) {
             m_nfc_sense_state = NFC_SENSE_STATE_ENABLE;
@@ -821,4 +850,8 @@ void nfc_tag_14a_set_reset_enable(bool enable) {
 
 bool nfc_tag_14a_is_reset_enable() {
     return reset_if_field_lost;
+}
+
+bool nfc_tag_14a_sensing_enabled(void) {
+    return m_nfc_sense_state == NFC_SENSE_STATE_ENABLE;
 }

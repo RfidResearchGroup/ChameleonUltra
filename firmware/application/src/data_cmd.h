@@ -176,6 +176,13 @@
 #define DATA_CMD_SEOS_READ_EMU_DATA             (4042)
 #define DATA_CMD_SEOS_WRITE_EMU_DATA            (4043)
 #define DATA_CMD_SEOS_WRITE_EMU_KEYS            (4044)
+#define DATA_CMD_SL1_PROFILE_STATUS             (4045)
+#define DATA_CMD_SL1_PROFILE_BEGIN              (4046)
+#define DATA_CMD_SL1_PROFILE_WRITE              (4047)
+#define DATA_CMD_SL1_PROFILE_SAVE               (4048)
+#define DATA_CMD_SL1_PROFILE_CANCEL             (4049)
+#define DATA_CMD_SL1_PROFILE_CLEAR              (4050)
+#define DATA_CMD_SL1_PROFILE_SET_ENABLED        (4051)
 //
 // ******************************************************************
 
