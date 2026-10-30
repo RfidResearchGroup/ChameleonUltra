@@ -348,7 +348,7 @@ static void system_off_enter(void) {
                 nrf_gpio_pin_clear(p_led_array[i]);
             }
             light_up_by_slot();
-            sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
+            sleep_timer_start(settings_get_sleep_timeout());
             return;
         }
     }
@@ -530,7 +530,7 @@ static void check_wakeup_src(void) {
         light_up_by_slot();
 
         // We can only run tag emulation at field wakeup source.
-        sleep_timer_start(SLEEP_DELAY_MS_FIELD_WAKEUP);
+        sleep_timer_start(settings_get_sleep_timeout());
     } else if (m_reset_source & NRF_POWER_RESETREAS_VBUS_MASK) {
         // nrfx_power_usbstatus_get() can check usb attach status
         NRF_LOG_INFO("WakeUp from VBUS(USB)");
@@ -750,7 +750,7 @@ static bool battery_status_display_cancel_on_button(void) {
 static void battery_status_display_on_button_cancel(void) {
     g_usb_led_marquee_enable = false;
     if (!m_is_field_on) {
-        sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
+        sleep_timer_start(settings_get_sleep_timeout());
     }
 }
 
@@ -1027,7 +1027,7 @@ static void run_button_function_by_settings(settings_button_function_t sbf) {
 
                 // Restart sleep timer
                 NRF_LOG_INFO("Field off, restarting sleep timer");
-                sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
+                sleep_timer_start(settings_get_sleep_timeout());
                 NRF_LOG_INFO("Sleep timer restarted");
             }
             break;
@@ -1072,7 +1072,7 @@ static void button_press_process(void) {
         g_usb_led_marquee_enable = false;
         // Re-delay into hibernation (unless field is on)
         if (!m_is_field_on) {
-            sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
+            sleep_timer_start(settings_get_sleep_timeout());
         }
     }
 }

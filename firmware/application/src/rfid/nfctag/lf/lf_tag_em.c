@@ -17,6 +17,7 @@
 #include "protocols/pyramid.h"
 #include "protocols/viking.h"
 #include "syssleep.h"
+#include "settings.h"
 #include "tag_emulation.h"
 #include "tag_persistence.h"
 
@@ -48,7 +49,7 @@ static void lf_field_lost(void) {
     // Re-arm LPCOMP so the next field appearance triggers lpcomp_event_handler.
     NRF_LPCOMP->INTENSET = LPCOMP_INTENSET_UP_Msk;
     // call sleep_timer_start *after* unsetting g_is_tag_emulating
-    sleep_timer_start(SLEEP_DELAY_MS_FIELD_125KHZ_LOST);  // Start the timer to enter the sleep
+    sleep_timer_start(settings_get_sleep_timeout());  // Start the timer to enter the sleep
     NRF_LOG_INFO("LF FIELD LOST");
 }
 

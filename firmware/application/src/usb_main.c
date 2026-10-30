@@ -1,5 +1,6 @@
 #include "usb_main.h"
 #include "syssleep.h"
+#include "settings.h"
 #include "dataframe.h"
 
 #include "app_usbd.h"
@@ -111,7 +112,7 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event) {
             break;
 
         case APP_USBD_EVT_POWER_REMOVED:
-            sleep_timer_start(SLEEP_DELAY_MS_USB_POWER_DISCONNECTED);
+            sleep_timer_start(settings_get_sleep_timeout());
             NRF_LOG_INFO("USB power removed");
             g_usb_connected = false;
             g_usb_led_marquee_enable = false;
