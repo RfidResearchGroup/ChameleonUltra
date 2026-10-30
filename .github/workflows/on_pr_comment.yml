@@ -65,7 +65,8 @@ jobs:
                 '## Client',
                 '',
                 `- [Linux](${baseUrl}/client-linux.zip)`,
-                `- [macOS](${baseUrl}/client-macos.zip)`,
+                `- [macOS (Apple Silicon)](${baseUrl}/client-macos.zip)`,
+                `- [macOS (Intel)](${baseUrl}/client-macos-intel.zip)`,
                 `- [Windows](${baseUrl}/client-windows.zip)`,
               );
             } else {

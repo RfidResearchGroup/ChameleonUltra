@@ -34,6 +34,12 @@ jobs:
               true
             bundle_command: |
               (cd software/dist && zip -r "$OLDPWD/client-macos.zip" .)
+          - name: macos-intel
+            os: macos-15-intel
+            pre_command: |
+              true
+            bundle_command: |
+              (cd software/dist && zip -r "$OLDPWD/client-macos-intel.zip" .)
     runs-on: ${{ matrix.os }}
     steps:
       - name: Check out the repo
