@@ -29,6 +29,11 @@ typedef int (*tag_datas_loadcb_t)(tag_specific_type_t type, tag_data_buffer_t *b
 typedef int (*tag_datas_savecb_t)(tag_specific_type_t type, tag_data_buffer_t *buffer);
 // Data factory initialization function
 typedef bool (*tag_datas_factory_t)(uint8_t slot, tag_specific_type_t type);
+// Called when a different type is about to be loaded into this type's
+// buffer, so a type that cached a pointer into the buffer (or registered
+// itself as the 14A handler) can drop it. Optional -- NULL for a type that
+// keeps no state beyond the buffer contents themselves.
+typedef void (*tag_datas_unloadcb_t)(tag_specific_type_t type);
 
 // The data of the tag data loading and the recovery function of the preservation event mapping table
 typedef struct {
@@ -38,6 +43,7 @@ typedef struct {
     tag_datas_savecb_t data_on_save;
     tag_datas_factory_t data_factory;
     tag_data_buffer_t *data_buffer;
+    tag_datas_unloadcb_t data_on_unload;  // optional; omitted entries default to NULL
 } tag_base_handler_map_t;
 
 /**

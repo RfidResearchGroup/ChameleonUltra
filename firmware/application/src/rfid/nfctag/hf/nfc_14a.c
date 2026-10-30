@@ -218,7 +218,7 @@ uint8_t nfc_tag_14a_wrap_frame(const uint8_t *pbtTx, const size_t szTxBits, cons
 *          pbtRxPar: The buffer of the bitstream Store after the packaging, the coupling school inspection area
 * @retval :The data length of the bitstream packaging, note that the length of the data area is the length of the data area.retval / 8
 */
-uint8_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBits, uint8_t *pbtRx, uint8_t *pbtRxPar) {
+uint16_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBits, uint8_t *pbtRx, uint8_t *pbtRxPar) {
     uint8_t btFrame;
     uint8_t btData;
     uint8_t uiBitPos;
@@ -401,10 +401,12 @@ void nfc_tag_14a_data_process(uint8_t *p_data) {
             if (auto_coll_res != NULL) {
                 // The status machine is set to the preparation state, and the next operation is to enter the card selection link
                 m_tag_state_14a = NFC_TAG_STATE_14A_READY;
-                // After receiving the WUPA or REQA instruction, we need to reply to ATQA
-                if (m_atqa_tx != UINT16_MAX) m_atqa_tx++;
-                nfc_tag_14a_tx_bytes(auto_coll_res->atqa, 2, false);
-                // NRF_LOG_INFO("ATQA reply: %02x%02x", auto_coll_res->atqa[0], auto_coll_res->atqa[1]);
+                if (!m_sniff_passive) {
+                    // After receiving the WUPA or REQA instruction, we need to reply to ATQA
+                    if (m_atqa_tx != UINT16_MAX) m_atqa_tx++;
+                    nfc_tag_14a_tx_bytes(auto_coll_res->atqa, 2, false);
+                    // NRF_LOG_INFO("ATQA reply: %02x%02x", auto_coll_res->atqa[0], auto_coll_res->atqa[1]);
+                }
             } else {
                 m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
                 NRF_LOG_INFO("Auto anti-collision resource no exists.");

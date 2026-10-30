@@ -26,7 +26,10 @@ NRF_LOG_MODULE_REGISTER();
 #define PCB_IBLOCK_MASK   0xC0
 #define PCB_IBLOCK_VAL    0x00
 #define PCB_RBLOCK_MASK   0xE0
-#define PCB_RBLOCK_VAL    0x80
+/* R-block top 3 bits are 101, i.e. 0xA0, not 0x80 -- 0xA2/0xB2 (ACK/NAK)
+ * never matched this and fell through to the I-block branch, which also
+ * rejected them. The R-block path below was dead code. */
+#define PCB_RBLOCK_VAL    0xA0
 #define PCB_SBLOCK_MASK   0xC0
 #define PCB_SBLOCK_VAL    0xC0
 #define PCB_BLOCK_NUM     0x01
@@ -101,6 +104,10 @@ static uint8_t m_resp_buf[NFC_DESFIRE_MAX_INF];
 static uint16_t m_resp_len = 0;
 static uint8_t m_tx_buf[NFC_DESFIRE_MAX_INF + 4];
 
+/* Block number of the request m_resp_buf/m_resp_len answered. Only
+ * meaningful while m_resp_len > 0. */
+static uint8_t m_last_rx_block_num = 0;
+
 static uint16_t m_frames_rx = 0;
 static uint16_t m_frames_tx = 0;
 static uint16_t m_engine_errors = 0;
@@ -109,9 +116,14 @@ static uint16_t m_max_reset_us = 0;
 
 /* ------------------------------------------------------- TX helpers ---- */
 
+/* PCB of the last final response, kept so a retransmitted request can be
+ * answered byte-for-byte without re-running the command. */
+static uint8_t m_resp_pcb = 0;
+
 static void send_iblock(const uint8_t *data, uint16_t len) {
     uint8_t pcb = PCB_IBLOCK_VAL | 0x02 | (m_block_num & PCB_BLOCK_NUM);
     if (m_cid_supported) pcb |= PCB_CID_FOLLOWING;
+    m_resp_pcb = pcb;
     uint8_t off = 0;
     m_tx_buf[off++] = pcb;
     if (m_cid_supported) m_tx_buf[off++] = m_cid & 0x0F;
@@ -119,6 +131,20 @@ static void send_iblock(const uint8_t *data, uint16_t len) {
     memcpy(&m_tx_buf[off], data, len);
     nfc_tag_14a_tx_bytes(m_tx_buf, off + len, true);
     m_block_num ^= 1;
+    m_frames_tx++;
+}
+
+/* Resend the last final response exactly as it went out, for a request the
+ * reader retransmitted. Deliberately does not touch m_block_num: this is a
+ * replay of the previous block, not a new one. */
+static void resend_last_iblock(void) {
+    uint8_t off = 0;
+    m_tx_buf[off++] = m_resp_pcb;
+    if (m_resp_pcb & PCB_CID_FOLLOWING) m_tx_buf[off++] = m_cid & 0x0F;
+    uint16_t len = m_resp_len;
+    if (len > NFC_DESFIRE_MAX_INF) len = NFC_DESFIRE_MAX_INF;
+    memcpy(&m_tx_buf[off], m_resp_buf, len);
+    nfc_tag_14a_tx_bytes(m_tx_buf, off + len, true);
     m_frames_tx++;
 }
 
@@ -219,8 +245,7 @@ static void nfc_tag_desfire_state_handler(uint8_t *p_data, uint16_t szDataBits) 
     if ((pcb & PCB_RBLOCK_MASK) == PCB_RBLOCK_VAL) {
         bool nak = (pcb & 0x10) != 0;
         if (nak && m_resp_len > 0) {
-            m_block_num ^= 1; /* undo the increment from the original send */
-            send_iblock(m_resp_buf, m_resp_len);
+            resend_last_iblock();
         } else {
             send_rblock(true);
         }
@@ -229,6 +254,17 @@ static void nfc_tag_desfire_state_handler(uint8_t *p_data, uint16_t szDataBits) 
 
     /* --- I-block --- */
     if ((pcb & PCB_IBLOCK_MASK) != PCB_IBLOCK_VAL) return;
+
+    /* A reader that missed our answer retransmits the identical I-block
+     * (same block number) rather than sending an R-block. Nothing here
+     * checked for that, so the retry ran the command again -- a repeated
+     * write/credit/debit executed twice. Only a fresh, non-chained frame can
+     * be this kind of duplicate; a chain fragment is never retried this way. */
+    if (!(pcb & PCB_CHAIN) && m_rx_len == 0 && m_resp_len > 0 &&
+            (pcb & PCB_BLOCK_NUM) == m_last_rx_block_num) {
+        resend_last_iblock();
+        return;
+    }
 
     uint8_t off = 1;
     if (pcb & PCB_CID_FOLLOWING) {
@@ -295,6 +331,7 @@ static void nfc_tag_desfire_state_handler(uint8_t *p_data, uint16_t szDataBits) 
     }
 
     m_resp_len = (uint16_t)resp_len;
+    m_last_rx_block_num = pcb & PCB_BLOCK_NUM;
     send_iblock(m_resp_buf, m_resp_len);
 }
 
@@ -477,6 +514,23 @@ int nfc_tag_desfire_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buf
         (int)m_info->credential.file_pool_used,
         DFC_FILE_POOL_SIZE);
     return info_size;
+}
+
+void nfc_tag_desfire_data_unloadcb(tag_specific_type_t type) {
+    (void)type;
+    /* The slot is switching to a different HF type that shares this same
+     * buffer. m_info pointed into it; once that type's loadcb runs, the
+     * buffer holds that type's data, not ours. Drop every reference so a
+     * GET_CREDENTIAL/GET_INFO/FACTORY_BLANK command sent after the switch
+     * fails instead of reading or overwriting someone else's tag. */
+    if (m_session != NULL) {
+        dfc_virtual_picc_session_free(m_session);
+        m_session = NULL;
+    }
+    m_info = NULL;
+    m_ac_uid_len = 0;
+    m_resp_len = 0;
+    m_rx_len = 0;
 }
 
 int nfc_tag_desfire_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {

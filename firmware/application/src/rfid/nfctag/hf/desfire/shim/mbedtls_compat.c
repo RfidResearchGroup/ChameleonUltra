@@ -152,14 +152,15 @@ int mbedtls_des3_crypt_cbc(
 
 static nrf_crypto_aes_context_t s_aes_ctx; /* single card emulated at a time */
 
-static void aes_shim_ensure_init(void) {
+static bool aes_shim_ensure_init(void) {
     static bool ready = false;
-    if (ready) return;
+    if (ready) return true;
     ret_code_t rc = nrf_crypto_init();
     /* Already initialised elsewhere (e.g. SEOS/boot) is fine. */
     if (rc == NRF_SUCCESS || rc == NRF_ERROR_MODULE_ALREADY_INITIALIZED) {
         ready = true;
     }
+    return ready;
 }
 
 void mbedtls_aes_init(mbedtls_aes_context* ctx) {
@@ -172,7 +173,10 @@ void mbedtls_aes_free(mbedtls_aes_context* ctx) {
 
 static int aes_setkey(mbedtls_aes_context* ctx, const uint8_t *key, unsigned int keybits) {
     if (keybits != 128) return MBEDTLS_ERR_AES_INVALID_KEY_LENGTH;
-    aes_shim_ensure_init();
+    /* Leave has_key cleared on a real init failure. crypt_cbc already checks
+     * has_key before touching the CC310, so this alone makes a later crypt
+     * call fail cleanly instead of running against an uninitialised backend. */
+    if (!aes_shim_ensure_init()) return MBEDTLS_ERR_AES_INVALID_KEY_LENGTH;
     memcpy(ctx->key, key, 16);
     ctx->has_key = 1;
     return 0;

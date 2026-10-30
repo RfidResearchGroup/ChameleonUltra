@@ -3457,8 +3457,18 @@ static data_frame_tx_t *cmd_processor_desfire_get_info(uint16_t cmd, uint16_t st
 
     uint8_t resp[20];
     uint16_t pool_used = (uint16_t)cred->file_pool_used;
-    resp[0] = (uint8_t)cred->uid_len;
-    memcpy(&resp[1], cred->uid, DFC_DESFIRE_UID_LEN);
+    /* resp[1..7] is a fixed 7-byte field; report exactly what's copied into
+     * it, not the model's raw uid_len. Those could differ if the model ever
+     * carries a longer UID than this wire layout has room for, and a count
+     * that doesn't match what was actually written makes a parser read past
+     * the UID into num_apps/num_files/pool fields as if they were UID. */
+    uint8_t uid_copy_len = (cred->uid_len > DFC_DESFIRE_UID_LEN) ?
+                               DFC_DESFIRE_UID_LEN : (uint8_t)cred->uid_len;
+    resp[0] = uid_copy_len;
+    memcpy(&resp[1], cred->uid, uid_copy_len);
+    if (uid_copy_len < DFC_DESFIRE_UID_LEN) {
+        memset(&resp[1 + uid_copy_len], 0, DFC_DESFIRE_UID_LEN - uid_copy_len);
+    }
     resp[8]  = (uint8_t)cred->num_apps;
     resp[9]  = (uint8_t)cred->num_files;
     resp[10] = (uint8_t)(pool_used >> 8);
@@ -3479,10 +3489,18 @@ static data_frame_tx_t *cmd_processor_desfire_factory_blank(uint16_t cmd, uint16
     DfcCredential *cred = nfc_tag_desfire_get_credential();
     if (cred == NULL) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
 
-    dfc_credential_init_blank(cred);
-    if (length >= 1 && data[0] == DFC_DESFIRE_UID_LEN) {
+    /* Validate the whole request before touching the existing credential.
+     * This used to blank first and validate after, so a malformed request
+     * (e.g. claiming a UID follows but not sending enough bytes) returned
+     * PAR_ERR having already erased the slot's live credential. */
+    bool has_uid = (length >= 1 && data[0] == DFC_DESFIRE_UID_LEN);
+    if (has_uid) {
         if (length < 1 + DFC_DESFIRE_UID_LEN) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
         if (data[1] != DFC_DESFIRE_UID_FIRST_BYTE) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    dfc_credential_init_blank(cred);
+    if (has_uid) {
         memcpy(cred->uid, &data[1], DFC_DESFIRE_UID_LEN);
     }
     if (!nfc_tag_desfire_reload()) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);

@@ -56,6 +56,7 @@ nfc_tag_14a_coll_res_reference_t *nfc_tag_desfire_get_coll_res(void);
 int nfc_tag_desfire_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 int nfc_tag_desfire_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 bool nfc_tag_desfire_data_factory(uint8_t slot, tag_specific_type_t tag_type);
+void nfc_tag_desfire_data_unloadcb(tag_specific_type_t type);
 
 /* Active slot's credential, for host load/dump commands. NULL when the active
  * slot is not a DESFire slot. */

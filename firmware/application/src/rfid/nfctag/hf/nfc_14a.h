@@ -129,7 +129,10 @@ bool nfc_tag_14a_checks_crc(uint8_t *pbtData, size_t szLen);
 
 // 14A frame combination
 uint8_t nfc_tag_14a_wrap_frame(const uint8_t *pbtTx, const size_t szTxBits, const uint8_t *pbtTxPar, uint8_t *pbtFrame);
-uint8_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBits, uint8_t *pbtRx, uint8_t *pbtRxPar);
+// Returns the unwrapped data length in BITS. uint16_t, not uint8_t: at 9
+// wire bits per data byte, a 29-byte-or-longer frame (any full-size DESFire
+// APDU) already exceeds 255 bits and would silently wrap in a narrower type.
+uint16_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBits, uint8_t *pbtRx, uint8_t *pbtRxPar);
 
 // 14A communication control
 void nfc_tag_14a_sense_switch(bool enable);
