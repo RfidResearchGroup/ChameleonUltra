@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <nrf_gpio.h>
 
 #include "nrf_drv_spi.h"
@@ -13,6 +14,8 @@
 #include "app_status.h"
 #include "hex_utils.h"
 #include "crc_utils.h"
+#include "ulc_3des.h"
+#include "nrf_drv_rng.h"
 
 #define NRF_LOG_MODULE_NAME rc522
 #include "nrf_log.h"
@@ -1135,6 +1138,98 @@ uint8_t pcd_14a_reader_mf1_write_by_cmd(uint8_t cmd, uint8_t addr, uint8_t *p) {
 uint8_t pcd_14a_reader_mf1_write(uint8_t addr, uint8_t *p) {
     // Standard M1 writing card writing card
     return pcd_14a_reader_mf1_write_by_cmd(PICC_WRITE, addr, p);
+}
+
+#define MIFARE_ULC_AUTH_1        0x1A
+#define MIFARE_ULC_AUTH_2        0xAF
+#define MIFARE_ULTRALIGHT_WRITE  0xA2
+
+static void ulc_reader_rng(uint8_t *buf, uint8_t len) {
+    uint8_t got = 0;
+    uint32_t guard = 0;
+    while (got < len) {
+        uint8_t avail = 0;
+        nrf_drv_rng_bytes_available(&avail);
+        if (avail > 0) {
+            uint8_t want = (uint8_t)(len - got);
+            uint8_t chunk = (avail < want) ? avail : want;
+            if (nrf_drv_rng_rand(buf + got, chunk) == NRF_SUCCESS) {
+                got += chunk;
+                continue;
+            }
+        }
+        if (++guard > 200000) {
+            while (got < len) buf[got++] = (uint8_t)rand();
+            break;
+        }
+    }
+}
+
+uint8_t pcd_14a_reader_mf0_ulc_auth(uint8_t *key) {
+    uint8_t status;
+    uint16_t rx_bits = 0;
+    uint8_t buf[24];
+    uint8_t iv[8] = { 0 };
+    uint8_t ek_rndb[8], rndb[8], rnda[8], token_plain[16], token[16], resp_enc[8], rnda_back[8];
+
+    buf[0] = MIFARE_ULC_AUTH_1;
+    buf[1] = 0x00;
+    crc_14a_append(buf, 2);
+    status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, buf, 4, buf, &rx_bits, U8ARR_BIT_LEN(buf));
+    if (status != STATUS_HF_TAG_OK) {
+        return status;
+    }
+    if (rx_bits != (11 * 8) || buf[0] != MIFARE_ULC_AUTH_2) {
+        return STATUS_HF_ERR_STAT;
+    }
+    memcpy(ek_rndb, &buf[1], 8);
+
+    ulc_tdes_dec_cbc(rndb, ek_rndb, 8, key, iv);
+    ulc_rol8(rndb);
+
+    ulc_reader_rng(rnda, 8);
+
+    memcpy(&token_plain[0], rnda, 8);
+    memcpy(&token_plain[8], rndb, 8);
+    ulc_tdes_enc_cbc(token, token_plain, 16, key, iv);
+
+    buf[0] = MIFARE_ULC_AUTH_2;
+    memcpy(&buf[1], token, 16);
+    crc_14a_append(buf, 17);
+    status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, buf, 19, buf, &rx_bits, U8ARR_BIT_LEN(buf));
+    if (status != STATUS_HF_TAG_OK) {
+        return status;
+    }
+    if (rx_bits != (11 * 8)) {
+        return STATUS_MF_ERR_AUTH;
+    }
+    memcpy(resp_enc, &buf[1], 8);
+
+    ulc_tdes_dec_cbc(rnda_back, resp_enc, 8, key, iv);
+    ulc_rol8(rnda);
+    if (memcmp(rnda_back, rnda, 8) != 0) {
+        return STATUS_MF_ERR_AUTH;
+    }
+    return STATUS_HF_TAG_OK;
+}
+
+uint8_t pcd_14a_reader_mf0_ult_write_page(uint8_t page, uint8_t *data) {
+    uint8_t status;
+    uint16_t rx_bits = 0;
+    uint8_t buf[8];
+
+    buf[0] = MIFARE_ULTRALIGHT_WRITE;
+    buf[1] = page;
+    memcpy(&buf[2], data, 4);
+    crc_14a_append(buf, 6);
+    status = pcd_14a_reader_bytes_transfer(PCD_TRANSCEIVE, buf, 8, buf, &rx_bits, U8ARR_BIT_LEN(buf));
+    if (status != STATUS_HF_TAG_OK) {
+        return status;
+    }
+    if (rx_bits != 4 || (buf[0] & 0x0F) != 0x0A) {
+        return STATUS_HF_ERR_STAT;
+    }
+    return STATUS_HF_TAG_OK;
 }
 
 /**

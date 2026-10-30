@@ -4,6 +4,7 @@
 #include "nfc_14a.h"
 #include "fds_util.h"
 #include "tag_persistence.h"
+#include "ulc_3des.h"
 
 #define NRF_LOG_MODULE_NAME tag_mf0_ntag
 #include "nrf_log.h"
@@ -41,6 +42,9 @@ NRF_LOG_MODULE_REGISTER();
 #define CMD_READ_SIG                    0x3C
 #define CMD_CHECK_TEARING_EVENT         0x3E
 #define CMD_VCSL                        0x4B
+#define CMD_AUTHENTICATE                0x1A
+#define CMD_AUTH_PART2                  0xAF
+#define ULC_AUTH_FRAME_DELAY_MAX        65535
 
 // MEMORY LAYOUT STUFF, addresses and sizes in bytes
 // UID stuff
@@ -56,6 +60,8 @@ NRF_LOG_MODULE_REGISTER();
 // CONFIG stuff
 #define MF0ICU2_USER_MEMORY_END         0x28
 #define MF0ICU2_CNT_PAGE                0x29
+#define MF0ICU2_AUTH0_PAGE              0x2A
+#define MF0ICU2_AUTH1_PAGE              0x2B
 #define MF0ICU2_FIRST_KEY_PAGE          0x2C
 #define MF0UL11_FIRST_CFG_PAGE          0x10
 #define MF0UL11_USER_MEMORY_END         (MF0UL11_FIRST_CFG_PAGE)
@@ -134,6 +140,10 @@ static nfc_tag_mf0_ntag_tx_buffer_t m_tag_tx_buffer;
 static tag_specific_type_t m_tag_type;
 static bool m_tag_authenticated = false;
 static bool m_did_first_read = false;
+
+static uint8_t m_ulc_auth_step = 0;
+static uint8_t m_ulc_rndb[8];
+static uint8_t m_ulc_iv[8];
 
 #define MF0_NTAG_AUTH_LOG_MAX 32
 static __attribute__((section(".noinit_mf0"))) struct nfc_tag_mf0_auth_log_buffer {
@@ -260,9 +270,19 @@ static int get_first_cfg_page_by_tag_type(tag_specific_type_t tag_type) {
 
 static int get_block_max_by_tag_type(tag_specific_type_t tag_type, bool read) {
     int max_pages = get_nr_pages_by_tag_type(tag_type);
-    int first_cfg_page = get_first_cfg_page_by_tag_type(tag_type);
 
-    if (first_cfg_page == 0 || m_tag_authenticated || m_tag_information->config.mode_uid_magic) return max_pages;
+    if (m_tag_authenticated || m_tag_information->config.mode_uid_magic) return max_pages;
+
+    if (tag_type == TAG_TYPE_MF0ICU2) {
+        uint8_t auth0 = m_tag_information->memory[MF0ICU2_AUTH0_PAGE][0];
+        uint8_t auth1 = m_tag_information->memory[MF0ICU2_AUTH1_PAGE][0];
+        if (auth0 >= 0x30) return max_pages;
+        if (read && ((auth1 & 0x01) != 0)) return max_pages;
+        return (max_pages > auth0) ? auth0 : max_pages;
+    }
+
+    int first_cfg_page = get_first_cfg_page_by_tag_type(tag_type);
+    if (first_cfg_page == 0) return max_pages;
 
     uint8_t auth0 = m_tag_information->memory[first_cfg_page][CONF_AUTH0_BYTE];
     uint8_t access = m_tag_information->memory[first_cfg_page + 1][0];
@@ -581,11 +601,19 @@ static void handle_any_read(uint8_t block_num, uint8_t block_cnt, uint8_t block_
         uint8_t block_to_read = (block_num + block) % block_max;
         uint8_t *tx_buf_ptr = m_tag_tx_buffer.tx_buffer + block * NFC_TAG_MF0_NTAG_DATA_SIZE;
 
-        // In case PWD or PACK pages are read we need to write zero to the output buffer. In UID magic mode we don't care.
-        if (m_tag_information->config.mode_uid_magic || (pwd_page == 0) || (block_to_read < pwd_page) || (block_to_read > (pwd_page + 1))) {
-            memcpy(tx_buf_ptr, m_tag_information->memory[block_to_read], NFC_TAG_MF0_NTAG_DATA_SIZE);
-        } else {
+        bool hide_page = false;
+        if (!m_tag_information->config.mode_uid_magic) {
+            if ((pwd_page != 0) && (block_to_read >= pwd_page) && (block_to_read <= (pwd_page + 1))) {
+                hide_page = true;
+            }
+            if ((m_tag_type == TAG_TYPE_MF0ICU2) && (block_to_read >= MF0ICU2_FIRST_KEY_PAGE)) {
+                hide_page = true;
+            }
+        }
+        if (hide_page) {
             memset(tx_buf_ptr, 0, NFC_TAG_MF0_NTAG_DATA_SIZE);
+        } else {
+            memcpy(tx_buf_ptr, m_tag_information->memory[block_to_read], NFC_TAG_MF0_NTAG_DATA_SIZE);
         }
 
         // apply mirroring if needed
@@ -1068,6 +1096,83 @@ static void handle_vcsl_command(uint16_t szDataBits) {
     nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, 1, true);
 }
 
+static void ulc_emu_rng(uint8_t *buf, uint8_t len) {
+    for (uint8_t i = 0; i < len; i++) {
+        buf[i] = (uint8_t)rand();
+    }
+}
+
+static void ulc_load_cipher_key(uint8_t out_key[16]) {
+    const uint8_t *p = &m_tag_information->memory[MF0ICU2_FIRST_KEY_PAGE][0];
+    for (int i = 0; i < 8; i++) out_key[i] = p[7 - i];
+    for (int i = 0; i < 8; i++) out_key[8 + i] = p[15 - i];
+}
+
+static void handle_ulc_auth_part1(void) {
+    if (m_tag_type != TAG_TYPE_MF0ICU2) {
+        if (is_ntag()) nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
+        return;
+    }
+
+    nfc_tag_14a_set_frame_delay_max(ULC_AUTH_FRAME_DELAY_MAX);
+
+    uint8_t key[16];
+    ulc_load_cipher_key(key);
+
+    ulc_emu_rng(m_ulc_rndb, 8);
+
+    memset(m_ulc_iv, 0, sizeof(m_ulc_iv));
+    uint8_t ek_rndb[8];
+    ulc_tdes_enc_cbc(ek_rndb, m_ulc_rndb, 8, key, m_ulc_iv);
+
+    m_ulc_auth_step = 1;
+
+    m_tag_tx_buffer.tx_buffer[0] = CMD_AUTH_PART2;
+    memcpy(&m_tag_tx_buffer.tx_buffer[1], ek_rndb, 8);
+    nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, 9, true);
+}
+
+static void handle_ulc_auth_part2(uint8_t *p_data, uint16_t szDataBits) {
+    if (m_tag_type != TAG_TYPE_MF0ICU2) {
+        if (is_ntag()) nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBV, 4);
+        return;
+    }
+    if (m_ulc_auth_step != 1 || szDataBits < (17 * 8)) {
+        m_ulc_auth_step = 0;
+        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        return;
+    }
+    m_ulc_auth_step = 0;
+
+    nfc_tag_14a_set_frame_delay_max(ULC_AUTH_FRAME_DELAY_MAX);
+
+    uint8_t key[16];
+    ulc_load_cipher_key(key);
+
+    uint8_t dec[16];
+    ulc_tdes_dec_cbc(dec, &p_data[1], 16, key, m_ulc_iv);
+
+    uint8_t expect_rndb[8];
+    memcpy(expect_rndb, m_ulc_rndb, 8);
+    ulc_rol8(expect_rndb);
+    if (memcmp(&dec[8], expect_rndb, 8) != 0) {
+        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        return;
+    }
+
+    uint8_t rnda_prime[8];
+    memcpy(rnda_prime, &dec[0], 8);
+    ulc_rol8(rnda_prime);
+    uint8_t ek_rnda_prime[8];
+    ulc_tdes_enc_cbc(ek_rnda_prime, rnda_prime, 8, key, m_ulc_iv);
+
+    m_tag_authenticated = true;
+
+    m_tag_tx_buffer.tx_buffer[0] = 0x00;
+    memcpy(&m_tag_tx_buffer.tx_buffer[1], ek_rnda_prime, 8);
+    nfc_tag_14a_tx_bytes(m_tag_tx_buffer.tx_buffer, 9, true);
+}
+
 static void nfc_tag_mf0_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits) {
     uint8_t command = p_data[0];
     uint8_t block_num = p_data[1];
@@ -1098,6 +1203,14 @@ static void nfc_tag_mf0_ntag_state_handler(uint8_t *p_data, uint16_t szDataBits)
         }
         case CMD_PWD_AUTH: {
             handle_pwd_auth_command(p_data);
+            break;
+        }
+        case CMD_AUTHENTICATE: {
+            handle_ulc_auth_part1();
+            break;
+        }
+        case CMD_AUTH_PART2: {
+            handle_ulc_auth_part2(p_data, szDataBits);
             break;
         }
         case CMD_READ_SIG:
@@ -1137,6 +1250,7 @@ nfc_tag_14a_coll_res_reference_t *nfc_tag_mf0_ntag_get_coll_res() {
 static void nfc_tag_mf0_ntag_reset_handler() {
     m_tag_authenticated = false;
     m_did_first_read = false;
+    m_ulc_auth_step = 0;
 }
 
 static int get_information_size_by_tag_type(tag_specific_type_t type) {
@@ -1181,6 +1295,7 @@ int nfc_tag_mf0_ntag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *bu
             .cb_reset = nfc_tag_mf0_ntag_reset_handler,
         };
         nfc_tag_14a_set_handler(&handler_for_14a);
+        ulc_3des_init();
         NRF_LOG_INFO("HF ntag data load finish.");
     } else {
         ASSERT(buffer->length == info_size);
@@ -1252,6 +1367,16 @@ bool nfc_tag_mf0_ntag_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
                 ASSERT(false);
                 break;
         }
+    }
+
+    if (tag_type == TAG_TYPE_MF0ICU2) {
+        p_ntag_information->memory[MF0ICU2_AUTH0_PAGE][0] = 0x30;
+        p_ntag_information->memory[MF0ICU2_AUTH1_PAGE][0] = 0x00;
+        static const uint8_t default_ulc_key[16] = {
+            0x49, 0x45, 0x4D, 0x4B, 0x41, 0x45, 0x52, 0x42,
+            0x21, 0x4E, 0x41, 0x43, 0x55, 0x4F, 0x59, 0x46
+        };
+        memcpy(p_ntag_information->memory[MF0ICU2_FIRST_KEY_PAGE], default_ulc_key, sizeof(default_ulc_key));
     }
 
     int version_page = get_version_page_by_tag_type(tag_type);

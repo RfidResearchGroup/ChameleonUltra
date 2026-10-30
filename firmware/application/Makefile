@@ -21,6 +21,7 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/byte_mirror.c \
   $(PROJ_DIR)/rfid/crc_utils.c \
   $(PROJ_DIR)/rfid/hex_utils.c \
+  $(PROJ_DIR)/rfid/crypto/ulc_3des.c \
   $(PROJ_DIR)/rfid/mf1_crapto1.c \
   $(PROJ_DIR)/rfid/mf1_crypto1.c \
   $(PROJ_DIR)/rfid/parity.c \
@@ -46,7 +47,9 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/nfctag/lf/utils/diphase.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/wiegand.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/idteck.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/protocols/pyramid.c \
   $(PROJ_DIR)/utils/dataframe.c \
+  $(PROJ_DIR)/utils/battery_health.c \
   $(PROJ_DIR)/utils/delayed_reset.c \
   $(PROJ_DIR)/utils/fds_util.c \
   $(PROJ_DIR)/utils/syssleep.c \
@@ -187,6 +190,7 @@ INC_FOLDERS += \
   ${PROJ_DIR}/bsp/ \
   ${PROJ_DIR}/utils/ \
   ${PROJ_DIR}/rfid/ \
+  ${PROJ_DIR}/rfid/crypto/ \
   ${PROJ_DIR}/rfid/nfctag/ \
   ${PROJ_DIR}/rfid/nfctag/hf \
   ${PROJ_DIR}/rfid/nfctag/lf \
@@ -359,6 +363,7 @@ ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
     $(PROJ_DIR)/rfid/reader/lf/lf_ioprox_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_viking_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_jablotron_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_pyramid_data.c \
 
   INC_FOLDERS +=\
     ${PROJ_DIR}/rfid/reader/ \
