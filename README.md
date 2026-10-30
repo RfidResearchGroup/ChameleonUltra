@@ -29,6 +29,7 @@ Read the [available documentation](https://github.com/RfidResearchGroup/Chameleo
 * [Mifare Chameleon Tool (iOS only, Beta)](https://apps.apple.com/it/app/mifare-chameleon-tool/id6761231484)
 * [Chameleon Ultra (Sailfish OS only)](https://sailfishos-chum.github.io/apps/harbour-chameleon-ultra)
 * [Chameleon GO (iOS only)](https://apps.apple.com/us/app/id6802015306)
+* [Device console for ChameleonUltra (Web)](https://sec1.dk/phreakbyte.html)
 
 # Videos
 
