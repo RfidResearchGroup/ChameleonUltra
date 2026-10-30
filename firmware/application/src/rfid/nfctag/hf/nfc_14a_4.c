@@ -28,9 +28,15 @@
 #define PCB_SBLOCK_MASK     0xC0
 #define PCB_SBLOCK_VAL      0xC0
 #define PCB_BLOCK_NUM       0x01
-#define PCB_CID_FOLLOWING   0x08  /* bit4: CID follows */
-#define PCB_NAD_FOLLOWING   0x04  /* bit3: NAD follows */
-#define PCB_CHAIN           0x10  /* bit5: chaining flag per ISO14443-4 Table 3 */
+/* ISO14443-4 Table 4/Table 6, pinned down by the well known encodings: I-block
+ * with CID is 0x0A, R(ACK) with CID 0xAA, S(DESELECT) with CID 0xCA, chained
+ * I-block 0x12. So CID is b4, NAD b3, chaining b5 -- one bit lower than the
+ * names suggest, because a plain I-block already carries 0x02. */
+#define PCB_CID_FOLLOWING   0x08
+#define PCB_NAD_FOLLOWING   0x04
+#define PCB_CHAIN           0x10
+/* S(WTX) is 1111 0010b, so 0xF2, and 0xFA once the CID is appended. A bare 0x30
+ * is not an S-block: it lacks the 0xC0 block-type bits and the mandatory b2. */
 #define PCB_SBLOCK_WTX      0xF2
 #define PCB_SBLOCK_DESELECT 0xC2
 #define PCB_PPS             0xD0
@@ -211,7 +217,9 @@ bool nfc_tag_14a_4_base_handler(nfc_tag_14a_4_tcl_state_t *m_tcl_session_state, 
             nfc_tag_14a_4_reset_handler();
             return false;
         }
-        if ((pcb & 0x3F) == (PCB_SBLOCK_WTX & 0x3F)) {
+        /* b6b5 = 11 marks WTX and 00 marks DESELECT, so this tells them apart
+         * whether or not a CID is appended. */
+        if ((pcb & 0x30) == 0x30) {
             /* Reader sending WTX — echo back with our WTXM */
             uint8_t wtxm = (szBytes > 1) ? data[szBytes - 1] & 0x3F : WTX_VALUE;
             uint8_t resp[3];
@@ -251,8 +259,17 @@ bool nfc_tag_14a_4_base_handler(nfc_tag_14a_4_tcl_state_t *m_tcl_session_state, 
 
         uint8_t offset = 1;
         if (has_cid) {
+            /* Echo the CID back. Our ATS advertises CID support in TC(1), so a
+             * reader that addresses us with one is entitled to see it in the
+             * response, and at least one access reader treats an answer without
+             * it as coming from a card its DESFire path cannot drive. */
+            if (offset >= szBytes) {
+                send_rack(m_tcl_session_state);
+                return false;
+            }
+            m_tcl_session_state->m_cid = data[offset] & 0x0F;
             m_tcl_session_state->m_cid_supported = true;
-            offset++;  /* skip CID byte */
+            offset++;
         }
         if (has_nad) offset++;
 
