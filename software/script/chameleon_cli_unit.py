@@ -7422,7 +7422,7 @@ class HWSettingsSleepTimeout(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = (
-            "Get or set the wake timeout after a button press (5-60 seconds)"
+            "Get or set the inactivity timeout before deep sleep (5-60 seconds)"
         )
         parser.add_argument(
             "-s",

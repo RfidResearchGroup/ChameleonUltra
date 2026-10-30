@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Fix sleep timeout being applied only after button wakeup: button presses, emulation end, BLE disconnect and USB power loss now restart the timer with the configured timeout instead of fixed 3-4 s delays
 
 ## [v2.3.0][2026-10-24]
  - Added Farpointe/Pyramid LF protocol support: read and emulate (FSK2a, RF/50)

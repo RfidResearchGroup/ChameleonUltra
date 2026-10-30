@@ -6,7 +6,7 @@
 #include "utils.h"
 
 #define SETTINGS_CURRENT_VERSION 7
-#define SETTINGS_SLEEP_TIMEOUT_DEFAULT_S 8   // default wake timeout in seconds (matches SLEEP_DELAY_MS_BUTTON_WAKEUP)
+#define SETTINGS_SLEEP_TIMEOUT_DEFAULT_S 8   // default wake timeout in seconds
 #define SETTINGS_SLEEP_TIMEOUT_MIN_S      5
 #define SETTINGS_SLEEP_TIMEOUT_MAX_S      60
 #define SETTINGS_LONG_PRESS_THRESHOLD_DEFAULT_MS 1000
@@ -57,7 +57,7 @@ typedef struct ALIGN_U32 {
     uint8_t ble_connect_key[6];
 
     // 1 byte (add on version6)
-    uint8_t sleep_timeout; // wake timeout in seconds after button wakeup
+    uint8_t sleep_timeout; // seconds of inactivity before deep sleep
 
     // 2 bytes (add on version7)
     uint16_t long_press_threshold; // long button press threshold in ms
