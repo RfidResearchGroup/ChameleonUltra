@@ -21,3 +21,16 @@
 #define LF_SNIFF_MAX_SAMPLES  4000
 
 bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen);
+
+/*
+ * Capture `count` full-resolution samples (14-bit, 0-16383), one per carrier
+ * period, at the sample phase set with lf_125khz_radio_saadc_phase_set().
+ *
+ * @return true if all `count` samples arrived within `timeout_ms`.
+ *         Check lf_capture_dropped() as well: a capture can be complete but
+ *         have lost samples in the middle.
+ */
+bool raw_read_samples(int16_t *samples, size_t count, uint32_t timeout_ms, size_t *outlen);
+
+/** Samples dropped during the last capture (ring buffer full). */
+uint32_t lf_capture_dropped(void);

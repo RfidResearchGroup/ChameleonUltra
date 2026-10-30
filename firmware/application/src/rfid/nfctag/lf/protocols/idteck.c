@@ -16,17 +16,8 @@
 // number in a byte-reversed layout, matching the format used by common
 // IDTECK readers; see cmdlfidteck.c in the Proxmark3 client for details).
 
-#define IDTECK_PWM_ENTRIES        (IDTECK_BIT_COUNT * LF_PSK1_RF32_SUBCYCLES_PER_BIT)
 #define IDTECK_T55XX_BLOCK_COUNT  (3)   // config word + 2 data blocks
 
-static nrf_pwm_values_wave_form_t m_idteck_pwm_seq_vals[IDTECK_PWM_ENTRIES] = {};
-
-static nrf_pwm_sequence_t m_idteck_pwm_seq = {
-    .values.p_wave_form = m_idteck_pwm_seq_vals,
-    .length = NRF_PWM_VALUES_LENGTH(m_idteck_pwm_seq_vals),
-    .repeats = 0,
-    .end_delay = 0,
-};
 
 static idteck_codec *idteck_alloc(void) {
     idteck_codec *d = malloc(sizeof(idteck_codec));
@@ -64,10 +55,7 @@ static bool idteck_decoder_feed(idteck_codec *d, uint16_t val) {
 static const nrf_pwm_sequence_t *idteck_modulator(idteck_codec *d, uint8_t *buf) {
     (void)d;
 
-    size_t n = lf_psk1_build_sequence(buf, IDTECK_BIT_COUNT,
-                                      m_idteck_pwm_seq_vals, IDTECK_PWM_ENTRIES);
-    m_idteck_pwm_seq.length = (uint16_t)(n * 4);   // 4 uint16 fields per wave-form entry
-    return &m_idteck_pwm_seq;
+    return lf_psk1_sequence(buf, IDTECK_BIT_COUNT);
 }
 
 const protocol idteck = {

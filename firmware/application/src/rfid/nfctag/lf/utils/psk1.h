@@ -41,3 +41,8 @@ size_t lf_psk1_build_sequence(const uint8_t *frame_bytes,
                               size_t bit_count,
                               nrf_pwm_values_wave_form_t *out_buf,
                               size_t out_capacity);
+
+#define LF_PSK1_MAX_FRAME_BITS (64)
+
+// Build the sequence into a buffer shared by all PSK1 types (one LF tag is emulated at a time).
+const nrf_pwm_sequence_t *lf_psk1_sequence(const uint8_t *frame_bytes, size_t bit_count);
