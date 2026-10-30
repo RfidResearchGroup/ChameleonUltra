@@ -133,7 +133,7 @@ static wiegand_card_t *unpack_ind26(uint64_t hi, uint64_t lo) {
     uint8_t odd_parity = lo & 0x01;           // 44
     uint32_t even = (lo >> 13) & 0xfff;       // 19..31
     uint8_t even_parity = (lo >> 25) & 0x01;  // 18
-    if (!(oddparity32(odd) == odd_parity) && (evenparity32(even) == even_parity)) {
+    if (!(oddparity32(odd) == odd_parity && evenparity32(even) == even_parity)) {
         return NULL;
     }
     wiegand_card_t *d = wiegand_card_alloc();
