@@ -954,7 +954,7 @@
 // <i> Select a library version compatible with the configuration. When interrupts are disable, a version named _noint must be used
 
 #ifndef NRF_CRYPTO_BACKEND_CC310_INTERRUPTS_ENABLED
-#define NRF_CRYPTO_BACKEND_CC310_INTERRUPTS_ENABLED 1
+#define NRF_CRYPTO_BACKEND_CC310_INTERRUPTS_ENABLED 0
 #endif
 
 // </e>
