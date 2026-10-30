@@ -3,7 +3,7 @@ import ctypes
 from typing import Union
 
 import chameleon_com
-from chameleon_utils import expect_response, reconstruct_full_nt, parity_to_str
+from chameleon_utils import expect_response, reconstruct_full_nt, parity_to_str, UnexpectedResponseError
 from chameleon_enum import Command, SlotNumber, Status, TagSenseType, TagSpecificType
 from chameleon_enum import ButtonPressFunction, ButtonType, MifareClassicDarksideStatus
 from chameleon_enum import MfcKeyType, MfcValueBlockOperator
@@ -1419,6 +1419,229 @@ class ChameleonCMD:
         """
         data = struct.pack(f"!B{len(block_data)}s", block_start, block_data)
         return self.device.send_cmd_sync(Command.MF1_WRITE_EMU_BLOCK_DATA, data)
+
+    # ---------------------------------------------------------- DESFire --
+
+    DESFIRE_CHUNK = 1024
+
+    def desfire_set_credential(self, blob: bytes, progress=None):
+        """
+        Load a DESFire credential (.dfcb octets) into the active slot.
+
+        Chunked with the offset and total in every chunk, so a failed transfer
+        is retried by simply starting again rather than needing a reset.
+
+        :param blob: credential in the .dfcb encoding, see chameleon_dfc
+        :param progress: optional callback(sent, total)
+        """
+        total = len(blob)
+        if total == 0:
+            raise ValueError("empty credential blob")
+        if total > 0xFFFF:
+            raise ValueError(f"credential blob too large for the protocol: {total}")
+        # Every credential starts with the 0x60 identifier. Refusing here means a
+        # wrong encoding never reaches the wire, and the device does the same
+        # check on the first chunk.
+        if blob[0] != 0x60:
+            raise ValueError(
+                f"not a .dfcb credential: first octet is 0x{blob[0]:02X}, not 0x60")
+        sent = 0
+        while sent < total:
+            chunk = blob[sent:sent + self.DESFIRE_CHUNK]
+            data = struct.pack(f"!HHH{len(chunk)}s", total, sent, len(chunk), chunk)
+            resp = self.device.send_cmd_sync(Command.DESFIRE_SET_CREDENTIAL, data)
+            if resp.status != Status.SUCCESS:
+                # The device may append a 1-byte DfcDerStatus code:
+                # 1 = malformed (bad DER/order/semantic), 2 = unsupported
+                # (well-formed but this build lacks it), 3 = capacity.
+                der = {1: "malformed", 2: "unsupported (build lacks this feature)",
+                       3: "too large for device"}
+                stages = {1: "decode", 2: "ATS-consistency", 3: "materialize/capacity",
+                          4: "reload/bind_session"}
+                detail = ""
+                if resp.data and len(resp.data) >= 1:
+                    detail = f" — DfcDer: {der.get(resp.data[0], resp.data[0])}"
+                    if len(resp.data) >= 2:
+                        detail += f", stage: {stages.get(resp.data[1], resp.data[1])}"
+                # Surface a device-side rejection instead of pretending the load
+                # succeeded. STATUS_DEVICE_MODE_ERROR (0x69) means the tag is
+                # emulating (RF field present) — the engine holds pointers into
+                # the credential from the NFC ISR and will not accept a load then.
+                raise UnexpectedResponseError(
+                    f"device rejected credential load (status 0x{resp.status:02X}"
+                    + (" — tag is emulating; remove it from any reader field and retry"
+                       if resp.status == 0x69 else "") + ")" + detail)
+            sent += len(chunk)
+            if progress:
+                progress(sent, total)
+
+    def desfire_get_credential(self, progress=None) -> bytes:
+        """
+        Read the active slot's credential back as .dfcb octets.
+        """
+        out = bytearray()
+        total = None
+        offset = 0
+        while total is None or offset < total:
+            resp = self.device.send_cmd_sync(
+                Command.DESFIRE_GET_CREDENTIAL, struct.pack("!H", offset))
+            if resp.status != Status.SUCCESS:
+                raise UnexpectedResponseError(f"device refused credential read: {resp.status}")
+            got_total, got_offset, chunk_len = struct.unpack("!HHH", resp.data[:6])
+            if got_offset != offset:
+                raise UnexpectedResponseError(
+                    f"device returned offset {got_offset}, expected {offset}")
+            if total is None:
+                total = got_total
+            out += resp.data[6:6 + chunk_len]
+            offset += chunk_len
+            if progress:
+                progress(offset, total)
+            if chunk_len == 0:
+                break
+        return bytes(out)
+
+    @expect_response(Status.SUCCESS)
+    def desfire_get_info(self):
+        """
+        Summary of the active DESFire slot: UID, counts, pool usage and the
+        capacity limits the firmware was built with.
+        """
+        resp = self.device.send_cmd_sync(Command.DESFIRE_GET_INFO)
+        if resp.status == Status.SUCCESS and len(resp.data) >= 20:
+            d = resp.data
+            resp.parsed = {
+                "uid": d[1:1 + d[0]],
+                "num_apps": d[8],
+                "num_files": d[9],
+                "pool_used": int.from_bytes(d[10:12], "big"),
+                "pool_size": int.from_bytes(d[12:14], "big"),
+                "cred_size": int.from_bytes(d[14:16], "big"),
+                "max_apps": d[16],
+                "max_keys": d[17],
+                "max_files": d[18],
+                "picc_auth_command": d[19],
+            }
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def desfire_factory_blank(self, uid: bytes = b""):
+        """
+        Reset the active slot to a blank, emulatable card. With no uid a random
+        one is generated by the device.
+        """
+        data = struct.pack(f"!B{len(uid)}s", len(uid), uid) if uid else b""
+        resp = self.device.send_cmd_sync(Command.DESFIRE_FACTORY_BLANK, data)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def desfire_get_stats(self):
+        """
+        RF frame counters, engine rejections, worst observed handler duration in
+        microseconds, and entropy-reserve starvations.
+        """
+        resp = self.device.send_cmd_sync(Command.DESFIRE_GET_STATS)
+        if resp.status == Status.SUCCESS and len(resp.data) >= 10:
+            rx, tx, errs, us, starv = struct.unpack("!HHHHH", resp.data[:10])
+            resp.parsed = {
+                "frames_rx": rx, "frames_tx": tx, "engine_errors": errs,
+                "max_handler_us": us, "entropy_starvations": starv,
+            }
+            if len(resp.data) >= 18:
+                activations, atqa, timeouts, reset_us = struct.unpack("!HHHH", resp.data[10:18])
+                resp.parsed.update({
+                    "activation_requests": activations,
+                    "atqa_tx": atqa,
+                    "fdt_timeouts": timeouts,
+                    "max_reset_us": reset_us,
+                })
+        return resp
+
+    # Cipher name -> (algorithm byte, key length, challenge length), matching
+    # dfc_reader_authenticate_iso7816_begin()'s validation in dfc_reader.c
+    # exactly: 2tdea (legacy DES / 2-key 3DES) takes a 16-byte key and an
+    # 8-byte challenge; 3tdea (3-key 3DES) a 24-byte key and 16-byte
+    # challenge; aes a 16-byte key and 16-byte challenge.
+    _DESFIRE_ISO7816_AUTH_ALGORITHMS = {
+        "2tdea": (0x02, 16),
+        "3tdea": (0x04, 24),
+        "aes": (0x09, 16),
+    }
+
+    def desfire_reader_auth_iso7816(self, key_no: int, algorithm: str, key: bytes, aid: bytes = None):
+        """
+        Reader mode: ISO 7816 mutual authentication against a physical DESFire
+        card, in one firmware call. The firmware cycles the field, does
+        select+RATS, optionally ISO-selects `aid`, then runs the
+        GET CHALLENGE / EXTERNAL AUTHENTICATE / INTERNAL AUTHENTICATE exchange
+        without ever returning to the host in between -- avoiding the T=CL
+        session drop that a separate select-then-auth pair of USB calls would
+        cause.
+
+        :param key_no: key number, 0-31. Authenticates the PICC master key
+                        when aid is None, or a key inside the selected
+                        application when aid is given.
+        :param algorithm: '2tdea' (legacy DES / 2-key 3DES), '3tdea'
+                        (3-key 3DES), or 'aes'.
+        :param key: raw key bytes; length must match algorithm
+                        (16 for 2tdea/aes, 24 for 3tdea).
+        :param aid: optional 3-byte AID to select before authenticating.
+        :return: response object.
+            resp.status:
+                Status.HF_TAG_OK  -- request reached the card (see resp.data
+                                     for the actual outcome)
+                Status.HF_TAG_NO  -- no card found in the field
+                Status.PAR_ERR    -- malformed request (should not happen if
+                                     this wrapper's own checks pass)
+            resp.data[0]: DfcReaderStatus (0 = DfcReaderOk = authenticated).
+            resp.data[1]: only present when resp.data[0] == 6
+                          (DfcReaderCardError) -- the card's native DESFire
+                          status byte, e.g. 0xAE = AUTHENTICATION_ERROR,
+                          0xA0 = APPLICATION_NOT_FOUND (see DFC_STATUS_* in
+                          dfc_common.h).
+        """
+        if algorithm not in self._DESFIRE_ISO7816_AUTH_ALGORITHMS:
+            raise ValueError(
+                f"algorithm must be one of {list(self._DESFIRE_ISO7816_AUTH_ALGORITHMS)}")
+        alg_byte, want_key_len = self._DESFIRE_ISO7816_AUTH_ALGORITHMS[algorithm]
+        if len(key) != want_key_len:
+            raise ValueError(f"{algorithm} key must be {want_key_len} bytes, got {len(key)}")
+        if not (0 <= key_no <= 0x1F):
+            raise ValueError("key_no must be 0-31")
+
+        has_aid = aid is not None
+        if has_aid and len(aid) != 3:
+            raise ValueError("aid must be 3 bytes")
+        aid_bytes = aid if has_aid else b"\x00\x00\x00"
+        # DFC_ISO7816_AUTH_APP_REFERENCE (0x80) | key number, matching the
+        # key_reference format dfc_reader_authenticate_iso7816_begin expects.
+        key_reference = (0x80 if has_aid else 0x00) | key_no
+
+        payload = bytes([1 if has_aid else 0]) + aid_bytes + \
+            bytes([key_reference, alg_byte, want_key_len]) + bytes(key)
+
+        return self.device.send_cmd_sync(
+            Command.DESFIRE_READER_AUTH_ISO7816, payload, timeout=3)
+
+    def desfire_reader_get_version(self):
+        """
+        Reader mode: full three-frame DESFire GetVersion in one firmware call.
+        The firmware cycles the field, does select+RATS, then sends the
+        ISO-wrapped 0x60 / 0xAF / 0xAF sequence in a single T=CL session, so the
+        continuation frames (SW/production) arrive — unlike the per-APDU path,
+        which re-selects the card each call and only ever reads the HW frame.
+
+        :return: response object.
+            resp.status:
+                Status.HF_TAG_OK  -- card answered (resp.data holds the frames)
+                Status.HF_TAG_NO  -- no card found in the field
+            resp.data: num_frames(1), then per frame len(1) bytes(len), where
+                       bytes = frame payload + SW1 SW2 (91 XX).
+        """
+        return self.device.send_cmd_sync(
+            Command.DESFIRE_READER_GET_VERSION, b"", timeout=3)
 
     @expect_response(Status.SUCCESS)
     def mf1_read_emu_block_data(self, block_start: int, block_count: int):

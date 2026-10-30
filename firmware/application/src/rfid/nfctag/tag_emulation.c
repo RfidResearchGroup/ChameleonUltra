@@ -9,6 +9,9 @@
 #include "nfc_mf1.h"
 #include "nfc_14a_4.h"
 #include "nfc_seos.h"
+#if defined(PROJECT_DESFIRE_EMULATION)
+#include "desfire/nfc_desfire.h"
+#endif
 #include "rgb_marquee.h"
 #include "tag_persistence.h"
 
@@ -55,7 +58,12 @@ static uint8_t m_tag_data_buffer_lf[20];  // LF card data buffer
 static uint16_t m_tag_data_lf_crc;
 static tag_data_buffer_t m_tag_data_lf = {sizeof(m_tag_data_buffer_lf), m_tag_data_buffer_lf, &m_tag_data_lf_crc};
 
-static uint8_t m_tag_data_buffer_hf[4500];  // HF card data buffer
+// Type currently holding each buffer, so switching the buffer to a different
+// type can tell the previous occupant to drop any pointer it cached into it.
+static tag_specific_type_t m_lf_loaded_type = TAG_TYPE_UNDEFINED;
+static tag_specific_type_t m_hf_loaded_type = TAG_TYPE_UNDEFINED;
+
+static uint8_t m_tag_data_buffer_hf[8192];  // HF card data buffer (= 1 FDS page; holds EV2 record)
 static uint16_t m_tag_data_hf_crc;
 static tag_data_buffer_t m_tag_data_hf = {sizeof(m_tag_data_buffer_hf), m_tag_data_buffer_hf, &m_tag_data_hf_crc};
 
@@ -119,6 +127,14 @@ static tag_base_handler_map_t tag_base_map[] = {
     // ISO14443-4 T=CL emulation
     {TAG_SENSE_HF, TAG_TYPE_HF14A_4,     nfc_tag_14a_4_data_loadcb,    nfc_tag_14a_4_data_savecb,    nfc_tag_14a_4_data_factory,    &m_tag_data_hf},
     {TAG_SENSE_HF, TAG_TYPE_SEOS,        nfc_tag_seos_data_loadcb,     nfc_tag_seos_data_savecb,     nfc_tag_seos_data_factory,     &m_tag_data_hf},
+#if defined(PROJECT_DESFIRE_EMULATION)
+    {TAG_SENSE_HF, TAG_TYPE_DESFIRE_EV1_2K, nfc_tag_desfire_data_loadcb, nfc_tag_desfire_data_savecb, nfc_tag_desfire_data_factory, &m_tag_data_hf, nfc_tag_desfire_data_unloadcb},
+    {TAG_SENSE_HF, TAG_TYPE_DESFIRE_EV1_4K, nfc_tag_desfire_data_loadcb, nfc_tag_desfire_data_savecb, nfc_tag_desfire_data_factory, &m_tag_data_hf, nfc_tag_desfire_data_unloadcb},
+    {TAG_SENSE_HF, TAG_TYPE_DESFIRE_EV1_8K, nfc_tag_desfire_data_loadcb, nfc_tag_desfire_data_savecb, nfc_tag_desfire_data_factory, &m_tag_data_hf, nfc_tag_desfire_data_unloadcb},
+    {TAG_SENSE_HF, TAG_TYPE_DESFIRE_EV2_2K, nfc_tag_desfire_data_loadcb, nfc_tag_desfire_data_savecb, nfc_tag_desfire_data_factory, &m_tag_data_hf, nfc_tag_desfire_data_unloadcb},
+    {TAG_SENSE_HF, TAG_TYPE_DESFIRE_EV2_4K, nfc_tag_desfire_data_loadcb, nfc_tag_desfire_data_savecb, nfc_tag_desfire_data_factory, &m_tag_data_hf, nfc_tag_desfire_data_unloadcb},
+    {TAG_SENSE_HF, TAG_TYPE_DESFIRE_EV2_8K, nfc_tag_desfire_data_loadcb, nfc_tag_desfire_data_savecb, nfc_tag_desfire_data_factory, &m_tag_data_hf, nfc_tag_desfire_data_unloadcb},
+#endif
 };
 
 static void tag_emulation_load_config(void);
@@ -143,6 +159,18 @@ static tag_datas_savecb_t get_data_savecb_from_tag_type(tag_specific_type_t type
     for (int i = 0; i < ARRAY_SIZE(tag_base_map); i++) {
         if (tag_base_map[i].tag_type == type) {
             return tag_base_map[i].data_on_save;
+        }
+    }
+    return NULL;
+}
+
+/**
+ * get the optional unload hook for the specific type of tag
+ */
+static tag_datas_unloadcb_t get_data_unloadcb_from_tag_type(tag_specific_type_t type) {
+    for (int i = 0; i < ARRAY_SIZE(tag_base_map); i++) {
+        if (tag_base_map[i].tag_type == type) {
+            return tag_base_map[i].data_on_unload;
         }
     }
     return NULL;
@@ -205,7 +233,18 @@ bool tag_emulation_load_by_buffer(tag_specific_type_t tag_type, bool update_crc)
         return false;
     }
 
+    // Tell the buffer's previous occupant to drop any pointer it cached into
+    // it before a different type starts writing/reinterpreting that memory.
+    tag_specific_type_t *last_loaded =
+        (buffer == &m_tag_data_hf) ? &m_hf_loaded_type :
+        (buffer == &m_tag_data_lf) ? &m_lf_loaded_type : NULL;
+    if (last_loaded != NULL && *last_loaded != tag_type && *last_loaded != TAG_TYPE_UNDEFINED) {
+        tag_datas_unloadcb_t unloader = get_data_unloadcb_from_tag_type(*last_loaded);
+        if (unloader != NULL) unloader(*last_loaded);
+    }
+
     int length = loader(tag_type, buffer);
+    if (last_loaded != NULL) *last_loaded = tag_type;
     if (length > 0 && update_crc) {
         // afterReadingIsCompleted,WeCanSaveACrcOfTheCurrentDataWhenItIsStoredLater,ItCanBeUsedAsAReferenceForChangesComparison
         calc_14a_crc_lut(buffer->buffer, length, (uint8_t *)buffer->crc);

@@ -372,6 +372,66 @@ ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
 
   CFLAGS += -DPROJECT_CHAMELEON_ULTRA
 
+# DESFire EV1/EV2 tag emulation + reader. AES runs on the CC310 hardware
+# peripheral and DES/3DES has no hardware path, so tiny-DES-c is vendored
+# and built here. Both go through shim/mbedtls_compat.c, an mbedTLS-shaped
+# shim dfc_crypto.c calls into -- no mbedTLS or OpenSSL dependency is added.
+  DESFIRE_DIR := $(PROJ_DIR)/rfid/nfctag/hf/desfire
+  TINY_DES_DIR := $(DESFIRE_DIR)/crypto/tiny-DES-c
+
+  SRC_FILES +=\
+    $(DESFIRE_DIR)/desfire_shim.c \
+    $(DESFIRE_DIR)/nfc_desfire.c \
+    $(DESFIRE_DIR)/src/dfc_virtual_picc.c \
+    $(DESFIRE_DIR)/src/dfc_emulator.c \
+    $(DESFIRE_DIR)/src/dfc_emulator_commands.c \
+    $(DESFIRE_DIR)/src/dfc_emulator_crypto.c \
+    $(DESFIRE_DIR)/src/dfc_emulator_iso7816.c \
+    $(DESFIRE_DIR)/src/dfc_credential.c \
+    $(DESFIRE_DIR)/src/dfc_der.c \
+    $(DESFIRE_DIR)/src/dfc_secure_messaging.c \
+    $(DESFIRE_DIR)/src/dfc_common.c \
+    $(DESFIRE_DIR)/src/dfc_crypto.c \
+    $(DESFIRE_DIR)/src/dfc_profile.c \
+    $(DESFIRE_DIR)/src/dfc_ev2.c \
+    $(DESFIRE_DIR)/src/dfc_ev2_crypto.c \
+    $(DESFIRE_DIR)/src/dfc_command.c \
+    $(DESFIRE_DIR)/src/dfc_reader.c \
+    $(DESFIRE_DIR)/src/aes_cmac.c \
+    $(DESFIRE_DIR)/src/des_cmac.c \
+    $(TINY_DES_DIR)/des.c \
+    $(DESFIRE_DIR)/shim/mbedtls_compat.c \
+
+  INC_FOLDERS +=\
+    ${DESFIRE_DIR} \
+    ${DESFIRE_DIR}/src \
+    ${DESFIRE_DIR}/port \
+    ${TINY_DES_DIR} \
+    ${DESFIRE_DIR}/shim \
+
+  CFLAGS += -DDFC_BUILD_PROFILE=DFC_PROFILE_FULL_EV3
+  CFLAGS += -DDFC_CRYPTO_BACKEND_MBEDTLS=1
+  CFLAGS += -DDES_ENABLE_ECB=1 -DDES_ENABLE_CBC=1
+  CFLAGS += -DDES_ENABLE_CTR=0 -DDES_ENABLE_TDES=1
+  # The device emulates; it does not read or write credential files, so the
+  # text codec is not built -- it would also pull in formatted output.
+  CFLAGS += -DDFC_ENABLE_TEXT_CODEC=0
+  CFLAGS += -DPROJECT_DESFIRE_EMULATION
+  CFLAGS += -DDFC_FIRMWARE_BUILD
+# Device capacity limits. These fix sizeof(DfcCredential), which fixes the
+# persisted slot record layout -- changing any of them invalidates stored
+# DESFire slots, so treat them as frozen once released.
+CFLAGS += -DDFC_KEY_POOL_SIZE=448
+CFLAGS += -DDFC_MAX_APPS=4 -DDFC_MAX_KEYS=14 -DDFC_MAX_FILES=8
+CFLAGS += -DDFC_FILE_POOL_SIZE=1024 -DDFC_MAX_FILE_DATA=1024
+
+# The credential codec runs once per load, never per frame. Its writer makes
+# two passes over the same body callbacks, and at -O3 GCC devirtualises and
+# inlines every one of them at every call site, which costs roughly 15 KiB
+# of flash for no useful speed. Build this one translation unit for size;
+# the trailing -Os wins over the global -O3.
+%/dfc_der.c.o: CFLAGS += -Os
+
 $(info  Chameleon Ultra <Application>: reader and tag emulation module enable.)
 else ifeq (${CURRENT_DEVICE_TYPE}, ${CHAMELEON_LITE})
 

@@ -83,6 +83,10 @@ typedef struct {
 
 // Communication reception function that needs to be implemented
 typedef void (*nfc_tag_14a_reset_handler_t)(void);
+// Physical field lifecycle callback (present = true on FIELD_DETECTED, false
+// on FIELD_LOST). DESFire needs the false edge to drop an authenticated
+// session; other handlers may leave this unset.
+typedef void (*nfc_tag_14a_field_handler_t)(bool present);
 
 /* Sniff callback — called for every received frame before the tag handler.
  * data    : raw frame bytes (after parity strip)
@@ -110,6 +114,7 @@ typedef nfc_tag_14a_coll_res_reference_t *(*nfc_tag_14a_coll_handler_t)(void);
 // The interface that 14A communication receiver needs to be implemented
 typedef struct {
     nfc_tag_14a_reset_handler_t cb_reset;
+    nfc_tag_14a_field_handler_t cb_field;
     nfc_tag_14a_state_handler_t cb_state;
     nfc_tag_14a_coll_handler_t get_coll_res;
 } nfc_tag_14a_handler_t;
@@ -124,7 +129,10 @@ bool nfc_tag_14a_checks_crc(uint8_t *pbtData, size_t szLen);
 
 // 14A frame combination
 uint8_t nfc_tag_14a_wrap_frame(const uint8_t *pbtTx, const size_t szTxBits, const uint8_t *pbtTxPar, uint8_t *pbtFrame);
-uint8_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBits, uint8_t *pbtRx, uint8_t *pbtRxPar);
+// Returns the unwrapped data length in BITS. uint16_t, not uint8_t: at 9
+// wire bits per data byte, a 29-byte-or-longer frame (any full-size DESFire
+// APDU) already exceeds 255 bits and would silently wrap in a narrower type.
+uint16_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBits, uint8_t *pbtRx, uint8_t *pbtRxPar);
 
 // 14A communication control
 void nfc_tag_14a_sense_switch(bool enable);
@@ -141,5 +149,11 @@ bool is_valid_uid_size(uint8_t uid_length);
 // Reset nfc peripheral after field lost
 void nfc_tag_14a_set_reset_enable(bool enable);
 bool nfc_tag_14a_is_reset_enable();
+
+// RF activation/ATQA/timeout counters (DESFire diagnostics -- desfireGetStats)
+void nfc_tag_14a_get_activation_stats(
+    uint16_t *requests,
+    uint16_t *atqa_tx,
+    uint16_t *fdt_timeouts);
 
 #endif
