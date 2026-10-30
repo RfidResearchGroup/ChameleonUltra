@@ -50,6 +50,7 @@
 #define DATA_CMD_SET_SLEEP_TIMEOUT              (1040)
 #define DATA_CMD_GET_LONG_PRESS_THRESHOLD       (1041)
 #define DATA_CMD_SET_LONG_PRESS_THRESHOLD       (1042)
+#define DATA_CMD_GET_BATTERY_INFO_EX            (1043)
 
 //
 // ******************************************************************
@@ -119,6 +120,7 @@
 #define DATA_CMD_IDTECK_WRITE_TO_T55XX          (3018)
 #define DATA_CMD_JABLOTRON_SCAN                 (3019)
 #define DATA_CMD_JABLOTRON_WRITE_TO_T55XX       (3020)
+#define DATA_CMD_PYRAMID_SCAN                   (3021)
 
 //
 // ******************************************************************
