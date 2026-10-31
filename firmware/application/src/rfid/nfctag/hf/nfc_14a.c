@@ -212,7 +212,12 @@ uint8_t nfc_tag_14a_wrap_frame(const uint8_t *pbtTx, const size_t szTxBits, cons
 *          pbtRxPar: The buffer of the bitstream Store after the packaging, the coupling school inspection area
 * @retval :The data length of the bitstream packaging, note that the length of the data area is the length of the data area.retval / 8
 */
-uint8_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBits, uint8_t *pbtRx, uint8_t *pbtRxPar) {
+/* Return type MUST be 16-bit: this returns the de-parity'd data-bit count,
+ * which exceeds 255 for any received frame of >=32 bytes. A uint8_t return
+ * wraps it mod 256, silently truncating every large reader->tag command
+ * (e.g. an ISO14443-4 APDU of 32+ bytes: a 44-byte frame -> 352 data bits
+ * -> 352 & 0xFF = 96 bits = 12 bytes reached the caller). */
+uint16_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBits, uint8_t *pbtRx, uint8_t *pbtRxPar) {
     uint8_t btFrame;
     uint8_t btData;
     uint8_t uiBitPos;

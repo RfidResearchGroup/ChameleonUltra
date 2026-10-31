@@ -5,6 +5,8 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 ## [unreleased][unreleased]
  - Added Paradox LF support for reading, emulation, and T55xx cloning. Reads validate CRC before accepting a frame. T55xx writes warn before enabling password mode and verify the result with one read-back attempt.
  - Assigned Paradox command IDs 3022/3023 and tag type 203 to avoid collisions with released Farpointe/Pyramid support.
+ - Fix reset when BLE bonds are deleted while connected (@mfcarroll)
+ - Fixed ISO14443-4 (T=CL) tag emulation silently truncating any received command of 32+ bytes (e.g. an EMV GPO with a full PDOL): `nfc_tag_14a_unwrap_frame` returned the data-bit count as `uint8_t`, wrapping it mod 256 (@whitewhidow)
 
 ## [v2.3.0][2026-10-24]
  - Added Farpointe/Pyramid LF protocol support: read and emulate (FSK2a, RF/50)
