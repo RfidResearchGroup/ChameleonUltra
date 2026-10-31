@@ -7326,6 +7326,60 @@ class HWSlotNick(SlotIndexArgsUnit, SenseTypeArgsUnit):
             print(f" - Get tag nick name for slot {slot_num} {sense_type.name}: {res}")
 
 
+@hw_slot.command("color")
+class HWSlotColor(SlotIndexArgsUnit, SenseTypeArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Get/Set the LED color shown for the tag of a slot"
+        self.add_slot_args(parser)
+        self.add_sense_type_args(parser)
+        action_group = parser.add_mutually_exclusive_group()
+        action_group.add_argument(
+            "-c",
+            "--color",
+            type=str,
+            required=False,
+            metavar="RRGGBB",
+            help="Set the LED color, e.g. FF5722",
+        )
+        action_group.add_argument(
+            "-d",
+            "--default",
+            action="store_true",
+            help="Go back to the default HF / LF color",
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.slot is not None:
+            slot_num = args.slot
+        else:
+            slot_num = SlotNumber.from_fw(self.cmd.get_active_slot())
+        if args.lf:
+            sense_type = TagSenseType.LF
+        else:
+            sense_type = TagSenseType.HF
+        if args.color is not None or args.default:
+            color = 0
+            if args.color is not None:
+                hex_color = args.color.removeprefix("#")
+                if len(hex_color) != 6 or not all(
+                    c in "0123456789abcdefABCDEF" for c in hex_color
+                ):
+                    raise ArgsParserError("Color must be 6 hex digits, e.g. FF5722")
+                color = int(hex_color, 16)
+            self.cmd.set_slot_color(slot_num, sense_type, color)
+            self.cmd.slot_data_config_save()
+            shown = f"#{color:06X}" if color else "default"
+            print(f" - Set LED color for slot {slot_num} {sense_type.name}: {shown}")
+        else:
+            color = self.cmd.get_all_slot_colors()[SlotNumber.to_fw(slot_num)][
+                sense_type.name.lower()
+            ]
+            shown = f"#{color:06X}" if color else "default"
+            print(f" - LED color for slot {slot_num} {sense_type.name}: {shown}")
+
+
 @hw_slot.command("store")
 class HWSlotUpdate(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:

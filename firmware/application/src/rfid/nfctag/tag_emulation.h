@@ -45,7 +45,7 @@ typedef struct {
  * This configuration can be preserved by persistently to Flash
  * 4 bytes a word, keep in mind the entire word alignment
  */
-#define TAG_SLOT_CONFIG_CURRENT_VERSION 8
+#define TAG_SLOT_CONFIG_CURRENT_VERSION 9
 // Intended struct size, for static assert
 #define TAG_SLOT_CONFIG_CURRENT_SIZE 68
 
@@ -58,7 +58,9 @@ typedef struct {
         // Individual slot configuration
         uint32_t enabled_hf : 1;  // Whether to enable the HF card
         uint32_t enabled_lf : 1;  // Whether to enable the LF card
-        uint32_t : 0;             // U32 align
+        // LED colors of the HF and LF cards (RGB555), 0 = not set, show the legacy HF/LF color
+        uint32_t color_hf : 15;
+        uint32_t color_lf : 15;
         // Specific type of emulated card
         union {
             uint16_t U16_tag_hf;
@@ -108,6 +110,9 @@ void tag_emulation_change_slot(uint8_t index, bool sense_disable);
 bool is_slot_enabled(uint8_t slot, tag_sense_type_t sense_type);
 // Set the card slot to enable
 void tag_emulation_slot_set_enable(uint8_t slot, tag_sense_type_t sense_type, bool enable);
+// Get / set the LED color (0xRRGGBB, 0 = not set) of the card in the slot
+uint32_t tag_emulation_slot_get_color(uint8_t slot, tag_sense_type_t sense_type);
+void tag_emulation_slot_set_color(uint8_t slot, tag_sense_type_t sense_type, uint32_t rgb);
 // Get the emulation card type of the corresponding card slot
 void tag_emulation_get_specific_types_by_slot(uint8_t slot, tag_slot_specific_type_t *tag_types);
 // Initialize some factory data
