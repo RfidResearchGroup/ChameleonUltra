@@ -48,43 +48,36 @@ extern "C" {
 #define T5577_EM410X_64_CONFIG (  \
     T5577_BITRATE_RF_64 |         \
     T5577_MODULATION_MANCHESTER | \
-    T5577_PWD |                   \
     (2 << T5577_MAXBLOCK_SHIFT))
 
 #define T5577_EM410X_ELECTRA_CONFIG ( \
     T5577_BITRATE_RF_64 |            \
     T5577_MODULATION_MANCHESTER |    \
-    T5577_PWD |                      \
     (4 << T5577_MAXBLOCK_SHIFT))
 
 #define T5577_HIDPROX_CONFIG ( \
     T5577_BITRATE_RF_50 |      \
     T5577_MODULATION_FSK2a |   \
-    T5577_PWD |                \
     (3 << T5577_MAXBLOCK_SHIFT))
 
 #define T5577_IOPROX_CONFIG ( \
     T5577_BITRATE_RF_64 |      \
     T5577_MODULATION_FSK2a |   \
-    T5577_PWD |                \
     (2 << T5577_MAXBLOCK_SHIFT))
 
 #define T5577_VIKING_CONFIG (     \
     T5577_BITRATE_RF_32 |         \
     T5577_MODULATION_MANCHESTER | \
-    T5577_PWD |                   \
     (2 << T5577_MAXBLOCK_SHIFT))
 
 #define T5577_PAC_CONFIG (        \
     T5577_MODULATION_DIRECT |     \
     T5577_BITRATE_RF_32 |         \
-    T5577_PWD |                   \
     (4 << T5577_MAXBLOCK_SHIFT))
 
 #define T5577_JABLOTRON_CONFIG (  \
     T5577_MODULATION_DIPHASE |    \
     T5577_BITRATE_RF_64 |         \
-    T5577_PWD |                   \
     (2 << T5577_MAXBLOCK_SHIFT))
 
 // IDTECK: PSK1 at RF/32, subcarrier = carrier/2 (RF_2), 2 data blocks (64-bit frame).
@@ -92,7 +85,6 @@ extern "C" {
     T5577_BITRATE_RF_32 |         \
     T5577_MODULATION_PSK1 |       \
     T5577_PSKCF_RF_2 |            \
-    T5577_PWD |                   \
     (2 << T5577_MAXBLOCK_SHIFT))
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
