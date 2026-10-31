@@ -74,7 +74,7 @@ void hidprox_codec_free(hidprox_codec *d) {
 // ref: https://github.com/RfidResearchGroup/proxmark3/blob/810eaeac250f35eca8819aa9c23cb57c5276b3e6/client/src/wiegand_formatutils.c#L131
 static uint8_t hidprox_codec_get_length(hidprox_codec *d) {
     //! TODO direct XOR check
-    if (!(d->raw >> 37) && 0x01) {
+    if ((d->raw >> 37) & 0x01) {
         return 37;
     }
     uint16_t bits = (d->raw >> 26) & 0x7ff;
