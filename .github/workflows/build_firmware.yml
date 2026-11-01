@@ -13,6 +13,19 @@ on:
         default: true
 
 jobs:
+  test_presco:
+    name: Test Presco frame and waveform
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.checkout-sha == null && github.sha || inputs.checkout-sha }}
+          persist-credentials: false
+      - name: Run hardware-free Presco tests with sanitizers
+        run: bash firmware/tests/run-presco.sh
   build_fw_builder:
     name: Build fw-builder Docker image
     runs-on: ubuntu-latest # Inherits permissions from caller
