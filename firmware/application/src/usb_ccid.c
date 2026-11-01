@@ -106,7 +106,8 @@ static const uint8_t m_descriptor[] = {
 
     0x07, APP_USBD_DESCRIPTOR_ENDPOINT,
     CCID_INTERRUPT_IN, APP_USBD_DESCRIPTOR_EP_ATTR_TYPE_INTERRUPT,
-    0x02, 0x00, 0x10,
+    /* Two-byte notifications must be short packets, also for Windows readers. */
+    0x08, 0x00, 0x10,
 };
 
 STATIC_ASSERT(sizeof(m_descriptor) == 84U);
@@ -125,13 +126,18 @@ static ret_code_t arm_out(app_usbd_class_inst_t const *inst) {
     ccid_ctx_t *ctx = context(inst);
     if (!ctx->configured || ctx->suspended || ctx->out_armed ||
             ctx->command_pending || ctx->response_pending ||
-            ctx->protocol.waiting_abort || ctx->in_state != CCID_IN_IDLE) {
+            ctx->protocol.waiting_abort) {
         return NRF_SUCCESS;
     }
     NRF_DRV_USBD_TRANSFER_OUT(transfer, ctx->packet, sizeof(ctx->packet));
     ret_code_t result = app_usbd_ep_transfer(endpoint(inst, 0U), &transfer);
-    if (result == NRF_SUCCESS) {
+    if (result == NRF_SUCCESS || result == NRF_ERROR_BUSY) {
+        /*
+         * A queued WAITING event may predate a successful rearm. BUSY means
+         * the driver already owns this packet buffer, not an endpoint fault.
+         */
         ctx->out_armed = true;
+        return NRF_SUCCESS;
     }
     return result;
 }
@@ -207,7 +213,10 @@ static ret_code_t endpoint_event(
     nrf_drv_usbd_ep_status_t status = event->drv_evt.data.eptransfer.status;
     if (ep == endpoint(inst, 0U)) {
         if (status == NRF_USBD_EP_WAITING) {
-            return arm_out(inst);
+            /* The queued event describes driver state when it was generated. */
+            ctx->out_armed = false;
+            (void)arm_out(inst);
+            return NRF_SUCCESS;
         }
         ctx->out_armed = false;
         if (status == NRF_USBD_EP_OK) {
@@ -217,7 +226,8 @@ static ret_code_t endpoint_event(
             }
             if (received == 0U && ctx->rx.length == 0U) {
                 /* Some hosts append a ZLP after a complete full-packet message. */
-                return arm_out(inst);
+                (void)arm_out(inst);
+                return NRF_SUCCESS;
             }
             if (received > sizeof(ctx->packet)) {
                 return NRF_ERROR_INVALID_LENGTH;
@@ -225,13 +235,17 @@ static ret_code_t endpoint_event(
             ctx->command_pending = usb_ccid_rx_feed(&ctx->rx, ctx->packet, received);
             /*
              * RF work runs from the main loop, after USB events are drained.
-             * Do not rearm OUT until IN completes: otherwise a second command
-             * could overwrite the message or response that the driver owns.
+             * Queue at most one command here. Its parser runs only once the
+             * previous IN reply completes, keeping the DMA reply immutable.
              */
-            return ctx->command_pending ? NRF_SUCCESS : arm_out(inst);
+            if (!ctx->command_pending) {
+                (void)arm_out(inst);
+            }
+            return NRF_SUCCESS;
         }
         ctx->rx.length = 0U;
-        return arm_out(inst);
+        (void)arm_out(inst);
+        return NRF_SUCCESS;
     }
     if (ep == endpoint(inst, 1U)) {
         if (status == NRF_USBD_EP_OK && ctx->in_state == CCID_IN_DATA &&
@@ -245,7 +259,8 @@ static ret_code_t endpoint_event(
             }
         }
         ctx->in_state = CCID_IN_IDLE;
-        return arm_out(inst);
+        (void)arm_out(inst);
+        return NRF_SUCCESS;
     }
     if (ep == endpoint(inst, 2U)) {
         ctx->interrupt_busy = false;
@@ -345,7 +360,7 @@ void usb_ccid_process(void) {
     if (!ctx->configured || ctx->suspended) {
         return;
     }
-    if (ctx->command_pending && ctx->in_state == CCID_IN_IDLE) {
+    if (ctx->command_pending && !ctx->response_pending && ctx->in_state == CCID_IN_IDLE) {
         usb_ccid_protocol_process(&ctx->protocol, ctx->rx.bytes, ctx->rx.length);
         ctx->rx.length = 0U;
         ctx->command_pending = false;
@@ -355,6 +370,12 @@ void usb_ccid_process(void) {
         /* Retry the USB transfer, never execute an RF command twice. */
         if (send_response(inst) == NRF_SUCCESS) {
             ctx->response_pending = false;
+            /*
+             * The host may still owe an OUT ZLP before it submits its IN read.
+             * Receiving into the separate RX buffer breaks that dependency;
+             * the next command is parsed only after this reply completes.
+             */
+            (void)arm_out(inst);
         }
         notify_slot(inst);
         return;

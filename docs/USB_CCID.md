@@ -22,7 +22,7 @@ systems using pcsc-lite, a CCID driver and the PC/SC service must be available.
 Driver recognition on each operating system should be checked separately.
 
 The response contains a 4-, 7-, or 10-byte UID in anticollision order, followed
-by `90 00`. For example, UID `12 85 44 8F` produces `12 85 44 8F 90 00`.
+by `90 00`. For example, UID `11 22 33 44` produces `11 22 33 44 90 00`.
 The card's UID and card memory are not modified.
 
 The nonzero `Le` cases follow PC/SC Part 3: a shorter `Le` returns
@@ -70,8 +70,14 @@ pseudo transport rather than adjustable RF parameters.
 
 Bulk OUT is received in 64-byte packets and assembled using `dwLength`. A
 64-byte-multiple message therefore completes without needing an extra short
-packet or ZLP. Only one command is accepted at a time, and reply buffers remain
-owned by USB until IN completes.
+packet or ZLP. OUT is rearmed while IN is pending, so a host that appends a ZLP
+can finish its write before submitting its read. A separate RX buffer can
+queue the next command, but its parser does not run until the current reply
+completes. The reply buffer remains immutable while USB owns it.
+
+Interrupt IN has an 8-byte maximum packet size. Each two-byte slot notification
+is therefore a short packet, so Windows completes a larger interrupt read
+without waiting for more notification data.
 
 Control and bulk Abort requests are paired by slot/sequence in either order.
 An incomplete Abort handshake blocks subsequent commands for the slot.

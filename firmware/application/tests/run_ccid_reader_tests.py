@@ -10,13 +10,15 @@ from pathlib import Path
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cc", default=os.environ.get("CC", "cc"))
-    parser.add_argument("--suite", choices=("all", "reader", "protocol"), default="all")
+    parser.add_argument(
+        "--suite", choices=("all", "reader", "protocol", "transport"), default="all"
+    )
     args = parser.parse_args()
     tests = Path(__file__).resolve().parent
     source = tests.parent / "src"
     stubs = tests / "ccid_stubs"
     with tempfile.TemporaryDirectory(prefix="chameleon-ccid-tests-") as temporary:
-        suites = ("reader", "protocol") if args.suite == "all" else (args.suite,)
+        suites = ("reader", "protocol", "transport") if args.suite == "all" else (args.suite,)
         for suite in suites:
             binary = Path(temporary) / (
                 f"test_ccid_{suite}.exe" if os.name == "nt" else f"test_ccid_{suite}"
@@ -36,10 +38,12 @@ def main() -> None:
             ]
             if suite == "reader":
                 command.extend(["-include", str(stubs / "rfid_main.h")])
+            if suite == "transport":
+                command.extend(["-I", str(tests / "ccid_transport_stubs")])
             command.extend(
                 [
                     str(tests / f"test_usb_ccid_{suite}.c"),
-                    str(source / f"usb_ccid_{suite}.c"),
+                    str(source / f"usb_ccid_{'protocol' if suite == 'transport' else suite}.c"),
                     "-o",
                     str(binary),
                 ]
