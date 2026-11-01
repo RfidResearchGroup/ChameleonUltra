@@ -121,6 +121,7 @@
 #define DATA_CMD_JABLOTRON_SCAN                 (3019)
 #define DATA_CMD_JABLOTRON_WRITE_TO_T55XX       (3020)
 #define DATA_CMD_PYRAMID_SCAN                   (3021)
+#define DATA_CMD_PRESCO_WRITE_TO_T55XX          (3040)
 
 //
 // ******************************************************************
@@ -210,6 +211,8 @@
 #define DATA_CMD_JABLOTRON_GET_EMU_ID           (5011)
 #define DATA_CMD_IDTECK_SET_EMU_ID              (5012)
 #define DATA_CMD_IDTECK_GET_EMU_ID              (5013)
+#define DATA_CMD_PRESCO_SET_EMU_ID              (5030)
+#define DATA_CMD_PRESCO_GET_EMU_ID              (5031)
 
 #define DATA_CMD_EM4X05_SCAN                    (3030)
 #define DATA_CMD_EM4X05_READSNIFF               (3032)

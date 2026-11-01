@@ -43,6 +43,7 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/pac.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/ioprox.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/viking.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/protocols/presco.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/jablotron.c \
   $(PROJ_DIR)/rfid/nfctag/lf/utils/diphase.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/wiegand.c \

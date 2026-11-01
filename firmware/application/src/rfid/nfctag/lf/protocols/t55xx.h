@@ -75,6 +75,13 @@ extern "C" {
     T5577_PWD |                   \
     (2 << T5577_MAXBLOCK_SHIFT))
 
+#define T5577_PRESCO_CONFIG (     \
+    T5577_BITRATE_RF_32 |         \
+    T5577_MODULATION_MANCHESTER | \
+    T5577_ST_TERMINATOR |         \
+    T5577_PWD |                   \
+    (4 << T5577_MAXBLOCK_SHIFT))
+
 #define T5577_PAC_CONFIG (        \
     T5577_MODULATION_DIRECT |     \
     T5577_BITRATE_RF_32 |         \
