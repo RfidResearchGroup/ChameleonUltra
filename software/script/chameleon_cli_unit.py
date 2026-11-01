@@ -54,6 +54,7 @@ from chameleon_enum import (
 )
 from chameleon_enum import HIDFormat
 from crypto1 import Crypto1
+from presco import encode_frame as presco_encode_frame, parse_hex_code, parse_printed_code
 
 # NXP IDs based on https://www.nxp.com/docs/en/application-note/AN10833.pdf
 type_id_SAK_dict = {
@@ -159,7 +160,7 @@ class BaseCLIUnit:
         """
         return True
 
-    def on_exec(self, args: argparse.Namespace):
+    def on_exec(self, args: argparse.Namespace) -> None:
         """
             Call a function on cmd match.
 
@@ -945,6 +946,7 @@ lf_hid = lf.subgroup("hid", "HID commands")
 lf_hid_prox = lf_hid.subgroup("prox", "HID Prox commands")
 lf_ioprox = lf.subgroup("ioprox", "ioProx commands")
 lf_pac = lf.subgroup("pac", "PAC/Stanley commands")
+lf_presco = lf.subgroup("presco", "Presco encoding, emulation and T55xx commands")
 lf_viking = lf.subgroup("viking", "Viking commands")
 lf_jablotron = lf.subgroup("jablotron", "Jablotron commands")
 lf_generic = lf.subgroup("generic", "Generic commands")
@@ -6423,6 +6425,70 @@ class LFPacEconfig(SlotIndexArgsAndGoUnit, LFPacIdArgsUnit):
             raw = pac_encode_raw(response)
             print(" - Get PAC/Stanley tag id success.")
             print(f"CN: {card_id_ascii} | Raw: {raw.hex().upper()}")
+
+
+def add_presco_code_args(parser: ArgumentParserNoExit, required=False):
+    group = parser.add_mutually_exclusive_group(required=required)
+    group.add_argument(
+        "--id", dest="code", type=parse_hex_code, metavar="<8 hex>",
+        help="Complete 32-bit Presco code in hexadecimal",
+    )
+    group.add_argument(
+        "--printed", dest="code", type=parse_printed_code, metavar="<base12>",
+        help="Printed code (base 12; quote values containing * or #)",
+    )
+    return parser
+
+
+def print_presco_code(code: bytes):
+    print(f" - Presco code: {code.hex().upper()}")
+    print(f"   Site: {code[0]} | User: {int.from_bytes(code[2:], 'big')}")
+    print(f"   Raw: {presco_encode_frame(code).hex().upper()}")
+
+
+@lf_presco.command("encode")
+class LFPrescoEncode(BaseCLIUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Encode a Presco code without connecting to a device"
+        return add_presco_code_args(parser, required=True)
+
+    def on_exec(self, args: argparse.Namespace):
+        print_presco_code(args.code)
+
+
+@lf_presco.command("write")
+class LFPrescoWriteT55xx(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Write Presco to T55xx (Ultra only). Replaces tag data and uses "
+            "the standard CLI T55xx password protection. Verify with a reader."
+        )
+        return add_presco_code_args(parser, required=True)
+
+    def on_exec(self, args: argparse.Namespace):
+        self.cmd.presco_write_to_t55xx(args.code)
+        print(" - Presco write sent. Verify the tag with a compatible reader.")
+
+
+@lf_presco.command("econfig")
+class LFPrescoEconfig(SlotIndexArgsAndGoUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Get or set the code of a Presco emulation slot"
+        self.add_slot_args(parser)
+        return add_presco_code_args(parser)
+
+    def on_exec(self, args: argparse.Namespace):
+        selected = self.cmd.get_active_slot()
+        if self.cmd.get_slot_info()[selected]["lf"] != TagSpecificType.Presco:
+            raise ArgsParserError("Set the slot type to Presco with hw slot type first")
+        if args.code is not None:
+            self.cmd.presco_set_emu_id(args.code)
+            print_presco_code(args.code)
+        else:
+            print_presco_code(self.cmd.presco_get_emu_id())
 
 
 @lf_viking.command("read")

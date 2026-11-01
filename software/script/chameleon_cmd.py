@@ -973,6 +973,14 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(Command.JABLOTRON_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
+    def presco_write_to_t55xx(self, code: bytes):
+        """Write a four-byte Presco code using the standard T55xx password workflow."""
+        if len(code) != 4:
+            raise ValueError("Presco code must be exactly 4 bytes")
+        data = code + new_key + b"".join(old_keys)
+        return self.device.send_cmd_sync(Command.PRESCO_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
     def idteck_write_to_t55xx(self, id_bytes: bytes):
         """
         Write an IDTECK 64-bit PSK1 frame onto a T55xx tag.
@@ -1206,6 +1214,23 @@ class ChameleonCMD:
         resp = self.device.send_cmd_sync(Command.IOPROX_GET_EMU_ID)
         if resp.status == Status.SUCCESS:
             resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def presco_set_emu_id(self, code: bytes):
+        """Set all 32 Presco code bits on the active Presco slot."""
+        if len(code) != 4:
+            raise ValueError("Presco code must be exactly 4 bytes")
+        return self.device.send_cmd_sync(Command.PRESCO_SET_EMU_ID, code)
+
+    @expect_response(Status.SUCCESS)
+    def presco_get_emu_id(self):
+        """Get the active slot's four-byte Presco code."""
+        resp = self.device.send_cmd_sync(Command.PRESCO_GET_EMU_ID)
+        if resp.status == Status.SUCCESS:
+            if len(resp.data) != 4:
+                raise ValueError("Presco response must be exactly 4 bytes")
+            resp.parsed = resp.data
         return resp
 
     @expect_response(Status.SUCCESS)
