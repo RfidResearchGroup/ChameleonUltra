@@ -20,6 +20,7 @@
 #include "lf_reader_generic.h"
 #include "lf_em4x05_data.h"
 #include "rc522.h"
+#include "usb_ccid_reader.h"
 #include "mf1_crapto1.h"
 #include "parity.h"
 #endif
@@ -2078,6 +2079,10 @@ static data_frame_tx_t *before_reader_run(uint16_t cmd, uint16_t status, uint16_
     if (mode != DEVICE_MODE_READER) {
         return data_frame_make(cmd, STATUS_DEVICE_MODE_ERROR, 0, NULL);
     }
+    /* Serial/BLE commands take priority over a PC/SC card session. A subsequent
+     * PC/SC transfer must reconnect, rather than use a UID cached before the
+     * command changed the RC522 or LF/HF antenna configuration. */
+    usb_ccid_reader_external_invalidate();
     return NULL;
 }
 
