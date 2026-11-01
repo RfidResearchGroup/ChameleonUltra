@@ -1,6 +1,9 @@
 #include <stdint.h>
 #include "rfid_main.h"
 #include "rgb_marquee.h"
+#if defined(PROJECT_CHAMELEON_ULTRA)
+#include "usb_ccid_reader.h"
+#endif
 
 //The current mode of the device
 device_mode_t rfid_state = DEVICE_MODE_NONE;
@@ -39,6 +42,11 @@ void reader_mode_enter(void) {
  */
 void tag_mode_enter(void) {
     if (rfid_state != DEVICE_MODE_TAG) {
+#if defined(PROJECT_CHAMELEON_ULTRA)
+        /* Release CCID while the RC522 is still initialized. Later USB events
+         * must not access its SPI registers once tag mode has taken over. */
+        usb_ccid_reader_external_invalidate();
+#endif
         rfid_state = DEVICE_MODE_TAG;
 
 #if defined(PROJECT_CHAMELEON_ULTRA)

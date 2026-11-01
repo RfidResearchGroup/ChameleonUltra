@@ -8,6 +8,10 @@
 #include "app_usbd_serial_num.h"
 #include "app_usbd_string_desc.h"
 
+#if defined(PROJECT_CHAMELEON_ULTRA)
+#include "usb_ccid.h"
+#endif
+
 #define NRF_LOG_MODULE_NAME usb_cdc
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
@@ -146,6 +150,11 @@ void usb_cdc_init(void) {
     app_usbd_class_inst_t const *class_cdc_acm = app_usbd_cdc_acm_class_inst_get(&m_app_cdc_acm);
     ret = app_usbd_class_append(class_cdc_acm);
     APP_ERROR_CHECK(ret);
+
+#if defined(PROJECT_CHAMELEON_ULTRA)
+    ret = app_usbd_class_append(usb_ccid_class_inst_get());
+    APP_ERROR_CHECK(ret);
+#endif
 }
 
 void usb_cdc_write(const void *p_buf, uint16_t length) {
