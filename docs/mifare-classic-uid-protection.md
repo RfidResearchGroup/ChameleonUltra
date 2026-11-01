@@ -62,3 +62,15 @@ block 0 afterward, and successful permitted updates to other blocks (including
 sector 0 data blocks). Repeat with Gen2 on, global write modes, and after saving
 and reloading the slot. Reader compatibility and RF timing need actual hardware;
 host regression tests and firmware builds cannot establish them.
+
+## Host regression check
+
+Run `bash firmware/tests/run-mf1-uid-protection.sh` with GCC or a compatible C
+compiler on Linux. It compiles the actual Classic state machine and Crypto1
+implementation, substitutes the Nordic platform/storage headers and RF I/O,
+and seeds an authenticated session. It sends encrypted commands with CRCs and
+checks decrypted ACK/NAK responses, memory contents and state transitions under
+AddressSanitizer and UndefinedBehaviorSanitizer. It covers Gen2 on/off, all five
+write-mode values, both key selections, block 0, other blocks, permission
+failures, an application counter update and the existing Gen1a override. RF
+activation, authentication timing and flash persistence are outside this test.
