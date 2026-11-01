@@ -40,6 +40,9 @@ jobs:
       - name: Install dependencies with uv
         run: uv sync --dev
 
+      - name: Presco regression tests
+        run: PYTHONPATH=script uv run --frozen python -m unittest discover -s script/tests -p test_presco.py -v
+
       - name: Ruff check
         run: uv run ruff check .
 

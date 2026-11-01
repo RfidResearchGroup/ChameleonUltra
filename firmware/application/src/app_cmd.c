@@ -1312,6 +1312,36 @@ static data_frame_tx_t *cmd_processor_ioprox_set_emu_id(uint16_t cmd, uint16_t s
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
+static bool active_slot_is_presco(void) {
+    tag_slot_specific_type_t types;
+    tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &types);
+    return types.tag_lf == TAG_TYPE_PRESCO;
+}
+
+static data_frame_tx_t *cmd_processor_presco_set_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != LF_PRESCO_TAG_ID_SIZE || !active_slot_is_presco()) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_PRESCO);
+    if (buffer == NULL || buffer->length < LF_PRESCO_TAG_ID_SIZE) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    memcpy(buffer->buffer, data, LF_PRESCO_TAG_ID_SIZE);
+    tag_emulation_load_by_buffer(TAG_TYPE_PRESCO, false);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_presco_get_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 0 || !active_slot_is_presco()) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_PRESCO);
+    if (buffer == NULL || buffer->length < LF_PRESCO_TAG_ID_SIZE) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_SUCCESS, LF_PRESCO_TAG_ID_SIZE, buffer->buffer);
+}
+
 static data_frame_tx_t *cmd_processor_idteck_set_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length != LF_IDTECK_TAG_ID_SIZE) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
@@ -1418,6 +1448,26 @@ static data_frame_tx_t *cmd_processor_seos_write_emu_keys(uint16_t cmd, uint16_t
 // T55xx clone is only available on Chameleon Ultra; the Lite firmware
 // has no LF reader hardware and does not compile the write_*_to_t55xx
 // helpers in lf_reader_main.c.
+static data_frame_tx_t *cmd_processor_presco_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t card_data[LF_PRESCO_TAG_ID_SIZE];
+        uint8_t new_key[4];
+        uint8_t old_keys[4];
+    } PACKED payload_t;
+
+    payload_t *payload = (payload_t *)data;
+
+    if (length < sizeof(payload_t) ||
+        (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0 ||
+        (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys) > UINT8_MAX) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    uint8_t old_cnt = (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys);
+    status = write_presco_to_t55xx(payload->card_data, payload->new_key, payload->old_keys, old_cnt);
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
 static data_frame_tx_t *cmd_processor_idteck_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     typedef struct {
         uint8_t card_data[LF_IDTECK_TAG_ID_SIZE];
@@ -3304,6 +3354,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_JABLOTRON_SCAN,               before_reader_run,           cmd_processor_jablotron_scan,                NULL                   },
     {    DATA_CMD_JABLOTRON_WRITE_TO_T55XX,     before_reader_run,           cmd_processor_jablotron_write_to_t55xx,      NULL                   },
     {    DATA_CMD_PYRAMID_SCAN,                 before_reader_run,           cmd_processor_pyramid_scan,                  NULL                   },
+    {    DATA_CMD_PRESCO_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_presco_write_to_t55xx,         NULL                   },
     {    DATA_CMD_IDTECK_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_idteck_write_to_t55xx,         NULL                   },
     {    DATA_CMD_LF_T55XX_WRITE,               before_reader_run,           cmd_processor_lf_t55xx_write,                NULL                   },
     {    DATA_CMD_ADC_GENERIC_READ,             before_reader_run,           cmd_processor_generic_read,                  NULL                   },
@@ -3378,6 +3429,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_PAC_GET_EMU_ID,                 NULL,                      cmd_processor_pac_get_emu_id,                NULL                   },
     {    DATA_CMD_JABLOTRON_SET_EMU_ID,           NULL,                      cmd_processor_jablotron_set_emu_id,          NULL                   },
     {    DATA_CMD_JABLOTRON_GET_EMU_ID,           NULL,                      cmd_processor_jablotron_get_emu_id,          NULL                   },
+    {    DATA_CMD_PRESCO_SET_EMU_ID,              NULL,                      cmd_processor_presco_set_emu_id,             NULL                   },
+    {    DATA_CMD_PRESCO_GET_EMU_ID,              NULL,                      cmd_processor_presco_get_emu_id,             NULL                   },
     {    DATA_CMD_IDTECK_SET_EMU_ID,              NULL,                      cmd_processor_idteck_set_emu_id,             NULL                   },
     {    DATA_CMD_IDTECK_GET_EMU_ID,              NULL,                      cmd_processor_idteck_get_emu_id,             NULL                   },
 

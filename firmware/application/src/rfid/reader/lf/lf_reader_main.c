@@ -14,6 +14,7 @@
 #include "protocols/jablotron.h"
 #include "protocols/pac.h"
 #include "protocols/viking.h"
+#include "protocols/presco.h"
 #include "protocols/pyramid.h"
 
 #define NRF_LOG_MODULE_NAME lf_main
@@ -220,6 +221,12 @@ uint8_t write_viking_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_pa
         return STATUS_PAR_ERR;
     }
     return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
+uint8_t write_presco_to_t55xx(uint8_t *code, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blocks[5];
+    uint8_t count = presco_t55xx_writer(code, blocks);
+    return write_t55xx(blocks, count, new_passwd, old_passwds, old_passwd_count);
 }
 
 uint8_t write_pac_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
