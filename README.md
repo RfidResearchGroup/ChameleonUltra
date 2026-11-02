@@ -28,6 +28,8 @@ Read the [available documentation](https://github.com/RfidResearchGroup/Chameleo
 * [MTools BLE](https://github.com/RfidResearchGroup/ChameleonUltra/wiki/mtoolsble)
 * [Mifare Chameleon Tool (iOS only, Beta)](https://apps.apple.com/it/app/mifare-chameleon-tool/id6761231484)
 * [Chameleon Ultra (Sailfish OS only)](https://sailfishos-chum.github.io/apps/harbour-chameleon-ultra)
+* [Chameleon GO (iOS only)](https://apps.apple.com/us/app/id6802015306)
+* [Device console for ChameleonUltra (Web)](https://sec1.dk/phreakbyte.html)
 
 # Videos
 
@@ -46,5 +48,10 @@ Where do you find the community?
   * Software/chameleon-dev for firmware and clients development discussions
   * Devices/chameleon-ultra for usage discussions
 * [GameTec_live discord server](https://discord.gg/DJ2A4wxncK)
+
+Other notable projects:
+* [Fantasi](https://fantasi.cloud)
+  * [Discord](https://fantasi.cloud/discord)
+* [chameleon-ultra.js](https://github.com/taichunmin/chameleon-ultra.js/) 
 
 ###### Searching for the docs repo? Find it [here](https://github.com/RfidResearchGroup/ChameleonUltraDocs)

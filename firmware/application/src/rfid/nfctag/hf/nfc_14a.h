@@ -124,7 +124,7 @@ bool nfc_tag_14a_checks_crc(uint8_t *pbtData, size_t szLen);
 
 // 14A frame combination
 uint8_t nfc_tag_14a_wrap_frame(const uint8_t *pbtTx, const size_t szTxBits, const uint8_t *pbtTxPar, uint8_t *pbtFrame);
-uint8_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBits, uint8_t *pbtRx, uint8_t *pbtRxPar);
+uint16_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBits, uint8_t *pbtRx, uint8_t *pbtRxPar);
 
 // 14A communication control
 void nfc_tag_14a_sense_switch(bool enable);
@@ -133,6 +133,7 @@ void nfc_tag_14a_set_state(nfc_tag_14a_state_t state);
 void nfc_tag_14a_tx_bytes(uint8_t *data, uint32_t bytes, bool appendCrc);
 void nfc_tag_14a_tx_bits(uint8_t *data, uint32_t bits);
 void nfc_tag_14a_tx_nbit(uint8_t data, uint32_t bits);
+void nfc_tag_14a_set_frame_delay_max(uint32_t max_ticks);
 
 // Determine whether it is an effective UID length
 bool is_valid_uid_size(uint8_t uid_length);

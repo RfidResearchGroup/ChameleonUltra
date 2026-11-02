@@ -19,6 +19,7 @@ uint8_t scan_hidprox(uint8_t *uid, uint8_t format_hint);
 uint8_t scan_pac(uint8_t *card_id);
 uint8_t scan_viking(uint8_t *uid);
 uint8_t scan_jablotron(uint8_t *uid);
+uint8_t scan_pyramid(uint8_t *data);
 #if defined(PROJECT_CHAMELEON_ULTRA)
 uint8_t scan_fdxb(uint8_t *data);
 uint8_t write_fdxb_to_t55xx(uint8_t *fdxb_data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count);

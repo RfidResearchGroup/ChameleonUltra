@@ -17,6 +17,7 @@
 #include "protocols/jablotron.h"
 #include "protocols/pac.h"
 #include "protocols/viking.h"
+#include "protocols/pyramid.h"
 
 #define NRF_LOG_MODULE_NAME lf_main
 #include "nrf_log.h"
@@ -130,6 +131,16 @@ uint8_t scan_fdxb(uint8_t *data) {
     return STATUS_LF_TAG_NO_FOUND;
 }
 #endif
+
+/**
+ * Search Farpointe/Pyramid tag
+ */
+uint8_t scan_pyramid(uint8_t *data) {
+    if (pyramid_read(data, g_timeout_readem_ms)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
 
 /**
  * Try reset t55XX tag passwords by enumerating old passwords.
