@@ -288,6 +288,11 @@ uint8_t pcd_14a_reader_bytes_transfer(uint8_t Command, uint8_t *pIn, uint8_t InL
 
     write_register_single(CommandReg,       PCD_IDLE);      //  Flushbuffer clearing the internal FIFO read and writing pointer and ErRreg's Bufferovfl logo position is cleared
     clear_register_mask(ComIrqReg,      0x80);          //  When Set1 is cleared, the shielding position of commonricqreg is clear zero
+    /* Clear all pending IRQ flags (write-1-to-clear). Without this, a stale
+     * RxIRq left by the previous receive makes the wait-loop below exit
+     * instantly with an empty FIFO, so the next transceive always looks
+     * like "no response". Same fix as tcl_apdu_ in app_cmd.c. */
+    write_register_single(ComIrqReg,    0x7F);
     set_register_mask(FIFOLevelReg,     0x80);          //  Write an empty order
 
     write_register_buffer(FIFODataReg, pIn, InLenByte); // Write data into FIFODATA
@@ -525,6 +530,11 @@ uint8_t pcd_14a_reader_bytes_transfer_flags(uint8_t Command, uint8_t *pIn, uint8
 
     write_register_single(CommandReg,       PCD_IDLE);      //  Flushbuffer clearing the internal FIFO read and writing pointer and ErRreg's Bufferovfl logo position is cleared
     clear_register_mask(ComIrqReg,      0x80);          //  When Set1 is cleared, the shielding position of commonricqreg is clear zero
+    /* Clear all pending IRQ flags (write-1-to-clear). Without this, a stale
+     * RxIRq left by the previous receive makes the wait-loop below exit
+     * instantly with an empty FIFO, so the next transceive always looks
+     * like "no response". Same fix as tcl_apdu_ in app_cmd.c. */
+    write_register_single(ComIrqReg,    0x7F);
     set_register_mask(FIFOLevelReg,     0x80);          //  Write an empty order
 
     write_register_buffer(FIFODataReg, pIn, InLenByte); // Write data into FIFODATA
@@ -1601,6 +1611,20 @@ uint8_t pcd_14a_reader_raw_cmd(bool openRFField,  bool waitResp, bool appendCrc,
 
     // Is there any data that needs to be sent
     if (szDataSendBits) {
+        /* Settle RC522 stale post-receive state before transmitting
+         * (same recipe as cmd_processor_hf14a_4_emv_scan): idle the chip,
+         * wait for it, clear ALL IRQ flags, flush FIFO, clear StartSend.
+         * Without this, the transceive exits instantly on a stale RxIRq
+         * left by the previous receive and looks like "no response". */
+        bsp_delay_ms(5);
+        write_register_single(CommandReg, PCD_IDLE);
+        {
+            uint16_t _w = 0;
+            while ((read_register_single(CommandReg) & 0x0F) != PCD_IDLE && _w++ < 1000);
+        }
+        write_register_single(ComIrqReg, 0x7F);
+        set_register_mask(FIFOLevelReg, 0x80);
+        clear_register_mask(BitFramingReg, 0x80);
         // If there is no need to receive data, the data receiving cache needs to be empty, otherwise a specified timeout value needs to be set
         // Caching old timeout values
         uint16_t oldWaitRespTimeout = g_com_timeout_ms;
