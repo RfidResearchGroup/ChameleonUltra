@@ -5,6 +5,8 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 ## [unreleased][unreleased]
  - Added Indala LF protocol support: read, emulate and T55xx clone (@kevihiiin, @mfcarroll)
  - Fix LF raw captures (`lf sniff`) dropping most samples: the capture buffer was smaller than one ADC batch (@mfcarroll)
+ - Fix reset when BLE bonds are deleted while connected (@mfcarroll)
+ - Fixed ISO14443-4 (T=CL) tag emulation silently truncating any received command of 32+ bytes (e.g. an EMV GPO with a full PDOL): `nfc_tag_14a_unwrap_frame` returned the data-bit count as `uint8_t`, wrapping it mod 256 (@whitewhidow)
 
 ## [v2.3.0][2026-10-24]
  - Added Farpointe/Pyramid LF protocol support: read and emulate (FSK2a, RF/50)
