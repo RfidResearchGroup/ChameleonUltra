@@ -7375,7 +7375,7 @@ class LFIndalaRead(ReaderRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         resp = self.cmd.indala_scan()
-        if resp.status != Status.LF_TAG_OK:
+        if resp.status != Status.LF_TAG_OK or resp.parsed is None:
             print(f" Indala scan failed: {resp.status}")
             return
         print(f" {indala_format_output(resp.parsed)}")
