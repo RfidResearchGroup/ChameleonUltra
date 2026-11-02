@@ -39,6 +39,7 @@ class Command(enum.IntEnum):
     DELETE_SLOT_SENSE_TYPE = 1024
 
     GET_BATTERY_INFO = 1025
+    GET_BATTERY_INFO_EX = 1043
 
     GET_BUTTON_PRESS_CONFIG = 1026
     SET_BUTTON_PRESS_CONFIG = 1027
@@ -60,8 +61,11 @@ class Command(enum.IntEnum):
     GET_SLEEP_TIMEOUT = 1039
     SET_SLEEP_TIMEOUT = 1040
 
-    GET_SLOT_COLOR = 1041
-    SET_SLOT_COLOR = 1042
+    GET_LONG_PRESS_THRESHOLD = 1041
+    SET_LONG_PRESS_THRESHOLD = 1042
+    
+    GET_SLOT_COLOR = 1043
+    SET_SLOT_COLOR = 1044
 
     HF14A_SCAN = 2000
     MF1_DETECT_SUPPORT = 2001
@@ -74,6 +78,10 @@ class Command(enum.IntEnum):
     MF1_READ_ONE_BLOCK = 2008
     MF1_WRITE_ONE_BLOCK = 2009
     HF14A_RAW = 2010
+    MF0_ULC_AUTH = 2018
+    MF0_ULC_READ = 2019
+    MF0_ULC_WRITE = 2021
+    MF0_ULC_SET_KEY = 2022
     HF14A_SCAN_KEEP = 2016
     HF14A_AUTH_TRACE = 2017
     MF1_MANIPULATE_VALUE_BLOCK = 2011
@@ -103,6 +111,7 @@ class Command(enum.IntEnum):
     IDTECK_WRITE_TO_T55XX = 3018
     JABLOTRON_SCAN = 3019
     JABLOTRON_WRITE_TO_T55XX = 3020
+    PYRAMID_SCAN = 3021
 
     MF1_WRITE_EMU_BLOCK_DATA = 4000
     HF14A_SET_ANTI_COLL_DATA = 4001
@@ -325,6 +334,7 @@ class TagSpecificType(enum.IntEnum):
     # FSK Tag-Talk-First      200
     HIDProx = 200
     ioProx = 201
+    Pyramid = 202
     # AWID
     # Paradox
 
@@ -412,6 +422,8 @@ class TagSpecificType(enum.IntEnum):
             return "HIDProx"
         elif self == TagSpecificType.ioProx:
             return "ioProx"
+        elif self == TagSpecificType.Pyramid:
+            return "Farpointe/Pyramid"
         elif self == TagSpecificType.PAC:
             return "PAC/Stanley"
         elif self == TagSpecificType.Viking:
@@ -655,6 +667,15 @@ class MfcValueBlockOperator(enum.IntEnum):
     DECREMENT = 0xC0
     INCREMENT = 0xC1
     RESTORE = 0xC2
+
+
+@enum.unique
+class BatteryHealth(enum.IntEnum):
+    CRITICAL = 0
+    LOW = 1
+    FAIR = 2
+    GOOD = 3
+    EXCELLENT = 4
 
 
 @enum.unique

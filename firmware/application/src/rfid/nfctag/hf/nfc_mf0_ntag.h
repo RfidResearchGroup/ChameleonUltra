@@ -30,7 +30,7 @@
 #define NTAG216_TOTAL_PAGES (NTAG216_PAGES + NTAG_EXTRA_PAGES) // 1 more page for the counter
 
 #define MF0ICU1_PAGES 16 //16 pages total for MF0ICU1 (the original UL), from 0 to 15
-#define MF0ICU2_PAGES 36 //16 pages total for MF0ICU2 (UL C), from 0 to 35
+#define MF0ICU2_PAGES 48 //48 pages total for MF0ICU2 (UL C), from 0 to 47 (incl. config 0x28-0x2B and 3DES key 0x2C-0x2F)
 #define MF0UL11_PAGES 20 //20 pages total for MF0UL11 (UL EV1), from 0 to 19
 #define MF0UL11_TOTAL_PAGES (MF0UL11_PAGES + MF0ULx1_EXTRA_PAGES) // 3 more pages for 3 one way counters
 #define MF0UL21_PAGES 41 //231 pages total for MF0UL21 (UL EV1), from 0 to 40

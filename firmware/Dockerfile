@@ -8,13 +8,13 @@ RUN set -xe; \
   apt update -q; \
   apt install -qy --no-install-recommends ca-certificates curl xz-utils make git zip; \
   git config --global --add safe.directory /workdir; \
-  curl -sLo /usr/bin/nrfutil https://developer.nordicsemi.com/.pc-tools/nrfutil/x64-linux/nrfutil; \
-  curl -sLo /tmp/nrf-clt.deb $NRF_CLT_URL; \
+  curl -fsSLo /usr/bin/nrfutil https://files.nordicsemi.com/artifactory/swtools/external/nrfutil/executables/x86_64-unknown-linux-gnu/nrfutil; \
+  curl -fsSLo /tmp/nrf-clt.deb $NRF_CLT_URL; \
   apt install -qfy /tmp/nrf-clt.deb; \
   rm /tmp/nrf-clt.deb; \
   chmod 755 /usr/bin/nrfutil; \
   nrfutil install device nrf5sdk-tools; \
-  curl -sL https://armkeil.blob.core.windows.net/developer/Files/downloads/gnu/$ARM_TOOLCHAIN_VERSION/binrel/arm-gnu-toolchain-$ARM_TOOLCHAIN_VERSION-x86_64-arm-none-eabi.tar.xz | tar xJ -C /usr/local; \
+  curl -fsSL https://armkeil.blob.core.windows.net/developer/Files/downloads/gnu/$ARM_TOOLCHAIN_VERSION/binrel/arm-gnu-toolchain-$ARM_TOOLCHAIN_VERSION-x86_64-arm-none-eabi.tar.xz | tar xJ -C /usr/local; \
   apt clean -q; \
   rm -rf /var/lib/apt/lists/*
 

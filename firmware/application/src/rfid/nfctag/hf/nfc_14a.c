@@ -212,7 +212,12 @@ uint8_t nfc_tag_14a_wrap_frame(const uint8_t *pbtTx, const size_t szTxBits, cons
 *          pbtRxPar: The buffer of the bitstream Store after the packaging, the coupling school inspection area
 * @retval :The data length of the bitstream packaging, note that the length of the data area is the length of the data area.retval / 8
 */
-uint8_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBits, uint8_t *pbtRx, uint8_t *pbtRxPar) {
+/* Return type MUST be 16-bit: this returns the de-parity'd data-bit count,
+ * which exceeds 255 for any received frame of >=32 bytes. A uint8_t return
+ * wraps it mod 256, silently truncating every large reader->tag command
+ * (e.g. an ISO14443-4 APDU of 32+ bytes: a 44-byte frame -> 352 data bits
+ * -> 352 & 0xFF = 96 bits = 12 bytes reached the caller). */
+uint16_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBits, uint8_t *pbtRx, uint8_t *pbtRxPar) {
     uint8_t btFrame;
     uint8_t btData;
     uint8_t uiBitPos;
@@ -333,6 +338,10 @@ void nfc_tag_14a_tx_nbit(uint8_t data, uint32_t bits) {
     m_is_responded = true;
     m_nfc_tx_buffer[0] = data;
     NFC_14A_TX_BITS_CORE(bits, NRF_NFCT_FRAME_DELAY_MODE_WINDOWGRID);
+}
+
+void nfc_tag_14a_set_frame_delay_max(uint32_t max_ticks) {
+    nrf_nfct_frame_delay_max_set(max_ticks);
 }
 
 /**
@@ -695,13 +704,8 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
                 uint32_t amt  = NRF_NFCT->TXD.AMOUNT;
                 uint16_t tx_bytes = (amt >> NFCT_TXD_AMOUNT_TXDATABYTES_Pos)
                                     & (NFCT_TXD_AMOUNT_TXDATABYTES_Msk >> NFCT_TXD_AMOUNT_TXDATABYTES_Pos);
-                uint16_t tx_bits_rem = (amt >> NFCT_TXD_AMOUNT_TXDATABITS_Pos)
-                                       & (NFCT_TXD_AMOUNT_TXDATABITS_Msk >> NFCT_TXD_AMOUNT_TXDATABITS_Pos);
-                uint16_t tx_bits = (tx_bits_rem > 0)
-                                   ? ((tx_bytes - 1) * 8 + tx_bits_rem)
-                                   : (tx_bytes * 8);
-                if (tx_bits > 0 && tx_bytes <= MAX_NFC_TX_BUFFER_SIZE) {
-                    m_tx_sniff_cb(m_nfc_tx_buffer, tx_bits);
+                if (amt > 0 && tx_bytes <= MAX_NFC_TX_BUFFER_SIZE) {
+                    m_tx_sniff_cb(m_nfc_tx_buffer, amt);
                 }
             }
             break;
