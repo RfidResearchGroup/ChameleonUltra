@@ -188,6 +188,7 @@ class Command(enum.IntEnum):
     EM4X05_SCAN = 3030
     EM4X05_READSNIFF = 3032
     LF_SNIFF = 3031
+    LF_T55XX_READ_CAPTURE = 3041  # Provisional allocation; requires maintainer approval.
 
 
 @enum.unique
@@ -218,6 +219,7 @@ class Status(enum.IntEnum):
     FLASH_WRITE_FAIL = 0x70
     FLASH_READ_FAIL = 0x71
     INVALID_SLOT_TYPE = 0x72
+    CMD_ERR = 0x75
 
     def __str__(self):
         if self == Status.HF_TAG_OK:
@@ -258,6 +260,8 @@ class Status(enum.IntEnum):
             return "Flash read failed"
         elif self == Status.INVALID_SLOT_TYPE:
             return "Invalid card type in slot"
+        elif self == Status.CMD_ERR:
+            return "Device command failed"
         return "Invalid status"
 
 

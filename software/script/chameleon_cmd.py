@@ -1,14 +1,40 @@
 import struct
 import ctypes
-from typing import Union
+from dataclasses import dataclass, replace
+from typing import Optional, Union
 
 import chameleon_com
 from chameleon_utils import expect_response, reconstruct_full_nt, parity_to_str
 from chameleon_enum import Command, SlotNumber, Status, TagSenseType, TagSpecificType
 from chameleon_enum import ButtonPressFunction, ButtonType, MifareClassicDarksideStatus
 from chameleon_enum import MfcKeyType, MfcValueBlockOperator
+from t55xx_read import (
+    ANCHOR_JITTER_SAMPLES,
+    T55xxConfig,
+    T55xxReadError,
+    decode_block,
+    detect_config,
+    unpack_capture,
+)
 
 CURRENT_VERSION_SETTINGS = 7
+T55XX_INDEPENDENT_READS = 3
+
+
+@dataclass(frozen=True)
+class T55xxReadResult:
+    block: int
+    word: int
+    config: T55xxConfig
+    independent_reads: int = T55XX_INDEPENDENT_READS
+
+
+@dataclass(frozen=True)
+class T55xxDumpResult:
+    words: tuple[int, ...]
+    config: T55xxConfig
+    independent_reads: int = T55XX_INDEPENDENT_READS
+
 
 new_key = b"\x20\x20\x66\x66"
 old_keys = [b"\x51\x24\x36\x48", b"\x19\x92\x04\x27"]
@@ -858,6 +884,91 @@ class ChameleonCMD:
         payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF])
         timeout_s = (timeout_ms // 1000) + 2
         return self.device.send_cmd_sync(Command.LF_SNIFF, payload, timeout=timeout_s)
+
+    @staticmethod
+    def _t55xx_check_block(block: int) -> None:
+        if not isinstance(block, int) or isinstance(block, bool) or not 0 <= block < 8:
+            raise ValueError("T55xx Page 0 block must be between 0 and 7")
+
+    @expect_response(Status.SUCCESS)
+    def _t55xx_capture_block(self, block: int):
+        """Send only an addressed READ; the returned ADC samples may be noise."""
+        self._t55xx_check_block(block)
+        try:
+            response = self.device.send_cmd_sync(
+                Command.LF_T55XX_READ_CAPTURE, bytes([block]), timeout=3
+            )
+        except TimeoutError as error:
+            raise T55xxReadError("T55xx capture timed out; no data accepted") from error
+        if response.status == Status.CMD_ERR:
+            raise T55xxReadError(
+                "T55xx capture could not complete; use USB with BLE disconnected"
+            )
+        if response.status == Status.SUCCESS:
+            response.parsed = unpack_capture(response.data)
+        return response
+
+    def t55xx_read_config(self) -> T55xxConfig:
+        """Calibrate block 0 using three independent, command-anchored captures."""
+        configs = [
+            detect_config(self._t55xx_capture_block(0))
+            for _ in range(T55XX_INDEPENDENT_READS)
+        ]
+        reference = configs[0]
+        if any(
+            (item.word, item.bitrate, item.inverted)
+            != (reference.word, reference.bitrate, reference.inverted)
+            for item in configs[1:]
+        ):
+            raise T55xxReadError(
+                "T55xx configuration differs between independent reads"
+            )
+        starts = sorted(item.start_sample for item in configs)
+        if starts[-1] - starts[0] > ANCHOR_JITTER_SAMPLES * 2:
+            raise T55xxReadError("T55xx configuration timing is not stable")
+        return replace(reference, start_sample=starts[len(starts) // 2])
+
+    def t55xx_read_block(
+        self, block: int, config: Optional[T55xxConfig] = None
+    ) -> T55xxReadResult:
+        """Read a Page 0 word without searching arbitrary cyclic rotations."""
+        self._t55xx_check_block(block)
+        if config is None:
+            config = self.t55xx_read_config()
+            if block == 0:
+                return T55xxReadResult(block, config.word, config)
+        words = [
+            decode_block(self._t55xx_capture_block(block), config)
+            for _ in range(T55XX_INDEPENDENT_READS)
+        ]
+        if any(word != words[0] for word in words[1:]):
+            raise T55xxReadError(
+                f"T55xx block {block} differs between independent reads"
+            )
+        if block == 0 and words[0] != config.word:
+            raise T55xxReadError("T55xx configuration changed after calibration")
+        return T55xxReadResult(block, words[0], config)
+
+    def t55xx_dump_page0(self) -> T55xxDumpResult:
+        """
+        Acquire all eight words and recheck block 0 before reporting a dump.
+
+        This checks capture/configuration consistency, not tag identity. Page 0
+        alone has no unique immutable identifier, so one stationary tag must
+        remain in the field throughout the operation.
+        """
+        config = self.t55xx_read_config()
+        words = [config.word]
+        for block in range(1, 8):
+            words.append(self.t55xx_read_block(block, config).word)
+        after = self.t55xx_read_config()
+        if (after.word, after.bitrate, after.inverted) != (
+            config.word,
+            config.bitrate,
+            config.inverted,
+        ) or abs(after.start_sample - config.start_sample) > ANCHOR_JITTER_SAMPLES:
+            raise T55xxReadError("T55xx configuration changed during the dump")
+        return T55xxDumpResult(tuple(words), config)
 
     @expect_response(Status.LF_TAG_OK)
     def em4x05_scan(self, pwd: int = 0):
