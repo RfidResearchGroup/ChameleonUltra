@@ -20,6 +20,23 @@ Heres a bit of info and a few guidelines to get you started:
     - Formatting matters. Mostly. While pixelpeeping and exact rules are annoying and unnescesary, format your code in a readable and logical way. [Ruff](https://docs.astral.sh/ruff/) is used to enforce various formatting rules. You may install the Ruff vscode extension or use the CLI to format before opening a PR.
     - Avoid extra packages. Almost everyone knows the "meme" of the javascript ["is-even"](https://www.npmjs.com/package/is-even) package. While it is encouraged and makes sense to use packages where appropriate, just installing packages for the hell of it even if its a 2 liner is not sensible.
 
+## C formatting
+
+Use [clang-format](https://clang.llvm.org/docs/ClangFormat.html) for C sources and
+headers. The shared configuration uses four-space indentation and same-line braces,
+preserves include order, and does not reflow comments. Install
+[uv](https://docs.astral.sh/uv/getting-started/installation/), then run from the repository:
+
+```sh
+bash tools/format-c.sh         # Format C sources and headers
+bash tools/format-c.sh --check # Check without changing files
+```
+
+The script pins clang-format to 22.1.8 for consistent local and CI results.
+Configure your editor to use that version and the repository's `.clang-format`.
+Vendor code and generated files are excluded through `.clang-format-ignore`;
+keep that list updated when adding either.
+
 ## Feature freeze and review cycle
 
 Pull requests are reviewed in batches so maintainers and testers can focus on a manageable set of changes. The `feature freeze` label marks the PRs in the current batch. This does not mean that you can not make new Pull requests or contributions.

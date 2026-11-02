@@ -43,6 +43,9 @@ jobs:
       - name: Ruff check
         run: uv run ruff check .
 
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
   lint-types:
     runs-on: ubuntu-latest
     defaults:

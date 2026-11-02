@@ -1,0 +1,18 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 120
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+DerivePointerAlignment: false
+PointerAlignment: Right
+
+# Preserve include dependencies and keep this a formatting-only operation.
+SortIncludes: Never
+IncludeBlocks: Preserve
+ReflowComments: Never
+InsertBraces: false
+RemoveBracesLLVM: false
+RemoveParentheses: Leave
+RemoveSemicolon: false

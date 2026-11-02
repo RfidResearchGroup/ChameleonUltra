@@ -1,0 +1,12 @@
+# Vendor SDK and imported third-party code.
+firmware/nrf52_sdk/**
+firmware/application/src/rfid/nfctag/hf/desfire/crypto/**
+software/src/HardnestedRecovery/pm3/**
+software/src/compat/**
+
+# Generated keys, SDK configuration, and benchmark data.
+firmware/bootloader/src/dfu_public_key.c
+firmware/application/src/sdk_config.h
+firmware/bootloader/src/sdk_config.h
+software/src/HardnestedRecovery/hardnested/hardnested_benchmark_data.h
+software/src/target_arch_detect.c

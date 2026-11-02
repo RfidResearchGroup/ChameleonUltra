@@ -1,0 +1,30 @@
+name: Format (C)
+
+on:
+  pull_request:
+    paths:
+      - "**/*.c"
+      - "**/*.h"
+      - ".clang-format"
+      - ".clang-format-ignore"
+      - "tools/format-c.sh"
+      - ".github/workflows/c-format.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Check C formatting
+        run: bash tools/format-c.sh --check
