@@ -20,7 +20,8 @@ typedef enum {
     RGB_MAGENTA,
     RGB_YELLOW,
     RGB_CYAN,
-    RGB_WHITE
+    RGB_WHITE,
+    RGB_DEFAULT
 } chameleon_rgb_type_t;
 
 
