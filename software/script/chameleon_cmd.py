@@ -954,7 +954,7 @@ class ChameleonCMD:
         """
         resp = self.device.send_cmd_sync(Command.FDXB_SCAN)
         if resp.status == Status.LF_TAG_OK:
-            tag_type = struct.unpack('!H', resp.data[:2])[0]
+            tag_type = struct.unpack("!H", resp.data[:2])[0]
             frame = resp.data[2:15]
             resp.parsed = (tag_type, frame)
         return resp
@@ -964,12 +964,15 @@ class ChameleonCMD:
         """
         Write FDX-B tag data to T55XX.
 
-        :param fdxb_data: 13-byte FDX-B frame (national_id[5] + country[2] + crc[2] + reserved[4])
+        :param fdxb_data: 13-byte destuffed FDX-B frame: 8-byte ID block (national ID,
+                          country code, flags), 2-byte CRC-16, 3-byte extended data
         :return:
         """
         if len(fdxb_data) != 13:
             raise ValueError("FDX-B data must be exactly 13 bytes")
-        data = struct.pack(f'!13s4s{4*len(old_keys)}s', fdxb_data, new_key, b''.join(old_keys))
+        data = struct.pack(
+            f"!13s4s{4 * len(old_keys)}s", fdxb_data, new_key, b"".join(old_keys)
+        )
         return self.device.send_cmd_sync(Command.FDXB_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)

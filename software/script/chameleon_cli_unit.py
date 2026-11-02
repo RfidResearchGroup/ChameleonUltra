@@ -7484,7 +7484,7 @@ class LFFdxbWriteT55xx(ReaderRequiredUnit):
             "--id",
             type=str,
             metavar="<hex>",
-            help="raw 26-hex frame instead of fields (advanced; not validated for reserved bits)",
+            help="raw 26-hex destuffed frame instead of fields (advanced)",
         )
         return parser
 

@@ -462,7 +462,7 @@ static void em4x05_write_timeslot_cb(void) {
         send_em4305_bit((cmd >> i) & 1);
     }
 
-    /* 45-bit data word (leading 0 + 8*(nibble+row parity) + 4 column parity). */
+    /* 45-bit data word (4 rows of 8 data bits + even parity, 8 column parity, stop 0). */
     uint8_t data_bits[45];
     em4x05_build_data_word(g_write_data, data_bits);
     for (int i = 0; i < 45; i++) {
