@@ -4,6 +4,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 
 ## [unreleased][unreleased]
 
+ - Added previewed Gen1A-compatible Classic 1K ordinary-data writes and restores with verified before-images, progress journals and independent readback.
  - Added read-only Gen1A-compatible Classic 1K backdoor checks and BIN/JSON read-image exports using the existing Ultra reader commands.
  - Fix reset when BLE bonds are deleted while connected (@mfcarroll)
  - Fixed ISO14443-4 (T=CL) tag emulation silently truncating any received command of 32+ bytes (e.g. an EMV GPO with a full PDOL): `nfc_tag_14a_unwrap_frame` returned the data-bit count as `uint8_t`, wrapping it mod 256 (@whitewhidow)
