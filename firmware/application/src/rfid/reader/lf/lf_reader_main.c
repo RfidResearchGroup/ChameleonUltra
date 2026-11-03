@@ -143,7 +143,7 @@ static uint8_t write_t55xx(uint32_t *blks, uint8_t blk_count, uint8_t *new_passw
     uint32_t passwd = bytes_to_num(new_passwd, 4);
 
     start_lf_125khz_radio();
-    bsp_delay_ms(1);  // Delays for a while after starting the field
+    bsp_delay_ms(4);  // The T5577 needs ~4 ms to power up before it accepts a command
 
     try_reset_t55xx_passwd(passwd, old_passwds, old_passwd_count);
     t55xx_write_data(passwd, blks, blk_count);
@@ -278,7 +278,7 @@ uint8_t lf_t55xx_write_block(uint8_t block, uint32_t word, uint32_t passwd, bool
     uint32_t *pwd_ptr = use_passwd ? &passwd : NULL;
 
     start_lf_125khz_radio();
-    bsp_delay_ms(1);  // Delay for a while after starting the field
+    bsp_delay_ms(4);  // The T5577 needs ~4 ms to power up before it accepts a command
 
     t55xx_send_cmd(opcode, pwd_ptr, 0, &word, block);
     t55xx_send_cmd(T5577_OPCODE_RESET, NULL, 0, NULL, 0);
