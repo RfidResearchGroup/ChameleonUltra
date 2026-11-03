@@ -16,6 +16,7 @@ import struct
 import queue
 from enum import Enum
 from multiprocessing import Pool, cpu_count
+from pathlib import Path
 from typing import Union
 from platform import uname
 from datetime import datetime
@@ -54,6 +55,9 @@ from chameleon_enum import (
 )
 from chameleon_enum import HIDFormat
 from crypto1 import Crypto1
+from slot_profile import REQUIRED_COMMANDS, SlotProfileManager
+from slot_profile_data import SlotProfileError
+from slot_profile_io import check_new_path, load_card_profile, load_snapshot
 
 # NXP IDs based on https://www.nxp.com/docs/en/application-note/AN10833.pdf
 type_id_SAK_dict = {
@@ -159,7 +163,7 @@ class BaseCLIUnit:
         """
         return True
 
-    def on_exec(self, args: argparse.Namespace):
+    def on_exec(self, args: argparse.Namespace) -> None:
         """
             Call a function on cmd match.
 
@@ -924,6 +928,7 @@ class TagTypeArgsUnit(DeviceRequiredUnit):
 root = CLITree(root=True)
 hw = root.subgroup("hw", "Hardware-related commands")
 hw_slot = hw.subgroup("slot", "Emulation slots commands")
+hw_slot_profile = hw_slot.subgroup("profile", "Verified Classic 1K HF slot profiles")
 hw_settings = hw.subgroup("settings", "Chameleon settings commands")
 
 hf = root.subgroup("hf", "High Frequency commands")
@@ -950,6 +955,150 @@ lf_jablotron = lf.subgroup("jablotron", "Jablotron commands")
 lf_generic = lf.subgroup("generic", "Generic commands")
 lf_idteck = lf.subgroup("idteck", "IDTECK commands")
 lf_pyramid = lf.subgroup("pyramid", "Farpointe/Pyramid commands")
+
+
+class HWSlotProfileBase(DeviceRequiredUnit):
+    @staticmethod
+    def _slot_arg(parser: ArgumentParserNoExit) -> None:
+        parser.add_argument("-s", "--slot", type=int, choices=range(1, 9), required=True)
+
+    @staticmethod
+    def _apply_args(parser: ArgumentParserNoExit) -> None:
+        parser.add_argument("--apply", action="store_true", help="Apply; default is preview")
+        parser.add_argument(
+            "--backup", type=Path, metavar="FILE",
+            help="New private target-slot snapshot, required with --apply",
+        )
+
+    def before_exec(self, args: argparse.Namespace):
+        if not super().before_exec(args):
+            return False
+        if not REQUIRED_COMMANDS.issubset(self.device_com.commands):
+            raise ArgsParserError("firmware lacks slot profile commands")
+        output = getattr(args, "out", None)
+        if getattr(args, "apply", False):
+            output = args.backup
+            if output is None:
+                raise ArgsParserError("--apply requires a new --backup FILE")
+        if output is not None:
+            try:
+                check_new_path(output)
+            except (SlotProfileError, OSError) as error:
+                raise ArgsParserError(str(error)) from error
+        return True
+
+    @staticmethod
+    def _report(manager: SlotProfileManager) -> str:
+        progress = manager.progress
+        message = (
+            f"stage={progress.stage}; target_may_have_changed={progress.possibly_changed}; "
+            f"data_verified={progress.data_verified}"
+        )
+        if progress.backup_path is not None:
+            message += f"; before-slot snapshot={progress.backup_path}"
+        return message
+
+    def _execute(self, args: argparse.Namespace, source, *, restoring=False) -> None:
+        if args.apply:
+            if args.backup is None:
+                raise ArgsParserError("--apply requires a new --backup FILE")
+            try:
+                check_new_path(args.backup)
+            except (SlotProfileError, OSError) as error:
+                raise ArgsParserError(str(error)) from error
+        manager = SlotProfileManager(self.device_com)
+        try:
+            plan = (
+                manager.plan_restore(source) if restoring
+                else manager.plan_import(args.slot, source)
+            )
+            before, desired = plan.before.state, plan.desired
+            print(
+                f" - HF slot {args.slot}: type {before.tag_type} -> {desired.tag_type}; "
+                f"enabled {before.enabled} -> {desired.enabled}"
+            )
+            if desired.profile is not None:
+                print(f" - Input image SHA-256: {desired.profile.image_sha256}")
+            print(" - Memory, saved UID/ATQA/SAK/ATS and emulator settings are one profile")
+            if not args.apply:
+                print(" - Preview only; target memory and metadata left unchanged")
+                return
+            manager.apply(plan, args.backup)
+        except BaseException as error:
+            report = self._report(manager)
+            if isinstance(error, KeyboardInterrupt):
+                print(f" - Interrupted; {report}")
+                raise
+            if isinstance(error, Exception):
+                raise ArgsParserError(f"slot operation stopped: {error}; {report}") from error
+            raise
+        print(" - Target profile verified after slot reload; original slot/mode restored")
+        if manager.progress.backup_path is not None:
+            print(f" - Before-slot snapshot: {manager.progress.backup_path}")
+        print(" - Imported key bytes were not independently authenticated")
+
+
+@hw_slot_profile.command("import")
+class HWSlotProfileImport(HWSlotProfileBase):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Import a Classic 1K image and identity into an inactive HF-only slot"
+        self._slot_arg(parser)
+        parser.add_argument("-f", "--file", type=Path, required=True)
+        parser.add_argument("--format", choices=("bin", "json"), default=None)
+        parser.add_argument("--atqa", default=None, help="BIN: two bytes in wire order")
+        parser.add_argument("--sak", default=None, help="BIN: one byte")
+        parser.add_argument("--sha256", default=None, help="BIN: expected image digest")
+        self._apply_args(parser)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            source = load_card_profile(
+                args.file, input_format=args.format, atqa=args.atqa,
+                sak=args.sak, expected_sha256=args.sha256,
+            )
+        except (SlotProfileError, OSError) as error:
+            raise ArgsParserError(f"cannot validate input profile: {error}") from error
+        self._execute(args, source)
+
+
+@hw_slot_profile.command("restore")
+class HWSlotProfileRestore(HWSlotProfileBase):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Restore a checksummed before-slot snapshot to the same device/slot"
+        self._slot_arg(parser)
+        parser.add_argument("-f", "--file", type=Path, required=True)
+        self._apply_args(parser)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            source = load_snapshot(args.file)
+            if source.slot != args.slot:
+                raise SlotProfileError("snapshot slot differs from --slot")
+        except (SlotProfileError, OSError) as error:
+            raise ArgsParserError(f"cannot validate slot snapshot: {error}") from error
+        self._execute(args, source, restoring=True)
+
+
+@hw_slot_profile.command("backup")
+class HWSlotProfileBackup(HWSlotProfileBase):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Save an inactive Classic 1K or empty HF-only slot profile"
+        self._slot_arg(parser)
+        parser.add_argument("-o", "--out", type=Path, required=True)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        manager = SlotProfileManager(self.device_com)
+        try:
+            manager.backup(args.slot, args.out)
+        except (SlotProfileError, OSError) as error:
+            raise ArgsParserError(f"cannot save slot snapshot: {error}; {self._report(manager)}") from error
+        print(f" - Verified before-slot snapshot saved: {args.out}")
 
 
 @root.command("clear")
