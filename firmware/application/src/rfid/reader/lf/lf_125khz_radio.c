@@ -8,6 +8,7 @@
 #include "nrfx_pwm.h"
 #include "nrfx_saadc.h"
 #include "nrfx_timer.h"
+#include "nrf_soc.h"
 #include "rfid_main.h"
 
 static bool m_reader_inited = false;
@@ -156,6 +157,13 @@ void lf_125khz_radio_gpiote_disable(void) {
 // init 125kHz signal PWM modulation (use gpiote for ASK & saadc for FSK)
 void lf_125khz_radio_init(void) {
     if (!m_reader_inited) {
+        // hold HFXO like lf_sense_enable() does for emulation, instead of using
+        // rc oscillator, allowing a source using its own clock to be read
+        sd_clock_hfclk_request();
+        uint32_t hfclk_running = 0;
+        while (!hfclk_running) {
+            sd_clock_hfclk_is_running(&hfclk_running);
+        }
         pwm_init();
         pwm_timer_counter_init();
         pwm_timer_count_ppi_init();
@@ -171,6 +179,7 @@ void lf_125khz_radio_uninit(void) {
         nrfx_ppi_channel_free(m_pwm_timer_count_ppi_channel);
         nrfx_timer_uninit(&m_pwm_timer_counter);
         nrfx_pwm_uninit(&m_pwm);
+        sd_clock_hfclk_release();
         m_reader_inited = false;
     }
 }
