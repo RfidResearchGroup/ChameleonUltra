@@ -59,6 +59,8 @@ from chameleon_enum import HIDFormat
 from crypto1 import Crypto1
 from magic_classic import MagicClassicReader, MagicCardReadError
 from magic_classic_io import encode_backup, publish_backup
+from magic_classic_write import MagicClassicTransaction, MagicWritePlan, WRITABLE_BLOCKS
+from magic_classic_write_io import check_backup_paths, load_restore_image
 
 # NXP IDs based on https://www.nxp.com/docs/en/application-note/AN10833.pdf
 type_id_SAK_dict = {
@@ -3264,6 +3266,186 @@ class HFMFMagicDump(HFMFMagicBase):
         print(f" - Two independent complete reads agree; saved {args.out}")
         print(f" - Image SHA-256: {checksum}")
         print(" - Raw read image: sector keys have not been independently authenticated")
+
+
+class HFMFMagicWriteBase(HFMFMagicBase):
+    @staticmethod
+    def _add_write_args(parser: ArgumentParserNoExit) -> ArgumentParserNoExit:
+        parser.add_argument(
+            "--apply",
+            action="store_true",
+            help="Apply the previewed changes; default is read-only planning",
+        )
+        parser.add_argument(
+            "--backup",
+            type=Path,
+            metavar="FILE",
+            help="New before-image BIN path, required with --apply; journal is adjacent",
+        )
+        return parser
+
+    def before_exec(self, args: argparse.Namespace):
+        if not super().before_exec(args):
+            return False
+        if args.apply:
+            if args.backup is None:
+                raise ArgsParserError("--apply requires a new --backup FILE")
+            try:
+                check_backup_paths(args.backup)
+            except (MagicCardReadError, OSError) as error:
+                raise ArgsParserError(str(error)) from error
+        return True
+
+    @contextmanager
+    def _write_mode(self) -> Iterator[None]:
+        was_reader = self.cmd.is_device_reader_mode()
+        primary: Union[BaseException, None] = None
+        try:
+            if not was_reader:
+                self.cmd.set_device_reader_mode(True)
+            yield
+        except BaseException as error:
+            primary = error
+            raise
+        finally:
+            if not was_reader:
+                try:
+                    self.cmd.set_device_reader_mode(False)
+                except BaseException as cleanup:
+                    if primary is not None:
+                        # Retain a write error's progress and original cause.
+                        # In particular, cancellation must remain cancellation.
+                        primary.args = (
+                            f"{primary}; original device mode restoration also "
+                            f"failed: {cleanup}",
+                        )
+                        primary.__dict__["mode_cleanup_error"] = cleanup
+                    elif isinstance(cleanup, Exception):
+                        raise ArgsParserError(
+                            f"could not restore the original device mode: {cleanup}"
+                        ) from cleanup
+                    else:
+                        raise
+
+    @staticmethod
+    def _plan_preview(plan: MagicWritePlan) -> None:
+        blocks = [change.block for change in plan.changes]
+        print(f" - Planned ordinary data blocks: {blocks}")
+        print(
+            f" - Before image SHA-256: {hashlib.sha256(plan.original_image).hexdigest()}"
+        )
+        print(
+            f" - Desired image SHA-256: {hashlib.sha256(plan.desired_image).hexdigest()}"
+        )
+        print(" - Block 0 and all sector trailers: no planned differences")
+
+    @staticmethod
+    def _progress_report(transaction: MagicClassicTransaction) -> str:
+        progress = transaction.progress
+        report = (
+            f"attempted={list(progress.attempted_blocks)}, "
+            f"possibly_written={list(progress.possible_written_blocks)}, "
+            f"independently_verified={list(progress.verified_blocks)}, "
+            f"stage={progress.failed_stage}, block={progress.failed_block}"
+        )
+        if transaction.backup is not None:
+            report += (
+                f"; before-image={transaction.backup.path}; "
+                f"journal={transaction.backup.journal_path}"
+            )
+        return report
+
+    def _run_write(self, args: argparse.Namespace, source: Union[bytes, None]) -> None:
+        # Also enforce the durable-output gate for programmatic unit callers.
+        if args.apply:
+            if args.backup is None:
+                raise ArgsParserError("--apply requires a new --backup FILE")
+            try:
+                check_backup_paths(args.backup)
+            except (MagicCardReadError, OSError) as error:
+                raise ArgsParserError(str(error)) from error
+        transaction = MagicClassicTransaction(self.cmd)
+        try:
+            with self._write_mode():
+                if source is None:
+                    plan = transaction.plan_block(args.block, args.data)
+                else:
+                    plan = transaction.plan_restore(source)
+                self._plan_preview(plan)
+                if not args.apply:
+                    print(" - Preview only; no programming command sent")
+                    return
+                result = transaction.apply(plan, backup_path=args.backup)
+        except BaseException as error:
+            report = self._progress_report(transaction)
+            if isinstance(error, KeyboardInterrupt):
+                print(f" - Interrupted; {report}")
+                raise
+            if isinstance(error, Exception):
+                raise ArgsParserError(
+                    f"ordinary-data operation stopped: {error}; {report}"
+                ) from error
+            raise
+        if not plan.changes:
+            print(" - No differing ordinary data blocks; no programming needed")
+            return
+        print(
+            f" - Independently verified {len(result.progress.verified_blocks)} "
+            "ordinary data block(s); final complete image verified"
+        )
+        if transaction.backup is not None:
+            print(f" - Before-image: {transaction.backup.path}")
+            print(f" - Journal: {transaction.backup.journal_path}")
+
+
+@hf_mf_magic.command("wrbl")
+class HFMFMagicWrbl(HFMFMagicWriteBase):
+    @staticmethod
+    def _data(value: str) -> bytes:
+        if re.fullmatch(r"[0-9a-fA-F]{32}", value) is None:
+            raise argparse.ArgumentTypeError("data must be exactly 32 hexadecimal digits")
+        return bytes.fromhex(value)
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Plan or apply one Gen1A-compatible Classic 1K ordinary data block "
+            "write; Block 0 and sector trailers are protected"
+        )
+        parser.add_argument(
+            "-b", "--block", type=int, choices=WRITABLE_BLOCKS, required=True, metavar="BLOCK"
+        )
+        parser.add_argument("-d", "--data", type=self._data, required=True, metavar="32HEX")
+        return self._add_write_args(parser)
+
+    def on_exec(self, args: argparse.Namespace):
+        self._run_write(args, None)
+
+
+@hf_mf_magic.command("restore")
+class HFMFMagicRestore(HFMFMagicWriteBase):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Plan or restore ordinary data blocks from a matching Classic 1K "
+            "image; reject any Block 0 or sector-trailer differences"
+        )
+        parser.add_argument("-i", "--input", type=Path, required=True, metavar="FILE")
+        parser.add_argument("--format", choices=("bin", "json"), default=None)
+        parser.add_argument(
+            "--sha256",
+            default=None,
+            metavar="DIGEST",
+            help="Expected image SHA-256; BIN can instead use its adjacent write journal",
+        )
+        return self._add_write_args(parser)
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            source = load_restore_image(args.input, args.format, args.sha256)
+        except (MagicCardReadError, OSError) as error:
+            raise ArgsParserError(f"cannot validate restore source: {error}") from error
+        self._run_write(args, source)
 
 
 @hf_mf.command("dump")
