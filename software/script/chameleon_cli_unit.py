@@ -936,7 +936,9 @@ hw_settings = hw.subgroup("settings", "Chameleon settings commands")
 hf = root.subgroup("hf", "High Frequency commands")
 hf_14a = hf.subgroup("14a", "ISO14443-a commands")
 hf_mf = hf.subgroup("mf", "MIFARE Classic commands")
-hf_mf_magic = hf_mf.subgroup("magic", "Read-only Gen1A-compatible Classic 1K tools")
+hf_mf_magic = hf_mf.subgroup(
+    "magic", "Gen1A-compatible Classic 1K reads and guarded data writes"
+)
 hf_mfu = hf.subgroup("mfu", "MIFARE Ultralight / NTAG commands")
 hf_des = hf.subgroup("des", "MIFARE DESFire commands")
 hf_seos = hf.subgroup("seos", "SEOS commands")
