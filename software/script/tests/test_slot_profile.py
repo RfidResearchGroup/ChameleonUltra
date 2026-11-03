@@ -492,6 +492,55 @@ class ManagerTest(unittest.TestCase):
         self.assertTrue(device.reader)
         self.assertEqual(device.active, 7)
 
+    def test_cleanup_only_cancel_keeps_type_and_verified_outcome(self):
+        for phase in ("inspection", "after-apply"):
+            device = FakeSlots()
+            manager = SlotProfileManager(device)
+            if phase == "inspection":
+                device.types[7] = 1001
+                device.flash[7] = profile(7)
+                armed = []
+
+                def inspect_cancel(fake, cmd, data):
+                    if cmd == Command.MF1_READ_EMU_BLOCK_DATA:
+                        armed.append(True)
+                    if cmd == Command.SET_ACTIVE_SLOT and data == b"\x02" and armed:
+                        return KeyboardInterrupt()
+                    return None
+
+                device.fault = inspect_cancel
+                with self.subTest(phase=phase), self.assertRaises(KeyboardInterrupt):
+                    manager.plan_import(8, profile(9))
+                self.assertEqual(device.setters(), [])
+                self.assertTrue(device.reader)
+            else:
+                plan = manager.plan_import(8, profile(9))
+
+                def apply_cancel(fake, cmd, data):
+                    if (
+                        cmd == Command.CHANGE_DEVICE_MODE
+                        and data == b"\x00"
+                        and fake.saves
+                    ):
+                        return KeyboardInterrupt()
+                    return None
+
+                device.fault = apply_cancel
+                with tempfile.TemporaryDirectory() as directory:
+                    path = Path(directory) / "before.json"
+                    with (
+                        self.subTest(phase=phase),
+                        self.assertRaises(KeyboardInterrupt) as caught,
+                    ):
+                        manager.apply(plan, path)
+                    self.assertTrue(manager.progress.data_verified)
+                    self.assertEqual(
+                        getattr(caught.exception, "slot_progress"), manager.progress
+                    )
+                    self.assertEqual(load_snapshot(path), plan.before)
+                self.assertEqual(device.active, 2)
+                self.assertTrue(device.reader)
+
     def test_bad_status_malformed_capture_and_missing_capability_refuse(self):
         for response in (
             Response(0, Status.PAR_ERR),

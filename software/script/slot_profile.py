@@ -294,6 +294,19 @@ class SlotProfileManager:
                     )
                     original.__dict__["context_errors"] = tuple(errors)
                 else:
+                    cancellation = next(
+                        (error for error in errors if not isinstance(error, Exception)),
+                        None,
+                    )
+                    if cancellation is not None:
+                        # Ctrl-C during cleanup is still cancellation even if
+                        # target verification already succeeded. Keep the
+                        # complete outcome for the caller's progress report.
+                        cancellation.args = (
+                            f"host context restoration interrupted: {message}",
+                        )
+                        cancellation.__dict__["context_errors"] = tuple(errors)
+                        raise cancellation
                     raise SlotProfileError(
                         f"restoring host context failed: {message}"
                     ) from errors[0]
