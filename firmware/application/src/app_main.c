@@ -33,6 +33,7 @@ NRF_LOG_MODULE_REGISTER();
 #include "bsp_wdt.h"
 #include "dataframe.h"
 #include "battery_health.h"
+#include "button_input.h"
 #include "fds_util.h"
 #include "hex_utils.h"
 #include "rfid_main.h"
@@ -48,20 +49,18 @@ NRF_LOG_MODULE_REGISTER();
 #endif
 
 // Defining soft timers
-APP_TIMER_DEF(m_button_check_timer); // Timer for button debounce
+APP_TIMER_DEF(m_button_a_check_timer);
+APP_TIMER_DEF(m_button_b_check_timer);
+#define BUTTON_DEBOUNCE_POLL_MS 10U
+#define BUTTON_DEBOUNCE_MS      50U
 #define BATTERY_STATUS_DISPLAY_DURATION_MS  5000U
 
-static uint32_t m_last_btn_press = 0;
+static button_input_t m_button_input;
+static const button_input_id_t m_button_ids[] = {ButtonInputA, ButtonInputB};
+static const uint32_t m_button_pins[] = {BUTTON_2, BUTTON_1};
+static bool m_button_timer_active[BUTTON_INPUT_COUNT];
 
-static bool m_is_btn_long_press = false;
-
-static bool m_is_b_btn_press = false;
-static bool m_is_a_btn_press = false;
-
-static bool m_is_b_btn_release = false;
-static bool m_is_a_btn_release = false;
-
-static bool m_system_off_processing = false;
+static volatile bool m_system_off_processing = false;
 static bool m_battery_status_display_active = false;
 static uint32_t m_battery_status_display_started_at = 0;
 static uint8_t m_battery_status_display_leds = 0;
@@ -193,83 +192,49 @@ static void field_generator_rainbow_loop(void) {
 }
 #endif
 
-/**@brief Button Matrix Events
- */
-static void button_pin_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action) {
-    device_mode_t mode = get_device_mode();
-    // Allow button operations in both tag and reader mode
-    if (mode == DEVICE_MODE_TAG || mode == DEVICE_MODE_READER) {
-        static nrf_drv_gpiote_pin_t pin_static;                                  // Use static internal variables to store the GPIO where the current event occurred
-        pin_static = pin;                                                        // Cache the button that currently triggers the event into an internal variable
-        app_timer_start(m_button_check_timer, APP_TIMER_TICKS(50), &pin_static); // Start timer anti-shake
-    }
+static app_timer_id_t button_check_timer(button_input_id_t button) {
+    return button == ButtonInputA ? m_button_a_check_timer : m_button_b_check_timer;
 }
 
-/** @brief Button anti-shake timer
- * @param None
- * @return None
- */
-static void timer_button_event_handle(void *arg) {
-    // if button press during shutdown, it's only to wake up quickly
-    if (m_system_off_processing) {
-        m_system_off_processing = false;
-        NRF_LOG_INFO("BUTTON press during shutdown");
+/** GPIO and timer callbacks share state with the main-loop event consumer. */
+static void button_pin_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action) {
+    (void)action;
+    device_mode_t mode = get_device_mode();
+    if (mode != DEVICE_MODE_TAG && mode != DEVICE_MODE_READER) {
         return;
     }
-
-    nrf_drv_gpiote_pin_t pin = *(nrf_drv_gpiote_pin_t *)arg;
-
-    // Check here if the current GPIO is at the pressed level
-    if (nrf_gpio_pin_read(pin) == 1) {
-        if (pin == BUTTON_1) {
-            // If button is disabled, we can't dispatch key event.
-            if (settings_get_button_press_config('b') != SettingsButtonDisable) {
-                NRF_LOG_INFO("BUTTON_B_PRESS");
-                m_is_b_btn_press = true;
-                m_last_btn_press = app_timer_cnt_get();
-            }
-        }
-        if (pin == BUTTON_2) {
-            if (settings_get_button_press_config('a') != SettingsButtonDisable) {
-                NRF_LOG_INFO("BUTTON_A_PRESS");
-                m_is_a_btn_press = true;
-                m_last_btn_press = app_timer_cnt_get();
-            }
-        }
+    button_input_id_t button = pin == BUTTON_2 ? ButtonInputA : ButtonInputB;
+    ret_code_t err_code = NRF_SUCCESS;
+    CRITICAL_REGION_ENTER();
+    button_input_edge(&m_button_input, button, nrf_gpio_pin_read(pin) != 0, app_timer_cnt_get());
+    if (!m_button_timer_active[button]) {
+        err_code = app_timer_start(button_check_timer(button), APP_TIMER_TICKS(BUTTON_DEBOUNCE_POLL_MS),
+                                   (void *)&m_button_ids[button]);
+        m_button_timer_active[button] = err_code == NRF_SUCCESS;
     }
+    CRITICAL_REGION_EXIT();
+    APP_ERROR_CHECK(err_code);
+}
 
-    if (nrf_gpio_pin_read(pin) == 0) {
-        uint32_t now = app_timer_cnt_get();
-        uint32_t ticks = app_timer_cnt_diff_compute(now, m_last_btn_press);
-
-        bool is_long_press = ticks > APP_TIMER_TICKS(settings_get_long_press_threshold());
-
-        if (pin == BUTTON_1 && m_is_b_btn_press == true) {
-            // If button is disabled, we can't dispatch key event.
-            if (settings_get_button_press_config('b') != SettingsButtonDisable) {
-                m_is_b_btn_release = true;
-                m_is_b_btn_press = false;
-                if (!is_long_press) {
-                    NRF_LOG_INFO("BUTTON_B_RELEASE_SHORT");
-                } else {
-                    NRF_LOG_INFO("BUTTON_B_RELEASE_LONG");
-                }
-                m_is_btn_long_press = is_long_press;
-            }
+static void timer_button_event_handle(void *context) {
+    button_input_id_t button = *(const button_input_id_t *)context;
+    ret_code_t err_code = NRF_SUCCESS;
+    CRITICAL_REGION_ENTER();
+    bool pending = button_input_poll(&m_button_input, button,
+                                     nrf_gpio_pin_read(m_button_pins[button]) != 0,
+                                     app_timer_cnt_get(),
+                                     APP_TIMER_TICKS(settings_get_long_press_threshold()));
+    if (!pending) {
+        if (m_system_off_processing) {
+            m_system_off_processing = false;
+            /* Only a debounced edge interrupts shutdown; its click is consumed. */
+            button_input_suppress_until_release(&m_button_input);
         }
-        if (pin == BUTTON_2 && m_is_a_btn_press == true) {
-            if (settings_get_button_press_config('a') != SettingsButtonDisable) {
-                m_is_a_btn_release = true;
-                m_is_a_btn_press = false;
-                if (!is_long_press) {
-                    NRF_LOG_INFO("BUTTON_A_RELEASE_SHORT");
-                } else {
-                    NRF_LOG_INFO("BUTTON_A_RELEASE_LONG");
-                }
-                m_is_btn_long_press = is_long_press;
-            }
-        }
+        err_code = app_timer_stop(button_check_timer(button));
+        m_button_timer_active[button] = false;
     }
+    CRITICAL_REGION_EXIT();
+    APP_ERROR_CHECK(err_code);
 }
 
 /**@brief Function for init button and led.
@@ -277,8 +242,9 @@ static void timer_button_event_handle(void *arg) {
 static void button_init(void) {
     ret_code_t err_code;
 
-    // Non-exact timer for initializing button anti-shake
-    err_code = app_timer_create(&m_button_check_timer, APP_TIMER_MODE_SINGLE_SHOT, timer_button_event_handle);
+    err_code = app_timer_create(&m_button_a_check_timer, APP_TIMER_MODE_REPEATED, timer_button_event_handle);
+    APP_ERROR_CHECK(err_code);
+    err_code = app_timer_create(&m_button_b_check_timer, APP_TIMER_MODE_REPEATED, timer_button_event_handle);
     APP_ERROR_CHECK(err_code);
 
     // Configure SENSE mode, select false for sense configuration
@@ -288,10 +254,11 @@ static void button_init(void) {
     // Configure key binding POTR
     err_code = nrf_drv_gpiote_in_init(BUTTON_1, &in_config, button_pin_handler);
     APP_ERROR_CHECK(err_code);
-    nrf_drv_gpiote_in_event_enable(BUTTON_1, true);
-
     err_code = nrf_drv_gpiote_in_init(BUTTON_2, &in_config, button_pin_handler);
     APP_ERROR_CHECK(err_code);
+    button_input_init(&m_button_input, APP_TIMER_MAX_CNT_VAL, APP_TIMER_TICKS(BUTTON_DEBOUNCE_MS),
+                      nrf_gpio_pin_read(BUTTON_2) != 0, nrf_gpio_pin_read(BUTTON_1) != 0);
+    nrf_drv_gpiote_in_event_enable(BUTTON_1, true);
     nrf_drv_gpiote_in_event_enable(BUTTON_2, true);
 }
 
@@ -733,18 +700,19 @@ static bool battery_status_display_cancel_on_button(void) {
     if (!m_battery_status_display_active) {
         return false;
     }
-
-    if (!(m_is_a_btn_release || m_is_b_btn_release)) {
-        return false;
+    button_input_event_t event;
+    bool available;
+    CRITICAL_REGION_ENTER();
+    available = button_input_event_get(&m_button_input, &event);
+    if (available) {
+        /* Dismiss the overlay once, consuming other queued/held buttons too. */
+        button_input_suppress_until_release(&m_button_input);
     }
-
-    m_is_a_btn_release = false;
-    m_is_b_btn_release = false;
-    m_is_a_btn_press = false;
-    m_is_b_btn_press = false;
-    m_is_btn_long_press = false;
-    battery_status_display_stop();
-    return true;
+    CRITICAL_REGION_EXIT();
+    if (available) {
+        battery_status_display_stop();
+    }
+    return available;
 }
 
 static void battery_status_display_on_button_cancel(void) {
@@ -1046,28 +1014,28 @@ static void run_button_function_by_settings(settings_button_function_t sbf) {
 /**@brief button press event process
  */
 static void button_press_process(void) {
-    // Make sure that one of the AB buttons has a click event
-    if (m_is_b_btn_release || m_is_a_btn_release) {
+    button_input_event_t event;
+    while (true) {
         if (battery_status_display_cancel_on_button()) {
             battery_status_display_on_button_cancel();
             return;
         }
-        if (m_is_a_btn_release) {
-            if (!m_is_btn_long_press) {
-                run_button_function_by_settings(settings_get_button_press_config('a'));
-            } else {
-                run_button_function_by_settings(settings_get_long_button_press_config('a'));
-            }
-            m_is_a_btn_release = false;
+        bool available;
+        CRITICAL_REGION_ENTER();
+        available = button_input_event_get(&m_button_input, &event);
+        CRITICAL_REGION_EXIT();
+        if (!available) {
+            return;
         }
-        if (m_is_b_btn_release) {
-            if (!m_is_btn_long_press) {
-                run_button_function_by_settings(settings_get_button_press_config('b'));
-            } else {
-                run_button_function_by_settings(settings_get_long_button_press_config('b'));
-            }
-            m_is_b_btn_release = false;
+        char button = event.button == ButtonInputA ? 'a' : 'b';
+        settings_button_function_t function = event.long_press
+            ? settings_get_long_button_press_config(button)
+            : settings_get_button_press_config(button);
+        /* Disabling the short action must not disable a configured long action. */
+        if (function == SettingsButtonDisable) {
+            continue;
         }
+        run_button_function_by_settings(function);
         // Disable led marquee for usb at button pressed.
         g_usb_led_marquee_enable = false;
         // Re-delay into hibernation (unless field is on)
