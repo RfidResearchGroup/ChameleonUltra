@@ -117,19 +117,30 @@ static void pwm_saadc_sample_ppi_init(void) {
     APP_ERROR_CHECK(err_code);
 }
 
-void lf_125khz_radio_saadc_enable(lf_adc_callback_t cb) {
+void lf_125khz_radio_saadc_prepare(lf_adc_callback_t cb) {
     register_lf_adc_callback(cb);
+}
 
+void lf_125khz_radio_saadc_start_sampling(void) {
     nrfx_err_t err_code;
     err_code = nrfx_ppi_channel_enable(m_pwm_saadc_sample_ppi_channel);
     APP_ERROR_CHECK(err_code);
 }
 
-void lf_125khz_radio_saadc_disable(void) {
+void lf_125khz_radio_saadc_stop_sampling(void) {
     nrfx_err_t err_code;
     err_code = nrfx_ppi_channel_disable(m_pwm_saadc_sample_ppi_channel);
     APP_ERROR_CHECK(err_code);
 
+}
+
+void lf_125khz_radio_saadc_enable(lf_adc_callback_t cb) {
+    lf_125khz_radio_saadc_prepare(cb);
+    lf_125khz_radio_saadc_start_sampling();
+}
+
+void lf_125khz_radio_saadc_disable(void) {
+    lf_125khz_radio_saadc_stop_sampling();
     unregister_lf_adc_callback();
 }
 
