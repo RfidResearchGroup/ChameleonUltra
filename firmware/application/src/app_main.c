@@ -57,7 +57,6 @@ APP_TIMER_DEF(m_button_b_check_timer);
 
 static button_input_t m_button_input;
 static const button_input_id_t m_button_ids[] = {ButtonInputA, ButtonInputB};
-static const uint32_t m_button_pins[] = {BUTTON_2, BUTTON_1};
 static bool m_button_timer_active[BUTTON_INPUT_COUNT];
 
 static volatile bool m_system_off_processing = false;
@@ -218,10 +217,12 @@ static void button_pin_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t a
 
 static void timer_button_event_handle(void *context) {
     button_input_id_t button = *(const button_input_id_t *)context;
+    /* Board detection supplies these pin numbers at runtime. */
+    uint32_t pin = button == ButtonInputA ? BUTTON_2 : BUTTON_1;
     ret_code_t err_code = NRF_SUCCESS;
     CRITICAL_REGION_ENTER();
     bool pending = button_input_poll(&m_button_input, button,
-                                     nrf_gpio_pin_read(m_button_pins[button]) != 0,
+                                     nrf_gpio_pin_read(pin) != 0,
                                      app_timer_cnt_get(),
                                      APP_TIMER_TICKS(settings_get_long_press_threshold()));
     if (!pending) {
