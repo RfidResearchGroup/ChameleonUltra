@@ -1095,6 +1095,32 @@ static data_frame_tx_t *cmd_processor_lf_t55xx_write(uint16_t cmd, uint16_t stat
 
 #define GENERIC_READ_LEN 800
 #define GENERIC_READ_TIMEOUT_MS 500
+/*
+ * Request: count:u16be. Response: version:u8, bits:u8, count:u16be,
+ * nominal_rate_hz:u32be, flags:u16be, requested:u16be, samples[count].
+ * Flags 1|2 mean a complete direct-DMA window; no card decoding is implied.
+ */
+static data_frame_tx_t *cmd_processor_lf_adc_capture(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 2U) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    size_t requested = ((size_t)data[0] << 8U) | data[1];
+    if (requested == 0U || requested > LF_SNIFF_MAX_SAMPLES) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    uint8_t *output = malloc(12U + requested);
+    if (output == NULL) return data_frame_make(cmd, STATUS_MEM_ERR, 0, NULL);
+    size_t actual = 0U;
+    if (!raw_read_to_buffer(output + 12U, requested, GENERIC_READ_TIMEOUT_MS, &actual)) {
+        free(output);
+        return data_frame_make(cmd, STATUS_CMD_ERR, 0, NULL);
+    }
+    uint8_t header[12] = {1U, 8U, data[0], data[1], 0U, 1U, 0xE8U, 0x48U,
+                          0U, 3U, data[0], data[1]};
+    memcpy(output, header, sizeof(header)); /* nominal 125000 Hz */
+    data_frame_tx_t *frame = data_frame_make(cmd, STATUS_LF_TAG_OK, actual + 12U, output);
+    free(output);
+    return frame != NULL ? frame : data_frame_make(cmd, STATUS_CREATE_RESPONSE_ERR, 0, NULL);
+}
+
 static data_frame_tx_t *cmd_processor_generic_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t *outdata = malloc(GENERIC_READ_LEN);
 
@@ -2220,7 +2246,9 @@ static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, ui
 
     static uint8_t sniff_buf[LF_SNIFF_MAX_SAMPLES];
     size_t outlen = 0;
-    raw_read_to_buffer(sniff_buf, LF_SNIFF_MAX_SAMPLES, timeout_ms, &outlen);
+    if (!raw_read_to_buffer(sniff_buf, LF_SNIFF_MAX_SAMPLES, timeout_ms, &outlen)) {
+        return data_frame_make(cmd, STATUS_CMD_ERR, 0, NULL);
+    }
 
     if (outlen == 0) {
         return data_frame_make(cmd, STATUS_LF_TAG_NO_FOUND, 0, NULL);
@@ -3307,6 +3335,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_IDTECK_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_idteck_write_to_t55xx,         NULL                   },
     {    DATA_CMD_LF_T55XX_WRITE,               before_reader_run,           cmd_processor_lf_t55xx_write,                NULL                   },
     {    DATA_CMD_ADC_GENERIC_READ,             before_reader_run,           cmd_processor_generic_read,                  NULL                   },
+    {    DATA_CMD_LF_ADC_CAPTURE,               before_reader_run,           cmd_processor_lf_adc_capture,                NULL                   },
 
     {    DATA_CMD_HF14A_SET_FIELD_ON,           before_reader_run,           cmd_processor_hf14a_set_field_on,            NULL                   },
     {    DATA_CMD_HF14A_SET_FIELD_OFF,          before_reader_run,           cmd_processor_hf14a_set_field_off,           NULL                   },

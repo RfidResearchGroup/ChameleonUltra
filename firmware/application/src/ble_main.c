@@ -632,6 +632,17 @@ void advertising_stop(void) {
     sd_ble_gap_adv_stop(m_advertising.adv_handle);
 }
 
+bool advertising_pause(bool *was_active) {
+    if (was_active == NULL) return false;
+    *was_active = false;
+    uint32_t result = sd_ble_gap_adv_stop(m_advertising.adv_handle);
+    if (result == NRF_SUCCESS) {
+        *was_active = true;
+        return true;
+    }
+    return result == NRF_ERROR_INVALID_STATE;
+}
+
 /**@brief Function for handling Peer Manager events.
  *
  * @param[in] p_evt  Peer Manager event.

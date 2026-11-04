@@ -1,0 +1,36 @@
+name: LF capture tests
+on:
+  push:
+    paths:
+      - "firmware/application/src/rfid/reader/lf/**"
+      - "firmware/application/tests/test_lf_sample_window.c"
+      - ".github/workflows/lf-capture-tests.yml"
+  pull_request:
+    paths:
+      - "firmware/application/src/rfid/reader/lf/**"
+      - "firmware/application/src/app_cmd.c"
+      - "firmware/application/tests/test_lf_sample_window.c"
+      - ".github/workflows/lf-capture-tests.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Test direct DMA window
+        env:
+          CC: ${{ matrix.compiler }}
+        run: |
+          "$CC" -std=c11 -Wall -Wextra -Werror -g \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -I firmware/application/src/rfid/reader/lf \
+            firmware/application/tests/test_lf_sample_window.c \
+            -o "$RUNNER_TEMP/test_lf_sample_window"
+          "$RUNNER_TEMP/test_lf_sample_window"
