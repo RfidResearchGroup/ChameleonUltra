@@ -1,0 +1,37 @@
+name: LF waveform tests
+on:
+  push:
+    paths:
+      - "software/script/lf_waveform.py"
+      - "software/script/chameleon_cli_unit.py"
+      - "software/script/tests/test_lf_waveform*.py"
+      - ".github/workflows/lf-waveform-tests.yml"
+  pull_request:
+    paths:
+      - "software/script/lf_waveform.py"
+      - "software/script/chameleon_cli_unit.py"
+      - "software/script/tests/test_lf_waveform*.py"
+      - ".github/workflows/lf-waveform-tests.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  host:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.9", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install existing CLI requirements
+        run: python -m pip install -r software/script/requirements.txt
+      - name: Test waveform files and CLI
+        working-directory: software/script
+        run: |
+          python -m unittest discover -s tests -p "test_lf_waveform*.py" -v
+          python chameleon_cli_main.py --help

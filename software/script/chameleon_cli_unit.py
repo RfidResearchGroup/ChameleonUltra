@@ -15,6 +15,7 @@ import random
 import struct
 import queue
 from enum import Enum
+from pathlib import Path
 from multiprocessing import Pool, cpu_count
 from typing import Union
 from platform import uname
@@ -54,6 +55,10 @@ from chameleon_enum import (
 )
 from chameleon_enum import HIDFormat
 from crypto1 import Crypto1
+from lf_waveform import (
+    WaveformError, capture_waveform, check_output, export_waveform,
+    load_waveform, save_waveform, summarize,
+)
 
 # NXP IDs based on https://www.nxp.com/docs/en/application-note/AN10833.pdf
 type_id_SAK_dict = {
@@ -950,6 +955,62 @@ lf_jablotron = lf.subgroup("jablotron", "Jablotron commands")
 lf_generic = lf.subgroup("generic", "Generic commands")
 lf_idteck = lf.subgroup("idteck", "IDTECK commands")
 lf_pyramid = lf.subgroup("pyramid", "Farpointe/Pyramid commands")
+data_waveform = data.subgroup("waveform", "Verified LF waveform files and offline exports")
+
+
+@lf_generic.command("capture")
+class LFGenericCapture(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Actively sample the LF field and save a new private waveform JSON"
+        parser.add_argument("-o", "--out", required=True, type=Path)
+        parser.add_argument("--samples", type=int, default=800)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            check_output(args.out)
+            value = capture_waveform(self.device_com, args.samples)
+            save_waveform(args.out, value)
+            print(f"Saved {value['sample_count']} samples; {value['continuity']}")
+            print(f"SHA-256: {value['samples_sha256']}")
+        except (WaveformError, OSError) as error:
+            extra = getattr(error, "restore_error", None)
+            raise ArgsParserError(f"{error}" + (f"; mode restoration: {extra}" if extra else "")) from error
+
+
+@data_waveform.command("info")
+class DataWaveformInfo(BaseCLIUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Verify an LF waveform and show signal statistics without a device"
+        parser.add_argument("-f", "--file", required=True, type=Path)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            for key, value in summarize(load_waveform(args.file)).items():
+                print(f"{key}: {value}")
+        except WaveformError as error:
+            raise ArgsParserError(str(error)) from error
+
+
+@data_waveform.command("export")
+class DataWaveformExport(BaseCLIUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Export verified samples as BIN, nominal-time CSV or SVG"
+        parser.add_argument("-f", "--file", required=True, type=Path)
+        parser.add_argument("-o", "--out", required=True, type=Path)
+        parser.add_argument("--format", choices=("bin", "csv", "svg"), required=True)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            export_waveform(load_waveform(args.file), args.out, args.format)
+            print(f"Exported {args.format}: {args.out}")
+        except WaveformError as error:
+            raise ArgsParserError(str(error)) from error
 
 
 @root.command("clear")
