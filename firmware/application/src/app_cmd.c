@@ -1,3 +1,5 @@
+#include <stddef.h>
+#include "mfu_profile_wire.h"
 #include "fds_util.h"
 #include "bsp_time.h"
 #include "bsp_delay.h"
@@ -1646,6 +1648,68 @@ static data_frame_tx_t *cmd_processor_mf1_read_emu_block_data(uint16_t cmd, uint
     }
     return data_frame_make(cmd, STATUS_SUCCESS, result_length, result_buffer);
 }
+
+/*
+ * Full emulator memory, including private counter/auth, version and signature
+ * pages. Fields are serialized explicitly, never as compiler-dependent structs.
+ */
+#if defined(PROJECT_CHAMELEON_ULTRA)
+static data_frame_tx_t *cmd_processor_mfu_profile(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    bool writing = cmd == DATA_CMD_MFU_WRITE_PROFILE;
+    if ((!writing && length != 1U) || (writing && length < 11U)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    uint8_t slot = data[writing ? 1U : 0U];
+    if (slot >= TAG_MAX_SLOT_NUM) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    if (get_device_mode() != DEVICE_MODE_READER || tag_emulation_get_slot() != slot) {
+        return data_frame_make(cmd, STATUS_DEVICE_MODE_ERROR, 0, NULL);
+    }
+    tag_slot_specific_type_t types;
+    tag_emulation_get_specific_types_by_slot(slot, &types);
+    int physical = nfc_tag_mf0_ntag_get_nr_pages_by_tag_type(types.tag_hf);
+    int total = nfc_tag_mf0_ntag_get_total_pages_by_tag_type(types.tag_hf);
+    if (physical <= 0 || total < physical || total > 255) {
+        return data_frame_make(cmd, STATUS_INVALID_SLOT_TYPE, 0, NULL);
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(types.tag_hf);
+    size_t image_length = (size_t)total * NFC_TAG_MF0_NTAG_DATA_SIZE;
+    if (buffer == NULL || buffer->buffer == NULL ||
+            buffer->length < offsetof(nfc_tag_mf0_ntag_information_t, memory) + image_length) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    nfc_tag_mf0_ntag_information_t *info = (nfc_tag_mf0_ntag_information_t *)buffer->buffer;
+    size_t response_length = 11U + image_length;
+    uint8_t header[11] = {1U, slot, (uint8_t)(types.tag_hf >> 8U), (uint8_t)types.tag_hf,
+                         (uint8_t)(physical >> 8U), (uint8_t)physical,
+                         (uint8_t)(total >> 8U), (uint8_t)total, 0U, 0U, 0U};
+    if (writing) {
+        if (!mfu_profile_write_valid(data, length, header, total,
+                                     info->config.mode_block_write)) {
+            return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+        }
+        info->config.mode_uid_magic = data[8] & 1U;
+        info->config.mode_block_write = (data[8] >> 1U) & 7U;
+        info->config.detection_enable = (data[8] >> 4U) & 1U;
+        info->config.reserved1 = data[8] >> 5U;
+        info->config.reserved2 = data[9];
+        info->config.reserved3 = data[10];
+        memcpy(info->memory, data + 11U, image_length);
+        return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+    }
+    header[8] = (uint8_t)(info->config.mode_uid_magic |
+        (info->config.mode_block_write << 1U) | (info->config.detection_enable << 4U) |
+        (info->config.reserved1 << 5U));
+    header[9] = info->config.reserved2;
+    header[10] = info->config.reserved3;
+    uint8_t *output = malloc(response_length);
+    if (output == NULL) return data_frame_make(cmd, STATUS_MEM_ERR, 0, NULL);
+    memcpy(output, header, 11U);
+    memcpy(output + 11U, info->memory, image_length);
+    data_frame_tx_t *frame = data_frame_make(cmd, STATUS_SUCCESS, response_length, output);
+    free(output);
+    return frame != NULL ? frame : data_frame_make(cmd, STATUS_CREATE_RESPONSE_ERR, 0, NULL);
+}
+#endif
 
 static data_frame_tx_t *cmd_processor_mf0_ntag_write_emu_page_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t byte;
@@ -3365,6 +3429,10 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF0_NTAG_GET_DETECTION_LOG,     NULL,                      cmd_processor_mf0_ntag_get_detection_log,    NULL                   },
     {    DATA_CMD_MF0_NTAG_GET_DETECTION_ENABLE,  NULL,                      cmd_processor_mf0_ntag_get_detection_enable, NULL                   },
     {    DATA_CMD_MF0_NTAG_GET_EMULATOR_CONFIG,   NULL,                      cmd_processor_mf0_get_emulator_config,       NULL                   },
+#if defined(PROJECT_CHAMELEON_ULTRA)
+    {    DATA_CMD_MFU_READ_PROFILE,               NULL,                      cmd_processor_mfu_profile,                  NULL                   },
+    {    DATA_CMD_MFU_WRITE_PROFILE,              NULL,                      cmd_processor_mfu_profile,                  NULL                   },
+#endif
 
     {    DATA_CMD_EM410X_SET_EMU_ID,              NULL,                      cmd_processor_em410x_set_emu_id,             NULL                   },
     {    DATA_CMD_EM410X_GET_EMU_ID,              NULL,                      cmd_processor_em410x_get_emu_id,             NULL                   },
