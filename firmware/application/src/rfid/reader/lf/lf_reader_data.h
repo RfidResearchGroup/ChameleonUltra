@@ -25,6 +25,7 @@ bool pac_read(uint8_t *data, uint32_t timeout_ms);
 bool viking_read(uint8_t *data, uint32_t timeout_ms);
 bool jablotron_read(uint8_t *data, uint32_t timeout_ms);
 bool pyramid_read(uint8_t *data, uint32_t timeout_ms);
+bool indala_read(uint8_t *data, uint32_t timeout_ms);
 
 bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen);
 

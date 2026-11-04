@@ -81,6 +81,12 @@ extern "C" {
     T5577_PWD |                   \
     (4 << T5577_MAXBLOCK_SHIFT))
 
+#define T5577_INDALA_64_CONFIG ( \
+    T5577_MODULATION_PSK1 |      \
+    T5577_BITRATE_RF_32 |        \
+    T5577_PWD |                  \
+    (2 << T5577_MAXBLOCK_SHIFT))
+
 #define T5577_JABLOTRON_CONFIG (  \
     T5577_MODULATION_DIPHASE |    \
     T5577_BITRATE_RF_64 |         \
