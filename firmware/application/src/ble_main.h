@@ -14,6 +14,8 @@ typedef void (*lf_adc_callback_t)(nrf_saadc_value_t *, size_t);
 void ble_slave_init(void);
 void advertising_start(bool erase_bonds);
 void advertising_stop(void);
+/* Preserve whether a temporary LF acquisition must resume advertising. */
+bool advertising_pause(bool *was_active);
 void delete_bonds_all(void);
 void nus_data_response(uint8_t *p_data, uint16_t length);
 bool is_nus_working(void);
