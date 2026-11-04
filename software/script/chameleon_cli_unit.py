@@ -913,7 +913,8 @@ class LFIndalaIdArgsUnit(DeviceRequiredUnit):
             "--fc",
             type=int,
             dest="_indala_fc",
-            help="Facility code (26-bit format, use with --cn)",
+            help="Facility code (26-bit format, use with --cn). Parity and checksum are"
+            " encoded the same way as Proxmark. Use --raw to make an exact copy",
             metavar="<dec>",
         )
         parser.add_argument(
@@ -7346,23 +7347,41 @@ def indala_encode_raw(fc: int, cn: int) -> bytes:
     return bytes(raw)
 
 
-def indala_is_26bit(raw: bytes) -> bool:
-    """True if the preamble (bits 0-32), parity (34, 38) and checksum (62, 63) are those of a 26-bit frame."""
-    fc, cn = indala_decode_raw(raw)
-    expected = indala_encode_raw(fc, cn)
+def _indala_bit(raw: bytes, i: int) -> int:
+    return (raw[i // 8] >> (7 - i % 8)) & 1
 
-    def bit(b, i):
-        return (b[i // 8] >> (7 - i % 8)) & 1
 
-    return all(bit(raw, i) == bit(expected, i) for i in (*range(33), 34, 38, 62, 63))
+def indala_has_26bit_preamble(raw: bytes) -> bool:
+    """True if bits 0-32 hold the 26-bit preamble: bits 0, 2 and 32 set, the rest clear."""
+    return all(_indala_bit(raw, i) == (i in (0, 2, 32)) for i in range(33))
+
+
+def indala_check_bits_match(raw: bytes) -> bool:
+    """True if the parity (34, 38) and checksum (62, 63) bits equal those indala_encode_raw() writes."""
+    expected = indala_encode_raw(*indala_decode_raw(raw))
+    return all(
+        _indala_bit(raw, i) == _indala_bit(expected, i) for i in (34, 38, 62, 63)
+    )
 
 
 def indala_format_output(raw: bytes) -> str:
     """Format Indala raw bytes as PM3-style output string."""
     lines = [f"Indala (len 64)  Raw: {raw.hex().upper()}"]
-    if indala_is_26bit(raw):
+    # Decode FC and card whenever the preamble matches, like Proxmark.
+    # A real card's parity and checksum bits can differ from those produced
+    # by the encoder.
+    if indala_has_26bit_preamble(raw):
         fc, cn = indala_decode_raw(raw)
-        lines.append(f"   Fmt 26  FC: {fc}  Card: {cn}")
+        parity = f"{_indala_bit(raw, 34)}{_indala_bit(raw, 38)}"
+        checksum = f"{_indala_bit(raw, 62)}{_indala_bit(raw, 63)}"
+        lines.append(
+            f"   Fmt 26  FC: {fc}  Card: {cn}  Parity: {parity}  Checksum: {checksum}"
+        )
+        if not indala_check_bits_match(raw):
+            lines.append(
+                "   The parity or checksum bits are different from those produced by --fc/--cn."
+                " To make an exact copy of this card, clone it with -r."
+            )
     return "\n".join(lines)
 
 
