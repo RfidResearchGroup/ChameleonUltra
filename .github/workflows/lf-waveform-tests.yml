@@ -17,7 +17,8 @@ permissions:
   contents: read
 jobs:
   host:
-    runs-on: ubuntu-latest
+    # Python 3.9 has hosted builds for 24.04, but not the new 26.04 latest image.
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         python: ["3.9", "3.13"]
