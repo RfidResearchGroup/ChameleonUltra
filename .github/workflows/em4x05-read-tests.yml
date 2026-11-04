@@ -1,0 +1,60 @@
+name: EM4x05 read tests
+on:
+  push:
+    paths:
+      - "software/script/em4x05*.py"
+      - "software/script/chameleon_cli_unit.py"
+      - "software/script/tests/*em4x05*.py"
+      - "firmware/application/src/rfid/reader/lf/em4x05_forward.h"
+      - "firmware/application/src/rfid/reader/lf/lf_em4x05_read.*"
+      - "firmware/application/tests/test_em4x05_forward.c"
+      - ".github/workflows/em4x05-read-tests.yml"
+  pull_request:
+    paths:
+      - "software/script/em4x05*.py"
+      - "software/script/chameleon_cli_unit.py"
+      - "software/script/tests/*em4x05*.py"
+      - "firmware/application/src/rfid/reader/lf/**"
+      - "firmware/application/tests/test_em4x05_forward.c"
+      - ".github/workflows/em4x05-read-tests.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  host:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.9", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -r software/script/requirements.txt
+      - name: Test read-only host workflows
+        working-directory: software/script
+        run: |
+          python -m unittest discover -s tests -p "test_em4x05*.py" -v
+          python chameleon_cli_main.py --help
+  native:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Verify forward-link golden vectors
+        env:
+          CC: ${{ matrix.compiler }}
+        run: |
+          "$CC" -std=c11 -Wall -Wextra -Werror -g \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -I firmware/application/src/rfid/reader/lf \
+            firmware/application/tests/test_em4x05_forward.c \
+            -o "$RUNNER_TEMP/test_em4x05_forward"
+          "$RUNNER_TEMP/test_em4x05_forward"
