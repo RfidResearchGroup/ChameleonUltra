@@ -512,6 +512,9 @@ static void check_wakeup_src(void) {
                (m_gpregret_val & RESET_ON_LF_FIELD_EXISTS_Msk)) {
         NRF_LOG_INFO("WakeUp from rfid field");
 
+        // Start emulating before the animation because the reader is already waiting
+        tag_mode_enter();
+
         // wake up from hf field.
         if (m_reset_source & NRF_POWER_RESETREAS_NFC_MASK) {
             color = 1;  // HF field show G.
@@ -525,8 +528,7 @@ static void check_wakeup_src(void) {
             }
         }
 
-        // It is currently the wake-up system of the emulation card event, we can make the strong lights on the field first
-        TAG_FIELD_LED_ON();
+        // The LF and HF field handlers turn on the field LED if they detect a field
 
         uint8_t animation_config = settings_get_animation_config();
         if (animation_config == SettingsAnimationModeFull) {
