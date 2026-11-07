@@ -556,8 +556,16 @@ static void soc_evt_handler(uint32_t evt_id, void * p_context)
 {
     if (evt_id == NRF_EVT_HFCLKSTARTED)
     {
-        m_clock_cb.hfclk_on = true;
-        clock_clk_started_notify(NRF_DRV_CLOCK_EVT_HFCLK_STARTED);
+        CRITICAL_REGION_ENTER();
+        /* A start notification can remain pending after the last release, or
+         * arrive during a later startup. Do not cache a stopped HFXO as ready
+         * or drain that later request's callbacks before it is running. */
+        if (m_clock_cb.hfclk_requests && nrf_drv_clock_hfclk_is_running())
+        {
+            m_clock_cb.hfclk_on = true;
+            clock_clk_started_notify(NRF_DRV_CLOCK_EVT_HFCLK_STARTED);
+        }
+        CRITICAL_REGION_EXIT();
     }
 }
 NRF_SDH_SOC_OBSERVER(m_soc_evt_observer, CLOCK_CONFIG_SOC_OBSERVER_PRIO, soc_evt_handler, NULL);

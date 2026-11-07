@@ -3,7 +3,8 @@
 
 #include "tag_emulation.h"
 
-#define MAX_NFC_RX_BUFFER_SIZE  257
+/* A 256-byte ISO14443-4 frame includes another 256 parity bits on air. */
+#define MAX_NFC_RX_BUFFER_SIZE  288
 #define MAX_NFC_TX_BUFFER_SIZE  512  /* must hold PCB + max APDU response */
 
 #define NFC_TAG_14A_CRC_LENGTH  2
@@ -83,9 +84,10 @@ typedef struct {
 
 // Communication reception function that needs to be implemented
 typedef void (*nfc_tag_14a_reset_handler_t)(void);
+typedef void (*nfc_tag_14a_rats_handler_t)(uint8_t parameter);
 
 /* Sniff callback — called for every received frame before the tag handler.
- * data    : raw frame bytes (after parity strip)
+ * data    : raw DMA frame bytes before software parity stripping
  * szBits  : number of bits received */
 typedef void (*nfc_tag_14a_sniff_cb_t)(const uint8_t *data, uint16_t szBits);
 
@@ -112,6 +114,8 @@ typedef struct {
     nfc_tag_14a_reset_handler_t cb_reset;
     nfc_tag_14a_state_handler_t cb_state;
     nfc_tag_14a_coll_handler_t get_coll_res;
+    /* Called after reset when a valid RATS is about to receive an ATS. */
+    nfc_tag_14a_rats_handler_t cb_rats;
 } nfc_tag_14a_handler_t;
 
 // Different or verification code
