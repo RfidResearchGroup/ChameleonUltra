@@ -23,6 +23,7 @@ import hardnested_utils
 
 import chameleon_com
 import chameleon_cmd
+from hf14a_trace import anticollision_response, parse_hf14a_trace
 from chameleon_utils import (
     ArgumentParserNoExit,
     ArgsParserError,
@@ -8133,7 +8134,7 @@ class HF14ASniff(BaseCLIUnit):
         print()
 
         try:
-            resp = self.cmd.hf14a_sniff(timeout_ms=timeout)
+            resp = self.cmd.hf14a_sniff(timeout_ms=timeout, with_metadata=True)
         except Exception as e:
             if "CMDInvalid" in type(e).__name__ or "2020" in str(e):
                 print(
@@ -8155,50 +8156,15 @@ class HF14ASniff(BaseCLIUnit):
                 print(" No frames captured — no reader detected")
             return
 
-        # Parse packed frame buffer: [2 bytes bits BE][N bytes data] ...
-        # Bit 15 of szBits: 0 = reader→card, 1 = card→reader (new firmware).
-        # Old firmware always sends bit15=0; parser is backward compatible.
-        buf = bytes(resp.data)
-        frames = []  # (szBits, data, is_tx, parity)
-        i = 0
-        while i + 2 <= len(buf):
-            hdr = (buf[i] << 8) | buf[i + 1]
-            i += 2
-            is_tx = bool(hdr & 0x8000)
-            szBits = hdr & 0x7FFF
-            if szBits == 0:
-                break
-            szBytes = (szBits + 7) // 8
-            if i + szBytes > len(buf):
-                break
-            raw = buf[i : i + szBytes]
-            i += szBytes
-
-            # parity array: parity for each byte of data array
-            parity_bits = []
-
-            # ISO14443-A frames include one parity bit per byte.
-            # Short frames (< 8 bits, e.g. REQA=7 bits) have no parity.
-            # All other frames: szBits = data_bytes * 9, strip every 9th bit.
-            if szBits >= 8 and szBits % 9 == 0:
-                n_bytes = szBits // 9
-                all_bits = []
-                for byte in raw:
-                    for b in range(8):
-                        all_bits.append((byte >> b) & 1)
-                stripped = []
-                for nb in range(n_bytes):
-                    val = 0
-                    for b in range(8):
-                        val |= all_bits[nb * 9 + b] << b
-                    stripped.append(val)
-                    parity_bits.append(all_bits[nb * 9 + 8])
-                data = bytes(stripped)
-                szBits = n_bytes * 8
-            else:
-                data = raw
-
-            frames.append((szBits, data, is_tx, parity_bits))
+        try:
+            captured = parse_hf14a_trace(bytes(resp.data))
+            frames = []  # (data bits, logical bytes, is_tx, captured parity)
+            for frame in captured:
+                bits, data, parity = frame.decoded()
+                frames.append((bits, data, frame.is_tx, parity))
+        except ValueError as error:
+            print(f"{CR}Invalid capture: {error}{C0}")
+            return
 
         if not frames:
             print(f"{CR}No frames decoded{C0}")
@@ -8224,6 +8190,7 @@ class HF14ASniff(BaseCLIUnit):
         expect_nr_ar = False
         last_auth_keytype = None
         last_auth_block = None
+        previous_reader_frame = None
 
         for n, (szBits, data, is_tx, parity_bits) in enumerate(frames):
             if len(data) == len(parity_bits):
@@ -8273,6 +8240,15 @@ class HF14ASniff(BaseCLIUnit):
             decoded, col = _decode_14a_frame_col(data, szBits)
             if decoded_ctx is not None:
                 decoded, col = decoded_ctx, col_ctx
+            if is_tx:
+                if previous_reader_frame is not None:
+                    reply = anticollision_response(*previous_reader_frame, szBits)
+                    if reply is not None:
+                        decoded, valid = reply
+                        col = CG if valid else CY
+                previous_reader_frame = None
+            else:
+                previous_reader_frame = (szBits, data)
 
             dir_str = f"{CG}<<<{C0}" if is_tx else f"{CY}>>>{C0}"
             print(
