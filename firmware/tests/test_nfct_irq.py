@@ -18,6 +18,7 @@ import tempfile
 
 CASES = (
     'reqa_without_error', 'stale_timeout_before_new_req_a',
+    'new_field_clears_selection_timing',
     'genuine_timeout_after_new_req_a', 'stale_then_genuine_timeout_during_rx',
     'selected_preserves_error_suppression',
     'field_events_still_precede_error_and_rx',

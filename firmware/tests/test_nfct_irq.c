@@ -160,6 +160,20 @@ int main(int argc, char **argv) {
         expect_atqa();
         assert(callback_steps == 2 && memcmp(callback_order, "ER", 2) == 0);
         assert(error_status == 0 && !events[NRF_NFCT_EVENT_ERROR]);
+    } else if (!strcmp(argv[1], "new_field_clears_selection_timing")) {
+        m_selection_timing_active = true;
+        m_selection_saved_delay_max = 4096;
+        const nrfx_nfct_evt_t field = {.evt_id = NRFX_NFCT_EVT_FIELD_DETECTED};
+        nfc_tag_14a_event_callback(&field);
+        assert(!m_selection_timing_active);
+        // The legacy field handler arms RX immediately. Count only recovery
+        // work below, so this case also runs without the separate clock fix.
+        rearm_count = 0;
+        pend_timeout();
+        pend_req_a();
+        nrfx_nfct_irq_handler();
+        expect_atqa();
+        assert(callback_steps == 2 && memcmp(callback_order, "ER", 2) == 0);
     } else if (!strcmp(argv[1], "genuine_timeout_after_new_req_a")) {
         pend_req_a();
         nrfx_nfct_irq_handler();
@@ -215,4 +229,3 @@ int main(int argc, char **argv) {
     }
     return 0;
 }
-
