@@ -2,7 +2,7 @@
  * @file nfc_14a_4.h
  * @brief ISO14443-4 T=CL emulation for ChameleonUltra
  *
- * Implements a full ISO14443-4 tag emulator:
+ * Implements ISO14443-4 tag transport with bounded APDU storage:
  *   - I-blocks (information, chaining, CID)
  *   - R-blocks (ACK/NAK retransmit)
  *   - S-blocks (WTX to keep reader alive, DESELECT)
@@ -50,24 +50,40 @@ nfc_tag_14a_4_information_t;
 
 /* T=CL session state */
 typedef struct __attribute__((packed)) {
-    uint8_t  m_block_num;
+    uint8_t  m_block_num; /* Next expected reader I-block number. */
+    bool     m_activated;
+    bool     m_pps_allowed;
     bool     m_cid_supported;
     uint8_t  m_cid;
+    bool     m_use_cid;
+    uint16_t m_fsd;
+    uint16_t m_fsc;
     uint8_t  m_apdu_buf[NFC_14A_4_MAX_APDU];
     uint16_t m_apdu_len;
     bool     m_apdu_pending;
+    bool     m_chaining_in;
     uint8_t  m_resp_buf[NFC_14A_4_MAX_APDU];
     uint16_t m_resp_len;
     bool     m_response_ready;
+    bool     m_waiting_response;
+    bool     m_wtx_pending;
+    uint8_t  m_wtxm;
+    bool     m_chaining_out;
+    uint16_t m_resp_offset;
+    uint8_t  m_last_tx[NFC_14A_4_MAX_APDU + 4];
+    uint16_t m_last_tx_len;
 }
 nfc_tag_14a_4_tcl_state_t;
 
 /* Anti-collision resource — used by get_coll_res_data in app_cmd.c */
 nfc_tag_14a_coll_res_reference_t *nfc_tag_14a_4_get_coll_res(void);
 
-/* Handles the low-level ISO14443-4 communication. Returns true when a complete APDU has been read and is ready for response. */
-bool nfc_tag_14a_4_base_handler(nfc_tag_14a_4_tcl_state_t *m_tcl_session_state, uint8_t *data, uint16_t szBytes);
+/* Receives a complete frame in bits, including CRC-A. Returns true for a complete APDU. */
+bool nfc_tag_14a_4_base_handler(nfc_tag_14a_4_tcl_state_t *m_tcl_session_state, uint8_t *data, uint16_t szBits);
 void nfc_tag_14a_4_base_respond(nfc_tag_14a_4_tcl_state_t *m_tcl_session_state);
+/* Called only after an accepted RATS; this state is RAM-only. */
+void nfc_tag_14a_4_activate(nfc_tag_14a_4_tcl_state_t *session,
+                          uint8_t rats_parameter, const nfc_14a_ats_t *ats);
 
 /* tag_base_map callbacks */
 int  nfc_tag_14a_4_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer);
