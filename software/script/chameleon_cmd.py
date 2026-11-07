@@ -650,19 +650,27 @@ class ChameleonCMD:
                 i += 14
         return resp
 
-    def hf14a_sniff(self, timeout_ms: int = 5000):
+    def hf14a_sniff(self, timeout_ms: int = 5000, with_metadata: bool = False):
         """
         Capture ISO14443A reader frames while CU acts as a tag emulator.
 
         The firmware installs a sniff callback into the HF14A stack for the
-        requested duration, then returns all captured frames packed as:
-          [2 bytes: bit count, big-endian] [N bytes: frame data, ceil(bits/8)] ...
+        requested duration. Legacy records contain a BE16 bit count (bit 15
+        marks TX), then ceil(bits/8) payload bytes. RX includes RF parity;
+        TX contains DMA data, which can omit generated parity/CRC.
+
+        With metadata, firmware adds a CU14/version-1 stream header and a
+        FRAMECONFIG byte after each bit count. Use hf14a_trace to decode it.
+        Older firmware may ignore the optional flag and return legacy records.
 
         :param timeout_ms: Listen duration in ms (1-30000, default 5000)
+        :param with_metadata: Request per-frame parity/CRC configuration
         :return: Raw response — check .status and .data
         """
         timeout_ms = max(1, min(30000, timeout_ms))
         payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF])
+        if with_metadata:
+            payload += b"\x01"
         timeout_s = (timeout_ms // 1000) + 5
         return self.device.send_cmd_sync(
             Command.HF14A_SNIFF, payload, timeout=timeout_s
