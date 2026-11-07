@@ -50,6 +50,12 @@ hidprox_codec *hidprox_codec_alloc(void) {
     hidprox_codec *d = malloc(sizeof(hidprox_codec));
     d->card = NULL;
     d->modem = fsk_alloc(FSK_BITRATE_HID);
+    if (d->modem) {
+        // Subtract a running DC baseline before the Goertzel. The raw ADC DC
+        // offset biases the fc/8 bin and, on weakly-coupled cards, pins every
+        // bit to 0 so nothing decodes. This extends the usable coupling range.
+        d->modem->dc_block = true;
+    }
     return d;
 }
 
