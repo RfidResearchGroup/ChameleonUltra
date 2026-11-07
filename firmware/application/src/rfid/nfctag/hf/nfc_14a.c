@@ -1,6 +1,7 @@
 #include <hal/nrf_nfct.h>
 #include <nrfx_nfct.h>
 #include <nrf_gpio.h>
+#include "nrf_drv_clock.h"
 
 #define NRF_LOG_MODULE_NAME nfc
 #include "nrf_log.h"
@@ -649,6 +650,70 @@ static inline void nfc_fdt_reset(void) {
 
 extern bool g_usb_led_marquee_enable;
 
+static enum {
+    NFC_SENSE_STATE_NONE,
+    NFC_SENSE_STATE_DISABLE,
+    NFC_SENSE_STATE_ENABLE,
+} m_nfc_sense_state = NFC_SENSE_STATE_NONE;
+
+static bool m_nfc_field_present;
+static bool m_nfc_clock_requested;
+static bool m_nfc_activated;
+
+static void nfc_tag_14a_clock_handler(nrf_drv_clock_evt_type_t event) {
+    if (event != NRF_DRV_CLOCK_EVT_HFCLK_STARTED) {
+        return;
+    }
+
+    CRITICAL_REGION_ENTER();
+    // A pending clock callback can arrive after field loss or sense disable.
+    if (m_nfc_sense_state == NFC_SENSE_STATE_ENABLE &&
+        m_nfc_field_present && m_nfc_clock_requested && !m_nfc_activated &&
+        nrf_drv_clock_hfclk_is_running()) {
+        m_nfc_activated = true;
+        // NFCT calibration requires HFXO before ACTIVATED. The shared clock
+        // driver keeps it running until this field's request is released.
+#if defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
+        nrfx_nfct_autocolres_disable();
+        nrfx_nfct_state_force(NRFX_NFCT_STATE_ACTIVATED);
+#else
+        (*(uint32_t *)(0x4000559C)) |= (0x1UL);
+        NRF_NFCT->TASKS_ACTIVATE = 1;
+#endif
+        NRFX_NFCT_RX_BYTES
+    }
+    CRITICAL_REGION_EXIT();
+}
+
+static nrf_drv_clock_handler_item_t m_nfc_clock_handler_item = {
+    .event_handler = nfc_tag_14a_clock_handler,
+};
+
+static void nfc_tag_14a_field_start(void) {
+    CRITICAL_REGION_ENTER();
+    if (m_nfc_sense_state == NFC_SENSE_STATE_ENABLE) {
+        m_nfc_field_present = true;
+        if (!m_nfc_clock_requested) {
+            // The callback is synchronous when another user already holds
+            // HFXO. Publish ownership before requesting it.
+            m_nfc_clock_requested = true;
+            nrf_drv_clock_hfclk_request(&m_nfc_clock_handler_item);
+        }
+    }
+    CRITICAL_REGION_EXIT();
+}
+
+static void nfc_tag_14a_field_stop(void) {
+    CRITICAL_REGION_ENTER();
+    m_nfc_field_present = false;
+    m_nfc_activated = false;
+    if (m_nfc_clock_requested) {
+        m_nfc_clock_requested = false;
+        nrf_drv_clock_hfclk_release();
+    }
+    CRITICAL_REGION_EXIT();
+}
+
 /**
  * 14A incident callback function
  */
@@ -666,21 +731,11 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
 
             NRF_LOG_INFO("HF FIELD DETECTED");
 
-            //Turn off the automatic anti -collision, MCU management all the interaction process, and then enable the NFC peripherals so that Io can be performed after enable
-            // 20221108 Fix the different enable switching process of NRF52840 and NRF52832
-#if defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
-            nrfx_nfct_autocolres_disable();
-            nrfx_nfct_state_force(NRFX_NFCT_STATE_ACTIVATED);
-#else
-            (*(uint32_t *)(0x4000559C)) |= (0x1UL);   // == nrfx_nfct_autocolres_disable();
-            NRF_NFCT->TASKS_ACTIVATE = 1;
-#endif
-
-            //Directly enable receiving
-            NRFX_NFCT_RX_BYTES
+            nfc_tag_14a_field_start();
             break;
         }
         case NRFX_NFCT_EVT_FIELD_LOST: {
+            nfc_tag_14a_field_stop();
             g_is_tag_emulating = false;
             // call sleep_timer_start *after* unsetting g_is_tag_emulating
             sleep_timer_start(SLEEP_DELAY_MS_FIELD_NFC_LOST);
@@ -782,35 +837,30 @@ void nfc_tag_14a_set_handler(nfc_tag_14a_handler_t *handler) {
     }
 }
 
-static enum  {
-    NFC_SENSE_STATE_NONE,
-    NFC_SENSE_STATE_DISABLE,
-    NFC_SENSE_STATE_ENABLE,
-} m_nfc_sense_state = NFC_SENSE_STATE_NONE;
+
 
 /**
  * 14A field sensing enable and closed capacity to implement functions
  * @param enable Whether to make the field induction
  */
 void nfc_tag_14a_sense_switch(bool enable) {
-    if (m_nfc_sense_state == NFC_SENSE_STATE_NONE || m_nfc_sense_state == NFC_SENSE_STATE_DISABLE) {
-        if (enable) {
-            m_nfc_sense_state = NFC_SENSE_STATE_ENABLE;
-            // Initialized interrupt event and callback
-            nrfx_nfct_config_t nnct = { .rxtx_int_mask = (uint32_t)0xFFFFFFFF, .cb = nfc_tag_14a_event_callback };
-            if (nrfx_nfct_init(&nnct) != NRFX_SUCCESS) {
-                NRF_LOG_INFO("Cannot setup NFC!");
+    if (enable) {
+        if (m_nfc_sense_state != NFC_SENSE_STATE_ENABLE) {
+            if (!nrf_drv_clock_init_check()) {
+                APP_ERROR_CHECK(nrf_drv_clock_init());
             }
-            // Starting field sensing
+            nrfx_nfct_config_t nnct = { .rxtx_int_mask = (uint32_t)0xFFFFFFFF, .cb = nfc_tag_14a_event_callback };
+            APP_ERROR_CHECK(nrfx_nfct_init(&nnct));
+            m_nfc_sense_state = NFC_SENSE_STATE_ENABLE;
             nrfx_nfct_enable();
         }
-    } else {
-        if (!enable) {
-            m_nfc_sense_state = NFC_SENSE_STATE_DISABLE;
-            //Directly anti -initialization NFC peripherals can turn off NFC field induction
-            // SDK inside us to call us nrfx_nfct_disable
-            nrfx_nfct_uninit();
-        }
+    } else if (m_nfc_sense_state == NFC_SENSE_STATE_ENABLE) {
+        CRITICAL_REGION_ENTER();
+        m_nfc_sense_state = NFC_SENSE_STATE_DISABLE;
+        // Stop NFCT before releasing its clock; invalidate any queued callback.
+        nrfx_nfct_uninit();
+        nfc_tag_14a_field_stop();
+        CRITICAL_REGION_EXIT();
     }
 }
 
