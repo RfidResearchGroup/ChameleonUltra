@@ -736,6 +736,7 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
     // Select action to process.
     switch (p_event->evt_id) {
         case NRFX_NFCT_EVT_FIELD_DETECTED: {
+            m_selection_timing_active = false;
             sleep_timer_stop();
 
             g_is_tag_emulating = true;
