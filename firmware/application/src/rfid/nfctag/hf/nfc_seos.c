@@ -196,9 +196,9 @@ nfc_tag_14a_coll_res_reference_t *nfc_tag_seos_get_coll_res(void) {
 /*  State handler (called from NFCT ISR on each received frame)        */
 /* ------------------------------------------------------------------ */
 
-static void nfc_tag_seos_state_handler(uint8_t *data, uint16_t szBytes) {
+static void nfc_tag_seos_state_handler(uint8_t *data, uint16_t szBits) {
     // Only continue if we have a full APDU ready
-    if (!nfc_tag_14a_4_base_handler(&m_tcl_session_state, data, szBytes)) return;
+    if (!nfc_tag_14a_4_base_handler(&m_tcl_session_state, data, szBits)) return;
 
     uint8_t *receivedCmd = m_tcl_session_state.m_apdu_buf;
     m_tcl_session_state.m_resp_len = 0;
@@ -763,6 +763,12 @@ void nfc_tag_seos_reset_handler(void) {
     nfc_tag_14a_4_reset_state(&m_tcl_session_state);
 }
 
+static void nfc_tag_seos_rats_handler(uint8_t parameter) {
+    if (m_tag_information != NULL) {
+        nfc_tag_14a_4_activate(&m_tcl_session_state, parameter, &m_tag_information->res_coll.ats);
+    }
+}
+
 /* ------------------------------------------------------------------ */
 /*  Data load / save / factory callbacks                               */
 /* ------------------------------------------------------------------ */
@@ -780,6 +786,7 @@ int nfc_tag_seos_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer
         .get_coll_res = nfc_tag_seos_get_coll_res,
         .cb_state     = nfc_tag_seos_state_handler,
         .cb_reset     = nfc_tag_seos_reset_handler,
+        .cb_rats      = nfc_tag_seos_rats_handler,
     };
     nfc_tag_14a_set_handler(&handler);
     NRF_LOG_INFO("SEOS loadcb OK: SAK=%02x uid_sz=%d",
