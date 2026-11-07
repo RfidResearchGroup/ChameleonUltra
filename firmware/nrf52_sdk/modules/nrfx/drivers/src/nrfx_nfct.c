@@ -790,6 +790,27 @@ void nrfx_nfct_irq_handler(void)
         // nothing to do but clear the event else IRQ handler will be called continuously
         nrf_nfct_event_clear(NRF_NFCT_EVENT_RXFRAMESTART);
     }
+    /* Dispatch an already latched timeout before processing new RX data.
+     * An RX observer may schedule a new response; delivering the older error
+     * afterwards would incorrectly associate that error with the new response.
+     * SELECTED clears previous errors below, so preserve that existing path.
+     * Leave ERROR pending: the normal handler below must still observe any
+     * new timeout raised while the RX observer runs, and all other errors.
+     */
+    if (NRFX_NFCT_EVT_ACTIVE(RXFRAMEEND) &&
+        NRFX_NFCT_EVT_ACTIVE(ERROR) &&
+        !NRFX_NFCT_EVT_ACTIVE(SELECTED) &&
+        (nrf_nfct_error_status_get() & NRF_NFCT_ERROR_FRAMEDELAYTIMEOUT_MASK))
+    {
+        nrf_nfct_error_status_clear(NRF_NFCT_ERROR_FRAMEDELAYTIMEOUT_MASK);
+        nrfx_nfct_evt_t nfct_evt =
+        {
+            .evt_id = NRFX_NFCT_EVT_ERROR
+        };
+        nfct_evt.params.error.reason = NRFX_NFCT_ERROR_FRAMEDELAYTIMEOUT;
+        NRFX_NFCT_CB_HANDLE(m_nfct_cb.config.cb, nfct_evt);
+    }
+
     if (NRFX_NFCT_EVT_ACTIVE(RXFRAMEEND))
     {
         nrf_nfct_event_clear(NRF_NFCT_EVENT_RXFRAMEEND);
