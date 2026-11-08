@@ -176,6 +176,9 @@
 #define DATA_CMD_SEOS_READ_EMU_DATA             (4042)
 #define DATA_CMD_SEOS_WRITE_EMU_DATA            (4043)
 #define DATA_CMD_SEOS_WRITE_EMU_KEYS            (4044)
+// FM11RF08S profile: constant nested-auth nonce while first auth keeps prng_type
+#define DATA_CMD_MF1_GET_NESTED_STATIC_NONCE    (4045)
+#define DATA_CMD_MF1_SET_NESTED_STATIC_NONCE    (4046)
 //
 // ******************************************************************
 

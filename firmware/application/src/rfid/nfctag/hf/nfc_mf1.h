@@ -80,8 +80,8 @@ typedef struct {
     uint8_t field_off_do_reset: 1;
     // PRNG type: 0=static 1=weak/LFSR(default) 2=hard/rand
     uint8_t prng_type: 2;
-    // reserved
-    uint8_t reserved1: 1;
+    // FM11RF08S profile: constant nested nonce, first auth keeps prng_type
+    uint8_t nested_static_nonce: 1;
     uint8_t reserved2;
     uint8_t reserved3;
 } nfc_tag_mf1_configure_t;
@@ -172,5 +172,7 @@ bool nfc_tag_mf1_is_field_off_do_reset(void);
 void nfc_tag_mf1_prng_seed(uint32_t seed);  // seed MFC LFSR PRNG from hardware RNG
 void nfc_tag_mf1_set_prng_type(uint8_t type);  // 0=static 1=weak(LFSR) 2=hard(rand)
 uint8_t nfc_tag_mf1_get_prng_type(void);
+void nfc_tag_mf1_set_nested_static_nonce(bool enable);  // FM11RF08S constant nested nonce
+bool nfc_tag_mf1_is_nested_static_nonce(void);
 
 #endif

@@ -407,6 +407,14 @@ uint8_t nfc_tag_mf1_get_prng_type(void) {
      */
 void nfc_tag_mf1_random_nonce(uint8_t nonce[4], bool isNested) {
     uint8_t prng_type = m_tag_information->config.prng_type;
+    if (isNested && m_tag_information->config.nested_static_nonce) {
+        // FM11RF08S: constant nested nonce -> repeating encrypted nonce
+        nonce[0] = 0x01;
+        nonce[1] = 0x02;
+        nonce[2] = 0x03;
+        nonce[3] = 0x04;
+        return;
+    }
     if (prng_type == 0) {
         // STATIC — always return same nonce (clone-card behaviour)
         nonce[0] = 0x01;
@@ -1336,7 +1344,7 @@ bool nfc_tag_mf1_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
 
     // PRNG type defaults to WEAK (1) — real MFC LFSR, compatible with Eltis readers
     p_mf1_information->config.prng_type = 1;
-    p_mf1_information->config.reserved1 = 0x00;
+    p_mf1_information->config.nested_static_nonce = false;
     p_mf1_information->config.reserved2 = 0x00;
     p_mf1_information->config.reserved3 = 0x00;
 
@@ -1424,4 +1432,12 @@ void nfc_tag_mf1_set_field_off_do_reset(bool enable) {
 
 bool nfc_tag_mf1_is_field_off_do_reset(void) {
     return m_tag_information->config.field_off_do_reset;
+}
+
+void nfc_tag_mf1_set_nested_static_nonce(bool enable) {
+    m_tag_information->config.nested_static_nonce = enable;
+}
+
+bool nfc_tag_mf1_is_nested_static_nonce(void) {
+    return m_tag_information->config.nested_static_nonce;
 }
