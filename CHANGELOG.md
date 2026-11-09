@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Fix setting another slot's tag type replacing what the active slot emulates (@mfcarroll)
  - Fix frequent gaps in LF emulation that cost reads (@mfcarroll)
  - Fix LF emulation playing at the wrong speed after changing a slot's type while emulating (@mfcarroll)
  - Fix LF emulation going silent after switching to reader mode and back (@mfcarroll)

@@ -685,8 +685,9 @@ void tag_emulation_change_type(uint8_t slot, tag_specific_type_t tag_type) {
             break;  // never happen
     }
     NRF_LOG_INFO("tag type = %d", tag_type);
-    // After the update is completed, we need to notify the relevant data in the update of the memory
-    if (sense_type != TAG_SENSE_NO) {
+    // After the update is completed, we need to notify the relevant data in the update of the memory.
+    // The data buffers hold the active slot's data. Another slot's data loads when that slot becomes active.
+    if (sense_type != TAG_SENSE_NO && slot == tag_emulation_get_slot()) {
         load_data_by_tag_type(slot, tag_type);
         NRF_LOG_INFO("reload data success.");
     }
