@@ -38,6 +38,7 @@ NRF_LOG_MODULE_REGISTER();
 #include "rfid_main.h"
 #include "syssleep.h"
 #include "tag_emulation.h"
+#include "lf_tag_em.h"
 #include "usb_main.h"
 #include "rgb_marquee.h"
 #include "tag_persistence.h"
@@ -62,6 +63,10 @@ static bool m_is_b_btn_release = false;
 static bool m_is_a_btn_release = false;
 
 static bool m_system_off_processing = false;
+// Static on button A woke the device, so it goes straight back to sleep
+static bool m_static_button_wake = false;
+// True from a static wake until a button press, USB power or a field. The device shows no lights meanwhile.
+bool g_is_static_wake = false;
 static bool m_battery_status_display_active = false;
 static uint32_t m_battery_status_display_started_at = 0;
 static uint8_t m_battery_status_display_leds = 0;
@@ -326,7 +331,8 @@ static void system_off_enter(void) {
             nrf_gpio_pin_clear(p_led_array[i]);
         }
         // Power off animation
-        uint8_t animation_config = settings_get_animation_config();
+        // No power-off animation while the wake is still dark
+        uint8_t animation_config = g_is_static_wake ? SettingsAnimationModeNone : settings_get_animation_config();
         uint8_t slot = tag_emulation_get_slot();
         uint8_t dir = slot > 3 ? 1 : 0;
         uint8_t color = get_color_by_slot(slot);
@@ -459,6 +465,36 @@ static void system_off_enter(void) {
         NRF_LOG_PROCESS();
 }
 
+/**@brief Start Bluetooth, show the button wake-up animation and start the sleep timeout
+ */
+static void button_wake_start(void) {
+    uint8_t slot = tag_emulation_get_slot();
+    uint8_t dir = slot > 3 ? 1 : 0;
+    uint8_t color = get_color_by_slot(slot);
+
+    advertising_start(false); // Turn on Bluetooth radio
+
+    // Button wake-up boot animation
+    uint8_t animation_config = settings_get_animation_config();
+    if (animation_config == SettingsAnimationModeFull) {
+        rgb_marquee_sweep_to(color, !dir, 11);
+        rgb_marquee_sweep_to(color, dir, 11);
+        rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
+    } else if (animation_config == SettingsAnimationModeMinimal) {
+        rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
+    } else if (animation_config == SettingsAnimationModeSymmetric) {
+        rgb_marquee_symmetric_out(color, slot);
+    } else {
+        set_slot_light_color(color);
+    }
+
+    // The indicator of the current card slot lights up at the end of the animation
+    light_up_by_slot();
+
+    // If no operation follows, wait for the configured timeout and then deep hibernate
+    sleep_timer_start(settings_get_sleep_timeout());
+}
+
 /**
  *@brief :Detection of wake-up source
  */
@@ -478,6 +514,10 @@ static void check_wakeup_src(void) {
      * If the wake-up source is USB, then keep BLE on and no hibernation until USB is unplugged
      * If the wakeup source is the first time to access the battery, then do nothing and go directly to hibernation
      *
+     * Static discharge on the case can wake the device:
+     * - If the wake-up source appears to be button A alone, but button A is not still being pressed once the app loads, keep the lights off and hibernate again immediately
+     * - If the wake-up source appears to be an LF field, but no field is present once the app loads, keep the lights off and hibernate after SLEEP_DELAY_MS_UNCONFIRMED_WAKE (in case the field pulses)
+     *
      * Hint: The above; logic is the logic processed in the wake-up phase, the rest of the logic is converted to the runtime processing phase
      */
 
@@ -485,35 +525,26 @@ static void check_wakeup_src(void) {
     uint8_t dir = slot > 3 ? 1 : 0;
     uint8_t color = get_color_by_slot(slot);
 
-    if (m_reset_source & NRF_POWER_RESETREAS_OFF_MASK) {
+    if ((m_reset_source & NRF_POWER_RESETREAS_OFF_MASK) && m_static_button_wake) {
+        NRF_LOG_INFO("WakeUp from static on button A");
+        g_is_static_wake = true;
+        sleep_timer_start(SLEEP_DELAY_MS_IMMEDIATE);
+    } else if (m_reset_source & NRF_POWER_RESETREAS_OFF_MASK) {
         NRF_LOG_INFO("WakeUp from button");
-        advertising_start(false); // Turn on Bluetooth radio
-
-        // Button wake-up boot animation
-        uint8_t animation_config = settings_get_animation_config();
-        if (animation_config == SettingsAnimationModeFull) {
-            rgb_marquee_sweep_to(color, !dir, 11);
-            rgb_marquee_sweep_to(color, dir, 11);
-            rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
-        } else if (animation_config == SettingsAnimationModeMinimal) {
-            rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
-        } else if (animation_config == SettingsAnimationModeSymmetric) {
-            rgb_marquee_symmetric_out(color, slot);
-        } else {
-            set_slot_light_color(color);
-        }
-
-        // The indicator of the current card slot lights up at the end of the animation
-        light_up_by_slot();
-
-        // If no operation follows, wait for the configured timeout and then deep hibernate
-        sleep_timer_start(settings_get_sleep_timeout());
+        button_wake_start();
     } else if ((m_reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) ||
                (m_gpregret_val & RESET_ON_LF_FIELD_EXISTS_Msk)) {
         NRF_LOG_INFO("WakeUp from rfid field");
 
         // Start emulating before the animation because the reader is already waiting
         tag_mode_enter();
+
+        // tag_mode_enter() samples the comparator and starts emulating if an LF field is present. If an LF wake finds
+        // no field, treat it as static and keep the lights off. Sleep after SLEEP_DELAY_MS_UNCONFIRMED_WAKE, because a
+        // reader that pulses its field may have been off at this check.
+        g_is_static_wake = (m_reset_source & NRF_POWER_RESETREAS_LPCOMP_MASK) &&
+                           !(m_reset_source & NRF_POWER_RESETREAS_NFC_MASK) &&
+                           !(m_gpregret_val & RESET_ON_LF_FIELD_EXISTS_Msk) && !lf_field_seen();
 
         // wake up from hf field.
         if (m_reset_source & NRF_POWER_RESETREAS_NFC_MASK) {
@@ -531,7 +562,9 @@ static void check_wakeup_src(void) {
         // The LF and HF field handlers turn on the field LED if they detect a field
 
         uint8_t animation_config = settings_get_animation_config();
-        if (animation_config == SettingsAnimationModeFull) {
+        if (g_is_static_wake) {
+            // No lights
+        } else if (animation_config == SettingsAnimationModeFull) {
             // In the case of field wake-up, only one round of RGB is swept as the power-on animation
             rgb_marquee_sweep_to(color, !dir, dir ? slot : 7 - slot);
         } else if (animation_config == SettingsAnimationModeSymmetric) {
@@ -539,10 +572,12 @@ static void check_wakeup_src(void) {
         } else {
             set_slot_light_color(color);
         }
-        light_up_by_slot();
+        if (!g_is_static_wake) {
+            light_up_by_slot();
+        }
 
         // We can only run tag emulation at field wakeup source.
-        sleep_timer_start(SLEEP_DELAY_MS_FIELD_WAKEUP);
+        sleep_timer_start(g_is_static_wake ? SLEEP_DELAY_MS_UNCONFIRMED_WAKE : SLEEP_DELAY_MS_FIELD_WAKEUP);
     } else if (m_reset_source & NRF_POWER_RESETREAS_VBUS_MASK) {
         // nrfx_power_usbstatus_get() can check usb attach status
         NRF_LOG_INFO("WakeUp from VBUS(USB)");
@@ -1060,6 +1095,15 @@ static void run_button_function_by_settings(settings_button_function_t sbf) {
 static void button_press_process(void) {
     // Make sure that one of the AB buttons has a click event
     if (m_is_b_btn_release || m_is_a_btn_release) {
+        // A press during a static wake wakes the device fully, like a regular button wake, instead of running the
+        // button function
+        if (g_is_static_wake) {
+            g_is_static_wake = false;
+            m_is_a_btn_release = false;
+            m_is_b_btn_release = false;
+            button_wake_start();
+            return;
+        }
         if (battery_status_display_cancel_on_button()) {
             battery_status_display_on_button_cancel();
             return;
@@ -1141,10 +1185,30 @@ static void ble_passkey_init(void) {
     }
 }
 
+/**@brief True if the wake-up source appears to be button A alone (A's latch is set and B's isn't), but A reads low
+ * now. A real press is still being held when the app starts, and a static spike is over by then. Button B can't be
+ * judged this way, because the bootloader waits for B to be released. Call this before anything clears GPIO LATCH.
+ * Reading A this way stops presses on A from being detected, so call it before button_init(), which turns that
+ * back on.
+ */
+static bool is_static_button_wake(void) {
+    if (!(NRF_POWER->RESETREAS & POWER_RESETREAS_OFF_Msk)) return false;
+    bool a = nrf_gpio_pin_latch_get(BUTTON_2);
+    bool b = nrf_gpio_pin_latch_get(BUTTON_1);
+    nrf_gpio_cfg_input(BUTTON_2, NRF_GPIO_PIN_PULLDOWN);
+    nrf_delay_us(10);  // Let the input settle before reading
+    return a && !b && !nrf_gpio_pin_read(BUTTON_2);
+}
+
 /**@brief Application main function.
  */
 int main(void) {
     hw_connect_init();        // Remember to initialize the pins first
+    m_static_button_wake = is_static_button_wake();
+    // LATCH keeps a bit set for each pin that met its sense condition, until software clears it.
+    // Clear it now, so the next wake from System OFF shows only the pins that caused that wake.
+    uint32_t latch[GPIO_COUNT];
+    nrf_gpio_latches_read_and_clear(0, GPIO_COUNT, latch);
 
     fds_util_init();          // Initialize fds tool
     settings_load_config();   // Load settings from flash

@@ -14,6 +14,8 @@
 #include "nrf_log_default_backends.h"
 NRF_LOG_MODULE_REGISTER();
 
+extern bool g_is_static_wake;
+
 // USB DEFINES START
 static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst, app_usbd_cdc_acm_user_event_t event);
 
@@ -103,6 +105,7 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event) {
 
         case APP_USBD_EVT_POWER_DETECTED:
             sleep_timer_stop();
+            g_is_static_wake = false;
             NRF_LOG_INFO("USB power detected");
             if (!nrf_drv_usbd_is_enabled()) {
                 app_usbd_enable();

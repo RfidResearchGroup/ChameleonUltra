@@ -648,6 +648,7 @@ static inline void nfc_fdt_reset(void) {
 }
 
 extern bool g_usb_led_marquee_enable;
+extern bool g_is_static_wake;
 
 /**
  * 14A incident callback function
@@ -663,6 +664,11 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
 
             set_slot_light_color(RGB_GREEN);
             TAG_FIELD_LED_ON()
+            // An HF field ends a static wake
+            if (g_is_static_wake) {
+                g_is_static_wake = false;
+                light_up_by_slot();
+            }
 
             NRF_LOG_INFO("HF FIELD DETECTED");
 

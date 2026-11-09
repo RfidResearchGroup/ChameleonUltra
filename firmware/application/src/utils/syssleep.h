@@ -15,6 +15,8 @@
 #define SLEEP_DELAY_MS_BLE_DISCONNECTED         4000    // BLE's sleep delay after disconnection
 #define SLEEP_DELAY_MS_USB_POWER_DISCONNECTED   3000    // The sleep delay after the USB power supply is broken
 #define SLEEP_NO_BATTERY_SHUTDOWN               1       // Turn off at a low volume
+#define SLEEP_DELAY_MS_IMMEDIATE                10      // The sleep delay after a wake-up most likely caused by static discharge. Sleeps as soon as startup finishes
+#define SLEEP_DELAY_MS_UNCONFIRMED_WAKE         4000    // The sleep delay after a wake-up where no LF field is found, usually caused by static discharge. Long enough to catch a reader that pulses its field
 
 
 void sleep_timer_init(void);
