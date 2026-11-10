@@ -30,6 +30,7 @@ Read the [available documentation](https://github.com/RfidResearchGroup/Chameleo
 * [Chameleon Ultra (Sailfish OS only)](https://sailfishos-chum.github.io/apps/harbour-chameleon-ultra)
 * [Chameleon GO (iOS only)](https://apps.apple.com/us/app/id6802015306)
 * [Device console for ChameleonUltra (Web)](https://sec1.dk/phreakbyte.html)
+* [ChameLab (Windows, macOS, Linux, Android, Web)](https://github.com/m0n5ter/ChameLab)
 
 # Videos
 
