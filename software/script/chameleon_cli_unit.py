@@ -2263,7 +2263,10 @@ class HFMFStaticEncryptedNested(ReaderRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         key_map = self.senested(
-            args.key, args.starting_sector, args.sectors, args.sectors
+            args.key,
+            args.starting_sector,
+            args.starting_sector + args.sectors,
+            args.sectors,
         )
         print_key_table(key_map)
 
@@ -2282,6 +2285,9 @@ class HFMFStaticEncryptedNested(ReaderRequiredUnit):
         check_speed = 1.95  # sec per 64 keys
 
         for sector in range(starting_sector, stopping_sector):
+            # the firmware returns the acquired sectors in acquisition order
+            rec_a = acquire_datas["nts"]["a"][sector - starting_sector]
+            rec_b = acquire_datas["nts"]["b"][sector - starting_sector]
             sector_name = str(sector).zfill(2)
             print("Recovering", sector, "sector...")
             execute_tool(
@@ -2289,9 +2295,9 @@ class HFMFStaticEncryptedNested(ReaderRequiredUnit):
                 [
                     uid,
                     sector_name,
-                    format(acquire_datas["nts"]["a"][sector]["nt"], "x").zfill(8),
-                    format(acquire_datas["nts"]["a"][sector]["nt_enc"], "x").zfill(8),
-                    str(acquire_datas["nts"]["a"][sector]["parity"]).zfill(4),
+                    format(rec_a["nt"], "x").zfill(8),
+                    format(rec_a["nt_enc"], "x").zfill(8),
+                    str(rec_a["parity"]).zfill(4),
                 ],
             )
             execute_tool(
@@ -2299,13 +2305,17 @@ class HFMFStaticEncryptedNested(ReaderRequiredUnit):
                 [
                     uid,
                     sector_name,
-                    format(acquire_datas["nts"]["b"][sector]["nt"], "x").zfill(8),
-                    format(acquire_datas["nts"]["b"][sector]["nt_enc"], "x").zfill(8),
-                    str(acquire_datas["nts"]["b"][sector]["parity"]).zfill(4),
+                    format(rec_b["nt"], "x").zfill(8),
+                    format(rec_b["nt_enc"], "x").zfill(8),
+                    str(rec_b["parity"]).zfill(4),
                 ],
             )
-            a_key_dic = f"keys_{uid}_{sector_name}_{format(acquire_datas['nts']['a'][sector]['nt'], 'x').zfill(8)}.dic"
-            b_key_dic = f"keys_{uid}_{sector_name}_{format(acquire_datas['nts']['b'][sector]['nt'], 'x').zfill(8)}.dic"
+            a_key_dic = (
+                f"keys_{uid}_{sector_name}_{format(rec_a['nt'], 'x').zfill(8)}.dic"
+            )
+            b_key_dic = (
+                f"keys_{uid}_{sector_name}_{format(rec_b['nt'], 'x').zfill(8)}.dic"
+            )
             execute_tool("staticnested_2x1nt_rf08s", [a_key_dic, b_key_dic])
 
             keys = open(
@@ -2340,7 +2350,7 @@ class HFMFStaticEncryptedNested(ReaderRequiredUnit):
                 a_key = execute_tool(
                     "staticnested_2x1nt_rf08s_1key",
                     [
-                        format(acquire_datas["nts"]["b"][sector]["nt"], "x").zfill(8),
+                        format(rec_b["nt"], "x").zfill(8),
                         key,
                         a_key_dic,
                     ],
@@ -2545,9 +2555,7 @@ class HFMFAutopwn(ReaderRequiredUnit):
                 print(f" {CG}[+]{C0}  Key {key_num} found by reuse")
                 continue
             sector_num = key_num // 2
-            found_keymap = snested.senested(
-                backdoor_key, sector_num, sector_num + 1, max_sectors_num
-            )
+            found_keymap = snested.senested(backdoor_key, sector_num, sector_num + 1, 1)
             next_key_num = keys[i + 1][0] if i + 1 < len(keys) else -1
             if next_key_num == key_num + 1 and key_type == MfcKeyType.A:
                 current_keys_found[key_num] = bytes.fromhex(
