@@ -14,6 +14,14 @@ NRF_LOG_MODULE_REGISTER();
 
 
 #define PWM_MAX 1000 // PWM Maximum
+// The RGB lines run at 16 MHz / 1000 = 16 kHz, an exact multiple of the 1 kHz slot LED PWM, so the two don't beat
+#define RGB_PWM_TOP 1000
+#define RGB_GAMMA 2.2f
+// Per-channel gains to balance the white point of the slot LEDs
+#define RGB_GAIN_R 1.0f
+#define RGB_GAIN_G 1.0f
+#define RGB_GAIN_B 1.0f
+#define RGB_COLOR_UNKNOWN 0xFFFFFFFF
 #define LIGHT_LEVEL_MAX 99 // The maximum value of brightness level
 static nrf_drv_pwm_t pwm0_ins = NRF_DRV_PWM_INSTANCE(1);
 nrf_pwm_values_individual_t pwm_sequ_val; // PWM control 4 channels in the independent mode
@@ -31,6 +39,18 @@ nrf_drv_pwm_config_t pwm_config = {//PWM configuration structure
     .load_mode = NRF_PWM_LOAD_INDIVIDUAL, // 4 channels for four values
     .step_mode = NRF_PWM_STEP_AUTO
 };
+static nrf_drv_pwm_t m_rgb_pwm = NRF_DRV_PWM_INSTANCE(2);
+static nrf_pwm_values_individual_t m_rgb_pwm_values;
+static nrf_pwm_sequence_t const m_rgb_pwm_seq = {
+    .values.p_individual = &m_rgb_pwm_values,
+    .length          = NRF_PWM_VALUES_LENGTH(m_rgb_pwm_values),
+    .repeats         = 0,
+    .end_delay       = 0
+};
+// Set from interrupts too: set_slot_light_color() is called when a reader field shows up
+static volatile bool m_rgb_pwm_running = false;
+static volatile uint32_t m_rgb_color = RGB_COLOR_UNKNOWN;
+static volatile bool m_slot_indicator_shown = false;
 static autotimer *timer;
 static uint8_t rgb_marquee_usb_idle_step = 0;
 static uint8_t rgb_marquee_usb_idle_color = RGB_RED;
@@ -55,14 +75,89 @@ void rgb_marquee_reset(void) {
     rgb_marquee_usb_open_step = 0;
 }
 
+// The RGB lines are active low; nrfx keeps an inverted pin high while the PWM is not running
+static uint16_t rgb_channel_duty(uint8_t level, float gain) {
+    float duty = powf(level / 255.0f, RGB_GAMMA) * gain;
+    if (duty > 1.0f) duty = 1.0f;
+    return (uint16_t)(duty * RGB_PWM_TOP + 0.5f);
+}
+
+void hw_rgb_pwm_release(void) {
+    m_slot_indicator_shown = false;
+    m_rgb_color = RGB_COLOR_UNKNOWN;
+    if (m_rgb_pwm_running) {
+        m_rgb_pwm_running = false;
+        nrfx_pwm_uninit(&m_rgb_pwm);  // the pins go back to their GPIO output level
+    }
+}
+
+static void rgb_apply(uint32_t color) {
+    color &= 0xFFFFFF;
+    if (color == m_rgb_color) return;
+
+    uint8_t r = color >> 16, g = color >> 8, b = color;
+    if ((r == 0 || r == 0xFF) && (g == 0 || g == 0xFF) && (b == 0 || b == 0xFF)) {
+        // Primary mixes don't need the PWM, drive the lines exactly like set_slot_light_color() does
+        hw_rgb_pwm_release();
+        nrf_gpio_pin_write(LED_R, r == 0);
+        nrf_gpio_pin_write(LED_G, g == 0);
+        nrf_gpio_pin_write(LED_B, b == 0);
+        m_rgb_color = color;
+        return;
+    }
+
+    // A looping sequence is re-read every period, so a running PWM just picks up the new values
+    m_rgb_pwm_values.channel_0 = rgb_channel_duty(r, RGB_GAIN_R);
+    m_rgb_pwm_values.channel_1 = rgb_channel_duty(g, RGB_GAIN_G);
+    m_rgb_pwm_values.channel_2 = rgb_channel_duty(b, RGB_GAIN_B);
+    m_rgb_pwm_values.channel_3 = 0;
+    if (!m_rgb_pwm_running) {
+        nrf_drv_pwm_config_t config = {
+            .output_pins = {
+                LED_R | NRF_DRV_PWM_PIN_INVERTED,
+                LED_G | NRF_DRV_PWM_PIN_INVERTED,
+                LED_B | NRF_DRV_PWM_PIN_INVERTED,
+                NRF_DRV_PWM_PIN_NOT_USED,
+            },
+            .irq_priority = APP_IRQ_PRIORITY_LOWEST,
+            .base_clock = NRF_PWM_CLK_16MHz,
+            .count_mode = NRF_PWM_MODE_UP,
+            .top_value = RGB_PWM_TOP,
+            .load_mode = NRF_PWM_LOAD_INDIVIDUAL,
+            .step_mode = NRF_PWM_STEP_AUTO
+        };
+        if (nrf_drv_pwm_init(&m_rgb_pwm, &config, NULL) != NRF_SUCCESS) {
+            NRF_LOG_ERROR("RGB PWM init failed");
+            return;
+        }
+        nrf_drv_pwm_simple_playback(&m_rgb_pwm, &m_rgb_pwm_seq, 1, NRF_DRV_PWM_FLAG_LOOP);
+        m_rgb_pwm_running = true;
+    }
+    m_rgb_color = color;
+}
+
+void set_slot_light_rgb(uint32_t color) {
+    m_slot_indicator_shown = false;
+    rgb_apply(color);
+}
+
+void rgb_slot_indicator_show(uint32_t color) {
+    rgb_apply(color);
+    m_slot_indicator_shown = true;
+}
+
+bool rgb_slot_indicator_is_shown(void) {
+    return m_slot_indicator_shown;
+}
+
 // Brightness to PWM value
 uint16_t get_pwmduty(uint8_t light_level) {
     return PWM_MAX - (PWM_MAX * pow(((double)light_level / LIGHT_LEVEL_MAX), 2.2));
 }
 
 // 4 Lights and the level of brightness levels (no return)
-//COLOR 0-R,1-G,2-B
-void rgb_marquee_usb_open_sweep(uint8_t color, uint8_t dir) {
+//color 0xRRGGBB
+void rgb_marquee_usb_open_sweep(uint32_t color, uint8_t dir) {
     static uint8_t startled = 0;
     static uint8_t setled = 0;
     uint32_t *led_pins_arr;
@@ -83,7 +178,7 @@ void rgb_marquee_usb_open_sweep(uint8_t color, uint8_t dir) {
 
     if (rgb_marquee_usb_open_step == 0) {
         //Adjust the color
-        set_slot_light_color(color);
+        set_slot_light_rgb(color);
         pwm_sequ_val.channel_0 = 1;
         pwm_sequ_val.channel_1 = 1;
         pwm_sequ_val.channel_2 = 1;
@@ -96,6 +191,7 @@ void rgb_marquee_usb_open_sweep(uint8_t color, uint8_t dir) {
     }
 
     if (rgb_marquee_usb_open_step == 1) {
+        set_slot_light_rgb(color);
         setled = startled;
         for (uint8_t i = 0; i < 4; i++) {
             pwm_config.output_pins[i] = led_pins_arr[setled];
@@ -119,7 +215,7 @@ void rgb_marquee_usb_open_sweep(uint8_t color, uint8_t dir) {
     }
 }
 
-void rgb_marquee_usb_open_symmetric(uint8_t color) {
+void rgb_marquee_usb_open_symmetric(uint32_t color) {
     static uint8_t startled = 0;
     static uint8_t setled = 0;
     uint32_t *led_pins_arr = hw_get_led_array();
@@ -133,7 +229,7 @@ void rgb_marquee_usb_open_symmetric(uint8_t color) {
 
     if (rgb_marquee_usb_open_step == 0) {
         //Adjust the color
-        set_slot_light_color(color);
+        set_slot_light_rgb(color);
         pwm_sequ_val.channel_0 = 1;
         pwm_sequ_val.channel_1 = 1;
         pwm_sequ_val.channel_2 = 1;
@@ -146,6 +242,7 @@ void rgb_marquee_usb_open_symmetric(uint8_t color) {
     }
 
     if (rgb_marquee_usb_open_step == 1) {
+        set_slot_light_rgb(color);
         setled = startled < 4 ? startled : (4 - (startled - 3));
         pwm_config.output_pins[0] = led_pins_arr[setled];
         pwm_config.output_pins[1] = led_pins_arr[7 - setled];
@@ -171,7 +268,7 @@ void rgb_marquee_usb_open_symmetric(uint8_t color) {
 // 4 Lights Dragon Tail horizontal movement cycle (not returning), including the disappearance of the tail and the head of the head slowly
 //dir 0-from 1 card slot to 8 card slot, 1-from 8 card slot to 1 card slot (Direction, the end point is determined by the END parameter)
 //end To scan the number of lamps, decide the final animation area with the direction
-void rgb_marquee_sweep_to(uint8_t color, uint8_t dir, uint8_t end) {
+void rgb_marquee_sweep_to(uint32_t color, uint8_t dir, uint8_t end) {
     uint8_t startled = 0;
     uint8_t setled = 0;
     uint8_t leds2turnon = 0;
@@ -185,7 +282,7 @@ void rgb_marquee_sweep_to(uint8_t color, uint8_t dir, uint8_t end) {
     }
 
     //Adjust the color
-    set_slot_light_color(color);
+    set_slot_light_rgb(color);
     pwm_sequ_val.channel_3 = 1; //Brightest
     pwm_sequ_val.channel_2 = 600;
     pwm_sequ_val.channel_1 = 880;
@@ -248,16 +345,16 @@ void rgb_marquee_sweep_to(uint8_t color, uint8_t dir, uint8_t end) {
 
 //Switch card slot animation
 //led_up The LED to be lit
-//color_led_up The color of the lit LED 0-R,1-G,2-B
+//color_led_up The color of the lit LED 0xRRGGBB
 //led_down LED to be extinguished
-//color_led_down The color of the LED to be extinguished 0-R,1-G,2-B
+//color_led_down The color of the LED to be extinguished 0xRRGGBB
 volatile bool callback_waiting = 0;
 static void rgb_marquee_slot_switch_pwm_callback(nrfx_pwm_evt_type_t event_type) {
     if (event_type == NRF_DRV_PWM_EVT_FINISHED) {
         callback_waiting = 1;
     }
 }
-void rgb_marquee_slot_switch(uint8_t led_down, uint8_t color_led_down, uint8_t led_up, uint8_t color_led_up) {
+void rgb_marquee_slot_switch(uint8_t led_down, uint32_t color_led_down, uint8_t led_up, uint32_t color_led_up) {
     int16_t light_level = 99; //ledBrightnessValue
     uint32_t *led_pins = hw_get_led_array();
     if (led_down >= 0 && led_down <= 7) {
@@ -276,7 +373,7 @@ void rgb_marquee_slot_switch(uint8_t led_down, uint8_t color_led_down, uint8_t l
                 nrf_gpio_pin_clear(led_pins[led_up]);
             }
 
-            set_slot_light_color(color_led_down);
+            set_slot_light_rgb(color_led_down);
 
             nrf_drv_pwm_init(&pwm0_ins, &pwm_config, rgb_marquee_slot_switch_pwm_callback);
             nrf_drv_pwm_simple_playback(&pwm0_ins, &seq, 1, NRF_DRV_PWM_FLAG_LOOP);
@@ -307,7 +404,7 @@ void rgb_marquee_slot_switch(uint8_t led_down, uint8_t color_led_down, uint8_t l
                 nrf_gpio_pin_clear(led_pins[led_down]);
             }
 
-            set_slot_light_color(color_led_up);
+            set_slot_light_rgb(color_led_up);
 
             nrf_drv_pwm_init(&pwm0_ins, &pwm_config, rgb_marquee_slot_switch_pwm_callback);
             nrf_drv_pwm_simple_playback(&pwm0_ins, &seq, 1, NRF_DRV_PWM_FLAG_LOOP);
@@ -324,7 +421,7 @@ void rgb_marquee_slot_switch(uint8_t led_down, uint8_t color_led_down, uint8_t l
 //dir 0-from 1 card slot to 8 card slot, 1-from 8 card slot to 1 card slot (Direction, the end point is determined by the END parameter)
 //end To scan the number of lamps, decide the final animation area with the direction
 //start_light stop_light 0-99 Indicate gradient brightness
-void rgb_marquee_sweep_fade(uint8_t color, uint8_t dir, uint8_t end, uint8_t start_light, uint8_t stop_light) {
+void rgb_marquee_sweep_fade(uint32_t color, uint8_t dir, uint8_t end, uint8_t start_light, uint8_t stop_light) {
     uint8_t startled = 0;
     uint8_t setled = 0;
     uint8_t leds2turnon = 0;
@@ -339,7 +436,7 @@ void rgb_marquee_sweep_fade(uint8_t color, uint8_t dir, uint8_t end, uint8_t sta
     }
 
     //Adjust the color
-    set_slot_light_color(color);
+    set_slot_light_rgb(color);
     while (1) {
         //Set the brightness
         // The current brightness coefficient
@@ -395,10 +492,10 @@ void rgb_marquee_sweep_fade(uint8_t color, uint8_t dir, uint8_t end, uint8_t sta
 }
 
 //Single light level movement
-//color The color of the lit LED 0-R,1-G,2-B
+//color The color of the lit LED 0xRRGGBB
 //start Start the lamp position
 //stop Stop lamp position
-void rgb_marquee_sweep_from_to(uint8_t color, uint8_t start, uint8_t stop) {
+void rgb_marquee_sweep_from_to(uint32_t color, uint8_t start, uint8_t stop) {
     int8_t setled = start;
     uint32_t *led_pins = hw_get_led_array();
     //Set the brightness
@@ -407,7 +504,7 @@ void rgb_marquee_sweep_from_to(uint8_t color, uint8_t start, uint8_t stop) {
     pwm_sequ_val.channel_1 = 0;
     pwm_sequ_val.channel_0 = get_pwmduty(99);
     //Adjust the color
-    set_slot_light_color(color);
+    set_slot_light_rgb(color);
     while (start < stop ? (setled < stop + 1) : (setled > (int8_t)stop - 1)) {
         //Close all channels
         pwm_config.output_pins[0] = NRF_DRV_PWM_PIN_NOT_USED;
@@ -538,11 +635,11 @@ void rgb_marquee_usb_idle(void) {
     }
 }
 
-void rgb_marquee_symmetric_out(uint8_t color, uint8_t slot) {
+void rgb_marquee_symmetric_out(uint32_t color, uint8_t slot) {
     uint32_t *led_pins = hw_get_led_array();
 
     //Adjust the color
-    set_slot_light_color(color);
+    set_slot_light_rgb(color);
     pwm_sequ_val.channel_3 = 950;
     pwm_sequ_val.channel_2 = 770;
     pwm_sequ_val.channel_1 = 770;
@@ -598,11 +695,11 @@ void rgb_marquee_symmetric_out(uint8_t color, uint8_t slot) {
     }
 }
 
-void rgb_marquee_symmetric_in(uint8_t color, uint8_t slot) {
+void rgb_marquee_symmetric_in(uint32_t color, uint8_t slot) {
     uint32_t *led_pins = hw_get_led_array();
 
     //Adjust the color
-    set_slot_light_color(color);
+    set_slot_light_rgb(color);
     pwm_sequ_val.channel_3 = 950;
     pwm_sequ_val.channel_2 = 770;
     pwm_sequ_val.channel_1 = 770;

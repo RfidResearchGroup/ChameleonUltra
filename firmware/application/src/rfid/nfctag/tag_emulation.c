@@ -358,11 +358,13 @@ void tag_emulation_delete_data(uint8_t slot, tag_sense_type_t sense_type) {
         case TAG_SENSE_HF: {
             slotConfig.slots[slot].tag_hf = TAG_TYPE_UNDEFINED;
             slotConfig.slots[slot].enabled_hf = false;
+            slotConfig.slots[slot].color_hf = 0;
         }
         break;
         case TAG_SENSE_LF: {
             slotConfig.slots[slot].tag_lf = TAG_TYPE_UNDEFINED;
             slotConfig.slots[slot].enabled_lf = false;
+            slotConfig.slots[slot].color_lf = 0;
         }
         break;
         default:
@@ -472,6 +474,16 @@ static void tag_emulation_migrate_slot_config_v0_to_v8(void) {
     }
 }
 
+static void tag_emulation_migrate_slot_config_v8_to_v9(void) {
+    NRF_LOG_INFO("Migrating slotConfig v8...");
+    // The color bits were unused padding before v9, and the v0->v8 migration left old data there
+    for (uint8_t i = 0; i < ARRAYLEN(slotConfig.slots); i++) {
+        slotConfig.slots[i].color_hf = 0;
+        slotConfig.slots[i].color_lf = 0;
+    }
+    slotConfig.version = TAG_SLOT_CONFIG_CURRENT_VERSION;
+}
+
 static void tag_emulation_migrate_slot_config(void) {
     switch (slotConfig.version) {
         case 0:
@@ -483,6 +495,8 @@ static void tag_emulation_migrate_slot_config(void) {
         case 6:
         case 7:
             tag_emulation_migrate_slot_config_v0_to_v8();
+        case 8:
+            tag_emulation_migrate_slot_config_v8_to_v9();
 
             /*
              * Add new migration steps ABOVE THIS COMMENT
@@ -627,6 +641,40 @@ void tag_emulation_slot_set_enable(uint8_t slot, tag_sense_type_t sense_type, bo
     }
     if (sense_type == TAG_SENSE_HF) {
         slotConfig.slots[slot].enabled_hf = enable;
+    }
+}
+
+/**
+ * Get the LED color of the card in the slot as 0xRRGGBB, 0 if not set
+ */
+uint32_t tag_emulation_slot_get_color(uint8_t slot, tag_sense_type_t sense_type) {
+    uint16_t c = 0;
+    if (sense_type == TAG_SENSE_HF) {
+        c = slotConfig.slots[slot].color_hf;
+    } else if (sense_type == TAG_SENSE_LF) {
+        c = slotConfig.slots[slot].color_lf;
+    }
+    // RGB555 -> RGB888, replicating the top bits so 0x1F maps to 0xFF
+    uint32_t r = (c >> 10) & 0x1F, g = (c >> 5) & 0x1F, b = c & 0x1F;
+    r = (r << 3) | (r >> 2);
+    g = (g << 3) | (g >> 2);
+    b = (b << 3) | (b >> 2);
+    return (r << 16) | (g << 8) | b;
+}
+
+/**
+ * Set the LED color (0xRRGGBB) of the card in the slot, 0 resets it to the legacy HF/LF color
+ */
+void tag_emulation_slot_set_color(uint8_t slot, tag_sense_type_t sense_type, uint32_t rgb) {
+    // RGB888 -> RGB555, rounding to the nearest level
+    uint16_t r = ((((rgb >> 16) & 0xFF) * 31) + 127) / 255;
+    uint16_t g = ((((rgb >> 8) & 0xFF) * 31) + 127) / 255;
+    uint16_t b = (((rgb & 0xFF) * 31) + 127) / 255;
+    uint16_t c = (r << 10) | (g << 5) | b;
+    if (sense_type == TAG_SENSE_HF) {
+        slotConfig.slots[slot].color_hf = c;
+    } else if (sense_type == TAG_SENSE_LF) {
+        slotConfig.slots[slot].color_lf = c;
     }
 }
 

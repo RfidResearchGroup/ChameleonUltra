@@ -3,6 +3,7 @@
 #include "bsp_delay.h"
 #include "usb_main.h"
 #include "rfid_main.h"
+#include "rgb_marquee.h"
 #include "ble_main.h"
 #include "syssleep.h"
 #include "hex_utils.h"
@@ -1936,6 +1937,39 @@ static data_frame_tx_t *cmd_processor_delete_slot_tag_nick(uint16_t cmd, uint16_
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
+static data_frame_tx_t *cmd_processor_set_slot_color(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t slot;
+        uint8_t sense_type;
+        uint8_t rgb[3];     // 0,0,0 resets to the legacy HF/LF color
+    } PACKED payload_t;
+    payload_t *payload = (payload_t *)data;
+    if (length != sizeof(payload_t) ||
+            payload->slot >= TAG_MAX_SLOT_NUM ||
+            (payload->sense_type != TAG_SENSE_HF && payload->sense_type != TAG_SENSE_LF)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    uint32_t color = (payload->rgb[0] << 16) | (payload->rgb[1] << 8) | payload->rgb[2];
+    tag_emulation_slot_set_color(payload->slot, payload->sense_type, color);
+    if (payload->slot == tag_emulation_get_slot() && rgb_slot_indicator_is_shown()) {
+        light_up_by_slot();
+    }
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_get_all_slot_colors(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t colors[TAG_MAX_SLOT_NUM][2][3];     // per slot: HF RGB, LF RGB; 0,0,0 = not set
+    for (uint8_t slot = 0; slot < TAG_MAX_SLOT_NUM; slot++) {
+        for (uint8_t i = 0; i < 2; i++) {
+            uint32_t color = tag_emulation_slot_get_color(slot, i == 0 ? TAG_SENSE_HF : TAG_SENSE_LF);
+            colors[slot][i][0] = color >> 16;
+            colors[slot][i][1] = color >> 8;
+            colors[slot][i][2] = color;
+        }
+    }
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(colors), (uint8_t *)colors);
+}
+
 static data_frame_tx_t *cmd_processor_mf1_get_emulator_config(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t mf1_info[5] = {};
     mf1_info[0] = nfc_tag_mf1_is_detection_enable();
@@ -3263,6 +3297,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_SLEEP_TIMEOUT,            NULL,                        cmd_processor_get_sleep_timeout,             NULL                   },
     {    DATA_CMD_SET_SLEEP_TIMEOUT,            NULL,                        cmd_processor_set_sleep_timeout,             NULL                   },
     {    DATA_CMD_GET_ALL_SLOT_NICKS,           NULL,                        cmd_processor_get_all_slot_nicks,            NULL                   },
+    {    DATA_CMD_SET_SLOT_COLOR,               NULL,                        cmd_processor_set_slot_color,                NULL                   },
+    {    DATA_CMD_GET_ALL_SLOT_COLORS,          NULL,                        cmd_processor_get_all_slot_colors,           NULL                   },
     {    DATA_CMD_GET_LONG_PRESS_THRESHOLD,     NULL,                        cmd_processor_get_long_press_threshold,      NULL                   },
     {    DATA_CMD_SET_LONG_PRESS_THRESHOLD,     NULL,                        cmd_processor_set_long_press_threshold,      NULL                   },
 

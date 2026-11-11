@@ -108,6 +108,7 @@ uint32_t *hw_get_rgb_array(void);
 chameleon_device_type_t hw_get_device_type(void);
 uint8_t hw_get_version_code(void);
 void set_slot_light_color(chameleon_rgb_type_t color);
+void hw_rgb_pwm_release(void);
 
 
 #endif

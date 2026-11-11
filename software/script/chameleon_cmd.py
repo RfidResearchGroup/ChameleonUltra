@@ -1594,6 +1594,41 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
+    def set_slot_color(self, slot: SlotNumber, sense_type: TagSenseType, color: int):
+        """
+        Set the LED color shown for the card of the slot (not persisted until slot_data_config_save).
+
+        :param slot:  Card slot number
+        :param sense_type:  field type
+        :param color:  0xRRGGBB, 0 resets to the default HF / LF color
+        :return:
+        """
+        if not 0 <= color <= 0xFFFFFF:
+            raise ValueError("Color must be 0xRRGGBB.")
+        data = struct.pack(
+            "!BB3s", SlotNumber.to_fw(slot), sense_type, color.to_bytes(3, "big")
+        )
+        return self.device.send_cmd_sync(Command.SET_SLOT_COLOR, data)
+
+    @expect_response(Status.SUCCESS)
+    def get_all_slot_colors(self):
+        """
+        Get the LED colors of all slots.
+
+        :return: list of 8 dicts {'hf': 0xRRGGBB, 'lf': 0xRRGGBB}, 0 = default color
+        """
+        resp = self.device.send_cmd_sync(Command.GET_ALL_SLOT_COLORS)
+        d = resp.data
+        resp.parsed = [
+            {
+                "hf": int.from_bytes(d[i * 6 : i * 6 + 3], "big"),
+                "lf": int.from_bytes(d[i * 6 + 3 : i * 6 + 6], "big"),
+            }
+            for i in range(len(d) // 6)
+        ]
+        return resp
+
+    @expect_response(Status.SUCCESS)
     def delete_slot_tag_nick(self, slot: SlotNumber, sense_type: TagSenseType):
         """
         Delete the nick name of the slot.
