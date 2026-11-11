@@ -5,7 +5,7 @@
 #include "bsp_delay.h"
 #include "fds_util.h"
 #include "nrf_gpio.h"
-#include "nrf_soc.h"
+#include "nrf_drv_clock.h"
 #include "nrfx_lpcomp.h"
 #include "nrfx_pwm.h"
 #include "protocols/em410x.h"
@@ -164,14 +164,11 @@ static void lf_sense_enable(void) {
     // which rules out coherent demodulation or phase-lock-based approaches,
     // but does not preclude the differential-phase encodings supported here.
     //
-    // Paired release in lf_sense_disable(). SD reference-counts HFXO requests,
-    // so this coexists with BLE. Both functions run from thread context
-    // (tag_mode_enter/tag_emulation_sense_end) where SVCs are safe.
-    sd_clock_hfclk_request();
-    uint32_t hfclk_running = 0;
-    while (!hfclk_running) {
-        sd_clock_hfclk_is_running(&hfclk_running);
-    }
+    // Share the driver's reference count with HF emulation and USB. Raw
+    // SoftDevice requests do not track ownership by individual modules.
+    // Both functions run from thread context, where waiting is safe.
+    nrf_drv_clock_hfclk_request(NULL);
+    while (!nrf_drv_clock_hfclk_is_running()) {}
 
     lpcomp_init();
     pwm_init();  // use precise hardware pwm to broadcast card id
@@ -185,7 +182,7 @@ static void lf_sense_disable(void) {
     nrfx_lpcomp_uninit();
     m_pwm_seq = NULL;
     m_is_lf_emulating = false;
-    sd_clock_hfclk_release();
+    nrf_drv_clock_hfclk_release();
 }
 
 static enum {

@@ -62,6 +62,7 @@ typedef struct
     bool               fieldevents_filter_active; /**< Flag that indicates that the field events are ignored. */
     bool               is_hfclk_on;               /**< HFCLK has started - one of the NFC activation conditions. */
     bool               is_delayed;                /**< Required time delay has passed - one of the NFC activation conditions. */
+    bool               is_field_validation_pending; /**< Second activation check is pending. */
 #else
     uint32_t           field_state_cnt;           /**< Counter of the FIELDLOST events. */
 #endif // defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
@@ -148,6 +149,24 @@ typedef struct
 } nrfx_nfct_control_block_t;
 
 static nrfx_nfct_control_block_t m_nfct_cb;
+
+/* A stopped workaround timer cannot finish an old field-validation cycle.
+ * Reset its transient state whenever the driver lifetime changes. Preserve
+ * the configured timer instance and the application timer object. */
+static void nrfx_nfct_field_state_reset(void)
+{
+    m_nfct_cb.field_on = false;
+#if defined(USE_TIMER_WORKAROUND)
+#if defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
+    m_timer_workaround.fieldevents_filter_active = false;
+    m_timer_workaround.is_hfclk_on = false;
+    m_timer_workaround.is_delayed = false;
+    m_timer_workaround.is_field_validation_pending = false;
+#else
+    m_timer_workaround.field_state_cnt = 0;
+#endif
+#endif
+}
 
 /**
  * @brief Common part of the setup used for the NFCT initialization and reinitialization.
@@ -270,11 +289,9 @@ static void nrfx_nfct_field_event_handler(volatile nrfx_nfct_field_state_t field
 #if defined(NRF52833_XXAA) || defined(NRF52840_XXAA)
 static void nrfx_nfct_activate_check(void)
 {
-    static bool is_field_validation_pending = false;
-
-    if (is_field_validation_pending)
+    if (m_timer_workaround.is_field_validation_pending)
     {
-        is_field_validation_pending                  = false;
+        m_timer_workaround.is_field_validation_pending = false;
         m_timer_workaround.fieldevents_filter_active = false;
 
         // Check the field status and take action if field is lost.
@@ -285,7 +302,7 @@ static void nrfx_nfct_activate_check(void)
     if ((m_timer_workaround.is_hfclk_on) && (m_timer_workaround.is_delayed))
     {
         nrf_nfct_task_trigger(NRF_NFCT_TASK_ACTIVATE);
-        is_field_validation_pending = true;
+        m_timer_workaround.is_field_validation_pending = true;
 
         // Start the timer second time to validate whether the tag has locked to the field.
         nrfx_timer_clear(&m_timer_workaround.timer);
@@ -457,6 +474,7 @@ nrfx_err_t nrfx_nfct_init(nrfx_nfct_config_t const * p_config)
     }
 
     m_nfct_cb.config = *p_config;
+    nrfx_nfct_field_state_reset();
     nrfx_nfct_hw_init_setup();
 
     NRFX_IRQ_PENDING_CLEAR(NFCT_IRQn);
@@ -510,6 +528,7 @@ void nrfx_nfct_uninit(void)
     nrfx_timer_uninit(&m_timer_workaround.timer);
 #endif // defined(USE_TIMER_WORKAROUND)
 
+    nrfx_nfct_field_state_reset();
     m_nfct_cb.state = NRFX_DRV_STATE_UNINITIALIZED;
 }
 
@@ -790,6 +809,27 @@ void nrfx_nfct_irq_handler(void)
         // nothing to do but clear the event else IRQ handler will be called continuously
         nrf_nfct_event_clear(NRF_NFCT_EVENT_RXFRAMESTART);
     }
+    /* Dispatch an already latched timeout before processing new RX data.
+     * An RX observer may schedule a new response; delivering the older error
+     * afterwards would incorrectly associate that error with the new response.
+     * SELECTED clears previous errors below, so preserve that existing path.
+     * Leave ERROR pending: the normal handler below must still observe any
+     * new timeout raised while the RX observer runs, and all other errors.
+     */
+    if (NRFX_NFCT_EVT_ACTIVE(RXFRAMEEND) &&
+        NRFX_NFCT_EVT_ACTIVE(ERROR) &&
+        !NRFX_NFCT_EVT_ACTIVE(SELECTED) &&
+        (nrf_nfct_error_status_get() & NRF_NFCT_ERROR_FRAMEDELAYTIMEOUT_MASK))
+    {
+        nrf_nfct_error_status_clear(NRF_NFCT_ERROR_FRAMEDELAYTIMEOUT_MASK);
+        nrfx_nfct_evt_t nfct_evt =
+        {
+            .evt_id = NRFX_NFCT_EVT_ERROR
+        };
+        nfct_evt.params.error.reason = NRFX_NFCT_ERROR_FRAMEDELAYTIMEOUT;
+        NRFX_NFCT_CB_HANDLE(m_nfct_cb.config.cb, nfct_evt);
+    }
+
     if (NRFX_NFCT_EVT_ACTIVE(RXFRAMEEND))
     {
         nrf_nfct_event_clear(NRF_NFCT_EVENT_RXFRAMEEND);
