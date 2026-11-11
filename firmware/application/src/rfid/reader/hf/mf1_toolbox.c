@@ -1205,7 +1205,13 @@ uint8_t mf1_static_encrypted_nonces_acquire(uint64_t keyKnown, uint8_t sector_co
 
     *sectors_acquired = 0;
 
-    for (uint16_t sec = starting_sector; sec < sector_count && sec < 40; sec++) {
+    // sector_count is the number of sectors to acquire, not the index of the last one
+    uint16_t end_sector = (uint16_t)starting_sector + (uint16_t)sector_count;
+    if (end_sector > 40) {
+        end_sector = 40;
+    }
+
+    for (uint16_t sec = starting_sector; sec < end_sector; sec++) {
         mf1_toolbox_report_healthy();
         uint16_t blockNo = (sec < 32) ? sec * 4 + 3 : 128 + (sec - 32) * 16 + 15;
 
@@ -1273,7 +1279,8 @@ uint8_t mf1_static_encrypted_nonces_acquire(uint64_t keyKnown, uint8_t sector_co
             }
         }
 
-        memcpy(sector_data[sec], &sector_nonces, sizeof(sector_nonces));
+        // store relatively, so sector_data[0] is the first requested sector
+        memcpy(sector_data[*sectors_acquired], &sector_nonces, sizeof(sector_nonces));
         (*sectors_acquired)++;
     }
 
