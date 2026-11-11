@@ -239,13 +239,16 @@ static void load_data_by_tag_type(uint8_t slot, tag_specific_type_t tag_type) {
     // it may be caused by the firmware update at this time, the data must be deleted and rebuilt.
     uint16_t length = buffer->length;
     bool ret = fds_read_sync(map_info.id, map_info.key, &length, buffer->buffer);
-    if (false == ret) {
+    if (ret) {
+        ret = tag_emulation_load_by_buffer(tag_type, true);
+    } else {
         NRF_LOG_INFO("tag slot data no exists.");
-        return;
     }
-    ret = tag_emulation_load_by_buffer(tag_type, true);
     if (ret) {
         NRF_LOG_INFO("load tag data in slot %d, type %d done.", slot, tag_type);
+    } else if (sense_type == TAG_SENSE_LF) {
+        // LF emulation would otherwise play the waveform it loaded last, from another slot or type
+        lf_tag_data_clear();
     }
 }
 
@@ -682,8 +685,9 @@ void tag_emulation_change_type(uint8_t slot, tag_specific_type_t tag_type) {
             break;  // never happen
     }
     NRF_LOG_INFO("tag type = %d", tag_type);
-    // After the update is completed, we need to notify the relevant data in the update of the memory
-    if (sense_type != TAG_SENSE_NO) {
+    // After the update is completed, we need to notify the relevant data in the update of the memory.
+    // The data buffers hold the active slot's data. Another slot's data loads when that slot becomes active.
+    if (sense_type != TAG_SENSE_NO && slot == tag_emulation_get_slot()) {
         load_data_by_tag_type(slot, tag_type);
         NRF_LOG_INFO("reload data success.");
     }
