@@ -2055,6 +2055,18 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(Command.MF1_SET_FIELD_OFF_DO_RESET, data)
 
     @expect_response(Status.SUCCESS)
+    def mf1_get_nested_static_nonce(self):
+        resp = self.device.send_cmd_sync(Command.MF1_GET_NESTED_STATIC_NONCE)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = struct.unpack("!B", resp.data)[0] == 1
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def mf1_set_nested_static_nonce(self, enabled: bool):
+        data = struct.pack("!B", enabled)
+        return self.device.send_cmd_sync(Command.MF1_SET_NESTED_STATIC_NONCE, data)
+
+    @expect_response(Status.SUCCESS)
     def get_long_press_threshold(self):
         """
         Get the long button press threshold (in ms)

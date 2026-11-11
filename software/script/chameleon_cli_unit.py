@@ -4092,6 +4092,17 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
             action="store_true",
             help="Disable FIELD_OFF_DO_RESET",
         )
+        nested_static_group = parser.add_mutually_exclusive_group()
+        nested_static_group.add_argument(
+            "--enable-nested-static",
+            action="store_true",
+            help="Constant nested-auth nonce (FM11RF08S static encrypted nonce)",
+        )
+        nested_static_group.add_argument(
+            "--disable-nested-static",
+            action="store_true",
+            help="Nested-auth nonce follows the configured PRNG type",
+        )
         return parser
 
     def on_exec(self, args: argparse.Namespace):
@@ -4129,6 +4140,7 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
             args, uid, atqa, sak, ats
         )
         field_off_do_reset = self.cmd.mf1_get_field_off_do_reset()
+        nested_static_nonce = self.cmd.mf1_get_nested_static_nonce()
 
         if args.enable_gen1a:
             change_requested = True
@@ -4231,6 +4243,26 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
                 print(
                     f"{color_string((CY, 'Requested FIELD_OFF_DO_RESET already disabled'))}"
                 )
+        if args.enable_nested_static:
+            change_requested = True
+            if not nested_static_nonce:
+                nested_static_nonce = True
+                self.cmd.mf1_set_nested_static_nonce(nested_static_nonce)
+                change_done = True
+            else:
+                print(
+                    f"{color_string((CY, 'Requested nested static nonce already enabled'))}"
+                )
+        elif args.disable_nested_static:
+            change_requested = True
+            if nested_static_nonce:
+                nested_static_nonce = False
+                self.cmd.mf1_set_nested_static_nonce(nested_static_nonce)
+                change_done = True
+            else:
+                print(
+                    f"{color_string((CY, 'Requested nested static nonce already disabled'))}"
+                )
 
         if change_done:
             print(" - MF1 Emulator settings updated")
@@ -4265,6 +4297,10 @@ class HFMFEConfig(SlotIndexArgsAndGoUnit, HF14AAntiCollArgsUnit, DeviceRequiredU
             )
             print(
                 f"- {'FIELD_OFF_DO_RESET:':40}{f'{enabled_str}' if field_off_do_reset else f'{disabled_str}'}"
+            )
+            print(
+                f"- {'Nested static nonce (FM11RF08S):':40}"
+                f"{f'{enabled_str}' if nested_static_nonce else f'{disabled_str}'}"
             )
 
 
