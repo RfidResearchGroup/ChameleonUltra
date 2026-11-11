@@ -10,6 +10,8 @@ extern nrfx_pwm_t m_pwm;
 void lf_125khz_radio_init(void);
 void lf_125khz_radio_uninit(void);
 
+#define LF_PHASE_TICKS_PER_PERIOD 128
+void lf_125khz_radio_saadc_phase_set(uint8_t ticks);
 void lf_125khz_radio_saadc_enable(lf_adc_callback_t cb);
 void lf_125khz_radio_gpiote_enable(void);
 void lf_125khz_radio_saadc_disable(void);

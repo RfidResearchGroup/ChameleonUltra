@@ -16,6 +16,14 @@ nrfx_timer_t m_pwm_timer_counter = NRFX_TIMER_INSTANCE(2);
 nrf_ppi_channel_t m_pwm_saadc_sample_ppi_channel;
 nrf_ppi_channel_t m_pwm_timer_count_ppi_channel;
 
+// Optional delayed ADC trigger: TIMER3 is cleared on every carrier period
+// (PWMPERIODEND) and triggers the sample at CC0, so the sample can be taken at a
+// chosen point in the 8us carrier cycle. See lf_125khz_radio_saadc_phase_set().
+static nrfx_timer_t m_phase_timer = NRFX_TIMER_INSTANCE(3);
+static nrf_ppi_channel_t m_pwm_phase_clear_ppi_channel;
+static nrf_ppi_channel_t m_phase_saadc_sample_ppi_channel;
+static uint8_t m_saadc_phase_ticks = 0;  // 0 = sample directly on PWMPERIODEND
+
 // At present, only channel 1 is used, so only one channel can be configured
 static nrf_pwm_values_individual_t m_lf_125khz_pwm_seq_val[] = {
     {2, 0, 0, 0},
@@ -117,18 +125,59 @@ static void pwm_saadc_sample_ppi_init(void) {
     APP_ERROR_CHECK(err_code);
 }
 
+static void phase_timer_init(void) {
+    nrfx_timer_config_t cfg = NRFX_TIMER_DEFAULT_CONFIG;
+    cfg.frequency = NRF_TIMER_FREQ_16MHz;  // 62.5ns per tick, 128 ticks per carrier period
+    cfg.mode = NRF_TIMER_MODE_TIMER;
+    cfg.bit_width = NRF_TIMER_BIT_WIDTH_16;
+    APP_ERROR_CHECK(nrfx_timer_init(&m_phase_timer, &cfg, NULL));
+}
+
+static void phase_ppi_init(void) {
+    APP_ERROR_CHECK(nrfx_ppi_channel_alloc(&m_pwm_phase_clear_ppi_channel));
+    APP_ERROR_CHECK(nrfx_ppi_channel_assign(
+                        m_pwm_phase_clear_ppi_channel,
+                        nrfx_pwm_event_address_get(&m_pwm, NRF_PWM_EVENT_PWMPERIODEND),
+                        nrfx_timer_task_address_get(&m_phase_timer, NRF_TIMER_TASK_CLEAR)));
+
+    APP_ERROR_CHECK(nrfx_ppi_channel_alloc(&m_phase_saadc_sample_ppi_channel));
+    APP_ERROR_CHECK(nrfx_ppi_channel_assign(
+                        m_phase_saadc_sample_ppi_channel,
+                        nrfx_timer_compare_event_address_get(&m_phase_timer, NRF_TIMER_CC_CHANNEL0),
+                        nrf_saadc_task_address_get(NRF_SAADC_TASK_SAMPLE)));
+}
+
+/**
+ * Set where in the 8us carrier period the ADC samples, in 62.5ns ticks (0-127).
+ * 0 keeps the default trigger. Takes effect at the next lf_125khz_radio_saadc_enable();
+ * callers that change it must set it back to 0 when done, since every other reader
+ * shares the trigger.
+ */
+void lf_125khz_radio_saadc_phase_set(uint8_t ticks) {
+    if (ticks >= LF_PHASE_TICKS_PER_PERIOD) {
+        ticks = LF_PHASE_TICKS_PER_PERIOD - 1;
+    }
+    m_saadc_phase_ticks = ticks;
+}
+
 void lf_125khz_radio_saadc_enable(lf_adc_callback_t cb) {
     register_lf_adc_callback(cb);
 
-    nrfx_err_t err_code;
-    err_code = nrfx_ppi_channel_enable(m_pwm_saadc_sample_ppi_channel);
-    APP_ERROR_CHECK(err_code);
+    if (m_saadc_phase_ticks == 0) {
+        APP_ERROR_CHECK(nrfx_ppi_channel_enable(m_pwm_saadc_sample_ppi_channel));
+        return;
+    }
+    nrfx_timer_compare(&m_phase_timer, NRF_TIMER_CC_CHANNEL0, m_saadc_phase_ticks, false);
+    nrfx_timer_enable(&m_phase_timer);
+    APP_ERROR_CHECK(nrfx_ppi_channel_enable(m_pwm_phase_clear_ppi_channel));
+    APP_ERROR_CHECK(nrfx_ppi_channel_enable(m_phase_saadc_sample_ppi_channel));
 }
 
 void lf_125khz_radio_saadc_disable(void) {
-    nrfx_err_t err_code;
-    err_code = nrfx_ppi_channel_disable(m_pwm_saadc_sample_ppi_channel);
-    APP_ERROR_CHECK(err_code);
+    APP_ERROR_CHECK(nrfx_ppi_channel_disable(m_pwm_saadc_sample_ppi_channel));
+    APP_ERROR_CHECK(nrfx_ppi_channel_disable(m_pwm_phase_clear_ppi_channel));
+    APP_ERROR_CHECK(nrfx_ppi_channel_disable(m_phase_saadc_sample_ppi_channel));
+    nrfx_timer_disable(&m_phase_timer);
 
     unregister_lf_adc_callback();
 }
@@ -160,6 +209,8 @@ void lf_125khz_radio_init(void) {
         pwm_timer_counter_init();
         pwm_timer_count_ppi_init();
         pwm_saadc_sample_ppi_init();
+        phase_timer_init();
+        phase_ppi_init();
         m_reader_inited = true;
     }
 }
@@ -169,6 +220,9 @@ void lf_125khz_radio_uninit(void) {
     if (m_reader_inited) {
         nrfx_ppi_channel_free(m_pwm_saadc_sample_ppi_channel);
         nrfx_ppi_channel_free(m_pwm_timer_count_ppi_channel);
+        nrfx_ppi_channel_free(m_pwm_phase_clear_ppi_channel);
+        nrfx_ppi_channel_free(m_phase_saadc_sample_ppi_channel);
+        nrfx_timer_uninit(&m_phase_timer);
         nrfx_timer_uninit(&m_pwm_timer_counter);
         nrfx_pwm_uninit(&m_pwm);
         m_reader_inited = false;
