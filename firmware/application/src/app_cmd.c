@@ -24,12 +24,6 @@
 #include "parity.h"
 #endif
 #include "nfc_14a.h"
-/* Forward declarations for functions added to nfc_14a.c/h in this PR.
- * These are declared here to avoid build failure if nfc_14a.h is not yet
- * updated on the build system. */
-extern void nfc_tag_14a_set_tx_sniff_cb(void (*cb)(const uint8_t *, uint16_t));
-extern void nfc_tag_14a_clear_tx_sniff_cb(void);
-extern void nfc_tag_14a_set_sniff_passive(bool passive);
 #include "nfc_14a_4.h"
 
 #define NRF_LOG_MODULE_NAME app_cmd
@@ -2487,21 +2481,31 @@ static data_frame_tx_t *cmd_processor_hf14a_auth_trace(uint16_t cmd, uint16_t st
 #define HF_SNIFF_MAX_FRAMES  200
 
 static uint8_t  m_sniff_buf[HF_SNIFF_BUF_SIZE];
-static uint16_t m_sniff_buf_len = 0;
-static bool     m_sniff_active  = false;
+static volatile uint16_t m_sniff_buf_len = 0;
+static volatile bool m_sniff_active = false;
 static uint16_t m_sniff_cb_count = 0;   /* debug: total callback invocations */
+static bool m_sniff_metadata = false;
+static const uint8_t m_sniff_v1_header[] = {'C', 'U', '1', '4', 1};
 
 /* Encode one frame into m_sniff_buf.
  * Format: [szBits_be16][data...]
  * Bit 15 of szBits: 0 = reader→card (RX), 1 = card→reader (TX).
- * Real szBits always < 512 so bit15 is always free in genuine frames.
- * Old parsers (bit15=0 for all frames) still work correctly. */
+ * When metadata is requested, the stream starts with "CU14" and version 1,
+ * and each record adds a FRAMECONFIG byte after its bit count. RX data is
+ * captured before software parity removal; TX data is the DMA payload before
+ * hardware parity/CRC insertion and may have unused bits at its start.
+ * Requests without metadata preserve the existing record format. */
 static void hf14a_sniff_store(const uint8_t *data, uint16_t szBits, bool is_tx) {
     uint16_t szBytes = (szBits + 7) / 8;
-    if (m_sniff_buf_len + 2 + szBytes > HF_SNIFF_BUF_SIZE) return;
+    if (szBits == 0 || szBits >= 0x8000 ||
+            m_sniff_buf_len + 2 + (m_sniff_metadata ? 1 : 0) + szBytes > HF_SNIFF_BUF_SIZE) return;
     uint16_t hdr = szBits | (is_tx ? 0x8000u : 0x0000u);
     m_sniff_buf[m_sniff_buf_len++] = (hdr >> 8) & 0xFF;
     m_sniff_buf[m_sniff_buf_len++] =  hdr        & 0xFF;
+    if (m_sniff_metadata) {
+        m_sniff_buf[m_sniff_buf_len++] = (uint8_t)(is_tx ?
+            nfc_tag_14a_get_tx_frame_config() : nfc_tag_14a_get_rx_frame_config());
+    }
     memcpy(&m_sniff_buf[m_sniff_buf_len], data, szBytes);
     m_sniff_buf_len += szBytes;
 }
@@ -2518,7 +2522,10 @@ static void hf14a_sniff_tx_frame_cb(const uint8_t *data, uint16_t szBits) {
 }
 
 static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    /* Optional 2-byte big-endian timeout in ms (default 5000ms) */
+    /* Optional timeout BE16, followed by metadata flag bit 0. */
+    if (length > 3 || (length == 3 && (data[2] & ~1u) != 0)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
     uint32_t timeout_ms = 5000;
     if (length >= 2) {
         timeout_ms = ((uint32_t)data[0] << 8) | data[1];
@@ -2543,6 +2550,11 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
      * with a slot active before running this command. */
     m_sniff_buf_len = 0;
     m_sniff_cb_count = 0;
+    m_sniff_metadata = length == 3 && (data[2] & 1u) != 0;
+    if (m_sniff_metadata) {
+        memcpy(m_sniff_buf, m_sniff_v1_header, sizeof(m_sniff_v1_header));
+        m_sniff_buf_len = sizeof(m_sniff_v1_header);
+    }
     m_sniff_active  = true;
     /* passive mode intentionally disabled: CU acts as the card so it must
      * respond normally to the reader (ATQA/UID/SAK). TX sniff captures responses. */
@@ -2566,7 +2578,7 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
     nfc_tag_14a_clear_tx_sniff_cb();
     tag_emulation_sense_run();  /* restore slot-based sense state */
 
-    if (m_sniff_buf_len == 0) {
+    if (m_sniff_buf_len == (m_sniff_metadata ? sizeof(m_sniff_v1_header) : 0)) {
         return data_frame_make(cmd, STATUS_HF_TAG_NO, 0, NULL);
     }
     return data_frame_make(cmd, STATUS_SUCCESS, m_sniff_buf_len, m_sniff_buf);

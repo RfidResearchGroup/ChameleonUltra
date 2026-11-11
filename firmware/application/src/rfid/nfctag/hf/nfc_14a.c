@@ -82,6 +82,14 @@ void nfc_tag_14a_clear_tx_sniff_cb(void) {
     m_tx_sniff_cb = NULL;
 }
 
+uint32_t nfc_tag_14a_get_tx_frame_config(void) {
+    return NRF_NFCT->TXD.FRAMECONFIG;
+}
+
+uint32_t nfc_tag_14a_get_rx_frame_config(void) {
+    return NRF_NFCT->RXD.FRAMECONFIG;
+}
+
 /* Passive sniff mode: suppress all tag TX responses so the CU does not
  * participate in anticollision and avoids colliding with the real card. */
 static bool m_sniff_passive = false;
