@@ -25,12 +25,12 @@ Read the [available documentation](https://github.com/RfidResearchGroup/Chameleo
 # Compatible applications
 
 * [ChameleonUltraGUI](https://github.com/GameTec-live/ChameleonUltraGUI)
-* [MTools BLE](https://github.com/RfidResearchGroup/ChameleonUltra/wiki/mtoolsble)
-* [Mifare Chameleon Tool (iOS only, Beta)](https://apps.apple.com/it/app/mifare-chameleon-tool/id6761231484)
+* [ChameLab](https://github.com/m0n5ter/ChameLab)
 * [Chameleon Ultra (Sailfish OS only)](https://sailfishos-chum.github.io/apps/harbour-chameleon-ultra)
 * [Chameleon GO (iOS only)](https://apps.apple.com/us/app/id6802015306)
 * [Device console for ChameleonUltra (Web)](https://sec1.dk/phreakbyte.html)
-* [ChameLab (Windows, macOS, Linux, Android, Web)](https://github.com/m0n5ter/ChameLab)
+* [MTools BLE](https://github.com/RfidResearchGroup/ChameleonUltra/wiki/mtoolsble)
+* [Mifare Chameleon Tool (iOS only, Beta)](https://apps.apple.com/it/app/mifare-chameleon-tool/id6761231484)
 
 # Videos
 
