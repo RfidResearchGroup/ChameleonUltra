@@ -111,6 +111,8 @@ device_mode_t get_device_mode(void) {
  * @return uint8_t Color 0R, 1G, 2B
  */
 uint8_t get_color_by_slot(uint8_t slot) {
+    chameleon_rgb_type_t customColor = tag_emulation_get_color(slot);
+    if (customColor != RGB_DEFAULT) return customColor;
     tag_slot_specific_type_t tag_types;
     tag_emulation_get_specific_types_by_slot(slot, &tag_types);
     bool enabled_lf = is_slot_enabled(slot, TAG_SENSE_LF);
