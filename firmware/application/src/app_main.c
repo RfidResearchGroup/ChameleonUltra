@@ -541,6 +541,11 @@ static void check_wakeup_src(void) {
 
         // Start Bluetooth radio with USB plugged in, no deep hibernation required
         advertising_start(false);
+
+        // A VBUS pulse can end before the app starts. Start the sleep timer now,
+        // so the app still sleeps if no USB power removed event ever arrives.
+        // If USB power is actually present, sleep_timer_start() does nothing and it stays on.
+        sleep_timer_start(SLEEP_DELAY_MS_IMMEDIATE);
     } else {
         NRF_LOG_INFO("First power system");
 
