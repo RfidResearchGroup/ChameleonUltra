@@ -60,17 +60,23 @@ bool fds_read_sync(uint16_t id, uint16_t key, uint16_t *length, uint8_t *buffer)
     if (fds_find_record(id, key, &record_desc)) {
         err_code = fds_record_open(&record_desc, &flash_record);            //Open the record so that it is marked as the open state
         APP_ERROR_CHECK(err_code);
+        bool read = false;
         if (flash_record.p_header->length_words * 4 <= *length) {        // Read the data in Flash here to the given RAM
             // Make sure that the buffer will not overflow, read this record
             memcpy(buffer, flash_record.p_data, flash_record.p_header->length_words * 4);
             NRF_LOG_INFO("FDS read success.");
             *length = flash_record.p_header->length_words * 4;
-            return true;
+            read = true;
         } else {
             NRF_LOG_INFO("FDS buffer too small, can't run memcpy, fds size = %d, buffer size = %d", flash_record.p_header->length_words * 4, *length);
         }
-        err_code = fds_record_close(&record_desc);                          // Close the file after the operation is completed
+        // Close the record in every case: GC never reclaims a page that holds an open record,
+        // so each read left open would pin its page until flash runs out.
+        err_code = fds_record_close(&record_desc);
         APP_ERROR_CHECK(err_code);
+        if (read) {
+            return true;
+        }
     }
     //If the correct data is not loaded, this record may not exist
     *length = 0;
