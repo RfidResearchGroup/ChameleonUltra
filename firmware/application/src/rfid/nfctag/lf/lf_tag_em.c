@@ -16,6 +16,7 @@
 #include "protocols/pac.h"
 #include "protocols/pyramid.h"
 #include "protocols/viking.h"
+#include "protocols/presco.h"
 #include "syssleep.h"
 #include "tag_emulation.h"
 #include "tag_persistence.h"
@@ -253,6 +254,12 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
         return LF_IOPROX_TAG_ID_SIZE;
     }
 
+    if (type == TAG_TYPE_PRESCO && buffer->length >= LF_PRESCO_TAG_ID_SIZE) {
+        m_tag_type = type;
+        m_pwm_seq = presco.modulator(NULL, buffer->buffer);
+        return LF_PRESCO_TAG_ID_SIZE;
+    }
+
     if (type == TAG_TYPE_VIKING && buffer->length >= LF_VIKING_TAG_ID_SIZE) {
         m_tag_type = type;
         void *codec = viking.alloc();
@@ -469,4 +476,14 @@ bool lf_tag_pyramid_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
         0x01, 0x01, 0x01, 0x4A, 0xE3, 0x5E, 0x7F, 0x4F,
     };
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
+}
+
+int lf_tag_presco_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return type == TAG_TYPE_PRESCO && m_tag_type == type && buffer->length >= LF_PRESCO_TAG_ID_SIZE
+        ? LF_PRESCO_TAG_ID_SIZE : 0;
+}
+
+bool lf_tag_presco_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    uint8_t code[LF_PRESCO_TAG_ID_SIZE] = {0x01, 0x00, 0x00, 0x01};
+    return lf_tag_data_factory(slot, tag_type, code, sizeof(code));
 }

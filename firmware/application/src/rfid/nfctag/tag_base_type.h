@@ -44,7 +44,7 @@ typedef enum {
     // gallagher
     // PAC/Stanley
     TAG_TYPE_PAC = 150,
-    // Presco
+    TAG_TYPE_PRESCO = 160,
     // Visa2000
     // Viking
     TAG_TYPE_VIKING = 170,
@@ -114,7 +114,7 @@ typedef enum {
     }
 
 #define TAG_SPECIFIC_TYPE_LF_VALUES \
-    TAG_TYPE_EM410X, TAG_TYPE_EM410X_ELECTRA, TAG_TYPE_PAC, TAG_TYPE_HID_PROX, TAG_TYPE_IOPROX, TAG_TYPE_FARPOINTE_PYRAMID, TAG_TYPE_VIKING, TAG_TYPE_JABLOTRON, TAG_TYPE_IDTECK
+    TAG_TYPE_EM410X, TAG_TYPE_EM410X_ELECTRA, TAG_TYPE_PAC, TAG_TYPE_PRESCO, TAG_TYPE_HID_PROX, TAG_TYPE_IOPROX, TAG_TYPE_FARPOINTE_PYRAMID, TAG_TYPE_VIKING, TAG_TYPE_JABLOTRON, TAG_TYPE_IDTECK
 
 // Tag types that use PSK1 modulation for emulation. These require the PWM
 // base clock to be set to 1MHz (see lf_tag_em.c pwm_init) so the 16us
