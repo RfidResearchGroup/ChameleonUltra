@@ -16,6 +16,7 @@
 #include "protocols/pac.h"
 #include "protocols/pyramid.h"
 #include "protocols/viking.h"
+#include "rfid_main.h"
 #include "syssleep.h"
 #include "tag_emulation.h"
 #include "tag_persistence.h"
@@ -30,9 +31,12 @@ NRF_LOG_MODULE_REGISTER();
 
 // Whether the USB light effect is allowed to enable
 extern bool g_usb_led_marquee_enable;
+extern bool g_is_static_wake;
 
 // Whether it is currently in the low -frequency card number of broadcasting
 static volatile bool m_is_lf_emulating = false;
+// An LF field has started emulation since the app booted up
+static volatile bool m_lf_field_seen = false;
 // Cache tag type
 static tag_specific_type_t m_tag_type = TAG_TYPE_UNDEFINED;
 
@@ -84,6 +88,7 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
 
     // set the emulation status logo bit
     m_is_lf_emulating = true;
+    m_lf_field_seen = true;
     g_is_tag_emulating = true;
     // turn off USB light effect when emulating cards
     g_usb_led_marquee_enable = false;
@@ -91,6 +96,11 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // LED status update
     set_slot_light_color(RGB_BLUE);
     TAG_FIELD_LED_ON()
+    // A field that arrives after the static-wake check ends the dark wake
+    if (g_is_static_wake) {
+        g_is_static_wake = false;
+        light_up_by_slot();
+    }
 
     // Play a finite burst then stop — field check happens in EVT_STOPPED after
     // PWM has fully released LF_MOD, so ANT_NO_MOD() and the settle delay are
@@ -196,6 +206,10 @@ static enum {
 
 static uint16_t lf_em410x_id_size(tag_specific_type_t type) {
     return type == TAG_TYPE_EM410X_ELECTRA ? LF_EM410X_ELECTRA_TAG_ID_SIZE : LF_EM410X_TAG_ID_SIZE;
+}
+
+bool lf_field_seen(void) {
+    return m_lf_field_seen;
 }
 
 /**
