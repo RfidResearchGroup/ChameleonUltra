@@ -1,0 +1,28 @@
+name: CCID host tests
+
+on:
+  pull_request:
+    paths:
+      - "firmware/application/src/usb_ccid*"
+      - "firmware/application/tests/**"
+      - ".github/workflows/ccid-tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "firmware/application/src/usb_ccid*"
+      - "firmware/application/tests/**"
+      - ".github/workflows/ccid-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ccid:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Test production CCID reader and message parser
+        run: python3 firmware/application/tests/run_ccid_reader_tests.py

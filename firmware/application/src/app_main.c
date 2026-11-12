@@ -39,6 +39,10 @@ NRF_LOG_MODULE_REGISTER();
 #include "syssleep.h"
 #include "tag_emulation.h"
 #include "usb_main.h"
+#if defined(PROJECT_CHAMELEON_ULTRA)
+#include "usb_ccid.h"
+#include "usb_ccid_reader.h"
+#endif
 #include "rgb_marquee.h"
 #include "tag_persistence.h"
 #include "settings.h"
@@ -938,6 +942,8 @@ static void btn_fn_copy_hf(uint8_t slot, tag_specific_type_t type) {
 
 // fast detect a 14a tag uid to sim
 static void btn_fn_copy_ic_uid(void) {
+    /* Offline copy uses the reader directly, bypassing serial command hooks. */
+    usb_ccid_reader_external_invalidate();
     // get 14a tag res buffer;
     uint8_t slot_now = tag_emulation_get_slot();
     tag_slot_specific_type_t tag_types;
@@ -979,6 +985,8 @@ static void run_button_function_by_settings(settings_button_function_t sbf) {
             btn_fn_copy_ic_uid();
             break;
         case SettingsButtonNfcFieldGenerator:
+            /* The button owns this continuous field until it toggles it off. */
+            usb_ccid_reader_external_invalidate();
             if (!m_is_field_on) {
                 // Initialize reader hardware if not already in reader mode
                 device_mode_t current_mode = get_device_mode();
@@ -1192,6 +1200,9 @@ int main(void) {
         while (NRF_LOG_PROCESS());
         // USB event process
         while (app_usbd_event_queue_process());
+#if defined(PROJECT_CHAMELEON_ULTRA)
+        usb_ccid_process();
+#endif
         // WDT refresh
         bsp_wdt_feed();
         // No task to process, system sleep enter.
