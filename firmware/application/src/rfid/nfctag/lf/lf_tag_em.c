@@ -40,6 +40,9 @@ static tag_specific_type_t m_tag_type = TAG_TYPE_UNDEFINED;
 const nrfx_pwm_t m_broadcast = NRFX_PWM_INSTANCE(0);
 const nrf_pwm_sequence_t *m_pwm_seq = NULL;
 
+// A T5577 starts its first PSK1 frame about 8 bits after the field comes on.
+#define LF_TAG_PSK1_POWERUP_US (8 * 256)  // 8 bits at RF/32
+
 static void lf_field_lost(void) {
     // Open the incident interruption, so that the next event can be in and out normally
     g_is_tag_emulating = false;  // Reset the flag in the emulation
@@ -91,6 +94,11 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // LED status update
     set_slot_light_color(RGB_BLUE);
     TAG_FIELD_LED_ON()
+
+    // Delay PSK1 ~2 ms to mimic a T5577's startup time
+    if (IS_PSK1_TYPE(m_tag_type)) {
+        bsp_delay_us(LF_TAG_PSK1_POWERUP_US);
+    }
 
     // Play a finite burst then stop — field check happens in EVT_STOPPED after
     // PWM has fully released LF_MOD, so ANT_NO_MOD() and the settle delay are
