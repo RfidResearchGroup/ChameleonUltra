@@ -214,5 +214,6 @@
 #define DATA_CMD_EM4X05_SCAN                    (3030)
 #define DATA_CMD_EM4X05_READSNIFF               (3032)
 #define DATA_CMD_LF_SNIFF                       (3031)
+#define DATA_CMD_EM4X05_READ_CAPTURE            (3043) /* Provisional: read-only EM word capture */
 
 #endif

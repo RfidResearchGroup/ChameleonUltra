@@ -19,6 +19,7 @@
 #include "bsp_wdt.h"
 #include "lf_reader_generic.h"
 #include "lf_em4x05_data.h"
+#include "lf_em4x05_read.h"
 #include "rc522.h"
 #include "mf1_crapto1.h"
 #include "parity.h"
@@ -1095,6 +1096,25 @@ static data_frame_tx_t *cmd_processor_lf_t55xx_write(uint16_t cmd, uint16_t stat
 
 #define GENERIC_READ_LEN 800
 #define GENERIC_READ_TIMEOUT_MS 500
+static data_frame_tx_t *cmd_processor_em4x05_read_capture(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    /* Exact request: address:u8, use_password:u8, password:u32be. */
+    if (length != 6U || data[0] >= 16U || data[0] == 2U || data[1] > 1U ||
+            (data[1] == 0U && bytes_to_num(data + 2U, 4U) != 0U)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    uint8_t *output = malloc(EM4X05_CAPTURE_BYTES);
+    if (output == NULL) return data_frame_make(cmd, STATUS_MEM_ERR, 0, NULL);
+    size_t outlen = 0U;
+    if (!em4x05_read_capture(data[0], (uint32_t)bytes_to_num(data + 2U, 4U),
+                             data[1] != 0U, output, EM4X05_CAPTURE_BYTES, &outlen)) {
+        free(output);
+        return data_frame_make(cmd, STATUS_CMD_ERR, 0, NULL);
+    }
+    data_frame_tx_t *frame = data_frame_make(cmd, STATUS_LF_TAG_OK, outlen, output);
+    free(output);
+    return frame != NULL ? frame : data_frame_make(cmd, STATUS_CREATE_RESPONSE_ERR, 0, NULL);
+}
+
 static data_frame_tx_t *cmd_processor_generic_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t *outdata = malloc(GENERIC_READ_LEN);
 
@@ -3307,6 +3327,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_IDTECK_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_idteck_write_to_t55xx,         NULL                   },
     {    DATA_CMD_LF_T55XX_WRITE,               before_reader_run,           cmd_processor_lf_t55xx_write,                NULL                   },
     {    DATA_CMD_ADC_GENERIC_READ,             before_reader_run,           cmd_processor_generic_read,                  NULL                   },
+    {    DATA_CMD_EM4X05_READ_CAPTURE,          before_reader_run,           cmd_processor_em4x05_read_capture,           NULL                   },
 
     {    DATA_CMD_HF14A_SET_FIELD_ON,           before_reader_run,           cmd_processor_hf14a_set_field_on,            NULL                   },
     {    DATA_CMD_HF14A_SET_FIELD_OFF,          before_reader_run,           cmd_processor_hf14a_set_field_off,           NULL                   },
