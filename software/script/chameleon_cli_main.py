@@ -217,16 +217,21 @@ def main(argv=None) -> int:
 
     cli = ChameleonCLI()
     if args.command:
-        for command in args.command:
-            try:
-                cli.exec_cmd(command)
-            except SystemExit as e:
-                # The interactive "exit" command uses a non-zero sentinel to
-                # break the prompt loop. Treat it as success for one-shot use.
-                if e.code == 996:
-                    return EXIT_SUCCESS
-                raise
-        return EXIT_SUCCESS
+        try:
+            for command in args.command:
+                try:
+                    cli.exec_cmd(command)
+                except SystemExit as e:
+                    # The interactive "exit" command uses a non-zero sentinel to
+                    # break the prompt loop. Treat it as success for one-shot use.
+                    if e.code == 996:
+                        return EXIT_SUCCESS
+                    raise
+            return EXIT_SUCCESS
+        finally:
+            # Close the connection so the CLI can exit.
+            if cli.device_com.isOpen():
+                cli.device_com.close()
 
     if not sys.stdin.isatty():
         parser.error("an interactive terminal is required unless --command is used")
