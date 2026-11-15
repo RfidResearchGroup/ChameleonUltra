@@ -293,7 +293,8 @@ uint8_t GetAccessCondition(uint8_t Block) {
         Block &= 3;
     else {
         Block &= 15;
-        if (Block & 15)
+        // Large sectors use access groups 0..4, 5..9, 10..14, and trailer 15.
+        if (Block == 15)
             Block = 3;
         else if (Block <= 4)
             Block = 0;
