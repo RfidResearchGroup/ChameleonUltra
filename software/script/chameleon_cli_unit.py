@@ -1,4 +1,6 @@
 import binascii
+import hashlib
+import json
 import glob
 import math
 import os
@@ -16,6 +18,7 @@ import struct
 import queue
 from enum import Enum
 from multiprocessing import Pool, cpu_count
+from pathlib import Path
 from typing import Union
 from platform import uname
 from datetime import datetime
@@ -54,6 +57,7 @@ from chameleon_enum import (
 )
 from chameleon_enum import HIDFormat
 from crypto1 import Crypto1
+from t55xx_read import T55xxConfig, T55xxReadError
 
 # NXP IDs based on https://www.nxp.com/docs/en/application-note/AN10833.pdf
 type_id_SAK_dict = {
@@ -159,7 +163,7 @@ class BaseCLIUnit:
         """
         return True
 
-    def on_exec(self, args: argparse.Namespace):
+    def on_exec(self, args: argparse.Namespace) -> None:
         """
             Call a function on cmd match.
 
@@ -934,6 +938,7 @@ hf_des = hf.subgroup("des", "MIFARE DESFire commands")
 hf_seos = hf.subgroup("seos", "SEOS commands")
 
 lf = root.subgroup("lf", "Low Frequency commands")
+lf_t55xx = lf.subgroup("t55xx", "Read-only T5577 blocks and Page 0 backups")
 lf_em = lf.subgroup("em", "EM commands")
 lf_em_4x05 = lf_em.subgroup("4x05", "EM4x05/EM4x69 commands")
 data = root.subgroup("data", "Data analysis and visualization commands")
@@ -6511,6 +6516,152 @@ class LFIdteckEconfig(SlotIndexArgsAndGoUnit, LFIdteckIdArgsUnit):
             print(
                 f"   Checksum : 0x{info['checksum']:02X} (expected 0x{info['checksum_expected']:02X}, {chk_tag})"
             )
+
+
+def publish_t55xx_backup(target: Path, content: bytes) -> None:
+    """Publish complete bytes without replacing any pre-existing destination."""
+    temporary: Union[Path, None] = None
+    try:
+        # A same-directory temporary keeps publication on one filesystem. The
+        # target is never visible with partially written or unflushed contents.
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=target.parent,
+            prefix=f".{target.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as backup:
+            temporary = Path(backup.name)
+            if backup.write(content) != len(content):
+                raise OSError("incomplete T55xx backup write")
+            backup.flush()
+            os.fsync(backup.fileno())
+        if os.name == "nt":
+            # Windows rename refuses an existing destination, including FAT.
+            os.rename(temporary, target)
+            temporary = None
+        else:
+            # POSIX rename would replace the destination. Link creation is
+            # atomic and fails if a competing backup appeared during the read.
+            os.link(temporary, target)
+    finally:
+        if temporary is not None:
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass
+
+
+class LFT55xxReadUnit(ReaderRequiredUnit):
+    def before_exec(self, args: argparse.Namespace):
+        if not DeviceRequiredUnit.before_exec(self, args):
+            return False
+        # Check capabilities before changing mode. Official firmware without
+        # this new command must not be sent an unrelated private command ID.
+        if Command.LF_T55XX_READ_CAPTURE not in self.device_com.commands:
+            raise ArgsParserError("firmware does not support T55xx read captures")
+        output = getattr(args, "out", None)
+        if output is not None and output.exists():
+            raise ArgsParserError(f"refusing to overwrite existing backup: {output}")
+        return super().before_exec(args)
+
+    @staticmethod
+    def print_config(config: T55xxConfig):
+        print(
+            f" - Configuration: {config.word:08X}; "
+            f"ASK Manchester RF/{config.bitrate}; MaxBlock={config.max_block}"
+        )
+
+
+@lf_t55xx.command("read")
+class LFT55xxRead(LFT55xxReadUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Read a basic T5577 Page 0 block using three independent captures "
+            "(experimental Manchester RF/32 or RF/64; USB, BLE disconnected)"
+        )
+        parser.add_argument(
+            "-b", "--block", type=int, choices=range(8), required=True, metavar="0-7"
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            result = self.cmd.t55xx_read_block(args.block)
+        except T55xxReadError as error:
+            raise ArgsParserError(str(error)) from error
+        self.print_config(result.config)
+        print(
+            f" - Block {result.block}: {result.word:08X} "
+            f"({result.independent_reads} independent reads agree)"
+        )
+
+
+@lf_t55xx.command("dump")
+class LFT55xxDump(LFT55xxReadUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Back up all eight Page 0 words after repeated reads and a "
+            "configuration recheck (experimental; USB, BLE disconnected)"
+        )
+        parser.add_argument("-o", "--out", type=Path, required=True, metavar="FILE")
+        parser.add_argument(
+            "--format",
+            choices=("json", "bin"),
+            default="json",
+            help="JSON with acquisition metadata (default), or 32-byte big-endian image",
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        # Also check here for callers that execute a unit without before_exec.
+        if args.out.exists():
+            raise ArgsParserError(f"refusing to overwrite existing backup: {args.out}")
+        try:
+            result = self.cmd.t55xx_dump_page0()
+            if len(result.words) != 8:
+                raise T55xxReadError("T55xx Page 0 dump is incomplete")
+            image = struct.pack("!8I", *result.words)
+            checksum = hashlib.sha256(image).hexdigest()
+            if args.format == "bin":
+                content = image
+            else:
+                config = result.config
+                metadata = {
+                    "format": "chameleon-t5577-page0-v1",
+                    "page": 0,
+                    "word_byte_order": "big",
+                    "words": [f"{word:08X}" for word in result.words],
+                    "sha256": checksum,
+                    "configuration": {
+                        "word": f"{config.word:08X}",
+                        "modulation": config.modulation,
+                        "carrier_divisor": config.bitrate,
+                        "max_block": config.max_block,
+                        "calibration_start_sample": config.start_sample,
+                        "inverted": config.inverted,
+                    },
+                    "acquisition": {
+                        "nominal_sample_rate_hz": 125000,
+                        "quantization_bits": 4,
+                        "independent_reads_per_block": result.independent_reads,
+                        "configuration_checks": 2,
+                    },
+                }
+                content = (json.dumps(metadata, indent=2) + "\n").encode("utf-8")
+            # Acquisition and validation finish before publication starts.
+            # The helper also handles storage errors and filename races.
+            publish_t55xx_backup(args.out, content)
+        except T55xxReadError as error:
+            raise ArgsParserError(str(error)) from error
+        except OSError as error:
+            raise ArgsParserError(f"cannot create T55xx backup: {error}") from error
+        self.print_config(result.config)
+        for block, word in enumerate(result.words):
+            print(f" - Block {block}: {word:08X}")
+        print(f" - Saved {args.out} ({len(content)} bytes); image SHA-256: {checksum}")
 
 
 @lf.command("clone")

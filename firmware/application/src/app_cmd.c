@@ -19,6 +19,8 @@
 #include "bsp_wdt.h"
 #include "lf_reader_generic.h"
 #include "lf_em4x05_data.h"
+#include "lf_t55xx_read.h"
+#include "protocols/t55xx.h"
 #include "rc522.h"
 #include "mf1_crapto1.h"
 #include "parity.h"
@@ -2228,6 +2230,27 @@ static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, ui
     return data_frame_make(cmd, STATUS_LF_TAG_OK, (uint16_t)outlen, sniff_buf);
 }
 
+static data_frame_tx_t *cmd_processor_t55xx_read_capture(
+    uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data
+) {
+    _Static_assert(LF_T55XX_CAPTURE_MAX_BYTES <= NETDATA_MAX_DATA_LENGTH,
+                   "T55xx capture must fit one Chameleon response");
+    if (length != 1U || data[0] >= T5577_BLOCK_COUNT) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0U, NULL);
+    }
+
+    static uint8_t capture[NETDATA_MAX_DATA_LENGTH];
+    size_t capture_length = 0U;
+    if (!t55xx_read_block_capture(data[0], capture, sizeof(capture), &capture_length)) {
+        return data_frame_make(cmd, STATUS_CMD_ERR, 0U, NULL);
+    }
+    /*
+     * SUCCESS means samples were acquired, not that a tag was identified.
+     * The host must validate the configuration, decode and compare captures.
+     */
+    return data_frame_make(cmd, STATUS_SUCCESS, (uint16_t)capture_length, capture);
+}
+
 /* ========================================================================
  * HF14A AUTH TRACE — full anticoll + Crypto1 auth flow, every frame returned.
  *
@@ -3318,6 +3341,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_IOPROX_COMPOSE_ID,            NULL,                        cmd_processor_ioprox_compose_id,             NULL                   },
     {    DATA_CMD_EM4X05_SCAN,                  before_reader_run,           cmd_processor_em4x05_scan,                   NULL                   },
     {    DATA_CMD_LF_SNIFF,                     before_reader_run,           cmd_processor_lf_sniff,                      NULL                   },
+    {    DATA_CMD_LF_T55XX_READ_CAPTURE,        before_reader_run,           cmd_processor_t55xx_read_capture,            NULL                   },
     {    DATA_CMD_HF14A_SNIFF,                  NULL,                        cmd_processor_hf14a_sniff,                   NULL                   },
     {    DATA_CMD_HF14A_AUTH_TRACE,             before_hf_reader_run,        cmd_processor_hf14a_auth_trace,              after_hf_reader_run    },
 

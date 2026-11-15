@@ -632,6 +632,24 @@ void advertising_stop(void) {
     sd_ble_gap_adv_stop(m_advertising.adv_handle);
 }
 
+bool advertising_pause(bool *was_active) {
+    /*
+     * Preserve whether advertising was active before a temporary LF capture.
+     * An idle advertisement needs no resume; other stop errors must abort the
+     * capture instead of being mistaken for that harmless idle state.
+     */
+    if (was_active == NULL) {
+        return false;
+    }
+    *was_active = false;
+    uint32_t result = sd_ble_gap_adv_stop(m_advertising.adv_handle);
+    if (result == NRF_SUCCESS) {
+        *was_active = true;
+        return true;
+    }
+    return result == NRF_ERROR_INVALID_STATE;
+}
+
 /**@brief Function for handling Peer Manager events.
  *
  * @param[in] p_evt  Peer Manager event.

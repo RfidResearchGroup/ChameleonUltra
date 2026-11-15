@@ -3,6 +3,8 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+
+ - Added experimental Ultra T5577 read-only Page 0 captures and Manchester RF/32/RF/64 backups; RF hardware validation is pending.
  - Fix reset when BLE bonds are deleted while connected (@mfcarroll)
  - Fixed ISO14443-4 (T=CL) tag emulation silently truncating any received command of 32+ bytes (e.g. an EMV GPO with a full PDOL): `nfc_tag_14a_unwrap_frame` returned the data-bit count as `uint8_t`, wrapping it mod 256 (@whitewhidow)
 
