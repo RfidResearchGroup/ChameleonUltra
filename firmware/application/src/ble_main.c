@@ -613,6 +613,10 @@ void advertising_start(bool erase_bonds) {
         // So we don't call `ble_advertising_start()` after `delete_bonds_all()`.
         delete_bonds_all();
     } else {
+        // The only peripheral link is in use, advertising restarts when it disconnects
+        if (m_conn_handle != BLE_CONN_HANDLE_INVALID) {
+            return;
+        }
         if (settings_get_ble_pairing_enable_first_load()) {
             whitelist_set(PM_PEER_ID_LIST_SKIP_NO_ID_ADDR);
         }

@@ -224,6 +224,7 @@ uint8_t nfc_tag_14a_wrap_frame(const uint8_t *pbtTx, const size_t szTxBits, cons
 *          pbtRxPar: The buffer of the bitstream Store after the packaging, the coupling school inspection area
 * @retval :The data length of the bitstream packaging, note that the length of the data area is the length of the data area.retval / 8
 */
+/* The de-parity'd data-bit count exceeds 255 for frames of 32 or more bytes. */
 uint16_t nfc_tag_14a_unwrap_frame(const uint8_t *pbtFrame, const size_t szFrameBits, uint8_t *pbtRx, uint8_t *pbtRxPar) {
     if (!pbtFrame || !pbtRx || szFrameBits > MAX_NFC_RX_BUFFER_SIZE * 8U) return 0;
     if (szFrameBits == 0) return 0;
