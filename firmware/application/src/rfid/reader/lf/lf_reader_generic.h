@@ -15,7 +15,10 @@
  * @param maxlen      Max bytes to capture (max 4000 for USB frame limit)
  * @param timeout_ms  Stop after this many ms even if buffer not full
  * @param outlen      Actual number of bytes written
- * @return            true on success
+ * @return            true only for a complete window; false returns outlen=0
+ *
+ * Requires USB with no BLE connection. Advertising is temporarily paused and
+ * resumed. The wait is bounded to 80 ms inside a 90 ms reservation.
  */
 /** Maximum bytes a single raw capture can return (USB frame limit). */
 #define LF_SNIFF_MAX_SAMPLES  4000

@@ -1,72 +1,76 @@
 #include "lf_reader_generic.h"
-#include "lf_reader_data.h"
-
+#include "ble_main.h"
 #include "bsp_delay.h"
 #include "bsp_wdt.h"
-#include "bsp_time.h"
-#include "circular_buffer.h"
 #include "lf_125khz_radio.h"
-#include "lf_reader_data.h"
-#include "protocols/protocols.h"
+#include "lf_sample_window.h"
+#include "timeslot.h"
 
-#define NRF_LOG_MODULE_NAME lfgeneric
-#include "nrf_log.h"
-#include "nrf_log_ctrl.h"
-#include "nrf_log_default_backends.h"
-NRF_LOG_MODULE_REGISTER();
+#define LF_CAPTURE_TIMESLOT_US 90000U
+#define LF_CAPTURE_MAX_WAIT_US 80000U
+#define LF_CAPTURE_POLL_US       100U
+#define LF_CAPTURE_SETTLE_US    2000U
 
-/*
- * Circular buffer for SAADC samples.
- * Increased from 128 to 512 to reduce overrun risk during USB transfer.
- * The main loop drains it as fast as possible into the output buffer.
- */
-#define CIRCULAR_BUFFER_SIZE (512)
-static circular_buffer cb;
+static lf_sample_window_t m_capture;
+static uint32_t m_wait_us;
+static bool m_capture_busy;
 
-static void saadc_cb(nrf_saadc_value_t *vals, size_t size) {
-    for (int i = 0; i < size; i++) {
-        nrf_saadc_value_t val = vals[i];
-        if (!cb_push_back(&cb, &val)) {
-            return;  /* buffer full — oldest samples dropped */
-        }
+_Static_assert(sizeof(nrf_saadc_value_t) == sizeof(int16_t),
+               "LF capture expects signed 16-bit SAADC samples");
+
+static void capture_samples(nrf_saadc_value_t *values, size_t count) {
+    /* Copy a full DMA batch directly instead of dropping its tail in a ring. */
+    lf_sample_window_feed(&m_capture, values, count);
+}
+
+static void capture_timeslot(void) {
+    start_lf_125khz_radio();
+    bsp_delay_us(LF_CAPTURE_SETTLE_US);
+    /* DMA is prepared already; no samples precede field stabilization. */
+    lf_125khz_radio_saadc_start_sampling();
+    for (uint32_t waited = 0U;
+            !lf_sample_window_complete(&m_capture) && waited < m_wait_us;
+            waited += LF_CAPTURE_POLL_US) {
+        bsp_delay_us(LF_CAPTURE_POLL_US);
+        bsp_wdt_feed();
     }
-}
-
-static void init_saadc_hw(void) {
-    lf_125khz_radio_saadc_enable(saadc_cb);
-}
-
-static void uninit_saadc_hw(void) {
-    lf_125khz_radio_saadc_disable();
+    lf_125khz_radio_saadc_stop_sampling();
+    stop_lf_125khz_radio();
 }
 
 bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen) {
-    *outlen = 0;
-
-    cb_init(&cb, CIRCULAR_BUFFER_SIZE, sizeof(uint16_t));
-    init_saadc_hw();
-    start_lf_125khz_radio();
-
-    /* Wait for antenna to settle before capturing.
-     * The LC circuit rings for ~400µs on field startup, then takes
-     * another ~800µs to reach steady state. Skip 2ms to be safe. */
-    bsp_delay_ms(2);
-
-    autotimer *p_at = bsp_obtain_timer(0);
-    while (NO_TIMEOUT_1MS(p_at, timeout_ms) && *outlen < maxlen) {
-        uint16_t val = 0;
-        while (cb_pop_front(&cb, &val) && *outlen < maxlen) {
-            val = val >> 5;  /* 14-bit ADC → 9-bit, then >>5 gives 8-bit */
-            data[*outlen] = val > 0xff ? 0xff : (uint8_t)val;
-            ++(*outlen);
-        }
-        bsp_wdt_feed();  /* prevent watchdog reset during long captures */
+    if (outlen == NULL) return false;
+    *outlen = 0U;
+    if (data == NULL || maxlen == 0U || maxlen > LF_SNIFF_MAX_SAMPLES ||
+            timeout_ms == 0U || m_capture_busy || is_nus_working()) {
+        return false;
     }
-
-    bsp_return_timer(p_at);
-    stop_lf_125khz_radio();
-    uninit_saadc_hw();
-    cb_free(&cb);
-
-    return true;
+    m_capture_busy = true;
+    bool resume_advertising = false;
+    if (!advertising_pause(&resume_advertising)) {
+        m_capture_busy = false;
+        return false;
+    }
+    if (is_nus_working()) {
+        if (resume_advertising) advertising_start(false);
+        m_capture_busy = false;
+        return false;
+    }
+    lf_sample_window_init(&m_capture, data, maxlen);
+    m_wait_us = timeout_ms >= LF_CAPTURE_MAX_WAIT_US / 1000U
+        ? LF_CAPTURE_MAX_WAIT_US : timeout_ms * 1000U;
+    lf_125khz_radio_saadc_prepare(capture_samples);
+    /*
+     * RTC1 is masked inside request_timeslot, so a BSP millisecond timer cannot
+     * implement this deadline. This finite microsecond loop fits in 90 ms.
+     */
+    request_timeslot(LF_CAPTURE_TIMESLOT_US, capture_timeslot);
+    lf_125khz_radio_saadc_disable();
+    bool complete = lf_sample_window_complete(&m_capture);
+    if (complete) *outlen = m_capture.count;
+    /* Stop the producer before releasing the caller's destination/resuming BLE. */
+    lf_sample_window_init(&m_capture, NULL, 0U);
+    if (resume_advertising) advertising_start(false);
+    m_capture_busy = false;
+    return complete;
 }
