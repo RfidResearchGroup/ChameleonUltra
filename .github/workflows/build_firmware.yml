@@ -13,6 +13,19 @@ on:
         default: true
 
 jobs:
+  test_mf1_uid_protection:
+    name: Test Classic UID write protection
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.checkout-sha == null && github.sha || inputs.checkout-sha }}
+          persist-credentials: false
+      - name: Run hardware-free Classic state machine tests
+        run: bash firmware/tests/run-mf1-uid-protection.sh
   build_fw_builder:
     name: Build fw-builder Docker image
     runs-on: ubuntu-latest # Inherits permissions from caller

@@ -929,6 +929,9 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                             uint8_t Acc = abDataAccessConditions[ GetAccessCondition(CurrentAddress) ][ KeyInUse ];
                             if (blockToSector(CurrentAddress) != AuthenticatedSector || isSectorTrailer(CurrentAddress) || (Acc & ACC_BLOCK_DECREMENT) == 0) {
                                 status = NAK_INVALID_OPERATION_TBIV;
+                            } else if (CurrentAddress == 0 && !m_tag_information->config.mode_gen2_magic) {
+                                // TRANSFER writes memory too; protect the manufacturer block just as WRITE does.
+                                status = NAK_INVALID_OPERATION_TBIV;
                             } else if (m_tag_information->config.mode_block_write == NFC_TAG_MF1_WRITE_DENIED) {
                                 // Do not judge the current writing mode here to control the writing mode
                                 // Under this mode directly reject operation
