@@ -1,0 +1,25 @@
+name: MIFARE Classic access regression
+
+on:
+  pull_request:
+    paths:
+      - "firmware/application/src/rfid/nfctag/hf/nfc_mf1.c"
+      - "firmware/tests/test_mf1_access.py"
+      - ".github/workflows/mf1-access-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  access-decoder:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        cc: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Test production access decoder without hardware
+        run: python3 firmware/tests/test_mf1_access.py --cc ${{ matrix.cc }} --sanitize
