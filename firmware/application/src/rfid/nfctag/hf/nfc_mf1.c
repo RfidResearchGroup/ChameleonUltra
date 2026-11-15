@@ -6,6 +6,12 @@
 #include "mf1_crapto1.h"  // for prng_successor — real MFC LFSR PRNG
 #include "fds_util.h"
 #include "tag_persistence.h"
+#if defined(PROJECT_CHAMELEON_ULTRA)
+#include "sl1/sl1_framing.h"
+#include "nrf_drv_rng.h"
+#include <hal/nrf_nfct.h>
+#include "app_util_platform.h"
+#endif
 
 #ifdef NFC_MF1_FAST_SIM
 #include "mf1_crypto1.h"
@@ -241,6 +247,251 @@ static nfc_tag_mf1_tx_buffer_t m_tag_tx_buffer;
 //Save the specific type of MF1 currently being emulated
 static tag_specific_type_t m_tag_type;
 
+/* SL1 is an explicit RAM sidecar: the existing profile ABI stays untouched. */
+#if defined(PROJECT_CHAMELEON_ULTRA)
+#define MF1_SL1_ENTROPY_SIZE 64U
+static CuSl1Adapter m_sl1;
+static uint8_t m_sl1_slot;
+static uint8_t m_sl1_uid[10];
+static uint8_t m_sl1_uid_len;
+static tag_specific_type_t m_sl1_type;
+static uint8_t m_sl1_entropy[MF1_SL1_ENTROPY_SIZE];
+static uint8_t m_sl1_entropy_head;
+static uint8_t m_sl1_entropy_count;
+static uint32_t m_sl1_epoch;
+static bool m_sl1_profile_loaded;
+static uint8_t m_sl1_loaded_slot;
+
+static bool m_sl1_tx_window_owned;
+static uint32_t m_sl1_tx_window_previous;
+
+static void mf1_sl1_tx_window_restore(void) {
+    if (m_sl1_tx_window_owned) {
+        if (nfc_tag_14a_sensing_enabled())
+            nrf_nfct_frame_delay_max_set(m_sl1_tx_window_previous);
+        m_sl1_tx_window_owned = false;
+    }
+}
+
+static void mf1_sl1_tx_window_extend(void) {
+    if (!nfc_tag_14a_sensing_enabled()) return;
+    if (!m_sl1_tx_window_owned) {
+        m_sl1_tx_window_previous = nrf_nfct_frame_delay_max_get();
+        m_sl1_tx_window_owned = true;
+    }
+    nrf_nfct_frame_delay_max_set(65535U);
+}
+
+static void mf1_sl1_unload(void) {
+    CRITICAL_REGION_ENTER();
+    mf1_sl1_tx_window_restore();
+    bool was_enabled = cu_sl1_adapter_enabled(&m_sl1);
+    m_sl1.enabled = false;
+    cu_sl1_adapter_disable(&m_sl1);
+    sl1_secure_zero(m_sl1_entropy, sizeof(m_sl1_entropy));
+    sl1_secure_zero(m_sl1_uid, sizeof(m_sl1_uid));
+    m_sl1_entropy_head = m_sl1_entropy_count = m_sl1_uid_len = 0;
+    m_sl1_type = TAG_TYPE_UNDEFINED;
+    m_sl1_slot = 0xFF;
+    ++m_sl1_epoch;
+    if (was_enabled) nfc_tag_mf1_reset_handler();
+    CRITICAL_REGION_EXIT();
+}
+
+/* A detached handler cannot be rebound against its old buffer. */
+static void mf1_sl1_handler_unload(void) {
+    mf1_sl1_unload();
+    m_sl1_profile_loaded = false;
+}
+
+static bool mf1_sl1_identity_matches(uint8_t slot, const uint8_t *uid, uint8_t uid_len,
+                                     tag_specific_type_t type) {
+    if (!m_sl1_profile_loaded || !m_tag_information || !uid || (uid_len != 4 && uid_len != 7) ||
+            slot >= TAG_MAX_SLOT_NUM || tag_emulation_get_slot() != slot ||
+            m_sl1_loaded_slot != slot ||
+            !is_slot_enabled(slot, TAG_SENSE_HF) || m_tag_type != type ||
+            type < TAG_TYPE_MIFARE_Mini || type > TAG_TYPE_MIFARE_4096) return false;
+    tag_slot_specific_type_t types;
+    tag_emulation_get_specific_types_by_slot(slot, &types);
+    if (types.tag_hf != type) return false;
+    nfc_tag_14a_coll_res_reference_t *coll = get_mifare_coll_res();
+    return coll && coll->size && coll->uid && *coll->size == uid_len &&
+           memcmp(coll->uid, uid, uid_len) == 0;
+}
+
+/* Called in IRQ, or under a short main-loop critical region. */
+static bool mf1_sl1_active(void) {
+    if (!cu_sl1_adapter_enabled(&m_sl1)) return false;
+    if (!mf1_sl1_identity_matches(m_sl1_slot, m_sl1_uid, m_sl1_uid_len, m_sl1_type)) {
+        mf1_sl1_unload();
+        return false;
+    }
+    return true;
+}
+
+static bool mf1_sl1_plaintext_allowed(void) {
+    return !mf1_sl1_active() ||
+           (m_mf1_state == MF1_STATE_UNAUTHENTICATED && m_gen1a_state == GEN1A_STATE_DISABLE);
+}
+
+static bool mf1_sl1_session_reset(void) {
+    if (!mf1_sl1_active()) return false;
+    nfc_tag_mf1_reset_handler();
+    return true;
+}
+
+/* The RNG driver is used only by poll; RF consumes already prepared bytes. */
+static bool mf1_sl1_take_entropy(uint8_t *out, uint8_t size) {
+    bool available;
+    CRITICAL_REGION_ENTER();
+    available = size <= m_sl1_entropy_count;
+    if (available) {
+        for (uint8_t i = 0; i < size; ++i) {
+            out[i] = m_sl1_entropy[m_sl1_entropy_head];
+            m_sl1_entropy[m_sl1_entropy_head] = 0;
+            m_sl1_entropy_head = (m_sl1_entropy_head + 1U) % MF1_SL1_ENTROPY_SIZE;
+        }
+        m_sl1_entropy_count -= size;
+    }
+    CRITICAL_REGION_EXIT();
+    return available;
+}
+
+bool nfc_tag_mf1_sl1_configure(uint8_t slot, const uint8_t *uid, uint8_t uid_len,
+                              const uint8_t key[16]) {
+    bool configured = false;
+    CRITICAL_REGION_ENTER();
+    if (!nfc_tag_14a_field_present()) {
+        mf1_sl1_unload();
+        if (key && !nfc_tag_14a_is_sniff_passive() &&
+                mf1_sl1_identity_matches(slot, uid, uid_len, m_tag_type)) {
+            m_sl1_slot = slot;
+            m_sl1_uid_len = uid_len;
+            m_sl1_type = m_tag_type;
+            memcpy(m_sl1_uid, uid, uid_len);
+            configured = cu_sl1_adapter_configure(&m_sl1, key, CU_SL1_KEY_SIZE);
+            nfc_tag_mf1_reset_handler();
+            /* A field can arrive while interrupts are masked. Reject that race. */
+            if (nfc_tag_14a_field_present()) {
+                mf1_sl1_unload();
+                configured = false;
+            }
+        }
+    }
+    CRITICAL_REGION_EXIT();
+    return configured;
+}
+
+bool nfc_tag_mf1_sl1_disable(void) {
+    bool disabled = false;
+    CRITICAL_REGION_ENTER();
+    if (!nfc_tag_14a_field_present()) {
+        mf1_sl1_unload();
+        nfc_tag_mf1_reset_handler();
+        disabled = true;
+    }
+    CRITICAL_REGION_EXIT();
+    return disabled;
+}
+
+void nfc_tag_mf1_sl1_poll(void) {
+    uint8_t fresh[16];
+    uint8_t needed = 0;
+    uint32_t epoch;
+    CRITICAL_REGION_ENTER();
+    epoch = m_sl1_epoch;
+    if (mf1_sl1_active()) {
+        needed = MF1_SL1_ENTROPY_SIZE - m_sl1_entropy_count;
+        if (needed > sizeof(fresh)) needed = sizeof(fresh);
+    }
+    CRITICAL_REGION_EXIT();
+    if (needed && nrf_drv_rng_rand(fresh, needed) == NRF_SUCCESS) {
+        CRITICAL_REGION_ENTER();
+        if (epoch == m_sl1_epoch && cu_sl1_adapter_enabled(&m_sl1)) {
+            for (uint8_t i = 0; i < needed; ++i) {
+                uint8_t tail = (m_sl1_entropy_head + m_sl1_entropy_count) % MF1_SL1_ENTROPY_SIZE;
+                m_sl1_entropy[tail] = fresh[i];
+                ++m_sl1_entropy_count;
+            }
+        }
+        CRITICAL_REGION_EXIT();
+    }
+    sl1_secure_zero(fresh, sizeof(fresh));
+}
+
+bool nfc_tag_mf1_sl1_is_enabled(void) {
+    bool enabled;
+    CRITICAL_REGION_ENTER();
+    enabled = mf1_sl1_active();
+    CRITICAL_REGION_EXIT();
+    return enabled;
+}
+
+bool nfc_tag_mf1_sl1_ready(void) {
+    bool ready;
+    CRITICAL_REGION_ENTER();
+    ready = mf1_sl1_active() && m_sl1_entropy_count >= 24;
+    CRITICAL_REGION_EXIT();
+    return ready;
+}
+
+static bool mf1_sl1_modifies_memory(uint8_t command) {
+    return command == CMD_WRITE || command == CMD_INCREMENT || command == CMD_DECREMENT ||
+           command == CMD_RESTORE || command == CMD_TRANSFER;
+}
+
+static bool mf1_sl1_receive(uint8_t *data, uint16_t bits) {
+    if (!mf1_sl1_active() || m_mf1_state != MF1_STATE_UNAUTHENTICATED ||
+            m_gen1a_state != GEN1A_STATE_DISABLE) return false;
+    /* ISO4 S(DESELECT), without CID. Classic RESTORE is four bytes instead. */
+    if (bits == 24 && data[0] == 0xC2 && nfc_tag_14a_checks_crc(data, 3)) {
+        nfc_tag_mf1_reset_handler();
+        nfc_tag_14a_tx_bytes(data, 1, true);
+        nfc_tag_14a_set_state(NFC_TAG_STATE_14A_HALTED);
+        return true;
+    }
+    mf1_sl1_tx_window_restore();
+    uint8_t entropy[16];
+    size_t entropy_size = 0;
+    if (bits == 40 && data[0] == 0x76 && data[1] == 0x04 && data[2] == 0x90 &&
+            nfc_tag_14a_checks_crc(data, 5) && mf1_sl1_take_entropy(entropy, sizeof(entropy))) {
+        entropy_size = sizeof(entropy);
+    }
+    /* Only exact CRC-valid AES commands own an extended TX deadline. */
+    if ((bits == 40 && data[0] == 0x76 && data[1] == 0x04 && data[2] == 0x90 &&
+            nfc_tag_14a_checks_crc(data, 5)) ||
+            (bits == 280 && data[0] == 0x72 && nfc_tag_14a_checks_crc(data, 35)))
+        mf1_sl1_tx_window_extend();
+    CuSl1Reply reply;
+    bool consumed = cu_sl1_adapter_receive(&m_sl1, data, (bits + 7U) / 8U, bits, true,
+                                            entropy, entropy_size, &reply);
+    sl1_secure_zero(entropy, sizeof(entropy));
+    bool responded = reply.bits != 0;
+    if (consumed) {
+        if (reply.bits == 4) nfc_tag_14a_tx_nbit(reply.data[0], 4);
+        else if (reply.bits == 136) nfc_tag_14a_tx_bytes(reply.data, reply.size, reply.append_crc);
+        sl1_secure_zero(&reply, sizeof(reply));
+    }
+    if (!responded) mf1_sl1_tx_window_restore();
+    return consumed;
+}
+#else
+/* Lite keeps the old dispatcher and has no SL1 RAM pool. */
+bool nfc_tag_mf1_sl1_configure(uint8_t slot, const uint8_t *uid, uint8_t uid_len,
+                              const uint8_t key[16]) {
+    (void)slot; (void)uid; (void)uid_len; (void)key;
+    return false;
+}
+bool nfc_tag_mf1_sl1_disable(void) { return true; }
+void nfc_tag_mf1_sl1_poll(void) {}
+bool nfc_tag_mf1_sl1_is_enabled(void) { return false; }
+bool nfc_tag_mf1_sl1_ready(void) { return false; }
+static void mf1_sl1_unload(void) {}
+static bool mf1_sl1_active(void) { return false; }
+static bool mf1_sl1_modifies_memory(uint8_t command) { (void)command; return false; }
+static bool mf1_sl1_receive(uint8_t *data, uint16_t bits) { (void)data; (void)bits; return false; }
+#endif
+
 // Fast simulate is enable, we use internal crypto1 instance from 'mf1_crypto1.c'
 #ifndef NFC_MF1_FAST_SIM
 // mifare classic crypto1
@@ -430,6 +681,14 @@ void nfc_tag_mf1_random_nonce(uint8_t nonce[4], bool isNested) {
     }
 }
 
+static bool mf1_sl1_classic_nonce(uint8_t nonce[4], bool nested) {
+#if defined(PROJECT_CHAMELEON_ULTRA)
+    if (mf1_sl1_active()) return mf1_sl1_take_entropy(nonce, 4);
+#endif
+    nfc_tag_mf1_random_nonce(nonce, nested);
+    return true;
+}
+
 /**
  * @brief MF1 additional verification log, step 1, store basic information
  * @param isKeyB: Are you verifying the secret B
@@ -552,10 +811,27 @@ void mf1_response_4bit_auto_encrypt(uint8_t value) {
  * @param state     Finite State Machine
  */
 void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
+    /* Defence in depth for direct dispatch; passive capture must do no crypto. */
+    if (nfc_tag_14a_is_sniff_passive()) return;
+    bool sl1 = mf1_sl1_active();
+#if defined(PROJECT_CHAMELEON_ULTRA)
+    mf1_sl1_tx_window_restore();
+#endif
+    if (sl1 && szDataBits <= 8 && m_mf1_state == MF1_STATE_UNAUTHENTICATED &&
+            m_gen1a_state == GEN1A_STATE_DISABLE) {
+        /* Gen1 entry/wipe/unlock is unavailable in the read-only profile. */
+#if defined(PROJECT_CHAMELEON_ULTRA)
+        cu_sl1_adapter_reset(&m_sl1);
+#endif
+        if (p_data[0] == CMD_CHINESE_UNLOCK || p_data[0] == CMD_CHINESE_WIPE ||
+                p_data[0] == CMD_CHINESE_UNLOCK_RW) nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+        return;
+    }
+    if (mf1_sl1_receive(p_data, szDataBits)) return;
     //Special instructions, such as compatible with MiFare Gen1a label
     if (szDataBits <= 8) {
         // Only when the Gen1A mode is enabled, the response of the back door instruction is allowed
-        if (m_tag_information->config.mode_gen1a_magic) {
+        if (!sl1 && m_tag_information->config.mode_gen1a_magic) {
             if (szDataBits == 7 && p_data[0] == CMD_CHINESE_UNLOCK) {
                 // The first step back door card verification
                 // NRF_LOG_INFO("MIFARE_MAGICWUPC1 received.\n");
@@ -587,6 +863,11 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
         case MF1_STATE_UNAUTHENTICATED: {    // Unparalleled state, communication is open
             if (szDataBits == 32) {    // 32 -bit, may be instructions
                 if (nfc_tag_14a_checks_crc(p_data, 4)) {
+                    if (sl1 && mf1_sl1_modifies_memory(p_data[0])) {
+                        nfc_tag_14a_tx_nbit(NAK_INVALID_OPERATION_TBIV, 4);
+                        nfc_tag_mf1_reset_handler();
+                        return;
+                    }
                     switch (p_data[0]) {
                         case CMD_AUTH_A:
                         case CMD_AUTH_B: {
@@ -609,7 +890,10 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                             m_tag_trailer_info = (nfc_tag_mf1_trailer_info_t *)m_tag_information->memory[BlockEnd];
 
                             // Generate random number
-                            nfc_tag_mf1_random_nonce(CardNonce, false);
+                            if (!mf1_sl1_classic_nonce(CardNonce, false)) {
+                                nfc_tag_mf1_reset_handler();
+                                return;
+                            }
 
                             // Calculate the card reader in advance according to the card random number
                             for (uint8_t i = 0; i < sizeof(ReaderResponse); i++) {
@@ -795,6 +1079,12 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
 #endif
                 // After the decryption is completed, check whether the CRC is correct, and we must ensure that the data coming over is correct!
                 if (nfc_tag_14a_checks_crc(p_data, 4)) {
+                    if (sl1 && mf1_sl1_modifies_memory(p_data[0])) {
+                        /* Consume the encrypted command and return encrypted NAK. */
+                        mf1_response_4bit_auto_encrypt(NAK_INVALID_OPERATION_TBIV);
+                        nfc_tag_mf1_reset_handler();
+                        return;
+                    }
                     switch (p_data[0]) {
                         case CMD_READ: {
                             // Save the block address of the current operation
@@ -969,7 +1259,10 @@ void nfc_tag_mf1_state_handler(uint8_t *p_data, uint16_t szDataBits) {
                             m_tag_trailer_info = (nfc_tag_mf1_trailer_info_t *)m_tag_information->memory[BlockEnd];
 
                             // Generate random number
-                            nfc_tag_mf1_random_nonce(CardNonce, true);
+                            if (!mf1_sl1_classic_nonce(CardNonce, true)) {
+                                nfc_tag_mf1_reset_handler();
+                                return;
+                            }
 
                             // Calculate the card reader response based on the card random number
                             for (uint8_t i = 0; i < sizeof(ReaderResponse); i++) {
@@ -1224,6 +1517,10 @@ nfc_tag_14a_coll_res_reference_t *get_saved_mifare_coll_res() {
  * @brief Reconcile when the parameter label needs to be reset
  */
 void nfc_tag_mf1_reset_handler() {
+#if defined(PROJECT_CHAMELEON_ULTRA)
+    mf1_sl1_tx_window_restore();
+    cu_sl1_adapter_reset(&m_sl1);
+#endif
     m_mf1_state = MF1_STATE_UNAUTHENTICATED;
     m_gen1a_state = GEN1A_STATE_DISABLE;
     nfc_tag_14a_set_state(NFC_TAG_STATE_14A_IDLE);
@@ -1270,6 +1567,11 @@ int nfc_tag_mf1_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer)
  * @param buffer   Data buffer
  */
 int nfc_tag_mf1_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    /* Even a failed replacement load invalidates the previous RAM binding. */
+    mf1_sl1_unload();
+#if defined(PROJECT_CHAMELEON_ULTRA)
+    m_sl1_profile_loaded = false;
+#endif
     // Make sure that external capacity is enough to convert to an information structure
     int info_size = get_information_size_by_tag_type(type);
     if (buffer->length >= info_size) {
@@ -1277,13 +1579,24 @@ int nfc_tag_mf1_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer)
         m_tag_information = (nfc_tag_mf1_information_t *)buffer->buffer;
         // The specific type of MF1 that is emulated by the cache
         m_tag_type = type;
+#if defined(PROJECT_CHAMELEON_ULTRA)
+        m_sl1_loaded_slot = tag_emulation_get_slot();
+#endif
         // Register 14A communication management interface
         nfc_tag_14a_handler_t handler_for_14a = {
             .get_coll_res = get_mifare_coll_res,
             .cb_state = nfc_tag_mf1_state_handler,
             .cb_reset = nfc_tag_mf1_reset_handler,
+#if defined(PROJECT_CHAMELEON_ULTRA)
+            .cb_unload = mf1_sl1_handler_unload,
+            .cb_session_reset = mf1_sl1_session_reset,
+            .cb_plaintext_allowed = mf1_sl1_plaintext_allowed,
+#endif
         };
         nfc_tag_14a_set_handler(&handler_for_14a);
+#if defined(PROJECT_CHAMELEON_ULTRA)
+        m_sl1_profile_loaded = true;
+#endif
         NRF_LOG_INFO("HF mf1 config 'field_off_do_reset' = %d", m_tag_information->config.field_off_do_reset);
         nfc_tag_14a_set_reset_enable(m_tag_information->config.field_off_do_reset);
         NRF_LOG_INFO("HF mf1 data load finish.");
@@ -1424,4 +1737,8 @@ void nfc_tag_mf1_set_field_off_do_reset(bool enable) {
 
 bool nfc_tag_mf1_is_field_off_do_reset(void) {
     return m_tag_information->config.field_off_do_reset;
+}
+
+bool nfc_tag_mf1_sl1_field_present(void) {
+    return nfc_tag_14a_field_present();
 }

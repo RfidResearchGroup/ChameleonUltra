@@ -1,0 +1,25 @@
+{
+  "upstream_commit": "23856752fbd139da0b8ca6e471a13d5bcc99a08d",
+  "date": "2026-10-19",
+  "license": "Unlicense/public domain",
+  "files": [
+    {
+      "file": "aes.c",
+      "url": "https://raw.githubusercontent.com/kokke/tiny-AES-c/23856752fbd139da0b8ca6e471a13d5bcc99a08d/aes.c",
+      "sha256": "f7f78b44654efd3542b6886923dd05194286807ebcfeb078ea05d21fe901ee9e",
+      "bytes": 19017
+    },
+    {
+      "file": "aes.h",
+      "url": "https://raw.githubusercontent.com/kokke/tiny-AES-c/23856752fbd139da0b8ca6e471a13d5bcc99a08d/aes.h",
+      "sha256": "9f74a4de3bd11621ff6e8fb9b352b060f699e6c1c67f81a22d104aacad61a23b",
+      "bytes": 2790
+    },
+    {
+      "file": "unlicense.txt",
+      "url": "https://raw.githubusercontent.com/kokke/tiny-AES-c/23856752fbd139da0b8ca6e471a13d5bcc99a08d/unlicense.txt",
+      "sha256": "7e12e5df4bae12cb21581ba157ced20e1986a0508dd10d0e8a4ab9a4cf94e85c",
+      "bytes": 1211
+    }
+  ]
+}

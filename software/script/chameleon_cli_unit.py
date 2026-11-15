@@ -16,7 +16,7 @@ import struct
 import queue
 from enum import Enum
 from multiprocessing import Pool, cpu_count
-from typing import Union
+from typing import Any, Union
 from platform import uname
 from datetime import datetime
 import hardnested_utils
@@ -929,6 +929,7 @@ hw_settings = hw.subgroup("settings", "Chameleon settings commands")
 hf = root.subgroup("hf", "High Frequency commands")
 hf_14a = hf.subgroup("14a", "ISO14443-a commands")
 hf_mf = hf.subgroup("mf", "MIFARE Classic commands")
+hf_mf_profile = hf_mf.subgroup("profile", "Lossless Classic and SL1 CardAuth profiles")
 hf_mfu = hf.subgroup("mfu", "MIFARE Ultralight / NTAG commands")
 hf_des = hf.subgroup("des", "MIFARE DESFire commands")
 hf_seos = hf.subgroup("seos", "SEOS commands")
@@ -11626,3 +11627,179 @@ class HFSeosKeys(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
             return
 
         self.cmd.seos_write_emu_keys(auth=auth, privenc=privenc, privmac=privmac)
+
+
+@hf_mf_profile.command("file")
+class HFMFProfileFile(BaseCLIUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.add_argument("action", choices=["inspect", "import", "export"])
+        parser.add_argument(
+            "--file", required=True, help="Structured profile JSON input"
+        )
+        parser.add_argument("--output", help="Lossless profile JSON output")
+        aes = parser.add_mutually_exclusive_group()
+        aes.add_argument(
+            "--aes-key-file", help="File containing a known AES-128 key as hex"
+        )
+        aes.add_argument(
+            "--aes-key-prompt",
+            action="store_true",
+            help="Prompt for a known AES key without echo",
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace) -> Any:
+        import getpass
+        from pathlib import Path
+        import sl1_profile
+
+        profile = sl1_profile.loads(Path(args.file).read_text(encoding="utf-8"))
+        if args.aes_key_file or args.aes_key_prompt:
+            key = (
+                Path(args.aes_key_file).read_text(encoding="utf-8").strip().upper()
+                if args.aes_key_file
+                else getpass.getpass("Known AES-128 key: ").strip().upper()
+            )
+            sl1_profile.hex_bytes(key, 16)
+            profile["cardAuth"] = {
+                "enabled": True,
+                "scenario": "sl1-cardauth-9004",
+                "keyNumber": 36868,
+                "key": key,
+                "verification": {"status": "provided", "evidence": None},
+            }
+            sl1_profile.validate(profile)
+        if args.action == "inspect":
+            try:
+                sl1_profile.image(profile)
+                complete = True
+            except ValueError:
+                complete = False
+            print(
+                {
+                    "name": profile["name"],
+                    "type": profile["classic"]["type"],
+                    "complete": complete,
+                    "cardAuth": profile["cardAuth"] is not None,
+                }
+            )
+        else:
+            if not args.output:
+                raise ArgsParserError("--output is required for import/export")
+            Path(args.output).write_text(sl1_profile.dumps(profile), encoding="utf-8")
+
+
+@hf_mf_profile.command("read")
+class HFMFProfileRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit(
+            description="Read using supplied known Classic keys only; no key recovery"
+        )
+        source = parser.add_mutually_exclusive_group(required=True)
+        source.add_argument(
+            "--file",
+            help="Existing structured profile with matching identity and supplied sector keys",
+        )
+        source.add_argument(
+            "--type",
+            choices=["mini", "1k", "2k", "4k"],
+            help="First-read geometry; creates unknown block coverage automatically",
+        )
+        parser.add_argument(
+            "--keys-file",
+            help="Known-key .dic file: one 12-digit hex key per line; comments start with #; required with --type",
+        )
+        parser.add_argument(
+            "--output", required=True, help="Lossless structured profile JSON output"
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace) -> Any:
+        from pathlib import Path
+        import sl1_profile
+
+        if args.type and not args.keys_file:
+            raise ArgsParserError(
+                "--type requires --keys-file containing supplied known keys"
+            )
+        candidates = (
+            sl1_profile.dictionary_keys(
+                Path(args.keys_file).read_text(encoding="utf-8")
+            )
+            if args.keys_file
+            else None
+        )
+        seed = (
+            sl1_profile.loads(Path(args.file).read_text(encoding="utf-8"))
+            if args.file
+            else None
+        )
+        result = sl1_profile.read_profile(
+            self.cmd, seed=seed, kind=args.type, candidates=candidates
+        )
+        Path(args.output).write_text(sl1_profile.dumps(result), encoding="utf-8")
+
+
+@hf_mf_profile.command("slot")
+class HFMFProfileSlot(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.add_argument(
+            "action",
+            choices=[
+                "upload",
+                "save",
+                "status",
+                "cancel",
+                "clear",
+                "enable",
+                "disable",
+            ],
+        )
+        parser.add_argument(
+            "--slot",
+            required=True,
+            type=int,
+            choices=range(1, 9),
+            help="Slot number 1..8",
+        )
+        parser.add_argument("--file", help="Structured profile JSON")
+        parser.add_argument(
+            "--stage-only",
+            action="store_true",
+            help="Stage without changing device mode or saving; commit later with profile slot save",
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace) -> Any:
+        from pathlib import Path
+        import sl1_profile
+
+        slot = args.slot - 1
+        if args.action == "upload":
+            if not args.file:
+                raise ArgsParserError("--file is required")
+            sl1_profile.upload(
+                self.cmd,
+                slot,
+                sl1_profile.loads(Path(args.file).read_text(encoding="utf-8")),
+                args.stage_only,
+            )
+        elif args.action == "save":
+            sl1_profile.save_staged(self.cmd, slot)
+        else:
+            if not sl1_profile.COMMANDS.issubset(
+                set(self.cmd.get_device_capabilities())
+            ):
+                raise ArgsParserError("Firmware lacks profile capabilities")
+            if args.action in ("clear", "enable", "disable"):
+                self.cmd.set_device_reader_mode(False)
+            if args.action == "status":
+                print(self.cmd.sl1_profile_status(slot))
+            elif args.action == "cancel":
+                self.cmd.sl1_profile_cancel(slot)
+            elif args.action == "clear":
+                self.cmd.sl1_profile_clear(slot)
+            else:
+                self.cmd.sl1_profile_set_enabled(slot, args.action == "enable")

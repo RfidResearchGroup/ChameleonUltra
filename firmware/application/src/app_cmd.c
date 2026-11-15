@@ -22,6 +22,7 @@
 #include "rc522.h"
 #include "mf1_crapto1.h"
 #include "parity.h"
+#include "sl1_profile.h"
 #endif
 #include "nfc_14a.h"
 /* Forward declarations for functions added to nfc_14a.c/h in this PR.
@@ -37,6 +38,52 @@ extern void nfc_tag_14a_set_sniff_passive(bool passive);
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 NRF_LOG_MODULE_REGISTER();
+
+static bool invalidate_sl1_profile(uint8_t slot) {
+#if defined(PROJECT_CHAMELEON_ULTRA)
+    return sl1_profile_invalidate(slot);
+#else
+    return true;
+#endif
+}
+
+#if defined(PROJECT_CHAMELEON_ULTRA)
+static data_frame_tx_t *cmd_processor_sl1_profile(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t response[14] = {0};
+    uint16_t response_length = 0;
+    switch (cmd) {
+        case DATA_CMD_SL1_PROFILE_STATUS:
+            status = sl1_profile_status(data, length, response);
+            if (status == STATUS_SUCCESS) response_length = sizeof(response);
+            break;
+        case DATA_CMD_SL1_PROFILE_BEGIN:
+            status = sl1_profile_begin(data, length);
+            break;
+        case DATA_CMD_SL1_PROFILE_WRITE:
+            status = sl1_profile_write(data, length);
+            break;
+        case DATA_CMD_SL1_PROFILE_SAVE:
+            status = sl1_profile_save(data, length);
+            break;
+        case DATA_CMD_SL1_PROFILE_CANCEL:
+            status = sl1_profile_cancel(data, length);
+            break;
+        case DATA_CMD_SL1_PROFILE_CLEAR:
+            status = sl1_profile_clear(data, length);
+            break;
+        case DATA_CMD_SL1_PROFILE_SET_ENABLED:
+            status = sl1_profile_set_enabled(data, length);
+            break;
+        default:
+            status = STATUS_INVALID_CMD;
+            break;
+    }
+    /* Completed profile commands can contain both AES and Classic keys. */
+    volatile uint8_t *payload = data;
+    for (uint16_t i = 0; payload && i < length; i++) payload[i] = 0;
+    return data_frame_make(cmd, status, response_length, response_length ? response : NULL);
+}
+#endif
 
 
 static void change_slot_auto(uint8_t slot_new) {
@@ -1143,6 +1190,9 @@ static data_frame_tx_t *cmd_processor_set_slot_tag_type(uint16_t cmd, uint16_t s
     if (payload->num_slot >= TAG_MAX_SLOT_NUM || !is_tag_specific_type_valid(tag_type)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
+    if (get_sense_type_from_tag_type(tag_type) == TAG_SENSE_HF && !invalidate_sl1_profile(payload->num_slot)) {
+        return data_frame_make(cmd, STATUS_FLASH_WRITE_FAIL, 0, NULL);
+    }
     tag_emulation_change_type(payload->num_slot, tag_type);
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
@@ -1159,7 +1209,12 @@ static data_frame_tx_t *cmd_processor_delete_slot_sense_type(uint16_t cmd, uint1
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
-    tag_emulation_delete_data(payload->num_slot, payload->sense_type);
+    if (payload->sense_type == TAG_SENSE_HF && !invalidate_sl1_profile(payload->num_slot)) {
+        return data_frame_make(cmd, STATUS_FLASH_WRITE_FAIL, 0, NULL);
+    }
+    if (!tag_emulation_delete_data(payload->num_slot, payload->sense_type)) {
+        return data_frame_make(cmd, STATUS_FLASH_WRITE_FAIL, 0, NULL);
+    }
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
@@ -1176,6 +1231,9 @@ static data_frame_tx_t *cmd_processor_set_slot_data_default(uint16_t cmd, uint16
     tag_specific_type_t tag_type = U16NTOHS(payload->tag_type);
     if (payload->num_slot >= TAG_MAX_SLOT_NUM || !is_tag_specific_type_valid(tag_type)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    if (get_sense_type_from_tag_type(tag_type) == TAG_SENSE_HF && !invalidate_sl1_profile(payload->num_slot)) {
+        return data_frame_make(cmd, STATUS_FLASH_WRITE_FAIL, 0, NULL);
     }
     status = tag_emulation_factory_data(payload->num_slot, tag_type) ? STATUS_SUCCESS : STATUS_NOT_IMPLEMENTED;
     return data_frame_make(cmd, status, 0, NULL);
@@ -1239,6 +1297,11 @@ static data_frame_tx_t *cmd_processor_get_slot_info(uint16_t cmd, uint16_t statu
 }
 
 static data_frame_tx_t *cmd_processor_wipe_fds(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+#if defined(PROJECT_CHAMELEON_ULTRA)
+    for (uint8_t slot = 0; slot < TAG_MAX_SLOT_NUM; ++slot) {
+        if (sl1_profile_hf_incomplete(slot)) return data_frame_make(cmd, STATUS_CMD_ERR, 0, NULL);
+    }
+#endif
     bool success = fds_wipe();
     status = success ? STATUS_SUCCESS : STATUS_FLASH_WRITE_FAIL;
     delayed_reset(50);
@@ -1614,13 +1677,16 @@ static data_frame_tx_t *cmd_processor_mf1_get_detection_log(uint16_t cmd, uint16
 }
 
 static data_frame_tx_t *cmd_processor_mf1_write_emu_block_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    if (length == 0 || (((length - 1) % NFC_TAG_MF1_DATA_SIZE) != 0)) {
+    if (length <= 1 || (((length - 1) % NFC_TAG_MF1_DATA_SIZE) != 0)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     uint8_t block_index = data[0];
-    uint8_t block_count = (length - 1) / NFC_TAG_MF1_DATA_SIZE;
+    uint16_t block_count = (length - 1) / NFC_TAG_MF1_DATA_SIZE;
     if (block_index + block_count > NFC_TAG_MF1_BLOCK_MAX) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    if (!invalidate_sl1_profile(tag_emulation_get_slot())) {
+        return data_frame_make(cmd, STATUS_FLASH_WRITE_FAIL, 0, NULL);
     }
     tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_MIFARE_4096);
     nfc_tag_mf1_information_t *info = (nfc_tag_mf1_information_t *)buffer->buffer;
@@ -1813,8 +1879,11 @@ static data_frame_tx_t *cmd_processor_hf14a_set_anti_coll_data(uint16_t cmd, uin
     if ((length < 1) || \
             (!is_valid_uid_size(data[0])) || \
             (length < 1 + data[0] + 2 + 1 + 1) || \
-            (length < 1 + data[0] + 2 + 1 + 1 + data[1 + data[0] + 2 + 1])) {
+            (length != 1 + data[0] + 2 + 1 + 1 + data[1 + data[0] + 2 + 1])) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    if (!invalidate_sl1_profile(tag_emulation_get_slot())) {
+        return data_frame_make(cmd, STATUS_FLASH_WRITE_FAIL, 0, NULL);
     }
     nfc_tag_14a_coll_res_reference_t *info = get_coll_res_data(true);
 
@@ -1929,8 +1998,8 @@ static data_frame_tx_t *cmd_processor_delete_slot_tag_nick(uint16_t cmd, uint16_
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     get_fds_map_by_slot_sense_type_for_nick(slot, sense_type, &map_info);
-    bool ret = fds_delete_sync(map_info.id, map_info.key);
-    if (!ret) {
+    int count = fds_delete_sync(map_info.id, map_info.key);
+    if (count <= 0) {
         return data_frame_make(cmd, STATUS_FLASH_WRITE_FAIL, 0, NULL);
     }
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
@@ -1965,8 +2034,11 @@ static data_frame_tx_t *cmd_processor_mf1_get_gen1a_mode(uint16_t cmd, uint16_t 
 }
 
 static data_frame_tx_t *cmd_processor_mf1_set_gen1a_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    if (length != 1 && data[0] > 1) {
+    if (length != 1 || data[0] > 1) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    if (data[0] && nfc_tag_mf1_sl1_is_enabled()) {
+        return data_frame_make(cmd, STATUS_CMD_ERR, 0, NULL);
     }
     nfc_tag_mf1_set_gen1a_magic_mode(data[0]);
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
@@ -1978,8 +2050,11 @@ static data_frame_tx_t *cmd_processor_mf1_get_gen2_mode(uint16_t cmd, uint16_t s
 }
 
 static data_frame_tx_t *cmd_processor_mf1_set_gen2_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    if (length != 1 && data[0] > 1) {
+    if (length != 1 || data[0] > 1) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    if (data[0] && nfc_tag_mf1_sl1_is_enabled()) {
+        return data_frame_make(cmd, STATUS_CMD_ERR, 0, NULL);
     }
     nfc_tag_mf1_set_gen2_magic_mode(data[0]);
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
@@ -1991,8 +2066,11 @@ static data_frame_tx_t *cmd_processor_mf1_get_block_anti_coll_mode(uint16_t cmd,
 }
 
 static data_frame_tx_t *cmd_processor_mf1_set_block_anti_coll_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    if (length != 1 && data[0] > 1) {
+    if (length != 1 || data[0] > 1) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    if (data[0] != nfc_tag_mf1_is_use_mf1_coll_res() && !invalidate_sl1_profile(tag_emulation_get_slot())) {
+        return data_frame_make(cmd, STATUS_FLASH_WRITE_FAIL, 0, NULL);
     }
     nfc_tag_mf1_set_use_mf1_coll_res(data[0]);
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
@@ -2525,22 +2603,12 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
         if (timeout_ms == 0 || timeout_ms > 30000) timeout_ms = 5000;
     }
 
-    /* Reload active slot data before sniffing.
-     * The NFCT anti-collision response is built from m_tag_information which
-     * points into the shared tag data buffer. After a slot switch the buffer
-     * may still contain the previous slot's UID if the FDS async load has not
-     * completed. A forced reload here ensures the correct UID is presented
-     * during the sniff session.
-     * A short settle delay follows to allow the reload to complete before
-     * the first field detection can trigger the anti-collision path. */
-    tag_emulation_load_data();
-    bsp_delay_ms(100);
+    // Attach only to the current active emulation owner. Sniffing must not
+    // reload card data, replace its handler or reset an in-flight session.
+    if (get_device_mode() != DEVICE_MODE_TAG || nfc_tag_14a_is_sniff_passive()) {
+        return data_frame_make(cmd, STATUS_CMD_ERR, 0, NULL);
+    }
 
-    /* Install sniff callback into the already-running tag emulation stack.
-     * Do NOT call tag_mode_enter() or sense_switch() here — those reinit
-     * NFCT and wipe the anti-collision data, breaking the emulation.
-     * The device must already be in emulator mode (hw mode --emulator)
-     * with a slot active before running this command. */
     m_sniff_buf_len = 0;
     m_sniff_cb_count = 0;
     m_sniff_active  = true;
@@ -2549,22 +2617,22 @@ static data_frame_tx_t *cmd_processor_hf14a_sniff(uint16_t cmd, uint16_t status,
     nfc_tag_14a_set_sniff_cb(hf14a_sniff_frame_cb);
     nfc_tag_14a_set_tx_sniff_cb(hf14a_sniff_tx_frame_cb);
 
-    /* Wait for duration, yielding each ms so USB stack stays alive.
-     * Feed watchdog every iteration — WDT timeout is 5000ms and the
-     * main loop cannot feed it while we are blocking here. */
+    // Service bounded entropy preparation and any pending sensing while the
+    // main loop is occupied by this existing diagnostic command.
     autotimer *p_at = bsp_obtain_timer(0);
     while (NO_TIMEOUT_1MS(p_at, timeout_ms)) {
+        nfc_tag_mf1_sl1_poll();
+        sl1_profile_poll();
         bsp_delay_ms(1);
         bsp_wdt_feed();
     }
     bsp_return_timer(p_at);
 
-    /* Remove callback and restore normal sense state */
+    /* Detach diagnostics without changing the current handler/session. */
     m_sniff_active = false;
     /* (passive mode was not enabled, nothing to restore) */
     nfc_tag_14a_clear_sniff_cb();
     nfc_tag_14a_clear_tx_sniff_cb();
-    tag_emulation_sense_run();  /* restore slot-based sense state */
 
     if (m_sniff_buf_len == 0) {
         return data_frame_make(cmd, STATUS_HF_TAG_NO, 0, NULL);
@@ -3268,6 +3336,14 @@ static cmd_data_map_t m_data_cmd_map[] = {
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
+    {    DATA_CMD_SL1_PROFILE_STATUS,           NULL,                        cmd_processor_sl1_profile,                   NULL                   },
+    {    DATA_CMD_SL1_PROFILE_BEGIN,            NULL,                        cmd_processor_sl1_profile,                   NULL                   },
+    {    DATA_CMD_SL1_PROFILE_WRITE,            NULL,                        cmd_processor_sl1_profile,                   NULL                   },
+    {    DATA_CMD_SL1_PROFILE_SAVE,             NULL,                        cmd_processor_sl1_profile,                   NULL                   },
+    {    DATA_CMD_SL1_PROFILE_CANCEL,           NULL,                        cmd_processor_sl1_profile,                   NULL                   },
+    {    DATA_CMD_SL1_PROFILE_CLEAR,            NULL,                        cmd_processor_sl1_profile,                   NULL                   },
+    {    DATA_CMD_SL1_PROFILE_SET_ENABLED,      NULL,                        cmd_processor_sl1_profile,                   NULL                   },
+
     {    DATA_CMD_HF14A_SCAN,                   before_hf_reader_run,        cmd_processor_hf14a_scan,                    after_hf_reader_run    },
     {    DATA_CMD_MF1_DETECT_SUPPORT,           before_hf_reader_run,        cmd_processor_mf1_detect_support,            after_hf_reader_run    },
     {    DATA_CMD_MF1_DETECT_PRNG,              before_hf_reader_run,        cmd_processor_mf1_detect_prng,               after_hf_reader_run    },
@@ -3429,6 +3505,28 @@ static void auto_response_data(data_frame_tx_t *resp) {
 }
 
 
+#if defined(PROJECT_CHAMELEON_ULTRA)
+/* The 4000 namespace is HF emulation; 6000 is ISO4 emulation plus the two
+ * independent reader operations below. Block getters too: quarantined boot
+ * deliberately has no loaded HF handler. New HF setters fail closed. */
+static bool command_uses_live_hf(uint16_t cmd) {
+    switch (cmd) {
+        case DATA_CMD_SL1_PROFILE_STATUS:
+        case DATA_CMD_SL1_PROFILE_BEGIN:
+        case DATA_CMD_SL1_PROFILE_WRITE:
+        case DATA_CMD_SL1_PROFILE_SAVE:
+        case DATA_CMD_SL1_PROFILE_CANCEL:
+        case DATA_CMD_SL1_PROFILE_CLEAR:
+        case DATA_CMD_SL1_PROFILE_SET_ENABLED:
+        case DATA_CMD_HF14A_4_READER_APDU:
+        case DATA_CMD_HF14A_4_EMV_SCAN:
+            return false;
+        default:
+            return (cmd >= 4000 && cmd < 5000) || (cmd >= 6000 && cmd < 7000) || cmd == DATA_CMD_HF14A_SNIFF;
+    }
+}
+#endif
+
 /**@brief Function to process data frame(cmd)
  */
 void on_data_frame_received(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -3437,6 +3535,12 @@ void on_data_frame_received(uint16_t cmd, uint16_t status, uint16_t length, uint
     for (int i = 0; i < ARRAY_SIZE(m_data_cmd_map); i++) {
         if (m_data_cmd_map[i].cmd == cmd) {
             is_cmd_support = true;
+#if defined(PROJECT_CHAMELEON_ULTRA)
+            if (command_uses_live_hf(cmd) && sl1_profile_hf_incomplete(tag_emulation_get_slot())) {
+                response = data_frame_make(cmd, STATUS_CMD_ERR, 0, NULL);
+                break;
+            }
+#endif
             if (m_data_cmd_map[i].cmd_before != NULL) {
                 data_frame_tx_t *before_resp = m_data_cmd_map[i].cmd_before(cmd, status, length, data);
                 if (before_resp != NULL) {

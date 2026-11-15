@@ -106,12 +106,19 @@ void nfc_tag_14a_clear_tx_sniff_cb(void);
 void nfc_tag_14a_set_sniff_passive(bool passive);
 typedef void (*nfc_tag_14a_state_handler_t)(uint8_t *data, uint16_t szBits);
 typedef nfc_tag_14a_coll_res_reference_t *(*nfc_tag_14a_coll_handler_t)(void);
+typedef bool (*nfc_tag_14a_optional_handler_t)(void);
 
 // The interface that 14A communication receiver needs to be implemented
 typedef struct {
     nfc_tag_14a_reset_handler_t cb_reset;
     nfc_tag_14a_state_handler_t cb_state;
     nfc_tag_14a_coll_handler_t get_coll_res;
+    /* Runtime-only extensions. NULL preserves the legacy tag lifecycle. */
+    nfc_tag_14a_reset_handler_t cb_unload;
+    /* Reset an opt-in session and return true; false leaves legacy reset policy. */
+    nfc_tag_14a_optional_handler_t cb_session_reset;
+    /* Do not interpret encrypted native frames as plaintext HALT/RATS. */
+    nfc_tag_14a_optional_handler_t cb_plaintext_allowed;
 } nfc_tag_14a_handler_t;
 
 // Different or verification code
@@ -134,6 +141,8 @@ void nfc_tag_14a_tx_bytes(uint8_t *data, uint32_t bytes, bool appendCrc);
 void nfc_tag_14a_tx_bits(uint8_t *data, uint32_t bits);
 void nfc_tag_14a_tx_nbit(uint8_t data, uint32_t bits);
 void nfc_tag_14a_set_frame_delay_max(uint32_t max_ticks);
+bool nfc_tag_14a_field_present(void);
+bool nfc_tag_14a_is_sniff_passive(void);
 
 // Determine whether it is an effective UID length
 bool is_valid_uid_size(uint8_t uid_length);
@@ -143,3 +152,5 @@ void nfc_tag_14a_set_reset_enable(bool enable);
 bool nfc_tag_14a_is_reset_enable();
 
 #endif
+
+bool nfc_tag_14a_sensing_enabled(void);

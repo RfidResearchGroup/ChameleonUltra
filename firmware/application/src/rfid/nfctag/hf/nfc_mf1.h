@@ -149,6 +149,17 @@ typedef struct {
 
 
 nfc_tag_mf1_auth_log_t *mf1_get_auth_log(uint32_t *count);
+/* Runtime sidecar; bind after a normal Classic load with sensing stopped.
+ * The key is copied. Disable/unload wipes it; field/session resets keep it.
+ * ready requires enough cached entropy for AES and two Classic nonces.
+ */
+bool nfc_tag_mf1_sl1_configure(uint8_t slot, const uint8_t *uid, uint8_t uid_len,
+                              const uint8_t key[16]);
+bool nfc_tag_mf1_sl1_disable(void);
+bool nfc_tag_mf1_sl1_is_enabled(void);
+bool nfc_tag_mf1_sl1_ready(void);
+void nfc_tag_mf1_sl1_poll(void);
+bool nfc_tag_mf1_sl1_field_present(void);
 void nfc_tag_mf1_reset_handler();
 int nfc_tag_mf1_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 int nfc_tag_mf1_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);

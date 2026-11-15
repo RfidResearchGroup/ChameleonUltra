@@ -40,4 +40,9 @@
 // ID 0x1069 Keys 0x1068-0x1070
 
 
+/* Versioned optional CardAuth sidecars, one record per slot. */
+#define FDS_SL1_PROFILE_FILE_ID_BASE 0x1300
+#define FDS_SL1_PROFILE_RECORD_KEY 1
+#define FDS_SL1_TRANSACTION_RECORD_KEY 2
+
 #endif
