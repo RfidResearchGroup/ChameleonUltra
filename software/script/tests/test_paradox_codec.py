@@ -49,6 +49,7 @@ HOST_TEST = r"""
 #define BUFFER_BITS (104)
 #define FRAME_BYTES (12)
 #define BUFFER_BYTES (13)
+#define PARADOX_DATA_BITS_FOR_TEST (44)
 
 static const uint8_t expected_data[PARADOX_DATA_SIZE] = {
     0x00, 0x04, 0x8D, 0x15, 0x87, 0xB0,
@@ -100,6 +101,8 @@ static void test_valid_payload(void) {
     uint32_t sample_index = 0;
     assert(codec != NULL);
     paradox.decoder.start(codec, 0);
+    /* One frame is only a candidate; a second matching frame confirms it. */
+    assert(feed_bits(codec, expected_stream, BUFFER_BITS, &sample_index) == 0);
     assert(feed_bits(codec, expected_stream, BUFFER_BITS, &sample_index) == 1);
     assert(memcmp(paradox.get_data(codec), expected_data, PARADOX_DATA_SIZE) == 0);
     paradox.free(codec);
@@ -118,6 +121,7 @@ static void test_crc_rejection_and_recovery(void) {
     uint32_t sample_index = 0;
     assert(codec != NULL);
     paradox.decoder.start(codec, 0);
+    assert(feed_bits(codec, expected_stream, BUFFER_BITS, &sample_index) == 0);
     assert(feed_bits(codec, expected_stream, BUFFER_BITS, &sample_index) == 1);
 
     /* Flip each protected data or CRC bit while retaining valid Manchester pairs. */
@@ -129,6 +133,7 @@ static void test_crc_rejection_and_recovery(void) {
         assert(memcmp(paradox.get_data(codec), expected_data, PARADOX_DATA_SIZE) == 0);
     }
 
+    assert(feed_bits(codec, second_stream, BUFFER_BITS, &sample_index) == 0);
     assert(feed_bits(codec, second_stream, BUFFER_BITS, &sample_index) == 1);
     assert(memcmp(paradox.get_data(codec), second_data, PARADOX_DATA_SIZE) == 0);
     paradox.free(codec);
@@ -156,11 +161,13 @@ static void test_manchester_resync(void) {
     assert(codec != NULL);
     paradox.decoder.start(codec, 0);
     assert(feed_bits(codec, bad_frame, BUFFER_BITS, &sample_index) == 0);
+    assert(feed_bits(codec, expected_stream, BUFFER_BITS, &sample_index) == 0);
     assert(feed_bits(codec, expected_stream, BUFFER_BITS, &sample_index) == 1);
     assert(memcmp(paradox.get_data(codec), expected_data, PARADOX_DATA_SIZE) == 0);
 
     paradox.decoder.start(codec, 0);
     assert(feed_bits(codec, noise, 7, &sample_index) == 0);
+    assert(feed_bits(codec, expected_stream, BUFFER_BITS, &sample_index) == 0);
     assert(feed_bits(codec, expected_stream, BUFFER_BITS, &sample_index) == 1);
     assert(memcmp(paradox.get_data(codec), expected_data, PARADOX_DATA_SIZE) == 0);
     paradox.free(codec);
@@ -171,10 +178,14 @@ static void test_repeated_frames_and_reset(void) {
     uint32_t sample_index = 0;
     assert(codec != NULL);
     paradox.decoder.start(codec, 0);
+    assert(feed_bits(codec, expected_stream, BUFFER_BITS, &sample_index) == 0);
     assert(feed_bits(codec, expected_stream, BUFFER_BITS, &sample_index) == 1);
+    /* After a confirmed read, every further matching frame confirms again. */
     assert(feed_bits(codec, expected_stream, BUFFER_BITS, &sample_index) == 1);
 
+    /* Reset drops the candidate, so two fresh frames are needed again. */
     paradox.decoder.start(codec, 0);
+    assert(feed_bits(codec, expected_stream, BUFFER_BITS, &sample_index) == 0);
     assert(feed_bits(codec, expected_stream, BUFFER_BITS, &sample_index) == 1);
     assert(memcmp(paradox.get_data(codec), expected_data, PARADOX_DATA_SIZE) == 0);
     paradox.free(codec);
@@ -188,10 +199,43 @@ static void test_payload_preserved_after_rejected_frame(void) {
     bad_frame[0] ^= 0x01;
     assert(codec != NULL);
     paradox.decoder.start(codec, 0);
+    assert(feed_bits(codec, expected_stream, BUFFER_BITS, &sample_index) == 0);
     assert(feed_bits(codec, expected_stream, BUFFER_BITS, &sample_index) == 1);
     assert(feed_bits(codec, bad_frame, BUFFER_BITS, &sample_index) == 0);
     assert(memcmp(paradox.get_data(codec), expected_data, PARADOX_DATA_SIZE) == 0);
     paradox.free(codec);
+}
+
+static void test_unchecked_tail_bits_need_matching_frames(void) {
+    /* Bits 42 and 43 are outside the CRC, so a flip there passes the CRC check. */
+    for (uint16_t bit = 42; bit < PARADOX_DATA_BITS_FOR_TEST; bit++) {
+        uint8_t flipped_stream[BUFFER_BYTES];
+        uint8_t flipped_data[PARADOX_DATA_SIZE];
+        uint16_t position = 8 + bit * 2;
+        void *codec = paradox.alloc();
+        uint32_t sample_index = 0;
+
+        memcpy(flipped_stream, expected_stream, sizeof(flipped_stream));
+        flipped_stream[position / 8] ^= (uint8_t)(0xC0 >> (position % 8));
+        memcpy(flipped_data, expected_data, sizeof(flipped_data));
+        flipped_data[bit / 8] ^= (uint8_t)(0x80 >> (bit % 8));
+        assert(codec != NULL);
+        paradox.decoder.start(codec, 0);
+
+        /* A single misread frame between good frames is never reported. */
+        assert(feed_bits(codec, expected_stream, BUFFER_BITS, &sample_index) == 0);
+        assert(feed_bits(codec, flipped_stream, BUFFER_BITS, &sample_index) == 0);
+        assert(feed_bits(codec, expected_stream, BUFFER_BITS, &sample_index) == 0);
+        assert(feed_bits(codec, expected_stream, BUFFER_BITS, &sample_index) == 1);
+        assert(memcmp(paradox.get_data(codec), expected_data, PARADOX_DATA_SIZE) == 0);
+
+        /* A card that always sends these bits still reads. */
+        paradox.decoder.start(codec, 0);
+        assert(feed_bits(codec, flipped_stream, BUFFER_BITS, &sample_index) == 0);
+        assert(feed_bits(codec, flipped_stream, BUFFER_BITS, &sample_index) == 1);
+        assert(memcmp(paradox.get_data(codec), flipped_data, PARADOX_DATA_SIZE) == 0);
+        paradox.free(codec);
+    }
 }
 
 static void test_t55xx_writer_preserves_wire_bits(void) {
@@ -239,6 +283,7 @@ int main(void) {
     test_manchester_resync();
     test_repeated_frames_and_reset();
     test_payload_preserved_after_rejected_frame();
+    test_unchecked_tail_bits_need_matching_frames();
     test_t55xx_writer_preserves_wire_bits();
     test_pwm_frame_consistency();
     return 0;

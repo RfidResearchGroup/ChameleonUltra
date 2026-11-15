@@ -59,6 +59,12 @@ typedef struct {
 
 typedef struct {
     uint8_t data[PARADOX_DATA_SIZE];
+    /*
+     * CRC covers data bits 0-33 only; bits 42-43 are unchecked. Report a
+     * read only after two separate frames decode to the same value.
+     */
+    uint8_t candidate[PARADOX_DATA_SIZE];
+    bool has_candidate;
     /* Start second candidate after half a 50-sample bit. */
     uint8_t input_sample_count;
     paradox_phase phases[PARADOX_PHASE_COUNT];
@@ -237,14 +243,34 @@ static bool paradox_decoder_feed(void *codec_ptr, uint16_t sample) {
         return false;
     }
 
-    bool found = paradox_phase_feed(&codec->phases[0], sample, codec->data);
+    uint8_t decoded[PARADOX_DATA_SIZE];
+    bool found = paradox_phase_feed(&codec->phases[0], sample, decoded);
     if (codec->input_sample_count >= PARADOX_PHASE_OFFSET) {
-        found = paradox_phase_feed(&codec->phases[1], sample, codec->data) || found;
+        found = paradox_phase_feed(&codec->phases[1], sample, decoded) || found;
     }
     if (codec->input_sample_count < PARADOX_PHASE_OFFSET) {
         codec->input_sample_count++;
     }
-    return found;
+    if (!found) {
+        return false;
+    }
+
+    if (codec->has_candidate && memcmp(codec->candidate, decoded, PARADOX_DATA_SIZE) == 0) {
+        memcpy(codec->data, decoded, PARADOX_DATA_SIZE);
+        return true;
+    }
+
+    /*
+     * Keep the new value as the candidate. Drop buffered bits in both phases
+     * so the confirming decode uses only bits from a later frame, not the
+     * same frame seen by the other phase or the shared window bits.
+     */
+    memcpy(codec->candidate, decoded, PARADOX_DATA_SIZE);
+    codec->has_candidate = true;
+    for (uint8_t i = 0; i < PARADOX_PHASE_COUNT; i++) {
+        codec->phases[i].encoded_bit_count = 0;
+    }
+    return false;
 }
 
 static void paradox_emit_bit(uint16_t *index, bool bit) {

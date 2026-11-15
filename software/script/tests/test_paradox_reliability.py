@@ -169,7 +169,7 @@ static void test_reset_reuses_all_phase_state(void) {
     assert(codec != NULL);
 
     paradox.decoder.start(codec, 0);
-    for (uint32_t i = 0; i < 12000; i++) {
+    for (uint32_t i = 0; i < 30000; i++) {
         uint32_t bit = (uint32_t)floor((double)i / BIT_SAMPLES);
         double frequency = frame_bit(first, bit, false) ? 12500.0 : 15625.0;
         phase += 2.0 * PI * frequency / SAMPLE_RATE;
@@ -177,13 +177,13 @@ static void test_reset_reuses_all_phase_state(void) {
             assert(memcmp(paradox.get_data(codec), first, PARADOX_DATA_SIZE) == 0);
             break;
         }
-        assert(i + 1 < 12000);
+        assert(i + 1 < 30000);
     }
 
     paradox.decoder.start(codec, 0);
     phase = PI / 2.0;
     bool found = false;
-    for (uint32_t i = 0; i < 12000; i++) {
+    for (uint32_t i = 0; i < 30000; i++) {
         uint32_t bit = (uint32_t)floor(((double)i + 25.0) / BIT_SAMPLES);
         double frequency = frame_bit(second, bit, false) ? 12500.0 : 15625.0;
         phase += 2.0 * PI * frequency / SAMPLE_RATE;
