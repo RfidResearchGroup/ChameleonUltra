@@ -11,6 +11,7 @@
 #include "app_status.h"
 #include "battery_health.h"
 #include "tag_persistence.h"
+#include "lf/protocols/raw_manchester.h"
 #include "nrf_pwr_mgmt.h"
 #include "settings.h"
 #include "delayed_reset.h"
@@ -39,11 +40,14 @@ extern void nfc_tag_14a_set_sniff_passive(bool passive);
 NRF_LOG_MODULE_REGISTER();
 
 
-static void change_slot_auto(uint8_t slot_new) {
+static bool change_slot_auto(uint8_t slot_new) {
     uint8_t slot_now = tag_emulation_get_slot();
     device_mode_t mode = get_device_mode();
-    tag_emulation_change_slot(slot_new, mode != DEVICE_MODE_READER);
+    if (!tag_emulation_change_slot(slot_new, mode != DEVICE_MODE_READER)) {
+        return false;
+    }
     apply_slot_change(slot_now, slot_new);
+    return true;
 }
 
 static data_frame_tx_t *cmd_processor_get_app_version(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -1125,8 +1129,8 @@ static data_frame_tx_t *cmd_processor_set_active_slot(uint16_t cmd, uint16_t sta
     if (length != 1 || data[0] >= TAG_MAX_SLOT_NUM) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-    change_slot_auto(data[0]);
-    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+    bool changed = change_slot_auto(data[0]);
+    return data_frame_make(cmd, changed ? STATUS_SUCCESS : STATUS_FLASH_WRITE_FAIL, 0, NULL);
 }
 
 static data_frame_tx_t *cmd_processor_set_slot_tag_type(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -1197,6 +1201,7 @@ static data_frame_tx_t *cmd_processor_set_slot_enable(uint16_t cmd, uint16_t sta
     }
 
     uint8_t slot_now = payload->slot_index;
+    bool was_enabled = is_slot_enabled(slot_now, payload->sense_type);
     tag_emulation_slot_set_enable(slot_now, payload->sense_type, payload->enabled);
     if ((!payload->enabled) &&
             (!is_slot_enabled(slot_now, payload->sense_type == TAG_SENSE_HF ? TAG_SENSE_LF : TAG_SENSE_HF))) {
@@ -1206,15 +1211,18 @@ static data_frame_tx_t *cmd_processor_set_slot_enable(uint16_t cmd, uint16_t sta
         if (slot_prev == slot_now) {
             set_slot_light_color(RGB_MAGENTA);
         } else {
-            change_slot_auto(slot_prev);
+            if (!change_slot_auto(slot_prev)) {
+                tag_emulation_slot_set_enable(slot_now, payload->sense_type, was_enabled);
+                return data_frame_make(cmd, STATUS_FLASH_WRITE_FAIL, 0, NULL);
+            }
         }
     }
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
 static data_frame_tx_t *cmd_processor_slot_data_config_save(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    tag_emulation_save();
-    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+    bool saved = tag_emulation_save();
+    return data_frame_make(cmd, saved ? STATUS_SUCCESS : STATUS_FLASH_WRITE_FAIL, 0, NULL);
 }
 
 static data_frame_tx_t *cmd_processor_get_active_slot(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -1456,6 +1464,73 @@ static data_frame_tx_t *cmd_processor_viking_set_emu_id(uint16_t cmd, uint16_t s
     memcpy(buffer->buffer, data, LF_VIKING_TAG_ID_SIZE);
     tag_emulation_load_by_buffer(TAG_TYPE_VIKING, false);
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_raw_manchester_set_emu(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    tag_slot_specific_type_t types;
+    tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &types);
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_RAW_MANCHESTER);
+    if (types.tag_lf != TAG_TYPE_RAW_MANCHESTER || !buffer ||
+            buffer->length != LF_RAW_MANCHESTER_RECORD_SIZE ||
+            !lf_raw_manchester_validate(data, length)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    bool restore_sense = get_device_mode() != DEVICE_MODE_READER;
+    if (restore_sense) {
+        tag_emulation_sense_switch(TAG_SENSE_LF, false);
+    }
+    memcpy(buffer->buffer, data, length);
+    tag_emulation_load_by_buffer(TAG_TYPE_RAW_MANCHESTER, false);
+    if (restore_sense) {
+        tag_emulation_sense_switch(TAG_SENSE_LF, true);
+    }
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static bool raw_diagnostic_usb_allowed(void) {
+    return data_frame_get_origin() == DATA_FRAME_ORIGIN_USB && is_usb_working() && !is_nus_working();
+}
+
+static data_frame_tx_t *cmd_processor_raw_diagnostic_start(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (!raw_diagnostic_usb_allowed() || length != 2 || !data || get_device_mode() == DEVICE_MODE_READER) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    uint16_t ms = ((uint16_t)data[0] << 8) | data[1];
+    tag_slot_specific_type_t types;
+    tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &types);
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_RAW_MANCHESTER);
+    if (ms < 1 || ms > 5000 || types.tag_lf != TAG_TYPE_RAW_MANCHESTER || !buffer ||
+            !lf_raw_manchester_validate(buffer->buffer, buffer->length) || !lf_tag_raw_diagnostic_start(ms)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_raw_diagnostic_stop(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (!raw_diagnostic_usb_allowed() || length != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    lf_tag_raw_diagnostic_stop();
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_raw_diagnostic_status(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (!raw_diagnostic_usb_allowed() || length != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    uint8_t diagnostic_status = lf_tag_raw_diagnostic_status();
+    return data_frame_make(cmd, STATUS_SUCCESS, 1, &diagnostic_status);
+}
+
+static data_frame_tx_t *cmd_processor_raw_manchester_get_emu(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    tag_slot_specific_type_t types;
+    tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &types);
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_RAW_MANCHESTER);
+    if (length != 0 || types.tag_lf != TAG_TYPE_RAW_MANCHESTER || !buffer ||
+            !lf_raw_manchester_validate(buffer->buffer, buffer->length)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_SUCCESS, LF_RAW_MANCHESTER_RECORD_SIZE, buffer->buffer);
 }
 
 static data_frame_tx_t *cmd_processor_viking_get_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -3374,6 +3449,11 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_IOPROX_GET_EMU_ID,              NULL,                      cmd_processor_ioprox_get_emu_id,             NULL                   },
     {    DATA_CMD_VIKING_SET_EMU_ID,              NULL,                      cmd_processor_viking_set_emu_id,             NULL                   },
     {    DATA_CMD_VIKING_GET_EMU_ID,              NULL,                      cmd_processor_viking_get_emu_id,             NULL                   },
+    {    DATA_CMD_RAW_MANCHESTER_SET_EMU,         NULL,                      cmd_processor_raw_manchester_set_emu,        NULL                   },
+    {    DATA_CMD_RAW_MANCHESTER_GET_EMU,         NULL,                      cmd_processor_raw_manchester_get_emu,        NULL                   },
+    {    DATA_CMD_RAW_DIAGNOSTIC_START,          NULL,                      cmd_processor_raw_diagnostic_start,          NULL                   },
+    {    DATA_CMD_RAW_DIAGNOSTIC_STOP,           NULL,                      cmd_processor_raw_diagnostic_stop,           NULL                   },
+    {    DATA_CMD_RAW_DIAGNOSTIC_STATUS,         NULL,                      cmd_processor_raw_diagnostic_status,         NULL                   },
     {    DATA_CMD_PAC_SET_EMU_ID,                 NULL,                      cmd_processor_pac_set_emu_id,                NULL                   },
     {    DATA_CMD_PAC_GET_EMU_ID,                 NULL,                      cmd_processor_pac_get_emu_id,                NULL                   },
     {    DATA_CMD_JABLOTRON_SET_EMU_ID,           NULL,                      cmd_processor_jablotron_set_emu_id,          NULL                   },

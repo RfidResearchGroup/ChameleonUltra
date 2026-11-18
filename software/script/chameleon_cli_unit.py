@@ -934,6 +934,7 @@ hf_des = hf.subgroup("des", "MIFARE DESFire commands")
 hf_seos = hf.subgroup("seos", "SEOS commands")
 
 lf = root.subgroup("lf", "Low Frequency commands")
+lf_raw = lf.subgroup("raw", "Raw Manchester emulation (provisional firmware API)")
 lf_em = lf.subgroup("em", "EM commands")
 lf_em_4x05 = lf_em.subgroup("4x05", "EM4x05/EM4x69 commands")
 data = root.subgroup("data", "Data analysis and visualization commands")
@@ -950,6 +951,87 @@ lf_jablotron = lf.subgroup("jablotron", "Jablotron commands")
 lf_generic = lf.subgroup("generic", "Generic commands")
 lf_idteck = lf.subgroup("idteck", "IDTECK commands")
 lf_pyramid = lf.subgroup("pyramid", "Farpointe/Pyramid commands")
+
+
+@lf_raw.command("diagnostic")
+class LFRawDiagnostic(DeviceRequiredUnit):
+    def args_parser(self):
+        parser = ArgumentParserNoExit()
+        action = parser.add_mutually_exclusive_group(required=True)
+        action.add_argument("--ms", type=int, help="Experimental USB-only playback, 1..5000 ms")
+        action.add_argument("--stop", action="store_true")
+        action.add_argument("--status", action="store_true")
+        return parser
+
+    def on_exec(self, args):
+        if args.ms is not None:
+            self.cmd.raw_diagnostic_start(args.ms)
+            print("Raw diagnostic started; no settings saved.")
+        elif args.stop:
+            self.cmd.raw_diagnostic_stop()
+            print("Raw diagnostic stopped.")
+        else:
+            print(("idle", "running", "stopped")[self.cmd.raw_diagnostic_status()])
+
+
+@lf_raw.command("import")
+class LFRawImport(SlotIndexArgsUnit):
+    def args_parser(self):
+        parser = ArgumentParserNoExit()
+        self.add_slot_args(parser)
+        parser.add_argument("file", help="Proxmark T55x7 JSON or 32-byte raw record")
+        parser.add_argument("--force", action="store_true", help="Overwrite occupied LF slot (HF preserved)")
+        return parser
+
+    def on_exec(self, args):
+        from lf_raw_manchester import load_record, access_slot
+        record = load_record(args.file)
+        access_slot(self.cmd, args.slot, record, args.force)
+        print("Raw Manchester imported, readback verified and saved; active slot restored.")
+
+
+@lf_raw.command("export")
+class LFRawExport(SlotIndexArgsUnit):
+    def args_parser(self):
+        parser = ArgumentParserNoExit()
+        self.add_slot_args(parser)
+        parser.add_argument("file", help="Output 32-byte raw record (must not exist)")
+        return parser
+
+    def on_exec(self, args):
+        from lf_raw_manchester import access_slot
+        record = access_slot(self.cmd, args.slot)
+        with open(args.file, "xb") as destination:
+            destination.write(record.encode())
+        print("Raw Manchester record exported.")
+
+
+@lf_raw.command("config")
+class LFRawConfig(SlotIndexArgsUnit):
+    def args_parser(self):
+        parser = ArgumentParserNoExit()
+        self.add_slot_args(parser)
+        parser.add_argument("--clock", type=int, choices=(32, 64))
+        parser.add_argument("--terminator", choices=("on", "off"))
+        parser.add_argument("--invert", choices=("on", "off"))
+        parser.add_argument("--force", action="store_true", help="Confirm LF configuration overwrite")
+        return parser
+
+    def on_exec(self, args):
+        from dataclasses import replace
+        from lf_raw_manchester import access_slot
+        record = access_slot(self.cmd, args.slot)
+        changes = {}
+        if args.clock is not None:
+            changes["clock"] = args.clock
+        for field in ("terminator", "invert"):
+            value = getattr(args, field)
+            if value is not None:
+                changes[field] = value == "on"
+        if changes:
+            record = replace(record, **changes)
+            access_slot(self.cmd, args.slot, record, args.force)
+        print(f"RF/{record.clock}, {record.bits} bits, terminator={record.terminator}, invert={record.invert}, data={record.data.hex()}")
 
 
 @root.command("clear")
@@ -6930,6 +7012,9 @@ class HWSlotList(DeviceRequiredUnit):
                 if lf_tag_type == TagSpecificType.EM410X:
                     id = self.cmd.em410x_get_emu_id()
                     print(f"      {'ID:':40}{color_string((CY, id.hex().upper()))}")
+                if lf_tag_type == TagSpecificType.RAW_MANCHESTER:
+                    record = self.cmd.raw_manchester_get()
+                    print(f"      Raw: RF/{record.clock}, {record.bits} bits, ST={record.terminator}, invert={record.invert}, {record.data.hex()}")
                 if lf_tag_type == TagSpecificType.HIDProx:
                     (format, fc, cn1, cn2, il, oem) = self.cmd.hidprox_get_emu_id()
                     cn = (cn1 << 32) + cn2

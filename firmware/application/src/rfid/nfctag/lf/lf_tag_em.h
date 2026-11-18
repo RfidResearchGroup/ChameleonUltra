@@ -16,6 +16,26 @@
 #define LF_PYRAMID_TAG_ID_SIZE 16
 
 void lf_tag_125khz_sense_switch(bool enable);
+/* Thread-only: confirms PWM stopped before invalidating its DMA source. */
+void lf_tag_data_clear(void);
+typedef enum {
+    LF_RAW_DIAGNOSTIC_IDLE,
+    LF_RAW_DIAGNOSTIC_RUNNING,
+    LF_RAW_DIAGNOSTIC_STOPPED,
+} lf_raw_diagnostic_status_t;
+/* Experimental thread-only API. Requires loaded raw data and LF sense enabled.
+ * start accepts 1..5000 ms, rounds DOWN to whole frames (false if none fit),
+ * never loops indefinitely. stop confirms DMA stopped before returning.
+ * start rejects IRQ context; stop is a no-op there (no blocking from IRQ).
+ * Rejects reader mode and an already RUNNING diagnostic. STOPPED remains until
+ * explicit start/load; stop/expiry re-arm normal field detection without replay.
+ * Normal raw resumes on the next field UP edge (remove/reapply existing field).
+ * status may be read from IRQ. No reader compatibility promised. */
+bool lf_tag_raw_diagnostic_start(uint32_t ms);
+void lf_tag_raw_diagnostic_stop(void);
+lf_raw_diagnostic_status_t lf_tag_raw_diagnostic_status(void);
+int lf_tag_raw_manchester_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
+bool lf_tag_raw_manchester_data_factory(uint8_t slot, tag_specific_type_t tag_type);
 int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 int lf_tag_em410x_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 bool lf_tag_em410x_data_factory(uint8_t slot, tag_specific_type_t tag_type);

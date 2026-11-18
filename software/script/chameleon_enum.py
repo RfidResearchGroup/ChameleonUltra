@@ -185,6 +185,11 @@ class Command(enum.IntEnum):
     JABLOTRON_GET_EMU_ID = 5011
     IDTECK_SET_EMU_ID = 5012
     IDTECK_GET_EMU_ID = 5013
+    RAW_MANCHESTER_SET = 5020
+    RAW_MANCHESTER_GET = 5021
+    RAW_DIAGNOSTIC_START = 5022
+    RAW_DIAGNOSTIC_STOP = 5023
+    RAW_DIAGNOSTIC_STATUS = 5024
     EM4X05_SCAN = 3030
     EM4X05_READSNIFF = 3032
     LF_SNIFF = 3031
@@ -327,6 +332,7 @@ class TagSpecificType(enum.IntEnum):
     Viking = 170
     # Noralsy
     Jablotron = 180
+    RAW_MANCHESTER = 190  # Provisional wire ID; must match firmware.
 
     # FSK Tag-Talk-First      200
     HIDProx = 200
@@ -405,6 +411,8 @@ class TagSpecificType(enum.IntEnum):
     def __str__(self):
         if self == TagSpecificType.UNDEFINED:
             return "Undefined"
+        elif self == TagSpecificType.RAW_MANCHESTER:
+            return "Raw Manchester"
         elif self == TagSpecificType.EM410X:
             return "EM410X"
         elif self == TagSpecificType.EM410X_16:

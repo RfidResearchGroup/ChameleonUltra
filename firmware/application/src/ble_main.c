@@ -184,7 +184,7 @@ static void nus_data_handler(ble_nus_evt_t *p_evt) {
     if (p_evt->type == BLE_NUS_EVT_RX_DATA) {
         NRF_LOG_DEBUG("Received data from BLE NUS.");
         NRF_LOG_HEXDUMP_DEBUG(p_evt->params.rx_data.p_data, p_evt->params.rx_data.length);
-        data_frame_receive((uint8_t *)(p_evt->params.rx_data.p_data), p_evt->params.rx_data.length);
+        data_frame_receive_from((uint8_t *)(p_evt->params.rx_data.p_data), p_evt->params.rx_data.length, DATA_FRAME_ORIGIN_BLE);
     }
 }
 /**@snippet [Handling the data received over BLE] */
@@ -437,6 +437,7 @@ static void ble_evt_handler(ble_evt_t const *p_ble_evt, void *p_context) {
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
+            data_frame_disconnect(DATA_FRAME_ORIGIN_BLE);
             NRF_LOG_INFO("Disconnected");
             // LED indication will be changed when advertising starts.
             m_conn_handle = BLE_CONN_HANDLE_INVALID;

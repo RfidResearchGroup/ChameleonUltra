@@ -59,6 +59,7 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst, app_usb
         }
 
         case APP_USBD_CDC_ACM_USER_EVT_PORT_CLOSE:
+            data_frame_disconnect(DATA_FRAME_ORIGIN_USB);
             NRF_LOG_INFO("CDC ACM port closed");
             g_usb_port_opened = false;
             g_usb_led_marquee_enable = true;
@@ -70,7 +71,7 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst, app_usb
         case APP_USBD_CDC_ACM_USER_EVT_RX_DONE: {
             // Get amount of data transfered to process data
             size_t size = app_usbd_cdc_acm_rx_size(&m_app_cdc_acm);
-            data_frame_receive(cdc_data_buffer, size);
+            data_frame_receive_from(cdc_data_buffer, size, DATA_FRAME_ORIGIN_USB);
 
             // Setup next transfer
             ret_code_t ret = app_usbd_cdc_acm_read_any(&m_app_cdc_acm, cdc_data_buffer, sizeof(cdc_data_buffer));
@@ -97,6 +98,7 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event) {
             break;
 
         case APP_USBD_EVT_STOPPED:
+            data_frame_disconnect(DATA_FRAME_ORIGIN_USB);
             NRF_LOG_INFO("USB STOPPED");
             app_usbd_disable();
             break;
@@ -111,6 +113,7 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event) {
             break;
 
         case APP_USBD_EVT_POWER_REMOVED:
+            data_frame_disconnect(DATA_FRAME_ORIGIN_USB);
             sleep_timer_start(SLEEP_DELAY_MS_USB_POWER_DISCONNECTED);
             NRF_LOG_INFO("USB power removed");
             g_usb_connected = false;
