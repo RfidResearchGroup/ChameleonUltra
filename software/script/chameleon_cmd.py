@@ -1099,6 +1099,51 @@ class ChameleonCMD:
         lf_tag_value = slotinfo[active_slot - 1]["lf"]
         return TagSpecificType(lf_tag_value)
 
+    def _require_raw_diagnostic(self, command):
+        if command not in self.get_device_capabilities():
+            raise ValueError("Firmware lacks raw diagnostic capability; no changes made")
+
+    @expect_response(Status.SUCCESS)
+    def raw_diagnostic_start(self, ms: int):
+        if type(ms) is not int or not 1 <= ms <= 5000:
+            raise ValueError("Diagnostic duration must be 1..5000 ms")
+        self._require_raw_diagnostic(Command.RAW_DIAGNOSTIC_START)
+        if self._get_active_lf_tag_type() != TagSpecificType.RAW_MANCHESTER:
+            raise ValueError("Active LF slot is not Raw Manchester")
+        return self.device.send_cmd_sync(Command.RAW_DIAGNOSTIC_START, struct.pack("!H", ms))
+
+    @expect_response(Status.SUCCESS)
+    def raw_diagnostic_stop(self):
+        self._require_raw_diagnostic(Command.RAW_DIAGNOSTIC_STOP)
+        return self.device.send_cmd_sync(Command.RAW_DIAGNOSTIC_STOP)
+
+    @expect_response(Status.SUCCESS)
+    def raw_diagnostic_status(self):
+        self._require_raw_diagnostic(Command.RAW_DIAGNOSTIC_STATUS)
+        resp = self.device.send_cmd_sync(Command.RAW_DIAGNOSTIC_STATUS)
+        if resp.status == Status.SUCCESS:
+            if len(resp.data) != 1 or resp.data[0] not in (0, 1, 2):
+                raise ValueError("Invalid raw diagnostic status response")
+            resp.parsed = resp.data[0]
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def raw_manchester_set(self, record):
+        data = record.encode()
+        if self._get_active_lf_tag_type() != TagSpecificType.RAW_MANCHESTER:
+            raise ValueError("Active LF slot is not Raw Manchester")
+        return self.device.send_cmd_sync(Command.RAW_MANCHESTER_SET, data)
+
+    @expect_response(Status.SUCCESS)
+    def raw_manchester_get(self):
+        from lf_raw_manchester import RawManchesterRecord
+        if self._get_active_lf_tag_type() != TagSpecificType.RAW_MANCHESTER:
+            raise ValueError("Active LF slot is not Raw Manchester")
+        resp = self.device.send_cmd_sync(Command.RAW_MANCHESTER_GET)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = RawManchesterRecord.decode(resp.data)
+        return resp
+
     @expect_response(Status.SUCCESS)
     def em410x_set_emu_id(self, id: bytes):
         """

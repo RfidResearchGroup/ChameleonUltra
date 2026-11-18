@@ -16,9 +16,12 @@
 #include "protocols/pac.h"
 #include "protocols/pyramid.h"
 #include "protocols/viking.h"
+#include "protocols/raw_manchester.h"
 #include "syssleep.h"
 #include "tag_emulation.h"
 #include "tag_persistence.h"
+#include "rfid_main.h"
+#include "app_util_platform.h"
 
 #define NRF_LOG_MODULE_NAME tag_em410x
 #include "nrf_log.h"
@@ -39,6 +42,104 @@ static tag_specific_type_t m_tag_type = TAG_TYPE_UNDEFINED;
 // The pwm to broadcast modulated card id
 const nrfx_pwm_t m_broadcast = NRFX_PWM_INSTANCE(0);
 const nrf_pwm_sequence_t *m_pwm_seq = NULL;
+static lf_raw_manchester_entry_t m_raw_entries[LF_RAW_MANCHESTER_MAX_ENTRIES];
+static nrf_pwm_values_wave_form_t m_raw_pwm[LF_RAW_MANCHESTER_MAX_ENTRIES];
+static nrf_pwm_sequence_t m_raw_seq = {
+    .values.p_wave_form = m_raw_pwm,
+};
+static volatile lf_raw_diagnostic_status_t m_raw_status = LF_RAW_DIAGNOSTIC_IDLE;
+static volatile bool m_cancel_playback;
+static bool m_pwm_initialized;
+static volatile bool m_diagnostic_owned;
+static bool m_lpcomp_enabled;
+static void lf_field_lost(void);
+
+static void lf_lpcomp_enable(void) {
+    if (!m_lpcomp_enabled) {
+        nrfx_lpcomp_enable();
+        m_lpcomp_enabled = true;
+    }
+}
+
+static void lf_lpcomp_disable(void) {
+    if (m_lpcomp_enabled) {
+        nrfx_lpcomp_disable();
+        m_lpcomp_enabled = false;
+    }
+}
+
+static void diagnostic_release(void) {
+    m_diagnostic_owned = false;
+    m_raw_status = LF_RAW_DIAGNOSTIC_STOPPED;
+    ANT_NO_MOD();
+    // Re-arm only: a new field edge, not STOPPED, starts normal emulation.
+    lf_lpcomp_enable();
+    lf_field_lost();
+}
+
+/* SDK nrfx_pwm.c:368-427 polls the hardware STOPPED event even with IRQ pending.
+ * Publish cancellation first so a pending STOPPED IRQ cannot restart DMA. */
+static void playback_cancel(void) {
+    m_cancel_playback = true;
+    if (m_pwm_initialized) {
+        nrfx_pwm_stop(&m_broadcast, true);
+    }
+    if (m_raw_status == LF_RAW_DIAGNOSTIC_RUNNING) {
+        m_raw_status = LF_RAW_DIAGNOSTIC_STOPPED;
+    }
+    m_diagnostic_owned = false;
+    ANT_NO_MOD();
+}
+
+void lf_tag_raw_diagnostic_stop(void) {
+    if (__get_IPSR() != 0) return;
+    bool owned;
+    CRITICAL_REGION_ENTER();
+    owned = m_diagnostic_owned;
+    if (owned) m_cancel_playback = true;
+    CRITICAL_REGION_EXIT();
+    if (owned) {
+        playback_cancel();
+        diagnostic_release();
+        m_cancel_playback = false;
+    }
+}
+
+lf_raw_diagnostic_status_t lf_tag_raw_diagnostic_status(void) {
+    return m_raw_status;
+}
+
+bool lf_tag_raw_diagnostic_start(uint32_t ms) {
+    if (__get_IPSR() != 0 || get_device_mode() == DEVICE_MODE_READER ||
+        m_raw_status == LF_RAW_DIAGNOSTIC_RUNNING || !m_pwm_initialized ||
+        m_tag_type != TAG_TYPE_RAW_MANCHESTER || m_pwm_seq != &m_raw_seq ||
+        ms == 0 || ms > 5000) return false;
+    uint32_t frame_ticks = 0;
+    for (size_t i = 0; i < m_raw_seq.length / 4; i++) {
+        frame_ticks += m_raw_pwm[i].counter_top;
+    }
+    uint16_t count = lf_raw_manchester_repetitions(frame_ticks, ms);
+    if (!count) return false;
+    playback_cancel();
+    lf_lpcomp_disable();
+    sleep_timer_stop();
+    m_is_lf_emulating = true;
+    g_is_tag_emulating = true;
+    g_usb_led_marquee_enable = false;
+    set_slot_light_color(RGB_BLUE);
+    TAG_FIELD_LED_ON()
+    m_diagnostic_owned = true;
+    m_cancel_playback = false;
+    m_raw_status = LF_RAW_DIAGNOSTIC_RUNNING;
+    nrfx_pwm_simple_playback(&m_broadcast, &m_raw_seq, count, NRFX_PWM_FLAG_STOP);
+    return true;
+}
+
+void lf_tag_data_clear(void) {
+    playback_cancel();
+    m_pwm_seq = NULL;
+    m_tag_type = TAG_TYPE_UNDEFINED;
+}
 
 static void lf_field_lost(void) {
     // Open the incident interruption, so that the next event can be in and out normally
@@ -56,7 +157,7 @@ static void lf_field_lost(void) {
  * @brief Judge field status
  */
 bool is_lf_field_exists(void) {
-    nrfx_lpcomp_enable();
+    lf_lpcomp_enable();
     bsp_delay_us(30);  // Display for a period of time and sampling to avoid misjudgment
     nrf_lpcomp_task_trigger(NRF_LPCOMP_TASK_SAMPLE);
     return nrf_lpcomp_result_get() == 1;  // Determine the sampling results of the LF field status
@@ -72,7 +173,8 @@ bool is_lf_field_exists(void) {
  */
 static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // Only when the lf-frequency emulation is not launched, and the analog card is started
-    if (m_is_lf_emulating || event != NRF_LPCOMP_EVENT_UP) {
+    if (m_cancel_playback || m_diagnostic_owned ||
+        m_pwm_seq == NULL || m_is_lf_emulating || event != NRF_LPCOMP_EVENT_UP) {
         return;
     }
 
@@ -80,7 +182,7 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // Disable LPCOMP during emulation — LF_RSSI fluctuates during load
     // modulation and would trigger spurious DOWN events with DETECT_CROSS.
     // Field-loss is checked periodically via EVT_END_SEQ0 in pwm_handler.
-    nrfx_lpcomp_disable();
+    lf_lpcomp_disable();
 
     // set the emulation status logo bit
     m_is_lf_emulating = true;
@@ -116,6 +218,12 @@ static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
     if (event_type != NRFX_PWM_EVT_STOPPED) {
         return;
     }
+    if (m_cancel_playback) return;
+    if (m_diagnostic_owned) {
+        diagnostic_release();
+        return;
+    }
+    if (!m_is_lf_emulating || m_pwm_seq == NULL) return;
     // PWM has fully stopped — LF_MOD is released back to GPIO.
     // Now ANT_NO_MOD() and the settle delay are effective.
     ANT_NO_MOD();
@@ -149,9 +257,11 @@ static void pwm_init(void) {
 
     nrfx_err_t err_code = nrfx_pwm_init(&m_broadcast, &cfg, pwm_handler);
     APP_ERROR_CHECK(err_code);
+    m_pwm_initialized = true;
 }
 
 static void lf_sense_enable(void) {
+    m_cancel_playback = false;
     // PWM bit timing divides HFCLK by a fixed ratio. On HFINT (64 MHz RC,
     // ±1.5% at 25°C after factory trim, wider over temperature) this gives a
     // chip-to-chip spread that NRZ readers — which see cumulative error across
@@ -181,10 +291,17 @@ static void lf_sense_enable(void) {
 }
 
 static void lf_sense_disable(void) {
+    playback_cancel();
     nrfx_pwm_uninit(&m_broadcast);
+    m_pwm_initialized = false;
+    // SDK uninit calls disable(), which requires POWERED_ON even after playback.
+    lf_lpcomp_enable();
     nrfx_lpcomp_uninit();
-    m_pwm_seq = NULL;
+    m_lpcomp_enabled = false;
+    // Keep loaded slot data for reader -> emulator re-entry; data_clear invalidates it.
     m_is_lf_emulating = false;
+    g_is_tag_emulating = false;
+    TAG_FIELD_LED_OFF()
     sd_clock_hfclk_release();
 }
 
@@ -202,6 +319,9 @@ static uint16_t lf_em410x_id_size(tag_specific_type_t type) {
  * @brief switchLfFieldInductionToEnableTheState
  */
 void lf_tag_125khz_sense_switch(bool enable) {
+    if (enable && m_pwm_seq == NULL) {
+        return;
+    }
     // init modulation PIN as output PIN
     nrf_gpio_cfg_output(LF_MOD);
     // turn off mod, otherwise its hard to judge RSSI
@@ -222,7 +342,29 @@ void lf_tag_125khz_sense_switch(bool enable) {
  * @param type     Refined tag type
  * @param buffer   Data buffer
  */
-int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+static int lf_tag_data_encode(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    if (type == TAG_TYPE_RAW_MANCHESTER) {
+        if (!lf_raw_manchester_validate(buffer->buffer, buffer->length)) {
+            return 0;
+        }
+        const uint8_t *record = buffer->buffer;
+        size_t count = lf_raw_manchester_encode(record + 4, (record[3] + 7) / 8,
+                record[3], record[1], record[2] & 2, record[2] & 1,
+                m_raw_entries, LF_RAW_MANCHESTER_MAX_ENTRIES);
+        if (!count) {
+            return 0;
+        }
+        for (size_t i = 0; i < count; i++) {
+            m_raw_pwm[i].channel_0 = m_raw_entries[i].compare[0];
+            m_raw_pwm[i].channel_1 = 0;
+            m_raw_pwm[i].channel_2 = 0;
+            m_raw_pwm[i].counter_top = m_raw_entries[i].top;
+        }
+        m_raw_seq.length = count * 4;
+        m_pwm_seq = &m_raw_seq;
+        m_tag_type = type;
+        return LF_RAW_MANCHESTER_RECORD_SIZE;
+    }
     // ensure buffer size is large enough for specific tag type,
     // so that tag data (e.g., card numbers) can be converted to corresponding pwm sequence here.
     if ((type == TAG_TYPE_EM410X || type == TAG_TYPE_EM410X_ELECTRA) && buffer->length >= lf_em410x_id_size(type)) {
@@ -300,6 +442,17 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
 
     NRF_LOG_ERROR("no valid data exists in buffer for tag type: %d.", type);
     return 0;
+}
+
+int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    if (__get_IPSR() != 0) return 0;
+    bool resume = m_pwm_initialized;
+    if (resume) lf_tag_125khz_sense_switch(false);
+    lf_tag_data_clear(); // Confirm EasyDMA released all protocol buffers before encoding.
+    m_raw_status = LF_RAW_DIAGNOSTIC_IDLE;
+    int length = lf_tag_data_encode(type, buffer);
+    if (resume && length > 0) lf_tag_125khz_sense_switch(true);
+    return length;
 }
 
 /** @brief Id card deposit card number before callback
@@ -420,6 +573,17 @@ bool lf_tag_viking_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     // default id
     uint8_t tag_id[4] = {0xDE, 0xAD, 0xBE, 0xEF};
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
+}
+
+int lf_tag_raw_manchester_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    if (type != TAG_TYPE_RAW_MANCHESTER || m_tag_type != type) return 0;
+    return lf_raw_manchester_validate(buffer->buffer, buffer->length) ? LF_RAW_MANCHESTER_RECORD_SIZE : -1;
+}
+
+bool lf_tag_raw_manchester_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    // Synthetic alternating bits, not a credential or protocol-specific frame.
+    uint8_t record[LF_RAW_MANCHESTER_RECORD_SIZE] = {1, 32, 0, 8, 0xAA};
+    return lf_tag_data_factory(slot, tag_type, record, sizeof(record));
 }
 
 int lf_tag_pac_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {

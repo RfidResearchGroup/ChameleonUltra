@@ -11,6 +11,7 @@
 #include "nfc_seos.h"
 #include "rgb_marquee.h"
 #include "tag_persistence.h"
+#include "rfid_main.h"
 
 #define NRF_LOG_MODULE_NAME tag_emu
 #include "nrf_log.h"
@@ -51,7 +52,7 @@ bool is_tag_specific_type_valid(tag_specific_type_t tag_type) {
 /**
  * Tag data stored in flash. Total length must be aligned by 4 bytes (whole words).
  */
-static uint8_t m_tag_data_buffer_lf[20];  // LF card data buffer
+static uint8_t m_tag_data_buffer_lf[32];  // LF card data buffer
 static uint16_t m_tag_data_lf_crc;
 static tag_data_buffer_t m_tag_data_lf = {sizeof(m_tag_data_buffer_lf), m_tag_data_buffer_lf, &m_tag_data_lf_crc};
 
@@ -96,6 +97,7 @@ static tag_base_handler_map_t tag_base_map[] = {
     {TAG_SENSE_LF, TAG_TYPE_HID_PROX,    lf_tag_data_loadcb,           lf_tag_hidprox_data_savecb,   lf_tag_hidprox_data_factory,   &m_tag_data_lf},
     {TAG_SENSE_LF, TAG_TYPE_IOPROX,      lf_tag_data_loadcb,           lf_tag_ioprox_data_savecb,    lf_tag_ioprox_data_factory,    &m_tag_data_lf},
     {TAG_SENSE_LF, TAG_TYPE_VIKING,      lf_tag_data_loadcb,           lf_tag_viking_data_savecb,    lf_tag_viking_data_factory,    &m_tag_data_lf},
+    {TAG_SENSE_LF, TAG_TYPE_RAW_MANCHESTER, lf_tag_data_loadcb,       lf_tag_raw_manchester_data_savecb, lf_tag_raw_manchester_data_factory, &m_tag_data_lf},
     {TAG_SENSE_LF, TAG_TYPE_PAC,         lf_tag_data_loadcb,           lf_tag_pac_data_savecb,       lf_tag_pac_data_factory,       &m_tag_data_lf},
     {TAG_SENSE_LF, TAG_TYPE_JABLOTRON,   lf_tag_data_loadcb,           lf_tag_jablotron_data_savecb, lf_tag_jablotron_data_factory, &m_tag_data_lf},
     {TAG_SENSE_LF, TAG_TYPE_IDTECK,      lf_tag_data_loadcb,           lf_tag_idteck_data_savecb,    lf_tag_idteck_data_factory,    &m_tag_data_lf},
@@ -122,7 +124,7 @@ static tag_base_handler_map_t tag_base_map[] = {
 };
 
 static void tag_emulation_load_config(void);
-static void tag_emulation_save_config(void);
+static bool tag_emulation_save_config(void);
 
 /**
  * get the data loader for the specific type of tag
@@ -238,9 +240,18 @@ static void load_data_by_tag_type(uint8_t slot, tag_specific_type_t tag_type) {
     // If the length of data does not match the length of the buffer,
     // it may be caused by the firmware update at this time, the data must be deleted and rebuilt.
     uint16_t length = buffer->length;
+    if (tag_type == TAG_TYPE_RAW_MANCHESTER) {
+        // Fail closed: a missing or invalid raw record must not replay the previous slot.
+        lf_tag_data_clear();
+        memset(buffer->buffer, 0, buffer->length);
+    }
     bool ret = fds_read_sync(map_info.id, map_info.key, &length, buffer->buffer);
     if (false == ret) {
         NRF_LOG_INFO("tag slot data no exists.");
+        return;
+    }
+    if (tag_type == TAG_TYPE_RAW_MANCHESTER && length != 32) {
+        memset(buffer->buffer, 0, buffer->length);
         return;
     }
     ret = tag_emulation_load_by_buffer(tag_type, true);
@@ -252,15 +263,15 @@ static void load_data_by_tag_type(uint8_t slot, tag_specific_type_t tag_type) {
 /**
  * Save data according to the type
  */
-static void save_data_by_tag_type(uint8_t slot, tag_specific_type_t tag_type) {
+static bool save_data_by_tag_type(uint8_t slot, tag_specific_type_t tag_type) {
     // Maybe the card slot is not enabled to use the emulation of this type of label, and skip it directly to save this data
     if (tag_type == TAG_TYPE_UNDEFINED) {
-        return;
+        return true;
     }
 
     tag_data_buffer_t *buffer = get_buffer_by_tag_type(tag_type);
     if (buffer == NULL) {
-        return;
+        return false;
     }
 
     // The length of the data to be saved by the user should not exceed the size of the global buffer
@@ -268,26 +279,27 @@ static void save_data_by_tag_type(uint8_t slot, tag_specific_type_t tag_type) {
     tag_datas_savecb_t fn_savecb = get_data_savecb_from_tag_type(tag_type);
     if (fn_savecb == NULL) {  // Make sure that there is a real estate process
         NRF_LOG_INFO("Tag data saver no impl.");
-        return;
+        return false;
     }
 
     data_byte_length = fn_savecb(tag_type, buffer);
     // Make sure to save data, we can judge whether the data has changed through CRC
     if (data_byte_length <= 0) {
         NRF_LOG_INFO("Tag type %d data no save.", tag_type);
-        return;
+        // Zero means nothing loaded; negative means loaded data could not be saved.
+        return data_byte_length == 0;
     }
     // Make sure that the data to be stored is not greater than the size of the current buffer area
     if (data_byte_length > buffer->length) {
         NRF_LOG_ERROR("Tag data save length overflow.", tag_type);
-        return;
+        return false;
     }
     uint16_t crc;
     calc_14a_crc_lut(buffer->buffer, data_byte_length, (uint8_t *)&crc);
     // Determine whether the data has changed
     if (crc == *buffer->crc) {
         NRF_LOG_INFO("Tag slot data no change, length = %d", data_byte_length);
-        return;
+        return true;
     }
     tag_sense_type_t sense_type = get_sense_type_from_tag_type(tag_type);
     // Get the special card slot FDS record information
@@ -301,7 +313,8 @@ static void save_data_by_tag_type(uint8_t slot, tag_specific_type_t tag_type) {
         NRF_LOG_ERROR("Save tag slot data error.");
     }
     // After the preservation is completed, the CRC of the BUFFER in the corresponding memory
-    *buffer->crc = crc;
+    if (ret) *buffer->crc = crc;
+    return ret;
 }
 
 /**
@@ -330,10 +343,11 @@ void tag_emulation_load_data(void) {
 /**
  *Save the emulated card configuration data. At the right time, this function should be called for data preservation of data
  */
-void tag_emulation_save_data(void) {
+bool tag_emulation_save_data(void) {
     uint8_t slot = tag_emulation_get_slot();
-    save_data_by_tag_type(slot, slotConfig.slots[slot].tag_hf);
-    save_data_by_tag_type(slot, slotConfig.slots[slot].tag_lf);
+    bool hf_saved = save_data_by_tag_type(slot, slotConfig.slots[slot].tag_hf);
+    bool lf_saved = save_data_by_tag_type(slot, slotConfig.slots[slot].tag_lf);
+    return hf_saved && lf_saved;
 }
 
 /**
@@ -379,15 +393,23 @@ void tag_emulation_delete_data(uint8_t slot, tag_sense_type_t sense_type) {
  */
 bool tag_emulation_factory_data(uint8_t slot, tag_specific_type_t tag_type) {
     tag_datas_factory_t factory = get_data_factory_from_tag_type(tag_type);
+    tag_sense_type_t sense_type = get_sense_type_from_tag_type(tag_type);
+    bool active = slot == tag_emulation_get_slot();
+    if (active && sense_type != TAG_SENSE_NO) {
+        tag_emulation_sense_switch(sense_type, false);
+    }
     // The process of implementing the data formatting data!
-    if (factory != NULL && factory(slot, tag_type)) {
+    bool success = factory != NULL && factory(slot, tag_type);
+    if (success) {
         // If the current data card slot number currently set is the current activated card slot, then we need to update to the memory
         if (tag_emulation_get_slot() == slot) {
             load_data_by_tag_type(slot, tag_type);
         }
-        return true;
     }
-    return false;
+    if (active && sense_type != TAG_SENSE_NO && get_device_mode() != DEVICE_MODE_READER) {
+        tag_emulation_sense_switch(sense_type, true);
+    }
+    return success;
 }
 
 /**
@@ -521,7 +543,7 @@ static void tag_emulation_load_config(void) {
 /**
  * Save the emulated card configuration data
  */
-static void tag_emulation_save_config(void) {
+static bool tag_emulation_save_config(void) {
     // We are configured the card slot configuration, and we need to calculate the current card slot configuration CRC code to judge whether the data below is updated
     uint16_t new_calc_crc;
     calc_14a_crc_lut((uint8_t *)&slotConfig, sizeof(slotConfig), (uint8_t *)&new_calc_crc);
@@ -533,10 +555,12 @@ static void tag_emulation_save_config(void) {
             m_slot_config_crc = new_calc_crc;
         } else {
             NRF_LOG_ERROR("Save tag slot config error.");
+            return false;
         }
     } else {
         NRF_LOG_INFO("Tag slot config no change.");
     }
+    return true;
 }
 
 /**
@@ -566,9 +590,10 @@ void tag_emulation_init(void) {
 /**
  * Save the tag data (written from RAM to Flash)
  */
-void tag_emulation_save(void) {
-    tag_emulation_save_config();  // Save the card slot configuration
-    tag_emulation_save_data();    // Save card slot data
+bool tag_emulation_save(void) {
+    bool config_saved = tag_emulation_save_config();
+    bool data_saved = tag_emulation_save_data();
+    return config_saved && data_saved;
 }
 
 /**
@@ -589,12 +614,18 @@ void tag_emulation_set_slot(uint8_t index) {
 /**
  * Switch to the card slot of the specified index, this function will automatically complete the data loading
  */
-void tag_emulation_change_slot(uint8_t index, bool sense_disable) {
+bool tag_emulation_change_slot(uint8_t index, bool sense_disable) {
     if (sense_disable) {
         // Turn off the analog card to avoid triggering the emulation when switching the card slot
         tag_emulation_sense_end();
     }
-    tag_emulation_save_data();      // Save the data of the current card, in case of there is a change
+    if (!tag_emulation_save_data()) {
+        NRF_LOG_ERROR("Tag data save failed before slot change.");
+        if (sense_disable) {
+            tag_emulation_sense_run();
+        }
+        return false;
+    }
     g_is_tag_emulating = false;     // Reset the emulating flag
     tag_emulation_set_slot(index);  // Update the index of the activated card slot
     tag_emulation_load_data();      // Then reload the data of the card slot
@@ -602,6 +633,7 @@ void tag_emulation_change_slot(uint8_t index, bool sense_disable) {
         // According to the configuration of the new card slot, the monitoring status of our update
         tag_emulation_sense_run();
     }
+    return true;
 }
 
 /**
@@ -627,6 +659,9 @@ void tag_emulation_slot_set_enable(uint8_t slot, tag_sense_type_t sense_type, bo
     }
     if (sense_type == TAG_SENSE_HF) {
         slotConfig.slots[slot].enabled_hf = enable;
+    }
+    if (slot == tag_emulation_get_slot() && get_device_mode() != DEVICE_MODE_READER) {
+        tag_emulation_sense_switch(sense_type, enable);
     }
 }
 
@@ -683,8 +718,12 @@ void tag_emulation_change_type(uint8_t slot, tag_specific_type_t tag_type) {
     }
     NRF_LOG_INFO("tag type = %d", tag_type);
     // After the update is completed, we need to notify the relevant data in the update of the memory
-    if (sense_type != TAG_SENSE_NO) {
+    if (sense_type != TAG_SENSE_NO && slot == tag_emulation_get_slot()) {
+        tag_emulation_sense_switch(sense_type, false);
         load_data_by_tag_type(slot, tag_type);
+        if (get_device_mode() != DEVICE_MODE_READER) {
+            tag_emulation_sense_switch(sense_type, true);
+        }
         NRF_LOG_INFO("reload data success.");
     }
 }

@@ -1,5 +1,6 @@
 #include "dataframe.h"
 #include "netdata.h"
+#include "app_util_platform.h"
 
 #define NRF_LOG_MODULE_NAME data_frame
 #include "nrf_log.h"
@@ -18,6 +19,11 @@ static uint16_t m_data_status;
 static uint16_t m_data_len;
 static uint8_t *m_data_buffer;
 static volatile bool m_data_completed = false;
+static data_frame_origin_t m_data_origin = DATA_FRAME_ORIGIN_UNKNOWN;
+static data_frame_origin_t m_dispatch_origin = DATA_FRAME_ORIGIN_UNKNOWN;
+static bool m_dispatching = false;
+static bool m_receiving = false;
+static bool m_reset_pending = false;
 static data_frame_cbk_t m_frame_process_cbk = NULL;
 
 static uint8_t compute_lrc(uint8_t *buf, uint16_t bufsize) {
@@ -82,8 +88,42 @@ data_frame_tx_t *data_frame_make(uint16_t cmd, uint16_t status, uint16_t data_le
 /**
  * @brief Data frame reset
  */
-void data_frame_reset(void) {
+// Called only with interrupts masked; the RX owner must have released its buffer.
+static void reset_locked(void) {
     m_data_rx_position = 0;
+    m_data_origin = DATA_FRAME_ORIGIN_UNKNOWN;
+    m_data_completed = false;
+    m_reset_pending = false;
+}
+
+static void request_reset_locked(void) {
+    if (m_dispatching) {
+        return;
+    }
+    if (m_receiving) {
+        m_reset_pending = true;
+    } else {
+        reset_locked();
+    }
+}
+
+void data_frame_reset(void) {
+    CRITICAL_REGION_ENTER();
+    request_reset_locked();
+    CRITICAL_REGION_EXIT();
+}
+
+data_frame_origin_t data_frame_get_origin(void) {
+    return m_dispatch_origin;
+}
+
+void data_frame_disconnect(data_frame_origin_t origin) {
+    CRITICAL_REGION_ENTER();
+    if (m_data_origin == origin) {
+        // Drop partial and queued commands from the old connection, not another transport.
+        request_reset_locked();
+    }
+    CRITICAL_REGION_EXIT();
 }
 
 /**
@@ -92,9 +132,26 @@ void data_frame_reset(void) {
  * @param length:The length of the receiving byte array
  */
 void data_frame_receive(uint8_t *data, uint16_t length) {
+    data_frame_receive_from(data, length, DATA_FRAME_ORIGIN_UNKNOWN);
+}
+
+static void receive_owned(uint8_t *data, uint16_t length, data_frame_origin_t origin) {
     // buffer wait process
     if (m_data_completed) {
         NRF_LOG_ERROR("Data frame wait process.");
+        return;
+    }
+    if (length == 0) {
+        return;
+    }
+    if (data == NULL || (origin != DATA_FRAME_ORIGIN_UNKNOWN &&
+                         origin != DATA_FRAME_ORIGIN_USB && origin != DATA_FRAME_ORIGIN_BLE)) {
+        data_frame_reset();
+        return;
+    }
+    if (m_data_rx_position != 0 && m_data_origin != origin) {
+        // Never splice bytes from different transports into one command.
+        data_frame_reset();
         return;
     }
     // buffer overflow
@@ -104,6 +161,9 @@ void data_frame_receive(uint8_t *data, uint16_t length) {
         return;
     }
     // frame process
+    if (m_data_rx_position == 0) {
+        m_data_origin = origin;
+    }
     for (int i = 0; i < length; i++) {
         // copy to buffer
         ((uint8_t *)(&m_netdata_frame_rx_buf))[m_data_rx_position] = data[i];
@@ -165,22 +225,67 @@ void data_frame_receive(uint8_t *data, uint16_t length) {
     }
 }
 
+void data_frame_receive_from(uint8_t *data, uint16_t length, data_frame_origin_t origin) {
+    if (length == 0) {
+        return;
+    }
+    bool acquired = false;
+    CRITICAL_REGION_ENTER();
+    if (!m_receiving && !m_dispatching && !m_data_completed) {
+        m_receiving = true;
+        if (m_data_rx_position == 0) {
+            m_data_origin = origin;
+        }
+        acquired = true;
+    }
+    CRITICAL_REGION_EXIT();
+    if (!acquired) {
+        return;
+    }
+    // USB runs in main context; BLE may interrupt it. Drop overlapping ingress,
+    // rather than mask interrupts while copying/checksumming up to 4096 bytes.
+    receive_owned(data, length, origin);
+    CRITICAL_REGION_ENTER();
+    if (m_reset_pending) {
+        reset_locked();
+    }
+    m_receiving = false;
+    CRITICAL_REGION_EXIT();
+}
+
 /**
  * @brief After the data packet processing, when the received data forms a complete frame,
  *         This function will be distributed processing tasks through this function, which will be adjusted to notify the data processing of the data
  * If the data processing is time -consuming operation, you need to put this function in the main loop to call
  */
 void data_frame_process(void) {
-    // check if data frame
-    if (m_data_completed) {
-        // to process data frame
-        if (m_frame_process_cbk != NULL) {
-            m_frame_process_cbk(m_data_cmd, m_data_status, m_data_len, m_data_buffer);
-        }
-        // reset after process data frame.
-        data_frame_reset();
-        m_data_completed = false;
+    data_frame_cbk_t callback = NULL;
+    uint16_t cmd = 0, status = 0, length = 0;
+    uint8_t *buffer = NULL;
+    bool acquired = false;
+    CRITICAL_REGION_ENTER();
+    if (!m_dispatching && !m_receiving && m_data_completed) {
+        m_dispatching = true;
+        m_dispatch_origin = m_data_origin;
+        callback = m_frame_process_cbk;
+        cmd = m_data_cmd;
+        status = m_data_status;
+        length = m_data_len;
+        buffer = m_data_buffer;
+        acquired = true;
     }
+    CRITICAL_REGION_EXIT();
+    if (!acquired) {
+        return;
+    }
+    if (callback != NULL) {
+        callback(cmd, status, length, buffer);
+    }
+    CRITICAL_REGION_ENTER();
+    m_dispatch_origin = DATA_FRAME_ORIGIN_UNKNOWN;
+    reset_locked();
+    m_dispatching = false;
+    CRITICAL_REGION_EXIT();
 }
 
 /**
