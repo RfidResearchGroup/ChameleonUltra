@@ -1,0 +1,43 @@
+name: Button input tests
+
+on:
+  push:
+    paths:
+      - "firmware/application/src/button_input.*"
+      - "firmware/application/src/app_main.c"
+      - "firmware/application/Makefile"
+      - "firmware/application/tests/test_button_input.c"
+      - ".github/workflows/button-input-tests.yml"
+  pull_request:
+    paths:
+      - "firmware/application/src/button_input.*"
+      - "firmware/application/src/app_main.c"
+      - "firmware/application/Makefile"
+      - "firmware/application/tests/test_button_input.c"
+      - ".github/workflows/button-input-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Test button input with address and undefined-behavior sanitizers
+        env:
+          CC: ${{ matrix.compiler }}
+        run: |
+          "$CC" -std=c11 -Wall -Wextra -Werror -g \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -I firmware/application/src \
+            firmware/application/src/button_input.c \
+            firmware/application/tests/test_button_input.c \
+            -o "$RUNNER_TEMP/test_button_input"
+          "$RUNNER_TEMP/test_button_input"
