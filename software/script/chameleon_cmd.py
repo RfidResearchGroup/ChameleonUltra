@@ -404,9 +404,19 @@ class ChameleonCMD:
         """Clear all static APDU responses from the active HF14A_4 slot."""
         return self.device.send_cmd_sync(Command.HF14A_4_STATIC_RESP, b"\x00")
 
-    def hf14a_raw(self, options, resp_timeout_ms=100, data=[], bitlen=None):
+    def hf14a_raw(self, options, resp_timeout_ms=100, data=b"", bitlen=None):
+        """Send a raw frame, preserving the existing bytes-only API."""
+        return self.hf14a_raw_response(options, resp_timeout_ms, data, bitlen).data
+
+    def hf14a_raw_response(
+        self, options, resp_timeout_ms=100, data=b"", bitlen=None
+    ) -> chameleon_com.Response:
         """
-        Send raw cmd to 14a tag.
+        Send a raw frame and retain the firmware status alongside its bytes.
+
+        Read-only backup workflows must reject a CRC, collision or RF error
+        even if the firmware also returned data. Existing raw callers keep
+        their bytes-only behavior through hf14a_raw().
 
         :param options:
         :param resp_timeout_ms:
@@ -451,7 +461,7 @@ class ChameleonCMD:
         resp = self.device.send_cmd_sync(
             Command.HF14A_RAW, data, timeout=(resp_timeout_ms // 1000) + 1
         )
-        return resp.data
+        return resp
 
     @expect_response(Status.HF_TAG_OK)
     def mf1_manipulate_value_block(

@@ -1,4 +1,5 @@
 import binascii
+import hashlib
 import glob
 import math
 import os
@@ -16,7 +17,9 @@ import struct
 import queue
 from enum import Enum
 from multiprocessing import Pool, cpu_count
-from typing import Union
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Iterator, Union
 from platform import uname
 from datetime import datetime
 import hardnested_utils
@@ -54,6 +57,8 @@ from chameleon_enum import (
 )
 from chameleon_enum import HIDFormat
 from crypto1 import Crypto1
+from magic_classic import MagicClassicReader, MagicCardReadError
+from magic_classic_io import encode_backup, publish_backup
 
 # NXP IDs based on https://www.nxp.com/docs/en/application-note/AN10833.pdf
 type_id_SAK_dict = {
@@ -159,7 +164,7 @@ class BaseCLIUnit:
         """
         return True
 
-    def on_exec(self, args: argparse.Namespace):
+    def on_exec(self, args: argparse.Namespace) -> None:
         """
             Call a function on cmd match.
 
@@ -929,6 +934,7 @@ hw_settings = hw.subgroup("settings", "Chameleon settings commands")
 hf = root.subgroup("hf", "High Frequency commands")
 hf_14a = hf.subgroup("14a", "ISO14443-a commands")
 hf_mf = hf.subgroup("mf", "MIFARE Classic commands")
+hf_mf_magic = hf_mf.subgroup("magic", "Read-only Gen1A-compatible Classic 1K tools")
 hf_mfu = hf.subgroup("mfu", "MIFARE Ultralight / NTAG commands")
 hf_des = hf.subgroup("des", "MIFARE DESFire commands")
 hf_seos = hf.subgroup("seos", "SEOS commands")
@@ -3146,6 +3152,118 @@ class HFMFView(MF1AuthArgsUnit):
                 "Missing args. Specify --dump-file (-d) or --key-file (-k)"
             )
         print_mem_dump(data, 16)
+
+
+class HFMFMagicBase(DeviceRequiredUnit):
+    @staticmethod
+    def _check_output(target: Path) -> None:
+        if target.exists() or target.is_symlink():
+            raise ArgsParserError(f"refusing to overwrite existing backup: {target}")
+        if not target.parent.is_dir():
+            raise ArgsParserError(f"backup directory does not exist: {target.parent}")
+
+    def before_exec(self, args: argparse.Namespace):
+        if not super().before_exec(args):
+            return False
+        required = {
+            Command.HF14A_RAW,
+            Command.HF14A_SCAN,
+            Command.GET_DEVICE_MODE,
+            Command.CHANGE_DEVICE_MODE,
+        }
+        if not required.issubset(self.device_com.commands):
+            raise ArgsParserError("firmware lacks the required HF reader commands")
+        output = getattr(args, "out", None)
+        if output is not None:
+            self._check_output(output)
+        return True
+
+    @contextmanager
+    def _reader_session(self) -> Iterator[MagicClassicReader]:
+        # Unlike an interactive raw session, a backup is self-contained. Restore
+        # the original mode before exposing a result or publishing any file.
+        was_reader = self.cmd.is_device_reader_mode()
+        primary = None
+        try:
+            if not was_reader:
+                self.cmd.set_device_reader_mode(True)
+            yield MagicClassicReader(self.cmd)
+        except BaseException as error:
+            primary = error
+            raise
+        finally:
+            if not was_reader:
+                try:
+                    self.cmd.set_device_reader_mode(False)
+                except Exception as cleanup:
+                    if primary is not None:
+                        raise ArgsParserError(
+                            f"{primary}; restoring the original device mode also "
+                            f"failed: {cleanup}"
+                        ) from primary
+                    raise ArgsParserError(
+                        f"could not restore the original device mode: {cleanup}"
+                    ) from cleanup
+
+
+@hf_mf_magic.command("info")
+class HFMFMagicInfo(HFMFMagicBase):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Check a Gen1A-compatible read backdoor with two independent Block 0 "
+            "reads (4-byte UID, Classic 1K profile; keep one stationary card)"
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            with self._reader_session() as reader:
+                result = reader.read_info()
+        except (MagicCardReadError, UnexpectedResponseError, TimeoutError) as error:
+            raise ArgsParserError(str(error)) from error
+        identity = result.identity
+        print(f" - UID: {identity.uid.hex().upper()}")
+        print(f" - ATQA (wire order): {identity.atqa.hex().upper()}; SAK: 08")
+        print(" - Gen1A-compatible read backdoor: verified")
+        print(" - Two independent CRC-checked Block 0 reads agree; UID/BCC match")
+
+
+@hf_mf_magic.command("dump")
+class HFMFMagicDump(HFMFMagicBase):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Back up the Classic 1K profile through a Gen1A-compatible read "
+            "backdoor (two independent passes; keep one stationary card)"
+        )
+        parser.add_argument("-o", "--out", type=Path, required=True, metavar="FILE")
+        parser.add_argument(
+            "--format",
+            choices=("bin", "json"),
+            default="bin",
+            help="1024-byte BIN (default), or JSON with image and read metadata",
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        self._check_output(args.out)
+        try:
+            with self._reader_session() as reader:
+                result = reader.dump()
+            content = encode_backup(result, args.format)
+            publish_backup(args.out, content)
+        except (MagicCardReadError, UnexpectedResponseError, TimeoutError) as error:
+            raise ArgsParserError(str(error)) from error
+        except OSError as error:
+            raise ArgsParserError(f"cannot create Classic 1K backup: {error}") from error
+        # Sector trailers can contain keys. Only the destination and digest,
+        # never the complete card contents, belong in the interactive output.
+        checksum = hashlib.sha256(result.image).hexdigest()
+        print(f" - UID: {result.identity.uid.hex().upper()}; 64 blocks read")
+        print(f" - Two independent complete reads agree; saved {args.out}")
+        print(f" - Image SHA-256: {checksum}")
+        print(" - Raw read image: sector keys have not been independently authenticated")
 
 
 @hf_mf.command("dump")
