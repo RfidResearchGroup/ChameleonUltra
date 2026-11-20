@@ -176,6 +176,8 @@
 #define DATA_CMD_SEOS_READ_EMU_DATA             (4042)
 #define DATA_CMD_SEOS_WRITE_EMU_DATA            (4043)
 #define DATA_CMD_SEOS_WRITE_EMU_KEYS            (4044)
+#define DATA_CMD_MFU_READ_PROFILE               (4045) /* Provisional: explicit slot/full memory */
+#define DATA_CMD_MFU_WRITE_PROFILE              (4046) /* Provisional: versioned profile restore */
 //
 // ******************************************************************
 

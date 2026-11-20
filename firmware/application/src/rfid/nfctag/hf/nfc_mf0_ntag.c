@@ -235,6 +235,11 @@ static int get_total_pages_by_tag_type(tag_specific_type_t tag_type) {
     return nr_pages;
 }
 
+int nfc_tag_mf0_ntag_get_total_pages_by_tag_type(tag_specific_type_t tag_type) {
+    if (nfc_tag_mf0_ntag_get_nr_pages_by_tag_type(tag_type) <= 0) return -1;
+    return get_total_pages_by_tag_type(tag_type);
+}
+
 static int get_first_cfg_page_by_tag_type(tag_specific_type_t tag_type) {
     int page;
 

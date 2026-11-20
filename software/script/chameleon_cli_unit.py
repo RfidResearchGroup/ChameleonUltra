@@ -15,6 +15,7 @@ import random
 import struct
 import queue
 from enum import Enum
+from pathlib import Path
 from multiprocessing import Pool, cpu_count
 from typing import Union
 from platform import uname
@@ -54,6 +55,9 @@ from chameleon_enum import (
 )
 from chameleon_enum import HIDFormat
 from crypto1 import Crypto1
+from ntag_profile import NtagProfileManager
+from ntag_profile_data import NtagProfileError
+from ntag_profile_io import check_new_path, load_snapshot
 
 # NXP IDs based on https://www.nxp.com/docs/en/application-note/AN10833.pdf
 type_id_SAK_dict = {
@@ -924,6 +928,7 @@ class TagTypeArgsUnit(DeviceRequiredUnit):
 root = CLITree(root=True)
 hw = root.subgroup("hw", "Hardware-related commands")
 hw_slot = hw.subgroup("slot", "Emulation slots commands")
+hw_slot_ntag = hw_slot.subgroup("ntag", "Verified complete MF0/NTAG slot profiles")
 hw_settings = hw.subgroup("settings", "Chameleon settings commands")
 
 hf = root.subgroup("hf", "High Frequency commands")
@@ -950,6 +955,101 @@ lf_jablotron = lf.subgroup("jablotron", "Jablotron commands")
 lf_generic = lf.subgroup("generic", "Generic commands")
 lf_idteck = lf.subgroup("idteck", "IDTECK commands")
 lf_pyramid = lf.subgroup("pyramid", "Farpointe/Pyramid commands")
+
+
+class HWNtagProfileBase(DeviceRequiredUnit):
+    def parser(self, description: str, *, source: bool = False,
+               output: bool = False, apply: bool = False) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = description
+        parser.add_argument("-s", "--slot", required=True, type=int, choices=range(1, 9))
+        if source:
+            parser.add_argument("-f", "--file", required=True, type=Path)
+        if output:
+            parser.add_argument("-o", "--out", required=True, type=Path)
+        if apply:
+            parser.add_argument("--apply", action="store_true")
+            parser.add_argument("--backup", type=Path)
+        return parser
+
+    def execute_plan(self, manager, plan, args) -> None:
+        before, desired = plan.before.state, plan.desired
+        print(f"Slot {args.slot}: type {before.tag_type} -> {desired.tag_type}; "
+              f"enabled {before.enabled} -> {desired.enabled}; "
+              f"changes {before != desired}")
+        if args.apply:
+            manager.apply(plan, args.backup)
+            print("Complete profile verified after reload; original slot/mode restored")
+        else:
+            print("Preview only; use --apply with a new --backup path")
+
+    def check_apply(self, args) -> None:
+        if args.apply:
+            if args.backup is None:
+                raise NtagProfileError("--apply requires a new private --backup path")
+            check_new_path(args.backup)
+        elif args.backup is not None:
+            raise NtagProfileError("--backup is used only with --apply")
+
+    @staticmethod
+    def failure(manager, error) -> None:
+        progress = manager.progress
+        message = (f"{error}; stage={progress.stage}; "
+                   f"target_may_have_changed={progress.possibly_changed}; "
+                   f"verified={progress.data_verified}")
+        if progress.backup_path is not None:
+            message += f"; verified_before_backup={progress.backup_path}"
+        raise ArgsParserError(message) from error
+
+
+@hw_slot_ntag.command("backup")
+class HWNtagProfileBackup(HWNtagProfileBase):
+    def args_parser(self) -> ArgumentParserNoExit:
+        return self.parser("Backup an inactive HF-only empty or MF0/NTAG slot", output=True)
+
+    def on_exec(self, args: argparse.Namespace):
+        manager = NtagProfileManager(self.device_com)
+        try:
+            manager.backup(args.slot, args.out)
+            print(f"Verified complete slot snapshot saved: {args.out}")
+        except (NtagProfileError, OSError) as error:
+            self.failure(manager, error)
+
+
+@hw_slot_ntag.command("import")
+class HWNtagProfileImport(HWNtagProfileBase):
+    def args_parser(self) -> ArgumentParserNoExit:
+        return self.parser("Preview/import a complete MF0/NTAG snapshot profile", source=True, apply=True)
+
+    def on_exec(self, args: argparse.Namespace):
+        manager = NtagProfileManager(self.device_com)
+        try:
+            self.check_apply(args)
+            source = load_snapshot(args.file)
+            if source.state.profile is None:
+                raise NtagProfileError("source snapshot has no MF0/NTAG profile")
+            plan = manager.plan_import(args.slot, source.state.profile)
+            self.execute_plan(manager, plan, args)
+        except (NtagProfileError, OSError) as error:
+            self.failure(manager, error)
+
+
+@hw_slot_ntag.command("restore")
+class HWNtagProfileRestore(HWNtagProfileBase):
+    def args_parser(self) -> ArgumentParserNoExit:
+        return self.parser("Preview/restore a snapshot to its bound device and slot", source=True, apply=True)
+
+    def on_exec(self, args: argparse.Namespace):
+        manager = NtagProfileManager(self.device_com)
+        try:
+            self.check_apply(args)
+            source = load_snapshot(args.file)
+            if source.slot != args.slot:
+                raise NtagProfileError("restore slot differs from snapshot")
+            plan = manager.plan_restore(source)
+            self.execute_plan(manager, plan, args)
+        except (NtagProfileError, OSError) as error:
+            self.failure(manager, error)
 
 
 @root.command("clear")
