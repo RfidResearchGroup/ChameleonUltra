@@ -211,6 +211,16 @@ bool tag_emulation_load_by_buffer(tag_specific_type_t tag_type, bool update_crc)
         calc_14a_crc_lut(buffer->buffer, length, (uint8_t *)buffer->crc);
         return true;
     }
+    if (length > 0) {
+        // *buffer->crc holds the CRC of the data last loaded or saved, from any slot. save_data_by_tag_type() skips
+        // the write if the data's CRC equals *buffer->crc. If a command or a clone sets data that another slot last
+        // loaded or saved, the CRCs match and the save doesn't write the data to the active slot's record. So store a
+        // value that is deliberately wrong for the data (its CRC with every bit flipped). The next save then writes
+        // the data and stores the correct CRC.
+        uint16_t crc;
+        calc_14a_crc_lut(buffer->buffer, length, (uint8_t *)&crc);
+        *buffer->crc = (uint16_t)~crc;
+    }
     return false;
 }
 
