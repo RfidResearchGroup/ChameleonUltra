@@ -9662,8 +9662,20 @@ def _emv_decode_apdu(data: bytes) -> str:
     return f"CLA={cla:02x} INS={ins:02x} P1={p1:02x} P2={p2:02x}"
 
 
+class EMVSlotLoadUnit(SlotIndexArgsAndGoUnit):
+    # The HF14A_4 setters and the save act on the active slot, which is --slot while the command
+    # runs. The save also stores --slot as the slot the device starts on. after_exec() saves again
+    # once the previous slot is active, and the device keeps starting on that one.
+    saved = False
+
+    def after_exec(self, args: argparse.Namespace):
+        super().after_exec(args)
+        if self.saved and self.prev_slot_num != self.slot_num:
+            self.cmd.slot_data_config_save()
+
+
 @emv.command("scan")
-class EMVScan(DeviceRequiredUnit):
+class EMVScan(EMVSlotLoadUnit):
     """
     Full EMV contactless card scan — equivalent to PM3 'emv scan -at'.
 
@@ -9696,6 +9708,7 @@ class EMVScan(DeviceRequiredUnit):
             type=int,
             default=None,
             metavar="<1-8>",
+            choices=[x.value for x in SlotNumber],
             help="Also load scanned card into this slot for emulation",
         )
         return parser
@@ -10092,7 +10105,7 @@ class EMVScan(DeviceRequiredUnit):
             print(f"\n{json_str}")
 
         if args.slot is not None and pairs:
-            target_slot = SlotNumber(args.slot)
+            target_slot = self.slot_num
             print(f"\n {CY}Loading into slot {target_slot}...{C0}")
             try:
                 cmd.set_slot_tag_type(target_slot, TagSpecificType.HF14A_4)
@@ -10105,6 +10118,7 @@ class EMVScan(DeviceRequiredUnit):
                 for c, r in pairs:
                     cmd.hf14a_4_add_static_response(c, r)  # use full cmd as match key
                 cmd.slot_data_config_save()
+                self.saved = True
                 print(
                     f" {CG}Slot {target_slot} ready. Run: hw slot change -s {args.slot} && hw mode -e{C0}"
                 )
@@ -10137,7 +10151,7 @@ class EMVDebug(DeviceRequiredUnit):
 
 
 @emv.command("load")
-class EMVLoad(DeviceRequiredUnit):
+class EMVLoad(EMVSlotLoadUnit):
     """
     Load EMV card data into an HF14A_4 slot for emulation.
 
@@ -10164,18 +10178,11 @@ class EMVLoad(DeviceRequiredUnit):
             metavar="<path>",
             help="Load from PM3 emv scan JSON file",
         )
-        parser.add_argument(
-            "-s",
-            "--slot",
-            type=int,
-            default=None,
-            metavar="<1-8>",
-            help="Target slot when using --file (default: active)",
-        )
+        self.add_slot_args(parser)
         parser.add_argument(
             "--clear",
             action="store_true",
-            help="Clear all static responses from active slot",
+            help="Clear all static responses from the slot",
         )
         parser.add_argument(
             "--cmd",
@@ -10216,11 +10223,7 @@ class EMVLoad(DeviceRequiredUnit):
             return
 
         if args.file:
-            if args.slot is not None:
-                target_slot = SlotNumber(args.slot)
-            else:
-                target_slot = SlotNumber.from_fw(cmd.get_active_slot())
-            self._load_from_json(args.file, target_slot, cmd)
+            self._load_from_json(args.file, self.slot_num, cmd)
             return
 
         print(f" {CY}Specify --file, --cmd/--resp, --clear, or --defaults{C0}")
@@ -10387,6 +10390,7 @@ class EMVLoad(DeviceRequiredUnit):
                 print(f" {CR}  Failed {name}: {e}{C0}")
 
         cmd.slot_data_config_save()
+        self.saved = True
         print(
             f"\n {CG}Done! Slot {target_slot} ready with {len(static_pairs)} response(s).{C0}"
         )
