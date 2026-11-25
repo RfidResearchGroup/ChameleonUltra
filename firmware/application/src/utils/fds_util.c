@@ -1,5 +1,6 @@
 #include "fds_util.h"
 #include "bsp_wdt.h"
+#include "nrf_sdh_soc.h"
 
 #define NRF_LOG_MODULE_NAME fds_sync
 #include "nrf_log.h"
@@ -13,10 +14,21 @@ static struct {
     uint32_t record_id; // record id, used for sync delete
     uint16_t id;        // file id
     uint16_t key;       // file key
-    bool success;       // task is success
+    volatile bool success; // task is success
     bool waiting;       // task waiting done.
     bool ignore_pm;     // ignore peer manager records, defaults to true, set to false by fds_wipe
 } fds_operation_info;
+
+static volatile uint32_t m_flash_progress;
+
+static void flash_progress_handler(uint32_t event, void *context) {
+    UNUSED_PARAMETER(context);
+    if (event == NRF_EVT_FLASH_OPERATION_SUCCESS) {
+        ++m_flash_progress;
+    }
+}
+
+NRF_SDH_SOC_OBSERVER(m_flash_progress_observer, 1, flash_progress_handler, NULL);
 
 
 /**
@@ -57,6 +69,7 @@ bool fds_read_sync(uint16_t id, uint16_t key, uint16_t *length, uint8_t *buffer)
     ret_code_t          err_code;       //The results of the operation
     fds_flash_record_t  flash_record;   // Pointing to the actual information in Flash
     fds_record_desc_t   record_desc;    // Recorded handle
+    bool success = false;
     if (fds_find_record(id, key, &record_desc)) {
         err_code = fds_record_open(&record_desc, &flash_record);            //Open the record so that it is marked as the open state
         APP_ERROR_CHECK(err_code);
@@ -65,16 +78,17 @@ bool fds_read_sync(uint16_t id, uint16_t key, uint16_t *length, uint8_t *buffer)
             memcpy(buffer, flash_record.p_data, flash_record.p_header->length_words * 4);
             NRF_LOG_INFO("FDS read success.");
             *length = flash_record.p_header->length_words * 4;
-            return true;
+            success = true;
         } else {
             NRF_LOG_INFO("FDS buffer too small, can't run memcpy, fds size = %d, buffer size = %d", flash_record.p_header->length_words * 4, *length);
         }
         err_code = fds_record_close(&record_desc);                          // Close the file after the operation is completed
         APP_ERROR_CHECK(err_code);
     }
-    //If the correct data is not loaded, this record may not exist
-    *length = 0;
-    return false;
+    if (!success) {
+        *length = 0;
+    }
+    return success;
 }
 
 /**
@@ -279,12 +293,18 @@ void fds_util_init() {
 }
 
 void fds_gc_sync(void) {
+    uint32_t last_progress = m_flash_progress;
     fds_operation_info.success = false;
     ret_code_t err_code = fds_gc();
     APP_ERROR_CHECK(err_code);
     while (!fds_operation_info.success) {
-        __NOP();
-    };
+        // FDS only reports completion after the entire pass.
+        uint32_t progress = m_flash_progress;
+        if (progress != last_progress) {
+            last_progress = progress;
+            bsp_wdt_feed();
+        }
+    }
 }
 
 static bool fds_next_record_delete_sync() {
