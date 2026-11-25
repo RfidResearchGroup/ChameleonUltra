@@ -9,6 +9,7 @@ from chameleon_enum import ButtonPressFunction, ButtonType, MifareClassicDarksid
 from chameleon_enum import MfcKeyType, MfcValueBlockOperator
 
 CURRENT_VERSION_SETTINGS = 7
+FLASH_WRITE_TIMEOUT = 30
 
 new_key = b"\x20\x20\x66\x66"
 old_keys = [b"\x51\x24\x36\x48", b"\x19\x92\x04\x27"]
@@ -1035,7 +1036,9 @@ class ChameleonCMD:
         """
         # SlotNumber() will raise error for us if slot_index not in slot range
         data = struct.pack("!B", SlotNumber.to_fw(slot_index))
-        return self.device.send_cmd_sync(Command.SET_ACTIVE_SLOT, data)
+        return self.device.send_cmd_sync(
+            Command.SET_ACTIVE_SLOT, data, timeout=FLASH_WRITE_TIMEOUT
+        )
 
     @expect_response(Status.SUCCESS)
     def set_slot_tag_type(self, slot_index: SlotNumber, tag_type: TagSpecificType):
@@ -1076,7 +1079,9 @@ class ChameleonCMD:
         """
         # SlotNumber() will raise error for us if slot_index not in slot range
         data = struct.pack("!BH", SlotNumber.to_fw(slot_index), tag_type)
-        return self.device.send_cmd_sync(Command.SET_SLOT_DATA_DEFAULT, data)
+        return self.device.send_cmd_sync(
+            Command.SET_SLOT_DATA_DEFAULT, data, timeout=FLASH_WRITE_TIMEOUT
+        )
 
     @expect_response(Status.SUCCESS)
     def set_slot_enable(
@@ -1091,7 +1096,9 @@ class ChameleonCMD:
         """
         # SlotNumber() will raise error for us if slot_index not in slot range
         data = struct.pack("!BBB", SlotNumber.to_fw(slot_index), sense_type, enabled)
-        return self.device.send_cmd_sync(Command.SET_SLOT_ENABLE, data)
+        return self.device.send_cmd_sync(
+            Command.SET_SLOT_ENABLE, data, timeout=FLASH_WRITE_TIMEOUT
+        )
 
     def _get_active_lf_tag_type(self) -> TagSpecificType:
         slotinfo = self.get_slot_info()
@@ -1537,7 +1544,9 @@ class ChameleonCMD:
         data = struct.pack(
             f"!BB{len(encoded_name)}s", SlotNumber.to_fw(slot), sense_type, encoded_name
         )
-        return self.device.send_cmd_sync(Command.SET_SLOT_TAG_NICK, data)
+        return self.device.send_cmd_sync(
+            Command.SET_SLOT_TAG_NICK, data, timeout=FLASH_WRITE_TIMEOUT
+        )
 
     @expect_response(Status.SUCCESS)
     def get_slot_tag_nick(self, slot: SlotNumber, sense_type: TagSenseType):
@@ -1688,7 +1697,9 @@ class ChameleonCMD:
         Update the configuration and data of the card slot to flash.
         :return:
         """
-        return self.device.send_cmd_sync(Command.SLOT_DATA_CONFIG_SAVE)
+        return self.device.send_cmd_sync(
+            Command.SLOT_DATA_CONFIG_SAVE, timeout=FLASH_WRITE_TIMEOUT
+        )
 
     def enter_bootloader(self):
         """
@@ -1750,7 +1761,9 @@ class ChameleonCMD:
         """
         Reset settings stored in flash memory
         """
-        resp = self.device.send_cmd_sync(Command.RESET_SETTINGS)
+        resp = self.device.send_cmd_sync(
+            Command.RESET_SETTINGS, timeout=FLASH_WRITE_TIMEOUT
+        )
         resp.parsed = resp.status == Status.SUCCESS
         return resp
 
@@ -1759,7 +1772,9 @@ class ChameleonCMD:
         """
         Store settings to flash memory
         """
-        resp = self.device.send_cmd_sync(Command.SAVE_SETTINGS)
+        resp = self.device.send_cmd_sync(
+            Command.SAVE_SETTINGS, timeout=FLASH_WRITE_TIMEOUT
+        )
         resp.parsed = resp.status == Status.SUCCESS
         return resp
 
@@ -1768,7 +1783,7 @@ class ChameleonCMD:
         """
         Reset to factory settings
         """
-        resp = self.device.send_cmd_sync(Command.WIPE_FDS)
+        resp = self.device.send_cmd_sync(Command.WIPE_FDS, timeout=FLASH_WRITE_TIMEOUT)
         resp.parsed = resp.status == Status.SUCCESS
         self.device.close()
         return resp
