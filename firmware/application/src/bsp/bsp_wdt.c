@@ -3,6 +3,7 @@
 #include "nrf_gpio.h"
 
 static nrf_drv_wdt_channel_id m_channel_id;
+static bool m_started;
 
 static void wdt_event_handler(void) {
     //NOTE: The max amount of time we can spend in WDT interrupt is two cycles of 32768[Hz] clock - after that, reset occurs
@@ -22,8 +23,11 @@ void bsp_wdt_init(void) {
     err_code = nrf_drv_wdt_channel_alloc(&m_channel_id);
     APP_ERROR_CHECK(err_code);
     nrf_drv_wdt_enable();
+    m_started = true;
 }
 
 void bsp_wdt_feed(void) {
-    nrf_drv_wdt_channel_feed(m_channel_id);
+    if (m_started) {
+        nrf_drv_wdt_channel_feed(m_channel_id);
+    }
 }

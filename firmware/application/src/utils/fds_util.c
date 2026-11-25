@@ -1,5 +1,6 @@
 #include "fds_util.h"
 #include "bsp_wdt.h"
+#include "nrf_sdh_soc.h"
 
 #define NRF_LOG_MODULE_NAME fds_sync
 #include "nrf_log.h"
@@ -13,10 +14,21 @@ static struct {
     uint32_t record_id; // record id, used for sync delete
     uint16_t id;        // file id
     uint16_t key;       // file key
-    bool success;       // task is success
+    volatile bool success; // task is success
     bool waiting;       // task waiting done.
     bool ignore_pm;     // ignore peer manager records, defaults to true, set to false by fds_wipe
 } fds_operation_info;
+
+static volatile uint32_t m_flash_progress;
+
+static void flash_progress_handler(uint32_t event, void *context) {
+    UNUSED_PARAMETER(context);
+    if (event == NRF_EVT_FLASH_OPERATION_SUCCESS) {
+        ++m_flash_progress;
+    }
+}
+
+NRF_SDH_SOC_OBSERVER(m_flash_progress_observer, 1, flash_progress_handler, NULL);
 
 
 /**
@@ -281,12 +293,18 @@ void fds_util_init() {
 }
 
 void fds_gc_sync(void) {
+    uint32_t last_progress = m_flash_progress;
     fds_operation_info.success = false;
     ret_code_t err_code = fds_gc();
     APP_ERROR_CHECK(err_code);
     while (!fds_operation_info.success) {
-        __NOP();
-    };
+        // FDS only reports completion after the entire pass.
+        uint32_t progress = m_flash_progress;
+        if (progress != last_progress) {
+            last_progress = progress;
+            bsp_wdt_feed();
+        }
+    }
 }
 
 static bool fds_next_record_delete_sync() {
