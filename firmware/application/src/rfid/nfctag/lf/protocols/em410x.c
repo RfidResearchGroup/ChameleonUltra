@@ -230,10 +230,7 @@ bool em410x_decoder_feed(em410x_codec *d, uint16_t interval) {
     int8_t bitlen = 0;
     manchester_feed(d->modem, (uint8_t)interval, bits, &bitlen);
     if (bitlen == -1) {
-        d->raw = 0;
-        d->raw_length = 0;
-        d->total_length = 0;
-        d->epilogue = 0;
+        em410x_decoder_start(d, 0);
         return false;
     }
     for (int i = 0; i < bitlen; i++) {
