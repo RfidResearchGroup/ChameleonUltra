@@ -1,0 +1,91 @@
+[
+  {
+    "file": "physical-rf64.u16",
+    "sha256": "53fe0f4b832dd12e834e22a0559c9e6a3788e964ed31b334b86d1bdad21c6f2d",
+    "clock": 64,
+    "id": "1020304050",
+    "offsets": [
+      0,
+      337
+    ],
+    "decoder": "original",
+    "source": "physical T5577",
+    "live": {
+      "status": 64,
+      "intervals": 834,
+      "duration_ms": 510,
+      "first_result_ms": 330,
+      "first_result_count": 545,
+      "tag_type": 103,
+      "id": "1020304050",
+      "dropped": 0,
+      "truncated": 0
+    }
+  },
+  {
+    "file": "physical-rf64-after.u16",
+    "sha256": "1c7dde346fdbc2d124854fb8a4cc60e7162ad9b003d8a95da97cd0ee3d62c04b",
+    "clock": 64,
+    "id": "1020304050",
+    "offsets": [
+      0
+    ],
+    "decoder": "fixed",
+    "source": "physical T5577",
+    "live": {
+      "status": 64,
+      "intervals": 846,
+      "duration_ms": 510,
+      "first_result_ms": 30,
+      "first_result_count": 56,
+      "tag_type": 103,
+      "id": "1020304050",
+      "dropped": 0,
+      "truncated": 0
+    }
+  },
+  {
+    "file": "pm5-simulation-rf64.u16",
+    "sha256": "c90d4ec1b1827e54c15b5472118b57486623fdea52ecef8e911a06192bb8d812",
+    "clock": 64,
+    "id": "A1B2C3D4E5",
+    "offsets": [
+      0
+    ],
+    "decoder": "original",
+    "source": "PM5 simulation controlled by Flipper",
+    "live": {
+      "status": 65,
+      "intervals": 762,
+      "duration_ms": 510,
+      "first_result_ms": null,
+      "first_result_count": 0,
+      "tag_type": 0,
+      "id": null,
+      "dropped": 0,
+      "truncated": 0
+    }
+  },
+  {
+    "file": "pm5-simulation-rf64-after.u16",
+    "sha256": "5ebcc21271abd4241fcd7d23c1cc14454cbe77f4c8dbf325f1b1c126d256fe5c",
+    "clock": 64,
+    "id": "A1B2C3D4E5",
+    "offsets": [
+      0
+    ],
+    "decoder": "fixed",
+    "source": "PM5 simulation controlled by Flipper",
+    "live": {
+      "status": 64,
+      "intervals": 768,
+      "duration_ms": 510,
+      "first_result_ms": 60,
+      "first_result_count": 99,
+      "tag_type": 103,
+      "id": "A1B2C3D4E5",
+      "dropped": 0,
+      "truncated": 0
+    }
+  }
+]
